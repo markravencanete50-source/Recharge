@@ -1,0 +1,1 @@
+ALTER TABLE `communication_messages` ADD `attachments_json` text DEFAULT '[]' NOT NULL;

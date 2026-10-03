@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 160" role="img" aria-labelledby="title desc">
+  <title id="title">Recharge</title>
+  <desc id="desc">The Recharge bed-and-lightning symbol beside the Recharge wordmark, with a lightning bolt cut out of the A.</desc>
+  <g fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M40 31v101M40 100h92v25"/>
+    <circle cx="80" cy="80" r="69"/>
+  </g>
+  <circle cx="68" cy="78" r="17" fill="#fff"/>
+  <path d="M91 65h31a10 10 0 0 1 10 10v25H91Z" fill="#fff"/>
+  <path d="m112 69-11 20h9l-6 22 21-29h-11l8-13Z" fill="#1c3934"/>
+
+  <g fill="#fff" font-family="Arial, Helvetica Neue, Helvetica, sans-serif" font-size="116" font-weight="700" letter-spacing="0">
+    <text x="178" y="127">RECH</text>
+    <text x="626" y="127">RGE</text>
+  </g>
+  <path d="M570 40 618 127h-27l-9-22h-30l-9 22h-27l47-87Z" fill="#fff"/>
+  <path d="m571 68-14 25h11l-7 26 25-35h-12l10-16Z" fill="#1c3934"/>
+</svg>

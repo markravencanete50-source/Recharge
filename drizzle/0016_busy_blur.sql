@@ -1,0 +1,1 @@
+ALTER TABLE `management_properties` ADD `cleaning_cost_pence` integer DEFAULT 0 NOT NULL;
