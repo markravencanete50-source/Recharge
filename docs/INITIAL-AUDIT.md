@@ -35,6 +35,8 @@ Production Vite build passes. TypeScript passes. Four new file-response security
 
 The Supabase foundation was syntax-checked in a rollback transaction. Access tests use disposable synthetic accounts and roll back all fixtures. Checks cover forged role metadata, client isolation, pending and revoked accounts, super admin monitoring, missing identities and denied client writes. See `supabase/tests/access_foundation.sql`.
 
+The migration was applied and recorded as `20261003120633`. The same access tests passed after application. Final verification shows three application tables with RLS, no anonymous profile access, no authenticated role-update permission and zero retained test users, profiles or events. Supabase advisors show two informational unused-index notices for the empty access-events table; the indexes are retained for future user and actor lookups. No security or warning-level items were shown in the advisor list with filters cleared.
+
 The dependency advisory service could not be reached; `npm audit` returned a connection reset. Dependency vulnerability status remains unverified. A limited source-pattern scan found no credential-like literals or private keys, but this is not an exhaustive secrets audit.
 
 ## Development order
