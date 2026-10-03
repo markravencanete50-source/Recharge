@@ -317,6 +317,7 @@ export function RechargePortal({
   onboardingData,
   cleansData,
   signOutPath,
+  preview = false,
 }: {
   currentUser: CurrentUser;
   accessUsers: AccessUser[];
@@ -328,6 +329,7 @@ export function RechargePortal({
   onboardingData?: OnboardingData;
   cleansData?: CleansData;
   signOutPath: string;
+  preview?: boolean;
 }) {
   const [view, setView] = useState<View>(defaultDepartment(currentUser.role));
   const [cleansMode, setCleansMode] = useState<CleansMode>("cleaning-schedule");
@@ -391,7 +393,7 @@ export function RechargePortal({
   return (
     <div className="min-h-screen bg-[#f0f4f1] text-[#1c3934]">
       <GuestMessageNotifier
-        enabled={currentUser.modules.includes("guest-communication") && currentUser.role !== "client"}
+        enabled={!preview && currentUser.modules.includes("guest-communication") && currentUser.role !== "client"}
         paused={view === "communications"}
         initialData={communicationData}
         onOpen={() => changeView("communications")}
