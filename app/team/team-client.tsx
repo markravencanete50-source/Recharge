@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, cloneElement, isValidElement, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   ArrowLeft,
   BriefcaseBusiness,
@@ -14,7 +15,6 @@ import {
   ShieldCheck,
   Trash2,
   Users,
-  X,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type AccessStatus, type ModuleId, type WorkspaceRole } from "@/lib/modules";
@@ -121,15 +121,17 @@ export function TeamClient({
   const [scheduleEditor, setScheduleEditor] = useState<TeamDepartment | null>(null);
   const [error, setError] = useState("");
 
-  async function load() {
-    const response = await fetch("/api/team", { cache: "no-store" });
-    const result = await response.json().catch(() => null) as { data: TeamStructureData; error?: string } | null;
-    if (response.ok && result) setStructure(result.data);
-    else setError(result?.error || "Team information could not be loaded.");
-  }
-
   useEffect(() => {
-    void load();
+    let active = true;
+    fetch("/api/team", { cache: "no-store" })
+      .then(async response => {
+        const result = await response.json() as {data: TeamStructureData; error?: string};
+        if (!active) return;
+        if (response.ok) setStructure(result.data);
+        else setError(result.error || "Team information could not be loaded.");
+      })
+      .catch(() => { if (active) setError("Team information could not be loaded. Please try again."); });
+    return () => { active = false; };
   }, []);
 
   const directory = (
@@ -233,6 +235,8 @@ export function TeamClient({
       <header className="sticky top-0 z-20 border-b border-[#d9e2df] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[92rem] items-center justify-between gap-4 px-5 py-4 sm:px-8 lg:px-10">
           <div className="flex items-center gap-4">
+            {/* A full-page link also works in the standalone Cloudflare preview. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a className="grid size-10 place-items-center rounded-xl border border-[#d9e2df] bg-white hover:bg-[#f3f6f5]" href="/" aria-label="Back to Recharge">
               <ArrowLeft className="size-5" />
             </a>
@@ -550,7 +554,7 @@ function TeamMemberEditor({ member, structure, onClose, onSaved }: { member?: Te
       ? await fetch("/api/team", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "remove_person", id: member.directoryId }) })
       : await fetch("/api/access", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: member.email }) });
     const result = await response.json().catch(() => null) as { data: TeamStructureData; error?: string } | null;
-    if (response.ok && result) member.directoryId ? onSaved(result.data) : window.location.reload();
+    if (response.ok && result) { if (member.directoryId) onSaved(result.data); else window.location.reload(); }
     else { setError("The team member could not be removed."); setRemoving(false); }
   }
   return (
@@ -664,10 +668,19 @@ function ScheduleEditor({ department, members, onClose, onSaved }: { department:
 }
 
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#10271f]/55 p-4 backdrop-blur-sm"><div className="w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-[#d8e2df] bg-white shadow-2xl"><div className="flex items-start justify-between gap-4 border-b border-[#e2e9e7] px-6 py-5"><div><h2 className="text-2xl font-semibold">{title}</h2><p className="mt-1 text-sm text-[#718184]">{subtitle}</p></div><button className="icon-button" onClick={onClose} aria-label="Close"><X className="size-5" /></button></div>{children}</div></div>;
+  const returnFocus = useRef(typeof document === "undefined" ? null : document.activeElement as HTMLElement);
+  return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <DialogContent className="gap-0 p-0 sm:max-w-2xl" onCloseAutoFocus={(event) => { event.preventDefault(); returnFocus.current?.focus(); }}>
+      <DialogHeader className="border-b border-[#e2e9e7] px-6 py-5 pr-16"><DialogTitle className="text-2xl leading-8">{title}</DialogTitle><DialogDescription className="leading-6">{subtitle}</DialogDescription></DialogHeader>
+      {children}
+    </DialogContent>
+  </Dialog>;
 }
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block"><span className="mb-2 block text-sm font-semibold">{label}</span>{children}</label>; }
-function Choice({ selected, onClick, label }: { selected: boolean; onClick: () => void; label: string }) { return <button type="button" onClick={onClick} className={"flex items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-medium " + (selected ? "border-[#315f50] bg-[#e2ebe7]" : "border-[#d7e0dd] bg-white")}><span>{label}</span><span className={"grid size-5 place-items-center rounded-full border " + (selected ? "border-[#315f50] bg-[#315f50] text-white" : "border-[#acbbb6]")} >{selected && <Check className="size-3" />}</span></button>; }
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId();
+  return <div className="block"><label id={`${id}-label`} htmlFor={id} className="mb-2 block text-sm font-semibold">{label}</label>{isValidElement<{id?: string; "aria-labelledby"?: string}>(children) ? cloneElement(children, {id, "aria-labelledby": `${id}-label`}) : children}</div>;
+}
+function Choice({ selected, onClick, label }: { selected: boolean; onClick: () => void; label: string }) { return <button type="button" onClick={onClick} aria-pressed={selected} className={"flex items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-medium " + (selected ? "border-[#315f50] bg-[#e2ebe7]" : "border-[#d7e0dd] bg-white")}><span>{label}</span><span className={"grid size-5 place-items-center rounded-full border " + (selected ? "border-[#315f50] bg-[#315f50] text-white" : "border-[#acbbb6]")} >{selected && <Check className="size-3" />}</span></button>; }
 function RegionPill({ area }: { area: string }) { return <span className="inline-flex items-center gap-1 rounded-full border border-[#d7e0dd] bg-white px-2.5 py-1 text-xs text-[#526b65]"><MapPin className="size-3" />{area}</span>; }
 function StatusPill({ status }: { status: AccessStatus | "vacancy" }) { const styles = status === "active" ? "bg-emerald-50 text-emerald-700" : status === "vacancy" ? "bg-amber-100 text-amber-800" : status === "pending" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"; return <span className={"rounded-full px-2 py-1 text-[11px] font-semibold " + styles}>{status}</span>; }
 function initials(name: string) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RS"; }

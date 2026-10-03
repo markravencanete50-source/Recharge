@@ -3,6 +3,7 @@ import { properties, workflows, communications, maintenance, onboarding, cleans,
 const endpoints: Record<string, unknown> = {
   "/api/property-database": {data: properties},
   "/api/workflows": {data: workflows},
+  "/api/workflows/tickets": {data: workflows},
   "/api/communications/threads": {data: communications},
   "/api/maintenance": {data: maintenance},
   "/api/onboarding": {data: onboarding},

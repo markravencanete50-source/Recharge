@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Fragment, useMemo, useState } from "react";
+import { FormEvent, Fragment, cloneElement, createContext, isValidElement, useContext, useId, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Building2,
@@ -20,10 +20,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent as BaseDialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger as BaseSelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { CleansData, CleanFileKind, CleanProperty, Cleaner, CleanTicket } from "@/lib/cleans-types";
@@ -42,6 +42,17 @@ export type CleansMode = Extract<ModuleId,
 >;
 
 type ActionBody = Record<string, unknown> & { action: string };
+const CleansErrorContext = createContext("");
+const FieldIdContext = createContext<string | undefined>(undefined);
+function SelectTrigger(props: React.ComponentProps<typeof BaseSelectTrigger>) {
+  const id = useContext(FieldIdContext);
+  return <BaseSelectTrigger {...props} id={props.id || id} aria-labelledby={props["aria-labelledby"] || (id ? `${id}-label` : undefined)} />;
+}
+
+function DialogContent({children, ...props}: React.ComponentProps<typeof BaseDialogContent>) {
+  const error = useContext(CleansErrorContext);
+  return <BaseDialogContent {...props}>{children}{error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}</BaseDialogContent>;
+}
 
 const modeTitles: Record<CleansMode, string> = {
   "clean-client-database": "Clean Client Database",
@@ -62,10 +73,13 @@ export function CleansCentre({ initialData, mode, role, onBack }: { initialData:
 
   async function action(body: ActionBody) {
     setBusy(true); setError("");
+    try {
     const response = await fetch("/api/cleans", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const result = await response.json().catch(() => null) as { data?: CleansData; error?: string } | null;
     if (!response.ok || !result?.data) { setError(result?.error || "The update could not be saved"); setBusy(false); return false; }
     setData(result.data); setBusy(false); return true;
+    } catch { setError("The update could not be saved. Check your connection and try again."); return false; }
+    finally { setBusy(false); }
   }
 
   async function upload(ticketId: string, kind: CleanFileKind, file: File) {
@@ -87,13 +101,13 @@ export function CleansCentre({ initialData, mode, role, onBack }: { initialData:
 
   if (!data.available) return <EmptyState title="Recharge Cleans is temporarily unavailable" description="The workspace could not reach its live data. Please refresh and try again." />;
   return (
-    <div>
+    <CleansErrorContext.Provider value={error}><div>
       <Button variant="ghost" className="-ml-3 mb-5 text-[#526b67]" onClick={onBack}><ArrowLeft /> Back</Button>
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><p className="eyebrow">Connected workflow</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">{modeTitles[mode]}</h1></div>
         {mode === "cleaning-schedule" && <Button className="h-11 rounded-xl bg-[#1c3934] text-white" onClick={sync} disabled={busy || !data.hostawayConnected}><CloudDownload /> {busy ? "Syncing…" : "Sync Hostaway"}</Button>}
       </div>
-      {error && <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
+      {error && <div role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
       <div className="mt-8">
         {mode === "clean-client-database" && <PropertyDatabase data={data} action={action} busy={busy} />}
         {mode === "cleaner-database" && <CleanerDatabase data={data} action={action} busy={busy} />}
@@ -105,7 +119,7 @@ export function CleansCentre({ initialData, mode, role, onBack }: { initialData:
         {mode === "client-mailbox" && <ClientMailbox data={data} action={action} busy={busy} client={role === "client"} />}
         {mode === "replenishment-requests" && <Replenishments data={data} action={action} busy={busy} />}
       </div>
-    </div>
+    </div></CleansErrorContext.Provider>
   );
 }
 
@@ -301,7 +315,10 @@ function UploadButton({ ticket, kind, label, icon: Icon, upload, busy, accept, r
 type ScreenProps = { data: CleansData; action: (body: ActionBody) => Promise<boolean>; busy: boolean };
 type UploadProps = { upload: (ticketId: string, kind: CleanFileKind, file: File) => Promise<boolean> };
 function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) { return <div className="relative w-full max-w-xl"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#81908d]" /><Input className="h-11 bg-white pl-10" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} /></div>; }
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="space-y-2"><Label>{label}</Label>{children}</div>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const id = useId();
+  return <FieldIdContext.Provider value={id}><div className="space-y-2"><Label id={`${id}-label`} htmlFor={id}>{label}</Label>{isValidElement<{id?: string; "aria-labelledby"?: string}>(children) ? cloneElement(children, {id, "aria-labelledby": `${id}-label`}) : children}</div></FieldIdContext.Provider>;
+}
 function CheckToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <button type="button" onClick={() => onChange(!checked)} className={`flex items-center justify-between rounded-xl border p-3 text-sm font-semibold ${checked ? "border-[#b9d3c5] bg-[#edf6ef] text-[#315d4d]" : "border-red-200 bg-red-50 text-red-800"}`}><span>{label}</span>{checked ? <Check className="size-4" /> : <CircleAlert className="size-4" />}</button>; }
 function CheckReadout({ label, value }: { label: string; value: boolean | null }) { return <div className={`rounded-xl p-3 text-sm font-semibold ${value === false ? "bg-red-50 text-red-800" : "bg-[#edf6ef] text-[#315d4d]"}`}>{label}: {value === false ? "Issue" : value === true ? "Working" : "Not checked"}</div>; }
 function Legend({ swatch, label }: { swatch: string; label: string }) { return <span className="flex items-center gap-1.5"><span className={`size-3 rounded-sm border ${swatch}`} />{label}</span>; }

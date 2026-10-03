@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ToolIllustration } from "@/components/tool-illustration";
 import {
   Activity,
   ArrowUpRight,
@@ -94,11 +95,12 @@ import {
   type PurchaseOrderWorkspace,
 } from "@/app/purchase-order-centre";
 import { OperationsCentre, type OperationsMode } from "@/app/operations-centre";
-import { WorkflowToolBoard } from "@/app/workflow-tool-board";
+import { WorkflowToolBoard, type WorkflowToolMode } from "@/app/workflow-tool-board";
 import { TeamClient } from "@/app/team/team-client";
 import { OwnerStatementsCentre } from "@/app/owner-statements-centre";
 
 type Role = WorkspaceRole;
+const PreviewContext = createContext(false);
 type OperationsView =
   | "cleans"
   | "ready"
@@ -123,6 +125,7 @@ type View =
   | "owner-statements"
   | "onboarding-invoices-board"
   | "new-property-inspections-board"
+  | "workflow-board"
   | "team"
   | "access";
 type Module = (typeof MODULES)[number];
@@ -342,6 +345,37 @@ export function RechargePortal({
     useState<PurchaseOrderWorkspace>("ready");
   const [operationsMode, setOperationsMode] = useState<OperationsMode>("ready-calendar");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [workflowBoardMode, setWorkflowBoardMode] = useState<WorkflowToolMode>("new-property-inspections");
+  const navigationRef = useRef<HTMLElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const returnFocus = menuTriggerRef.current;
+    document.body.style.overflow = "hidden";
+    const items = () => Array.from(navigationRef.current?.querySelectorAll<HTMLElement>("button, a[href], input, select, [tabindex='0']") || []).filter(item => item.getClientRects().length > 0);
+    items()[0]?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Tab") {
+        const controls = items();
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const resized = () => { if (desktop.matches) setMenuOpen(false); };
+    document.addEventListener("keydown", keydown);
+    desktop.addEventListener("change", resized);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", keydown);
+      desktop.removeEventListener("change", resized);
+      returnFocus?.focus();
+    };
+  }, [menuOpen]);
   const visibleModules = useMemo(
     () => MODULES.filter((module) => currentUser.modules.includes(module.id)),
     [currentUser.modules],
@@ -351,7 +385,7 @@ export function RechargePortal({
       operationsSections.filter((section) =>
         section.modules.some((moduleId) => currentUser.modules.includes(moduleId)),
       ),
-    [currentUser.modules, currentUser.role],
+    [currentUser.modules],
   );
 
   function changeView(next: View) {
@@ -391,14 +425,16 @@ export function RechargePortal({
   }
 
   return (
-    <div className="min-h-screen bg-[#f0f4f1] text-[#1c3934]">
+    <PreviewContext.Provider value={preview}>
+    <div className="recharge-workspace min-h-screen text-[#1c3934]">
       <GuestMessageNotifier
         enabled={!preview && currentUser.modules.includes("guest-communication") && currentUser.role !== "client"}
         paused={view === "communications"}
         initialData={communicationData}
         onOpen={() => changeView("communications")}
       />
-      <aside className={"sidebar " + (menuOpen ? "sidebar-open" : "")}>
+      {menuOpen && <button className="navigation-backdrop lg:hidden" aria-label="Dismiss navigation" onClick={() => setMenuOpen(false)} tabIndex={-1} />}
+      <aside ref={navigationRef} id="workspace-navigation" role={menuOpen ? "dialog" : undefined} aria-modal={menuOpen ? true : undefined} aria-label="Workspace navigation" className={"sidebar " + (menuOpen ? "sidebar-open" : "")}>
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-6 lg:border-0">
           <button
             className="flex items-center gap-3 text-left"
@@ -430,7 +466,7 @@ export function RechargePortal({
           className="scrollbar-thin mt-5 flex-1 overflow-y-auto px-4 pb-6"
           aria-label="Workspace"
         >
-          {currentUser.role === "stays" && (
+          {currentUser.role === "stays" && myRecharge && (
           <div className="space-y-2">
             <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/30">Personal</p>
               <NavButton
@@ -511,6 +547,9 @@ export function RechargePortal({
               className="grid size-10 place-items-center rounded-xl border border-[#d9e2df] bg-white lg:hidden"
               onClick={() => setMenuOpen(true)}
               aria-label="Open navigation"
+              aria-expanded={menuOpen}
+              aria-controls="workspace-navigation"
+              ref={menuTriggerRef}
             >
               <Menu className="size-5" />
             </button>
@@ -538,7 +577,7 @@ export function RechargePortal({
           </div>
         </header>
 
-        <div className="mx-auto max-w-[92rem] p-5 sm:p-8 lg:p-10">
+        <div key={view} className="workspace-view mx-auto max-w-[92rem] p-5 sm:p-8 lg:p-10">
           {view === "my-recharge" &&
             currentUser.role === "stays" &&
             myRecharge && <MyRecharge initialData={myRecharge} />}
@@ -562,7 +601,7 @@ export function RechargePortal({
                   onOpenClientCalendar={() => setView("client-calendar")}
                   onOpenOperations={openOperations}
                   onOpenOwnerStatements={() => setView("owner-statements")}
-                  onOpenWorkflowBoard={(mode) => setView(mode === "onboarding-invoices" ? "onboarding-invoices-board" : "new-property-inspections-board")}
+                  onOpenWorkflowBoard={(mode) => { setWorkflowBoardMode(mode); setView("workflow-board"); }}
                 />
             ) : null,
           )}
@@ -669,6 +708,7 @@ export function RechargePortal({
           )}
           {view === "onboarding-invoices-board" && <WorkflowToolBoard mode="onboarding-invoices" initialData={workflowData} onBack={() => setView("accounts")} />}
           {view === "new-property-inspections-board" && <WorkflowToolBoard mode="new-property-inspections" initialData={workflowData} onBack={() => setView("ready")} />}
+          {view === "workflow-board" && <WorkflowToolBoard mode={workflowBoardMode} initialData={workflowData} onBack={() => setView(workflowBoardMode === "onboarding-invoices" ? "accounts" : workflowBoardMode === "aircover-reporting" ? "stays" : "ready")} />}
           {view === "team" && currentUser.role !== "client" && (
             <TeamClient
               users={accessUsers}
@@ -684,6 +724,7 @@ export function RechargePortal({
         </div>
       </main>
     </div>
+    </PreviewContext.Provider>
   );
 }
 
@@ -1128,7 +1169,7 @@ function OperationsSection({
   onOpenClientCalendar: () => void;
   onOpenOperations: (mode: OperationsMode) => void;
   onOpenOwnerStatements: () => void;
-  onOpenWorkflowBoard: (mode: "onboarding-invoices" | "new-property-inspections") => void;
+  onOpenWorkflowBoard: (mode: WorkflowToolMode) => void;
 }) {
   const Icon = section.icon;
   const [toolSearch, setToolSearch] = useState("");
@@ -1140,13 +1181,13 @@ function OperationsSection({
 
   return (
     <div>
-      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+      <div className="department-heading flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <div className="mb-5 grid size-12 place-items-center rounded-2xl bg-[#e5f0e9] text-[#315f4d]">
             <Icon className="size-5" aria-hidden="true" />
           </div>
           <p className="eyebrow">Recharge department</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
+          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.045em] sm:text-[2.75rem]">
             {section.label}
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
@@ -1161,23 +1202,25 @@ function OperationsSection({
         </Badge>
       </div>
 
-      <div className="relative mt-7 max-w-2xl">
+      <div className="tool-search relative mt-7 max-w-2xl">
         <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#7c8c88]" />
         <Input
-          className="h-12 rounded-2xl border-[#cedbd6] bg-white pl-11"
+          className="h-12 rounded-2xl border-[#cedbd6] bg-white pl-11 pr-12"
           value={toolSearch}
           onChange={(event) => setToolSearch(event.target.value)}
           placeholder={`Search ${section.label} tools`}
           aria-label={`Search ${section.label} tools`}
         />
+        {toolSearch && <button className="absolute right-1 top-1 grid size-10 place-items-center rounded-xl text-[#526d61] hover:bg-[#edf3ef]" aria-label="Clear tool search" onClick={() => setToolSearch("")}><X className="size-4" /></button>}
       </div>
+      {toolSearch && <p className="mt-3 text-xs text-[#526d61]" role="status">{filteredModules.length} of {modules.length} tools match your search</p>}
 
       {section.id !== "cleans" && (
         <WorkflowPanels section={section.id} data={workflowData} />
       )}
 
       {filteredModules.length > 0 ? (
-        <div className="mt-8 grid gap-4 xl:grid-cols-2">
+        <div className="tool-grid mt-8 grid gap-5 xl:grid-cols-2">
           {filteredModules.map((module) => (
             <ToolCard
               key={module.id}
@@ -1213,6 +1256,12 @@ function OperationsSection({
                     ? () => onOpenWorkflowBoard("new-property-inspections")
                   : module.id === "onboarding-invoices"
                     ? () => onOpenWorkflowBoard("onboarding-invoices")
+                  : module.id === "property-furnishing-board"
+                    ? () => onOpenWorkflowBoard("property-furnishing")
+                  : module.id === "routine-bin-garden-board"
+                    ? () => onOpenWorkflowBoard("routine-bin-garden")
+                  : module.id === "aircover-reporting"
+                    ? () => onOpenWorkflowBoard("aircover-reporting")
                   : module.id === "owner-statements"
                     ? onOpenOwnerStatements
                   : module.id === "listing-health"
@@ -1249,6 +1298,7 @@ function OperationsSection({
           <Search className="mx-auto size-6 text-[#6f827b]" />
           <h2 className="mt-4 text-xl font-semibold">No matching tools</h2>
           <p className="mt-2 text-sm text-[#647577]">Try a different name or keyword.</p>
+          <Button className="mt-5" variant="outline" onClick={() => setToolSearch("")}>Clear search</Button>
         </section>
       )}
     </div>
@@ -1264,62 +1314,43 @@ function ToolCard({
   large?: boolean;
   onOpen?: () => void;
 }) {
-  const Icon = icons[module.id];
+  const preview = useContext(PreviewContext);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const action = onOpen ? "Open centre" : module.url && !preview ? "Open tool" : "View details";
   return (
-    <article className={"tool-card group " + (large ? "min-h-64" : "")}>
+    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+    <article className={"tool-card group " + (large ? "tool-card-large" : "")}>
       <div className="flex items-start justify-between gap-4">
-        <div
-          className={"grid size-12 place-items-center rounded-2xl " + module.tone}
-        >
-          <Icon className="size-5" />
-        </div>
-        <Badge className="border-0 bg-[#f1f5f3] text-[0.65rem] uppercase tracking-[0.14em] text-[#637477]">
+        <span className="tool-art-stage"><ToolIllustration id={module.id} fallback={icons[module.id]} /></span>
+        <Badge className="tool-audience border-0 bg-[#f1f5f3] text-[0.6rem] uppercase tracking-[0.12em] text-[#526a60]">
           {module.audience}
         </Badge>
       </div>
-      <div className="mt-8">
-        <h3 className="text-xl font-semibold tracking-[-0.025em]">
+      <div className="tool-card-copy">
+        <h3 className="text-[1.35rem] leading-7 font-semibold tracking-[-0.025em]">
           {module.name}
         </h3>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-[#6b7b7d]">
+        <p className="mt-2 max-w-xl text-sm leading-6 text-[#60756c]">
           {module.description}
         </p>
       </div>
-      <div className="mt-7 flex items-center justify-between border-t border-[#e2e9e7] pt-5">
-        <span className="text-xs font-medium text-[#849294]">
+      <div className="tool-card-footer flex items-center justify-between gap-3 border-t border-[#e2e9e7] pt-4">
+        <span className="tool-category text-xs font-medium text-[#5b7568]">
           {module.category}
         </span>
-        {onOpen ? (
-          <button
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#1c3934]"
-            onClick={onOpen}
-          >
-            Open centre
-            <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />
-          </button>
-        ) : module.url ? (
-          <a
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#1c3934]"
-            href={"/tool/" + module.id}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open tool
-            <ChevronRight className="size-4 transition-transform group-hover:translate-x-1" />
-          </a>
-        ) : liveInternalModules.has(module.id) ? (
-          <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#436352]">
-            <span className="size-1.5 rounded-full bg-[#76ad49]" />
-            Live workflow
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#6f8179]">
-            <span className="size-1.5 rounded-full bg-[#315f50]" />
-            Planned
-          </span>
-        )}
+        <span className="tool-card-action" aria-hidden="true">{action}<span className="tool-card-arrow"><ChevronRight className="size-4" /></span></span>
       </div>
+      {module.url && !preview && !onOpen ? <a className="tool-card-hitarea" href={"/tool/" + module.id} target="_blank" rel="noreferrer" aria-label={`Open ${module.name} in a new tab`} /> : onOpen ? <button className="tool-card-hitarea" onClick={onOpen} aria-label={`Open ${module.name}`} /> : <DialogTrigger asChild><button className="tool-card-hitarea" aria-label={`View details for ${module.name}`} /></DialogTrigger>}
     </article>
+      <DialogContent>
+        <ToolIllustration id={module.id} className="tool-modal-art" />
+        <DialogHeader><DialogTitle className="text-2xl leading-8">{module.name}</DialogTitle><DialogDescription className="leading-6">{module.description}</DialogDescription></DialogHeader>
+        <div className="rounded-2xl border border-[#dbe6df] bg-[#f2f6f3] p-4 text-sm leading-6 text-[#4b685a]">
+          {module.url && preview ? "This external tool is not connected in this read-only preview. It will open from the authenticated application when its integration is ready." : liveInternalModules.has(module.id) ? "This workflow is available in the department work boards. Use those boards to review and manage its tickets." : "This tool is planned. Its dedicated workflow will become available once the integration is complete."}
+        </div>
+        <DialogFooter><Button onClick={() => setDetailsOpen(false)}>Back to tools</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1714,6 +1745,7 @@ function NavButton({
     <button
       className={"nav-button " + (active ? "nav-button-active" : "")}
       onClick={onClick}
+      aria-current={active ? "page" : undefined}
     >
       <span className="text-[0.65rem] font-semibold tracking-[0.08em] text-white/35">
         {index}
@@ -1737,6 +1769,7 @@ function initials(value: string) {
 }
 
 function viewTitle(view: View, maintenanceWorkspace: MaintenanceWorkspace) {
+  if (view === "workflow-board") return "Workflow centre";
   if (view === "overview") return "Overview";
   if (view === "tools") return "Business tools";
   if (view === "my-recharge") return "My Recharge";
