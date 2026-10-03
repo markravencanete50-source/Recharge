@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { getAccessProfile } from "@/lib/access";
 import { canUseMaintenance, getMaintenanceEvidence } from "@/lib/maintenance";
+import { privateFileHeaders } from "@/lib/file-response";
 
 export async function GET(
   _request: Request,
@@ -17,13 +18,8 @@ export async function GET(
   try {
     const result = await getMaintenanceEvidence(profile, id);
     if (!result) return NextResponse.json({ error: "Evidence not found" }, { status: 404 });
-    const safeName = result.row.file_name.replace(/["\r\n]/g, "");
     return new Response(result.object.body, {
-      headers: {
-        "content-type": result.row.content_type,
-        "content-disposition": `attachment; filename="${safeName}"`,
-        "cache-control": "private, no-store",
-      },
+      headers: privateFileHeaders(result.row.content_type, result.row.file_name, true),
     });
   } catch (error) {
     console.error("Maintenance evidence download failed", error);

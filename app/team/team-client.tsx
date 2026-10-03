@@ -123,8 +123,8 @@ export function TeamClient({
 
   async function load() {
     const response = await fetch("/api/team", { cache: "no-store" });
-    const result = await response.json().catch(() => null);
-    if (response.ok) setStructure(result.data);
+    const result = await response.json().catch(() => null) as { data: TeamStructureData; error?: string } | null;
+    if (response.ok && result) setStructure(result.data);
     else setError(result?.error || "Team information could not be loaded.");
   }
 
@@ -363,8 +363,8 @@ function DepartmentSchedules({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "remove_schedule", id }),
     });
-    const result = await response.json().catch(() => null);
-    if (response.ok) onChanged(result.data);
+    const result = await response.json().catch(() => null) as { data: TeamStructureData; error?: string } | null;
+    if (response.ok && result) onChanged(result.data);
   }
 
   return (
@@ -538,8 +538,8 @@ function TeamMemberEditor({ member, structure, onClose, onSaved }: { member?: Te
     setError("");
     const form = new FormData(event.currentTarget);
     const response = await fetch("/api/team", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "save_person", id: member?.directoryId, fullName: form.get("fullName"), email: member?.email || "", department, responsibilities: form.get("responsibilities"), status, roleIds, regions }) });
-    const result = await response.json().catch(() => null);
-    if (response.ok) { onSaved(result.data); return; }
+    const result = await response.json().catch(() => null) as { data: TeamStructureData; error?: string } | null;
+    if (response.ok && result) { onSaved(result.data); return; }
     setError(result?.error || "The team member could not be saved.");
     setSaving(false);
   }
@@ -549,8 +549,8 @@ function TeamMemberEditor({ member, structure, onClose, onSaved }: { member?: Te
     const response = member.directoryId
       ? await fetch("/api/team", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "remove_person", id: member.directoryId }) })
       : await fetch("/api/access", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: member.email }) });
-    const result = await response.json().catch(() => null);
-    if (response.ok) member.directoryId ? onSaved(result.data) : window.location.reload();
+    const result = await response.json().catch(() => null) as { data: TeamStructureData; error?: string } | null;
+    if (response.ok && result) member.directoryId ? onSaved(result.data) : window.location.reload();
     else { setError("The team member could not be removed."); setRemoving(false); }
   }
   return (
@@ -596,16 +596,16 @@ function RoleEditor({ role, structure, onClose, onSaved }: { role?: TeamCustomRo
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "save_role", id: role?.id, name: form.get("name"), description: form.get("description"), department, responsibilities, regions: regions.length ? regions : ["General"], parentRoleId: form.get("parentRoleId") }),
     });
-    const result = await response.json().catch(() => null);
-    if (response.ok) onSaved(result.data);
+    const result = await response.json().catch(() => null) as { data: TeamStructureData; error?: string } | null;
+    if (response.ok && result) onSaved(result.data);
     else { setError(result?.error || "The role could not be saved."); setSaving(false); }
   }
   async function remove() {
     if (!role || !window.confirm("Remove this role? Team members will remain in their department.")) return;
     setRemoving(true);
     const response = await fetch("/api/team", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "remove_role", id: role.id }) });
-    const result = await response.json().catch(() => null);
-    if (response.ok) onSaved(result.data);
+    const result = await response.json().catch(() => null) as { data: TeamStructureData; error?: string } | null;
+    if (response.ok && result) onSaved(result.data);
     else { setError(result?.error || "The role could not be removed."); setRemoving(false); }
   }
   const parents = structure.roles.filter((item) => item.id !== role?.id);
@@ -642,8 +642,8 @@ function ScheduleEditor({ department, members, onClose, onSaved }: { department:
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "save_schedule", department, title: form.get("title"), scheduleDate: form.get("scheduleDate"), startTime: form.get("startTime"), endTime: form.get("endTime"), assignedEmail: form.get("assignedEmail"), note: form.get("note") }),
     });
-    const result = await response.json().catch(() => null);
-    if (response.ok) onSaved(result.data);
+    const result = await response.json().catch(() => null) as { data: TeamStructureData; error?: string } | null;
+    if (response.ok && result) onSaved(result.data);
     else { setError(result?.error || "The schedule item could not be saved."); setSaving(false); }
   }
   const eligible = members.filter((member) => member.role === department && member.status !== "vacancy");

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { getAccessProfile } from "@/lib/access";
 import { getPurchaseOrderFile } from "@/lib/purchase-orders";
+import { privateFileHeaders } from "@/lib/file-response";
 
 export async function GET(
   _request: Request,
@@ -15,13 +16,8 @@ export async function GET(
     const { id } = await context.params;
     const result = await getPurchaseOrderFile(profile, id);
     if (!result) return NextResponse.json({ error: "File not found" }, { status: 404 });
-    const name = result.row.file_name.replace(/["\r\n]/g, "");
     return new Response(result.object.body, {
-      headers: {
-        "content-type": result.row.content_type,
-        "content-disposition": `inline; filename="${name}"`,
-        "cache-control": "private, no-store",
-      },
+      headers: privateFileHeaders(result.row.content_type, result.row.file_name),
     });
   } catch (error) {
     console.error("Purchase order file download failed", error);

@@ -145,6 +145,7 @@ function migrationProfile(request: Request) {
   return {
     email: "enquiries@rechargestays.co.uk",
     fullName: "Recharge migration",
+    responsibilities: "",
     role: "admin" as const,
     modules: [],
     status: "active" as const,

@@ -484,6 +484,7 @@ function legacySourceRecord(property: ManagementProperty): ClickUpImportRecord {
     propertyAddress: property.propertyAddress,
     propertyType: property.propertyType,
     bedrooms: property.bedrooms,
+    beds: property.beds,
     bathrooms: property.bathrooms,
     wcCount: property.wcCount,
     parking: property.parking,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { getAccessProfile } from "@/lib/access";
 import { getCleanFile } from "@/lib/cleans";
+import { privateFileHeaders } from "@/lib/file-response";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await getChatGPTUser();
@@ -12,11 +13,11 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const { id } = await context.params;
     const result = await getCleanFile(profile, id);
     if (!result) return NextResponse.json({ error: "File not found" }, { status: 404 });
-    const name = result.row.file_name.replace(/["\r\n]/g, "");
-    return new Response(result.object.body, { headers: { "content-type": result.row.content_type, "content-disposition": `inline; filename="${name}"`, "cache-control": "private, no-store" } });
+    return new Response(result.object.body, {
+      headers: privateFileHeaders(result.row.content_type, result.row.file_name),
+    });
   } catch (error) {
     console.error("Clean file download failed", error);
     return NextResponse.json({ error: "File could not be downloaded" }, { status: 403 });
   }
 }
-

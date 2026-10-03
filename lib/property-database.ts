@@ -949,8 +949,8 @@ function mergePropertyValues(keeper: DeduplicationRow, duplicates: Deduplication
   };
 }
 
-function findHostawayDatabaseMatch(
-  rows: Array<{ id: string; hostaway_listing_id: string | null; hostaway_listing_ids: string; clickup_task_id: string | null; property_name: string; property_address: string }>,
+function findHostawayDatabaseMatch<T extends { id: string; hostaway_listing_id: string | null; hostaway_listing_ids: string; clickup_task_id: string | null; property_name: string; property_address: string }>(
+  rows: T[],
   property: GroupedHostawayProperty,
 ) {
   const ids = new Set(property.ids);

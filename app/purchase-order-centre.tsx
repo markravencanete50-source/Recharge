@@ -122,7 +122,7 @@ export function PurchaseOrderCentre({
   async function load() {
     try {
       const response = await fetch("/api/purchase-orders", { cache: "no-store" });
-      const payload = await response.json();
+      const payload = await response.json() as { data: PurchaseOrderData; error?: string };
       if (!response.ok) throw new Error(payload.error || "Purchase orders could not be loaded");
       setData(payload.data);
     } catch (error) {
@@ -139,7 +139,7 @@ export function PurchaseOrderCentre({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const payload = await response.json();
+      const payload = await response.json() as { data: PurchaseOrderData; error?: string };
       if (!response.ok) throw new Error(payload.error || "Purchase order update failed");
       setData(payload.data);
       setMessage("Purchase order updated");
@@ -162,7 +162,7 @@ export function PurchaseOrderCentre({
       form.set("kind", kind);
       form.set("file", file);
       const response = await fetch("/api/purchase-orders/files", { method: "POST", body: form });
-      const payload = await response.json();
+      const payload = await response.json() as { data: PurchaseOrderData; error?: string };
       if (!response.ok) throw new Error(payload.error || "Evidence upload failed");
       setData(payload.data);
       setMessage(kind === "receipt" ? "Receipt uploaded" : "Item photo uploaded");

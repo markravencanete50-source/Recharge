@@ -585,7 +585,7 @@ function normalizeMessages(
   values: unknown[],
 ): NormalizedMessage[] {
   const messages = values
-    .map((value, index) => {
+    .map((value, index): NormalizedMessage => {
       const message = asObject(value);
       const sentAt =
         parseTimestamp(message.insertedOn ?? message.date ?? message.createdOn) ||

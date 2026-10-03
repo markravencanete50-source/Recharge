@@ -324,7 +324,7 @@ function ChannelWorkspace({
     let cancelled = false;
     setReservationLoading(true);
     void fetch(`/api/hostaway/reservations?listingId=${encodeURIComponent(selected.hostawayListingId)}`, { cache: "no-store" })
-      .then((response) => response.json())
+      .then(async (response) => await response.json() as { reservations?: HostawayReservation[] })
       .then((result: { reservations?: HostawayReservation[] }) => {
         if (cancelled) return;
         const match = result.reservations?.find((item) => item.id === selected.hostawayReservationId || item.bookingReference === bookingReference(selected));

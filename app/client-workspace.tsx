@@ -69,7 +69,7 @@ export function ClientWorkspace({ propertyData, onboardingCases, initialTool, on
 
   useEffect(() => { if (selected) void loadReservations(selected); }, [selected?.id]);
   useEffect(() => { if (tool === "calendar") properties.filter((property) => visibleIds.includes(property.id)).forEach((property) => void loadReservations(property)); }, [tool, visibleIds.join("|")]);
-  useEffect(() => { if (tool !== "properties") return; void fetch("/api/operations", { cache: "no-store" }).then((response) => response.json()).then((result: OperationsData) => setWeeklyReports(result.reports || [])).catch(() => undefined); }, [tool]);
+  useEffect(() => { if (tool !== "properties") return; void fetch("/api/operations", { cache: "no-store" }).then(async (response) => await response.json() as OperationsData).then((result: OperationsData) => setWeeklyReports(result.reports || [])).catch(() => undefined); }, [tool]);
   useEffect(() => {
     let active = true;
     const refresh = async () => {
