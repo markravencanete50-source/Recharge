@@ -70,5 +70,5 @@ export const ownerStatements: OwnerStatementsData = {
 };
 export const team: TeamStructureData = {
   roles: [], coverage: [], regions: ["General", "Edinburgh & Lothians", "Glasgow & Clyde"], schedules: [],
-  people: accessUsers.filter(user => user.role !== "client").map(user => ({id: user.role, fullName: user.fullName, email: user.email, department: user.role === "admin" ? "management" : user.role, responsibilities: user.responsibilities, status: "active", roleIds: [], regions: ["General"]})),
+  people: accessUsers.filter(user => user.role !== "client").map(user => ({id: user.role, fullName: user.fullName, email: user.email, department: user.role === "admin" ? "leadership" : user.role, responsibilities: user.responsibilities, status: "active", roleIds: [], regions: ["General"]})),
 };
