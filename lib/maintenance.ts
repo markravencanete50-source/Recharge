@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
 import { checklistForCategory } from "@/lib/maintenance-checklists";
@@ -169,7 +170,7 @@ export type MaintenanceAction =
   | { action: "note"; id: string; note: string };
 
 export function maintenancePermissions(profile: AccessProfile): MaintenancePermissions {
-  const admin = profile.role === "admin";
+  const admin = isWorkspaceAdmin(profile.role);
   return {
     stays: admin || profile.modules.includes("stays-maintenance-reporting"),
     ready: admin || profile.modules.includes("maintenance-reporting"),
@@ -915,7 +916,7 @@ function canSeeTicketRow(
   permissions: MaintenancePermissions,
   ticket: TicketRow,
 ) {
-  if (profile.role === "admin" || permissions.stays) return true;
+  if (isWorkspaceAdmin(profile.role) || permissions.stays) return true;
   if (profile.role === "client") {
     return Boolean(ticket.client_email) && ticket.client_email.toLowerCase() === profile.email.toLowerCase();
   }

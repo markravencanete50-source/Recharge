@@ -96,3 +96,32 @@ test("every Recharge tool has distinct 3D artwork", async () => {
   });
   assert.equal(new Set(artwork).size, MODULES.length, "No two tools may share an illustration");
 });
+
+test("analytics excludes old and future records and preserves exact status totals", async () => {
+  const { buildWorkspaceAnalytics } = await vite.ssrLoadModule("/lib/analytics.ts");
+  const now = new Date("2026-10-03T12:00:00").getTime();
+  const timestamp = now / 1000;
+  const data = { workflows: { available: true, tickets: [
+    {createdAt: timestamp, status: "new"}, {createdAt: timestamp - 86400, status: "complete"},
+    {createdAt: timestamp - 45 * 86400, status: "new"}, {createdAt: timestamp + 2 * 86400, status: "new"},
+  ] }, maintenance: {available: true, tickets: [{createdAt: timestamp, status: "in_progress"}]}, cleans: {available: true, tickets: [{cleanDate: "2026-10-03", status: "approved"}]} };
+  const result = buildWorkspaceAnalytics(data, 7, now);
+  assert.equal(result.total, 4);
+  assert.equal(result.complete, 2);
+  assert.equal(result.waiting, 1);
+  assert.equal(result.status.reduce((sum,s)=>sum+s.value,0),result.total);
+  assert.equal(result.trend.length,7);
+  assert.equal(result.trend.reduce((sum,s)=>sum+s.workflows+s.repairs,0),3);
+  const empty = buildWorkspaceAnalytics({},7,now);
+  assert.equal(empty.total,0);
+  assert.ok(empty.sources.every(s=>!s.available));
+});
+
+test("API role hierarchy cannot assign elevated access through ordinary admin requests", async () => {
+  const { canManageAccess } = await vite.ssrLoadModule("/lib/access-policy.ts");
+  assert.equal(canManageAccess("admin","stays","super_admin"), false);
+  assert.equal(canManageAccess("admin","admin","stays"), false);
+  assert.equal(canManageAccess("admin","stays","ready"), true);
+  assert.equal(canManageAccess("client","client","stays"), false);
+  assert.equal(canManageAccess("super_admin","admin","super_admin"), true);
+});

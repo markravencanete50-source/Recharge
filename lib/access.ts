@@ -1,4 +1,7 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { env } from "cloudflare:workers";
+import { supabaseConfiguration } from "@/lib/supabase-server";
+import { supabaseAccessAccount, supabaseAccessUsers, supabaseSaveAccess, supabaseRequestAccess } from "@/lib/supabase-access";
 import {
   MODULE_IDS,
   defaultModulesForRole,
@@ -20,6 +23,7 @@ export type AccessProfile = {
 
 const OWNER_EMAIL = "enquiries@rechargestays.co.uk";
 const WORKSPACE_ROLES = new Set<WorkspaceRole>([
+  "super_admin",
   "admin",
   "stays",
   "cleans",
@@ -54,6 +58,7 @@ export async function getAccessAccount(
   email: string,
   displayName = "",
 ): Promise<AccessProfile | null> {
+  if (supabaseConfiguration()) return supabaseAccessAccount(email);
   const normalised = email.trim().toLowerCase();
   if (normalised === OWNER_EMAIL) return ownerProfile(displayName);
 
@@ -87,7 +92,7 @@ export async function getAccessAccount(
       role,
       status: user.status,
       modules:
-        role === "admin"
+        isWorkspaceAdmin(role)
           ? [...MODULE_IDS]
           : withRequiredRoleModules(
               role,
@@ -111,6 +116,7 @@ export async function getAccessProfile(
 }
 
 export async function listAccessUsers(): Promise<AccessProfile[]> {
+  if (supabaseConfiguration()) return supabaseAccessUsers();
   const owner = ownerProfile();
   try {
     const users = await database()
@@ -142,7 +148,7 @@ export async function listAccessUsers(): Promise<AccessProfile[]> {
           role,
           status: user.status,
           modules:
-            role === "admin"
+            isWorkspaceAdmin(role)
               ? [...MODULE_IDS]
               : withRequiredRoleModules(
                   role,
@@ -174,13 +180,14 @@ export async function saveAccessUser(input: {
   modules: ModuleId[];
   status?: AccessStatus;
 }) {
+  if (supabaseConfiguration()) return supabaseSaveAccess(input);
   const email = input.email.trim().toLowerCase();
   if (email === OWNER_EMAIL) {
     throw new Error("The primary owner account cannot be changed");
   }
 
   const modules =
-    input.role === "admin" ? [...MODULE_IDS] : Array.from(new Set(input.modules));
+    isWorkspaceAdmin(input.role) ? [...MODULE_IDS] : Array.from(new Set(input.modules));
   const status = input.status || "active";
   const db = database();
   const statements = [
@@ -202,6 +209,12 @@ export async function saveAccessUser(input: {
 }
 
 export async function removeAccessUser(emailInput: string) {
+  if (supabaseConfiguration()) {
+    const users = await supabaseAccessUsers();
+    const account = users.find(user => user.email.toLowerCase() === emailInput.trim().toLowerCase());
+    if (!account) throw new Error("Account could not be found");
+    return supabaseSaveAccess({ ...account, status: "revoked" });
+  }
   const email = emailInput.trim().toLowerCase();
   if (email === OWNER_EMAIL) throw new Error("The primary owner account cannot be removed");
   const db = database();
@@ -216,6 +229,13 @@ export async function registerAccessRequest(input: {
   fullName: string;
   role: WorkspaceRole;
 }): Promise<AccessProfile> {
+  if (input.role === "super_admin" || input.role === "admin") throw new Error("Privileged roles must be assigned by a super admin");
+  if (supabaseConfiguration()) {
+    await supabaseRequestAccess(input.fullName, input.role);
+    const account = await supabaseAccessAccount(input.email);
+    if (!account) throw new Error("Account request could not be loaded");
+    return account;
+  }
   const email = input.email.trim().toLowerCase();
   const existing = await getAccessAccount(email, input.fullName);
   if (existing) return existing;

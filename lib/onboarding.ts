@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
 import { reconcileMisimportedMaintenance } from "@/lib/maintenance-import-cleanup";
@@ -107,7 +108,7 @@ type NotificationRow = {
 
 export function canUseOnboarding(profile: AccessProfile) {
   return (
-    profile.role === "admin" ||
+    isWorkspaceAdmin(profile.role) ||
     profile.modules.includes("property-onboarding")
   );
 }
@@ -992,7 +993,7 @@ function requireStaff(profile: AccessProfile) {
 }
 
 function requireClient(profile: AccessProfile, row: OnboardingRow) {
-  if (profile.role !== "client" && profile.role !== "admin") {
+  if (profile.role !== "client" && !isWorkspaceAdmin(profile.role)) {
     throw new Error("Client decision access required");
   }
   if (profile.role === "client" && row.client_email.toLowerCase() !== profile.email.toLowerCase()) {

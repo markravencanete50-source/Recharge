@@ -40,7 +40,10 @@ export const MODULE_IDS = [
 
 export type ModuleId = (typeof MODULE_IDS)[number];
 
-export type WorkspaceRole = "admin" | "stays" | "cleans" | "ready" | "client";
+export type WorkspaceRole = "super_admin" | "admin" | "stays" | "cleans" | "ready" | "client";
+export function isWorkspaceAdmin(role: string | undefined): boolean {
+  return role === "super_admin" || role === "admin";
+}
 export type AccessStatus = "active" | "pending" | "revoked";
 
 const CLIENT_MODULES = [
@@ -99,6 +102,7 @@ export const DEFAULT_ROLE_MODULES: Record<WorkspaceRole, readonly ModuleId[]> = 
     ]),
   ),
   admin: MODULE_IDS,
+  super_admin: MODULE_IDS,
 };
 
 export function defaultModulesForRole(role: WorkspaceRole): ModuleId[] {

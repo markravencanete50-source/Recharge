@@ -1,14 +1,16 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
-import { getAccessProfile, removeAccessUser, saveAccessUser } from "@/lib/access";
+import { getAccessAccount, getAccessProfile, removeAccessUser, saveAccessUser } from "@/lib/access";
+import { canManageAccess } from "@/lib/access-policy";
 import { MODULE_IDS } from "@/lib/modules";
 
 const accessSchema = z.object({
   email: z.string().trim().email().max(254),
   fullName: z.string().trim().min(2).max(120),
   responsibilities: z.string().trim().max(5000).default(""),
-  role: z.enum(["admin", "stays", "cleans", "ready", "client"]),
+  role: z.enum(["super_admin", "admin", "stays", "cleans", "ready", "client"]),
   status: z.enum(["active", "pending", "revoked"]),
   modules: z.array(z.enum(MODULE_IDS)),
 });
@@ -23,7 +25,7 @@ export async function POST(request: Request) {
     signedInUser.email,
     signedInUser.displayName,
   );
-  if (actor?.role !== "admin") {
+  if (!actor || !isWorkspaceAdmin(actor.role)) {
     return NextResponse.json(
       { error: "Admin access required" },
       { status: 403 },
@@ -39,10 +41,12 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  const target = await getAccessAccount(parsed.data.email);
+  if (!canManageAccess(actor.role, target?.role, parsed.data.role)) return NextResponse.json({ error: "Only a super admin can manage admin accounts" }, { status: 403 });
 
   if (
     parsed.data.status === "active" &&
-    parsed.data.role !== "admin" &&
+    !isWorkspaceAdmin(parsed.data.role) &&
     parsed.data.modules.length === 0
   ) {
     return NextResponse.json(
@@ -69,9 +73,11 @@ export async function DELETE(request: Request) {
   const signedInUser = await getChatGPTUser();
   if (!signedInUser) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const actor = await getAccessProfile(signedInUser.email, signedInUser.displayName);
-  if (actor?.role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!actor || !isWorkspaceAdmin(actor.role)) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   const parsed = z.object({ email: z.string().trim().email().max(254) }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid team member" }, { status: 400 });
+  const target = await getAccessAccount(parsed.data.email);
+  if (!canManageAccess(actor.role, target?.role)) return NextResponse.json({ error: "Only a super admin can manage admin accounts" }, { status: 403 });
   try {
     await removeAccessUser(parsed.data.email);
     return NextResponse.json({ ok: true });

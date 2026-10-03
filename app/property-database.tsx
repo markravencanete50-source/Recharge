@@ -1,5 +1,6 @@
 "use client";
 
+
 import { FormEvent, useMemo, useState } from "react";
 import {
   Archive,
@@ -139,7 +140,7 @@ export function PropertyDatabase({
     return (
       <div>
         <BackButton onBack={onBack} />
-        <div className="rounded-3xl border border-[#ead8a5] bg-[#fff9e8] p-7 text-[#765e22]">
+        <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-7 text-[var(--rc-danger-text)]">
           The Management Property Database is temporarily unavailable.
         </div>
       </div>
@@ -153,7 +154,7 @@ export function PropertyDatabase({
         <div>
           <p className="eyebrow">Recharge Stays</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">Management Property Database</h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--muted-foreground)]">
             Property, owner, access, listing and payout information in one searchable record.
           </p>
         </div>
@@ -183,10 +184,10 @@ export function PropertyDatabase({
         <Stat label="Clients" value={data.clients.length} icon={UsersRound} />
       </section>
 
-      {error && <div className="mt-5 rounded-2xl border border-[#efcaca] bg-[#fff1f1] px-5 py-4 text-sm font-medium text-[#923f3f]">{error}</div>}
+      {error && <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--muted)] px-5 py-4 text-sm font-medium text-[var(--rc-danger-text)]">{error}</div>}
 
       <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="mt-6">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-[#e3ebe7] p-1.5 sm:grid-cols-3 xl:grid-cols-7">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-[var(--muted)] p-1.5 sm:grid-cols-3 xl:grid-cols-7">
           <TabsTrigger value="new_enquiry" className="h-11 min-h-11 rounded-xl px-3">New enquiry</TabsTrigger>
           <TabsTrigger value="sign_them_up" className="h-11 min-h-11 rounded-xl px-3">Sign them up</TabsTrigger>
           <TabsTrigger value="live" className="h-11 min-h-11 rounded-xl px-3">Live properties</TabsTrigger>
@@ -200,10 +201,10 @@ export function PropertyDatabase({
       {section === "reporting" ? (
         <PropertyReporting data={data} />
       ) : section !== "clients" ? (
-        <section className="mt-5 grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white xl:h-[42rem] xl:grid-cols-[22rem_minmax(0,1fr)]">
-          <aside className="border-b border-[#dfe7e4] bg-[#f7f9f8] xl:border-r xl:border-b-0">
+        <section className="mt-5 grid overflow-hidden rounded-[1.6rem] border border-[var(--border)] bg-white xl:h-[42rem] xl:grid-cols-[22rem_minmax(0,1fr)]">
+          <aside className="border-b border-[var(--border)] bg-[var(--card)] xl:border-r xl:border-b-0">
             <SearchBox value={propertySearch} onChange={setPropertySearch} placeholder="Search property, address or owner" />
-            <div className="border-b border-[#dfe7e4] px-4 pb-4">
+            <div className="border-b border-[var(--border)] px-4 pb-4">
               <Select value={regionFilter} onValueChange={setRegionFilter}>
                 <SelectTrigger className="bg-white"><SelectValue placeholder="Region" /></SelectTrigger>
                 <SelectContent><SelectItem value="all">All regions</SelectItem>{regions.map((region) => <SelectItem key={region} value={region}>{region}</SelectItem>)}</SelectContent>
@@ -215,16 +216,16 @@ export function PropertyDatabase({
                   key={property.id}
                   type="button"
                   onClick={() => setSelectedId(property.id)}
-                  className={`w-full border-b border-[#e3e9e7] px-5 py-4 text-left transition ${selected?.id === property.id ? "bg-white" : "hover:bg-white/70"}`}
+                  className={`w-full border-b border-[var(--border)] px-5 py-4 text-left transition ${selected?.id === property.id ? "bg-white" : "hover:bg-white/70"}`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="truncate text-sm font-semibold">{property.propertyName}</p>
                     <StatusBadge status={property.status} />
                   </div>
-                  <p className="mt-2 truncate text-xs text-[#718184]">{property.propertyAddress || property.ownerName || "Property details required"}</p>
+                  <p className="mt-2 truncate text-xs text-[var(--muted-foreground)]">{property.propertyAddress || property.ownerName || "Property details required"}</p>
                 </button>
               ))}
-              {properties.length === 0 && <p className="px-5 py-10 text-center text-sm text-[#718184]">No matching properties.</p>}
+              {properties.length === 0 && <p className="px-5 py-10 text-center text-sm text-[var(--muted-foreground)]">No matching properties.</p>}
             </div>
           </aside>
           {selected ? (
@@ -235,25 +236,25 @@ export function PropertyDatabase({
               onError={setError}
             />
           ) : (
-            <div className="grid min-h-80 place-items-center p-8 text-sm text-[#718184]">Select a property to view its record.</div>
+            <div className="grid min-h-80 place-items-center p-8 text-sm text-[var(--muted-foreground)]">Select a property to view its record.</div>
           )}
         </section>
       ) : (
-        <section className="mt-5 rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5 sm:p-6">
+        <section className="mt-5 rounded-[1.6rem] border border-[var(--border)] bg-white p-5 sm:p-6">
           <div className="max-w-xl"><SearchBox value={clientSearch} onChange={setClientSearch} placeholder="Search clients or portfolio properties" /></div>
           <div className="mt-5 grid gap-4 xl:grid-cols-2">
             {clients.map((client) => (
-              <article key={client.key} className="rounded-2xl border border-[#dfe7e4] bg-[#fbfcfb] p-5">
+              <article key={client.key} className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-lg font-semibold">{client.companyName || client.ownerName}</p>
-                    {client.directorNames.length > 0 && <p className="mt-1 text-sm text-[#647577]">Directors: {client.directorNames.join(", ")}</p>}
-                    <div className="mt-2 space-y-1 text-sm text-[#647577]">
+                    {client.directorNames.length > 0 && <p className="mt-1 text-sm text-[var(--muted-foreground)]">Directors: {client.directorNames.join(", ")}</p>}
+                    <div className="mt-2 space-y-1 text-sm text-[var(--muted-foreground)]">
                       {client.ownerEmail && <p className="flex items-center gap-2"><Mail className="size-4" /> {client.ownerEmail}</p>}
                       {client.ownerPhone && <p className="flex items-center gap-2"><Phone className="size-4" /> {client.ownerPhone}</p>}
                     </div>
                   </div>
-                  <Badge variant="outline" className="border-[#cddbd6] bg-white">{client.properties.length} {client.properties.length === 1 ? "property" : "properties"}</Badge>
+                  <Badge variant="outline" className="border-[var(--border)] bg-white">{client.properties.length} {client.properties.length === 1 ? "property" : "properties"}</Badge>
                 </div>
                 <div className="mt-5 space-y-2">
                   {client.properties.map((property) => (
@@ -265,7 +266,7 @@ export function PropertyDatabase({
                 </div>
               </article>
             ))}
-            {clients.length === 0 && <p className="py-12 text-center text-sm text-[#718184] xl:col-span-2">No matching clients.</p>}
+            {clients.length === 0 && <p className="py-12 text-center text-sm text-[var(--muted-foreground)] xl:col-span-2">No matching clients.</p>}
           </div>
         </section>
       )}
@@ -286,18 +287,18 @@ function PropertyReporting({ data }: { data: PropertyDatabaseData }) {
   return (
     <section className="mt-5 space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {periods.map(([label, value]) => <article key={label} className="rounded-2xl border border-[#d9e2df] bg-white p-5"><div className="flex items-center justify-between"><p className="text-sm font-medium text-[#647577]">New enquiries</p><CalendarDays className="size-4 text-[#527261]" /></div><p className="mt-4 text-3xl font-semibold">{value}</p><p className="mt-1 text-sm text-[#718184]">{label}</p></article>)}
+        {periods.map(([label, value]) => <article key={label} className="rounded-2xl border border-[var(--border)] bg-white p-5"><div className="flex items-center justify-between"><p className="text-sm font-medium text-[var(--muted-foreground)]">New enquiries</p><CalendarDays className="size-4 text-[var(--muted-foreground)]" /></div><p className="mt-4 text-3xl font-semibold">{value}</p><p className="mt-1 text-sm text-[var(--muted-foreground)]">{label}</p></article>)}
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <article className="rounded-2xl bg-[#1c3934] p-6 text-white"><TrendingUp className="size-5 text-[#8fb3a2]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{data.reporting.strikeRate}%</p><p className="mt-2 font-medium">Enquiry-to-onboarding strike rate</p><p className="mt-2 text-sm leading-6 text-white/60">The percentage of recorded enquiries that progressed into onboarding.</p></article>
-        <article className="rounded-2xl border border-[#d9e2df] bg-white p-6"><UsersRound className="size-5 text-[#527261]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{portfolios.length}</p><p className="mt-2 font-medium">Clients</p><p className="mt-2 text-sm leading-6 text-[#718184]">Landlords or companies with a named portfolio, excluding archived properties.</p></article>
-        <article className="rounded-2xl border border-[#d9e2df] bg-white p-6"><Building2 className="size-5 text-[#527261]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{averagePortfolio.toFixed(1)}</p><p className="mt-2 font-medium">Average portfolio size</p><p className="mt-2 text-sm leading-6 text-[#718184]">Average active properties managed per landlord or company.</p></article>
+        <article className="rounded-2xl bg-[#1c3934] p-6 text-white"><TrendingUp className="size-5 text-[var(--muted-foreground)]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{data.reporting.strikeRate}%</p><p className="mt-2 font-medium">Enquiry-to-onboarding strike rate</p><p className="mt-2 text-sm leading-6 text-white/60">The percentage of recorded enquiries that progressed into onboarding.</p></article>
+        <article className="rounded-2xl border border-[var(--border)] bg-white p-6"><UsersRound className="size-5 text-[var(--muted-foreground)]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{portfolios.length}</p><p className="mt-2 font-medium">Clients</p><p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">Landlords or companies with a named portfolio, excluding archived properties.</p></article>
+        <article className="rounded-2xl border border-[var(--border)] bg-white p-6"><Building2 className="size-5 text-[var(--muted-foreground)]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{averagePortfolio.toFixed(1)}</p><p className="mt-2 font-medium">Average portfolio size</p><p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">Average active properties managed per landlord or company.</p></article>
       </div>
-      <article className="overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white">
-        <div className="flex items-center gap-3 border-b border-[#dfe7e4] px-5 py-5 sm:px-6"><BarChart3 className="size-5 text-[#527261]" /><div><h2 className="font-semibold">Properties signed up</h2><p className="mt-1 text-sm text-[#718184]">Recorded when the management agreement was signed.</p></div></div>
-        <div className="divide-y divide-[#e3e9e7]">
-          {data.reporting.signedUp.map((item) => <div key={`${item.propertyName}:${item.signedAt}`} className="flex flex-col justify-between gap-1 px-5 py-4 sm:flex-row sm:items-center sm:px-6"><p className="font-medium text-[#27443f]">{item.propertyName}</p><p className="text-sm text-[#718184]">{formatDate(item.signedAt)}</p></div>)}
-          {!data.reporting.signedUp.length && <p className="px-6 py-10 text-center text-sm text-[#718184]">No signed management agreements have been recorded yet.</p>}
+      <article className="overflow-hidden rounded-[1.6rem] border border-[var(--border)] bg-white">
+        <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-5 sm:px-6"><BarChart3 className="size-5 text-[var(--muted-foreground)]" /><div><h2 className="font-semibold">Properties signed up</h2><p className="mt-1 text-sm text-[var(--muted-foreground)]">Recorded when the management agreement was signed.</p></div></div>
+        <div className="divide-y divide-[var(--border)]">
+          {data.reporting.signedUp.map((item) => <div key={`${item.propertyName}:${item.signedAt}`} className="flex flex-col justify-between gap-1 px-5 py-4 sm:flex-row sm:items-center sm:px-6"><p className="font-medium text-[var(--foreground)]">{item.propertyName}</p><p className="text-sm text-[var(--muted-foreground)]">{formatDate(item.signedAt)}</p></div>)}
+          {!data.reporting.signedUp.length && <p className="px-6 py-10 text-center text-sm text-[var(--muted-foreground)]">No signed management agreements have been recorded yet.</p>}
         </div>
       </article>
     </section>
@@ -316,22 +317,22 @@ function PropertyDetail({
   onError: (message: string) => void;
 }) {
   return (
-    <div className="min-h-0 overflow-y-auto bg-[#fbfcfb] p-5 sm:p-6">
+    <div className="min-h-0 overflow-y-auto bg-[var(--card)] p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={property.status} />
-            {property.hostawayListingId && <Badge className="border-0 bg-[#e7f4f3] text-[#2f6e73]">Hostaway linked</Badge>}
-            {property.clickupTaskId && <Badge className="border-0 bg-[#eef0ff] text-[#565fa0]">ClickUp imported</Badge>}
+            {property.hostawayListingId && <Badge className="border-0 bg-[var(--muted)] text-[var(--rc-info-text)]">Hostaway linked</Badge>}
+            {property.clickupTaskId && <Badge className="border-0 bg-[var(--muted)] text-[var(--rc-info-text)]">ClickUp imported</Badge>}
           </div>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">{property.propertyName}</h2>
-          <p className="mt-2 flex items-start gap-2 text-sm text-[#718184]"><MapPin className="mt-0.5 size-4 shrink-0" />{property.propertyAddress || "Address still required"}</p>
+          <p className="mt-2 flex items-start gap-2 text-sm text-[var(--muted-foreground)]"><MapPin className="mt-0.5 size-4 shrink-0" />{property.propertyAddress || "Address still required"}</p>
         </div>
         {canEdit && <PropertyDialog key={property.id} property={property} onSaved={onSaved} onError={onError} />}
       </div>
 
       <Tabs defaultValue="record" className="mt-6">
-        <TabsList className="h-auto rounded-2xl bg-[#e3ebe7] p-1.5">
+        <TabsList className="h-auto rounded-2xl bg-[var(--muted)] p-1.5">
           <TabsTrigger value="record" className="min-h-10 rounded-xl px-4">Property record</TabsTrigger>
           {property.clickupTaskId && <TabsTrigger value="history" className="min-h-10 rounded-xl px-4">Imported history</TabsTrigger>}
         </TabsList>
@@ -388,7 +389,7 @@ function PropertyDetail({
           </TabsContent>
         )}
       </Tabs>
-      <p className="mt-5 text-xs text-[#7a888a]">Recharge record updated {formatDate(property.updatedAt)}</p>
+      <p className="mt-5 text-xs text-[var(--muted-foreground)]">Recharge record updated {formatDate(property.updatedAt)}</p>
     </div>
   );
 }
@@ -408,7 +409,7 @@ function ClickUpArchive({ property }: { property: ManagementProperty }) {
         <ArchiveStat icon={MessageSquare} label="Comments & replies" value={String(commentTotal)} />
         <ArchiveStat icon={Paperclip} label="Attachment index" value={`${attachments.length} · ${formatBytes(fileBytes)}`} />
       </div>
-      <p className="rounded-2xl border border-[#d9e2df] bg-white px-5 py-4 text-sm leading-6 text-[#647577]">
+      <p className="rounded-2xl border border-[var(--border)] bg-white px-5 py-4 text-sm leading-6 text-[var(--muted-foreground)]">
         Every original Property Info card linked to this property is preserved below. Open a card to view its description, custom fields, checklist progress, comments, replies and file index.
       </p>
       <div className="space-y-3">
@@ -425,14 +426,14 @@ function ClickUpSourceCard({ record }: { record: ClickUpImportRecord }) {
   const fileBytes = record.attachments.reduce((total, attachment) => total + attachment.size, 0);
   const description = record.descriptionMarkdown || record.textContent;
   return (
-    <details className="overflow-hidden rounded-2xl border border-[#d9e2df] bg-white">
+    <details className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
       <summary className="cursor-pointer list-none px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><p className="font-semibold">{record.propertyName}</p><p className="mt-1 text-xs text-[#718184]">{record.clickupStatus} · Updated {formatClickUpDate(record.updatedAt)}</p></div>
-          <div className="flex flex-wrap gap-2 text-xs text-[#647577]"><Badge variant="outline">{completedItems}/{checklistItems.length} tasks</Badge><Badge variant="outline">{comments} comments</Badge><Badge variant="outline">{record.attachments.length} files</Badge></div>
+          <div><p className="font-semibold">{record.propertyName}</p><p className="mt-1 text-xs text-[var(--muted-foreground)]">{record.clickupStatus} · Updated {formatClickUpDate(record.updatedAt)}</p></div>
+          <div className="flex flex-wrap gap-2 text-xs text-[var(--muted-foreground)]"><Badge variant="outline">{completedItems}/{checklistItems.length} tasks</Badge><Badge variant="outline">{comments} comments</Badge><Badge variant="outline">{record.attachments.length} files</Badge></div>
         </div>
       </summary>
-      <div className="border-t border-[#e2e9e7] bg-[#f7f9f8] p-5">
+      <div className="border-t border-[var(--border)] bg-[var(--card)] p-5">
         <div className="grid gap-4 xl:grid-cols-2">
           <InfoCard title="Source record" icon={Archive}>
             <InfoLine label="ClickUp task ID" value={record.clickupTaskId} />
@@ -441,10 +442,10 @@ function ClickUpSourceCard({ record }: { record: ClickUpImportRecord }) {
             <InfoLine label="Due date" value={formatClickUpDate(record.dueAt)} />
             <InfoLine label="Created" value={formatClickUpDate(record.createdAt)} />
             <InfoLine label="Last updated" value={formatClickUpDate(record.updatedAt)} />
-            <a href={record.clickupUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#2f6e73]">Open original card <ExternalLink className="size-4" /></a>
+            <a href={record.clickupUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[var(--rc-info-text)]">Open original card <ExternalLink className="size-4" /></a>
           </InfoCard>
           <InfoCard title="Original description" icon={FileText}>
-            {description ? <p className="whitespace-pre-wrap text-sm leading-6 text-[#536467]">{description}</p> : <EmptyValue />}
+            {description ? <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--muted-foreground)]">{description}</p> : <EmptyValue />}
           </InfoCard>
         </div>
         {Object.keys(record.customFields).length > 0 && (
@@ -454,18 +455,18 @@ function ClickUpSourceCard({ record }: { record: ClickUpImportRecord }) {
         )}
         {record.checklists.length > 0 && (
           <ArchiveSection title="Checklists" icon={ClipboardList}>
-            <div className="space-y-3">{record.checklists.map((checklist) => <div key={checklist.id} className="rounded-xl border border-[#dfe7e4] bg-white p-4"><p className="text-sm font-semibold">{checklist.name} <span className="font-normal text-[#718184]">· {checklist.resolved} complete, {checklist.unresolved} remaining</span></p><div className="mt-3 space-y-2">{checklist.items.flatMap((item) => [item, ...item.children]).map((item) => <p key={item.id} className="flex items-start gap-2 text-sm text-[#536467]"><span className={`mt-1 size-3 shrink-0 rounded-full ${item.resolved ? "bg-[#63d48b]" : "border border-[#aebdb9] bg-white"}`} />{item.name}</p>)}</div></div>)}</div>
+            <div className="space-y-3">{record.checklists.map((checklist) => <div key={checklist.id} className="rounded-xl border border-[var(--border)] bg-white p-4"><p className="text-sm font-semibold">{checklist.name} <span className="font-normal text-[var(--muted-foreground)]">· {checklist.resolved} complete, {checklist.unresolved} remaining</span></p><div className="mt-3 space-y-2">{checklist.items.flatMap((item) => [item, ...item.children]).map((item) => <p key={item.id} className="flex items-start gap-2 text-sm text-[var(--muted-foreground)]"><span className={`mt-1 size-3 shrink-0 rounded-full ${item.resolved ? "bg-[var(--muted)]" : "border border-[var(--border)] bg-white"}`} />{item.name}</p>)}</div></div>)}</div>
           </ArchiveSection>
         )}
         {record.comments.length > 0 && (
           <ArchiveSection title="Comments & replies" icon={MessageSquare}>
-            <div className="space-y-3">{record.comments.map((comment) => <article key={comment.id} className="rounded-xl border border-[#dfe7e4] bg-white p-4"><div className="flex flex-wrap justify-between gap-2 text-xs text-[#718184]"><span className="font-semibold text-[#536467]">{comment.author || "ClickUp user"}</span><span>{formatClickUpDate(comment.date)}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#536467]">{comment.text}</p>{comment.replies.map((reply) => <div key={reply.id} className="ml-4 mt-3 border-l-2 border-[#dce7e1] pl-4"><div className="flex flex-wrap justify-between gap-2 text-xs text-[#718184]"><span className="font-semibold text-[#536467]">{reply.author || "ClickUp user"}</span><span>{formatClickUpDate(reply.date)}</span></div><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#536467]">{reply.text}</p></div>)}</article>)}</div>
+            <div className="space-y-3">{record.comments.map((comment) => <article key={comment.id} className="rounded-xl border border-[var(--border)] bg-white p-4"><div className="flex flex-wrap justify-between gap-2 text-xs text-[var(--muted-foreground)]"><span className="font-semibold text-[var(--muted-foreground)]">{comment.author || "ClickUp user"}</span><span>{formatClickUpDate(comment.date)}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--muted-foreground)]">{comment.text}</p>{comment.replies.map((reply) => <div key={reply.id} className="ml-4 mt-3 border-l-2 border-[var(--border)] pl-4"><div className="flex flex-wrap justify-between gap-2 text-xs text-[var(--muted-foreground)]"><span className="font-semibold text-[var(--muted-foreground)]">{reply.author || "ClickUp user"}</span><span>{formatClickUpDate(reply.date)}</span></div><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--muted-foreground)]">{reply.text}</p></div>)}</article>)}</div>
           </ArchiveSection>
         )}
         {record.attachments.length > 0 && (
           <ArchiveSection title="Attachment index" icon={HardDrive}>
-            <p className="mb-3 text-sm leading-6 text-[#647577]">Names, types and sizes are preserved here. Original file contents remain in ClickUp until the separate {formatBytes(fileBytes)} file-copy stage is complete.</p>
-            <div className="grid gap-2 sm:grid-cols-2">{record.attachments.map((attachment) => <div key={attachment.id} className="rounded-xl border border-[#dfe7e4] bg-white px-4 py-3"><p className="truncate text-sm font-semibold" title={attachment.title}>{attachment.title}</p><p className="mt-1 text-xs text-[#718184]">{attachment.extension.toUpperCase() || attachment.mimetype || "File"} · {formatBytes(attachment.size)}</p></div>)}</div>
+            <p className="mb-3 text-sm leading-6 text-[var(--muted-foreground)]">Names, types and sizes are preserved here. Original file contents remain in ClickUp until the separate {formatBytes(fileBytes)} file-copy stage is complete.</p>
+            <div className="grid gap-2 sm:grid-cols-2">{record.attachments.map((attachment) => <div key={attachment.id} className="rounded-xl border border-[var(--border)] bg-white px-4 py-3"><p className="truncate text-sm font-semibold" title={attachment.title}>{attachment.title}</p><p className="mt-1 text-xs text-[var(--muted-foreground)]">{attachment.extension.toUpperCase() || attachment.mimetype || "File"} · {formatBytes(attachment.size)}</p></div>)}</div>
           </ArchiveSection>
         )}
       </div>
@@ -516,11 +517,11 @@ function legacySourceRecord(property: ManagementProperty): ClickUpImportRecord {
 }
 
 function ArchiveSection({ title, icon: Icon, children }: { title: string; icon: typeof Archive; children: React.ReactNode }) {
-  return <section className="mt-4 rounded-2xl border border-[#dfe7e4] bg-[#f2f6f4] p-5"><h3 className="mb-4 flex items-center gap-2 text-base font-semibold"><Icon className="size-4 text-[#52706a]" />{title}</h3>{children}</section>;
+  return <section className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--muted)] p-5"><h3 className="mb-4 flex items-center gap-2 text-base font-semibold"><Icon className="size-4 text-[var(--muted-foreground)]" />{title}</h3>{children}</section>;
 }
 
 function ArchiveStat({ icon: Icon, label, value }: { icon: typeof Archive; label: string; value: string }) {
-  return <div className="rounded-2xl border border-[#dfe7e4] bg-white p-4"><Icon className="size-4 text-[#52706a]" /><p className="mt-3 text-2xl font-semibold tracking-[-0.04em]">{value}</p><p className="mt-1 text-xs text-[#718184]">{label}</p></div>;
+  return <div className="rounded-2xl border border-[var(--border)] bg-white p-4"><Icon className="size-4 text-[var(--muted-foreground)]" /><p className="mt-3 text-2xl font-semibold tracking-[-0.04em]">{value}</p><p className="mt-1 text-xs text-[var(--muted-foreground)]">{label}</p></div>;
 }
 
 function PropertyDialog({
@@ -590,9 +591,9 @@ function PropertyDialog({
           {property ? <Pencil /> : <Plus />} {property ? "Edit property" : "Add property"}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[#d9e2df] p-0 sm:max-w-3xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[var(--border)] p-0 sm:max-w-3xl">
         <form onSubmit={submit}>
-          <DialogHeader className="border-b border-[#e2e9e7] px-6 py-6 text-left">
+          <DialogHeader className="border-b border-[var(--border)] px-6 py-6 text-left">
             <DialogTitle className="text-2xl tracking-[-0.035em]">{property ? "Edit property record" : "Add property record"}</DialogTitle>
             <DialogDescription>Hostaway data remains linked; information completed here is kept during future syncs.</DialogDescription>
           </DialogHeader>
@@ -619,7 +620,7 @@ function PropertyDialog({
             <div className="grid gap-4 sm:grid-cols-3"><Field label="Payout date"><Input name="payoutSchedule" defaultValue={property?.payoutSchedule || ""} placeholder="For example: 10th of each month" /></Field><Field label="Management fee (%)"><Input name="managementFeePercent" type="number" min="0" max="100" step="0.01" defaultValue={property?.managementFeePercent || 0} /></Field><Field label="Cleaning cost per changeover (£)"><Input name="cleaningCost" type="number" min="0" step="0.01" defaultValue={((property?.cleaningCostPence || 0) / 100).toFixed(2)} /></Field></div>
             <Field label="Payout information"><Textarea name="payoutNotes" rows={4} defaultValue={property?.payoutNotes || ""} placeholder="Payout arrangement, deductions and owner-specific notes." /></Field>
           </div>
-          <DialogFooter className="border-t border-[#e2e9e7] px-6 py-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={saving} className="bg-[#1c3934] text-white">{saving ? "Saving…" : "Save property"}</Button></DialogFooter>
+          <DialogFooter className="border-t border-[var(--border)] px-6 py-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={saving} className="bg-[#1c3934] text-white">{saving ? "Saving…" : "Save property"}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -627,37 +628,37 @@ function PropertyDialog({
 }
 
 function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
-  return <div className="relative p-4"><Search className="absolute left-7 top-1/2 size-4 -translate-y-1/2 text-[#819093]" /><Input value={value} onChange={(event) => onChange(event.target.value)} className="bg-white pl-9" placeholder={placeholder} /></div>;
+  return <div className="relative p-4"><Search className="absolute left-7 top-1/2 size-4 -translate-y-1/2 text-[var(--muted-foreground)]" /><Input value={value} onChange={(event) => onChange(event.target.value)} className="bg-white pl-9" placeholder={placeholder} /></div>;
 }
 
 function Stat({ label, value, icon: Icon }: { label: string; value: number; icon: typeof Building2 }) {
-  return <article className="rounded-2xl border border-[#d9e2df] bg-white p-5"><div className="flex items-center justify-between"><p className="text-sm font-medium text-[#647577]">{label}</p><Icon className="size-4 text-[#527261]" /></div><p className="mt-4 text-3xl font-semibold">{value}</p></article>;
+  return <article className="rounded-2xl border border-[var(--border)] bg-white p-5"><div className="flex items-center justify-between"><p className="text-sm font-medium text-[var(--muted-foreground)]">{label}</p><Icon className="size-4 text-[var(--muted-foreground)]" /></div><p className="mt-4 text-3xl font-semibold">{value}</p></article>;
 }
 
 function InfoCard({ title, icon: Icon, children }: { title: string; icon: typeof Building2; children: React.ReactNode }) {
-  return <section className="rounded-2xl border border-[#dfe7e4] bg-white p-5"><div className="flex items-center gap-2 font-semibold"><Icon className="size-4 text-[#527261]" /> {title}</div><div className="mt-4 space-y-3">{children}</div></section>;
+  return <section className="rounded-2xl border border-[var(--border)] bg-white p-5"><div className="flex items-center gap-2 font-semibold"><Icon className="size-4 text-[var(--muted-foreground)]" /> {title}</div><div className="mt-4 space-y-3">{children}</div></section>;
 }
 
 function InfoLine({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
-  return <div><p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#819093]">{label}</p>{value ? <p className={`mt-1 text-sm leading-6 text-[#40585b] ${multiline ? "whitespace-pre-wrap" : ""}`}>{value}</p> : <EmptyValue />}</div>;
+  return <div><p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">{label}</p>{value ? <p className={`mt-1 text-sm leading-6 text-[var(--muted-foreground)] ${multiline ? "whitespace-pre-wrap" : ""}`}>{value}</p> : <EmptyValue />}</div>;
 }
 
 function InfoLink({ label, url }: { label: string; url: string }) {
   if (!url) return null;
-  return <a href={url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 rounded-xl bg-[#f5f8f6] px-3 py-2.5 text-sm font-medium hover:bg-[#edf3ef]"><span className="truncate">{label}</span><ExternalLink className="size-4 shrink-0" /></a>;
+  return <a href={url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 rounded-xl bg-[var(--muted)] px-3 py-2.5 text-sm font-medium hover:bg-[var(--muted)]"><span className="truncate">{label}</span><ExternalLink className="size-4 shrink-0" /></a>;
 }
 
-function EmptyValue() { return <p className="mt-1 text-sm text-[#9aa6a7]">Not recorded</p>; }
+function EmptyValue() { return <p className="mt-1 text-sm text-[var(--muted-foreground)]">Not recorded</p>; }
 
 function StatusBadge({ status }: { status: PropertyStatus }) {
-  const tone = status === "live" ? "bg-[#e8f7d6] text-[#36561d]" : ["new_enquiry", "sign_them_up", "onboarding"].includes(status) ? "bg-[#fff1ce] text-[#8a641c]" : "bg-[#edf2f0] text-[#61706d]";
+  const tone = status === "live" ? "bg-[var(--muted)] text-[var(--muted-foreground)]" : ["new_enquiry", "sign_them_up", "onboarding"].includes(status) ? "bg-[var(--muted)] text-[var(--rc-danger-text)]" : "bg-[var(--muted)] text-[var(--muted-foreground)]";
   const label = status === "new_enquiry" ? "New enquiry" : status === "sign_them_up" ? "Sign them up" : status[0].toUpperCase() + status.slice(1);
   return <Badge className={`border-0 ${tone}`}>{label}</Badge>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="space-y-2"><Label>{label}</Label>{children}</div>; }
 
-function BackButton({ onBack }: { onBack: () => void }) { return <button type="button" className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#4f6966] hover:text-[#1c3934]" onClick={onBack}><ArrowLeft className="size-4" /> Back to Stays</button>; }
+function BackButton({ onBack }: { onBack: () => void }) { return <button type="button" className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]" onClick={onBack}><ArrowLeft className="size-4" /> Back to Stays</button>; }
 
 function parseLinkText(value: string): PropertyListingLink[] {
   return value.split("\n").map((line) => line.trim()).filter(Boolean).flatMap((line) => {

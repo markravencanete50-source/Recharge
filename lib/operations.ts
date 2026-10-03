@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
@@ -162,7 +163,7 @@ function database() {
 }
 
 export function canUseOperations(profile: AccessProfile) {
-  return profile.role === "admin" || profile.role === "stays" || profile.role === "ready" || profile.role === "client";
+  return isWorkspaceAdmin(profile.role) || profile.role === "stays" || profile.role === "ready" || profile.role === "client";
 }
 
 export async function getOperationsData(profile: AccessProfile): Promise<OperationsData> {

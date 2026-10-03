@@ -16,3 +16,13 @@
 .preview-banner select { border-color: #b7c9b9; min-height: 40px; padding: .5rem .75rem; border-radius: .75rem; color: #244637; }
 .preview-workspace .navigation-backdrop { z-index: 120; }
 @media(max-width: 1023px) { .preview-workspace .sidebar-open { z-index: 130; } }
+
+.preview-banner { min-height: 64px; padding: 10px 24px; gap: 16px; }
+.preview-banner select { min-height: 44px; }
+@media(max-width: 640px) {
+  .preview-banner { min-height: 0; padding: 12px 16px; gap: 10px; }
+  .preview-banner strong { font-size: 12px; }
+  .preview-banner span { display: block; font-size: 11px; line-height: 1.5; }
+  .preview-banner label { font-size: 12px; }
+  .preview-banner select { padding: 6px 10px; }
+}

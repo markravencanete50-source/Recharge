@@ -30,7 +30,7 @@ export function previewResponse(request: Request): Response | null {
   if (path === "/api" || path.startsWith("/api/")) {
     return Object.hasOwn(endpoints, path) ? json(endpoints[path]) : json({error: "This service is not connected in the product preview."}, 404);
   }
-  if (path === "/_worker.js" || path === "/_routes.json" || path.startsWith("/tool/") || path.includes("signin") || path.includes("signout")) {
+  if (path === "/_worker.js" || path === "/_routes.json" || path.startsWith("/tool/") || path.includes("signin") || path.includes("signout") || path === "/sign-in" || path === "/sign-out") {
     return json({error: "Live sign-in and external tools are not connected in this preview. Return to the preview home."}, 404);
   }
   return null;

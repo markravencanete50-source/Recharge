@@ -1,4 +1,6 @@
 "use client";
+import { isWorkspaceAdmin } from "@/lib/modules";
+
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -229,7 +231,7 @@ export function MaintenanceCentre({
     return (
       <div>
         <BackButton onBack={onBack} />
-        <div className="rounded-3xl border border-[#ead8a5] bg-[#fff9e8] p-7 text-[#765e22]">
+        <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-7 text-[var(--rc-danger-text)]">
           Maintenance Reporting is temporarily unavailable. Please try again shortly.
         </div>
       </div>
@@ -245,7 +247,7 @@ export function MaintenanceCentre({
           <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
             {maintenanceToolCopy(initialWorkspace).title}
           </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--muted-foreground)]">
             {maintenanceToolCopy(initialWorkspace).description}
           </p>
         </div>
@@ -267,13 +269,13 @@ export function MaintenanceCentre({
       </section>
 
       {error && (
-        <div className="mt-5 rounded-2xl border border-[#efcaca] bg-[#fff1f1] px-5 py-4 text-sm font-medium text-[#923f3f]">
+        <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--muted)] px-5 py-4 text-sm font-medium text-[var(--rc-danger-text)]">
           {error}
         </div>
       )}
 
       <Tabs value={activeWorkspace} onValueChange={(value) => setWorkspace(value as MaintenanceWorkspace)} className="mt-6">
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl bg-[#e3ebe7] p-1.5">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl bg-[var(--muted)] p-1.5">
           {availableTabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -292,11 +294,11 @@ export function MaintenanceCentre({
       ) : (
         <>
           {activeWorkspace === "ready" && <ReadyCalendar tickets={tickets} />}
-          <div className="mt-5 grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white xl:h-[46rem] xl:grid-cols-[22rem_minmax(0,1fr)]">
-            <aside className="border-b border-[#dfe7e4] bg-[#f7f9f8] xl:min-h-0 xl:border-r xl:border-b-0">
-              <div className="border-b border-[#dfe7e4] px-5 py-4">
+          <div className="mt-5 grid overflow-hidden rounded-[1.6rem] border border-[var(--border)] bg-white xl:h-[46rem] xl:grid-cols-[22rem_minmax(0,1fr)]">
+            <aside className="border-b border-[var(--border)] bg-[var(--card)] xl:min-h-0 xl:border-r xl:border-b-0">
+              <div className="border-b border-[var(--border)] px-5 py-4">
                 <p className="text-sm font-semibold">{workspaceLabel(activeWorkspace)}</p>
-                <p className="mt-1 text-xs text-[#718184]">{tickets.length} tickets</p>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">{tickets.length} tickets</p>
               </div>
               <div className="max-h-72 overflow-y-auto xl:max-h-[calc(46rem-4.4rem)]">
                 {tickets.map((ticket) => (
@@ -309,7 +311,7 @@ export function MaintenanceCentre({
                   />
                 ))}
                 {tickets.length === 0 && (
-                  <p className="px-5 py-10 text-center text-sm leading-6 text-[#718184]">
+                  <p className="px-5 py-10 text-center text-sm leading-6 text-[var(--muted-foreground)]">
                     No tickets in this queue.
                   </p>
                 )}
@@ -326,7 +328,7 @@ export function MaintenanceCentre({
                 upload={upload}
               />
             ) : (
-              <div className="grid min-h-80 place-items-center p-8 text-center text-sm text-[#718184]">
+              <div className="grid min-h-80 place-items-center p-8 text-center text-sm text-[var(--muted-foreground)]">
                 Select a ticket to see its connected workflow.
               </div>
             )}
@@ -339,7 +341,7 @@ export function MaintenanceCentre({
 
 function BackButton({ onBack }: { onBack: () => void }) {
   return (
-    <button className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#4f6966] hover:text-[#1c3934]" onClick={onBack}>
+    <button className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]" onClick={onBack}>
       <ArrowLeft className="size-4" /> Back to department
     </button>
   );
@@ -347,10 +349,10 @@ function BackButton({ onBack }: { onBack: () => void }) {
 
 function MaintenanceStat({ label, value, icon: Icon }: { label: string; value: number; icon: typeof Wrench }) {
   return (
-    <article className="rounded-2xl border border-[#d9e2df] bg-white p-5">
+    <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-medium text-[#647577]">{label}</p>
-        <Icon className="size-4 text-[#527261]" />
+        <p className="text-sm font-medium text-[var(--muted-foreground)]">{label}</p>
+        <Icon className="size-4 text-[var(--muted-foreground)]" />
       </div>
       <p className="mt-4 text-3xl font-semibold tracking-[-0.04em]">{value}</p>
     </article>
@@ -437,9 +439,9 @@ function NewTicketDialog({ properties, onSaved }: { properties: MaintenancePrope
           <Plus /> Raise maintenance ticket
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[#d9e2df] p-0 sm:max-w-3xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[var(--border)] p-0 sm:max-w-3xl">
         <form onSubmit={submit}>
-          <DialogHeader className="border-b border-[#e2e9e7] px-6 py-6 text-left">
+          <DialogHeader className="border-b border-[var(--border)] px-6 py-6 text-left">
             <DialogTitle className="text-2xl tracking-[-0.035em]">Raise maintenance ticket</DialogTitle>
             <DialogDescription>Select every affected property. Owner details come from the Management Property Database and each property creates a clearly identified ticket.</DialogDescription>
           </DialogHeader>
@@ -447,13 +449,13 @@ function NewTicketDialog({ properties, onSaved }: { properties: MaintenancePrope
             <Field label="Properties">
               <Popover open={propertyPickerOpen} onOpenChange={setPropertyPickerOpen}>
                 <PopoverTrigger asChild><Button type="button" variant="outline" role="combobox" aria-expanded={propertyPickerOpen} className="w-full justify-between bg-white font-normal"><span className="truncate">{selectedPropertyIds.length ? `${selectedPropertyIds.length} ${selectedPropertyIds.length === 1 ? "property" : "properties"} selected` : "Select properties from the database"}</span><ChevronsUpDown className="size-4 opacity-50" /></Button></PopoverTrigger>
-                <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0"><Command><CommandInput placeholder="Search property or address…" /><CommandList><CommandEmpty>No property found.</CommandEmpty><CommandGroup>{properties.map((property) => <CommandItem key={property.id} value={`${property.propertyName} ${property.propertyAddress}`} onSelect={() => toggleProperty(property)} className="items-start py-3"><Checkbox checked={selectedPropertyIds.includes(property.id)} className="mt-0.5" /><span className="min-w-0"><span className="block truncate font-medium">{property.propertyAddress || property.propertyName}</span><span className="mt-0.5 block truncate text-xs text-[#718184]">{property.clientName || "Owner details not yet recorded"}</span></span></CommandItem>)}</CommandGroup></CommandList></Command></PopoverContent>
+                <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0"><Command><CommandInput placeholder="Search property or address…" /><CommandList><CommandEmpty>No property found.</CommandEmpty><CommandGroup>{properties.map((property) => <CommandItem key={property.id} value={`${property.propertyName} ${property.propertyAddress}`} onSelect={() => toggleProperty(property)} className="items-start py-3"><Checkbox checked={selectedPropertyIds.includes(property.id)} className="mt-0.5" /><span className="min-w-0"><span className="block truncate font-medium">{property.propertyAddress || property.propertyName}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted-foreground)]">{property.clientName || "Owner details not yet recorded"}</span></span></CommandItem>)}</CommandGroup></CommandList></Command></PopoverContent>
               </Popover>
             </Field>
             {selectedProperties.map((property) => {
               const selectedReservation = selectedReservations[property.id];
               const propertyReservations = reservations[property.id] || [];
-              return <div key={property.id} className="rounded-2xl border border-[#dbe5df] bg-[#f7faf8] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">{property.propertyAddress || property.propertyName}</p><p className="mt-1 text-xs text-[#718184]">Client details linked automatically · reservation optional</p></div><Button type="button" variant="ghost" size="sm" onClick={() => toggleProperty(property)}>Remove</Button></div><div className="mt-4"><Select value={selectedReservation?.id || "none"} onValueChange={(id) => setSelectedReservations((current) => ({ ...current, [property.id]: id === "none" ? null : propertyReservations.find((reservation) => reservation.id === id) || null }))}><SelectTrigger disabled={reservationsLoading[property.id]}><SelectValue placeholder={reservationsLoading[property.id] ? "Loading reservations…" : "Select reservation"} /></SelectTrigger><SelectContent><SelectItem value="none">No reservation linked</SelectItem>{propertyReservations.map((reservation) => <SelectItem key={reservation.id} value={reservation.id}>{reservationLabel(reservation)} · {formatReservationDates(reservation)}</SelectItem>)}</SelectContent></Select>{reservationErrors[property.id] && <p className="mt-2 text-xs font-medium text-[#8a641c]">{reservationErrors[property.id]}</p>}</div></div>;
+              return <div key={property.id} className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">{property.propertyAddress || property.propertyName}</p><p className="mt-1 text-xs text-[var(--muted-foreground)]">Client details linked automatically · reservation optional</p></div><Button type="button" variant="ghost" size="sm" onClick={() => toggleProperty(property)}>Remove</Button></div><div className="mt-4"><Select value={selectedReservation?.id || "none"} onValueChange={(id) => setSelectedReservations((current) => ({ ...current, [property.id]: id === "none" ? null : propertyReservations.find((reservation) => reservation.id === id) || null }))}><SelectTrigger disabled={reservationsLoading[property.id]}><SelectValue placeholder={reservationsLoading[property.id] ? "Loading reservations…" : "Select reservation"} /></SelectTrigger><SelectContent><SelectItem value="none">No reservation linked</SelectItem>{propertyReservations.map((reservation) => <SelectItem key={reservation.id} value={reservation.id}>{reservationLabel(reservation)} · {formatReservationDates(reservation)}</SelectItem>)}</SelectContent></Select>{reservationErrors[property.id] && <p className="mt-2 text-xs font-medium text-[var(--rc-danger-text)]">{reservationErrors[property.id]}</p>}</div></div>;
             })}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Repair type">
@@ -475,16 +477,16 @@ function NewTicketDialog({ properties, onSaved }: { properties: MaintenancePrope
             </div>
             <Field label="Issue"><Input name="summary" required placeholder="Short description of the issue" /></Field>
             <Field label="Full details"><Textarea name="details" required rows={5} placeholder="What has happened, access details, guest impact and any evidence already received." /></Field>
-            <div className="flex items-start gap-3 rounded-2xl border border-[#dbe5df] bg-[#f7faf8] p-4">
-              <ListChecks className="mt-0.5 size-5 shrink-0 text-[#527261]" />
+            <div className="flex items-start gap-3 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+              <ListChecks className="mt-0.5 size-5 shrink-0 text-[var(--muted-foreground)]" />
               <span>
                 <span className="block text-sm font-semibold">Troubleshooting comes next</span>
-                <span className="mt-1 block text-xs leading-5 text-[#718184]">The ticket stays with Stays until every issue-specific check is completed. If it remains unresolved, the connected Ready ticket is created then.</span>
+                <span className="mt-1 block text-xs leading-5 text-[var(--muted-foreground)]">The ticket stays with Stays until every issue-specific check is completed. If it remains unresolved, the connected Ready ticket is created then.</span>
               </span>
             </div>
             {error && <p className="text-sm font-medium text-red-700">{error}</p>}
           </div>
-          <DialogFooter className="border-t border-[#e2e9e7] px-6 py-5">
+          <DialogFooter className="border-t border-[var(--border)] px-6 py-5">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button disabled={saving} className="bg-[#1c3934] text-white hover:bg-[#10271f]">{saving ? "Raising…" : "Raise ticket"}</Button>
           </DialogFooter>
@@ -507,10 +509,10 @@ function MaintenanceReporting({ tickets, nowMs }: { tickets: MaintenanceTicket[]
   const overdue = tickets.filter((ticket) => isOpen(ticket) && nowMs / 1000 - ticket.updatedAt >= 86400).length;
   const trend = buckets.map((bucket) => ({ ...bucket, count: tickets.filter((ticket) => ticket.createdAt >= bucket.start && ticket.createdAt < bucket.end).length }));
   const maximum = Math.max(1, ...trend.map((bucket) => bucket.count));
-  return <section className="mt-5 space-y-5"><div className="flex flex-col justify-between gap-4 rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5 sm:flex-row sm:items-end"><div><p className="eyebrow">Maintenance analytics</p><h2 className="mt-2 text-2xl font-semibold">Ticket reporting</h2><p className="mt-2 text-sm text-[#647577]">New demand, resolution speed and update compliance.</p></div><Tabs value={period} onValueChange={(value) => setPeriod(value as typeof period)}><TabsList className="grid h-auto grid-cols-4 bg-[#e8efec]"><TabsTrigger value="day">Daily</TabsTrigger><TabsTrigger value="week">Weekly</TabsTrigger><TabsTrigger value="month">Monthly</TabsTrigger><TabsTrigger value="year">Yearly</TabsTrigger></TabsList></Tabs></div><div className="grid gap-3 md:grid-cols-3"><ReportMetric label={`New tickets · ${current.label}`} value={String(opened.length)} /><ReportMetric label="Average resolution time" value={resolved.length ? formatDuration(averageHours) : "—"} note={`${resolved.length} resolved in this period`} /><ReportMetric label="Over 24 hours without update" value={String(overdue)} alert={overdue > 0} note="Currently open tickets" /></div><div className="rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5"><div className="flex items-center justify-between gap-4"><p className="font-semibold">New tickets over time</p><p className="text-xs text-[#718184]">{period === "day" ? "Last 14 days" : period === "week" ? "Last 12 weeks" : period === "month" ? "Last 12 months" : "Last 5 years"}</p></div><div className="mt-6 flex h-56 items-end gap-2 overflow-x-auto border-b border-[#dfe7e4] pb-1">{trend.map((bucket) => <div key={bucket.start} className="flex h-full min-w-10 flex-1 flex-col justify-end text-center"><span className="mb-2 text-xs font-semibold">{bucket.count}</span><div className="mx-auto w-full max-w-12 rounded-t-lg bg-[#76ad49]" style={{ height: `${Math.max(4, bucket.count / maximum * 150)}px` }} /><span className="mt-2 truncate text-[0.65rem] text-[#718184]">{bucket.shortLabel}</span></div>)}</div></div></section>;
+  return <section className="mt-5 space-y-5"><div className="flex flex-col justify-between gap-4 rounded-[1.6rem] border border-[var(--border)] bg-white p-5 sm:flex-row sm:items-end"><div><p className="eyebrow">Maintenance analytics</p><h2 className="mt-2 text-2xl font-semibold">Ticket reporting</h2><p className="mt-2 text-sm text-[var(--muted-foreground)]">New demand, resolution speed and update compliance.</p></div><Tabs value={period} onValueChange={(value) => setPeriod(value as typeof period)}><TabsList className="grid h-auto grid-cols-4 bg-[var(--muted)]"><TabsTrigger value="day">Daily</TabsTrigger><TabsTrigger value="week">Weekly</TabsTrigger><TabsTrigger value="month">Monthly</TabsTrigger><TabsTrigger value="year">Yearly</TabsTrigger></TabsList></Tabs></div><div className="grid gap-3 md:grid-cols-3"><ReportMetric label={`New tickets · ${current.label}`} value={String(opened.length)} /><ReportMetric label="Average resolution time" value={resolved.length ? formatDuration(averageHours) : "—"} note={`${resolved.length} resolved in this period`} /><ReportMetric label="Over 24 hours without update" value={String(overdue)} alert={overdue > 0} note="Currently open tickets" /></div><div className="rounded-[1.6rem] border border-[var(--border)] bg-white p-5"><div className="flex items-center justify-between gap-4"><p className="font-semibold">New tickets over time</p><p className="text-xs text-[var(--muted-foreground)]">{period === "day" ? "Last 14 days" : period === "week" ? "Last 12 weeks" : period === "month" ? "Last 12 months" : "Last 5 years"}</p></div><div className="mt-6 flex h-56 items-end gap-2 overflow-x-auto border-b border-[var(--border)] pb-1">{trend.map((bucket) => <div key={bucket.start} className="flex h-full min-w-10 flex-1 flex-col justify-end text-center"><span className="mb-2 text-xs font-semibold">{bucket.count}</span><div className="mx-auto w-full max-w-12 rounded-t-lg bg-[#76ad49]" style={{ height: `${Math.max(4, bucket.count / maximum * 150)}px` }} /><span className="mt-2 truncate text-[0.65rem] text-[var(--muted-foreground)]">{bucket.shortLabel}</span></div>)}</div></div></section>;
 }
 
-function ReportMetric({ label, value, note, alert = false }: { label: string; value: string; note?: string; alert?: boolean }) { return <article className={`rounded-2xl border p-5 ${alert ? "border-red-200 bg-red-50" : "border-[#d9e2df] bg-white"}`}><p className="text-sm text-[#647577]">{label}</p><p className={`mt-3 text-3xl font-semibold ${alert ? "text-red-700" : ""}`}>{value}</p>{note && <p className="mt-2 text-xs text-[#718184]">{note}</p>}</article>; }
+function ReportMetric({ label, value, note, alert = false }: { label: string; value: string; note?: string; alert?: boolean }) { return <article className={`rounded-2xl border p-5 ${alert ? "border-red-200 bg-red-50" : "border-[var(--border)] bg-white"}`}><p className="text-sm text-[var(--muted-foreground)]">{label}</p><p className={`mt-3 text-3xl font-semibold ${alert ? "text-red-700" : ""}`}>{value}</p>{note && <p className="mt-2 text-xs text-[var(--muted-foreground)]">{note}</p>}</article>; }
 
 function ReadyCalendar({ tickets }: { tickets: MaintenanceTicket[] }) {
   const scheduled = tickets
@@ -523,15 +525,15 @@ function ReadyCalendar({ tickets }: { tickets: MaintenanceTicket[] }) {
     .slice(0, 12);
   if (!scheduled.length) return null;
   return (
-    <section className="mt-5 rounded-2xl border border-[#d9e2df] bg-white p-5">
-      <div className="flex items-center gap-2 text-sm font-semibold"><CalendarDays className="size-4 text-[#527261]" /> Ready calendar</div>
+    <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-5">
+      <div className="flex items-center gap-2 text-sm font-semibold"><CalendarDays className="size-4 text-[var(--muted-foreground)]" /> Ready calendar</div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {scheduled.map((ticket) => (
-          <div key={ticket.id} className="rounded-xl bg-[#f4f7f5] px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#607174]">{formatShortDate(ticket.scheduledDate || ticket.proposedRepairDate)}</p>
+          <div key={ticket.id} className="rounded-xl bg-[var(--muted)] px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">{formatShortDate(ticket.scheduledDate || ticket.proposedRepairDate)}</p>
             <p className="mt-1 font-semibold">{ticket.scheduledDate ? `${ticket.scheduledStartTime}-${ticket.scheduledEndTime}` : "Approved · awaiting scheduling"}</p>
-            <p className="mt-1 truncate text-sm text-[#647577]">{ticket.propertyName} · {ticket.summary}</p>
-            <p className="mt-2 text-xs font-semibold text-[#527261]">{formatMoney(ticket.quoteAmountPence || 0)}</p>
+            <p className="mt-1 truncate text-sm text-[var(--muted-foreground)]">{ticket.propertyName} · {ticket.summary}</p>
+            <p className="mt-2 text-xs font-semibold text-[var(--muted-foreground)]">{formatMoney(ticket.quoteAmountPence || 0)}</p>
           </div>
         ))}
       </div>
@@ -554,16 +556,16 @@ function TicketListItem({
   return (
     <button className={`w-full border-b border-l-4 border-b-[#e4eae8] p-4 text-left transition-colors ${freshness.tone === "red" ? "border-l-red-500 bg-red-50/40" : freshness.tone === "yellow" ? "border-l-amber-400 bg-amber-50/40" : "border-l-transparent"} ${active ? "bg-white" : "hover:bg-white/70"}`} onClick={onClick}>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#607174]">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
           {workspace === "ready" ? ticket.readyReference : ticket.reference}
         </p>
         <StatusBadge status={ticket.status} />
       </div>
       <p className="mt-3 truncate text-sm font-semibold">{ticket.propertyName}</p>
-      <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#718184]">
+      <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--muted-foreground)]">
         {workspace === "closed" ? ticket.closedReason || ticket.summary : ticket.summary}
       </p>
-      <div className="mt-3 flex items-center justify-between text-xs text-[#819093]">
+      <div className="mt-3 flex items-center justify-between text-xs text-[var(--muted-foreground)]">
         <span>{ticket.category}</span>
         <span className={freshness.tone === "red" ? "font-semibold text-red-700" : freshness.tone === "yellow" ? "font-semibold text-amber-700" : ""}>{freshness.shortLabel}</span>
       </div>
@@ -573,7 +575,7 @@ function TicketListItem({
 
 function UpdateDueAlert({ ticket }: { ticket: MaintenanceTicket }) {
   const freshness = updateFreshness(ticket);
-  const tone = freshness.tone === "red" ? "border-red-200 bg-red-50 text-red-800" : freshness.tone === "yellow" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-[#cfe4c6] bg-[#f3fbe9] text-[#486337]";
+  const tone = freshness.tone === "red" ? "border-red-200 bg-red-50 text-red-800" : freshness.tone === "yellow" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)]";
   return <section className={`rounded-2xl border p-4 ${tone}`}><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0" /><div><p className="font-semibold">{freshness.title}</p><p className="mt-1 text-sm leading-6">{freshness.description} Add an update in the activity section below; this requirement continues while the ticket is with Recharge Ready.</p></div></div></section>;
 }
 
@@ -593,25 +595,25 @@ function TicketDetail({
   upload: (ticketId: string, kind: EvidenceKind, file: File) => Promise<boolean>;
 }) {
   return (
-    <section className="min-h-0 overflow-y-auto bg-[#fbfcfb]">
-      <header className="sticky top-0 z-10 border-b border-[#dfe7e4] bg-white/95 px-5 py-4 backdrop-blur">
+    <section className="min-h-0 overflow-y-auto bg-[var(--card)]">
+      <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-white/95 px-5 py-4 backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold"><span className="text-[#718184]">Property:</span> {ticket.propertyName}</p>
+              <p className="font-semibold"><span className="text-[var(--muted-foreground)]">Property:</span> {ticket.propertyName}</p>
               <PriorityBadge priority={ticket.priority} />
             </div>
-            {ticket.propertyAddress && <p className="mt-1 text-xs text-[#718184]">{ticket.propertyAddress}</p>}
-            <p className="mt-1 text-xs text-[#718184]">{ticket.reference}{ticket.readyReference ? ` · Ready ${ticket.readyReference}` : ""}</p>
+            {ticket.propertyAddress && <p className="mt-1 text-xs text-[var(--muted-foreground)]">{ticket.propertyAddress}</p>}
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">{ticket.reference}{ticket.readyReference ? ` · Ready ${ticket.readyReference}` : ""}</p>
           </div>
           <StatusBadge status={ticket.status} />
         </div>
       </header>
       <div className="space-y-5 p-5 sm:p-6">
-        <section className="rounded-2xl border border-[#dfe7e4] bg-white p-5">
+        <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
           <p className="text-lg font-semibold">{ticket.summary}</p>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#607174]">{ticket.details}</p>
-          <div className="mt-5 grid gap-4 border-t border-[#e6ecea] pt-5 sm:grid-cols-2 xl:grid-cols-3">
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--muted-foreground)]">{ticket.details}</p>
+          <div className="mt-5 grid gap-4 border-t border-[var(--border)] pt-5 sm:grid-cols-2 xl:grid-cols-3">
             <Detail label="Repair type" value={ticket.category} />
             <Detail label="Raised by" value={ticket.raisedByName} />
             <Detail label="Client" value={ticket.clientName || ticket.clientEmail || "Not recorded"} />
@@ -636,10 +638,10 @@ function TicketDetail({
           <section className="rounded-2xl bg-[#1c3934] p-5 text-white">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8fb3a2]">Ready quote</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted-foreground)]">Ready quote</p>
                 <p className="mt-2 text-3xl font-semibold">{formatMoney(ticket.quoteAmountPence)}</p>
               </div>
-              <a className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-[#1c3934]" href={`/api/maintenance/${ticket.id}/proposal`}>
+              <a className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-[var(--foreground)]" href={`/api/maintenance/${ticket.id}/proposal`}>
                 <Download className="size-4" /> Client proposal
               </a>
             </div>
@@ -750,19 +752,19 @@ function TroubleshootingPanel({
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#cedbd6] bg-white">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#e2e9e6] bg-[#f7faf8] p-5">
+    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] bg-[var(--card)] p-5">
         <div className="flex items-start gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#1c3934] text-white"><Bot className="size-5" /></span>
           <div>
-            <div className="flex items-center gap-2"><p className="font-semibold">AI Maintenance Troubleshooter</p><Badge className="border-0 bg-[#e4f5d7] text-[#456628]"><Sparkles className="mr-1 size-3" /> ClickUp SOP guided</Badge></div>
-            <p className="mt-1 text-xs leading-5 text-[#718184]">A conversation using the {ticket.category.toLowerCase()} pathway and Recharge maintenance SOPs.</p>
+            <div className="flex items-center gap-2"><p className="font-semibold">AI Maintenance Troubleshooter</p><Badge className="border-0 bg-[var(--muted)] text-[var(--muted-foreground)]"><Sparkles className="mr-1 size-3" /> ClickUp SOP guided</Badge></div>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">A conversation using the {ticket.category.toLowerCase()} pathway and Recharge maintenance SOPs.</p>
           </div>
         </div>
-        <span className="text-xs font-semibold text-[#527261]">{Math.min(answers.length, checklist.length)} / {checklist.length} avenues reviewed</span>
+        <span className="text-xs font-semibold text-[var(--muted-foreground)]">{Math.min(answers.length, checklist.length)} / {checklist.length} avenues reviewed</span>
       </div>
 
-      <div className="max-h-[34rem] space-y-4 overflow-y-auto bg-[#f4f7f5] p-5" aria-live="polite">
+      <div className="max-h-[34rem] space-y-4 overflow-y-auto bg-[var(--muted)] p-5" aria-live="polite">
         <AssistantBubble>
           I’ll take you through the safe checks one at a time and create a clear handoff. Never ask a guest to open a boiler, gas appliance or electrical unit, touch exposed wiring, or repeatedly reset a breaker.
         </AssistantBubble>
@@ -794,10 +796,10 @@ function TroubleshootingPanel({
         {safetyCleared && currentStep && (
           <div className="space-y-3">
             <AssistantBubble>
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#698077]">Next safe check</span>
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted-foreground)]">Next safe check</span>
               <span className="mt-1 block">{currentStep.label}</span>
             </AssistantBubble>
-            <div className="ml-auto max-w-[42rem] rounded-2xl rounded-br-md border border-[#cbd9d3] bg-white p-4">
+            <div className="ml-auto max-w-[42rem] rounded-2xl rounded-br-md border border-[var(--border)] bg-white p-4">
               <Textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} placeholder="Tell the assistant what you checked and what happened…" />
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button type="button" size="sm" onClick={() => answerStep("remains")} className="bg-[#1c3934] text-white hover:bg-[#10271f]">Checked — issue remains</Button>
@@ -832,50 +834,50 @@ function TroubleshootingPanel({
         {resolvedAnswer && <Button type="button" disabled={Boolean(saving)} onClick={() => finish("resolved")} className="bg-[#5f8b4a] text-white hover:bg-[#4b713a]"><Check /> {saving === "resolved" ? "Closing ticket…" : "Confirm resolved & close"}</Button>}
         {(answers.length > 0 || safetyCleared || safetyEscalation) && <Button type="button" variant="outline" disabled={Boolean(saving)} onClick={() => { setAnswers([]); setDraft(""); setClosureReason(""); setSafetyCleared(false); setSafetyEscalation(false); setValidationError(""); }}>Restart conversation</Button>}
       </div>
-      {!resolvedAnswer && !allReviewed && <p className="mt-3 text-xs text-[#718184]">Ready remains locked until the assistant reaches a safe stopping point or all relevant checks have been reviewed.</p>}
+      {!resolvedAnswer && !allReviewed && <p className="mt-3 text-xs text-[var(--muted-foreground)]">Ready remains locked until the assistant reaches a safe stopping point or all relevant checks have been reviewed.</p>}
       </div>
     </section>
   );
 }
 
 function AssistantBubble({ children }: { children: React.ReactNode }) {
-  return <div className="flex max-w-[46rem] items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#1c3934] text-white"><Bot className="size-4" /></span><div className="rounded-2xl rounded-tl-md border border-[#dce5e1] bg-white px-4 py-3 text-sm leading-6 text-[#43585a]">{children}</div></div>;
+  return <div className="flex max-w-[46rem] items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#1c3934] text-white"><Bot className="size-4" /></span><div className="rounded-2xl rounded-tl-md border border-[var(--border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--muted-foreground)]">{children}</div></div>;
 }
 
 function UserBubble({ children }: { children: React.ReactNode }) {
-  return <div className="ml-auto flex max-w-[42rem] flex-row-reverse items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#ddefcf] text-[#456628]"><UserRound className="size-4" /></span><div className="rounded-2xl rounded-tr-md bg-[#dfeae5] px-4 py-3 text-sm leading-6 text-[#29443f]">{children}</div></div>;
+  return <div className="ml-auto flex max-w-[42rem] flex-row-reverse items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--muted)] text-[var(--muted-foreground)]"><UserRound className="size-4" /></span><div className="rounded-2xl rounded-tr-md bg-[var(--muted)] px-4 py-3 text-sm leading-6 text-[var(--foreground)]">{children}</div></div>;
 }
 
 function TroubleshootingRecord({ ticket }: { ticket: MaintenanceTicket }) {
   const checklist = checklistForCategory(ticket.category);
   const completed = new Set(ticket.troubleshootingCompletedItems);
   return (
-    <section className="rounded-2xl border border-[#dbe5df] bg-[#f7faf8] p-5">
+    <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 font-semibold">
-            <ListChecks className="size-4 text-[#527261]" /> Troubleshooting record
+            <ListChecks className="size-4 text-[var(--muted-foreground)]" /> Troubleshooting record
           </div>
-          <p className="mt-1 text-xs text-[#718184]">
+          <p className="mt-1 text-xs text-[var(--muted-foreground)]">
             {ticket.troubleshootingCompletedItems.length} of {checklist.length} safe avenues reviewed
           </p>
         </div>
-        <Badge className="border-0 bg-[#e7efea] text-[#405f50]">
+        <Badge className="border-0 bg-[var(--muted)] text-[var(--muted-foreground)]">
           {ticket.troubleshootingOutcome === "resolved" ? "Resolved in Stays" : "Referred to Ready"}
         </Badge>
       </div>
       <div className="mt-4 grid gap-2 lg:grid-cols-2">
         {checklist.map((item) => (
-          <div key={item.id} className="flex items-start gap-2 rounded-xl bg-white px-3 py-2.5 text-xs leading-5 text-[#526568]">
-            {completed.has(item.id) ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#5f8b4a]" /> : <Clock3 className="mt-0.5 size-4 shrink-0 text-[#9a8b70]" />}
+          <div key={item.id} className="flex items-start gap-2 rounded-xl bg-white px-3 py-2.5 text-xs leading-5 text-[var(--muted-foreground)]">
+            {completed.has(item.id) ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[var(--muted-foreground)]" /> : <Clock3 className="mt-0.5 size-4 shrink-0 text-[var(--rc-warning-text)]" />}
             <span>{item.label}</span>
           </div>
         ))}
       </div>
       {ticket.troubleshootingNotes && (
         <div className="mt-4 rounded-xl bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#819093]">Notes</p>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#526568]">{ticket.troubleshootingNotes}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">Notes</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--muted-foreground)]">{ticket.troubleshootingNotes}</p>
         </div>
       )}
     </section>
@@ -884,14 +886,14 @@ function TroubleshootingRecord({ ticket }: { ticket: MaintenanceTicket }) {
 
 function ClosurePanel({ ticket }: { ticket: MaintenanceTicket }) {
   return (
-    <section className="rounded-2xl border border-[#cfe2c1] bg-[#f2f9eb] p-5">
-      <div className="flex items-center gap-2 font-semibold text-[#355420]">
+    <section className="rounded-2xl border border-[var(--border)] bg-[var(--muted)] p-5">
+      <div className="flex items-center gap-2 font-semibold text-[var(--muted-foreground)]">
         <Archive className="size-4" /> Closed ticket
       </div>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#526842]">
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--muted-foreground)]">
         {ticket.closedReason || "This ticket has been completed and closed."}
       </p>
-      <p className="mt-3 text-xs text-[#6b7f5c]">
+      <p className="mt-3 text-xs text-[var(--muted-foreground)]">
         {ticket.closedByName || "Recharge team"}
         {ticket.closedAt ? ` · ${formatDateTime(ticket.closedAt)}` : ""}
       </p>
@@ -915,9 +917,9 @@ function QuoteForm({ ticket, mutate, threshold }: { ticket: MaintenanceTicket; m
     setSaving(false);
   }
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-[#dbe5df] bg-white p-5">
-      <div className="flex items-center gap-2 font-semibold"><Banknote className="size-4 text-[#527261]" /> Ready quote required</div>
-      <p className="mt-2 text-xs leading-5 text-[#718184]">
+    <form onSubmit={submit} className="rounded-2xl border border-[var(--border)] bg-white p-5">
+      <div className="flex items-center gap-2 font-semibold"><Banknote className="size-4 text-[var(--muted-foreground)]" /> Ready quote required</div>
+      <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">
         {threshold?.configured
           ? `No-approval limit ${formatMoney(threshold.managementLimitPence)} · client limit ${formatMoney(threshold.clientLimitPence)}`
           : "No threshold is configured for this repair type, so management and client approval will be required."}
@@ -935,15 +937,15 @@ function QuoteForm({ ticket, mutate, threshold }: { ticket: MaintenanceTicket; m
 function ApprovalPanel({ ticket, currentUser, mutate }: { ticket: MaintenanceTicket; currentUser: MaintenanceUser; mutate: (body: Record<string, unknown>) => Promise<boolean> }) {
   const managementPending = ticket.managementApproval === "pending";
   const clientPending = ticket.clientApproval === "pending";
-  const canClientAct = currentUser.role === "client" || currentUser.role === "admin";
+  const canClientAct = currentUser.role === "client" || isWorkspaceAdmin(currentUser.role);
   if (!managementPending && !clientPending) return null;
   return (
-    <section className="rounded-2xl border border-[#ead8a5] bg-[#fff9e8] p-5">
-      <div className="flex items-center gap-2 font-semibold text-[#765e22]"><Flag className="size-4" /> Approval required</div>
+    <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+      <div className="flex items-center gap-2 font-semibold text-[var(--rc-danger-text)]"><Flag className="size-4" /> Approval required</div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {managementPending && currentUser.role === "admin" && <ApprovalBox ticket={ticket} kind="management" mutate={mutate} />}
+        {managementPending && isWorkspaceAdmin(currentUser.role) && <ApprovalBox ticket={ticket} kind="management" mutate={mutate} />}
         {clientPending && canClientAct && <ApprovalBox ticket={ticket} kind="client" mutate={mutate} />}
-        {managementPending && currentUser.role !== "admin" && <ApprovalWaiting label="Management approval pending" />}
+        {managementPending && !isWorkspaceAdmin(currentUser.role) && <ApprovalWaiting label="Management approval pending" />}
         {clientPending && !canClientAct && <ApprovalWaiting label="Client approval pending" />}
       </div>
     </section>
@@ -958,7 +960,7 @@ function ApprovalBox({ ticket, kind, mutate }: { ticket: MaintenanceTicket; kind
     setSaving(false);
   }
   return (
-    <div className="rounded-xl border border-[#eadfbd] bg-white p-4">
+    <div className="rounded-xl border border-[var(--border)] bg-white p-4">
       <p className="text-sm font-semibold">{kind === "management" ? "Management decision" : "Client decision"}</p>
       <div className="mt-3 flex gap-2">
         <Button size="sm" disabled={saving} onClick={() => decide("approved")} className="bg-[#1c3934] text-white"><Check /> Approve</Button>
@@ -969,7 +971,7 @@ function ApprovalBox({ ticket, kind, mutate }: { ticket: MaintenanceTicket; kind
 }
 
 function ApprovalWaiting({ label }: { label: string }) {
-  return <div className="flex items-center gap-2 rounded-xl border border-[#eadfbd] bg-white p-4 text-sm font-semibold"><Clock3 className="size-4 text-[#a47623]" /> {label}</div>;
+  return <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white p-4 text-sm font-semibold"><Clock3 className="size-4 text-[var(--rc-danger-text)]" /> {label}</div>;
 }
 
 function ApprovalStatusPill({ label, status }: { label: string; status: MaintenanceTicket["managementApproval"] }) {
@@ -995,8 +997,8 @@ function ScheduleForm({ ticket, currentUser, mutate }: { ticket: MaintenanceTick
     setSaving(false);
   }
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-[#dbe5df] bg-white p-5">
-      <div className="flex items-center gap-2 font-semibold"><CalendarDays className="size-4 text-[#527261]" /> Lock into Ready calendar</div>
+    <form onSubmit={submit} className="rounded-2xl border border-[var(--border)] bg-white p-5">
+      <div className="flex items-center gap-2 font-semibold"><CalendarDays className="size-4 text-[var(--muted-foreground)]" /> Lock into Ready calendar</div>
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
         <Field label="Date"><Input name="scheduledDate" required type="date" defaultValue={ticket.proposedRepairDate || ""} /></Field>
         <Field label="Start"><Input name="startTime" required type="time" /></Field>
@@ -1019,11 +1021,11 @@ function ReadyProgress({ ticket, mutate }: { ticket: MaintenanceTicket; mutate: 
     setSaving(false);
   }
   return (
-    <section className="rounded-2xl border border-[#dbe5df] bg-white p-5">
+    <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="font-semibold">Ready job progress</p>
-          <p className="mt-1 text-xs text-[#718184]">{formatShortDate(ticket.scheduledDate)} · {ticket.scheduledStartTime}-{ticket.scheduledEndTime} · {ticket.assignedReadyName}</p>
+          <p className="mt-1 text-xs text-[var(--muted-foreground)]">{formatShortDate(ticket.scheduledDate)} · {ticket.scheduledStartTime}-{ticket.scheduledEndTime} · {ticket.assignedReadyName}</p>
         </div>
         {ticket.status === "scheduled" ? (
           <Button disabled={saving} onClick={() => action("start")} className="bg-[#1c3934] text-white">Start work</Button>
@@ -1032,7 +1034,7 @@ function ReadyProgress({ ticket, mutate }: { ticket: MaintenanceTicket; mutate: 
         )}
       </div>
       {ticket.status === "in_progress" && !ticket.evidence.some((item) => item.kind === "completion") && (
-        <p className="mt-3 text-xs font-medium text-[#8a641c]">Completion evidence is required before the job can be submitted to management.</p>
+        <p className="mt-3 text-xs font-medium text-[var(--rc-danger-text)]">Completion evidence is required before the job can be submitted to management.</p>
       )}
     </section>
   );
@@ -1046,11 +1048,11 @@ function FinalApproval({ ticket, mutate }: { ticket: MaintenanceTicket; mutate: 
     setSaving(false);
   }
   return (
-    <section className="rounded-2xl border border-[#cfe2c1] bg-[#f2f9eb] p-5">
+    <section className="rounded-2xl border border-[var(--border)] bg-[var(--muted)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="font-semibold text-[#355420]">Management completion review</p>
-          <p className="mt-1 text-xs text-[#60754e]">Review Ready&apos;s completion evidence before creating the Accounts ticket.</p>
+          <p className="font-semibold text-[var(--muted-foreground)]">Management completion review</p>
+          <p className="mt-1 text-xs text-[var(--muted-foreground)]">Review Ready&apos;s completion evidence before creating the Accounts ticket.</p>
         </div>
         <div className="flex gap-2">
           <Button disabled={saving} onClick={() => decide("approved")} className="bg-[#1c3934] text-white"><Check /> Approve work</Button>
@@ -1076,9 +1078,9 @@ function AccountsPayment({ ticket, mutate }: { ticket: MaintenanceTicket; mutate
     setSaving(false);
   }
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-[#d9dff0] bg-[#f5f6fc] p-5">
-      <div className="flex items-center gap-2 font-semibold text-[#384978]"><Banknote className="size-4" /> Approved maintenance payment</div>
-      <p className="mt-2 text-xs leading-5 text-[#67708a]">Upload the supplier invoice, make the payment and record its bank or payment reference.</p>
+    <form onSubmit={submit} className="rounded-2xl border border-[var(--rc-info-border)] bg-[var(--muted)] p-5">
+      <div className="flex items-center gap-2 font-semibold text-[var(--rc-info-text)]"><Banknote className="size-4" /> Approved maintenance payment</div>
+      <p className="mt-2 text-xs leading-5 text-[var(--rc-info-text)]">Upload the supplier invoice, make the payment and record its bank or payment reference.</p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field label="Payment reference"><Input name="paymentReference" required placeholder="Bank or payment reference" /></Field>
         <Field label="Payment note"><Input name="note" placeholder="Optional payment detail" /></Field>
@@ -1098,9 +1100,9 @@ function AccountsReconciliation({ ticket, mutate }: { ticket: MaintenanceTicket;
     setSaving(false);
   }
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-[#d9dff0] bg-[#f5f6fc] p-5">
-      <div className="flex items-center gap-2 font-semibold text-[#384978]"><ReceiptText className="size-4" /> Reconcile paid maintenance</div>
-      <p className="mt-2 text-xs leading-5 text-[#67708a]">Payment {ticket.paymentReference || "recorded"}. Match the supplier invoice to {ticket.reference}, the property and the client payout deduction.</p>
+    <form onSubmit={submit} className="rounded-2xl border border-[var(--rc-info-border)] bg-[var(--muted)] p-5">
+      <div className="flex items-center gap-2 font-semibold text-[var(--rc-info-text)]"><ReceiptText className="size-4" /> Reconcile paid maintenance</div>
+      <p className="mt-2 text-xs leading-5 text-[var(--rc-info-text)]">Payment {ticket.paymentReference || "recorded"}. Match the supplier invoice to {ticket.reference}, the property and the client payout deduction.</p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field label="Invoice reference"><Input name="invoiceReference" required placeholder="Supplier invoice number" /></Field>
         <Field label="Reconciliation note"><Input name="note" placeholder="Account, payout or payment note" /></Field>
@@ -1122,8 +1124,8 @@ function EvidencePanel({
   upload: (ticketId: string, kind: EvidenceKind, file: File) => Promise<boolean>;
 }) {
   return (
-    <section className="rounded-2xl border border-[#dbe5df] bg-white p-5">
-      <div className="flex items-center gap-2 font-semibold"><ImagePlus className="size-4 text-[#527261]" /> Evidence & invoices</div>
+    <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
+      <div className="flex items-center gap-2 font-semibold"><ImagePlus className="size-4 text-[var(--muted-foreground)]" /> Evidence & invoices</div>
       <div className="mt-4 flex flex-wrap gap-2">
         {toolWorkspace === "stays" && permissions.stays && <EvidenceUpload ticket={ticket} kind="issue" label="Issue evidence" upload={upload} />}
         {toolWorkspace === "ready" && permissions.ready && <EvidenceUpload ticket={ticket} kind="completion" label="Completion evidence" upload={upload} />}
@@ -1131,12 +1133,12 @@ function EvidencePanel({
       </div>
       <div className="mt-4 space-y-2">
         {ticket.evidence.map((item) => (
-          <a key={item.id} href={`/api/maintenance/evidence/${item.id}`} className="flex items-center justify-between gap-4 rounded-xl bg-[#f5f8f6] px-4 py-3 text-sm hover:bg-[#edf3ef]">
-            <span className="inline-flex min-w-0 items-center gap-2"><FileText className="size-4 shrink-0 text-[#527261]" /><span className="truncate font-medium">{item.fileName}</span></span>
-            <span className="shrink-0 text-xs text-[#718184]">{evidenceKindLabel(item.kind)}</span>
+          <a key={item.id} href={`/api/maintenance/evidence/${item.id}`} className="flex items-center justify-between gap-4 rounded-xl bg-[var(--muted)] px-4 py-3 text-sm hover:bg-[var(--muted)]">
+            <span className="inline-flex min-w-0 items-center gap-2"><FileText className="size-4 shrink-0 text-[var(--muted-foreground)]" /><span className="truncate font-medium">{item.fileName}</span></span>
+            <span className="shrink-0 text-xs text-[var(--muted-foreground)]">{evidenceKindLabel(item.kind)}</span>
           </a>
         ))}
-        {ticket.evidence.length === 0 && <p className="text-sm text-[#718184]">No evidence uploaded yet.</p>}
+        {ticket.evidence.length === 0 && <p className="text-sm text-[var(--muted-foreground)]">No evidence uploaded yet.</p>}
       </div>
     </section>
   );
@@ -1145,7 +1147,7 @@ function EvidencePanel({
 function EvidenceUpload({ ticket, kind, label, upload }: { ticket: MaintenanceTicket; kind: EvidenceKind; label: string; upload: (ticketId: string, kind: EvidenceKind, file: File) => Promise<boolean> }) {
   const [saving, setSaving] = useState(false);
   return (
-    <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-[#d4dfdb] bg-white px-3 text-sm font-medium hover:bg-[#f6f8f7]">
+    <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] bg-white px-3 text-sm font-medium hover:bg-[var(--card)]">
       {saving ? <Clock3 className="size-4" /> : <Upload className="size-4" />} {saving ? "Uploading…" : label}
       <input
         className="sr-only"
@@ -1169,8 +1171,8 @@ function Timeline({ ticket, canAddNote, mutate }: { ticket: MaintenanceTicket; c
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   return (
-    <section className="rounded-2xl border border-[#dbe5df] bg-white p-5">
-      <div className="flex items-center gap-2 font-semibold"><History className="size-4 text-[#527261]" /> Connected updates</div>
+    <section className="rounded-2xl border border-[var(--border)] bg-white p-5">
+      <div className="flex items-center gap-2 font-semibold"><History className="size-4 text-[var(--muted-foreground)]" /> Connected updates</div>
       {canAddNote && (
         <div className="mt-4 flex gap-2">
           <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add an update for every connected team" />
@@ -1187,12 +1189,12 @@ function Timeline({ ticket, canAddNote, mutate }: { ticket: MaintenanceTicket; c
           </Button>
         </div>
       )}
-      <div className="mt-5 space-y-4 border-l border-[#dce5e2] pl-4">
+      <div className="mt-5 space-y-4 border-l border-[var(--border)] pl-4">
         {ticket.updates.map((update) => (
           <div key={update.id} className="relative">
             <span className="absolute -left-[1.22rem] top-1.5 size-2 rounded-full bg-[#6c9560]" />
-            <p className="text-sm leading-6 text-[#526568]">{update.note}</p>
-            <p className="mt-1 text-xs text-[#819093]">{update.actorName} · {formatDateTime(update.createdAt)}</p>
+            <p className="text-sm leading-6 text-[var(--muted-foreground)]">{update.note}</p>
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">{update.actorName} · {formatDateTime(update.createdAt)}</p>
           </div>
         ))}
       </div>
@@ -1202,11 +1204,11 @@ function Timeline({ ticket, canAddNote, mutate }: { ticket: MaintenanceTicket; c
 
 function ThresholdWorkspace({ thresholds, onData, onError }: { thresholds: MaintenanceThreshold[]; onData: (data: MaintenanceData) => void; onError: (error: string) => void }) {
   return (
-    <section className="mt-5 rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5 sm:p-6">
+    <section className="mt-5 rounded-[1.6rem] border border-[var(--border)] bg-white p-5 sm:p-6">
       <div className="max-w-3xl">
         <p className="eyebrow">Approval matrix</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">Repair thresholds</h2>
-        <p className="mt-2 text-sm leading-6 text-[#647577]">
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
           Jobs up to the management limit can be scheduled without approval. Jobs above it need management approval; jobs above the client limit also need client approval.
         </p>
       </div>
@@ -1244,10 +1246,10 @@ function ThresholdRow({ threshold, onData, onError }: { threshold: MaintenanceTh
     onData(result.data);
   }
   return (
-    <form onSubmit={submit} className="grid gap-3 rounded-2xl border border-[#e0e7e4] p-4 lg:grid-cols-[1fr_12rem_12rem_auto] lg:items-end">
+    <form onSubmit={submit} className="grid gap-3 rounded-2xl border border-[var(--border)] p-4 lg:grid-cols-[1fr_12rem_12rem_auto] lg:items-end">
       <div>
         <p className="font-semibold">{threshold.category}</p>
-        <p className="mt-1 text-xs text-[#718184]">{threshold.configured ? "Configured" : "Approval required until configured"}</p>
+        <p className="mt-1 text-xs text-[var(--muted-foreground)]">{threshold.configured ? "Configured" : "Approval required until configured"}</p>
       </div>
       <Field label="No approval up to (£)"><Input name="managementLimit" type="number" min="0" step="0.01" defaultValue={(threshold.managementLimitPence / 100).toFixed(2)} /></Field>
       <Field label="Client approval over (£)"><Input name="clientLimit" type="number" min="0" step="0.01" defaultValue={(threshold.clientLimitPence / 100).toFixed(2)} /></Field>
@@ -1257,7 +1259,7 @@ function ThresholdRow({ threshold, onData, onError }: { threshold: MaintenanceTh
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
-  return <div><p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#819093]">{label}</p><p className="mt-1 text-sm font-medium text-[#40585b]">{value}</p></div>;
+  return <div><p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">{label}</p><p className="mt-1 text-sm font-medium text-[var(--muted-foreground)]">{value}</p></div>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -1266,18 +1268,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function StatusBadge({ status }: { status: MaintenanceStatus }) {
   const tone = status === "approval_pending" || status === "management_review"
-    ? "bg-[#fff1ce] text-[#8a641c]"
+    ? "bg-[var(--muted)] text-[var(--rc-danger-text)]"
     : status === "reconciled" || status === "closed"
-      ? "bg-[#e8f7d6] text-[#36561d]"
+      ? "bg-[var(--muted)] text-[var(--muted-foreground)]"
       : status === "quote_required" || status === "accounts_pending"
-        ? "bg-[#fee8e8] text-[#9c3737]"
-        : "bg-[#edf2f0] text-[#526a64]";
+        ? "bg-[var(--muted)] text-[var(--rc-danger-text)]"
+        : "bg-[var(--muted)] text-[var(--muted-foreground)]";
   return <Badge className={`border-0 ${tone}`}>{statusLabel(status)}</Badge>;
 }
 
 function PriorityBadge({ priority }: { priority: MaintenanceTicket["priority"] }) {
   if (priority === "normal") return null;
-  return <Badge className={`border-0 ${priority === "emergency" ? "bg-[#fee8e8] text-[#9c3737]" : "bg-[#fff1ce] text-[#8a641c]"}`}>{priority}</Badge>;
+  return <Badge className={`border-0 ${priority === "emergency" ? "bg-[var(--muted)] text-[var(--rc-danger-text)]" : "bg-[var(--muted)] text-[var(--rc-danger-text)]"}`}>{priority}</Badge>;
 }
 
 function ticketsForWorkspace(data: MaintenanceData, workspace: MaintenanceWorkspace, user: MaintenanceUser, rootWorkspace: MaintenanceWorkspace) {

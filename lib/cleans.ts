@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
@@ -65,7 +66,7 @@ export type CleanAction =
 
 export function canUseCleans(profile: AccessProfile) {
   return (
-    profile.role === "admin" ||
+    isWorkspaceAdmin(profile.role) ||
     profile.modules.some((id) =>
       [
         "clean-client-database",
@@ -199,7 +200,7 @@ export async function applyCleanAction(profile: AccessProfile, input: CleanActio
   }
 
   if (input.action === "mail_status") {
-    if (profile.role !== "client" && profile.role !== "admin") throw new Error("Client Mailbox access required");
+    if (profile.role !== "client" && !isWorkspaceAdmin(profile.role)) throw new Error("Client Mailbox access required");
     const where = profile.role === "client" ? " AND lower(client_email) = lower(?)" : "";
     const query = db.prepare(`UPDATE client_mail_items SET status = ?, updated_at = ? WHERE id = ?${where}`);
     await (profile.role === "client" ? query.bind(input.status, now, input.id, profile.email) : query.bind(input.status, now, input.id)).run();
@@ -347,7 +348,7 @@ async function cleanerName(db: Db, id: string) {
 }
 
 function requireTeam(profile: AccessProfile, moduleId: string) {
-  if (profile.role === "client" || (profile.role !== "admin" && !profile.modules.includes(moduleId as any))) throw new Error("This Recharge Cleans tool is not assigned to your account");
+  if (profile.role === "client" || (!isWorkspaceAdmin(profile.role) && !profile.modules.includes(moduleId as any))) throw new Error("This Recharge Cleans tool is not assigned to your account");
 }
 
 function database() {

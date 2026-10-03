@@ -1,7 +1,12 @@
 "use client";
+import { isWorkspaceAdmin } from "@/lib/modules";
+
 
 import { FormEvent, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ToolIllustration } from "@/components/tool-illustration";
+import { DepartmentIllustration } from "@/components/department-illustration";
+import { ThemeToggle } from "@/components/workspace-theme";
+import { AnalyticsBoard } from "@/app/analytics-board";
 import {
   Activity,
   ArrowUpRight,
@@ -101,6 +106,7 @@ import { OwnerStatementsCentre } from "@/app/owner-statements-centre";
 
 type Role = WorkspaceRole;
 const PreviewContext = createContext(false);
+const ActorRoleContext = createContext<Role>("client");
 type OperationsView =
   | "cleans"
   | "ready"
@@ -110,6 +116,7 @@ type OperationsView =
   | "marketing";
 type View =
   | "overview"
+  | "analytics"
   | "tools"
   | "my-recharge"
   | OperationsView
@@ -222,6 +229,7 @@ const liveInternalModules = new Set<ModuleId>([
 ]);
 
 const roleLabels: Record<Role, string> = {
+  super_admin: "Super admin",
   admin: "Admin",
   stays: "Stays employee",
   cleans: "Cleans employee",
@@ -334,7 +342,7 @@ export function RechargePortal({
   signOutPath: string;
   preview?: boolean;
 }) {
-  const [view, setView] = useState<View>(defaultDepartment(currentUser.role));
+  const [view, setView] = useState<View>(currentUser.role === "super_admin" ? "analytics" : defaultDepartment(currentUser.role));
   const [cleansMode, setCleansMode] = useState<CleansMode>("cleaning-schedule");
   const [onboardingMode, setOnboardingMode] = useState<"client" | "staff">(
     currentUser.role === "client" ? "client" : "staff",
@@ -425,8 +433,8 @@ export function RechargePortal({
   }
 
   return (
-    <PreviewContext.Provider value={preview}>
-    <div className="recharge-workspace min-h-screen text-[#1c3934]">
+    <PreviewContext.Provider value={preview}><ActorRoleContext.Provider value={currentUser.role}>
+    <div className="recharge-workspace min-h-screen text-[var(--foreground)]">
       <GuestMessageNotifier
         enabled={!preview && currentUser.modules.includes("guest-communication") && currentUser.role !== "client"}
         paused={view === "communications"}
@@ -435,7 +443,7 @@ export function RechargePortal({
       />
       {menuOpen && <button className="navigation-backdrop lg:hidden" aria-label="Dismiss navigation" onClick={() => setMenuOpen(false)} tabIndex={-1} />}
       <aside ref={navigationRef} id="workspace-navigation" role={menuOpen ? "dialog" : undefined} aria-modal={menuOpen ? true : undefined} aria-label="Workspace navigation" className={"sidebar " + (menuOpen ? "sidebar-open" : "")}>
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-6 lg:border-0">
+        <div className="sidebar-brand flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-5 lg:border-0">
           <button
             className="flex items-center gap-3 text-left"
             onClick={() =>
@@ -454,7 +462,7 @@ export function RechargePortal({
             </span>
           </button>
           <button
-            className="grid size-9 place-items-center rounded-lg text-white/70 lg:hidden"
+            className="grid size-11 place-items-center rounded-lg text-white/70 lg:hidden"
             onClick={() => setMenuOpen(false)}
             aria-label="Close navigation"
           >
@@ -463,7 +471,7 @@ export function RechargePortal({
         </div>
 
         <nav
-          className="scrollbar-thin mt-5 flex-1 overflow-y-auto px-4 pb-6"
+          className="sidebar-navigation min-h-0 flex-1 overflow-y-auto px-4 pb-3"
           aria-label="Workspace"
         >
           {currentUser.role === "stays" && myRecharge && (
@@ -501,14 +509,16 @@ export function RechargePortal({
               <NavButton
                 active={view === "team"}
                 icon={Users}
-                index="09"
+                index="06"
                 label="Team"
                 onClick={() => changeView("team")}
               />
             </div>
           )}
 
-          {currentUser.role === "admin" && (
+          {isWorkspaceAdmin(currentUser.role) && <div className="mt-4 space-y-1"><NavButton active={view === "analytics"} icon={BarChart3} index="07" label="Analytics" onClick={() => changeView("analytics")} /></div>}
+
+          {isWorkspaceAdmin(currentUser.role) && (
             <div className="mt-7 space-y-2">
               <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/30">
                 Administration
@@ -516,7 +526,7 @@ export function RechargePortal({
               <NavButton
                 active={view === "access"}
                 icon={UserRoundCog}
-                index="10"
+                index="08"
                 label="Access"
                 onClick={() => changeView("access")}
               />
@@ -524,7 +534,7 @@ export function RechargePortal({
           )}
         </nav>
 
-        <div className="border-t border-white/10 p-5">
+        <div className="sidebar-footer shrink-0 border-t border-white/10 px-6 py-4">
           <p className="truncate text-sm font-semibold text-white">
             {currentUser.name}
           </p>
@@ -532,7 +542,7 @@ export function RechargePortal({
             {roleLabels[currentUser.role]}
           </p>
           <a
-            className="mt-4 inline-flex text-sm font-medium text-[#8fb3a2] hover:text-white"
+            className="mt-4 inline-flex text-sm font-medium text-[var(--muted-foreground)] hover:text-white"
             href={signOutPath}
           >
             Sign out
@@ -541,10 +551,11 @@ export function RechargePortal({
       </aside>
 
       <main className="lg:pl-[17rem]">
-        <header className="flex h-[4.75rem] items-center justify-between border-b border-[#d9e2df] bg-white/85 px-5 backdrop-blur sm:px-8 lg:px-10">
+        <header className="workspace-header flex h-[4.75rem] items-center justify-between border-b border-[var(--border)] bg-white/85 px-5 backdrop-blur sm:px-8 lg:px-10">
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <button
-              className="grid size-10 place-items-center rounded-xl border border-[#d9e2df] bg-white lg:hidden"
+              className="grid size-10 place-items-center rounded-xl border border-[var(--border)] bg-white lg:hidden"
               onClick={() => setMenuOpen(true)}
               aria-label="Open navigation"
               aria-expanded={menuOpen}
@@ -555,20 +566,20 @@ export function RechargePortal({
             </button>
             <div>
               <p className="text-sm font-semibold">{viewTitle(view, maintenanceWorkspace)}</p>
-              <p className="hidden text-xs text-[#77888a] sm:block">
+              <p className="hidden text-xs text-[var(--muted-foreground)] sm:block">
                 Perfection at every stage.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {(currentUser.role === "client" || currentUser.role === "stays" || currentUser.role === "admin") && (
+            {(currentUser.role === "client" || currentUser.role === "stays" || isWorkspaceAdmin(currentUser.role)) && (
               <NotificationCentre
                 initialData={onboardingData}
                 role={currentUser.role}
                 onOpenOnboarding={() => openOnboarding(currentUser.role === "client" ? "client" : "staff")}
               />
             )}
-            <Badge className="border-0 bg-[#dfe9e4] px-3 py-1 text-[#264d42]">
+            <Badge className="border-0 bg-[var(--muted)] px-3 py-1 text-[var(--muted-foreground)]">
               {roleLabels[currentUser.role]}
             </Badge>
             <div className="grid size-9 place-items-center rounded-full bg-[#315f50] text-sm font-bold text-white">
@@ -578,6 +589,7 @@ export function RechargePortal({
         </header>
 
         <div key={view} className="workspace-view mx-auto max-w-[92rem] p-5 sm:p-8 lg:p-10">
+          {view === "analytics" && (currentUser.role === "super_admin" || isWorkspaceAdmin(currentUser.role)) && <AnalyticsBoard initialData={{ workflows: workflowData, maintenance: maintenanceData, cleans: cleansData }} propertyCount={propertyDatabaseData?.properties.length || 0} preview={preview} />}
           {view === "my-recharge" &&
             currentUser.role === "stays" &&
             myRecharge && <MyRecharge initialData={myRecharge} />}
@@ -712,19 +724,19 @@ export function RechargePortal({
           {view === "team" && currentUser.role !== "client" && (
             <TeamClient
               users={accessUsers}
-              isAdmin={currentUser.role === "admin"}
+              isAdmin={isWorkspaceAdmin(currentUser.role)}
               currentUserName={currentUser.name}
               signOutPath={signOutPath}
               embedded
             />
           )}
-          {view === "access" && currentUser.role === "admin" && (
+          {view === "access" && isWorkspaceAdmin(currentUser.role) && (
             <Access accessUsers={accessUsers} />
           )}
         </div>
       </main>
     </div>
-    </PreviewContext.Provider>
+    </ActorRoleContext.Provider></PreviewContext.Provider>
   );
 }
 
@@ -754,7 +766,7 @@ function Overview({
           <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
             Good {dayPart()}, {firstName}.
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
             One standard, one workspace, every stage connected.
           </p>
         </div>
@@ -798,7 +810,7 @@ function Overview({
                 className="flex items-center gap-3 border-b border-white/10 px-5 py-4 last:border-0 sm:border-r sm:border-b-0 sm:last:border-r-0"
                 key={stage}
               >
-                <span className="text-xs font-semibold text-[#8fb3a2]">
+                <span className="text-xs font-semibold text-[var(--muted-foreground)]">
                   0{index + 1}
                 </span>
                 <span className="text-sm font-medium text-white/75">
@@ -841,7 +853,7 @@ function Overview({
             </h2>
           </div>
           <button
-            className="text-sm font-semibold text-[#3d6857] hover:text-[#1c3934]"
+            className="text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             onClick={onViewTools}
           >
             View all <span aria-hidden="true">→</span>
@@ -878,13 +890,13 @@ function Tools({
           <h1 className="text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
             Every tool. One standard.
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
             Only the tools assigned to your role appear here.
           </p>
         </div>
         <Badge
           variant="outline"
-          className="h-fit border-[#cddbd6] bg-white px-3 py-1.5 text-[#40585b]"
+          className="h-fit border-[var(--border)] bg-white px-3 py-1.5 text-[var(--muted-foreground)]"
         >
           {modules.length} available
         </Badge>
@@ -914,7 +926,7 @@ function Tools({
         ))}
       </div>
       {modules.length === 0 && (
-        <div className="mt-8 rounded-3xl border border-dashed border-[#bdcbc7] bg-white p-10 text-center text-[#647577]">
+        <div className="mt-8 rounded-3xl border border-dashed border-[var(--border)] bg-white p-10 text-center text-[var(--muted-foreground)]">
           No tools have been assigned to this account.
         </div>
       )}
@@ -955,12 +967,12 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
 
   if (!data.available) {
     return (
-      <section className="rounded-[1.5rem] border border-[#d9e2df] bg-white p-8">
+      <section className="rounded-[1.5rem] border border-[var(--border)] bg-white p-8">
         <p className="eyebrow">Personal workspace</p>
         <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em]">
           My Recharge
         </h1>
-        <p className="mt-4 text-base text-[#647577]">
+        <p className="mt-4 text-base text-[var(--muted-foreground)]">
           My Recharge is temporarily unavailable. Please try again shortly.
         </p>
       </section>
@@ -973,12 +985,12 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
       <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
         My Recharge
       </h1>
-      <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
+      <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
         Clock in, check your schedule and review your performance.
       </p>
 
       <Tabs defaultValue="clock" className="mt-8">
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[#e6eeea] p-1 sm:w-fit">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[var(--muted)] p-1 sm:w-fit">
           <TabsTrigger value="clock" className="min-h-10 px-4">
             Clock in
           </TabsTrigger>
@@ -1016,7 +1028,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
                 className={
                   "h-12 min-w-36 rounded-xl px-6 font-semibold " +
                   (data.openEntry
-                    ? "bg-white text-[#1c3934] hover:bg-white/90"
+                    ? "bg-white text-[var(--foreground)] hover:bg-white/90"
                     : "bg-[#315f50] text-white hover:bg-[#274e42]")
                 }
                 disabled={saving}
@@ -1036,10 +1048,10 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
               {error}
             </p>
           )}
-          <section className="mt-5 rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
+          <section className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-white p-5 sm:p-6">
             <h2 className="text-lg font-semibold">Recent time</h2>
             {data.recentEntries.length ? (
-              <div className="mt-4 divide-y divide-[#e7ecea]">
+              <div className="mt-4 divide-y divide-[var(--border)]">
                 {data.recentEntries.map((entry) => (
                   <div
                     className="flex flex-col justify-between gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center"
@@ -1048,7 +1060,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
                     <span className="text-sm font-medium">
                       {formatDateTime(entry.clockIn)}
                     </span>
-                    <span className="text-sm text-[#718184]">
+                    <span className="text-sm text-[var(--muted-foreground)]">
                       {entry.clockOut
                         ? `${formatTime(entry.clockIn)}–${formatTime(entry.clockOut)}`
                         : "In progress"}
@@ -1057,7 +1069,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-[#718184]">
+              <p className="mt-3 text-sm text-[var(--muted-foreground)]">
                 Your first clock-in will appear here.
               </p>
             )}
@@ -1065,13 +1077,13 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
         </TabsContent>
 
         <TabsContent value="schedule" className="mt-6">
-          <section className="rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
+          <section className="rounded-[1.5rem] border border-[var(--border)] bg-white p-5 sm:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="eyebrow">Next seven days</p>
                 <h2 className="mt-2 text-2xl font-semibold">Your schedule</h2>
               </div>
-              <Badge className="border-0 bg-[#dfe9e4] text-[#36561d]">
+              <Badge className="border-0 bg-[var(--muted)] text-[var(--muted-foreground)]">
                 {data.schedule.length} shifts
               </Badge>
             </div>
@@ -1079,25 +1091,25 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
               <div className="mt-5 space-y-3">
                 {data.schedule.map((shift) => (
                   <div
-                    className="flex flex-col justify-between gap-3 rounded-xl border border-[#e1e8e5] p-4 sm:flex-row sm:items-center"
+                    className="flex flex-col justify-between gap-3 rounded-xl border border-[var(--border)] p-4 sm:flex-row sm:items-center"
                     key={shift.id}
                   >
                     <div>
                       <p className="text-sm font-semibold">
                         {formatShiftDate(shift.shiftDate)}
                       </p>
-                      <p className="mt-1 text-sm text-[#718184]">{shift.label}</p>
+                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">{shift.label}</p>
                     </div>
-                    <p className="text-sm font-semibold text-[#315f4d]">
+                    <p className="text-sm font-semibold text-[var(--muted-foreground)]">
                       {shift.startTime}–{shift.endTime}
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="mt-6 rounded-xl bg-[#f3f6f4] px-5 py-8 text-center">
+              <div className="mt-6 rounded-xl bg-[var(--muted)] px-5 py-8 text-center">
                 <p className="text-sm font-medium">No shifts assigned</p>
-                <p className="mt-1 text-sm text-[#718184]">
+                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                   Your next scheduled shift will appear here.
                 </p>
               </div>
@@ -1120,7 +1132,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
               value={String(data.performance.completedShifts)}
             />
           </section>
-          <p className="mt-4 text-sm text-[#718184]">
+          <p className="mt-4 text-sm text-[var(--muted-foreground)]">
             Performance updates automatically from your recorded time.
           </p>
         </TabsContent>
@@ -1131,8 +1143,8 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
 
 function PerformanceStat({ label, value }: { label: string; value: string }) {
   return (
-    <article className="rounded-[1.4rem] border border-[#d9e2df] bg-white p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#718184]">
+    <article className="rounded-[1.4rem] border border-[var(--border)] bg-white p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[var(--muted-foreground)]">
         {label}
       </p>
       <p className="mt-7 text-4xl font-semibold tracking-[-0.05em]">{value}</p>
@@ -1182,38 +1194,38 @@ function OperationsSection({
   return (
     <div>
       <div className="department-heading flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div>
-          <div className="mb-5 grid size-12 place-items-center rounded-2xl bg-[#e5f0e9] text-[#315f4d]">
-            <Icon className="size-5" aria-hidden="true" />
-          </div>
+        <div className="department-heading-content">
+          <DepartmentIllustration department={section.id} />
+          <div>
           <p className="eyebrow">Recharge department</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-[-0.045em] sm:text-[2.75rem]">
             {section.label}
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
             {section.description}
           </p>
+          </div>
         </div>
         <Badge
           variant="outline"
-          className="h-fit border-[#cddbd6] bg-white px-3 py-1.5 text-[#40585b]"
+          className="h-fit border-[var(--border)] bg-white px-3 py-1.5 text-[var(--muted-foreground)]"
         >
           {modules.length} {modules.length === 1 ? "tool" : "tools"}
         </Badge>
       </div>
 
       <div className="tool-search relative mt-7 max-w-2xl">
-        <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#7c8c88]" />
+        <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
         <Input
-          className="h-12 rounded-2xl border-[#cedbd6] bg-white pl-11 pr-12"
+          className="h-12 rounded-2xl border-[var(--border)] bg-white pl-11 pr-12"
           value={toolSearch}
           onChange={(event) => setToolSearch(event.target.value)}
           placeholder={`Search ${section.label} tools`}
           aria-label={`Search ${section.label} tools`}
         />
-        {toolSearch && <button className="absolute right-1 top-1 grid size-10 place-items-center rounded-xl text-[#526d61] hover:bg-[#edf3ef]" aria-label="Clear tool search" onClick={() => setToolSearch("")}><X className="size-4" /></button>}
+        {toolSearch && <button className="absolute right-1 top-1 grid size-10 place-items-center rounded-xl text-[var(--muted-foreground)] hover:bg-[var(--muted)]" aria-label="Clear tool search" onClick={() => setToolSearch("")}><X className="size-4" /></button>}
       </div>
-      {toolSearch && <p className="mt-3 text-xs text-[#526d61]" role="status">{filteredModules.length} of {modules.length} tools match your search</p>}
+      {toolSearch && <p className="mt-3 text-xs text-[var(--muted-foreground)]" role="status">{filteredModules.length} of {modules.length} tools match your search</p>}
 
       {section.id !== "cleans" && (
         <WorkflowPanels section={section.id} data={workflowData} />
@@ -1283,21 +1295,21 @@ function OperationsSection({
           ))}
         </div>
       ) : modules.length === 0 ? (
-        <section className="mt-8 rounded-[1.5rem] border border-dashed border-[#bdcbc7] bg-white px-6 py-12 text-center sm:px-10">
-          <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-[#eef4f0] text-[#4a705f]">
+        <section className="mt-8 rounded-[1.5rem] border border-dashed border-[var(--border)] bg-white px-6 py-12 text-center sm:px-10">
+          <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-[var(--muted)] text-[var(--muted-foreground)]">
             <Icon className="size-5" aria-hidden="true" />
           </div>
           <h2 className="mt-5 text-xl font-semibold">No tools connected yet</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#647577]">
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
             This section is ready for the {section.label.toLowerCase()} tools we
             add next.
           </p>
         </section>
       ) : (
-        <section className="mt-8 rounded-[1.5rem] border border-dashed border-[#bdcbc7] bg-white px-6 py-12 text-center sm:px-10">
-          <Search className="mx-auto size-6 text-[#6f827b]" />
+        <section className="mt-8 rounded-[1.5rem] border border-dashed border-[var(--border)] bg-white px-6 py-12 text-center sm:px-10">
+          <Search className="mx-auto size-6 text-[var(--muted-foreground)]" />
           <h2 className="mt-4 text-xl font-semibold">No matching tools</h2>
-          <p className="mt-2 text-sm text-[#647577]">Try a different name or keyword.</p>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">Try a different name or keyword.</p>
           <Button className="mt-5" variant="outline" onClick={() => setToolSearch("")}>Clear search</Button>
         </section>
       )}
@@ -1322,7 +1334,7 @@ function ToolCard({
     <article className={"tool-card group " + (large ? "tool-card-large" : "")}>
       <div className="flex items-start justify-between gap-4">
         <span className="tool-art-stage"><ToolIllustration id={module.id} fallback={icons[module.id]} /></span>
-        <Badge className="tool-audience border-0 bg-[#f1f5f3] text-[0.6rem] uppercase tracking-[0.12em] text-[#526a60]">
+        <Badge className="tool-audience border-0 bg-[var(--muted)] text-[0.6rem] uppercase tracking-[0.12em] text-[var(--muted-foreground)]">
           {module.audience}
         </Badge>
       </div>
@@ -1330,12 +1342,12 @@ function ToolCard({
         <h3 className="text-[1.35rem] leading-7 font-semibold tracking-[-0.025em]">
           {module.name}
         </h3>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-[#60756c]">
+        <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted-foreground)]">
           {module.description}
         </p>
       </div>
-      <div className="tool-card-footer flex items-center justify-between gap-3 border-t border-[#e2e9e7] pt-4">
-        <span className="tool-category text-xs font-medium text-[#5b7568]">
+      <div className="tool-card-footer flex items-center justify-between gap-3 border-t border-[var(--border)] pt-4">
+        <span className="tool-category text-xs font-medium text-[var(--muted-foreground)]">
           {module.category}
         </span>
         <span className="tool-card-action" aria-hidden="true">{action}<span className="tool-card-arrow"><ChevronRight className="size-4" /></span></span>
@@ -1345,7 +1357,7 @@ function ToolCard({
       <DialogContent>
         <ToolIllustration id={module.id} className="tool-modal-art" />
         <DialogHeader><DialogTitle className="text-2xl leading-8">{module.name}</DialogTitle><DialogDescription className="leading-6">{module.description}</DialogDescription></DialogHeader>
-        <div className="rounded-2xl border border-[#dbe6df] bg-[#f2f6f3] p-4 text-sm leading-6 text-[#4b685a]">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)] p-4 text-sm leading-6 text-[var(--muted-foreground)]">
           {module.url && preview ? "This external tool is not connected in this read-only preview. It will open from the authenticated application when its integration is ready." : liveInternalModules.has(module.id) ? "This workflow is available in the department work boards. Use those boards to review and manage its tickets." : "This tool is planned. Its dedicated workflow will become available once the integration is complete."}
         </div>
         <DialogFooter><Button onClick={() => setDetailsOpen(false)}>Back to tools</Button></DialogFooter>
@@ -1355,6 +1367,7 @@ function ToolCard({
 }
 
 function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
+  const actorRole = useContext(ActorRoleContext);
   const pending = accessUsers.filter((user) => user.status === "pending").length;
   const active = accessUsers.filter((user) => user.status === "active").length;
 
@@ -1366,7 +1379,7 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
           <h1 className="text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
             Accounts & access
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
             Approve account requests, assign roles and control every user’s tool access.
           </p>
         </div>
@@ -1374,16 +1387,16 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
       </div>
 
       <div className="mt-7 flex flex-wrap gap-3">
-        <span className="rounded-full border border-[#d6e2de] bg-white px-4 py-2 text-sm font-semibold text-[#47645e]">
+        <span className="rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted-foreground)]">
           {active} active
         </span>
-        <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${pending ? "border-amber-200 bg-amber-50 text-amber-800" : "border-[#d6e2de] bg-white text-[#73827f]"}`}>
+        <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${pending ? "border-amber-200 bg-amber-50 text-amber-800" : "border-[var(--border)] bg-white text-[var(--muted-foreground)]"}`}>
           {pending} pending approval
         </span>
       </div>
 
-      <section className="mt-8 overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
-        <div className="hidden grid-cols-[1.2fr_0.75fr_0.65fr_1.45fr_auto] gap-5 border-b border-[#e2e9e7] bg-[#f6f8f7] px-6 py-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#718184] lg:grid">
+      <section className="mt-8 overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-white">
+        <div className="hidden grid-cols-[1.2fr_0.75fr_0.65fr_1.45fr_auto] gap-5 border-b border-[var(--border)] bg-[var(--card)] px-6 py-4 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted-foreground)] lg:grid">
           <span>User</span>
           <span>Account type</span>
           <span>Status</span>
@@ -1392,24 +1405,24 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
         </div>
         {accessUsers.map((user) => (
           <div
-            className={`grid gap-4 border-b border-[#e6ecea] px-5 py-5 last:border-0 lg:grid-cols-[1.2fr_0.75fr_0.65fr_1.45fr_auto] lg:items-center lg:px-6 ${user.status === "pending" ? "bg-amber-50/45" : ""}`}
+            className={`grid gap-4 border-b border-[var(--border)] px-5 py-5 last:border-0 lg:grid-cols-[1.2fr_0.75fr_0.65fr_1.45fr_auto] lg:items-center lg:px-6 ${user.status === "pending" ? "bg-amber-50/45" : ""}`}
             key={user.email}
           >
             <div className="flex items-center gap-3">
-              <div className="grid size-10 place-items-center rounded-full bg-[#edf5f0] text-sm font-bold text-[#315c61]">
+              <div className="grid size-10 place-items-center rounded-full bg-[var(--muted)] text-sm font-bold text-[var(--rc-info-text)]">
                 {initials(user.fullName || user.email)}
               </div>
               <div>
                 <p className="text-sm font-semibold">
                   {user.fullName || "Unnamed user"}
                 </p>
-                <p className="mt-0.5 text-xs text-[#7c8b8d]">{user.email}</p>
+                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{user.email}</p>
               </div>
             </div>
             <div>
               <Badge
                 variant="outline"
-                className="border-[#d6e0dd] bg-[#fbfcfc] text-[#476064]"
+                className="border-[var(--border)] bg-[var(--card)] text-[var(--rc-info-text)]"
               >
                 {roleLabels[user.role]}
               </Badge>
@@ -1420,24 +1433,24 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
             <div className="flex flex-wrap gap-1.5">
               {user.modules.slice(0, 5).map((moduleId) => (
                 <span
-                  className="rounded-md bg-[#eef3f1] px-2 py-1 text-[0.68rem] font-medium text-[#4c6669]"
+                  className="rounded-md bg-[var(--muted)] px-2 py-1 text-[0.68rem] font-medium text-[var(--muted-foreground)]"
                   key={moduleId}
                 >
                   {MODULES.find((module) => module.id === moduleId)?.shortName}
                 </span>
               ))}
               {user.modules.length > 5 && (
-                <span className="rounded-md bg-[#f5f7f6] px-2 py-1 text-[0.68rem] font-semibold text-[#687976]">
+                <span className="rounded-md bg-[var(--muted)] px-2 py-1 text-[0.68rem] font-semibold text-[var(--muted-foreground)]">
                   +{user.modules.length - 5} more
                 </span>
               )}
               {user.modules.length === 0 && (
-                <span className="text-xs text-[#879491]">No tools selected</span>
+                <span className="text-xs text-[var(--muted-foreground)]">No tools selected</span>
               )}
             </div>
             <div>
-              {user.email === "enquiries@rechargestays.co.uk" ? (
-                <span className="text-xs font-medium text-[#879491]">Primary owner</span>
+              {actorRole !== "super_admin" && (user.role === "super_admin" || isWorkspaceAdmin(user.role)) ? (
+                <span className="text-xs font-medium text-[var(--muted-foreground)]">Super-admin managed</span>
               ) : (
                 <AccessDialog user={user} />
               )}
@@ -1450,6 +1463,8 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
 }
 
 function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?: boolean }) {
+  const preview = useContext(PreviewContext);
+  const actorRole = useContext(ActorRoleContext);
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<Role>(user?.role || "stays");
   const [status, setStatus] = useState<AccessStatus>(user?.status || "active");
@@ -1469,6 +1484,7 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
     setSaving(true);
     setError("");
     const form = new FormData(event.currentTarget);
+    try {
     const response = await fetch("/api/access", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1491,13 +1507,15 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
     }
     setOpen(false);
     window.location.reload();
+    } catch { setError("Could not save access. Check your connection and try again."); }
+    finally { setSaving(false); }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {user ? (
-          <Button variant="outline" className="rounded-xl border-[#cad8d4] bg-white">
+          <Button variant="outline" className="rounded-xl border-[var(--border)] bg-white">
             Manage
           </Button>
         ) : (
@@ -1506,19 +1524,20 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-[#d9e2df] p-0 sm:max-w-xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-[var(--border)] p-0 sm:max-w-xl">
         <form onSubmit={submit}>
-          <DialogHeader className="border-b border-[#e2e9e7] px-6 py-6 text-left">
+          <DialogHeader className="border-b border-[var(--border)] px-6 py-6 text-left">
             <DialogTitle className="text-2xl tracking-[-0.035em]">
               {user ? "Manage account" : teamOnly ? "Add a team member" : "Add an account"}
             </DialogTitle>
             <DialogDescription>
               {user
                 ? "Change this person’s role, status and individual tool access."
-                : teamOnly ? "Add the person, choose their department and record what they are responsible for." : "Create active access using the email this person uses to sign in."}
+                : teamOnly ? "Add the person, choose their department and record what they are responsible for." : "Assign access to an existing verified sign-in account using their email."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 px-6 py-6">
+            {preview && <p className="rounded-xl bg-[var(--muted)] p-3 text-sm text-[var(--muted-foreground)]">Preview only. Account changes will be available in the authenticated workspace.</p>}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="fullName">Name</Label>
@@ -1544,12 +1563,12 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Role</Label>
+                <Label>Role</Label>
               <Select
                 value={role}
                 onValueChange={(value) => changeRole(value as Role)}
               >
-                <SelectTrigger className="h-11 w-full">
+                <SelectTrigger className="h-11 w-full" aria-label="Account role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1557,7 +1576,7 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
                   <SelectItem value="stays">Stays employee</SelectItem>
                   <SelectItem value="cleans">Cleans employee</SelectItem>
                   <SelectItem value="ready">Ready employee</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {actorRole === "super_admin" && <><SelectItem value="admin">Admin</SelectItem><SelectItem value="super_admin">Super admin</SelectItem></>}
                 </SelectContent>
               </Select>
             </div>
@@ -1578,13 +1597,13 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
                   value={status}
                   onValueChange={(value) => setStatus(value as AccessStatus)}
                 >
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger className="h-11 w-full" aria-label="Account status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="pending">Pending approval</SelectItem>
-                    <SelectItem value="revoked">Disabled</SelectItem>
+                    <SelectItem value="revoked">Revoked</SelectItem>
                   </SelectContent>
                 </Select>
                 {user.status === "pending" && status !== "active" && (
@@ -1597,27 +1616,28 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
             <div>
               <div className="flex items-center justify-between gap-4">
                 <Label>Tool access</Label>
-                {role !== "admin" && (
+                {!isWorkspaceAdmin(role) && (
                   <button
                     type="button"
-                    className="text-xs font-semibold text-[#45675f] hover:text-[#1c3934]"
+                    className="text-xs font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                     onClick={() => setSelected(defaultModulesForRole(role))}
                   >
                     Reset to role defaults
                   </button>
                 )}
               </div>
+              {role === "super_admin" && <p className="mt-3 rounded-xl bg-[var(--muted)] p-3 text-sm">Full access to every department, analytics and administration. Can manage admin accounts and individual permissions.</p>}
               <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
                 {MODULES.map((module) => {
                   const checked = selected.includes(module.id);
                   return (
                     <label
-                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#dce5e2] p-3.5 hover:bg-[#f5f8f7]"
+                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--border)] p-3.5 hover:bg-[var(--muted)]"
                       key={module.id}
                     >
                       <Checkbox
                         checked={checked}
-                        disabled={role === "admin"}
+                        disabled={isWorkspaceAdmin(role)}
                         onCheckedChange={(value) =>
                           setSelected((items) =>
                             value === true
@@ -1630,7 +1650,7 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
                         <span className="block text-sm font-semibold">
                           {module.name}
                         </span>
-                        <span className="mt-0.5 block text-xs text-[#78888a]">
+                        <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
                           {module.audience}
                         </span>
                       </span>
@@ -1640,12 +1660,12 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
               </div>
             </div>
             {error && (
-              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
               </p>
             )}
           </div>
-          <DialogFooter className="border-t border-[#e2e9e7] px-6 py-5">
+          <DialogFooter className="border-t border-[var(--border)] px-6 py-5">
             <Button
               type="button"
               variant="outline"
@@ -1657,8 +1677,8 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
             <Button
               type="submit"
               disabled={
-                saving ||
-                (status === "active" && role !== "admin" && selected.length === 0)
+                preview || saving ||
+                (status === "active" && !isWorkspaceAdmin(role) && selected.length === 0)
               }
               className="rounded-xl bg-[#1c3934] text-white hover:bg-[#10271f]"
             >
@@ -1684,7 +1704,7 @@ function StatusBadge({ status }: { status: AccessStatus }) {
   const label = {
     active: "Active",
     pending: "Pending",
-    revoked: "Disabled",
+    revoked: "Revoked",
   }[status];
 
   return (
@@ -1712,18 +1732,18 @@ function Stat({
       className={
         "rounded-[1.4rem] border p-5 " +
         (accent
-          ? "border-[#315f50] bg-[#e5eeea]"
-          : "border-[#d9e2df] bg-white")
+          ? "border-[var(--border)] bg-[var(--muted)]"
+          : "border-[var(--border)] bg-white")
       }
     >
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#718184]">
+        <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[var(--muted-foreground)]">
           {label}
         </p>
-        <Icon className="size-4 text-[#739195]" />
+        <Icon className="size-4 text-[var(--muted-foreground)]" />
       </div>
       <p className="mt-8 text-3xl font-semibold tracking-[-0.04em]">{value}</p>
-      <p className="mt-2 text-xs text-[#829092]">{note}</p>
+      <p className="mt-2 text-xs text-[var(--muted-foreground)]">{note}</p>
     </article>
   );
 }
@@ -1769,6 +1789,7 @@ function initials(value: string) {
 }
 
 function viewTitle(view: View, maintenanceWorkspace: MaintenanceWorkspace) {
+  if (view === "analytics") return "Workspace analytics";
   if (view === "workflow-board") return "Workflow centre";
   if (view === "overview") return "Overview";
   if (view === "tools") return "Business tools";

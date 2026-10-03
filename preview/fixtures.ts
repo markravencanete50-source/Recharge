@@ -33,7 +33,7 @@ export const properties: PropertyDatabaseData = {
   clients: [{key: "example-company", companyName: "Example Property Company", ownerName: "Example owner", directorNames: [], ownerEmail: "preview@example.com", ownerPhone: "", properties: demoProperties}],
   reporting: {newEnquiries: {week: 0, month: 0, quarter: 0, year: 0}, signedUp: [], strikeRate: 0},
 };
-export const accessUsers = (["admin", "stays", "cleans", "ready", "client"] as WorkspaceRole[]).map(role => ({
+export const accessUsers = (["super_admin", "admin", "stays", "cleans", "ready", "client"] as WorkspaceRole[]).map(role => ({
   email: `${role}@example.com`, fullName: `Example ${role} user`, responsibilities: "Fictional preview team member", role,
   modules: defaultModulesForRole(role), status: "active" as const,
 }));
@@ -42,6 +42,13 @@ export const workflows: WorkflowData = {
   onboardings: [{id: "demo-onboarding", propertyName: "Example Glasgow Apartment", propertyAddress: "Example address, Scotland", progress: 60, status: "active", createdByName: "Preview user", completedAt: null, createdAt: now}],
   tickets: [{id: "demo-inspection", board: "new_property_inspection", lane: "New", sourceBusiness: "Stays", targetBusiness: "Ready", propertyName: "Example Glasgow Apartment", propertyAddress: "Example address, Scotland", title: "Sample property inspection", details: "Fictional task for reviewing the workflow layout.", priority: "normal", dueDate: date, status: "new", triggerType: "manual_referral", createdByName: "Preview user", createdAt: now}],
 };
+// A dated, fictional workload makes the chart layout and period filter reviewable.
+workflows.tickets.push(...Array.from({ length: 24 }, (_, i) => ({
+  ...workflows.tickets[0], id: `demo-workload-${i}`, title: `Sample workflow ${i + 1}`,
+  board: (["property_furnishing", "routine_bin_garden", "aircover_reporting"] as const)[i % 3],
+  status: (["new", "in_progress", "complete"] as const)[i % 3],
+  createdAt: now - ((i * 7) % 29) * 86400,
+})));
 export const communications: CommunicationCentreData = {
   available: true, integrations: {hostaway: false, email: false, whatsapp: false, bonline: false}, workflows: [], calls: [], schedule: [],
   threads: [{id: "demo-conversation", source: "guests", propertyName: "Example Edinburgh Apartment", guestName: "Example guest", senderAddress: "guest@example.com", subject: "Sample check-in question", hostawayListingId: "", hostawayReservationId: "", openedAt: null, unread: true, unreadCount: 1, status: "open", assignedToEmail: null, assignedToName: null, lastInboundAt: now, lastOutboundAt: null,
@@ -70,5 +77,5 @@ export const ownerStatements: OwnerStatementsData = {
 };
 export const team: TeamStructureData = {
   roles: [], coverage: [], regions: ["General", "Edinburgh & Lothians", "Glasgow & Clyde"], schedules: [],
-  people: accessUsers.filter(user => user.role !== "client").map(user => ({id: user.role, fullName: user.fullName, email: user.email, department: user.role === "admin" ? "leadership" : user.role, responsibilities: user.responsibilities, status: "active", roleIds: [], regions: ["General"]})),
+  people: accessUsers.filter(user => user.role !== "client").map(user => ({id: user.role, fullName: user.fullName, email: user.email, department: user.role === "admin" || user.role === "super_admin" ? "leadership" : user.role, responsibilities: user.responsibilities, status: "active", roleIds: [], regions: ["General"]})),
 };

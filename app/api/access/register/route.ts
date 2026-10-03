@@ -5,7 +5,7 @@ import { getAccessAccount, registerAccessRequest } from "@/lib/access";
 
 const schema = z.object({
   fullName: z.string().trim().min(2).max(160),
-  role: z.enum(["admin", "stays", "cleans", "ready", "client"]),
+  role: z.enum(["stays", "cleans", "ready", "client"]),
 });
 
 export async function POST(request: Request) {
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
 
   const existing = await getAccessAccount(user.email, user.displayName);
-  if (existing) {
+  if (existing && existing.status !== "pending") {
     return NextResponse.json({ ok: true, status: existing.status });
   }
 
@@ -25,6 +25,7 @@ export async function POST(request: Request) {
     );
   }
 
+  try {
   const account = await registerAccessRequest({
     email: user.email,
     fullName: parsed.data.fullName,
@@ -32,4 +33,5 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ ok: true, status: account.status });
+  } catch { return NextResponse.json({ error: "The account request could not be saved" }, { status: 400 }); }
 }
