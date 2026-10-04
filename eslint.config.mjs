@@ -5,6 +5,13 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    files: ['mobile/**/*.{ts,tsx}'],
+    rules: {
+      // Native Image accessibility uses accessible/accessibilityLabel instead of HTML alt.
+      'jsx-a11y/alt-text': 'off',
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -12,6 +19,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "mobile/node_modules/**",
+    "mobile/.expo/**",
+    "mobile/dist/**",
+    "mobile/dist-ios/**",
   ]),
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],

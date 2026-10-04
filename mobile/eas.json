@@ -1,0 +1,10 @@
+{
+  "cli": { "version": ">=24.10.0", "appVersionSource": "local" },
+  "build": {
+    "preview-ios": {
+      "distribution": "internal",
+      "ios": { "simulator": true },
+      "env": { "EXPO_NO_TELEMETRY": "1" }
+    }
+  }
+}

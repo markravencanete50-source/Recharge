@@ -1,0 +1,637 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import { ui, type Palette } from "./theme";
+
+export type Profile = {
+  displayName: string;
+  avatar: keyof typeof avatarColors;
+};
+export const avatarColors = {
+  forest: "#315f50",
+  sage: "#587443",
+  ocean: "#285c75",
+  plum: "#715471",
+  clay: "#976044",
+  slate: "#4a5c70",
+};
+export function initials(name: string) {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase() || "YOU"
+  );
+}
+export function Avatar({
+  profile,
+  size = 44,
+}: {
+  profile: Profile;
+  size?: number;
+}) {
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: avatarColors[profile.avatar],
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text
+        style={{ color: "#ffffff", fontWeight: "700", fontSize: size * 0.3 }}
+      >
+        {initials(profile.displayName)}
+      </Text>
+    </View>
+  );
+}
+function accountOrigin() {
+  const value = process.env.EXPO_PUBLIC_ACCOUNT_API_URL;
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      url.pathname === "/"
+      ? url.origin
+      : null;
+  } catch {
+    return null;
+  }
+}
+const origin = accountOrigin();
+async function accountRequest(body: object, token?: string) {
+  if (!origin)
+    throw new Error(
+      "Live registration is awaiting configuration. You can customize your preview profile now.",
+    );
+  const response = await fetch(`${origin}/api/mobile/account`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: origin,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(
+      typeof data.error === "string"
+        ? data.error
+        : "Account setup is unavailable. Please try again.",
+    );
+  return data;
+}
+export function AccountSetup({
+  mode,
+  palette: p,
+  current,
+  onClose,
+  onProfile,
+}: {
+  mode: "register" | "preview";
+  palette: Palette;
+  current: Profile;
+  onClose: () => void;
+  onProfile: (profile: Profile) => void;
+}) {
+  const [step, setStep] = useState(mode === "preview" ? 3 : 0);
+  const [method, setMethod] = useState<"email" | "phone">("email");
+  const [address, setAddress] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [code, setCode] = useState("");
+  const [profile, setProfile] = useState(current);
+  const [enabled, setEnabled] = useState(false);
+  const [phoneEnabled, setPhoneEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const token = useRef<string | null>(null);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    if (origin && mode === "register")
+      fetch(`${origin}/api/mobile/account`, {
+        signal: AbortSignal.timeout(10_000),
+      })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (alive.current) {
+            setEnabled(data?.enabled === true);
+            setPhoneEnabled(data?.phoneEnabled === true);
+          }
+        })
+        .catch(() => {});
+    return () => {
+      alive.current = false;
+      token.current = null;
+    };
+  }, [mode]);
+  const changeMethod = (value: "email" | "phone") => {
+    setMethod(value);
+    setAddress("");
+    setError("");
+  };
+  const field = {
+    ...ui.input,
+    color: p.text,
+    backgroundColor: p.surface,
+    borderColor: p.border,
+  };
+  const label = { ...ui.small, color: p.muted };
+  const next = async () => {
+    setError("");
+    if (step === 0) {
+      const trimmed = address.trim();
+      if (
+        !(method === "email"
+          ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) && trimmed.length <= 254
+          : /^\+[1-9]\d{7,14}$/.test(trimmed))
+      ) {
+        setError(
+          method === "email"
+            ? "Enter a valid email address."
+            : "Include the country code, for example +447123456789.",
+        );
+        return;
+      }
+      setAddress(method === "email" ? trimmed.toLowerCase() : trimmed);
+      setStep(1);
+      return;
+    }
+    if (step === 1) {
+      const bytes = [...password].reduce((total, char) => {
+        const point = char.codePointAt(0)!;
+        return (
+          total + (point < 128 ? 1 : point < 2048 ? 2 : point < 65536 ? 3 : 4)
+        );
+      }, 0);
+      if (password.length < 12 || password.length > 72 || bytes > 72) {
+        setError("Use at least 12 characters and no more than 72 bytes.");
+        return;
+      }
+      if (password !== confirmation) {
+        setError("Your passwords do not match.");
+        return;
+      }
+    }
+    if (step === 2 && !/^\d{6,8}$/.test(code)) {
+      setError("Enter the verification code from your email or SMS.");
+      return;
+    }
+    if (
+      step === 3 &&
+      (profile.displayName.trim().length < 2 ||
+        profile.displayName.trim().length > 60 ||
+        /[\u0000-\u001f\u007f]/.test(profile.displayName))
+    ) {
+      setError("Enter a name between 2 and 60 characters.");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (step === 1) {
+        const result = await accountRequest({
+          action: "register",
+          method,
+          address,
+          password,
+        });
+        if (!alive.current) return;
+        setPassword("");
+        setConfirmation("");
+        setMessage(result.message);
+        setStep(2);
+      } else if (step === 2) {
+        const result = await accountRequest({
+          action: "verify",
+          method,
+          address,
+          code,
+        });
+        if (!alive.current) return;
+        if (typeof result.accessToken !== "string")
+          throw new Error("Verification could not be completed.");
+        token.current = result.accessToken;
+        setCode("");
+        setMessage("");
+        setStep(3);
+      } else if (step === 3) {
+        const appearance = {
+          ...profile,
+          displayName: profile.displayName.trim(),
+        };
+        if (mode === "register") {
+          if (!token.current)
+            throw new Error("Verify your contact details first.");
+          await accountRequest(appearance, token.current);
+        }
+        if (!alive.current) return;
+        token.current = null;
+        onProfile(appearance);
+        setStep(4);
+      }
+    } catch (failure) {
+      if (alive.current)
+        setError(
+          failure instanceof Error ? failure.message : "Please try again.",
+        );
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  };
+  const close = () => {
+    alive.current = false;
+    token.current = null;
+    setPassword("");
+    setConfirmation("");
+    setCode("");
+    onClose();
+  };
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="slide"
+      onRequestClose={close}
+      statusBarTranslucent
+    >
+      <KeyboardAvoidingView
+        style={ui.modalOverlay}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <SafeAreaView
+          edges={["bottom"]}
+          style={[
+            ui.modalSheet,
+            { backgroundColor: p.surface, maxHeight: "95%" },
+          ]}
+          accessibilityViewIsModal
+        >
+          <View style={ui.between}>
+            <Text
+              accessibilityRole="header"
+              style={[ui.sectionTitle, { color: p.text }]}
+            >
+              {mode === "preview"
+                ? "Your preview profile"
+                : "Create your account"}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close account setup"
+              disabled={busy}
+              onPress={close}
+              style={ui.iconButton}
+            >
+              <Feather name="x" size={21} color={p.text} />
+            </Pressable>
+          </View>
+          <ScrollView
+            contentContainerStyle={{ gap: 16, paddingBottom: 12 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {step < 4 && (
+              <Text style={[ui.eyebrow, { color: p.muted }]}>
+                {mode === "preview" ? "MAKE IT YOURS" : `STEP ${step + 1} OF 4`}
+              </Text>
+            )}
+            {step === 0 && (
+              <>
+                <Text style={[ui.title, { color: p.text }]}>
+                  Start with one contact.
+                </Text>
+                <Text style={label}>
+                  Register with your email address or phone number. You only
+                  need one.
+                </Text>
+                <View style={[ui.row, { gap: 10 }]}>
+                  {(["email", "phone"] as const).map((value) => (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: method === value }}
+                      onPress={() => changeMethod(value)}
+                      style={[
+                        ui.button,
+                        {
+                          flex: 1,
+                          backgroundColor:
+                            method === value ? p.primary : p.wash,
+                        },
+                      ]}
+                    >
+                      <Feather
+                        name={value === "email" ? "mail" : "smartphone"}
+                        size={17}
+                        color={method === value ? p.onPrimary : p.text}
+                      />
+                      <Text
+                        style={{
+                          color: method === value ? p.onPrimary : p.text,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {value === "email" ? "Email" : "Phone"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={label}>
+                  {method === "email"
+                    ? "Email address"
+                    : "Phone number with country code"}
+                </Text>
+                <TextInput
+                  accessibilityLabel={
+                    method === "email"
+                      ? "Registration email address"
+                      : "Registration phone number"
+                  }
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType={
+                    method === "email" ? "email-address" : "phone-pad"
+                  }
+                  textContentType={
+                    method === "email" ? "emailAddress" : "telephoneNumber"
+                  }
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder={
+                    method === "email" ? "you@example.com" : "+447123456789"
+                  }
+                  placeholderTextColor={p.muted}
+                  style={field}
+                />
+                {method === "phone" && !phoneEnabled && (
+                  <Text style={label}>
+                    SMS registration will be available once the SMS provider is
+                    connected.
+                  </Text>
+                )}
+              </>
+            )}
+            {step === 1 && (
+              <>
+                <Text style={[ui.title, { color: p.text }]}>
+                  Set your password.
+                </Text>
+                <Text style={label}>{address}</Text>
+                <Text style={label}>
+                  Use at least 12 characters. Your password will never be saved
+                  on this device.
+                </Text>
+                <TextInput
+                  accessibilityLabel="New account password"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="newPassword"
+                  style={field}
+                  placeholder="Your password"
+                  placeholderTextColor={p.muted}
+                />
+                <TextInput
+                  accessibilityLabel="Confirm account password"
+                  value={confirmation}
+                  onChangeText={setConfirmation}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="newPassword"
+                  style={field}
+                  placeholder="Confirm your password"
+                  placeholderTextColor={p.muted}
+                />
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: showPassword }}
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={[ui.row, { gap: 9, minHeight: 44 }]}
+                >
+                  <Feather
+                    name={showPassword ? "eye-off" : "eye"}
+                    color={p.text}
+                    size={18}
+                  />
+                  <Text style={label}>
+                    {showPassword ? "Hide" : "Show"} passwords
+                  </Text>
+                </Pressable>
+              </>
+            )}
+            {step === 2 && (
+              <>
+                <Text style={[ui.title, { color: p.text }]}>
+                  Verify it is you.
+                </Text>
+                <Text style={label}>{message}</Text>
+                <Text style={label}>
+                  Check {address} for your verification code.
+                </Text>
+                <TextInput
+                  accessibilityLabel="Account verification code"
+                  value={code}
+                  onChangeText={setCode}
+                  keyboardType="number-pad"
+                  maxLength={8}
+                  textContentType="oneTimeCode"
+                  style={field}
+                  placeholder="Verification code"
+                  placeholderTextColor={p.muted}
+                />
+              </>
+            )}
+            {step === 3 && (
+              <>
+                <Text style={[ui.title, { color: p.text }]}>
+                  Make it yours.
+                </Text>
+                <View style={{ alignItems: "center", padding: 10 }}>
+                  <Avatar profile={profile} size={88} />
+                </View>
+                <Text style={label}>Profile name</Text>
+                <TextInput
+                  accessibilityLabel="Your profile name"
+                  value={profile.displayName}
+                  onChangeText={(displayName) =>
+                    setProfile({ ...profile, displayName })
+                  }
+                  maxLength={60}
+                  textContentType="name"
+                  style={field}
+                  placeholder="Your name"
+                  placeholderTextColor={p.muted}
+                />
+                <Text style={label}>Choose your avatar</Text>
+                <View
+                  style={[
+                    ui.row,
+                    { flexWrap: "wrap", gap: 12, justifyContent: "center" },
+                  ]}
+                >
+                  {Object.keys(avatarColors).map((value) => (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`${value} avatar`}
+                      accessibilityState={{ checked: profile.avatar === value }}
+                      onPress={() =>
+                        setProfile({
+                          ...profile,
+                          avatar: value as Profile["avatar"],
+                        })
+                      }
+                      style={{
+                        padding: 4,
+                        borderWidth: 2,
+                        borderColor:
+                          profile.avatar === value ? p.primary : "transparent",
+                        borderRadius: 36,
+                      }}
+                    >
+                      <Avatar
+                        profile={{
+                          ...profile,
+                          avatar: value as Profile["avatar"],
+                        }}
+                        size={52}
+                      />
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={label}>
+                  {mode === "preview"
+                    ? "This customizes this local preview only. No account will be created."
+                    : "Your profile is personal. Workspace access is approved separately by an administrator."}
+                </Text>
+              </>
+            )}
+            {step === 4 && (
+              <>
+                <View style={{ alignItems: "center", gap: 16 }}>
+                  <Avatar profile={profile} size={88} />
+                  <Text style={[ui.title, { color: p.text }]}>
+                    All set, {profile.displayName.trim().split(" ")[0]}.
+                  </Text>
+                </View>
+                <Text style={label}>
+                  {mode === "preview"
+                    ? "Your preview profile is ready."
+                    : "Your account and profile are ready. Private workspace access remains pending administrator approval."}
+                </Text>
+              </>
+            )}
+            {mode === "register" && !enabled && step < 2 && (
+              <Text
+                style={[
+                  ui.small,
+                  {
+                    color: p.muted,
+                    backgroundColor: p.wash,
+                    padding: 12,
+                    borderRadius: 12,
+                  },
+                ]}
+              >
+                Live registration is awaiting secure backend configuration. No
+                email or phone number will be sent until it is connected.
+              </Text>
+            )}
+            {error ? (
+              <Text
+                accessibilityRole="alert"
+                style={[ui.small, { color: p.text }]}
+              >
+                {error}
+              </Text>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={
+                busy ||
+                (step === 1 &&
+                  (!enabled || (method === "phone" && !phoneEnabled)))
+              }
+              accessibilityState={{
+                disabled:
+                  busy ||
+                  (step === 1 &&
+                    (!enabled || (method === "phone" && !phoneEnabled))),
+              }}
+              onPress={step === 4 ? close : next}
+              style={[
+                ui.button,
+                {
+                  backgroundColor: p.primary,
+                  opacity:
+                    busy ||
+                    (step === 1 &&
+                      (!enabled || (method === "phone" && !phoneEnabled)))
+                      ? 0.5
+                      : 1,
+                },
+              ]}
+            >
+              <Text style={[ui.buttonText, { color: p.onPrimary }]}>
+                {busy
+                  ? "Please wait"
+                  : step === 0
+                    ? "Continue"
+                    : step === 1
+                      ? "Send verification code"
+                      : step === 2
+                        ? "Verify contact"
+                        : step === 3
+                          ? "Save profile"
+                          : "Done"}
+              </Text>
+            </Pressable>
+            {step > 0 && step < 3 && (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  setError("");
+                  setCode("");
+                  setStep(step - 1);
+                }}
+                style={ui.button}
+              >
+                <Text style={{ color: p.text }}>Back</Text>
+              </Pressable>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
