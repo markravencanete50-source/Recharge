@@ -18,6 +18,8 @@ Root and mobile TypeScript checks pass. Changed mobile and permission code passe
 
 Browser checks cover persisted bookmarks, checked/selected accessibility states, filtered calendar days, summary-to-filter navigation, client properties and detail transitions. Phone evidence uses 390 by 844 and 320 by 740 viewports; desktop evidence uses 1440 by 900. At 320 pixels, calendar day targets are approximately 44.3 by 48 pixels without horizontal page overflow.
 
+The uploaded native iOS simulator build is 8e365cc1-954b-4d1e-92cf-0ea0b3ca573c, from source commit 876e2cf. It was run on iPhone 14 Pro with iOS 17.2 through Appetize. Testing found and fixed full-screen modal headers overlapping the status bar by providing each modal its own safe-area context. The replacement build verifies property details, property-to-tool presentation, back navigation, light/dark mode, the profile sheet and cleaner-specific navigation. Screenshots are saved under .audit/redesign-ios-*.png. The Appetize build identifier is b_h5s4kzp4f5pevoabibknfv3vty. Simulator sessions were stopped after testing.
+
 The standard visual-lint run reports inherited container colours and the intentionally scrollable content region. Direct text-node checks distinguish these from actual rendered text and report zero findings in light mode at 390 pixels and dark mode at 320 pixels. Screenshots are retained locally under .audit. This does not replace screen-reader testing or physical-device checks.
 
 The broad suite initially found a registration mock that matched single-quoted imports only; it now handles both quote styles and all six registration checks pass. The rendered-html test depends on loading a Cloudflare worker artifact in plain Node, which rejects the cloudflare:workers import in this Windows environment. Record that limitation rather than claiming the entire suite passed.
@@ -25,6 +27,8 @@ The broad suite initially found a registration mock that matched single-quoted i
 ## Backend and release gates
 
 The reconnected Supabase dashboard showed only access_foundation applied. The administration, authentication-security and cleaning-manager migrations require hosted application and verification before live access can be enabled. The checked local SQL migration does not itself activate hosted security.
+
+A read-only hosted query confirmed zero workspace profiles. The Supabase connector denied access; the signed-in browser dashboard remains available. The three pending migrations are prepared as one transaction, with their original SQL retained in migration history. Browser confirmation was requested before enabling the administration functions; no pending migration was applied without that confirmation.
 
 The original 52 business tables remain in D1. Their migration to Supabase and table-specific ownership policies remain a separate workstream. Native session approval, phone-only workspace provisioning, email/SMS delivery, media uploads, push notifications and complete write workflows still need integration and end-to-end verification. Registration stays disabled in the preview. No manager or super-admin account was silently created or promoted.
 
