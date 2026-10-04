@@ -193,6 +193,7 @@
       iframe {
         border: 0;
         flex: 1;
+        min-height: 0;
         width: 100%;
         background: #f5f7fc;
       }
@@ -314,8 +315,8 @@
           ><span>Clearer reporting</span>
         </div>
         <p class="note">
-          Interactive browser preview<br />Sample data. No simulator minutes
-          used.
+          Scroll or drag inside the phone.<br />Sample data. No simulator
+          minutes used.
         </p>
       </div>
       <div class="frame-space">
@@ -369,9 +370,126 @@
         title = document.querySelector("#load-title"),
         detail = document.querySelector("#load-detail");
       let poll, deadline;
+      function enableDragScroll(doc) {
+        if (!doc || doc.documentElement.dataset.dragScroll === "ready") return;
+        doc.documentElement.dataset.dragScroll = "ready";
+        const styles = doc.createElement("style");
+        styles.textContent = `
+          [data-testid="workspace-scroll"] {
+            scrollbar-width: thin;
+            scrollbar-color: #6c7fa2 transparent;
+          }
+          [data-testid="workspace-scroll"]::-webkit-scrollbar { width: 6px; }
+          [data-testid="workspace-scroll"]::-webkit-scrollbar-thumb {
+            background: #6c7fa2;
+            border-radius: 6px;
+          }
+          [data-testid="workspace-scroll"]::-webkit-scrollbar-button { display: none; }
+          .studio-dragging, .studio-dragging * {
+            user-select: none !important;
+            cursor: grabbing !important;
+          }
+        `;
+        doc.head.append(styles);
+        let gesture = null,
+          suppressClick = false;
+        function scrollParent(target, axis) {
+          for (
+            let node = target;
+            node && node !== doc.documentElement;
+            node = node.parentElement
+          ) {
+            const css = doc.defaultView.getComputedStyle(node);
+            const overflow = axis === "y" ? css.overflowY : css.overflowX;
+            const room =
+              axis === "y"
+                ? node.scrollHeight - node.clientHeight
+                : node.scrollWidth - node.clientWidth;
+            if (/^(auto|scroll)$/.test(overflow) && room > 1) return node;
+          }
+          return null;
+        }
+        doc.addEventListener(
+          "mousedown",
+          (event) => {
+            suppressClick = false;
+            if (
+              event.button !== 0 ||
+              event.target.closest(
+                "input, textarea, select, [contenteditable], [role=slider]",
+              )
+            )
+              return;
+            const vertical = scrollParent(event.target, "y");
+            const horizontal = scrollParent(event.target, "x");
+            if (!vertical && !horizontal) return;
+            gesture = {
+              x: event.clientX,
+              y: event.clientY,
+              vertical,
+              horizontal,
+              scroller: null,
+              axis: null,
+            };
+          },
+          true,
+        );
+        function finish() {
+          if (gesture?.scroller) suppressClick = true;
+          gesture = null;
+          doc.documentElement.classList.remove("studio-dragging");
+        }
+        doc.addEventListener(
+          "mousemove",
+          (event) => {
+            if (!gesture) return;
+            if (!(event.buttons & 1)) {
+              finish();
+              return;
+            }
+            const dx = event.clientX - gesture.x;
+            const dy = event.clientY - gesture.y;
+            if (!gesture.scroller) {
+              if (Math.max(Math.abs(dx), Math.abs(dy)) < 6) return;
+              gesture.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+              gesture.scroller =
+                gesture.axis === "y" ? gesture.vertical : gesture.horizontal;
+              if (!gesture.scroller) {
+                gesture = null;
+                return;
+              }
+              gesture.start =
+                gesture.axis === "y"
+                  ? gesture.scroller.scrollTop
+                  : gesture.scroller.scrollLeft;
+              doc.documentElement.classList.add("studio-dragging");
+              doc.getSelection()?.removeAllRanges();
+            }
+            event.preventDefault();
+            if (gesture.axis === "y")
+              gesture.scroller.scrollTop = gesture.start - dy;
+            else gesture.scroller.scrollLeft = gesture.start - dx;
+          },
+          true,
+        );
+        doc.addEventListener("mouseup", finish, true);
+        doc.addEventListener("mouseleave", finish);
+        doc.defaultView.addEventListener("blur", finish);
+        doc.addEventListener(
+          "click",
+          (event) => {
+            if (!suppressClick || event.detail === 0) return;
+            suppressClick = false;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          },
+          true,
+        );
+      }
       function checkReady() {
         try {
           if (frame.contentDocument?.querySelector('[role="tab"]')) {
+            enableDragScroll(frame.contentDocument);
             clearInterval(poll);
             clearTimeout(deadline);
             statusPanel.hidden = true;

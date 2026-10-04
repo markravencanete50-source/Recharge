@@ -593,11 +593,12 @@ function AppContent() {
       </View>
       <ScrollView
         ref={scroll}
+        testID="workspace-scroll"
         style={ui.fill}
         contentContainerStyle={ui.page}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={Platform.OS === "web"}
       >
         <Animated.View
           style={{
