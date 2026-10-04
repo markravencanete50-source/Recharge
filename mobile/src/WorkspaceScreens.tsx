@@ -21,9 +21,7 @@ import { Artwork } from "./Artwork";
 import { FilterBar } from "./FilterBar";
 import { ProgressRing, StateGraphic } from "./StateGraphic";
 import Svg, {
-  Path,
   Rect,
-  Line,
   Defs,
   LinearGradient,
   RadialGradient,
@@ -56,6 +54,9 @@ import { Sparkline } from "./Charts";
 import { weeklySparkline } from "../../lib/report-presentation";
 import { snapshotFor } from "./model";
 import { DepartmentGrid } from "./DepartmentGrid";
+import { BuildingGlyph } from "./BuildingGlyph";
+import { ParallaxSurface } from "./ParallaxSurface";
+import { orderedPins } from "../../lib/pinned-tools";
 
 type IconName = ComponentProps<typeof Feather>["name"];
 type Props = {
@@ -100,41 +101,7 @@ function PropertyScene({
         justifyContent: "center",
       }}
     >
-      <Svg width={64} height={74} viewBox="0 0 64 74">
-        <Rect x="12" y="28" width="40" height="35" rx="2" fill={p.surface} />
-        <Path
-          d={variant % 2 ? "M6 29L32 8L58 29Z" : "M8 30L18 14H46L56 30Z"}
-          fill={tone.ink}
-        />
-        <Rect x="29" y="47" width="11" height="16" rx="2" fill={tone.ink} />
-        <Rect
-          x="19"
-          y="36"
-          width="8"
-          height="8"
-          rx="1"
-          fill={tone.ink}
-          opacity="0.6"
-        />
-        <Rect
-          x="37"
-          y="36"
-          width="8"
-          height="8"
-          rx="1"
-          fill={tone.ink}
-          opacity="0.6"
-        />
-        <Line
-          x1="6"
-          x2="58"
-          y1="64"
-          y2="64"
-          stroke={tone.ink}
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </Svg>
+      <BuildingGlyph palette={p} variant={variant}/>
     </View>
   );
 }
@@ -683,7 +650,7 @@ export function WorkspaceScreens({
       onPress={() => onOpen(item.tool, item.record)}
     />
   );
-  const saved = toolsFor(role).filter((tool) => savedTools.includes(tool.id));
+  const saved = orderedPins(toolsFor(role).map(tool=>({key:tool.id,name:tool.name,tone:WORKSPACE_MAP[tool.id].tone,tool})),savedTools).map(entry=>entry.tool);
 
 
   if(section==='work'||section==='calendar') {
@@ -754,7 +721,7 @@ export function WorkspaceScreens({
                   : "Your people and properties, working together."}
             </Text>
           </View>
-          <Entrance sessionKey={"home:"+role+":hero"}>
+          <Entrance sessionKey={"home:"+role+":hero"}><ParallaxSurface>
             <View
               style={{
                 backgroundColor: p.hero,
@@ -888,7 +855,7 @@ export function WorkspaceScreens({
                 <Feather name="arrow-right" size={20} color={p.heroText} />
               </Pressable>
               <Sparkline values={spark.days.map(day=>day.value)} label={spark.deltaLabel} palette={p}/>
-            </View>
+            </View></ParallaxSurface>
           </Entrance>
           <View style={[ui.row, { gap: 12 }]}>
             {[

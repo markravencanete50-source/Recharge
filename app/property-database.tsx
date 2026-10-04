@@ -2,6 +2,7 @@
 
 
 import { FormEvent, useMemo, useState } from "react";
+import { BuildingGlyph } from "@/components/building-glyph";
 import {
   Archive,
   ArrowLeft,
@@ -206,7 +207,7 @@ export function PropertyDatabase({
         <section className="mt-5 space-y-4">
           <div className="flex flex-wrap items-center gap-3"><div className="flex-1"><SearchBox value={propertySearch} onChange={setPropertySearch} placeholder="Search property, address or owner" /></div><Select value={regionFilter} onValueChange={setRegionFilter}><SelectTrigger className="w-48"><SelectValue placeholder="Region" /></SelectTrigger><SelectContent><SelectItem value="all">All regions</SelectItem>{regions.map(region => <SelectItem key={region} value={region}>{region}</SelectItem>)}</SelectContent></Select></div>
           <div className="property-directory-grid">{syncing ? Array.from({length:4},(_,index) => <div key={index} className="property-directory-card property-directory-skeleton" aria-label="Loading property" />) : properties.map(property => <button key={property.id} type="button" className="property-directory-card" onClick={() => {setSelectedId(property.id);setDirectoryView('record');}}>
-            <div className="property-directory-art"><svg viewBox="0 0 320 160" role="img" aria-label="Property illustration"><path d="M0 144h320v16H0z" fill="var(--rc-wash)"/><path d="M94 68l66-44 66 44v76H94z" fill="var(--rc-surface)" stroke="var(--rc-primary)" strokeWidth="3"/><path d="M78 70l82-56 82 56M147 144v-45h26v45" fill="none" stroke="var(--rc-primary)" strokeWidth="4" strokeLinejoin="round"/><path d="M112 78h22v22h-22zm74 0h22v22h-22z" fill="var(--rc-wash)" stroke="var(--rc-primary)" strokeWidth="2"/></svg><StatusBadge status={property.status}/></div>
+            <div className="property-directory-art"><BuildingGlyph/><StatusBadge status={property.status}/></div>
             <div className="property-directory-copy"><h2>{property.propertyName}</h2><p>{property.propertyAddress || 'Address not recorded'}</p><p>{property.region || 'Region not recorded'}</p><span>View property record <ExternalLink size={16}/></span></div>
           </button>)}</div>
           {!syncing && !properties.length && <p className="py-12 text-center text-[var(--muted-foreground)]">No matching properties.</p>}

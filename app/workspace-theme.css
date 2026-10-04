@@ -290,3 +290,21 @@ html[data-reduce-motion="true"] :is(.recharge-workspace,.phase-two-reports) *,ht
 :is(.tool-illustration,.department-illustration)[data-department] {background:var(--department-wash);color:var(--department-ink)}
 .theme-toggle {transition:none}
 .recharge-workspace {font-variant-numeric:tabular-nums;}
+
+/* Phase 3: quick finder and small geometric accents. */
+.command-trigger{display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 14px;border:1px solid var(--rc-controlBorder);border-radius:16px;background:var(--rc-surface);color:var(--rc-text);font:inherit;font-size:14px}
+.command-trigger kbd{color:var(--rc-muted);font-size:12px;font-family:inherit;border:1px solid var(--rc-border);padding:3px 6px;border-radius:6px}
+.workspace-command{background:var(--rc-surface)!important;color:var(--rc-text);width:min(600px,calc(100vw - 32px));max-width:600px;gap:12px}
+.command-input{display:flex;align-items:center;gap:12px;border:1px solid var(--rc-controlBorder);border-radius:16px;padding:0 16px;color:var(--rc-muted);background:var(--rc-background)}
+.command-input input{min-height:52px;background:transparent!important;border:0;box-shadow:none;font-size:16px;color:var(--rc-text);padding:0;flex:1}
+.command-input input::placeholder{color:var(--rc-muted)}
+.command-hint,.command-group{color:var(--rc-muted);font-size:13px;line-height:20px}
+.command-group{font-weight:600;margin:12px 0 6px}
+.command-results{max-height:min(48vh,420px);overflow:auto;overscroll-behavior:contain;padding:4px}
+.command-result{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;border:1px solid transparent;border-radius:16px;padding:12px;text-align:left;background:var(--rc-surface);color:var(--rc-text);font:inherit;font-size:15px;line-height:22px}
+.command-result>span:nth-last-child(2){flex:1}
+.command-result[data-selected=true]{background:var(--rc-wash);border-color:var(--rc-controlBorder)}
+.command-result mark{background:var(--rc-wash);color:var(--rc-primary);font-weight:700}
+.command-result .tool-illustration{width:40px;height:40px;margin:0;flex-shrink:0}
+.property-directory-art > .building-glyph{height:148px;width:132px}
+@media(max-width:767px){.command-trigger{padding:0;width:48px;flex-shrink:0}.command-trigger span,.command-trigger kbd{display:none}.workspace-header>div{min-width:0}.workspace-header>div:first-child{gap:8px}}

@@ -6,6 +6,8 @@ import { FormEvent, createContext, useContext, useEffect, useMemo, useRef, useSt
 import { ToolIllustration } from "@/components/tool-illustration";
 import { useWorkspaceMotion, MotionPreferenceSync, ReduceMotionToggle } from "@/components/workspace-motion";
 import { OfflineBanner } from "@/components/offline-banner";
+import { WorkspaceCommand } from "@/components/workspace-command";
+import { WORKSPACE_MAP } from "@/lib/workspace-map";
 import { DepartmentIllustration } from "@/components/department-illustration";
 import { ThemeToggle } from "@/components/workspace-theme";
 import { AnalyticsBoard } from "@/app/analytics-board";
@@ -359,6 +361,8 @@ export function RechargePortal({
     useState<PurchaseOrderWorkspace>("ready");
   const [operationsMode, setOperationsMode] = useState<OperationsMode>("ready-calendar");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [commandOpen,setCommandOpen]=useState(false);
+  const [commandTool,setCommandTool]=useState<ModuleId|null>(null);
   const [workflowBoardMode, setWorkflowBoardMode] = useState<WorkflowToolMode>("new-property-inspections");
   const navigationRef = useRef<HTMLElement>(null);
   const [departmentsOpen,setDepartmentsOpen]=useState(true);
@@ -368,6 +372,23 @@ export function RechargePortal({
   useEffect(()=>{const update=()=>setScrolled(window.scrollY>12);update();window.addEventListener("scroll",update,{passive:true});return()=>window.removeEventListener("scroll",update);},[]);
   useEffect(()=>{const nav=navigationRef.current?.querySelector<HTMLElement>("nav");if(!nav)return;const update=()=>{const active=nav.querySelector<HTMLElement>("[aria-current=page]");if(!active){setIndicator(current=>({...current,visible:false}));return;}setIndicator({y:active.getBoundingClientRect().top-nav.getBoundingClientRect().top+nav.scrollTop,height:active.offsetHeight,visible:true});};update();const observer=new ResizeObserver(update);observer.observe(nav);return()=>observer.disconnect();},[view,departmentsOpen,currentUser.role]);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  useEffect(()=>{
+    const listener=(event:KeyboardEvent)=>{
+      if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'&&!event.altKey){
+        if(!commandOpen&&document.querySelector('[role="dialog"]'))return;
+        event.preventDefault();setCommandOpen(value=>!value);
+      }
+    };
+    document.addEventListener('keydown',listener);return()=>document.removeEventListener('keydown',listener);
+  },[commandOpen]);
+  useEffect(()=>{
+    if(!commandTool)return;
+    const frame=requestAnimationFrame(()=>{
+      // Activate the existing permitted card action, preserving its destination and workflow.
+      const action=document.querySelector<HTMLButtonElement|HTMLAnchorElement>('[data-module-id="'+commandTool+'"] .tool-card-hitarea');
+      action?.click();setCommandTool(null);
+    });return()=>cancelAnimationFrame(frame);
+  },[commandTool,view]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -454,6 +475,15 @@ export function RechargePortal({
         onOpen={() => changeView("communications")}
       />
       <MotionPreferenceSync/><OfflineBanner/>
+      {commandOpen&&<WorkspaceCommand open={commandOpen} onOpenChange={setCommandOpen} tools={visibleModules} onReports={()=>changeView('analytics')} onSelect={tool=>{
+        if(!currentUser.modules.includes(tool.id))return;
+        const department=visibleOperationsSections.find(section=>section.id===WORKSPACE_MAP[tool.id].tone&&section.modules.includes(tool.id as never))||visibleOperationsSections.find(section=>section.modules.includes(tool.id as never));
+        if(department){changeView(department.id);setCommandTool(tool.id);}
+        else if(tool.id==='aircover-reporting'||tool.id==='property-furnishing-board'||tool.id==='routine-bin-garden-board'){
+          const mode=tool.id==='aircover-reporting'?'aircover-reporting':tool.id==='property-furnishing-board'?'property-furnishing':'routine-bin-garden';
+          setWorkflowBoardMode(mode);changeView('workflow-board');
+        }
+      }}/>}
       {menuOpen && <button className="navigation-backdrop lg:hidden" aria-label="Dismiss navigation" onClick={() => setMenuOpen(false)} tabIndex={-1} />}
       <aside ref={navigationRef} id="workspace-navigation" role={menuOpen ? "dialog" : undefined} aria-modal={menuOpen ? true : undefined} aria-label="Workspace navigation" className={"sidebar " + (menuOpen ? "sidebar-open" : "")}>
         <div className="sidebar-brand flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-5 lg:border-0">
@@ -587,6 +617,7 @@ export function RechargePortal({
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button className="command-trigger" type="button" aria-label="Open quick search" onClick={()=>setCommandOpen(true)}><Search size={20}/><span>Quick search</span><kbd>Ctrl K</kbd></button>
             {(currentUser.role === "client" || currentUser.role === "stays" || isWorkspaceAdmin(currentUser.role)) && (
               <NotificationCentre
                 initialData={onboardingData}
@@ -1346,7 +1377,7 @@ function ToolCard({
   const action = onOpen ? "Open centre" : module.url && !preview ? "Open tool" : "View details";
   return (
     <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-    <article className={"tool-card group " + (large ? "tool-card-large" : "")}>
+    <article data-module-id={module.id} className={"tool-card group " + (large ? "tool-card-large" : "")}>
       <div className="flex items-start justify-between gap-4">
         <span className="tool-art-stage"><ToolIllustration id={module.id} fallback={icons[module.id]} /></span>
         <Badge className="tool-audience border-0 bg-[var(--muted)] text-[0.6rem] uppercase tracking-[0.12em] text-[var(--muted-foreground)]">

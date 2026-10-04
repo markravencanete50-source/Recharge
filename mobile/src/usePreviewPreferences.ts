@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Animated, Platform, useColorScheme } from "react-native";
 import { MODULE_IDS, type WorkspaceRole } from "../../lib/modules";
 import { designTokenCss } from "../../lib/design-tokens";
+import { movePin } from "../../lib/pinned-tools";
 let sessionPins: Partial<Record<WorkspaceRole, string[]>> = {};
 export function usePreviewBookmarks(role: WorkspaceRole) {
   const [bookmarks, setBookmarks] = useState(() => {
@@ -42,6 +43,7 @@ export function usePreviewBookmarks(role: WorkspaceRole) {
     saved: bookmarks[role] || [],
     loaded: true,
     error,
+    move: (id: string, target: number) => setBookmarks(current => ({...current, [role]: movePin(current[role] || [], id, target)})),
     toggle: (id: string) => {
       if (!MODULE_IDS.includes(id as (typeof MODULE_IDS)[number])) return;
       setBookmarks((current) => {
@@ -80,7 +82,7 @@ export function useThemePreference() {
       style.id = "recharge-design-tokens";
       document.head.appendChild(style);
     }
-    style.textContent = designTokenCss;
+    style.textContent = designTokenCss + '[data-pin-grip="true"]{touch-action:none;cursor:grab;user-select:none}';
     document.documentElement.dataset.rechargeTheme = theme;
   }, [theme]);
   function setTheme(value: "light" | "dark", reduced = false) {

@@ -22,6 +22,7 @@ import {
 } from "../../lib/workspace-map";
 import { findTools, titleParts, type FinderEntry } from "../../lib/tool-finder";
 import { StateGraphic } from "./StateGraphic";
+import { PinnedTools } from "./PinnedTools";
 type Props = {
   role: WorkspaceRole;
   palette: Palette;
@@ -33,6 +34,7 @@ type Props = {
   onlySaved: boolean;
   onOnlySaved: () => void;
   onSave: (id: string) => void;
+  onMovePin: (id: string, target: number) => void;
   onOpen: (tool: Tool) => void;
   storageError: string;
   onNavigate: (section: WorkspaceSection) => void;
@@ -51,6 +53,7 @@ export function ToolDirectory({
   onlySaved,
   onOnlySaved,
   onSave,
+  onMovePin,
   onOpen,
   storageError,
   onNavigate,
@@ -505,44 +508,7 @@ export function ToolDirectory({
               </Text>
             </View>
             {entries.some((t) => saved.includes(t.key)) ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 12, paddingBottom: 4 }}
-              >
-                {entries
-                  .filter((t) => saved.includes(t.key))
-                  .map((t) => (
-                    <Pressable
-                      key={t.key}
-                      accessibilityRole="button"
-                      accessibilityLabel={"Open " + t.name}
-                      onPress={() => onOpen(t.tool)}
-                      style={{
-                        width: 164,
-                        minHeight: 136,
-                        padding: 16,
-                        gap: 12,
-                        borderRadius: 22,
-                        borderWidth: 1,
-                        borderColor: p.border,
-                        backgroundColor: p.surface,
-                      }}
-                    >
-                      <Artwork id={t.tool.id} size={40} palette={p} />
-                      <Text
-                        style={{
-                          color: p.text,
-                          fontSize: 14,
-                          lineHeight: 20,
-                          fontWeight: "500",
-                        }}
-                      >
-                        {t.name}
-                      </Text>
-                    </Pressable>
-                  ))}
-              </ScrollView>
+              <PinnedTools entries={entries} saved={saved} palette={p} onOpen={onOpen} onMove={onMovePin}/>
             ) : (
               <View
                 style={[

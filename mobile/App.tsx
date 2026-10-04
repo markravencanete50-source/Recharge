@@ -39,6 +39,7 @@ import { DesktopNavigation } from "./src/DesktopNavigation";
 import { themes, ui, type Palette } from "./src/theme";
 import { WorkspaceScreens, Calendar } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
+import { CommandSearch } from "./src/CommandSearch";
 import { exportReport } from "./src/exportReport";
 import { analyticsCsv, analyticsFilename } from "../lib/analytics-export";
 import { isWorkspaceAdmin } from "../lib/modules";
@@ -357,12 +358,14 @@ function AppContent() {
     null,
   );
   const [settings, setSettings] = useState(false);
+  const [commandOpen,setCommandOpen]=useState(false);
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
   const [savedOnly, setSavedOnly] = useState(false);
   const {
     saved: savedTools,
     toggle: toggleSaved,
+    move: moveSaved,
     error: bookmarkError,
     loaded: bookmarksLoaded,
   } = usePreviewBookmarks(role);
@@ -388,6 +391,16 @@ function AppContent() {
     [snapshot, period],
   );
   const tools = useMemo(() => toolsFor(role), [role]);
+  useEffect(()=>{
+    if(Platform.OS!=="web")return;
+    const listener=(event:KeyboardEvent)=>{
+      if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'&&!event.altKey){
+        if(settings||selectedTool||accountMode||calendar)return;
+        event.preventDefault();setCommandOpen(value=>!value);
+      }
+    };
+    document.addEventListener('keydown',listener);return()=>document.removeEventListener('keydown',listener);
+  },[settings,selectedTool,accountMode,calendar]);
   async function exportCsv() {
     if (!isWorkspaceAdmin(role) || exporting) return;
     setExporting(true);
@@ -451,6 +464,7 @@ function AppContent() {
     setRole(value);
     setExportMessage("");
     setSettings(false);
+    setCommandOpen(false);
     setSearch("");
     setDepartment("All");
     setSavedOnly(false);
@@ -542,6 +556,7 @@ function AppContent() {
                 </View>
               </View>
               <View style={[ui.row, { gap: 8 }]}>
+                <IconButton label="Open quick search" icon="search" palette={p} onPress={()=>setCommandOpen(true)}/>
                 <IconButton
                   label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
                   icon={theme === "dark" ? "sun" : "moon"}
@@ -597,6 +612,7 @@ function AppContent() {
               onlySaved={savedOnly}
               onOnlySaved={() => setSavedOnly(!savedOnly)}
               onSave={toggleSaved}
+              onMovePin={moveSaved}
               onOpen={openTool}
               storageError={
                 bookmarksLoaded ? bookmarkError : "Loading saved tools..."
@@ -744,6 +760,7 @@ function AppContent() {
               onProfile={setProfile}
             />
           )}
+          {commandOpen&&<Sheet visible title="Quick search" onClose={()=>setCommandOpen(false)} palette={p}><CommandSearch tools={tools} palette={p} onOpen={openTool} onNavigate={setTab} onProfile={()=>setSettings(true)} onClose={()=>setCommandOpen(false)}/></Sheet>}
           <Sheet
             visible={calendar}
             onClose={() => {
