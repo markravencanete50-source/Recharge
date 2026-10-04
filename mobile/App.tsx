@@ -148,6 +148,7 @@ function Sheet({
   const gesture = useMemo(
     () =>
       PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_, movement) =>
           movement.dy > 8 && Math.abs(movement.dy) > Math.abs(movement.dx),
         onPanResponderMove: (_, movement) => {
@@ -208,7 +209,7 @@ function Sheet({
               <View
                 {...gesture.panHandlers}
                 style={{
-                  height: 28,
+                  height: 44,
                   alignItems: "center",
                   justifyContent: "center",
                   marginTop: -12,
