@@ -44,7 +44,7 @@ export const ui = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 8,
   },
-  body: { fontSize: 14, lineHeight: 22 },
+  body: { fontSize: 15, lineHeight: 24 },
   small: { fontSize: 12, lineHeight: 18 },
   sectionTitle: { fontSize: 18, fontWeight: "700", letterSpacing: -0.4 },
   card: { borderWidth: 1, borderRadius: 22, padding: 18, gap: 12 },
@@ -58,7 +58,7 @@ export const ui = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  buttonText: { fontSize: 13, fontWeight: "600" },
+  buttonText: { fontSize: 14, fontWeight: "600" },
   iconButton: {
     height: 44,
     width: 44,
@@ -84,7 +84,7 @@ export const ui = StyleSheet.create({
     borderRadius: 10,
     alignSelf: "flex-start",
   },
-  tagText: { fontSize: 10, fontWeight: "600" },
+  tagText: { fontSize: 11, fontWeight: "600" },
   tab: {
     flex: 1,
     alignItems: "center",
@@ -93,7 +93,7 @@ export const ui = StyleSheet.create({
     gap: 5,
     borderRadius: 16,
   },
-  tabLabel: { fontSize: 10, fontWeight: "600" },
+  tabLabel: { fontSize: 12, fontWeight: "600" },
   tabs: {
     flexDirection: "row",
     gap: 5,

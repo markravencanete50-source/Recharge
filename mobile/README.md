@@ -6,7 +6,7 @@ This is a native React Native and Expo SDK 57 app, with Expo Router navigation. 
 
 The user chose a cloud iPhone simulator. The app is linked to the Expo project `@mrkrvn/recharge-mobile-preview`. Sign in to Expo and Appetize. The preview-ios profile in eas.json creates a standalone iOS Simulator app with its JavaScript bundled, without needing a local Metro connection, TestFlight or Apple Developer membership. Run `npx eas-cli@latest build --platform ios --profile preview-ios` from this folder. Download its simulator .app archive and upload it to Appetize as a compressed .app bundle. An IPA store build is not accepted by Appetize. Select an iPhone and open its live stream in a separate browser window. Keep live account configuration disabled until the backend is configured and audited.
 
-The iOS bundle export is a compilation check, not the simulator .app binary. A successful cloud build and a live simulator session are still needed before iOS runtime verification is complete. Appetize's free plan currently has 30 minutes per month; confirm the current limits before using paid plans.
+The first standalone EAS iOS Simulator build was uploaded to Appetize and ran successfully on an iPhone 14 Pro with iOS 17.2. Home, tools, native search, tool sheets, analytics and theme switching were exercised in the live native app. Each updated binary needs its own runtime check. The current free account limits each simulator session to three minutes; restart a session when its timer expires. Confirm the remaining account allowance before extended testing.
 
 ## Run on this Windows laptop
 
@@ -17,6 +17,8 @@ For another development machine, install Android SDK tools and a compatible emul
 ## Available screens
 
 Home, searchable workspace tools with individual artwork, read-only tool and record sheets, light and dark themes, six sample role views, and role-scoped analytics with native calendar dates, line, donut and bar charts. Tool search matches feature titles only, ignores capitalization and trims surrounding whitespace. Descriptions and category labels are excluded. Analytics reuse the existing tested calculation and access-scoping functions. Preview roles never grant live permissions. Detailed editing screens for every workflow remain part of the mobile implementation.
+
+The interactive mobile workspace adds department filters, bookmarks, a saved-tools view, clearable title-only search, searchable record lists and status filters. Saved tools are held only for the current app session. Analytics supports selecting individual days and status shares. Touch controls, cards, navigation, chart bars and onboarding steps use short animations that respect the device's Reduce Motion setting. Sheets support backdrop dismissal, a drag handle, keyboard avoidance and scrolling within the available screen height.
 
 Profile settings include custom names and six monogram avatar styles. Preview customization is local to the running app and creates no account. Uploaded profile photographs are not implemented yet.
 

@@ -3,7 +3,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   Text,
   TextInput,
@@ -12,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { ui, type Palette } from "./theme";
+import { Entrance, MotionPress as Pressable, useReducedMotion } from "./motion";
 
 export type Profile = {
   displayName: string;
@@ -118,6 +118,7 @@ export function AccountSetup({
   onClose: () => void;
   onProfile: (profile: Profile) => void;
 }) {
+  const reduced = useReducedMotion();
   const [step, setStep] = useState(mode === "preview" ? 3 : 0);
   const [method, setMethod] = useState<"email" | "phone">("email");
   const [address, setAddress] = useState("");
@@ -277,7 +278,7 @@ export function AccountSetup({
     <Modal
       visible
       transparent
-      animationType="slide"
+      animationType={reduced ? "none" : "slide"}
       onRequestClose={close}
       statusBarTranslucent
     >
@@ -315,320 +316,348 @@ export function AccountSetup({
           <ScrollView
             contentContainerStyle={{ gap: 16, paddingBottom: 12 }}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
           >
-            {step < 4 && (
-              <Text style={[ui.eyebrow, { color: p.muted }]}>
-                {mode === "preview" ? "MAKE IT YOURS" : `STEP ${step + 1} OF 4`}
-              </Text>
-            )}
-            {step === 0 && (
-              <>
-                <Text style={[ui.title, { color: p.text }]}>
-                  Start with one contact.
+            <Entrance trigger={String(step)} style={{ gap: 16 }}>
+              {mode === "register" && step < 4 && (
+                <View
+                  style={[ui.row, { gap: 6 }]}
+                  accessibilityLabel={`Account setup, step ${step + 1} of 4`}
+                >
+                  {[0, 1, 2, 3].map((index) => (
+                    <View
+                      key={index}
+                      style={{
+                        height: 4,
+                        flex: 1,
+                        borderRadius: 3,
+                        backgroundColor: index <= step ? p.primary : p.border,
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
+              {step < 4 && (
+                <Text style={[ui.eyebrow, { color: p.muted }]}>
+                  {mode === "preview"
+                    ? "MAKE IT YOURS"
+                    : `STEP ${step + 1} OF 4`}
                 </Text>
-                <Text style={label}>
-                  Register with your email address or phone number. You only
-                  need one.
-                </Text>
-                <View style={[ui.row, { gap: 10 }]}>
-                  {(["email", "phone"] as const).map((value) => (
-                    <Pressable
-                      key={value}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: method === value }}
-                      onPress={() => changeMethod(value)}
-                      style={[
-                        ui.button,
-                        {
-                          flex: 1,
-                          backgroundColor:
-                            method === value ? p.primary : p.wash,
-                        },
-                      ]}
-                    >
-                      <Feather
-                        name={value === "email" ? "mail" : "smartphone"}
-                        size={17}
-                        color={method === value ? p.onPrimary : p.text}
-                      />
-                      <Text
+              )}
+              {step === 0 && (
+                <>
+                  <Text style={[ui.title, { color: p.text }]}>
+                    Start with one contact.
+                  </Text>
+                  <Text style={label}>
+                    Register with your email address or phone number. You only
+                    need one.
+                  </Text>
+                  <View style={[ui.row, { gap: 10 }]}>
+                    {(["email", "phone"] as const).map((value) => (
+                      <Pressable
+                        key={value}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: method === value }}
+                        onPress={() => changeMethod(value)}
+                        style={[
+                          ui.button,
+                          {
+                            flex: 1,
+                            backgroundColor:
+                              method === value ? p.primary : p.wash,
+                          },
+                        ]}
+                      >
+                        <Feather
+                          name={value === "email" ? "mail" : "smartphone"}
+                          size={17}
+                          color={method === value ? p.onPrimary : p.text}
+                        />
+                        <Text
+                          style={{
+                            color: method === value ? p.onPrimary : p.text,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {value === "email" ? "Email" : "Phone"}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text style={label}>
+                    {method === "email"
+                      ? "Email address"
+                      : "Phone number with country code"}
+                  </Text>
+                  <TextInput
+                    accessibilityLabel={
+                      method === "email"
+                        ? "Registration email address"
+                        : "Registration phone number"
+                    }
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType={
+                      method === "email" ? "email-address" : "phone-pad"
+                    }
+                    textContentType={
+                      method === "email" ? "emailAddress" : "telephoneNumber"
+                    }
+                    value={address}
+                    onChangeText={setAddress}
+                    placeholder={
+                      method === "email" ? "you@example.com" : "+447123456789"
+                    }
+                    placeholderTextColor={p.muted}
+                    style={field}
+                  />
+                  {method === "phone" && !phoneEnabled && (
+                    <Text style={label}>
+                      SMS registration will be available once the SMS provider
+                      is connected.
+                    </Text>
+                  )}
+                </>
+              )}
+              {step === 1 && (
+                <>
+                  <Text style={[ui.title, { color: p.text }]}>
+                    Set your password.
+                  </Text>
+                  <Text style={label}>{address}</Text>
+                  <Text style={label}>
+                    Use at least 12 characters. Your password will never be
+                    saved on this device.
+                  </Text>
+                  <TextInput
+                    accessibilityLabel="New account password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="newPassword"
+                    style={field}
+                    placeholder="Your password"
+                    placeholderTextColor={p.muted}
+                  />
+                  <TextInput
+                    accessibilityLabel="Confirm account password"
+                    value={confirmation}
+                    onChangeText={setConfirmation}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="newPassword"
+                    style={field}
+                    placeholder="Confirm your password"
+                    placeholderTextColor={p.muted}
+                  />
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: showPassword }}
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={[ui.row, { gap: 9, minHeight: 44 }]}
+                  >
+                    <Feather
+                      name={showPassword ? "eye-off" : "eye"}
+                      color={p.text}
+                      size={18}
+                    />
+                    <Text style={label}>
+                      {showPassword ? "Hide" : "Show"} passwords
+                    </Text>
+                  </Pressable>
+                </>
+              )}
+              {step === 2 && (
+                <>
+                  <Text style={[ui.title, { color: p.text }]}>
+                    Verify it is you.
+                  </Text>
+                  <Text style={label}>{message}</Text>
+                  <Text style={label}>
+                    Check {address} for your verification code.
+                  </Text>
+                  <TextInput
+                    accessibilityLabel="Account verification code"
+                    value={code}
+                    onChangeText={setCode}
+                    keyboardType="number-pad"
+                    maxLength={8}
+                    textContentType="oneTimeCode"
+                    style={field}
+                    placeholder="Verification code"
+                    placeholderTextColor={p.muted}
+                  />
+                </>
+              )}
+              {step === 3 && (
+                <>
+                  <Text style={[ui.title, { color: p.text }]}>
+                    Make it yours.
+                  </Text>
+                  <View style={{ alignItems: "center", padding: 10 }}>
+                    <Avatar profile={profile} size={88} />
+                  </View>
+                  <Text style={label}>Profile name</Text>
+                  <TextInput
+                    accessibilityLabel="Your profile name"
+                    value={profile.displayName}
+                    onChangeText={(displayName) =>
+                      setProfile({ ...profile, displayName })
+                    }
+                    maxLength={60}
+                    textContentType="name"
+                    style={field}
+                    placeholder="Your name"
+                    placeholderTextColor={p.muted}
+                  />
+                  <Text style={label}>Choose your avatar</Text>
+                  <View
+                    style={[
+                      ui.row,
+                      { flexWrap: "wrap", gap: 12, justifyContent: "center" },
+                    ]}
+                  >
+                    {Object.keys(avatarColors).map((value) => (
+                      <Pressable
+                        key={value}
+                        accessibilityRole="radio"
+                        accessibilityLabel={`${value} avatar`}
+                        accessibilityState={{
+                          checked: profile.avatar === value,
+                        }}
+                        onPress={() =>
+                          setProfile({
+                            ...profile,
+                            avatar: value as Profile["avatar"],
+                          })
+                        }
                         style={{
-                          color: method === value ? p.onPrimary : p.text,
-                          fontWeight: "600",
+                          padding: 4,
+                          borderWidth: 2,
+                          borderColor:
+                            profile.avatar === value
+                              ? p.primary
+                              : "transparent",
+                          borderRadius: 36,
                         }}
                       >
-                        {value === "email" ? "Email" : "Phone"}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <Text style={label}>
-                  {method === "email"
-                    ? "Email address"
-                    : "Phone number with country code"}
-                </Text>
-                <TextInput
-                  accessibilityLabel={
-                    method === "email"
-                      ? "Registration email address"
-                      : "Registration phone number"
-                  }
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType={
-                    method === "email" ? "email-address" : "phone-pad"
-                  }
-                  textContentType={
-                    method === "email" ? "emailAddress" : "telephoneNumber"
-                  }
-                  value={address}
-                  onChangeText={setAddress}
-                  placeholder={
-                    method === "email" ? "you@example.com" : "+447123456789"
-                  }
-                  placeholderTextColor={p.muted}
-                  style={field}
-                />
-                {method === "phone" && !phoneEnabled && (
+                        <Avatar
+                          profile={{
+                            ...profile,
+                            avatar: value as Profile["avatar"],
+                          }}
+                          size={52}
+                        />
+                      </Pressable>
+                    ))}
+                  </View>
                   <Text style={label}>
-                    SMS registration will be available once the SMS provider is
-                    connected.
+                    {mode === "preview"
+                      ? "This customizes this local preview only. No account will be created."
+                      : "Your profile is personal. Workspace access is approved separately by an administrator."}
                   </Text>
-                )}
-              </>
-            )}
-            {step === 1 && (
-              <>
-                <Text style={[ui.title, { color: p.text }]}>
-                  Set your password.
-                </Text>
-                <Text style={label}>{address}</Text>
-                <Text style={label}>
-                  Use at least 12 characters. Your password will never be saved
-                  on this device.
-                </Text>
-                <TextInput
-                  accessibilityLabel="New account password"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  textContentType="newPassword"
-                  style={field}
-                  placeholder="Your password"
-                  placeholderTextColor={p.muted}
-                />
-                <TextInput
-                  accessibilityLabel="Confirm account password"
-                  value={confirmation}
-                  onChangeText={setConfirmation}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  textContentType="newPassword"
-                  style={field}
-                  placeholder="Confirm your password"
-                  placeholderTextColor={p.muted}
-                />
-                <Pressable
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: showPassword }}
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={[ui.row, { gap: 9, minHeight: 44 }]}
-                >
-                  <Feather
-                    name={showPassword ? "eye-off" : "eye"}
-                    color={p.text}
-                    size={18}
-                  />
+                </>
+              )}
+              {step === 4 && (
+                <>
+                  <View style={{ alignItems: "center", gap: 16 }}>
+                    <Avatar profile={profile} size={88} />
+                    <Text style={[ui.title, { color: p.text }]}>
+                      All set, {profile.displayName.trim().split(" ")[0]}.
+                    </Text>
+                  </View>
                   <Text style={label}>
-                    {showPassword ? "Hide" : "Show"} passwords
+                    {mode === "preview"
+                      ? "Your preview profile is ready."
+                      : "Your account and profile are ready. Private workspace access remains pending administrator approval."}
                   </Text>
-                </Pressable>
-              </>
-            )}
-            {step === 2 && (
-              <>
-                <Text style={[ui.title, { color: p.text }]}>
-                  Verify it is you.
-                </Text>
-                <Text style={label}>{message}</Text>
-                <Text style={label}>
-                  Check {address} for your verification code.
-                </Text>
-                <TextInput
-                  accessibilityLabel="Account verification code"
-                  value={code}
-                  onChangeText={setCode}
-                  keyboardType="number-pad"
-                  maxLength={8}
-                  textContentType="oneTimeCode"
-                  style={field}
-                  placeholder="Verification code"
-                  placeholderTextColor={p.muted}
-                />
-              </>
-            )}
-            {step === 3 && (
-              <>
-                <Text style={[ui.title, { color: p.text }]}>
-                  Make it yours.
-                </Text>
-                <View style={{ alignItems: "center", padding: 10 }}>
-                  <Avatar profile={profile} size={88} />
-                </View>
-                <Text style={label}>Profile name</Text>
-                <TextInput
-                  accessibilityLabel="Your profile name"
-                  value={profile.displayName}
-                  onChangeText={(displayName) =>
-                    setProfile({ ...profile, displayName })
-                  }
-                  maxLength={60}
-                  textContentType="name"
-                  style={field}
-                  placeholder="Your name"
-                  placeholderTextColor={p.muted}
-                />
-                <Text style={label}>Choose your avatar</Text>
-                <View
+                </>
+              )}
+              {mode === "register" && !enabled && step < 2 && (
+                <Text
                   style={[
-                    ui.row,
-                    { flexWrap: "wrap", gap: 12, justifyContent: "center" },
+                    ui.small,
+                    {
+                      color: p.muted,
+                      backgroundColor: p.wash,
+                      padding: 12,
+                      borderRadius: 12,
+                    },
                   ]}
                 >
-                  {Object.keys(avatarColors).map((value) => (
-                    <Pressable
-                      key={value}
-                      accessibilityRole="radio"
-                      accessibilityLabel={`${value} avatar`}
-                      accessibilityState={{ checked: profile.avatar === value }}
-                      onPress={() =>
-                        setProfile({
-                          ...profile,
-                          avatar: value as Profile["avatar"],
-                        })
-                      }
-                      style={{
-                        padding: 4,
-                        borderWidth: 2,
-                        borderColor:
-                          profile.avatar === value ? p.primary : "transparent",
-                        borderRadius: 36,
-                      }}
-                    >
-                      <Avatar
-                        profile={{
-                          ...profile,
-                          avatar: value as Profile["avatar"],
-                        }}
-                        size={52}
-                      />
-                    </Pressable>
-                  ))}
-                </View>
-                <Text style={label}>
-                  {mode === "preview"
-                    ? "This customizes this local preview only. No account will be created."
-                    : "Your profile is personal. Workspace access is approved separately by an administrator."}
+                  Live registration is awaiting secure backend configuration. No
+                  email or phone number will be sent until it is connected.
                 </Text>
-              </>
-            )}
-            {step === 4 && (
-              <>
-                <View style={{ alignItems: "center", gap: 16 }}>
-                  <Avatar profile={profile} size={88} />
-                  <Text style={[ui.title, { color: p.text }]}>
-                    All set, {profile.displayName.trim().split(" ")[0]}.
-                  </Text>
-                </View>
-                <Text style={label}>
-                  {mode === "preview"
-                    ? "Your preview profile is ready."
-                    : "Your account and profile are ready. Private workspace access remains pending administrator approval."}
+              )}
+              {error ? (
+                <Text
+                  accessibilityRole="alert"
+                  style={[ui.small, { color: p.text }]}
+                >
+                  {error}
                 </Text>
-              </>
-            )}
-            {mode === "register" && !enabled && step < 2 && (
-              <Text
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                disabled={
+                  busy ||
+                  (step === 1 &&
+                    (!enabled || (method === "phone" && !phoneEnabled)))
+                }
+                accessibilityState={{
+                  disabled:
+                    busy ||
+                    (step === 1 &&
+                      (!enabled || (method === "phone" && !phoneEnabled))),
+                }}
+                onPress={step === 4 ? close : next}
                 style={[
-                  ui.small,
+                  ui.button,
                   {
-                    color: p.muted,
-                    backgroundColor: p.wash,
-                    padding: 12,
-                    borderRadius: 12,
+                    backgroundColor: p.primary,
+                    opacity:
+                      busy ||
+                      (step === 1 &&
+                        (!enabled || (method === "phone" && !phoneEnabled)))
+                        ? 0.5
+                        : 1,
                   },
                 ]}
               >
-                Live registration is awaiting secure backend configuration. No
-                email or phone number will be sent until it is connected.
-              </Text>
-            )}
-            {error ? (
-              <Text
-                accessibilityRole="alert"
-                style={[ui.small, { color: p.text }]}
-              >
-                {error}
-              </Text>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              disabled={
-                busy ||
-                (step === 1 &&
-                  (!enabled || (method === "phone" && !phoneEnabled)))
-              }
-              accessibilityState={{
-                disabled:
-                  busy ||
-                  (step === 1 &&
-                    (!enabled || (method === "phone" && !phoneEnabled))),
-              }}
-              onPress={step === 4 ? close : next}
-              style={[
-                ui.button,
-                {
-                  backgroundColor: p.primary,
-                  opacity:
-                    busy ||
-                    (step === 1 &&
-                      (!enabled || (method === "phone" && !phoneEnabled)))
-                      ? 0.5
-                      : 1,
-                },
-              ]}
-            >
-              <Text style={[ui.buttonText, { color: p.onPrimary }]}>
-                {busy
-                  ? "Please wait"
-                  : step === 0
-                    ? "Continue"
-                    : step === 1
-                      ? "Send verification code"
-                      : step === 2
-                        ? "Verify contact"
-                        : step === 3
-                          ? "Save profile"
-                          : "Done"}
-              </Text>
-            </Pressable>
-            {step > 0 && step < 3 && (
-              <Pressable
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={() => {
-                  setError("");
-                  setCode("");
-                  setStep(step - 1);
-                }}
-                style={ui.button}
-              >
-                <Text style={{ color: p.text }}>Back</Text>
+                <Text style={[ui.buttonText, { color: p.onPrimary }]}>
+                  {busy
+                    ? "Please wait"
+                    : step === 0
+                      ? "Continue"
+                      : step === 1
+                        ? "Send verification code"
+                        : step === 2
+                          ? "Verify contact"
+                          : step === 3
+                            ? "Save profile"
+                            : "Done"}
+                </Text>
               </Pressable>
-            )}
+              {step > 0 && step < 3 && (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => {
+                    setError("");
+                    setCode("");
+                    setStep(step - 1);
+                  }}
+                  style={ui.button}
+                >
+                  <Text style={{ color: p.text }}>Back</Text>
+                </Pressable>
+              )}
+            </Entrance>
           </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>

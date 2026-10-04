@@ -7,15 +7,19 @@ import {
   type ReactNode,
 } from "react";
 import {
-  AccessibilityInfo,
   Animated,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
-  Pressable,
+  Pressable as NativePressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   useColorScheme,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -29,6 +33,12 @@ import { AccountSetup, Avatar, type Profile } from "./src/AccountSetup";
 import { Artwork } from "./src/Artwork";
 import { LineChart, QueueChart, StatusChart } from "./src/Charts";
 import { themes, ui, type Palette } from "./src/theme";
+import {
+  Entrance,
+  MotionPress as Pressable,
+  MotionProvider,
+  useReducedMotion,
+} from "./src/motion";
 import {
   buildAnalytics,
   dateKey,
@@ -126,40 +136,115 @@ function Sheet({
   palette: Palette;
   children: ReactNode;
 }) {
+  const reduced = useReducedMotion();
+  const { height } = useWindowDimensions();
+  const drag = useState(() => new Animated.Value(0))[0];
+  useEffect(() => {
+    if (visible) {
+      Keyboard.dismiss();
+      drag.setValue(0);
+    }
+  }, [visible, drag]);
+  const gesture = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, movement) =>
+          movement.dy > 8 && Math.abs(movement.dy) > Math.abs(movement.dx),
+        onPanResponderMove: (_, movement) => {
+          if (!reduced) drag.setValue(Math.max(0, movement.dy));
+        },
+        onPanResponderRelease: (_, movement) => {
+          if (movement.dy > 65 || (movement.dy > 20 && movement.vy > 0.8))
+            onClose();
+          Animated.spring(drag, {
+            toValue: 0,
+            bounciness: 0,
+            useNativeDriver: true,
+          }).start();
+        },
+        onPanResponderTerminate: () =>
+          Animated.spring(drag, {
+            toValue: 0,
+            bounciness: 0,
+            useNativeDriver: true,
+          }).start(),
+      }),
+    [drag, onClose, reduced],
+  );
   return (
     <Modal
       transparent
-      animationType="slide"
+      animationType={reduced ? "none" : "slide"}
       visible={visible}
       onRequestClose={onClose}
       statusBarTranslucent
     >
       <View style={ui.modalOverlay}>
-        <SafeAreaView
-          edges={["bottom"]}
-          style={[ui.modalSheet, { backgroundColor: p.surface }]}
-          accessibilityViewIsModal
+        <NativePressable
+          accessibilityRole="button"
+          accessibilityLabel={`Dismiss ${title}`}
+          onPress={onClose}
+          style={StyleSheet.absoluteFill}
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          pointerEvents="box-none"
+          style={{ maxHeight: height * 0.9 }}
         >
-          <View style={[ui.handle, { backgroundColor: p.muted }]} />
-          <View style={ui.between}>
-            <Text
-              accessibilityRole="header"
+          <Animated.View
+            style={{
+              maxHeight: height * 0.9,
+              transform: [{ translateY: drag }],
+            }}
+          >
+            <SafeAreaView
+              edges={["bottom"]}
               style={[
-                ui.sectionTitle,
-                { color: p.text, flex: 1, marginRight: 12 },
+                ui.modalSheet,
+                { backgroundColor: p.surface, maxHeight: height * 0.9 },
               ]}
+              accessibilityViewIsModal
             >
-              {title}
-            </Text>
-            <IconButton
-              label={`Close ${title}`}
-              icon="x"
-              onPress={onClose}
-              palette={p}
-            />
-          </View>
-          {children}
-        </SafeAreaView>
+              <View
+                {...gesture.panHandlers}
+                style={{
+                  height: 28,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginTop: -12,
+                  marginBottom: -10,
+                }}
+              >
+                <View style={[ui.handle, { backgroundColor: p.muted }]} />
+              </View>
+              <View style={ui.between}>
+                <Text
+                  accessibilityRole="header"
+                  style={[
+                    ui.sectionTitle,
+                    { color: p.text, flex: 1, marginRight: 12 },
+                  ]}
+                >
+                  {title}
+                </Text>
+                <IconButton
+                  label={`Close ${title}`}
+                  icon="x"
+                  onPress={onClose}
+                  palette={p}
+                />
+              </View>
+              <ScrollView
+                style={{ flexShrink: 1 }}
+                contentContainerStyle={{ gap: 18, paddingBottom: 4 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {children}
+              </ScrollView>
+            </SafeAreaView>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -232,16 +317,23 @@ function AppContent() {
   );
   const [settings, setSettings] = useState(false);
   const [search, setSearch] = useState("");
+  const [department, setDepartment] = useState("All");
+  const [savedOnly, setSavedOnly] = useState(false);
+  const [savedTools, setSavedTools] = useState<string[]>([]);
+  const [searchFocused, setSearchFocused] = useState(false);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<PreviewRecord | null>(
     null,
   );
+  const [recordSearch, setRecordSearch] = useState("");
+  const [recordStatus, setRecordStatus] = useState("All");
   const [period, setPeriod] = useState<AnalyticsPeriod>(() => presetPeriod(30));
   const [draft, setDraft] = useState(period);
   const [calendar, setCalendar] = useState(false);
   const [editingDate, setEditingDate] = useState<"from" | "to" | null>(null);
   const [chartData, setChartData] = useState(false);
   const [fade] = useState(() => new Animated.Value(1));
+  const reduced = useReducedMotion();
   const scroll = useRef<ScrollView>(null);
   const snapshot = useMemo(() => snapshotFor(role), [role]);
   const data = useMemo(
@@ -249,35 +341,59 @@ function AppContent() {
     [snapshot, period],
   );
   const tools = useMemo(() => toolsFor(role), [role]);
+  const departments = useMemo(
+    () => ["All", ...new Set(tools.map((tool) => tool.category))],
+    [tools],
+  );
+  const visibleTools = tools.filter(
+    (tool) =>
+      tool.name.toLowerCase().includes(search.trim().toLowerCase()) &&
+      (department === "All" || tool.category === department) &&
+      (!savedOnly || savedTools.includes(tool.id)),
+  );
+  const savedCount = tools.filter((tool) =>
+    savedTools.includes(tool.id),
+  ).length;
+  const toolRecords = selectedTool ? recordsFor(role, selectedTool.id) : [];
+  const visibleRecords = toolRecords.filter(
+    (record) =>
+      record.title.toLowerCase().includes(recordSearch.trim().toLowerCase()) &&
+      (recordStatus === "All" || record.status === recordStatus),
+  );
+  const openTool = (tool: Tool, record: PreviewRecord | null = null) => {
+    Keyboard.dismiss();
+    setRecordSearch("");
+    setRecordStatus("All");
+    setSelectedTool(tool);
+    setSelectedRecord(record);
+  };
   const upcoming = useMemo(() => upcomingFor(role), [role]);
   const roleLabel = roles.find((item) => item.value === role)!.label;
   const draftError = periodError(draft);
   useEffect(() => {
-    let cancelled = false;
-    AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
-      if (cancelled) return;
-      scroll.current?.scrollTo({ y: 0, animated: false });
-      if (reduce) {
-        fade.setValue(1);
-        return;
-      }
-      fade.setValue(0);
-      Animated.timing(fade, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
-    });
+    scroll.current?.scrollTo({ y: 0, animated: false });
+    Keyboard.dismiss();
+    if (reduced) {
+      fade.setValue(1);
+      return;
+    }
+    fade.setValue(0);
+    Animated.timing(fade, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
     return () => {
-      cancelled = true;
       fade.stopAnimation();
     };
-  }, [tab, role, fade]);
+  }, [tab, role, fade, reduced]);
   const card = { backgroundColor: p.surface, borderColor: p.border };
   const switchRole = (value: WorkspaceRole) => {
     setRole(value);
     setSettings(false);
     setSearch("");
+    setDepartment("All");
+    setSavedOnly(false);
     setSelectedTool(null);
     setSelectedRecord(null);
     setTab("home");
@@ -363,12 +479,12 @@ function AppContent() {
           },
         ]}
       >
-        <Text style={{ color: p.muted, fontSize: 10 }}>LOCAL APP PREVIEW</Text>
+        <Text style={{ color: p.muted, fontSize: 11 }}>PREVIEW WORKSPACE</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Change preview role"
           onPress={() => setSettings(true)}
-          style={[ui.row, { gap: 5, minHeight: 28 }]}
+          style={[ui.row, { gap: 5, minHeight: 44 }]}
         >
           <Text style={{ color: p.text, fontSize: 11, fontWeight: "600" }}>
             {roleLabel}
@@ -381,8 +497,23 @@ function AppContent() {
         style={ui.fill}
         contentContainerStyle={ui.page}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fade, gap: 22 }}>
+        <Animated.View
+          style={{
+            opacity: fade,
+            gap: 22,
+            transform: [
+              {
+                translateY: fade.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [10, 0],
+                }),
+              },
+            ],
+          }}
+        >
           <View>
             <Text style={[ui.eyebrow, { color: p.muted }]}>
               {tab === "home"
@@ -440,7 +571,13 @@ function AppContent() {
               </Pressable>
               <View style={ui.statGrid}>
                 {statItems.map((item) => (
-                  <View key={item.label} style={[ui.stat, card]}>
+                  <Pressable
+                    key={item.label}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.label}: ${item.value}. Open analytics`}
+                    onPress={() => setTab("analytics")}
+                    style={[ui.stat, card]}
+                  >
                     <View style={ui.between}>
                       <Text
                         style={{
@@ -463,7 +600,7 @@ function AppContent() {
                         ? "Current property snapshot"
                         : "In the selected period"}
                     </Text>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             </>
@@ -541,8 +678,7 @@ function AppContent() {
                       record={record}
                       palette={p}
                       onPress={() => {
-                        setSelectedTool(upcoming.tool ?? null);
-                        setSelectedRecord(record);
+                        if (upcoming.tool) openTool(upcoming.tool, record);
                       }}
                     />
                   ))
@@ -563,35 +699,125 @@ function AppContent() {
           )}
           {tab === "workspace" && (
             <>
-              <TextInput
-                accessibilityLabel="Search workspace tools"
-                placeholder="Search your tools"
-                placeholderTextColor={p.muted}
-                value={search}
-                onChangeText={setSearch}
+              <View
                 style={[
-                  ui.input,
+                  ui.row,
                   {
-                    color: p.text,
                     backgroundColor: p.surface,
-                    borderColor: p.border,
+                    borderWidth: 1,
+                    borderColor: searchFocused ? p.primary : p.border,
+                    borderRadius: 16,
+                    paddingLeft: 14,
                   },
                 ]}
-              />
-              {tools
-                .filter((tool) =>
-                  tool.name
-                    .toLowerCase()
-                    .includes(search.trim().toLowerCase()),
-                )
-                .map((tool) => (
+              >
+                <Feather name="search" size={18} color={p.muted} />
+                <TextInput
+                  accessibilityLabel="Search workspace tools"
+                  placeholder="Search feature titles"
+                  placeholderTextColor={p.muted}
+                  value={search}
+                  onChangeText={setSearch}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  onSubmitEditing={() => Keyboard.dismiss()}
+                  selectionColor={p.primary}
+                  style={[
+                    ui.input,
+                    {
+                      flex: 1,
+                      borderWidth: 0,
+                      color: p.text,
+                      backgroundColor: p.surface,
+                      borderColor: p.border,
+                    },
+                  ]}
+                />
+                {search.length > 0 && (
+                  <IconButton
+                    label="Clear tool search"
+                    icon="x"
+                    palette={p}
+                    onPress={() => setSearch("")}
+                  />
+                )}
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+                style={{ marginTop: -10, marginHorizontal: -22 }}
+              >
+                <View style={{ width: 14 }} />
+                {departments.map((value) => (
                   <Pressable
-                    key={tool.id}
+                    key={value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: department === value }}
+                    onPress={() => setDepartment(value)}
+                    style={[
+                      ui.button,
+                      {
+                        backgroundColor:
+                          department === value ? p.primary : p.surface,
+                        borderColor: p.border,
+                        borderWidth: 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        ui.buttonText,
+                        { color: department === value ? p.onPrimary : p.text },
+                      ]}
+                    >
+                      {value}
+                    </Text>
+                  </Pressable>
+                ))}
+                <View style={{ width: 14 }} />
+              </ScrollView>
+              <View style={[ui.between, { marginTop: -10 }]}>
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={[ui.small, { color: p.muted }]}
+                >
+                  {visibleTools.length} of {tools.length} tools
+                </Text>
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityLabel={`Show saved tools, ${savedCount} available`}
+                  accessibilityState={{ checked: savedOnly }}
+                  onPress={() => setSavedOnly(!savedOnly)}
+                  style={[
+                    ui.row,
+                    {
+                      gap: 7,
+                      minHeight: 44,
+                      paddingHorizontal: 10,
+                      borderRadius: 12,
+                      backgroundColor: savedOnly ? p.wash : "transparent",
+                    },
+                  ]}
+                >
+                  <Feather name="bookmark" size={16} color={p.primary} />
+                  <Text
+                    style={[ui.small, { color: p.text, fontWeight: "600" }]}
+                  >
+                    Saved {savedCount}
+                  </Text>
+                </Pressable>
+              </View>
+              {visibleTools.map((tool, index) => (
+                <Entrance key={tool.id} delay={index * 30}>
+                  <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Open ${tool.name}`}
                     onPress={() => {
-                      setSelectedRecord(null);
-                      setSelectedTool(tool);
+                      openTool(tool);
                     }}
                     style={({ pressed }) => [
                       ui.card,
@@ -601,11 +827,43 @@ function AppContent() {
                   >
                     <View style={ui.between}>
                       <Artwork id={tool.id} />
-                      <View style={[ui.tag, { backgroundColor: p.wash }]}>
-                        <Text style={[ui.tagText, { color: p.muted }]}>
-                          {tool.category}
-                        </Text>
-                      </View>
+                      <Pressable
+                        accessibilityRole="checkbox"
+                        accessibilityLabel={`Save ${tool.name}`}
+                        accessibilityState={{
+                          checked: savedTools.includes(tool.id),
+                        }}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          setSavedTools((current) =>
+                            current.includes(tool.id)
+                              ? current.filter((id) => id !== tool.id)
+                              : [...current, tool.id],
+                          );
+                        }}
+                        style={[
+                          ui.iconButton,
+                          {
+                            borderColor: p.border,
+                            backgroundColor: savedTools.includes(tool.id)
+                              ? p.wash
+                              : p.surface,
+                          },
+                        ]}
+                      >
+                        <Feather
+                          name={
+                            savedTools.includes(tool.id) ? "check" : "bookmark"
+                          }
+                          size={18}
+                          color={p.primary}
+                        />
+                      </Pressable>
+                    </View>
+                    <View style={[ui.tag, { backgroundColor: p.wash }]}>
+                      <Text style={[ui.tagText, { color: p.muted }]}>
+                        {tool.category}
+                      </Text>
                     </View>
                     <Text
                       style={{
@@ -643,7 +901,7 @@ function AppContent() {
                             fontSize: 12,
                           }}
                         >
-                          Open centre
+                          View tool
                         </Text>
                         <Feather
                           name="arrow-up-right"
@@ -653,24 +911,30 @@ function AppContent() {
                       </View>
                     </View>
                   </Pressable>
-                ))}
-              {!tools.some((tool) =>
-                tool.name
-                  .toLowerCase()
-                  .includes(search.trim().toLowerCase()),
-              ) && (
+                </Entrance>
+              ))}
+              {visibleTools.length === 0 && (
                 <View style={[ui.card, card]}>
                   <Text style={[ui.sectionTitle, { color: p.text }]}>
-                    No matching tools
+                    {savedOnly && !savedCount
+                      ? "Keep your go-to tools here"
+                      : "No matching tools"}
                   </Text>
                   <Text style={[ui.body, { color: p.muted }]}>
-                    Try another feature title.
+                    {savedOnly && !savedCount
+                      ? "Tap the bookmark on a tool to save it. Your saved tools stay available during this preview."
+                      : "Try another feature title or department."}
                   </Text>
                   <Action
-                    label="Clear search"
+                    label="Show all tools"
                     secondary
                     palette={p}
-                    onPress={() => setSearch("")}
+                    onPress={() => {
+                      setSearch("");
+                      setDepartment("All");
+                      setSavedOnly(false);
+                      Keyboard.dismiss();
+                    }}
                   />
                 </View>
               )}
@@ -678,7 +942,10 @@ function AppContent() {
           )}
           {tab === "analytics" && (
             <>
-              <View style={[ui.card, card]}>
+              <Entrance
+                trigger={`${period.from}:${period.to}:${role}`}
+                style={[ui.card, card]}
+              >
                 <Text
                   accessibilityRole="header"
                   style={[ui.sectionTitle, { color: p.text }]}
@@ -688,9 +955,17 @@ function AppContent() {
                 <Text style={[ui.small, { color: p.muted }]}>
                   Daily records within your access
                 </Text>
-                <LineChart data={data} palette={p} />
-              </View>
-              <View style={[ui.card, card]}>
+                <LineChart
+                  key={`${period.from}:${period.to}:${role}`}
+                  data={data}
+                  palette={p}
+                />
+              </Entrance>
+              <Entrance
+                delay={60}
+                trigger={`${period.from}:${period.to}:${role}`}
+                style={[ui.card, card]}
+              >
                 <Text
                   accessibilityRole="header"
                   style={[ui.sectionTitle, { color: p.text }]}
@@ -700,9 +975,17 @@ function AppContent() {
                 <Text style={[ui.small, { color: p.muted }]}>
                   Current status in this period
                 </Text>
-                <StatusChart data={data} palette={p} />
-              </View>
-              <View style={[ui.card, card]}>
+                <StatusChart
+                  key={`${period.from}:${period.to}:${role}`}
+                  data={data}
+                  palette={p}
+                />
+              </Entrance>
+              <Entrance
+                delay={120}
+                trigger={`${period.from}:${period.to}:${role}`}
+                style={[ui.card, card]}
+              >
                 <Text
                   accessibilityRole="header"
                   style={[ui.sectionTitle, { color: p.text }]}
@@ -713,7 +996,7 @@ function AppContent() {
                   Records by source
                 </Text>
                 <QueueChart data={data} palette={p} />
-              </View>
+              </Entrance>
               <Action
                 label="View chart data"
                 secondary
@@ -766,19 +1049,24 @@ function AppContent() {
               },
             ]}
           >
-            <Feather
-              name={item.icon}
-              size={21}
-              color={tab === item.value ? p.primary : p.muted}
-            />
-            <Text
-              style={[
-                ui.tabLabel,
-                { color: tab === item.value ? p.text : p.muted },
-              ]}
+            <Entrance
+              trigger={tab === item.value ? "active" : "inactive"}
+              style={{ alignItems: "center", gap: 5 }}
             >
-              {item.label}
-            </Text>
+              <Feather
+                name={item.icon}
+                size={21}
+                color={tab === item.value ? p.primary : p.muted}
+              />
+              <Text
+                style={[
+                  ui.tabLabel,
+                  { color: tab === item.value ? p.text : p.muted },
+                ]}
+              >
+                {item.label}
+              </Text>
+            </Entrance>
           </Pressable>
         ))}
       </View>
@@ -809,7 +1097,7 @@ function AppContent() {
           Explore the app as each role. This selector only changes sample
           screens and never grants real access.
         </Text>
-        <ScrollView>
+        <View>
           {roles.map((item) => (
             <Pressable
               key={item.value}
@@ -834,7 +1122,7 @@ function AppContent() {
               )}
             </Pressable>
           ))}
-        </ScrollView>
+        </View>
       </Sheet>
       {accountMode && (
         <AccountSetup
@@ -862,13 +1150,41 @@ function AppContent() {
             <Pressable
               key={days}
               accessibilityRole="button"
-              onPress={() => setDraft(presetPeriod(days))}
+              accessibilityState={{
+                selected:
+                  draft.from === presetPeriod(days).from &&
+                  draft.to === presetPeriod(days).to,
+              }}
+              onPress={() => {
+                setDraft(presetPeriod(days));
+                setEditingDate(null);
+              }}
               style={[
                 ui.button,
-                { flex: 1, paddingHorizontal: 6, backgroundColor: p.wash },
+                {
+                  flex: 1,
+                  paddingHorizontal: 6,
+                  backgroundColor:
+                    draft.from === presetPeriod(days).from &&
+                    draft.to === presetPeriod(days).to
+                      ? p.primary
+                      : p.wash,
+                },
               ]}
             >
-              <Text style={[ui.buttonText, { color: p.text, fontSize: 11 }]}>
+              <Text
+                style={[
+                  ui.buttonText,
+                  {
+                    color:
+                      draft.from === presetPeriod(days).from &&
+                      draft.to === presetPeriod(days).to
+                        ? p.onPrimary
+                        : p.text,
+                    fontSize: 12,
+                  },
+                ]}
+              >
                 Last {days} days
               </Text>
             </Pressable>
@@ -928,7 +1244,7 @@ function AppContent() {
         title={selectedTool?.name ?? "Workspace tool"}
         palette={p}
       >
-        <ScrollView contentContainerStyle={{ gap: 14 }}>
+        <View style={{ gap: 14 }}>
           {selectedTool && (
             <>
               <Artwork id={selectedTool.id} size={86} />
@@ -960,15 +1276,90 @@ function AppContent() {
                     onPress={() => setSelectedRecord(null)}
                   />
                 </>
-              ) : recordsFor(role, selectedTool.id).length ? (
-                recordsFor(role, selectedTool.id).map((record) => (
-                  <RecordRow
-                    key={record.id}
-                    record={record}
-                    palette={p}
-                    onPress={() => setSelectedRecord(record)}
+              ) : toolRecords.length ? (
+                <>
+                  <TextInput
+                    accessibilityLabel="Search record titles"
+                    placeholder="Search record titles"
+                    placeholderTextColor={p.muted}
+                    value={recordSearch}
+                    onChangeText={setRecordSearch}
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                    style={[
+                      ui.input,
+                      {
+                        color: p.text,
+                        borderColor: p.border,
+                        backgroundColor: p.wash,
+                      },
+                    ]}
                   />
-                ))
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8 }}
+                  >
+                    {[
+                      "All",
+                      ...new Set(toolRecords.map((record) => record.status)),
+                    ].map((status) => (
+                      <Pressable
+                        key={status}
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          selected: recordStatus === status,
+                        }}
+                        onPress={() => setRecordStatus(status)}
+                        style={[
+                          ui.button,
+                          {
+                            paddingHorizontal: 12,
+                            backgroundColor:
+                              recordStatus === status ? p.primary : p.wash,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            ui.small,
+                            {
+                              color:
+                                recordStatus === status ? p.onPrimary : p.text,
+                              fontWeight: "600",
+                            },
+                          ]}
+                        >
+                          {status.replaceAll("_", " ")}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                  <Text style={[ui.small, { color: p.muted }]}>
+                    {visibleRecords.length} of {toolRecords.length} records
+                  </Text>
+                  {visibleRecords.map((record) => (
+                    <RecordRow
+                      key={record.id}
+                      record={record}
+                      palette={p}
+                      onPress={() => setSelectedRecord(record)}
+                    />
+                  ))}
+                  {!visibleRecords.length && (
+                    <Action
+                      label="Reset record filters"
+                      palette={p}
+                      secondary
+                      onPress={() => {
+                        setRecordSearch("");
+                        setRecordStatus("All");
+                        Keyboard.dismiss();
+                      }}
+                    />
+                  )}
+                </>
               ) : (
                 <View
                   style={[
@@ -984,6 +1375,18 @@ function AppContent() {
                     for this tool. Its detailed editing screens will be added
                     during the mobile build.
                   </Text>
+                  <Action
+                    label={`Explore ${selectedTool.category} tools`}
+                    palette={p}
+                    secondary
+                    onPress={() => {
+                      setDepartment(selectedTool.category);
+                      setSearch("");
+                      setSavedOnly(false);
+                      setSelectedTool(null);
+                      setTab("workspace");
+                    }}
+                  />
                 </View>
               )}
               <Text style={[ui.small, { color: p.muted }]}>
@@ -991,7 +1394,7 @@ function AppContent() {
               </Text>
             </>
           )}
-        </ScrollView>
+        </View>
       </Sheet>
       <Sheet
         visible={chartData}
@@ -999,7 +1402,7 @@ function AppContent() {
         title="Daily chart data"
         palette={p}
       >
-        <ScrollView>
+        <View>
           {data.trend.map((day) => (
             <View
               key={day.key}
@@ -1028,7 +1431,7 @@ function AppContent() {
               </Text>
             </View>
           ))}
-        </ScrollView>
+        </View>
       </Sheet>
     </SafeAreaView>
   );
@@ -1036,7 +1439,9 @@ function AppContent() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AppContent />
+      <MotionProvider>
+        <AppContent />
+      </MotionProvider>
     </SafeAreaProvider>
   );
 }

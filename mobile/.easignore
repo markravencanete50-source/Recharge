@@ -10,6 +10,7 @@ work/
 .expo/
 dist/
 dist-ios/
+dist-android/
 .git/
 .env*
 *.log
