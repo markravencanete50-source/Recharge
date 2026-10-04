@@ -22,16 +22,16 @@ export function DepartmentGrid({ role, palette: p, onSelect }: { role: Workspace
       const count = tools.filter(tool => WORKSPACE_MAP[tool.id].tone === department.id).length;
       return <Entrance key={department.id} delay={index * 35} style={{ flexBasis: "46%", flexGrow: 1 }}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Open ${department.name} department, ${count} tools`} onPress={() => onSelect(department.id)} style={{ minHeight: 150, padding: 16, gap: 12, borderRadius: 24, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
-          <View style={ui.between}><View style={{ backgroundColor: tone.wash, borderRadius: 16 }}><Artwork id={department.art} size={54} /></View><Feather name="arrow-up-right" size={17} color={p.muted} /></View>
+          <View style={ui.between}><View style={{ backgroundColor: tone.art, padding: 4, borderRadius: 20 }}><Artwork id={department.art} size={64} /></View><View style={{ width: 26, height: 26, borderRadius: 9, backgroundColor: tone.wash, alignItems: "center", justifyContent: "center" }}><Feather name="arrow-up-right" size={17} color={tone.ink} /></View></View>
           <View style={{ gap: 3 }}><Text style={{ color: p.text, fontSize: 19, fontWeight: "700", letterSpacing: -0.4 }}>{department.name}</Text><Text style={[ui.small, { color: p.muted }]}>{department.detail}</Text></View>
           <Text style={{ fontSize: 12, fontWeight: "600", color: tone.ink }}>{count} {count === 1 ? "tool" : "tools"}</Text>
         </Pressable>
       </Entrance>;
     })}
     <Pressable accessibilityRole="button" accessibilityLabel="Browse all tools" onPress={() => onSelect("All")} style={{ flexBasis: "46%", flexGrow: 1, minHeight: 150, padding: 16, gap: 12, borderRadius: 24, backgroundColor: p.wash, borderWidth: 1, borderColor: p.border }}>
-      <View style={ui.between}><View style={{ width: 54, height: 54, borderRadius: 16, backgroundColor: p.surface, alignItems: "center", justifyContent: "center" }}><Feather name="grid" size={26} color={p.primary} /></View><Feather name="arrow-up-right" size={17} color={p.muted} /></View>
+      <View style={ui.between}><View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: p.utilityArt, alignItems: "center", justifyContent: "center" }}><Feather name="grid" size={30} color={p.utilityInk} /></View><Feather name="arrow-up-right" size={17} color={p.utilityAccent} /></View>
       <View style={{ gap: 3 }}><Text style={{ color: p.text, fontSize: 19, fontWeight: "700", letterSpacing: -0.4 }}>All tools</Text><Text style={[ui.small, { color: p.muted }]}>Your complete workspace</Text></View>
-      <Text style={{ color: p.primary, fontSize: 12, fontWeight: "600" }}>{tools.length} available</Text>
+      <Text style={{ color: p.utilityAccent, fontSize: 12, fontWeight: "600" }}>{tools.length} available</Text>
     </Pressable>
   </View>;
 }

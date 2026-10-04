@@ -32,14 +32,14 @@ import { router, useLocalSearchParams } from "expo-router";
 import { AccountSetup, Avatar, type Profile } from "./src/AccountSetup";
 import { Artwork } from "./src/Artwork";
 import { LineChart, QueueChart, StatusChart } from "./src/Charts";
-import { themes, ui, type Palette } from "./src/theme";
+import { departmentColor, themes, ui, type Palette } from "./src/theme";
 import { WorkspaceScreens } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
 import { exportReport } from "./src/exportReport";
 import { analyticsCsv, analyticsFilename } from "../lib/analytics-export";
 import { isWorkspaceAdmin } from "../lib/modules";
 import { usePreviewBookmarks } from "./src/usePreviewPreferences";
-import { navigationFor, type WorkspaceSection } from "../lib/workspace-map";
+import { navigationFor, WORKSPACE_MAP, type WorkspaceSection } from "../lib/workspace-map";
 import {
   Entrance,
   MotionPress as Pressable,
@@ -881,7 +881,7 @@ function AppContent() {
         <View style={{ gap: 14 }}>
           {selectedTool && (
             <>
-              <Artwork id={selectedTool.id} size={86} />
+              <View style={{ backgroundColor: departmentColor(WORKSPACE_MAP[selectedTool.id].tone, p).art, padding: 6, borderRadius: 24, alignSelf: "flex-start" }}><Artwork id={selectedTool.id} size={86} /></View>
               <Text style={[ui.body, { color: p.muted }]}>
                 {selectedTool.description}
               </Text>

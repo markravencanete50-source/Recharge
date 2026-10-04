@@ -18,12 +18,14 @@ test("preview serves the application and synthetic property data", async () => {
 
 test("hosted phone links serve the new mobile studio and reloadable mobile routes", async () => {
   for (const path of ["/?view=phone", "/studio.html"]) {
-    const response = await fetch(base + path);
+    const response = await fetch(base + path, { redirect: "manual" });
     assert.equal(response.status, 200);
     assert.match(await response.text(), /Recharge mobile studio/);
   }
   for (const path of ["/home", "/analytics", "/workspace"]) {
-    const response = await fetch(base + path);
+    const response = await fetch(base + path, { redirect: "manual" });
+    assert.equal(response.status, 200, `${path} must load without changing the frame's URL`);
+    assert.equal(response.headers.get("location"), null);
     assert.match(await response.text(), /Recharge Mobile Preview/);
     assert.match(response.headers.get("x-robots-tag"), /noindex/);
   }
