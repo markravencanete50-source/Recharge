@@ -26,6 +26,7 @@ const { defaultModulesForRole } = await vite.ssrLoadModule("/lib/modules.ts");
 const route = await vite.ssrLoadModule("/app/api/analytics/route.ts");
 const exportRoute = await vite.ssrLoadModule("/app/api/analytics/export/route.ts");
 const { analyticsCsv } = await vite.ssrLoadModule("/lib/analytics-export.ts");
+const { reportPresentation, weeklySparkline } = await vite.ssrLoadModule("/lib/report-presentation.ts");
 const at = value => new Date(value).getTime() / 1000;
 const date = at("2026-10-03T12:00:00Z");
 const viewer = (role, email = "me@example.com", modules = defaultModulesForRole(role)) => ({ role, email, modules, status: "active" });
@@ -50,6 +51,35 @@ const input = {
   onboarding: { available: true, cases: [{ clientEmail: "me@example.com", createdAt: date, status: "live" }, { clientEmail: "other@example.com", createdAt: date, status: "live" }] },
 };
 const period = { from: "2026-10-03", to: "2026-10-03" };
+
+test('presentation comparisons use equal calendar periods across daylight saving and preserve export totals', () => {
+  const snapshot = scopeAnalytics(viewer('admin'), input);
+  for (const range of [{from:'2026-03-28',to:'2026-03-30'}, {from:'2026-10-24',to:'2026-10-26'}, period]) {
+    const report = reportPresentation(snapshot, range);
+    assert.deepEqual(report.current, buildAnalytics(snapshot, range));
+    assert.equal((Date.parse(report.previousPeriod.to)-Date.parse(report.previousPeriod.from))/86400000+1, report.days.length);
+    assert.equal(Date.parse(range.from)-Date.parse(report.previousPeriod.to),86400000);
+    assert.equal(report.days.reduce((sum,day)=>sum+day.value,0),report.current.total);
+    assert.equal(report.queues.reduce((sum,queue)=>sum+queue.value,0),report.current.total);
+    assert.ok(report.queues.every((queue,i,list)=>i===0 || list[i-1].value>=queue.value));
+    assert.equal(new Set(report.labels.map(label=>label.index)).size,report.labels.length);
+  }
+});
+test('presentation distinguishes unavailable sources from a connected empty period', () => {
+  const unavailable = reportPresentation(scopeAnalytics(viewer('admin'),{}),period);
+  assert.equal(unavailable.available,false);
+  assert.equal(unavailable.deltas.total,'Source not connected');
+  assert.ok(unavailable.queues.every(queue=>!queue.available));
+  const empty = reportPresentation({...scopeAnalytics(viewer('admin'),input),sources:[{key:'cleans',name:'Cleans',available:true,records:[]}]},period);
+  assert.equal(empty.available,true);
+  assert.equal(empty.headline,'No dated records in this period.');
+});
+test('weekly overview delta is calculated only from the permitted source snapshot',()=>{
+  const snapshot=scopeAnalytics(viewer('client'),input), spark=weeklySparkline(snapshot,'2026-10-03');
+  assert.equal(spark.days.length,7);
+  assert.equal(spark.deltaLabel,`+${spark.current.total-spark.previous.total} vs last week`);
+  assert.deepEqual(spark.current.sources.map(s=>s.key),['repairs','onboarding','mail']);
+});
 
 test("custom ranges include both boundary dates and every chart reconciles, including cleans", () => {
   const result = buildWorkspaceAnalytics({ workflows: { available: true, tickets: [

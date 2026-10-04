@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   Animated,
+  Switch,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -33,7 +34,8 @@ import { Artwork } from "./src/Artwork";
 import { NavigationBar } from "./src/NavigationBar";
 import { FilterBar } from "./src/FilterBar";
 import { ProgressRing, StateGraphic } from "./src/StateGraphic";
-import { LineChart, QueueChart, StatusChart } from "./src/Charts";
+import { Reports } from "./src/Reports";
+import { DesktopNavigation } from "./src/DesktopNavigation";
 import { themes, ui, type Palette } from "./src/theme";
 import { WorkspaceScreens, Calendar } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
@@ -50,6 +52,7 @@ import {
   MotionPress as Pressable,
   MotionProvider,
   useReducedMotion,
+  useMotionPreference,
 } from "./src/motion";
 import {
   buildAnalytics,
@@ -148,7 +151,10 @@ function Sheet({
   children: ReactNode;
 }) {
   const reduced = useReducedMotion();
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
+  const desktop = width >= 768;
+  const [enter] = useState(()=>new Animated.Value(1));
+  useEffect(()=>{if(!visible)return;enter.setValue(reduced?1:0);if(!reduced)Animated.spring(enter,{toValue:1,speed:18,bounciness:desktop?0:3,useNativeDriver:Platform.OS!=="web"}).start();return()=>enter.stopAnimation();},[visible,reduced,enter,desktop]);
   const drag = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
     if (visible) {
@@ -186,12 +192,12 @@ function Sheet({
   return (
     <Modal
       transparent
-      animationType={reduced ? "none" : "slide"}
+      animationType="none"
       visible={visible}
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={[ui.modalOverlay, { backgroundColor: p.overlay }]}>
+      <View style={[ui.modalOverlay, { backgroundColor: p.overlay, justifyContent:desktop?"center":"flex-end", alignItems:desktop?"center":undefined }]}>
         <NativePressable
           accessibilityRole="button"
           accessibilityLabel={`Dismiss ${title}`}
@@ -201,19 +207,19 @@ function Sheet({
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           pointerEvents="box-none"
-          style={{ maxHeight: height * 0.9 }}
+          style={{ maxHeight: height * 0.9, width:desktop?Math.min(600,width-48):"100%" }}
         >
           <Animated.View
             style={{
               maxHeight: height * 0.9,
-              transform: [{ translateY: drag }],
+              opacity:enter, transform: [{ translateY:drag },{ translateY:enter.interpolate({inputRange:[0,1],outputRange:[desktop?8:100,0]}) }],
             }}
           >
             <SafeAreaView
               edges={["bottom"]}
               style={[
                 ui.modalSheet,
-                { backgroundColor: p.surface, maxHeight: height * 0.9 },
+                { backgroundColor: p.surface, maxHeight: height * 0.9, borderRadius:desktop?28:undefined },
               ]}
               accessibilityViewIsModal
             >
@@ -309,69 +315,23 @@ function RecordRow({
     </Pressable>
   );
 }
-function DetailScreen({
-  visible,
-  onClose,
-  title,
-  palette: p,
-  children,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  title: string;
-  palette: Palette;
-  children: ReactNode;
-}) {
-  const reduced = useReducedMotion();
-  return (
-    <Modal
-      visible={visible}
-      animationType={reduced ? "none" : "slide"}
-      onRequestClose={onClose}
-    >
-      <SafeAreaProvider>
-        <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]}>
-          <View
-            style={[
-              ui.row,
-              {
-                paddingHorizontal: 20,
-                paddingVertical: 10,
-                gap: 12,
-                borderBottomWidth: 1,
-                borderColor: p.border,
-                backgroundColor: p.surface,
-              },
-            ]}
-          >
-            <IconButton
-              label="Back to workspace"
-              icon="arrow-left"
-              onPress={onClose}
-              palette={p}
-            />
-            <Text
-              accessibilityRole="header"
-              style={[ui.sectionTitle, { color: p.text, flex: 1 }]}
-            >
-              {title}
-            </Text>
-          </View>
-          <ScrollView
-            contentContainerStyle={ui.page}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-          >
-            {children}
-          </ScrollView>
-        </SafeAreaView>
-      </SafeAreaProvider>
-    </Modal>
-  );
+function DetailScreen({visible,onClose,title,palette,children}:{visible:boolean;onClose:()=>void;title:string;palette:Palette;children:ReactNode}) {
+  return <Sheet visible={visible} title={title} onClose={onClose} palette={palette}>{children}</Sheet>;
 }
 function AppContent() {
   const { theme, setTheme, themeOpacity } = useThemePreference();
   const p = themes[theme];
+  const {width: windowWidth} = useWindowDimensions();
+  const desktop = windowWidth >= 1024;
+  const motionPreference = useMotionPreference();
+  const [scrolled,setScrolled] = useState(false);
+  const [offline,setOffline] = useState(false);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const update=()=>setOffline(!navigator.onLine);update();
+    window.addEventListener("online",update);window.addEventListener("offline",update);
+    return()=>{window.removeEventListener("online",update);window.removeEventListener("offline",update);};
+  },[]);
   const [role, setRole] = useState<WorkspaceRole>("super_admin");
   const { section } = useLocalSearchParams<{ section: string }>();
   const sections: WorkspaceSection[] = [
@@ -471,6 +431,7 @@ function AppContent() {
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
     Keyboard.dismiss();
+    setScrolled(false);
     if (reduced) {
       fade.setValue(1);
       return;
@@ -520,13 +481,17 @@ function AppContent() {
           edges={["top", "bottom"]}
         >
           <StatusBar style={theme === "dark" ? "light" : "dark"} />
-          <View style={{ backgroundColor: p.background }}>
+          <View style={[ui.fill,{flexDirection:"row"}]}>
+          {desktop&&<DesktopNavigation role={role} section={tab} palette={p} onNavigate={setTab} onProfile={()=>setSettings(true)} onDepartment={(department)=>{setSearch("");setDepartment(department);setSavedOnly(false);setTab("workspace");}}/>}
+          <View style={[ui.fill,{minWidth:0}]}>
+          {offline&&<View accessibilityRole="alert" style={{backgroundColor:p.cautionWash,padding:12}}><Text style={[ui.small,{color:p.text}]}>You're offline. The sample workspace remains available. Live requests may fail until you reconnect.</Text></View>}
+          <View style={{ backgroundColor: p.background, borderBottomWidth:desktop?1:0, borderColor:p.border, ...(Platform.OS === "web" && scrolled ? {boxShadow:"0 6px 18px var(--rc-shadow)"}: {}) }}>
             <View
               style={[
                 ui.between,
                 {
                   width: "100%",
-                  maxWidth: 760,
+                  maxWidth: desktop ? undefined : 760,
                   alignSelf: "center",
                   paddingHorizontal: 20,
                   paddingTop: 12,
@@ -639,12 +604,15 @@ function AppContent() {
             />
           )}
 
-          {tab !== "workspace" && tab !== "more" && (
+          {(tab === "work" || tab === "calendar") && <WorkspaceScreens key={role} section={tab} role={role} palette={p} onNavigate={setTab} onOpen={openTool} onProfile={()=>setSettings(true)} savedTools={savedTools} profileName={profile.displayName} onDepartment={department=>{setDepartment(department);setTab("workspace");}}/>}
+          {tab !== "workspace" && tab !== "more" && tab !== "work" && tab !== "calendar" && (
             <ScrollView
               ref={scroll}
               testID="workspace-scroll"
               style={ui.fill}
-              contentContainerStyle={ui.page}
+              contentContainerStyle={[ui.page,{maxWidth:desktop?1400:760}]}
+              onScroll={event=>setScrolled(event.nativeEvent.contentOffset.y>12)}
+              scrollEventThrottle={32}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={Platform.OS === "web"}
@@ -653,207 +621,10 @@ function AppContent() {
                 style={{
                   opacity: fade,
                   gap: 24,
-                  transform: [
-                    {
-                      translateY: fade.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [10, 0],
-                      }),
-                    },
-                  ],
+                  transform: desktop ? [{translateY:fade.interpolate({inputRange:[0,1],outputRange:[8,0]})}] : [{translateX:fade.interpolate({inputRange:[0,1],outputRange:[14,0]})}],
                 }}
               >
-                {tab === "analytics" && (
-                  <View style={{ gap: 6 }}>
-                    <Text
-                      accessibilityRole="header"
-                      style={[ui.title, { color: p.text }]}
-                    >
-                      {snapshot.title}
-                    </Text>
-                    <Text style={[ui.body, { color: p.muted }]}>
-                      {snapshot.description}
-                    </Text>
-                  </View>
-                )}
-                {tab === "analytics" && (
-                  <>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Choose analytics date range"
-                      onPress={() => {
-                        setDraft(period);
-                        setCalendar(true);
-                      }}
-                      style={[
-                        ui.between,
-                        ui.button,
-                        {
-                          backgroundColor: p.surface,
-                          borderWidth: 1,
-                          borderColor: p.border,
-                        },
-                      ]}
-                    >
-                      <View style={[ui.row, { gap: 8 }]}>
-                        <Feather name="calendar" size={17} color={p.text} />
-                        <Text
-                          style={{
-                            color: p.text,
-                            fontSize: 13,
-                            fontWeight: "500",
-                          }}
-                        >
-                          {periodLabel(period)}
-                        </Text>
-                      </View>
-                      <Feather name="chevron-down" size={16} color={p.muted} />
-                    </Pressable>
-                    {isWorkspaceAdmin(role) && (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Export analytics CSV"
-                        accessibilityState={{ disabled: exporting }}
-                        disabled={exporting}
-                        onPress={exportCsv}
-                        style={[
-                          ui.button,
-                          ui.row,
-                          {
-                            backgroundColor: p.primary,
-                            justifyContent: "center",
-                            gap: 10,
-                          },
-                        ]}
-                      >
-                        <Feather
-                          name="download"
-                          size={18}
-                          color={p.onPrimary}
-                        />
-                        <Text style={[ui.buttonText, { color: p.onPrimary }]}>
-                          {exporting
-                            ? "Preparing report..."
-                            : "Export CSV report"}
-                        </Text>
-                      </Pressable>
-                    )}
-                    {isWorkspaceAdmin(role) && exportMessage ? (
-                      <Text
-                        accessibilityLiveRegion="polite"
-                        style={[ui.small, { color: p.text }]}
-                      >
-                        {exportMessage}
-                      </Text>
-                    ) : null}
-                    <Entrance trigger={`${period.from}:${period.to}:${role}`}>
-                      <View
-                        style={{
-                          backgroundColor: p.hero,
-                          borderRadius: 24,
-                          padding: 22,
-                          gap: 20,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <View style={[ui.row, { gap: 18 }]}>
-                          <View style={{ flex: 1, gap: 6 }}>
-                            <Text style={{ color: p.heroMuted, fontSize: 13 }}>
-                              Activity in this period
-                            </Text>
-                            <Text
-                              style={{
-                                color: p.heroText,
-                                fontSize: 42,
-                                lineHeight: 50,
-                                fontWeight: "600",
-                                letterSpacing: -1.5,
-                              }}
-                            >
-                              {data.total}
-                            </Text>
-                            <Text style={{ color: p.heroMuted, fontSize: 14 }}>
-                              recorded items
-                            </Text>
-                          </View>
-                          <ProgressRing
-                            completed={data.complete}
-                            total={data.total}
-                          />
-                        </View>
-                        <View
-                          style={[
-                            ui.row,
-                            {
-                              gap: 16,
-                              flexWrap: "wrap",
-                              paddingTop: 16,
-                              borderTopWidth: 1,
-                              borderColor: p.heroLine,
-                            },
-                          ]}
-                        >
-                          {statItems.slice(1, 3).map((item) => (
-                            <View key={item.label} style={{ gap: 4, flex: 1 }}>
-                              <Text
-                                style={{
-                                  color: p.heroText,
-                                  fontSize: 22,
-                                  fontWeight: "600",
-                                }}
-                              >
-                                {item.value}
-                              </Text>
-                              <Text
-                                style={{ color: p.heroMuted, fontSize: 13 }}
-                              >
-                                {item.label}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      </View>
-                    </Entrance>
-                    <View
-                      style={[ui.between, { gap: 12, paddingHorizontal: 4 }]}
-                    >
-                      <View style={[ui.row, { gap: 10, flex: 1 }]}>
-                        <View
-                          style={{
-                            backgroundColor: p.utilityArt,
-                            padding: 10,
-                            borderRadius: 13,
-                          }}
-                        >
-                          <Feather name="home" size={20} color={p.utilityInk} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              color: p.text,
-                              fontSize: 14,
-                              fontWeight: "500",
-                            }}
-                          >
-                            {snapshot.propertyLabel}
-                          </Text>
-                          <Text style={[ui.small, { color: p.muted }]}>
-                            Current snapshot
-                          </Text>
-                        </View>
-                      </View>
-                      <Text
-                        style={{
-                          color: p.text,
-                          fontSize: 24,
-                          fontWeight: "600",
-                        }}
-                      >
-                        {snapshot.propertyCount}
-                      </Text>
-                    </View>
-                  </>
-                )}
+                {tab === "analytics" && <Reports snapshot={snapshot} period={period} role={role} palette={p} onDates={()=>{setDraft(period);setCalendar(true);}} onExport={exportCsv} exporting={exporting} exportMessage={exportMessage}/>}
                 <WorkspaceScreens
                   key={role}
                   section={tab}
@@ -871,76 +642,6 @@ function AppContent() {
                     setTab("workspace");
                   }}
                 />
-                {tab === "analytics" && (
-                  <>
-                    <Entrance
-                      trigger={`${period.from}:${period.to}:${role}`}
-                      style={[ui.card, card]}
-                    >
-                      <Text
-                        accessibilityRole="header"
-                        style={[ui.sectionTitle, { color: p.text }]}
-                      >
-                        Activity over time
-                      </Text>
-                      <Text style={[ui.small, { color: p.muted }]}>
-                        Daily records within your access
-                      </Text>
-                      <LineChart
-                        key={`${period.from}:${period.to}:${role}`}
-                        data={data}
-                        palette={p}
-                      />
-                    </Entrance>
-                    <Entrance
-                      delay={60}
-                      trigger={`${period.from}:${period.to}:${role}`}
-                      style={[ui.card, card]}
-                    >
-                      <Text
-                        accessibilityRole="header"
-                        style={[ui.sectionTitle, { color: p.text }]}
-                      >
-                        Work status
-                      </Text>
-                      <Text style={[ui.small, { color: p.muted }]}>
-                        Current status in this period
-                      </Text>
-                      <StatusChart
-                        key={`${period.from}:${period.to}:${role}`}
-                        data={data}
-                        palette={p}
-                      />
-                    </Entrance>
-                    <Entrance
-                      delay={120}
-                      trigger={`${period.from}:${period.to}:${role}`}
-                      style={[ui.card, card]}
-                    >
-                      <Text
-                        accessibilityRole="header"
-                        style={[ui.sectionTitle, { color: p.text }]}
-                      >
-                        Queue volume
-                      </Text>
-                      <Text style={[ui.small, { color: p.muted }]}>
-                        Records by source
-                      </Text>
-                      <QueueChart data={data} palette={p} />
-                    </Entrance>
-                    <Action
-                      label="View chart data"
-                      secondary
-                      palette={p}
-                      onPress={() => setChartData(true)}
-                    />
-                    <Text style={[ui.small, { color: p.muted }]}>
-                      Charts use fictional records and current status. Property
-                      counts show the current snapshot. Both range dates are
-                      included, using UK calendar dates.
-                    </Text>
-                  </>
-                )}
                 <Text
                   style={{
                     color: p.muted,
@@ -969,12 +670,13 @@ function AppContent() {
               Sample data only. Live changes disabled.
             </Text>
           </View>
-          <NavigationBar
+          {!desktop&&<NavigationBar
             role={role}
             section={tab}
             onNavigate={setTab}
             palette={p}
-          />
+          />}
+          </View></View>
           <Sheet
             visible={settings}
             onClose={() => setSettings(false)}
@@ -998,6 +700,7 @@ function AppContent() {
                 setAccountMode("register");
               }}
             />
+            <View style={[ui.between,{gap:16,minHeight:56}]}><View style={{flex:1,gap:4}}><Text style={[ui.body,{color:p.text,fontWeight:"600"}]}>Reduce motion</Text><Text style={[ui.small,{color:p.muted}]}>{motionPreference.system?"Your device setting is respected.":"Use instant changes instead of decorative animation."}</Text></View><Switch accessibilityLabel="Reduce motion" value={reduced} disabled={motionPreference.system} onValueChange={motionPreference.setPreference} trackColor={{false:p.controlBorder,true:p.primary}} thumbColor={p.surface}/></View>
             <Text style={[ui.body, { color: p.muted }]}>
               Explore the app as each role. This selector only changes sample
               screens and never grants real access.
@@ -1219,7 +922,7 @@ function AppContent() {
                           ui.input,
                           {
                             color: p.text,
-                            borderColor: p.border,
+                            borderColor: p.controlBorder,
                             backgroundColor: p.wash,
                           },
                         ]}

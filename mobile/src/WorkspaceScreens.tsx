@@ -1,6 +1,7 @@
-import { Text } from "./Typography";
+import { Text, FontsReady } from "./Typography";
 import {
   useMemo,
+  useContext,
   useState,
   useRef,
   useEffect,
@@ -29,7 +30,7 @@ import Svg, {
   Stop,
   Circle,
 } from "react-native-svg";
-import { Entrance, MotionPress as Pressable, useReducedMotion } from "./motion";
+import { Entrance, CountUp, SlidingPill, MotionPress as Pressable, useReducedMotion } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import {
   approvalItems,
@@ -51,6 +52,9 @@ import {
   type WorkspaceSection,
 } from "../../lib/workspace-map";
 import { presetPeriod } from "../../lib/analytics";
+import { Sparkline } from "./Charts";
+import { weeklySparkline } from "../../lib/report-presentation";
+import { snapshotFor } from "./model";
 import { DepartmentGrid } from "./DepartmentGrid";
 
 type IconName = ComponentProps<typeof Feather>["name"];
@@ -374,6 +378,7 @@ function WeekStrip({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ gap: 6, paddingVertical: 1 }}
     >
+      <SlidingPill x={Math.max(0,selectedIndex)*(dayWidth+6)} y={1} width={dayWidth} height={72} color={p.primary} visible={selectedIndex>=0}/>
       {days.map(({ date, key }) => {
         const active = selected === key;
         return (
@@ -389,7 +394,7 @@ function WeekStrip({
               borderRadius: 999,
               borderWidth: key === presetPeriod(1).to ? 2 : 1,
               borderColor: key === presetPeriod(1).to ? p.primary : p.border,
-              backgroundColor: active ? p.primary : p.surface,
+              backgroundColor: active ? "transparent" : p.surface,
               alignItems: "center",
               justifyContent: "center",
               gap: 7,
@@ -446,6 +451,9 @@ export function Calendar({
 }) {
   const { width } = useWindowDimensions();
   const [month, setMonth] = useState(selected.slice(0, 7));
+  const [gridWidth,setGridWidth]=useState(0);
+  const selectedCell=calendarCells(month).findIndex(day=>day===selected);
+  useEffect(()=>{queueMicrotask(()=>setMonth(selected.slice(0,7)));},[selected]);
   const moveMonth = (step: number) => {
     const date = new Date(`${month}-15T12:00:00Z`);
     date.setUTCMonth(date.getUTCMonth() + step);
@@ -511,7 +519,8 @@ export function Calendar({
           </Text>
         ))}
       </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+      <View onLayout={event=>setGridWidth(event.nativeEvent.layout.width)} style={{ flexDirection: "row", flexWrap: "wrap" }}>
+        <SlidingPill x={Math.max(0,selectedCell)%7*gridWidth/7} y={Math.floor(Math.max(0,selectedCell)/7)*48} width={gridWidth/7} height={48} color={p.primary} visible={selectedCell>=0}/>
         {calendarCells(month).map((day, index) => (
           <View
             key={day || `blank-${index}`}
@@ -527,8 +536,10 @@ export function Calendar({
                   flex: 1,
                   alignItems: "center",
                   justifyContent: "center",
-                  borderRadius: 12,
-                  backgroundColor: selected === day ? p.primary : "transparent",
+                  borderRadius: 999,
+                  borderWidth:day===presetPeriod(1).to?2:0,
+                  borderColor:p.primary,
+                  backgroundColor: "transparent",
                   gap: 3,
                 }}
               >
@@ -574,6 +585,11 @@ export function WorkspaceScreens({
   profileName,
 }: Props) {
   const items = useMemo(() => workFor(role), [role]);
+  const {width}=useWindowDimensions();
+  const desktop=width>=1024;
+  const fontsReady=useContext(FontsReady);
+  const [compactFilters,setCompactFilters]=useState(false);
+  const spark=useMemo(()=>weeklySparkline(snapshotFor(role),presetPeriod(1).to),[role]);
   const properties = useMemo(() => propertiesFor(role), [role]);
   const [query, setQuery] = useState("");
   const [propertyQuery, setPropertyQuery] = useState("");
@@ -619,7 +635,7 @@ export function WorkspaceScreens({
           borderRadius: 14,
           minHeight: 50,
           borderWidth: 1,
-          borderColor: p.border,
+          borderColor: p.controlBorder,
           paddingHorizontal: 14,
           backgroundColor: p.surface,
           gap: 10,
@@ -649,7 +665,7 @@ export function WorkspaceScreens({
           onPress={() => updateQuery("")}
           style={{
             minHeight: 48,
-            width: 40,
+            width: 44,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -669,6 +685,20 @@ export function WorkspaceScreens({
   );
   const saved = toolsFor(role).filter((tool) => savedTools.includes(tool.id));
 
+
+  if(section==='work'||section==='calendar') {
+    const calendarView=section==='calendar'||view==='Calendar';
+    const results=items.filter(item=>(item.record.title+' '+(item.record.propertyName||'')).toLowerCase().includes(query.trim().toLowerCase())).filter(item=>calendarView?item.record.date===date:filter==='All'||(filter==='Completed'?isComplete(item.record.status):filter==='Waiting'?isWaiting(item.record.status):!isComplete(item.record.status)));
+    return <ScrollView testID="workspace-scroll" style={{flex:1}} stickyHeaderIndices={[1]} onScroll={event=>setCompactFilters(event.nativeEvent.contentOffset.y>90)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS==='web'} contentContainerStyle={{width:'100%',maxWidth:desktop?1400:760,alignSelf:'center',paddingBottom:112}}>
+      <Entrance sessionKey={'work:'+role+':heading'} style={{padding:20,gap:16}}>{heading(role==='cleans'?'Your jobs':'Your work','Find the next action, then keep things moving.')}<Chips values={['List','Calendar']} selected={calendarView?'Calendar':'List'} onSelect={value=>{setView(value);if(section==='calendar'&&value==='List')onNavigate('work');}} palette={p}/></Entrance>
+      <View style={{gap:8,paddingHorizontal:20,paddingVertical:compactFilters?8:16,backgroundColor:p.background,borderBottomWidth:compactFilters?1:0,borderColor:p.border}}>{search('Search job or property titles')}{!calendarView&&<Chips values={['Active','Waiting','Completed','All']} selected={filter} onSelect={setFilter} palette={p}/>}</View>
+      <View style={{padding:20,gap:20}}>
+        {calendarView&&<><WeekStrip selected={date} onSelect={setDate} items={items} palette={p}/><Calendar selected={date} onSelect={setDate} items={items} palette={p}/><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{displayDate(date)}</Text><Pressable accessibilityRole="button" accessibilityLabel="Return to today" onPress={()=>setDate(presetPeriod(1).to)} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>Today</Text></Pressable></View></>}
+        <Text accessibilityLiveRegion="polite" style={[ui.small,{color:p.muted}]}>{results.length} {results.length===1?'item':'items'} within your access</Text>
+        <Entrance trigger={calendarView?date:filter} style={{gap:12}}>{results.length?<View style={[ui.card,card,{paddingVertical:0}]}>{results.map(openRow)}</View>:<View style={{gap:12}}><Empty title="No work in this view" detail="Try another status, search or calendar date." palette={p}/><Pressable accessibilityRole="button" onPress={()=>{setQuery('');setFilter('All');setDate(presetPeriod(1).to);}} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.buttonText,{color:p.text}]}>Reset work filters</Text></Pressable></View>}</Entrance>
+      </View>
+    </ScrollView>;
+  }
   return (
     <>
       {section === "home" ? (
@@ -724,7 +754,7 @@ export function WorkspaceScreens({
                   : "Your people and properties, working together."}
             </Text>
           </View>
-          <Entrance>
+          <Entrance sessionKey={"home:"+role+":hero"}>
             <View
               style={{
                 backgroundColor: p.hero,
@@ -800,7 +830,7 @@ export function WorkspaceScreens({
                       ? "Waiting for your decision"
                       : "Your work at a glance"}
                   </Text>
-                  <Text
+                  <CountUp value={role === "client" ? approvalItems(role).length : pending.length} sessionKey={"overview:"+role+":pending"}
                     style={{
                       color: p.heroText,
                       fontSize: 42,
@@ -808,11 +838,7 @@ export function WorkspaceScreens({
                       fontWeight: "600",
                       letterSpacing: -1.5,
                     }}
-                  >
-                    {role === "client"
-                      ? approvalItems(role).length
-                      : pending.length}
-                  </Text>
+                  />
                   <Text
                     style={{ color: p.heroMuted, fontSize: 14, lineHeight: 21 }}
                   >
@@ -822,7 +848,7 @@ export function WorkspaceScreens({
                   </Text>
                 </View>
                 <View style={{ gap: 5, alignItems: "center" }}>
-                  <ProgressRing
+                  <ProgressRing motionKey={"overview:"+role+":ring"}
                     completed={
                       items.filter((item) => isComplete(item.record.status))
                         .length
@@ -861,6 +887,7 @@ export function WorkspaceScreens({
                 </Text>
                 <Feather name="arrow-right" size={20} color={p.heroText} />
               </Pressable>
+              <Sparkline values={spark.days.map(day=>day.value)} label={spark.deltaLabel} palette={p}/>
             </View>
           </Entrance>
           <View style={[ui.row, { gap: 12 }]}>
@@ -915,7 +942,7 @@ export function WorkspaceScreens({
               </Pressable>
             ))}
           </View>
-          <View style={{ gap: 10 }}>
+          <Entrance sessionKey={"home:"+role+":schedule"} delay={55} style={{ gap: 10 }}>
             <View style={ui.between}>
               <Text
                 accessibilityRole="header"
@@ -974,8 +1001,8 @@ export function WorkspaceScreens({
                 </View>
               )}
             </Entrance>
-          </View>
-          <View style={{ gap: 10 }}>
+          </Entrance>
+          <Entrance sessionKey={"home:"+role+":departments"} delay={110} style={{ gap: 10 }}>
             <View style={ui.between}>
               <Text
                 accessibilityRole="header"
@@ -1002,8 +1029,8 @@ export function WorkspaceScreens({
               palette={p}
               onSelect={onDepartment}
             />
-          </View>
-          <View style={{ gap: 8 }}>
+          </Entrance>
+          <Entrance sessionKey={"home:"+role+":attention"} delay={165} style={{ gap: 8 }}>
             <View style={ui.between}>
               <Text
                 accessibilityRole="header"
@@ -1037,89 +1064,7 @@ export function WorkspaceScreens({
                 palette={p}
               />
             )}
-          </View>
-        </>
-      ) : null}
-
-      {section === "work" || section === "calendar" ? (
-        <>
-          {heading(
-            role === "cleans" ? "Your jobs" : "Your work",
-            "Find the next action, then keep things moving.",
-          )}
-          {search("Search job or property titles")}
-          <Chips
-            values={["List", "Calendar"]}
-            selected={section === "calendar" ? "Calendar" : view}
-            onSelect={(value) => {
-              setView(value);
-              if (section === "calendar" && value === "List")
-                onNavigate("work");
-            }}
-            palette={p}
-          />
-          {section === "calendar" || view === "Calendar" ? (
-            <>
-              <Calendar
-                selected={date}
-                onSelect={setDate}
-                items={items}
-                palette={p}
-              />
-              <Text
-                accessibilityRole="header"
-                style={[ui.sectionTitle, { color: p.text }]}
-              >
-                {displayDate(date)}
-              </Text>
-            </>
-          ) : (
-            <Chips
-              values={["Active", "Waiting", "Completed", "All"]}
-              selected={filter}
-              onSelect={setFilter}
-              palette={p}
-            />
-          )}
-          {(() => {
-            const results = items
-              .filter((item) =>
-                `${item.record.title} ${item.record.propertyName || ""}`
-                  .toLowerCase()
-                  .includes(query.trim().toLowerCase()),
-              )
-              .filter((item) =>
-                section === "calendar" || view === "Calendar"
-                  ? item.record.date === date
-                  : filter === "All" ||
-                    (filter === "Completed"
-                      ? isComplete(item.record.status)
-                      : filter === "Waiting"
-                        ? isWaiting(item.record.status)
-                        : !isComplete(item.record.status)),
-              );
-            return (
-              <>
-                <Text
-                  accessibilityLiveRegion="polite"
-                  style={[ui.small, { color: p.muted }]}
-                >
-                  {results.length} {results.length === 1 ? "item" : "items"}
-                </Text>
-                {results.length ? (
-                  <View style={[ui.card, card, { paddingVertical: 0 }]}>
-                    {results.map(openRow)}
-                  </View>
-                ) : (
-                  <Empty
-                    title="No work in this view"
-                    detail="Try another status, search or calendar date."
-                    palette={p}
-                  />
-                )}
-              </>
-            );
-          })()}
+          </Entrance>
         </>
       ) : null}
 
@@ -1134,63 +1079,15 @@ export function WorkspaceScreens({
             "One place for the details and work you can access.",
           )}
           {search("Search property names")}
-          {properties
-            .filter((property) =>
-              property.propertyName
-                .toLowerCase()
-                .includes(propertyQuery.trim().toLowerCase()),
-            )
-            .map((property, index) => (
-              <Entrance key={property.id} delay={index * 40}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${property.propertyName}`}
-                  onPress={() => setSelectedProperty(property)}
-                  style={[ui.card, card]}
-                >
-                  <View style={[ui.row, { gap: 14 }]}>
-                    <PropertyScene palette={p} variant={index} />
-                    <View style={{ flex: 1, gap: 6 }}>
-                      <Text
-                        style={{
-                          color: p.text,
-                          fontSize: 18,
-                          lineHeight: 24,
-                          fontWeight: "700",
-                        }}
-                      >
-                        {property.propertyName}
-                      </Text>
-                      <Text style={[ui.small, { color: p.muted }]}>
-                        {property.region}
-                      </Text>
-                    </View>
-                  </View>
-                  <View
-                    style={[
-                      ui.between,
-                      {
-                        borderTopWidth: 1,
-                        borderColor: p.border,
-                        paddingTop: 12,
-                      },
-                    ]}
-                  >
-                    <Text style={[ui.small, { color: p.muted }]}>
-                      {property.bedrooms} bedrooms, {property.bathrooms}{" "}
-                      {Number(property.bathrooms) === 1
-                        ? "bathroom"
-                        : "bathrooms"}
-                    </Text>
-                    <Feather
-                      name="arrow-up-right"
-                      color={p.primary}
-                      size={20}
-                    />
-                  </View>
-                </Pressable>
-              </Entrance>
-            ))}
+
+          <View style={{flexDirection:desktop?'row':'column',flexWrap:'wrap',gap:20}}>
+          {!fontsReady?[0,1].map(i=><View key={i} accessibilityLabel="Loading property card" style={[ui.card,card,{flexGrow:1,flexBasis:desktop?'45%':undefined,gap:16}]}><View style={{height:160,backgroundColor:p.elevated,borderRadius:16}}/><View style={{height:22,width:'70%',backgroundColor:p.elevated,borderRadius:8}}/><View style={{height:16,width:'45%',backgroundColor:p.elevated,borderRadius:8}}/></View>):properties.filter(property=>property.propertyName.toLowerCase().includes(propertyQuery.trim().toLowerCase())).map((property,index)=><Entrance key={property.id} sessionKey={'properties:'+role+':'+property.id} delay={index*55} style={{flexGrow:1,flexBasis:desktop?'45%':undefined,minWidth:0}}>
+            <Pressable accessibilityRole="button" accessibilityLabel={'Open '+property.propertyName} onPress={()=>setSelectedProperty(property)} style={[ui.card,card,{padding:0,overflow:'hidden'}]}>
+              <View style={{minHeight:160,alignItems:'center',justifyContent:'center',backgroundColor:p.elevated}}><PropertyScene palette={p} variant={index}/><View style={{position:'absolute',left:16,top:16,backgroundColor:p.surface,borderRadius:999,paddingHorizontal:10,paddingVertical:6,flexDirection:'row',alignItems:'center',gap:6}}><Feather name={property.status==='live'?'check-circle':'clock'} size={14} color={property.status==='live'?p.success:p.waiting}/><Text style={[ui.small,{color:p.text,fontWeight:'600'}]}>{property.status.replaceAll('_',' ')}</Text></View><Text style={{position:'absolute',right:16,bottom:12,fontSize:12,color:p.muted}}>Property illustration</Text></View>
+              <View style={{padding:20,gap:12}}><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text,flex:1}]}>{property.propertyName}</Text><Feather name="arrow-up-right" size={20} color={p.primary}/></View><View style={[ui.row,{gap:7}]}><Feather name="map-pin" size={15} color={p.muted}/><Text style={[ui.small,{color:p.muted,flex:1}]}>{property.region}</Text></View><View style={[ui.between,{borderTopWidth:1,borderColor:p.border,paddingTop:12}]}><Text style={[ui.small,{color:p.muted}]}>{property.bedrooms} bedrooms, {property.bathrooms} {Number(property.bathrooms)===1?'bathroom':'bathrooms'}</Text><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>View property</Text></View></View>
+            </Pressable>
+          </Entrance>)}
+          </View>
           {!properties.some((property) =>
             property.propertyName
               .toLowerCase()

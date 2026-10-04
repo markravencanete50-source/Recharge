@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { Animated, Platform, View } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
 import { navigationFor, type WorkspaceSection } from "../../lib/workspace-map";
 import type { WorkspaceRole } from "./model";
-import { MotionPress, useReducedMotion } from "./motion";
+import { MotionPress, NavSymbol, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 
@@ -80,9 +79,9 @@ export function NavigationBar({
             onPress={() => onNavigate(item.value)}
             style={ui.tab}
           >
-            <Feather
+            <NavSymbol
               name={item.icon}
-              size={22}
+              active={i===index}
               color={i === index ? p.primary : p.muted}
             />
             <Text

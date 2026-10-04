@@ -43,7 +43,7 @@ export function ThemeToggle() {
           setTheme(next);
         };
         if (
-          !matchMedia("(prefers-reduced-motion: reduce)").matches &&
+          !matchMedia("(prefers-reduced-motion: reduce)").matches && document.documentElement.dataset.reduceMotion !== "true" &&
           "startViewTransition" in document
         ) {
           (

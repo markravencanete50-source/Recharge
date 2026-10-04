@@ -4,6 +4,8 @@ import { isWorkspaceAdmin } from "@/lib/modules";
 
 import { FormEvent, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ToolIllustration } from "@/components/tool-illustration";
+import { useWorkspaceMotion, MotionPreferenceSync, ReduceMotionToggle } from "@/components/workspace-motion";
+import { OfflineBanner } from "@/components/offline-banner";
 import { DepartmentIllustration } from "@/components/department-illustration";
 import { ThemeToggle } from "@/components/workspace-theme";
 import { AnalyticsBoard } from "@/app/analytics-board";
@@ -359,6 +361,12 @@ export function RechargePortal({
   const [menuOpen, setMenuOpen] = useState(false);
   const [workflowBoardMode, setWorkflowBoardMode] = useState<WorkflowToolMode>("new-property-inspections");
   const navigationRef = useRef<HTMLElement>(null);
+  const [departmentsOpen,setDepartmentsOpen]=useState(true);
+  const [scrolled,setScrolled]=useState(false);
+  const reducedMotion=useWorkspaceMotion();
+  const [indicator,setIndicator]=useState({y:0,height:44,visible:false});
+  useEffect(()=>{const update=()=>setScrolled(window.scrollY>12);update();window.addEventListener("scroll",update,{passive:true});return()=>window.removeEventListener("scroll",update);},[]);
+  useEffect(()=>{const nav=navigationRef.current?.querySelector<HTMLElement>("nav");if(!nav)return;const update=()=>{const active=nav.querySelector<HTMLElement>("[aria-current=page]");if(!active){setIndicator(current=>({...current,visible:false}));return;}setIndicator({y:active.getBoundingClientRect().top-nav.getBoundingClientRect().top+nav.scrollTop,height:active.offsetHeight,visible:true});};update();const observer=new ResizeObserver(update);observer.observe(nav);return()=>observer.disconnect();},[view,departmentsOpen,currentUser.role]);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -445,6 +453,7 @@ export function RechargePortal({
         initialData={communicationData}
         onOpen={() => changeView("communications")}
       />
+      <MotionPreferenceSync/><OfflineBanner/>
       {menuOpen && <button className="navigation-backdrop lg:hidden" aria-label="Dismiss navigation" onClick={() => setMenuOpen(false)} tabIndex={-1} />}
       <aside ref={navigationRef} id="workspace-navigation" role={menuOpen ? "dialog" : undefined} aria-modal={menuOpen ? true : undefined} aria-label="Workspace navigation" className={"sidebar " + (menuOpen ? "sidebar-open" : "")}>
         <div className="sidebar-brand flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-5 lg:border-0">
@@ -478,6 +487,7 @@ export function RechargePortal({
           className="sidebar-navigation min-h-0 flex-1 overflow-y-auto px-4 pb-3"
           aria-label="Workspace"
         >
+          <span className="sidebar-active-indicator" aria-hidden="true" style={{height:indicator.height,transform:"translateY("+indicator.y+"px)",opacity:indicator.visible?1:0,transition:reducedMotion?"none":undefined}}/>
           {currentUser.role === "stays" && myRecharge && (
           <div className="space-y-2">
             <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/30">Personal</p>
@@ -492,9 +502,8 @@ export function RechargePortal({
           )}
 
           <div className={`${currentUser.role === "stays" ? "mt-7" : ""} space-y-2`}>
-            <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/30">
-              Departments
-            </p>
+            <button className="department-collapse" type="button" aria-expanded={departmentsOpen} aria-controls="desktop-departments" onClick={()=>setDepartmentsOpen(!departmentsOpen)}>Departments<span>{departmentsOpen?"Hide":"Show"}</span></button>
+            <div id="desktop-departments" hidden={!departmentsOpen}>
             {visibleOperationsSections.map((section, index) => (
               <NavButton
                 active={view === section.id}
@@ -505,6 +514,7 @@ export function RechargePortal({
                 onClick={() => changeView(section.id)}
               />
             ))}
+            </div>
           </div>
 
           {currentUser.role !== "client" && (
@@ -545,6 +555,7 @@ export function RechargePortal({
           <p className="mt-1 truncate text-xs text-white/45">
             {roleLabels[currentUser.role]}
           </p>
+          <ReduceMotionToggle/>
           <a
             className="mt-4 inline-flex text-sm font-medium text-[var(--muted-foreground)] hover:text-white"
             href={signOutPath}
@@ -554,8 +565,8 @@ export function RechargePortal({
         </div>
       </aside>
 
-      <main className="lg:pl-[17rem]">
-        <header className="workspace-header flex h-[4.75rem] items-center justify-between border-b border-[var(--border)] bg-white/85 px-5 backdrop-blur sm:px-8 lg:px-10">
+      <main className="workspace-main">
+        <header className={(scrolled?"workspace-header workspace-header-scrolled ":"workspace-header ")+"flex h-[4.75rem] items-center justify-between border-b border-[var(--border)] bg-white/85 px-5 backdrop-blur sm:px-8 lg:px-10"}>
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <button
@@ -586,7 +597,7 @@ export function RechargePortal({
             <Badge className="border-0 bg-[var(--muted)] px-3 py-1 text-[var(--muted-foreground)]">
               {roleLabels[currentUser.role]}
             </Badge>
-            <div className="grid size-9 place-items-center rounded-full bg-[#315f50] text-sm font-bold text-white">
+            <div className="grid size-9 place-items-center rounded-full workspace-avatar text-sm font-bold">
               {initials(currentUser.name)}
             </div>
           </div>

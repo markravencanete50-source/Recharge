@@ -85,7 +85,7 @@ export function useThemePreference() {
   }, [theme]);
   function setTheme(value: "light" | "dark", reduced = false) {
     if (
-      Platform.OS === "web" &&
+      Platform.OS === "web" && !reduced &&
       !matchMedia("(prefers-reduced-motion: reduce)").matches &&
       "startViewTransition" in document
     ) {

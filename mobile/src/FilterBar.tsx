@@ -31,13 +31,13 @@ export function FilterBar({
     x.stopAnimation();
     width.stopAnimation();
     if (reduced) {
-      x.setValue(box.x);
+      x.setValue(box.x + box.width / 2 - 50);
       width.setValue(box.width);
       return;
     }
     const animation = Animated.parallel([
       Animated.timing(x, {
-        toValue: box.x,
+        toValue: box.x + box.width / 2 - 50,
         duration: 180,
         useNativeDriver: false,
       }),
@@ -102,8 +102,8 @@ export function FilterBar({
                 left: 0,
                 borderRadius: 13,
                 backgroundColor: p.surface,
-                width,
-                transform: [{ translateX: x }],
+                width:100,
+                transform: [{ translateX: x }, {scaleX:width.interpolate({inputRange:[0,100],outputRange:[0,1]})}],
               }}
             />
           ) : null}
