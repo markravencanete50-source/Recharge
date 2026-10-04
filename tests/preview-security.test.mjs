@@ -37,6 +37,21 @@ test("direct requests cannot mutate records or invoke integrations", async () =>
   }
 });
 
+test("mobile icon fonts are published outside ignored dependency directories", async () => {
+  const html = await (await fetch(`${base}/home`)).text();
+  const scriptPath = html.match(/src="([^"]+\/entry-[^"]+\.js)"/)?.[1];
+  assert.ok(scriptPath, "mobile entry bundle is referenced");
+  const bundle = await (await fetch(new URL(scriptPath, base))).text();
+  assert.ok(!bundle.includes("/assets/node_modules/"), "no ignored dependency asset paths remain");
+  const fontPath = bundle.match(/\/assets\/vendor\/[^"']*\/Feather\.[^"']*\.ttf/)?.[0];
+  assert.ok(fontPath, "the visible interface's Feather font is referenced");
+  const font = await fetch(new URL(fontPath, base));
+  assert.equal(font.status, 200);
+  assert.ok(!font.headers.get("content-type").includes("text/html"), "font request must not fall back to page HTML");
+  const bytes = new Uint8Array(await font.arrayBuffer());
+  assert.ok(bytes.length > 50000, "complete font bytes are served");
+});
+
 test("unconnected APIs and legacy authentication routes never fall back to application HTML", async () => {
   for (const path of ["/api", "/api/unknown", "/api/maintenance/evidence/demo", "/signin-with-chatgpt", "/sign-in", "/sign-out", "/api/session", "/api/session/recovery", "/api/session/password", "/auth/recovery", "/reset-password", "/update-password", "/tool/client-furnishing", "/_worker.js"]) {
     const response = await fetch(`${base}${path}`);
