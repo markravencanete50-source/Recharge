@@ -5,6 +5,8 @@
 @font-face {font-family:'Recharge Inter';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/inter-700.ttf') format('truetype')}
 :root {--font-inter:'Recharge Inter',Inter,system-ui,sans-serif}
 .recharge-workspace,.recharge-workspace :is(button,input,select,textarea),[data-slot="dialog-content"],[data-slot="popover-content"] {font-family:var(--font-inter)}
+.recharge-workspace .sidebar-brand span span,.recharge-workspace .sidebar-navigation > div > p {font-size:11px}
+.phase-two-reports .eyebrow {color:var(--rc-muted);opacity:1}
 :root:not(.dark) {
   --background: #f2f5f2; --foreground: #1c3934; --card: #ffffff; --card-foreground: #1c3934;
   --popover: #ffffff; --popover-foreground: #1c3934; --muted: #edf3ef; --muted-foreground: #526960;
