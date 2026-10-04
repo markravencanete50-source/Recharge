@@ -4,16 +4,18 @@ import Svg, { Circle, Path, Rect } from "react-native-svg";
 import Feather from "@expo/vector-icons/Feather";
 import { useReducedMotion } from "./motion";
 import { Text } from "./Typography";
-import type { Palette } from "./theme";
+import { themes, type Palette } from "./theme";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 export function ProgressRing({
   completed,
   total,
+  palette: p = themes.light,
 }: {
   completed: number;
   total: number;
+  palette?: Palette;
 }) {
   const reduced = useReducedMotion();
   const [progress] = useState(() => new Animated.Value(0));
@@ -58,7 +60,8 @@ export function ProgressRing({
           cy="44"
           r="35"
           fill="none"
-          stroke="#6682e0"
+          stroke={p.heroLine}
+          strokeOpacity={0.4}
           strokeWidth="6"
         />
         <AnimatedCircle
@@ -66,7 +69,7 @@ export function ProgressRing({
           cy="44"
           r="35"
           fill="none"
-          stroke="#ffffff"
+          stroke={p.heroText}
           strokeWidth="6"
           strokeLinecap="round"
           strokeDasharray="220"
@@ -83,7 +86,7 @@ export function ProgressRing({
           fontSize: total ? 22 : 14,
           textAlign: "center",
           fontWeight: "600",
-          color: "#ffffff",
+          color: p.heroText,
           letterSpacing: -0.7,
         }}
       >

@@ -1,7 +1,7 @@
 import { Text } from "./Typography";
 import { View, ScrollView } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import { Artwork } from "./Artwork";
+import { DepartmentArtwork } from "./Artwork";
 import { Entrance, MotionPress as Pressable } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import { toolsFor, type ModuleId, type WorkspaceRole } from "./model";
@@ -79,7 +79,11 @@ export function DepartmentGrid({
               paddingVertical: 4,
             }}
           >
-            <Artwork id={department.art} size={52} palette={p} />
+            <DepartmentArtwork
+              department={department.id}
+              size={52}
+              palette={p}
+            />
             <Text style={{ color: p.text, fontSize: 12, fontWeight: "500" }}>
               {department.name}
             </Text>
@@ -169,7 +173,11 @@ export function DepartmentGrid({
                   },
                 ]}
               >
-                <Artwork id={department.art} size={48} palette={p} />
+                <DepartmentArtwork
+                  department={department.id}
+                  size={48}
+                  palette={p}
+                />
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text
                     style={{ color: p.text, fontSize: 17, fontWeight: "600" }}

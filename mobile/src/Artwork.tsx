@@ -1,53 +1,86 @@
-import type { ComponentProps } from "react";
 import { View } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
+import Svg, {
+  Path,
+  Circle,
+  Rect,
+  Line,
+  Polyline,
+  Polygon,
+  Ellipse,
+} from "react-native-svg";
 import type { ModuleId } from "./model";
-import { WORKSPACE_MAP } from "../../lib/workspace-map";
+import { WORKSPACE_MAP, type DepartmentTone } from "../../lib/workspace-map";
+import { featureGlyphs, departmentGlyphs, iconNodes } from "../../lib/artwork";
 import { departmentColor, themes, type Palette } from "./theme";
-
-// Every feature has a distinct vector symbol. Shared geometry keeps the family coherent.
-export const FEATURE_ICONS: Record<
-  ModuleId,
-  ComponentProps<typeof Feather>["name"]
-> = {
-  "clean-client-database": "users",
-  "cleaner-database": "user-check",
-  "client-dashboard": "pie-chart",
-  "clean-reporting": "clipboard",
-  "clean-property-onboarding": "check-square",
-  "cleaner-performance": "award",
-  "cleaning-schedule": "calendar",
-  "ready-schedule": "clock",
-  "maintenance-reporting": "tool",
-  "stays-maintenance-reporting": "activity",
-  "client-property-maintenance": "alert-circle",
-  "property-database": "home",
-  "property-onboarding": "key",
-  "direct-bookings": "bookmark",
-  "new-property-inspection-board": "search",
-  "safety-maintenance": "shield",
-  "routine-bin-garden-board": "sun",
-  "guest-communication": "message-circle",
-  "client-mailbox": "mail",
-  "purchase-order": "shopping-bag",
-  "purchase-order-requests": "send",
-  "client-purchase-order-quotes": "file-text",
-  "replenishment-requests": "package",
-  "property-furnishing-board": "layout",
-  "client-furnishing": "sliders",
-  "aircover-reporting": "umbrella",
-  "ota-logins": "lock",
-  licensing: "file",
-  "daily-pricing": "trending-up",
-  "weekly-performance": "bar-chart-2",
-  "listing-health": "check-circle",
-  "cleans-invoices": "dollar-sign",
-  "maintenance-reconciliation": "git-merge",
-  "onboarding-invoices": "file-plus",
-  "purchase-order-invoices": "credit-card",
-  "purchase-order-accounts": "briefcase",
-  "owner-statements": "book-open",
+const shapes = {
+  path: Path,
+  circle: Circle,
+  rect: Rect,
+  line: Line,
+  polyline: Polyline,
+  polygon: Polygon,
+  ellipse: Ellipse,
 };
+export function Glyph({
+  name,
+  size = 24,
+  color,
+  filled = false,
+}: {
+  name: string;
+  size?: number;
+  color: string;
+  filled?: boolean;
+}) {
+  return (
+    <Svg
+      accessible={false}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      stroke={color}
+      fill={filled ? color : "none"}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {iconNodes[name]?.map(([tag, attrs], index) => {
+        const Shape = shapes[tag as keyof typeof shapes];
+        return Shape ? <Shape key={index} {...attrs} /> : null;
+      })}
+    </Svg>
+  );
+}
+function Tile({
+  name,
+  tone,
+  size,
+  palette,
+}: {
+  name: string;
+  tone: DepartmentTone;
+  size: number;
+  palette: Palette;
+}) {
+  const c = departmentColor(tone, palette);
+  return (
+    <View
+      accessible={false}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.28),
+        backgroundColor: c.wash,
+        borderWidth: 1,
+        borderColor: c.ink,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Glyph name={name} size={Math.min(24, size * 0.5)} color={c.ink} />
+    </View>
+  );
+}
 export function Artwork({
   id,
   size = 48,
@@ -57,31 +90,30 @@ export function Artwork({
   size?: number;
   palette?: Palette;
 }) {
-  const tone = departmentColor(WORKSPACE_MAP[id].tone, palette);
   return (
-    <View
-      accessible={false}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.3,
-        backgroundColor: tone.wash,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <View
-        style={{
-          position: "absolute",
-          width: size * 0.5,
-          height: size * 0.5,
-          borderRadius: size * 0.2,
-          backgroundColor: tone.ink,
-          opacity: 0.07,
-          transform: [{ rotate: "-12deg" }],
-        }}
-      />
-      <Feather name={FEATURE_ICONS[id]} size={size * 0.47} color={tone.ink} />
-    </View>
+    <Tile
+      name={featureGlyphs[id]}
+      tone={WORKSPACE_MAP[id].tone}
+      size={size}
+      palette={palette}
+    />
+  );
+}
+export function DepartmentArtwork({
+  department,
+  size = 48,
+  palette = themes.light,
+}: {
+  department: DepartmentTone;
+  size?: number;
+  palette?: Palette;
+}) {
+  return (
+    <Tile
+      name={departmentGlyphs[department]}
+      tone={department}
+      size={size}
+      palette={palette}
+    />
   );
 }

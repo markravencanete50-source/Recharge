@@ -172,3 +172,26 @@ html.dark * { scrollbar-width: thin; scrollbar-color: #607c6a transparent; }
   .analytics-chart { padding: 20px; }
   .analytics-plot { height: 220px; }
 }
+/* Phase 1 surfaces and flat symbols. The shared token provider supplies colours. */
+.recharge-workspace,.dark .recharge-workspace { background:var(--rc-background); color:var(--rc-text); }
+.sidebar { background:var(--rc-surface);border-right:1px solid var(--rc-border);color:var(--rc-text); }
+.sidebar :is(.sidebar-brand,.sidebar-footer,.nav-button),.sidebar-brand span > span,.sidebar-navigation > div > p,.nav-button > span:first-child,.sidebar-footer p:nth-child(2),.sidebar-footer a {color:var(--rc-muted)}
+.sidebar .nav-button-active {background:var(--rc-wash);color:var(--rc-primary)}
+.tool-card,.dark .tool-card {background:var(--rc-surface);border-color:var(--rc-border);border-radius:22px;box-shadow:0 8px 28px var(--rc-shadow);color:var(--rc-text)}
+.tool-card::before,.dark .tool-card::before {display:none}
+.tool-card:hover,.dark .tool-card:hover {border-color:var(--rc-primary);box-shadow:0 12px 32px var(--rc-shadow)}
+.tool-card h3,.tool-card h2 {color:var(--rc-text)}
+.tool-card p,.eyebrow,.dark .eyebrow {color:var(--rc-muted)}
+.tool-card-arrow,.tool-category,.dark .tool-card-arrow,.dark .tool-category {background:var(--rc-elevated);color:var(--rc-text)}
+.preview-banner,.dark .preview-banner {background:var(--rc-elevated);color:var(--rc-text);border-color:var(--rc-border)}
+.preview-banner span {color:var(--rc-muted)}
+.tool-illustration,.department-illustration {display:grid;place-items:center;width:48px;height:48px;flex-shrink:0;border-radius:14px;border:1px solid currentColor;overflow:visible;}
+.department-illustration {width:64px;height:64px;border-radius:18px}
+[data-department="stays"] {--department-ink:var(--rc-stays-ink);--department-wash:var(--rc-stays-wash)}
+[data-department="ready"] {--department-ink:var(--rc-ready-ink);--department-wash:var(--rc-ready-wash)}
+[data-department="cleans"] {--department-ink:var(--rc-cleans-ink);--department-wash:var(--rc-cleans-wash)}
+[data-department="clients"] {--department-ink:var(--rc-clients-ink);--department-wash:var(--rc-clients-wash)}
+[data-department="accounts"] {--department-ink:var(--rc-accounts-ink);--department-wash:var(--rc-accounts-wash)}
+:is(.tool-illustration,.department-illustration)[data-department] {background:var(--department-wash);color:var(--department-ink)}
+.theme-toggle {transition:none}
+.recharge-workspace {font-variant-numeric:tabular-nums;}

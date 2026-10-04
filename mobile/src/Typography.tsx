@@ -20,6 +20,7 @@ export function Text({ style, ...props }: TextProps) {
     <NativeText
       {...props}
       style={[
+        { fontVariant: ["tabular-nums"] },
         style,
         loaded ? { fontFamily: font, fontWeight: "normal" } : null,
       ]}

@@ -16,10 +16,19 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
-import { FEATURE_ICONS } from "./Artwork";
+import { Artwork } from "./Artwork";
 import { FilterBar } from "./FilterBar";
 import { ProgressRing, StateGraphic } from "./StateGraphic";
-import Svg, { Path, Rect, Line } from "react-native-svg";
+import Svg, {
+  Path,
+  Rect,
+  Line,
+  Defs,
+  LinearGradient,
+  RadialGradient,
+  Stop,
+  Circle,
+} from "react-native-svg";
 import { Entrance, MotionPress as Pressable, useReducedMotion } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import {
@@ -32,6 +41,7 @@ import {
   workFor,
   type PreviewRecord,
   type Tool,
+  type ModuleId,
   type WorkspaceRole,
   type WorkItem,
 } from "./model";
@@ -129,12 +139,14 @@ function LinkRow({
   title,
   subtitle,
   icon,
+  toolId,
   palette: p,
   onPress,
 }: {
   title: string;
   subtitle?: string;
-  icon: IconName;
+  icon?: IconName;
+  toolId?: ModuleId;
   palette: Palette;
   onPress: () => void;
 }) {
@@ -154,7 +166,11 @@ function LinkRow({
           justifyContent: "center",
         }}
       >
-        <Feather name={icon} size={20} color={p.primary} />
+        {toolId ? (
+          <Artwork id={toolId} size={44} palette={p} />
+        ) : (
+          <Feather name={icon || "grid"} size={20} color={p.primary} />
+        )}
       </View>
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={{ color: p.text, fontSize: 16, fontWeight: "600" }}>
@@ -203,11 +219,7 @@ export function WorkRow({
           alignItems: "center",
         }}
       >
-        <Feather
-          name={FEATURE_ICONS[item.tool.id]}
-          size={20}
-          color={tone.ink}
-        />
+        <Artwork id={item.tool.id} size={44} palette={p} />
       </View>
       <View style={{ flex: 1, gap: 5 }}>
         <Text
@@ -226,7 +238,7 @@ export function WorkRow({
             style={[
               ui.row,
               {
-                backgroundColor: tone.wash,
+                backgroundColor: p.elevated,
                 paddingHorizontal: 8,
                 paddingVertical: 3,
                 borderRadius: 7,
@@ -234,21 +246,28 @@ export function WorkRow({
               },
             ]}
           >
-            <View
-              style={{
-                width: 5,
-                height: 5,
-                borderRadius: 3,
-                backgroundColor: isWaiting(item.record.status)
-                  ? p.waiting
-                  : p.chart,
-              }}
+            <Feather
+              name={
+                isComplete(item.record.status)
+                  ? "check-circle"
+                  : isWaiting(item.record.status)
+                    ? "clock"
+                    : "activity"
+              }
+              size={13}
+              color={
+                isComplete(item.record.status)
+                  ? p.success
+                  : isWaiting(item.record.status)
+                    ? p.waiting
+                    : p.primary
+              }
             />
             <Text
               style={{
                 fontSize: 12,
                 lineHeight: 18,
-                color: tone.ink,
+                color: p.text,
                 fontWeight: "500",
               }}
             >
@@ -361,13 +380,15 @@ function WeekStrip({
           <Pressable
             key={key}
             accessibilityRole="button"
-            accessibilityLabel={`Schedule for ${displayDate(key)}`}
+            accessibilityLabel={`Schedule for ${displayDate(key)}${key === presetPeriod(1).to ? ", today" : ""}`}
             accessibilityState={{ selected: active }}
             onPress={() => onSelect(key)}
             style={{
               width: dayWidth,
               minHeight: 72,
-              borderRadius: 15,
+              borderRadius: 999,
+              borderWidth: key === presetPeriod(1).to ? 2 : 1,
+              borderColor: key === presetPeriod(1).to ? p.primary : p.border,
               backgroundColor: active ? p.primary : p.surface,
               alignItems: "center",
               justifyContent: "center",
@@ -655,13 +676,29 @@ export function WorkspaceScreens({
           <View style={{ gap: 7 }}>
             <View style={ui.between}>
               <Text style={[ui.small, { color: p.muted, flex: 1 }]}>
-                Hello, {profileName.split(" ")[0]}.
+                {new Date().getHours() < 12
+                  ? "Good morning"
+                  : new Date().getHours() < 18
+                    ? "Good afternoon"
+                    : "Good evening"}
+                , {profileName.split(" ")[0]}.
               </Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Open calendar"
                 onPress={() => onNavigate("calendar")}
-                style={[ui.row, { minHeight: 44, gap: 7 }]}
+                style={[
+                  ui.row,
+                  {
+                    minHeight: 44,
+                    gap: 7,
+                    paddingHorizontal: 12,
+                    borderRadius: 999,
+                    backgroundColor: p.surface,
+                    borderWidth: 1,
+                    borderColor: p.border,
+                  },
+                ]}
               >
                 <Feather name="calendar" size={15} color={p.primary} />
                 <Text
@@ -691,12 +728,51 @@ export function WorkspaceScreens({
             <View
               style={{
                 backgroundColor: p.hero,
-                borderRadius: 24,
-                padding: 22,
+                borderRadius: 28,
+                padding: 24,
                 gap: 20,
                 overflow: "hidden",
               }}
             >
+              <Svg
+                pointerEvents="none"
+                accessible={false}
+                width="100%"
+                height="100%"
+                viewBox="0 0 600 300"
+                preserveAspectRatio="none"
+                style={{ position: "absolute", top: 0, left: 0 }}
+              >
+                <Defs>
+                  <LinearGradient
+                    id="today-gradient"
+                    x1="0"
+                    x2="1"
+                    y1="0"
+                    y2="1"
+                  >
+                    <Stop offset="0" stopColor={p.hero} />
+                    <Stop offset="1" stopColor={p.heroEnd} />
+                  </LinearGradient>
+                  <RadialGradient id="today-glow" cx=".95" cy="0" r=".34">
+                    <Stop offset="0" stopColor={p.heroGlow} stopOpacity=".2" />
+                    <Stop offset="1" stopColor={p.heroGlow} stopOpacity="0" />
+                  </RadialGradient>
+                </Defs>
+                <Rect width="600" height="300" fill="url(#today-gradient)" />
+                <Rect width="600" height="300" fill="url(#today-glow)" />
+                {[65, 95, 125].map((r) => (
+                  <Circle
+                    key={r}
+                    cx="545"
+                    cy="25"
+                    r={r}
+                    stroke={p.heroText}
+                    strokeOpacity=".08"
+                    fill="none"
+                  />
+                ))}
+              </Svg>
               <View
                 accessible={false}
                 style={{
@@ -793,14 +869,14 @@ export function WorkspaceScreens({
                 label: "Waiting",
                 value: waiting.length,
                 icon: "clock" as const,
-                bg: p.cautionWash,
+                bg: p.elevated,
                 action: () => openQueue("Waiting"),
               },
               {
                 label: "Properties",
                 value: properties.length,
                 icon: "home" as const,
-                bg: p.utilityArt,
+                bg: p.elevated,
                 action: () => onNavigate("properties"),
               },
             ].map((stat) => (
@@ -813,7 +889,7 @@ export function WorkspaceScreens({
                   flex: 1,
                   padding: 16,
                   backgroundColor: stat.bg,
-                  borderRadius: 18,
+                  borderRadius: 22,
                   gap: 10,
                 }}
               >
@@ -1102,7 +1178,9 @@ export function WorkspaceScreens({
                   >
                     <Text style={[ui.small, { color: p.muted }]}>
                       {property.bedrooms} bedrooms, {property.bathrooms}{" "}
-                      {Number(property.bathrooms) === 1 ? "bathroom" : "bathrooms"}
+                      {Number(property.bathrooms) === 1
+                        ? "bathroom"
+                        : "bathrooms"}
                     </Text>
                     <Feather
                       name="arrow-up-right"
@@ -1204,7 +1282,7 @@ export function WorkspaceScreens({
                   <LinkRow
                     key={tool.id}
                     title={tool.name}
-                    icon={FEATURE_ICONS[tool.id]}
+                    toolId={tool.id}
                     palette={p}
                     onPress={() => onOpen(tool)}
                   />
@@ -1384,7 +1462,7 @@ export function WorkspaceScreens({
                         <LinkRow
                           key={tool.id}
                           title={tool.name}
-                          icon={FEATURE_ICONS[tool.id]}
+                          toolId={tool.id}
                           palette={p}
                           onPress={() => openPropertyTool(tool)}
                         />

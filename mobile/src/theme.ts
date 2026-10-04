@@ -1,76 +1,29 @@
 import { StyleSheet } from "react-native";
 import type { DepartmentTone } from "../../lib/workspace-map";
-export const themes = {
-  light: {
-    background: "#f5f7fc",
-    surface: "#ffffff",
-    text: "#172033",
-    muted: "#5c667a",
-    border: "#e0e5ef",
-    primary: "#3457d5",
-    onPrimary: "#ffffff",
-    wash: "#eaf0ff",
-    accent: "#3457d5",
-    chart: "#137d73",
-    waiting: "#a14c31",
-    utilityArt: "#eae5ff",
-    utilityInk: "#55418c",
-    utilityAccent: "#55418c",
-    hero: "#3457d5",
-    heroText: "#ffffff",
-    heroMuted: "#e1e8ff",
-    heroLine: "#8cafff",
-    elevated: "#edf2ff",
-    success: "#137d73",
-    successWash: "#e3f5ef",
-    cautionWash: "#ffe9e1",
-  },
-  dark: {
-    background: "#111827",
-    surface: "#1e293b",
-    text: "#f5f7ff",
-    muted: "#c0c8d8",
-    border: "#3b4860",
-    primary: "#a9baff",
-    onPrimary: "#15234f",
-    wash: "#293857",
-    accent: "#a9baff",
-    chart: "#7adbc8",
-    waiting: "#ffb69f",
-    utilityArt: "#392f53",
-    utilityInk: "#d4c3ff",
-    utilityAccent: "#d4c3ff",
-    hero: "#3457d5",
-    heroText: "#ffffff",
-    heroMuted: "#e1e8ff",
-    heroLine: "#8cafff",
-    elevated: "#26344e",
-    success: "#7adbc8",
-    successWash: "#1d4142",
-    cautionWash: "#4b302d",
-  },
-};
+import { Platform } from "react-native";
+import { designTokens, departmentTokens } from "../../lib/design-tokens";
+export const themes = Object.fromEntries(
+  Object.entries(designTokens).map(([mode, values]) => [
+    mode,
+    {
+      ...Object.fromEntries(
+        Object.entries(values).map(([key, value]) => [
+          key,
+          Platform.OS === "web" ? "var(--rc-" + key + ")" : value,
+        ]),
+      ),
+      isDark: mode === "dark",
+    },
+  ]),
+) as Record<"light" | "dark", typeof designTokens.light & { isDark: boolean }>;
 export type Palette = typeof themes.light;
-export const departmentColors = {
-  light: {
-    stays: { ink: "#3457d5", wash: "#eaf0ff", art: "#eaf0ff" },
-    ready: { ink: "#137d73", wash: "#e3f5ef", art: "#e3f5ef" },
-    cleans: { ink: "#8a6417", wash: "#fff3d7", art: "#fff3d7" },
-    clients: { ink: "#55418c", wash: "#eae5ff", art: "#eae5ff" },
-    accounts: { ink: "#833a27", wash: "#ffe9e1", art: "#ffe9e1" },
-  },
-  dark: {
-    stays: { ink: "#b1c2ff", wash: "#293857", art: "#293857" },
-    ready: { ink: "#7adbc8", wash: "#1d4142", art: "#1d4142" },
-    cleans: { ink: "#f6d58c", wash: "#443c29", art: "#443c29" },
-    clients: { ink: "#d4c3ff", wash: "#392f53", art: "#392f53" },
-    accounts: { ink: "#ffb69f", wash: "#4b302d", art: "#4b302d" },
-  },
-};
 export function departmentColor(tone: DepartmentTone, palette: Palette) {
-  return departmentColors[
-    palette.background === themes.dark.background ? "dark" : "light"
-  ][tone];
+  const values = departmentTokens[palette.isDark ? "dark" : "light"][tone];
+  return {
+    ink: Platform.OS === "web" ? "var(--rc-" + tone + "-ink)" : values.ink,
+    wash: Platform.OS === "web" ? "var(--rc-" + tone + "-wash)" : values.wash,
+    art: Platform.OS === "web" ? "var(--rc-" + tone + "-wash)" : values.wash,
+  };
 }
 export const ui = StyleSheet.create({
   fill: { flex: 1 },
@@ -83,7 +36,7 @@ export const ui = StyleSheet.create({
   page: {
     padding: 20,
     paddingTop: 24,
-    paddingBottom: 32,
+    paddingBottom: 112,
     gap: 24,
     width: "100%",
     maxWidth: 760,
@@ -110,7 +63,15 @@ export const ui = StyleSheet.create({
     letterSpacing: -0.5,
     lineHeight: 26,
   },
-  card: { borderWidth: 1, borderRadius: 20, padding: 18, gap: 12 },
+  card: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    gap: 12,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 8px 24px var(--rc-shadow)" }
+      : {}),
+  },
   button: {
     minHeight: 48,
     borderRadius: 14,
@@ -149,7 +110,7 @@ export const ui = StyleSheet.create({
   tag: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: 999,
     alignSelf: "flex-start",
   },
   tagText: { fontSize: 13, fontWeight: "500", lineHeight: 19 },
@@ -159,7 +120,7 @@ export const ui = StyleSheet.create({
     justifyContent: "center",
     minHeight: 60,
     gap: 4,
-    borderRadius: 18,
+    borderRadius: 999,
   },
   tabLabel: { fontSize: 11, fontWeight: "500", lineHeight: 16 },
   tabs: {
@@ -181,7 +142,8 @@ export const ui = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "#070d2280",
+    backgroundColor:
+      Platform.OS === "web" ? "var(--rc-overlay)" : designTokens.light.overlay,
     justifyContent: "flex-end",
   },
   modalSheet: {
