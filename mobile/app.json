@@ -27,6 +27,13 @@
       "@react-native-community/datetimepicker",
       "expo-font"
     ],
-    "scheme": "recharge-preview"
+    "scheme": "recharge-preview",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bbaf2060-bce4-4135-b240-6cae1463133c"
+      }
+    },
+    "owner": "mrkrvn"
   }
 }

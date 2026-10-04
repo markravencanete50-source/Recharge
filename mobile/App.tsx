@@ -580,9 +580,9 @@ function AppContent() {
               />
               {tools
                 .filter((tool) =>
-                  `${tool.name} ${tool.category}`
+                  tool.name
                     .toLowerCase()
-                    .includes(search.toLowerCase()),
+                    .includes(search.trim().toLowerCase()),
                 )
                 .map((tool) => (
                   <Pressable
@@ -655,16 +655,16 @@ function AppContent() {
                   </Pressable>
                 ))}
               {!tools.some((tool) =>
-                `${tool.name} ${tool.category}`
+                tool.name
                   .toLowerCase()
-                  .includes(search.toLowerCase()),
+                  .includes(search.trim().toLowerCase()),
               ) && (
                 <View style={[ui.card, card]}>
                   <Text style={[ui.sectionTitle, { color: p.text }]}>
                     No matching tools
                   </Text>
                   <Text style={[ui.body, { color: p.muted }]}>
-                    Try another name or department.
+                    Try another feature title.
                   </Text>
                   <Action
                     label="Clear search"

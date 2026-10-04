@@ -1189,7 +1189,7 @@ function OperationsSection({
   const Icon = section.icon;
   const [toolSearch, setToolSearch] = useState("");
   const filteredModules = modules.filter((module) =>
-    `${module.name} ${module.description} ${module.category}`
+    module.name
       .toLowerCase()
       .includes(toolSearch.trim().toLowerCase()),
   );
