@@ -16,6 +16,19 @@ test("preview serves the application and synthetic property data", async () => {
   assert.equal(result.data.hostawayConnected, false);
 });
 
+test("hosted phone links serve the new mobile studio and reloadable mobile routes", async () => {
+  for (const path of ["/?view=phone", "/studio.html"]) {
+    const response = await fetch(base + path);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /Recharge mobile studio/);
+  }
+  for (const path of ["/home", "/analytics", "/workspace"]) {
+    const response = await fetch(base + path);
+    assert.match(await response.text(), /Recharge Mobile Preview/);
+    assert.match(response.headers.get("x-robots-tag"), /noindex/);
+  }
+});
+
 test("direct requests cannot mutate records or invoke integrations", async () => {
   for (const [path, method] of [["/api/access", "POST"], ["/api/property-database", "DELETE"], ["/api/maintenance", "PATCH"], ["/api/communications/hostaway/sync", "POST"], ["/api/onboarding/files", "POST"], ["/", "POST"]]) {
     const response = await fetch(`${base}${path}`, {method, headers: {"oai-authenticated-user-email": "enquiries@rechargestays.co.uk", "x-recharge-migration-key": "test"}});

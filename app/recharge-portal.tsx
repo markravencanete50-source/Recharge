@@ -593,7 +593,7 @@ export function RechargePortal({
         </header>
 
         <div key={view} className="workspace-view mx-auto max-w-[92rem] p-5 sm:p-8 lg:p-10">
-          {view === "analytics" && <AnalyticsBoard initialData={analyticsData || scopeAnalytics(currentUser, {})} preview={preview} />}
+          {view === "analytics" && <AnalyticsBoard initialData={analyticsData || scopeAnalytics(currentUser, {})} preview={preview} role={currentUser.role} />}
           {view === "my-recharge" &&
             currentUser.role === "stays" &&
             myRecharge && <MyRecharge initialData={myRecharge} />}

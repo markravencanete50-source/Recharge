@@ -8,6 +8,12 @@ Live snapshots are created on the server from the verified identity and current 
 
 Super admins and admins see workspace totals. Department users see workflows and sources allowed by their current module grants. A Cleans user whose email matches a cleaner sees only that cleaner's assigned jobs and properties. Schedule-only Cleans access without a cleaner match shows zero assigned jobs. Cleans management accounts without a cleaner association see department counts within their grants. Clients see their own maintenance requests, onboarding cases, mailbox activity and properties, matched by their verified email. Custom module grants also restrict analytics. An account with no granted sources has an explicit empty state. A revoked account cannot refresh its analytics; the UI clears its counters on an authorization rejection.
 
+## Report exports
+
+Admins and super admins can download a CSV report from Analytics. It contains the selected inclusive date range, summary totals, status counts, source availability and daily source counts. Excel-compatible UTF-8 output escapes CSV cells and neutralizes spreadsheet formulas. Current property totals and snapshot limits are explicitly labelled. This is an aggregate operational report, not an invoice ledger or individual-record export.
+
+Live downloads use GET /api/analytics/export. The server checks verified identity, current active admin access and a valid range of no more than 366 days before loading records. Client, cleaner, cleaning-manager, Stays and Ready roles cannot export, even if a request supplies an admin role. Responses are private and non-cacheable. The web preview and mobile preview export fictional records labelled SAMPLE DATA ONLY. Native devices open the system file-sharing sheet; browsers download the CSV. The native preview does not yet export live data.
+
 ## Interpretation
 
 Counts describe current statuses of records dated within the selection, not a historical reconstruction of status changes. Property counts are a current snapshot and are labelled accordingly. Source loaders currently limit workflows to 250, maintenance to 500, cleans to 1,500 and onboarding to 300 records before analytics filtering. Long ranges may therefore omit older records; the board displays this limitation. Unavailable sources contribute no counts. Linked work may appear in multiple sources. Booking revenue, occupancy and payment analytics require connected operational data and are not fabricated.

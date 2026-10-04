@@ -65,10 +65,10 @@ export function LineChart({
               strokeDasharray="3 5"
             />
           ))}
-          <SvgText x={4} y={25} fill={p.muted} fontSize={10}>
+          <SvgText x={4} y={25} fill={p.muted} fontSize={12}>
             {max}
           </SvgText>
-          <SvgText x={9} y={133} fill={p.muted} fontSize={10}>
+          <SvgText x={9} y={133} fill={p.muted} fontSize={12}>
             0
           </SvgText>
           <Polyline
@@ -106,7 +106,7 @@ export function LineChart({
               fill={p.chart}
             />
           )}
-          <SvgText x={28} y={153} fill={p.muted} fontSize={10}>
+          <SvgText x={28} y={153} fill={p.muted} fontSize={12}>
             {data.trend[0]?.date.split(" ").slice(0, 2).join(" ")}
           </SvgText>
           <SvgText
@@ -114,7 +114,7 @@ export function LineChart({
             y={153}
             textAnchor="end"
             fill={p.muted}
-            fontSize={10}
+            fontSize={12}
           >
             {data.trend.at(-1)?.date.split(" ").slice(0, 2).join(" ")}
           </SvgText>
@@ -239,7 +239,7 @@ export function StatusChart({
             x={90}
             y={110}
             textAnchor="middle"
-            fontSize={11}
+            fontSize={12}
             fill={p.muted}
           >
             {status ? status.name.toLowerCase() : "recorded items"}

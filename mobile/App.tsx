@@ -35,6 +35,9 @@ import { LineChart, QueueChart, StatusChart } from "./src/Charts";
 import { themes, ui, type Palette } from "./src/theme";
 import { WorkspaceScreens } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
+import { exportReport } from "./src/exportReport";
+import { analyticsCsv, analyticsFilename } from "../lib/analytics-export";
+import { isWorkspaceAdmin } from "../lib/modules";
 import { usePreviewBookmarks } from "./src/usePreviewPreferences";
 import { navigationFor, type WorkspaceSection } from "../lib/workspace-map";
 import {
@@ -290,7 +293,7 @@ function RecordRow({
         </Text>
         <Text style={[ui.small, { color: p.muted }]}>{record.subtitle}</Text>
         {record.date ? (
-          <Text style={{ color: p.muted, fontSize: 10 }}>{record.date}</Text>
+          <Text style={{ color: p.muted, fontSize: 12 }}>{record.date}</Text>
         ) : null}
       </View>
       <View style={[ui.tag, { backgroundColor: p.wash, maxWidth: 100 }]}>
@@ -349,6 +352,8 @@ function AppContent() {
   const [calendar, setCalendar] = useState(false);
   const [editingDate, setEditingDate] = useState<"from" | "to" | null>(null);
   const [chartData, setChartData] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
   const [fade] = useState(() => new Animated.Value(1));
   const reduced = useReducedMotion();
   const scroll = useRef<ScrollView>(null);
@@ -358,9 +363,15 @@ function AppContent() {
     [snapshot, period],
   );
   const tools = useMemo(() => toolsFor(role), [role]);
-  const savedCount = tools.filter((tool) =>
-    savedTools.includes(tool.id),
-  ).length;
+  async function exportCsv() {
+    if (!isWorkspaceAdmin(role) || exporting) return;
+    setExporting(true); setExportMessage("");
+    try {
+      await exportReport(analyticsCsv(snapshot, period, true), analyticsFilename(period));
+      setExportMessage(Platform.OS === "web" ? "Sample report downloaded." : "Sample report ready to save or share.");
+    } catch (error) { setExportMessage(error instanceof Error ? error.message : "Could not export. Please try again."); }
+    finally { setExporting(false); }
+  }
   const toolRecords = selectedTool ? recordsFor(role, selectedTool.id) : [];
   const visibleRecords = toolRecords.filter(
     (record) =>
@@ -397,6 +408,7 @@ function AppContent() {
   const card = { backgroundColor: p.surface, borderColor: p.border };
   const switchRole = (value: WorkspaceRole) => {
     setRole(value);
+    setExportMessage("");
     setSettings(false);
     setSearch("");
     setDepartment("All");
@@ -432,7 +444,7 @@ function AppContent() {
           {
             paddingHorizontal: 22,
             paddingVertical: 13,
-            borderBottomWidth: 1,
+            borderBottomWidth: 0,
             borderBottomColor: p.border,
             backgroundColor: p.surface,
           },
@@ -442,12 +454,12 @@ function AppContent() {
           <Text
             style={{
               color: p.text,
-              fontSize: 20,
-              fontWeight: "800",
+              fontSize: 23,
+              fontWeight: "700",
               letterSpacing: -0.6,
             }}
           >
-            RECHARGE
+            Recharge
           </Text>
           <Text
             style={{
@@ -457,7 +469,7 @@ function AppContent() {
               marginTop: 3,
             }}
           >
-            {roleLabel} · Sample workspace
+            {roleLabel} · Preview
           </Text>
         </View>
         <View style={[ui.row, { gap: 10 }]}>
@@ -528,6 +540,8 @@ function AppContent() {
                 </View>
                 <Feather name="chevron-down" size={16} color={p.muted} />
               </Pressable>
+              {isWorkspaceAdmin(role) && <Pressable accessibilityRole="button" accessibilityLabel="Export analytics CSV" accessibilityState={{ disabled: exporting }} disabled={exporting} onPress={exportCsv} style={[ui.button, ui.row, { backgroundColor: p.primary, justifyContent: "center", gap: 10 }]}><Feather name="download" size={18} color={p.onPrimary} /><Text style={[ui.buttonText, { color: p.onPrimary }]}>{exporting ? "Preparing report..." : "Export CSV report"}</Text></Pressable>}
+              {isWorkspaceAdmin(role) && exportMessage ? <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.text }]}>{exportMessage}</Text> : null}
               <View style={ui.statGrid}>
                 {statItems.map((item) => (
                   <Pressable
@@ -554,7 +568,7 @@ function AppContent() {
                     <Text style={[ui.statValue, { color: p.text }]}>
                       {item.value}
                     </Text>
-                    <Text style={{ color: p.muted, fontSize: 10 }}>
+                    <Text style={{ color: p.muted, fontSize: 12 }}>
                       {item.icon === "home"
                         ? "Current property snapshot"
                         : "In the selected period"}
@@ -564,8 +578,8 @@ function AppContent() {
               </View>
             </>
           )}
-          <WorkspaceScreens key={role} section={tab} role={role} palette={p} onNavigate={setTab} onOpen={openTool} onProfile={() => setSettings(true)} savedCount={savedCount} />
-          {tab === "workspace" && <ToolDirectory role={role} palette={p} query={search} onQuery={setSearch} area={department} onArea={setDepartment} saved={savedTools} onlySaved={savedOnly} onOnlySaved={() => setSavedOnly(!savedOnly)} onSave={toggleSaved} onOpen={openTool} storageError={bookmarksLoaded ? bookmarkError : "Loading saved tools"} />}
+          <WorkspaceScreens key={role} section={tab} role={role} palette={p} onNavigate={setTab} onOpen={openTool} onProfile={() => setSettings(true)} savedTools={savedTools} onDepartment={(department) => { setSearch(""); setDepartment(department); setSavedOnly(false); setTab("workspace"); }} />
+          {tab === "workspace" && <ToolDirectory role={role} palette={p} query={search} onQuery={setSearch} area={department} onArea={setDepartment} saved={savedTools} onlySaved={savedOnly} onOnlySaved={() => setSavedOnly(!savedOnly)} onSave={toggleSaved} onOpen={openTool} storageError={bookmarksLoaded ? bookmarkError : "Loading saved tools..."} />}
           {tab === "analytics" && (
             <>
               <Entrance

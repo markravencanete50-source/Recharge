@@ -12,9 +12,11 @@ Live URL: https://recharge-preview-28v.pages.dev
 
 Automatic deployments from the preview branch are enabled. The original `main` branch is unchanged.
 
-Build command: `npm run preview:build`
+Install both root and mobile dependencies before building: `npm ci` at the repository root, then `npm ci --prefix mobile`. Build command: `npm run preview:build`.
 
 Build output directory: `preview-dist`. The build includes a bundled `_worker.js` with the read-only API safeguards and `_routes.json` to handle every request. No application environment variables or database bindings are needed.
+
+The build also exports the Expo mobile components for the browser. `/studio.html` is the floating phone preview, and `/home`, `/analytics` and other mobile destinations reload through native.html. Existing `?view=phone` links open the new studio. The original desktop preview stays at the root. This browser view uses no Appetize minutes and is labelled as a browser preview.
 
 `preview/wrangler.jsonc` is an optional standalone Workers configuration for local verification or a later Workers deployment with `npm run preview:deploy`. Do not use the separate `wrangler.types.jsonc` type-generation configuration for deployment.
 

@@ -10,6 +10,10 @@ The first standalone EAS iOS Simulator build was uploaded to Appetize and ran su
 
 ## Run on this Windows laptop
 
+For a free browser view of the latest mobile UI, run `npx expo export --platform web --output-dir dist-web` from this folder and serve dist-web with a local static server that supports single-page routing. Open `/studio.html` for the floating phone view or `/home` for the full app. This uses the mobile components rendered for web and requires no Appetize minutes. It is a browser preview, not an iOS runtime.
+
+The October polish update adds recognizable department tiles, a grouped feature grid, clearer work status chips, readable report labels and admin-only CSV report downloads. Native exports open the system share sheet; browser exports download a file. All preview exports are clearly marked as sample data. Live report downloads use the server authorization endpoint described in ../docs/ANALYTICS.md.
+
 Run `scripts/start-mobile-preview.ps1` from the repository root. Android tools are installed in the current user's Android SDK directory. The launcher opens the emulator visibly, binds Metro to the local computer and opens the project in Expo Go. The first cold boot can take a few minutes. The development server must remain running while reviewing the app.
 
 For another development machine, install Android SDK tools and a compatible emulator, then run `npm ci` in this folder followed by `npx expo start --android`. Node 22.13 or newer is required. The iOS bundle can be exported on Windows; an iOS simulator requires a Mac. This is not a signed store build.

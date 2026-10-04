@@ -4,7 +4,11 @@ const worker = {
   async fetch(request: Request, env: { ASSETS: Fetcher }): Promise<Response> {
     const result = previewResponse(request);
     if (result) return result;
-    const asset = await env.ASSETS.fetch(request);
+    const url = new URL(request.url);
+    const mobileRoutes = ["/home", "/work", "/properties", "/inbox", "/more", "/workspace", "/analytics", "/calendar", "/approvals"];
+    if (mobileRoutes.includes(url.pathname)) url.pathname = "/native.html";
+    else if (url.pathname === "/" && url.searchParams.get("view") === "phone") url.pathname = "/studio.html";
+    const asset = await env.ASSETS.fetch(new Request(url, request));
     const response = new Response(asset.body, asset);
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
     response.headers.set("X-Content-Type-Options", "nosniff");

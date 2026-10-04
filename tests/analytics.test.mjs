@@ -16,7 +16,7 @@ const mocks = {
 };
 const vite = await createServer({ configFile: false, appType: "custom", root, resolve: { alias: { "@": root } }, server: { middlewareMode: true, hmr: false }, plugins: [{
   name: "analytics-route-isolation", enforce: "pre",
-  transform(code, id) { if (!id.replaceAll("\\", "/").endsWith("/app/api/analytics/route.ts")) return; for (const key of Object.keys(mocks)) code = code.replaceAll(`from "${key}"`, `from "analytics-test:${key}"`); return { code, map: null }; },
+  transform(code, id) { if (!/\/app\/api\/analytics\/(?:export\/)?route\.ts$/.test(id.replaceAll("\\", "/"))) return; for (const key of Object.keys(mocks)) code = code.replaceAll(`from "${key}"`, `from "analytics-test:${key}"`); return { code, map: null }; },
   resolveId(id) { return id.startsWith("analytics-test:") ? "\0" + id : null; },
   load(id) { return id.startsWith("\0analytics-test:") ? mocks[id.slice(16)] : null; },
 }] });
@@ -24,6 +24,8 @@ after(async () => { delete globalThis.__analyticsRouteTest; await vite.close(); 
 const { scopeAnalytics, buildAnalytics, buildWorkspaceAnalytics, periodError, presetPeriod, workspaceDateKey } = await vite.ssrLoadModule("/lib/analytics.ts");
 const { defaultModulesForRole } = await vite.ssrLoadModule("/lib/modules.ts");
 const route = await vite.ssrLoadModule("/app/api/analytics/route.ts");
+const exportRoute = await vite.ssrLoadModule("/app/api/analytics/export/route.ts");
+const { analyticsCsv } = await vite.ssrLoadModule("/lib/analytics-export.ts");
 const at = value => new Date(value).getTime() / 1000;
 const date = at("2026-10-03T12:00:00Z");
 const viewer = (role, email = "me@example.com", modules = defaultModulesForRole(role)) => ({ role, email, modules, status: "active" });
@@ -130,4 +132,42 @@ test("analytics API requires verified identity and active access, ignoring calle
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   const data = (await response.json()).data;
   assert.equal(data.title, "My property analytics"); assert.equal(buildAnalytics(data, period).total, 4);
+});
+
+test("report downloads require active admin identity and reject forged roles, revoked users and invalid dates", async () => {
+  const request = new Request("https://recharge.example/api/analytics/export?from=2026-10-03&to=2026-10-03&role=super_admin");
+  Object.assign(state, { user: null, profile: null, input });
+  assert.equal((await exportRoute.GET(request)).status, 401);
+  state.user = { email: "me@example.com", displayName: "Example" };
+  for (const role of ["client", "cleans", "cleaning_manager", "ready", "stays"]) {
+    state.profile = viewer(role);
+    assert.equal((await exportRoute.GET(request)).status, 403);
+  }
+  for (const status of ["revoked", "pending", "suspended"]) {
+    state.profile = { ...viewer("super_admin"), status };
+    assert.equal((await exportRoute.GET(request)).status, 403);
+  }
+  for (const role of ["admin", "super_admin"]) {
+    state.profile = viewer(role);
+    const response = await exportRoute.GET(request);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.match(response.headers.get("content-disposition"), /2026-10-03-2026-10-03.csv/);
+    assert.match(await response.text(), /"Recorded items","10"/);
+    assert.equal((await exportRoute.GET(new Request("https://recharge.example/api/analytics/export?from=2026-02-30&to=2026-03-01"))).status, 400);
+  }
+});
+
+test("CSV exports reconcile with selected charts, distinguish unavailable data and neutralize spreadsheet formulas", () => {
+  const snapshot = scopeAnalytics(viewer("admin"), { ...input, cleans: { ...input.cleans, available: false } });
+  snapshot.title = '=HYPERLINK("evil")';
+  const csv = analyticsCsv(snapshot, period, true);
+  assert.match(csv, /SAMPLE DATA ONLY/);
+  assert.match(csv, /"Recorded items","7"/);
+  assert.match(csv, /Not connected, excluded/);
+  assert.match(csv, /"Report","'=HYPERLINK\(""evil""\)"/);
+  assert.match(csv, /current snapshot, not date-filtered/);
+  const empty = analyticsCsv(snapshot, { from: "2020-01-01", to: "2020-01-02" });
+  assert.match(empty, /"Recorded items","0"/);
+  assert(!empty.includes("private description"));
 });

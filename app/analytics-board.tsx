@@ -2,10 +2,13 @@
 
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { Activity, CircleCheck, Clock3, Building2, RefreshCw } from "lucide-react";
+import { Activity, CircleCheck, Clock3, Building2, RefreshCw, Download } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { buildAnalytics, periodLabel, presetPeriod, type AnalyticsSnapshot } from "@/lib/analytics";
 import { AnalyticsDateRange } from "@/app/analytics-date-range";
+import { isWorkspaceAdmin, type WorkspaceRole } from "@/lib/modules";
+import { analyticsCsv, analyticsFilename } from "@/lib/analytics-export";
+import { downloadReport } from "@/lib/download-report";
 
 const colours = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"];
 function subscribeMotion(callback: () => void) {
@@ -13,15 +16,29 @@ function subscribeMotion(callback: () => void) {
   preference.addEventListener("change", callback);
   return () => preference.removeEventListener("change", callback);
 }
-export function AnalyticsBoard({ initialData, preview }: { initialData: AnalyticsSnapshot; preview: boolean }) {
+export function AnalyticsBoard({ initialData, preview, role }: { initialData: AnalyticsSnapshot; preview: boolean; role: WorkspaceRole }) {
   const [period, setPeriod] = useState(() => presetPeriod(30));
   const [choice, setChoice] = useState("30");
   const [data, setData] = useState(initialData);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const [updated, setUpdated] = useState<Date | null>(null);
   const motion = useSyncExternalStore(subscribeMotion, () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches, () => false);
   const metrics = useMemo(() => buildAnalytics(data, period), [data, period]);
+  async function exportCsv() {
+    if (!isWorkspaceAdmin(role) || exporting) return;
+    setExporting(true); setError("");
+    try {
+      if (preview) downloadReport(analyticsCsv(data, period, true), analyticsFilename(period));
+      else {
+        const response = await fetch(`/api/analytics/export?${new URLSearchParams(period)}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "Active admin access is required to export reports." : "Could not export the report. Try again.");
+        downloadReport(await response.text(), analyticsFilename(period));
+      }
+    } catch (error) { setError(error instanceof Error ? error.message : "Report export unavailable."); }
+    finally { setExporting(false); }
+  }
   async function refresh() {
     setRefreshing(true); setError("");
     try {
@@ -48,6 +65,7 @@ export function AnalyticsBoard({ initialData, preview }: { initialData: Analytic
       <div className="analytics-controls">
         <AnalyticsDateRange period={period} choice={choice} onChange={(next, nextChoice) => { setPeriod(next); setChoice(nextChoice); }} />
         <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh analytics"><RefreshCw size={17} className={refreshing ? "animate-spin" : ""} /></button>
+        {isWorkspaceAdmin(role) && <button type="button" onClick={exportCsv} disabled={exporting}><Download size={17} />{exporting ? "Exporting..." : "Export CSV"}</button>}
       </div>
     </div>
     <p className="analytics-period-summary" role="status">{periodLabel(period)}<span>UK dates, both dates included</span></p>

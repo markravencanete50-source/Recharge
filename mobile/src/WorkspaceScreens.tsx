@@ -8,9 +8,15 @@ import { departmentColor, ui, type Palette } from "./theme";
 import { approvalItems, inboxFor, isComplete, isWaiting, propertiesFor, toolsFor, workFor, type PreviewRecord, type Tool, type WorkspaceRole, type WorkItem } from "./model";
 import { calendarCells, WORKSPACE_MAP, type WorkspaceSection } from "../../lib/workspace-map";
 import { presetPeriod } from "../../lib/analytics";
+import { DepartmentGrid } from "./DepartmentGrid";
 
 type IconName = ComponentProps<typeof Feather>["name"];
-type Props = { section: WorkspaceSection; role: WorkspaceRole; palette: Palette; onNavigate: (section: WorkspaceSection) => void; onOpen: (tool: Tool, record?: PreviewRecord) => void; onProfile: () => void; savedCount: number };
+type Props = { section: WorkspaceSection; role: WorkspaceRole; palette: Palette; onNavigate: (section: WorkspaceSection) => void; onOpen: (tool: Tool, record?: PreviewRecord) => void; onProfile: () => void; onDepartment: (department: string) => void; savedTools: string[] };
+
+function displayDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "No date set";
+  return new Date(`${value}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
 
 function LinkRow({ title, subtitle, icon, palette: p, onPress }: { title: string; subtitle?: string; icon: IconName; palette: Palette; onPress: () => void }) {
   return <Pressable accessibilityRole="button" onPress={onPress} style={[ui.row, { gap: 14, minHeight: 68, paddingVertical: 12 }]}>
@@ -26,7 +32,7 @@ export function WorkRow({ item, palette: p, onPress }: { item: WorkItem; palette
     <View style={{ flex: 1, gap: 5 }}>
       <Text style={{ color: p.text, fontSize: 16, lineHeight: 22, fontWeight: "600" }}>{item.record.title}</Text>
       <Text style={[ui.small, { color: p.muted }]}>{item.tool.name}</Text>
-      <Text style={[ui.small, { color: p.muted }]}>{item.record.date || "No date set"} · {item.record.status.replaceAll("_", " ")}</Text>
+      <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}><View style={[ui.row, { backgroundColor: tone.wash, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, gap: 5 }]}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: isWaiting(item.record.status) ? p.waiting : p.chart }} /><Text style={{ fontSize: 12, lineHeight: 18, color: tone.ink, fontWeight: "500" }}>{item.record.status.replaceAll("_", " ")}</Text></View><Text style={{ fontSize: 12, lineHeight: 18, color: p.muted }}>{displayDate(item.record.date)}</Text></View>
     </View>
     <Feather name="chevron-right" size={18} color={p.muted} />
   </Pressable>;
@@ -52,7 +58,7 @@ function Calendar({ selected, onSelect, palette: p, items }: { selected: string;
     setMonth(date.toISOString().slice(0, 7));
   };
   const dates = new Set(items.map(item => item.record.date));
-  return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingHorizontal: width < 350 ? 4 : 16, marginHorizontal: width < 350 ? -20 : 0 }]}>
+  return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingHorizontal: width < 350 ? 4 : 16, marginHorizontal: width < 350 ? -22 : 0 }]}>
     <View style={ui.between}>
       <Pressable accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => moveMonth(-1)} style={[ui.iconButton, { backgroundColor: p.wash }]}><Feather name="chevron-left" size={20} color={p.text} /></Pressable>
       <Text style={{ fontSize: 16, fontWeight: "600", color: p.text }}>{new Date(`${month}-15T12:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })}</Text>
@@ -65,7 +71,7 @@ function Calendar({ selected, onSelect, palette: p, items }: { selected: string;
   </View>;
 }
 
-export function WorkspaceScreens({ section, role, palette: p, onNavigate, onOpen, onProfile, savedCount }: Props) {
+export function WorkspaceScreens({ section, role, palette: p, onNavigate, onOpen, onProfile, onDepartment, savedTools }: Props) {
   const items = useMemo(() => workFor(role), [role]);
   const properties = useMemo(() => propertiesFor(role), [role]);
   const [query, setQuery] = useState("");
@@ -91,18 +97,21 @@ export function WorkspaceScreens({ section, role, palette: p, onNavigate, onOpen
   const heading = (title: string, subtitle: string) => <View style={{ gap: 6 }}><Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{title}</Text><Text style={[ui.body, { color: p.muted }]}>{subtitle}</Text></View>;
   const search = (placeholder: string) => <View style={[ui.row, { borderRadius: 14, minHeight: 50, borderWidth: 1, borderColor: p.muted, paddingHorizontal: 14, backgroundColor: p.surface, gap: 10 }]}><Feather name="search" size={18} color={p.muted} /><TextInput accessibilityLabel={placeholder} placeholder={placeholder} placeholderTextColor={p.muted} value={searchQuery} onChangeText={updateQuery} autoCorrect={false} style={{ flex: 1, color: p.text, fontSize: 16, minHeight: 48 }} />{searchQuery ? <Pressable accessibilityLabel="Clear search" accessibilityRole="button" onPress={() => updateQuery("")} style={{ minHeight: 48, width: 40, alignItems: "center", justifyContent: "center" }}><Feather name="x" color={p.text} size={18} /></Pressable> : null}</View>;
   const openRow = (item: WorkItem) => <WorkRow key={`${item.tool.id}:${item.record.id}`} item={item} palette={p} onPress={() => onOpen(item.tool, item.record)} />;
+  const saved = toolsFor(role).filter(tool => savedTools.includes(tool.id));
 
   return <>
     {section === "home" ? <>
-      {heading(role === "client" ? "Your properties, in focus." : role === "cleans" ? "Your day, ready." : "The work that matters.", role === "client" ? "Decisions, updates and progress in one place." : role === "cleans" ? "Your assigned jobs and next steps." : "A clear view of what needs attention.")}
-      <Entrance style={[ui.card, { backgroundColor: p.primary, borderColor: p.primary, padding: 20 }]}>
-        <View style={ui.between}><View style={{ flex: 1, gap: 8 }}><Text style={{ color: p.onPrimary, fontSize: 13, fontWeight: "600" }}>{role === "client" ? "PENDING DECISIONS" : "ACTIVE WORK"}</Text><Text style={{ color: p.onPrimary, fontSize: 36, fontWeight: "700" }}>{role === "client" ? approvalItems(role).length : pending.length}</Text></View><View style={{ width: 72, height: 72, borderRadius: 24, backgroundColor: p.background }}><Artwork id={role === "client" ? "client-purchase-order-quotes" : role === "cleans" ? "cleaning-schedule" : "new-property-inspection-board"} size={72} /></View></View>
-        <Pressable accessibilityRole="button" onPress={() => role === "client" ? onNavigate("approvals") : openQueue()} style={[ui.between, { minHeight: 48, borderTopWidth: 1, borderColor: p.onPrimary, paddingTop: 10, gap: 10 }]}><Text style={{ color: p.onPrimary, fontSize: 16, fontWeight: "600", flex: 1 }}>{role === "client" ? "Review your approvals" : "Open your work queue"}</Text><Feather name="arrow-right" size={20} color={p.onPrimary} /></Pressable>
-      </Entrance>
-      <View style={[ui.row, { gap: 12 }]}>{[{ value: properties.length, label: role === "cleans" ? "Assigned properties" : "Properties", section: "properties" as const, icon: "home" as const }, { value: waiting.length, label: "Waiting", section: role === "client" ? "approvals" as const : "work" as const, icon: "clock" as const }].map(stat => <Pressable key={stat.label} accessibilityRole="button" onPress={() => stat.section === "work" ? openQueue("Waiting") : onNavigate(stat.section)} style={[ui.card, card, { flex: 1, padding: 15 }]}><Feather name={stat.icon} size={19} color={p.primary} /><Text style={{ color: p.text, fontSize: 27, fontWeight: "700" }}>{stat.value}</Text><Text style={[ui.small, { color: p.muted }]}>{stat.label}</Text></Pressable>)}</View>
-      <View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Next up</Text><Pressable accessibilityRole="button" accessibilityLabel="See all work" onPress={() => openQueue()} style={{ minHeight: 48, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>See all</Text></Pressable></View>
-      {pending.length ? <View style={[ui.card, card, { paddingVertical: 0 }]}>{pending.slice(0, 3).map(openRow)}</View> : <Empty title="Nothing waiting here" detail="There are no active sample tasks in your workspace." palette={p} />}
-      <View style={[ui.card, card, { paddingVertical: 0 }]}><LinkRow title="Your reports" subtitle="Trends and progress within your access" icon="bar-chart-2" palette={p} onPress={() => onNavigate("analytics")} /><LinkRow title="All tools" subtitle={`${toolsFor(role).length} features in your workspace`} icon="grid" palette={p} onPress={() => onNavigate("workspace")} /></View>
+      <View style={{ gap: 7 }}><Text style={[ui.eyebrow, { color: p.muted, marginBottom: 0 }]}>YOUR WORKSPACE</Text><View style={ui.between}><Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{role === "cleans" ? "Today" : role === "client" ? "At a glance" : "Overview"}</Text><View style={[ui.row, { backgroundColor: p.surface, borderRadius: 12, padding: 10, gap: 7, borderWidth: 1, borderColor: p.border }]}><Feather name="calendar" size={15} color={p.primary} /><Text style={{ color: p.text, fontSize: 12, fontWeight: "600" }}>{displayDate(presetPeriod(1).to).replace(/ \d{4}$/, "")}</Text></View></View><Text style={[ui.body, { color: p.muted }]}>Your properties. Your people. One clear view.</Text></View>
+      <View style={[ui.row, { backgroundColor: p.surface, borderRadius: 22, borderWidth: 1, borderColor: p.border, paddingVertical: 6 }]}>
+        {[{ label: role === "client" ? "Approvals" : "Open tasks", value: role === "client" ? approvalItems(role).length : pending.length, icon: "check-square" as const, action: () => role === "client" ? onNavigate("approvals") : openQueue() }, { label: "Waiting", value: waiting.length, icon: "clock" as const, action: () => openQueue("Waiting") }, { label: "Properties", value: properties.length, icon: "home" as const, action: () => onNavigate("properties") }].map((stat, index) => <Pressable key={stat.label} accessibilityRole="button" accessibilityLabel={stat.label + ": " + stat.value} onPress={stat.action} style={{ flex: 1, gap: 7, padding: 13, borderRightWidth: index < 2 ? 1 : 0, borderColor: p.border }}><Feather name={stat.icon} size={17} color={p.primary} /><Text style={{ fontSize: 28, fontWeight: "700", letterSpacing: -1, color: p.text }}>{stat.value}</Text><Text style={{ color: p.muted, fontSize: 12, lineHeight: 17, fontWeight: "500" }}>{stat.label}</Text></Pressable>)}
+      </View>
+      <Entrance><Pressable accessibilityRole="button" accessibilityLabel={role === "client" ? "Review your approvals" : "Open your work queue"} onPress={() => role === "client" ? onNavigate("approvals") : openQueue()} style={{ backgroundColor: "#234f40", borderRadius: 24, padding: 20, gap: 14, overflow: "hidden" }}>
+        <View accessible={false} style={{ position: "absolute", right: -32, top: -40, width: 164, height: 164, borderRadius: 90, borderWidth: 1, borderColor: "#416958" }} />
+        <View style={[ui.row, { gap: 15 }]}><View style={{ flex: 1, gap: 8 }}><View style={[ui.row, { gap: 6 }]}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#d7e4bc" }} /><Text style={{ color: "#d7e4bc", fontSize: 12, fontWeight: "600", letterSpacing: 0.5 }}>{role === "client" ? "DECISIONS & UPDATES" : "OPERATIONS"}</Text></View><Text style={{ color: "#ffffff", fontSize: 23, lineHeight: 29, letterSpacing: -0.5, fontWeight: "600" }}>{role === "client" ? "Keep things moving." : role === "cleans" ? "Your next clean starts here." : "Keep your team on track."}</Text></View><Artwork id={role === "cleans" ? "cleaning-schedule" : role === "client" ? "client-purchase-order-quotes" : "new-property-inspection-board"} size={68} /></View>
+        <View style={ui.between}><Text style={{ color: "#ffffff", fontSize: 14, fontWeight: "500" }}>{role === "client" ? "Review approvals" : "View open tasks"}</Text><View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#d7e4bc", alignItems: "center", justifyContent: "center" }}><Feather name="arrow-right" size={18} color="#234f40" /></View></View>
+      </Pressable></Entrance>
+      <View style={{ gap: 14 }}><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Departments</Text><Text style={[ui.small, { color: p.muted }]}>Within your access</Text></View><DepartmentGrid role={role} palette={p} onSelect={onDepartment} /></View>
+      <View style={{ gap: 8 }}><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Needs attention</Text><Pressable accessibilityRole="button" accessibilityLabel="See all work" onPress={() => openQueue()} style={{ minHeight: 48, justifyContent: "center", paddingLeft: 12 }}><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>View all</Text></Pressable></View>{pending.length ? <View style={[ui.card, card, { paddingVertical: 0 }]}>{pending.slice(0, 3).map(openRow)}</View> : <Empty title="You're up to date" detail="There are no active sample tasks in this workspace." palette={p} />}</View>
     </> : null}
 
     {section === "work" || section === "calendar" ? <>
@@ -128,7 +137,12 @@ export function WorkspaceScreens({ section, role, palette: p, onNavigate, onOpen
 
     {section === "inbox" ? <>{heading("Inbox", "Property mail and conversations within your access.")}{inbox.length ? <View style={[ui.card, card, { paddingVertical: 0 }]}>{inbox.map(openRow)}</View> : <Empty title="No sample messages" detail="Connected conversation channels will appear here when configured." palette={p} icon="message-circle" />}</> : null}
 
-    {section === "more" ? <>{heading("Your workspace", "The right tools, without the clutter.")}<View style={[ui.card, card, { paddingVertical: 0 }]}><LinkRow title="All tools" subtitle={`${toolsFor(role).length} available features`} icon="grid" palette={p} onPress={() => onNavigate("workspace")} /><LinkRow title="Reports and analytics" subtitle="Choose dates and explore your progress" icon="bar-chart-2" palette={p} onPress={() => onNavigate("analytics")} /><LinkRow title="Calendar" subtitle="Your dated work and visits" icon="calendar" palette={p} onPress={() => onNavigate("calendar")} /><LinkRow title="Inbox" subtitle={`${inbox.length} sample ${inbox.length === 1 ? "conversation" : "items"}`} icon="message-circle" palette={p} onPress={() => onNavigate("inbox")} /><LinkRow title="Profile and preferences" subtitle="Your name, avatar and preview role" icon="user" palette={p} onPress={onProfile} /></View><View style={[ui.card, card]}><Text style={[ui.sectionTitle, { color: p.text }]}>Your saved tools</Text><Text style={[ui.body, { color: p.muted }]}>{savedCount ? `${savedCount} bookmarked features are ready in your tool directory.` : "Bookmark a feature in All tools to keep it close."}</Text></View></> : null}
+    {section === "more" ? <>
+      {heading("Workspace", "Choose a department. Find your next action.")}
+      <DepartmentGrid role={role} palette={p} onSelect={onDepartment} />
+      <View style={{ gap: 12 }}><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Pinned tools</Text><Feather name="bookmark" color={p.primary} size={18} /></View>{saved.length ? <View style={[ui.card, card, { paddingVertical: 0 }]}>{saved.map(tool => <LinkRow key={tool.id} title={tool.name} icon={WORKSPACE_MAP[tool.id].icon as IconName} palette={p} onPress={() => onOpen(tool)} />)}</View> : <View style={[ui.card, card, { flexDirection: "row", alignItems: "center", gap: 14 }]}><View style={{ padding: 12, borderRadius: 14, backgroundColor: p.wash }}><Feather name="bookmark" color={p.primary} size={22} /></View><View style={{ flex: 1, gap: 4 }}><Text style={{ color: p.text, fontSize: 16, fontWeight: "600" }}>Make it yours</Text><Text style={[ui.small, { color: p.muted }]}>Save frequently used tools to find them here.</Text></View></View>}</View>
+      <View style={{ gap: 12 }}><Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Quick access</Text><View style={[ui.card, card, { paddingVertical: 0 }]}><LinkRow title="Reports and analytics" subtitle="Date ranges, trends and reporting" icon="bar-chart-2" palette={p} onPress={() => onNavigate("analytics")} /><LinkRow title="Calendar" subtitle="Plan your work and property visits" icon="calendar" palette={p} onPress={() => onNavigate("calendar")} /><LinkRow title="Inbox" subtitle={inbox.length + " sample items"} icon="message-circle" palette={p} onPress={() => onNavigate("inbox")} /><LinkRow title="Profile and preferences" subtitle="Personalize your workspace" icon="user" palette={p} onPress={onProfile} /></View></View>
+    </> : null}
 
     <Modal visible={Boolean(selectedProperty)} animationType={reduced ? "none" : "slide"} onRequestClose={() => setSelectedProperty(null)} onDismiss={() => { if (pendingTool) { setPendingTool(null); onOpen(pendingTool); } }}>
       <SafeAreaProvider>
