@@ -65,6 +65,24 @@ export const cleans: CleansData = {
   cleaners: [{id: "demo-cleaner", fullName: "Example cleaner", email: "cleaner@example.com", phone: "", notes: "Fictional preview team member", status: "active", assignedProperties: 2, approvedCleans: 0, unsuccessfulCleans: 0, successRate: null}],
   properties: demoProperties.map(p => ({id: p.id, hostawayListingId: null, propertyName: p.propertyName, propertyAddress: p.propertyAddress, accessInstructions: "No real access details in preview", clientName: p.ownerName, clientEmail: p.ownerEmail, cleanerId: "demo-cleaner", cleanerName: "Example cleaner", cleanPricePence: 6500, status: "active"})),
 };
+// Separate fictional owners and cleaner assignments exercise dashboard isolation.
+cleans.tickets.push(...Array.from({ length: 14 }, (_, i) => ({
+  id: `sample-clean-${i}`, hostawayReservationId: null, hostawayListingId: null,
+  propertyId: demoProperties[i % 2].id, propertyName: demoProperties[i % 2].propertyName,
+  propertyAddress: "Example address, Scotland", guestName: "Example guest", guestCount: 2,
+  bookingReference: `DEMO-${i}`, arrivalDate: null, cleanDate: new Date((now - i * 86400) * 1000).toISOString().slice(0, 10), channelName: "Sample booking",
+  assignedCleanerId: i < 10 ? "demo-cleaner" : "other-demo-cleaner", assignedCleanerName: i < 10 ? "Example cleaner" : "Another sample cleaner",
+  status: (["scheduled", "in_progress", "approved"] as const)[i % 3],
+  broadbandWorking: null, heatingWorking: null, hotWaterWorking: null, maintenanceNotes: "", replenishmentNotes: "",
+  mailPresent: false, mailNotes: "", guestConfirmationNotes: "", complaintNotes: "", refundOrCancellation: false,
+  invoiceWeek: null, submittedAt: null, approvedAt: null, unsuccessfulAt: null, invoicedAt: null, files: [],
+})));
+cleans.mail.push(...Array.from({ length: 4 }, (_, i) => ({
+  id: `sample-mail-${i}`, cleanTicketId: `sample-clean-${i}`, propertyName: "Example Edinburgh Apartment",
+  propertyAddress: "Example address, Scotland", clientEmail: i < 3 ? "preview@example.com" : "another-owner@example.com",
+  note: "Fictional mail item for design review", photoFileId: null,
+  status: i === 1 ? "reviewed" as const : "new" as const, createdAt: now - i * 86400,
+})));
 export const operations: OperationsData = {
   available: true, properties: demoProperties.map(p => ({id: p.id, name: p.propertyName, address: p.propertyAddress, region: p.region, status: p.status, clientEmail: p.ownerEmail})),
   routineMaintenanceBookings: [], routineInspectionSubmissions: [],

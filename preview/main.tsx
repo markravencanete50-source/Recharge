@@ -4,6 +4,7 @@ import { RechargePortal } from "@/app/recharge-portal";
 import { WorkspaceTheme } from "@/components/workspace-theme";
 import { defaultModulesForRole, type WorkspaceRole } from "@/lib/modules";
 import { accessUsers, properties, workflows, communications, maintenance, onboarding, cleans } from "./fixtures";
+import { scopeAnalytics } from "@/lib/analytics";
 import "@/app/globals.css";
 import "./preview.css";
 
@@ -27,10 +28,10 @@ function Preview() {
       </select></label>
     </section>
     <div className="preview-workspace"><RechargePortal key={role} preview
-      currentUser={{ name: "Preview user", email: "preview@example.com", role, modules: defaultModulesForRole(role) }}
+      currentUser={{ name: "Preview user", email: role === "cleans" ? "cleaner@example.com" : "preview@example.com", role, modules: defaultModulesForRole(role) }}
       accessUsers={accessUsers} propertyDatabaseData={properties} workflowData={workflows}
       communicationData={communications} maintenanceData={maintenance} onboardingData={{...onboarding, mode: role === "client" ? "client" : "staff"}}
-      cleansData={cleans} signOutPath="/" />
+      cleansData={cleans} analyticsData={scopeAnalytics({ email: role === "cleans" ? "cleaner@example.com" : "preview@example.com", role, modules: defaultModulesForRole(role) }, {workflows, maintenance, cleans, onboarding, properties})} signOutPath="/" />
     </div>
   </>;
 }

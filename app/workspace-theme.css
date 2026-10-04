@@ -79,6 +79,34 @@ html.dark * { scrollbar-width: thin; scrollbar-color: #607c6a transparent; }
 .department-illustration img { position: absolute; max-width: none; object-fit: fill; }
 .theme-toggle:focus-visible, .analytics-controls :is(button, select):focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
 .analytics-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-top: 12px; }
+.analytics-heading { flex-wrap: wrap; }
+.analytics-controls { flex-wrap: wrap; }
+.analytics-controls .analytics-calendar-trigger { display: inline-flex; width: auto; min-width: 130px; padding: 0 14px; gap: 8px; align-items: center; justify-content: center; white-space: nowrap; }
+.analytics-calendar-trigger svg { flex-shrink: 0; }
+.analytics-period-summary { margin: 20px 0 0; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 13px; font-weight: 600; }
+.analytics-period-summary span { color: var(--muted-foreground); font-size: 11px; font-weight: 400; }
+.analytics-range-dialog[data-slot="dialog-content"] { width: min(720px, calc(100vw - 32px)); max-width: 720px; background: var(--card); color: var(--foreground); }
+.analytics-range-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.analytics-range-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.analytics-range-fields label { display: grid; gap: 8px; font-size: 12px; font-weight: 600; }
+.analytics-range-fields input { min-width: 0; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--input); border-radius: 10px; background: var(--background); color: var(--foreground); font-size: 13px; }
+.dark .analytics-range-fields input { color-scheme: dark; }
+.analytics-range-fields input:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.analytics-range-dialog .analytics-calendar { width: 100%; padding: 8px 0; background: transparent; --cell-size: 40px; }
+.analytics-calendar .rdp-months { justify-content: space-between; gap: 24px; }
+.analytics-calendar .rdp-month { min-width: 0; }
+.analytics-calendar .rdp-day button { min-height: 40px; }
+.analytics-calendar .rdp-dropdown_root { min-height: 32px; }
+.analytics-range-summary { font-size: 12px; color: var(--muted-foreground); }
+.analytics-legend { flex-wrap: wrap; }
+@media(max-width: 640px) {
+  .analytics-range-dialog[data-slot="dialog-content"] { padding: 20px; }
+  .analytics-range-dialog .analytics-calendar { --cell-size: 36px; }
+  .analytics-range-fields input { padding: 8px; font-size: 12px; }
+  .analytics-range-presets button { flex: 1; padding-inline: 8px; font-size: 11px; }
+  .analytics-controls .analytics-calendar-trigger { flex: 1; }
+  .analytics-heading h1 { font-size: 32px; }
+}
 .analytics-heading h1 { font-size: clamp(32px, 4vw, 44px); font-weight: 600; letter-spacing: -.045em; line-height: 1.2; }
 .analytics-heading p { margin-top: 10px; color: var(--muted-foreground); }
 .analytics-controls { display: flex; align-items: center; gap: 8px; }

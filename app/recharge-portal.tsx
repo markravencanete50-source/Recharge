@@ -7,6 +7,7 @@ import { ToolIllustration } from "@/components/tool-illustration";
 import { DepartmentIllustration } from "@/components/department-illustration";
 import { ThemeToggle } from "@/components/workspace-theme";
 import { AnalyticsBoard } from "@/app/analytics-board";
+import { scopeAnalytics, type AnalyticsSnapshot } from "@/lib/analytics";
 import {
   Activity,
   ArrowUpRight,
@@ -328,6 +329,7 @@ export function RechargePortal({
   onboardingData,
   cleansData,
   signOutPath,
+  analyticsData,
   preview = false,
 }: {
   currentUser: CurrentUser;
@@ -340,6 +342,7 @@ export function RechargePortal({
   onboardingData?: OnboardingData;
   cleansData?: CleansData;
   signOutPath: string;
+  analyticsData?: AnalyticsSnapshot;
   preview?: boolean;
 }) {
   const [view, setView] = useState<View>(currentUser.role === "super_admin" ? "analytics" : defaultDepartment(currentUser.role));
@@ -516,7 +519,7 @@ export function RechargePortal({
             </div>
           )}
 
-          {isWorkspaceAdmin(currentUser.role) && <div className="mt-4 space-y-1"><NavButton active={view === "analytics"} icon={BarChart3} index="07" label="Analytics" onClick={() => changeView("analytics")} /></div>}
+          <div className="mt-4 space-y-1"><NavButton active={view === "analytics"} icon={BarChart3} index="07" label="Analytics" onClick={() => changeView("analytics")} /></div>
 
           {isWorkspaceAdmin(currentUser.role) && (
             <div className="mt-7 space-y-2">
@@ -565,7 +568,7 @@ export function RechargePortal({
               <Menu className="size-5" />
             </button>
             <div>
-              <p className="text-sm font-semibold">{viewTitle(view, maintenanceWorkspace)}</p>
+              <p className="text-sm font-semibold">{view === "analytics" ? analyticsData?.title || "My analytics" : viewTitle(view, maintenanceWorkspace)}</p>
               <p className="hidden text-xs text-[var(--muted-foreground)] sm:block">
                 Perfection at every stage.
               </p>
@@ -589,7 +592,7 @@ export function RechargePortal({
         </header>
 
         <div key={view} className="workspace-view mx-auto max-w-[92rem] p-5 sm:p-8 lg:p-10">
-          {view === "analytics" && (currentUser.role === "super_admin" || isWorkspaceAdmin(currentUser.role)) && <AnalyticsBoard initialData={{ workflows: workflowData, maintenance: maintenanceData, cleans: cleansData }} propertyCount={propertyDatabaseData?.properties.length || 0} preview={preview} />}
+          {view === "analytics" && <AnalyticsBoard initialData={analyticsData || scopeAnalytics(currentUser, {})} preview={preview} />}
           {view === "my-recharge" &&
             currentUser.role === "stays" &&
             myRecharge && <MyRecharge initialData={myRecharge} />}

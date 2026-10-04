@@ -4,7 +4,8 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { Activity, CircleCheck, Clock3, Building2, RefreshCw } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { buildWorkspaceAnalytics, type AnalyticsInput } from "@/lib/analytics";
+import { buildAnalytics, periodLabel, presetPeriod, type AnalyticsSnapshot } from "@/lib/analytics";
+import { AnalyticsDateRange } from "@/app/analytics-date-range";
 
 const colours = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"];
 function subscribeMotion(callback: () => void) {
@@ -12,56 +13,53 @@ function subscribeMotion(callback: () => void) {
   preference.addEventListener("change", callback);
   return () => preference.removeEventListener("change", callback);
 }
-export function AnalyticsBoard({ initialData, propertyCount, preview }: { initialData: AnalyticsInput; propertyCount: number; preview: boolean }) {
-  const [days, setDays] = useState(30);
+export function AnalyticsBoard({ initialData, preview }: { initialData: AnalyticsSnapshot; preview: boolean }) {
+  const [period, setPeriod] = useState(() => presetPeriod(30));
+  const [choice, setChoice] = useState("30");
   const [data, setData] = useState(initialData);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [updated, setUpdated] = useState<Date | null>(null);
   const motion = useSyncExternalStore(subscribeMotion, () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches, () => false);
-  const metrics = useMemo(() => buildWorkspaceAnalytics(data, days), [data, days]);
+  const metrics = useMemo(() => buildAnalytics(data, period), [data, period]);
   async function refresh() {
     setRefreshing(true); setError("");
     try {
-      const results = await Promise.all([
-        fetch("/api/workflows/tickets", { cache: "no-store" }),
-        fetch("/api/maintenance", { cache: "no-store" }),
-        fetch("/api/cleans", { cache: "no-store" }),
-      ]);
-      const next = { ...data };
-      const keys = ["workflows", "maintenance", "cleans"] as const;
-      let failures = 0;
-      for (let i = 0; i < results.length; i++) {
-        if (!results[i].ok) { failures++; continue; }
-        const result = await results[i].json() as { data?: unknown };
-        if (!result.data) { failures++; continue; }
-        // All three endpoints return their complete source snapshot.
-        Object.assign(next, { [keys[i]]: result.data });
+      if (preview) { setData(initialData); setUpdated(new Date()); return; }
+      const response = await fetch("/api/analytics", { cache: "no-store" });
+      if (response.status === 401 || response.status === 403) {
+        setData({ ...data, propertyCount: 0, sources: [] });
+        setError("Your access has changed. Sign in again to load your current analytics.");
+        return;
       }
-      setData(next); setUpdated(new Date());
-      if (failures) setError("Some sources could not refresh. Their last available records are still shown.");
+      if (!response.ok) throw new Error("Refresh unavailable");
+      const result = await response.json() as { data?: AnalyticsSnapshot };
+      if (!result.data) throw new Error("Missing analytics");
+      setData(result.data); setUpdated(new Date());
+      if (result.data.sources.some(source => !source.available)) setError("Some permitted sources are unavailable. Their counts are excluded until they reconnect.");
     } catch { setError("Could not refresh the board. Check your connection and try again."); }
     finally { setRefreshing(false); }
   }
   const tooltip = { contentStyle: { background: "var(--card)", color: "var(--foreground)", border: "1px solid var(--border)", borderRadius: 12 }, labelStyle: { color: "var(--foreground)" } };
   return <section className="analytics-board">
-    <p className="eyebrow">Workspace intelligence</p>
+    <p className="eyebrow">Your workspace intelligence</p>
     <div className="analytics-heading">
-      <div><h1>Analytics</h1><p>Every queue, one clear picture.</p></div>
-      <div className="analytics-controls"><label className="sr-only" htmlFor="analytics-period">Analytics period</label>
-        <select id="analytics-period" value={days} onChange={event => setDays(Number(event.target.value))}><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option></select>
+      <div><h1>{data.title}</h1><p>{data.description}</p></div>
+      <div className="analytics-controls">
+        <AnalyticsDateRange period={period} choice={choice} onChange={(next, nextChoice) => { setPeriod(next); setChoice(nextChoice); }} />
         <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh analytics"><RefreshCw size={17} className={refreshing ? "animate-spin" : ""} /></button>
       </div>
     </div>
-    <div className="analytics-source-note">{preview ? "Sample records for design review." : "Current workspace records. Source limits apply."} Last updated {updated ? updated.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "on opening"}.</div>
+    <p className="analytics-period-summary" role="status">{periodLabel(period)}<span>UK dates, both dates included</span></p>
+    <div className="analytics-source-note">{preview ? "Sample records for design review." : "Records permitted by your current access. Source limits apply."} Last updated {updated ? updated.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "on opening"}.</div>
     {error && <p role="alert" className="analytics-error">{error}</p>}
     <div className="analytics-metrics">
-      {[{ name: "Recorded items", value: metrics.total, note: "Across the selected period", icon: Activity }, { name: "Completed", value: metrics.complete, note: "Current completion status", icon: CircleCheck }, { name: "Waiting", value: metrics.waiting, note: "New or awaiting action", icon: Clock3 }, { name: "Managed properties", value: propertyCount, note: "Current property snapshot", icon: Building2 }].map(({ name, value, note, icon: Icon }) => <article className="analytics-metric" key={name}><div><span>{name}</span><Icon size={20} /></div><strong>{value.toLocaleString("en-GB")}</strong><p>{note}</p></article>)}
+      {[{ name: "Recorded items", value: metrics.total, note: "Across the selected period", icon: Activity }, { name: "Completed", value: metrics.complete, note: "Current completion status", icon: CircleCheck }, { name: "Waiting", value: metrics.waiting, note: "New or awaiting action", icon: Clock3 }, { name: data.propertyLabel, value: data.propertyCount, note: "Current property snapshot", icon: Building2 }].map(({ name, value, note, icon: Icon }) => <article className="analytics-metric" key={name}><div><span>{name}</span><Icon size={20} /></div><strong>{value.toLocaleString("en-GB")}</strong><p>{note}</p></article>)}
     </div>
     <div className="analytics-chart-grid">
-      <article className="analytics-chart analytics-trend"><div className="analytics-chart-title"><div><h2>Activity over time</h2><p>New workflow and maintenance records each day</p></div><span className="analytics-chart-tag">Daily</span></div>
-        <div className="analytics-plot" role="img" aria-label="Line chart showing daily workflow and maintenance records. Exact values are available under View chart data."><ResponsiveContainer width="100%" height="100%"><LineChart data={metrics.trend} margin={{ left: -20, right: 15, top: 20, bottom: 0 }} accessibilityLayer><CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 5" /><XAxis dataKey="date" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} minTickGap={45} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip {...tooltip} /><Line type="monotone" dataKey="workflows" name="Workflows" stroke={colours[0]} strokeWidth={3} dot={false} activeDot={{ r: 5 }} isAnimationActive={motion} animationDuration={800} /><Line type="monotone" dataKey="repairs" name="Maintenance" stroke={colours[1]} strokeWidth={3} dot={false} isAnimationActive={motion} animationDuration={800} /></LineChart></ResponsiveContainer></div>
-        <div className="analytics-legend"><span><i style={{ background: colours[0] }} />Workflows</span><span><i style={{ background: colours[1] }} />Maintenance</span></div>
+      <article className="analytics-chart analytics-trend"><div className="analytics-chart-title"><div><h2>Activity over time</h2><p>Daily records within your access</p></div><span className="analytics-chart-tag">Daily</span></div>
+        <div className="analytics-plot" role="img" aria-label="Line chart of permitted daily records. Exact values are available under View chart data."><ResponsiveContainer width="100%" height="100%"><LineChart data={metrics.trend} margin={{ left: -20, right: 15, top: 20, bottom: 0 }} accessibilityLayer><CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 5" /><XAxis dataKey="date" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} minTickGap={45} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip {...tooltip} />{metrics.sources.map((source, i) => <Line key={source.key} type="monotone" dataKey={source.key} name={source.name} stroke={colours[i % colours.length]} strokeWidth={3} dot={metrics.trend.length === 1 ? { r: 4 } : false} activeDot={{ r: 5 }} isAnimationActive={motion} animationDuration={800} />)}</LineChart></ResponsiveContainer></div>
+        <div className="analytics-legend">{metrics.sources.map((source, i) => <span key={source.key}><i style={{ background: colours[i % colours.length] }} />{source.name}</span>)}</div>
       </article>
       <article className="analytics-chart"><div className="analytics-chart-title"><div><h2>Work status</h2><p>Current status of records in this period</p></div></div>
         <div className="analytics-donut" role="img" aria-label={`Donut chart: ${metrics.waiting} waiting, ${metrics.total - metrics.waiting - metrics.complete} in progress, ${metrics.complete} complete.`}>
@@ -72,9 +70,9 @@ export function AnalyticsBoard({ initialData, propertyCount, preview }: { initia
       <article className="analytics-chart"><div className="analytics-chart-title"><div><h2>Queue volume</h2><p>Records by source, counted on the same scale</p></div></div>
         <div className="analytics-plot" role="img" aria-label={`Bar chart: ${metrics.queues.map(q => `${q.name} ${q.value}`).join(", ")}.`}><ResponsiveContainer width="100%" height="100%"><BarChart data={metrics.queues} margin={{ left: -20, right: 12, top: 15 }} accessibilityLayer><defs><linearGradient id="queue-depth" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#548b7a" /><stop offset="0.45" stopColor="#a9c598" /><stop offset="1" stopColor="#7ba889" /></linearGradient></defs><CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 5" /><XAxis dataKey="name" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip {...tooltip} cursor={{ fill: "var(--muted)" }} /><Bar dataKey="value" name="Records" fill="url(#queue-depth)" radius={[8, 8, 0, 0]} maxBarSize={65} isAnimationActive={motion} animationDuration={800} /></BarChart></ResponsiveContainer></div>
       </article>
-      <article className="analytics-chart analytics-sources"><h2>Connected sources</h2><p>Availability of each workspace snapshot</p>{metrics.sources.map(source => <div key={source.name}><span>{source.name}</span><span className={source.available ? "source-connected" : "source-unavailable"}>{source.available ? "Available" : "Not connected"}</span></div>)}<small>Workflow snapshots contain up to 250 records. Linked work may appear in more than one queue. Clean counts use the scheduled clean date. Revenue and occupancy need booking and payment integrations.</small></article>
+      <article className="analytics-chart analytics-sources"><h2>Connected sources</h2><p>Only sources included in your permissions</p>{metrics.sources.map(source => <div key={source.name}><span>{source.name}</span><span className={source.available ? "source-connected" : "source-unavailable"}>{source.available ? "Available" : "Not connected"}</span></div>)}<small>Counts use current source snapshots: up to 250 workflows, 500 maintenance records, 1,500 cleans or 300 onboarding cases. Older records may be outside these limits. Clean counts use the scheduled date; other sources use their creation date. Linked work can appear in more than one queue.</small></article>
     </div>
-    <details className="analytics-data"><summary>View chart data</summary><div className="analytics-table-wrap"><table><caption>Exact daily record counts</caption><thead><tr><th>Date</th><th>Workflows</th><th>Maintenance</th></tr></thead><tbody>{metrics.trend.map(day => <tr key={day.date}><th scope="row">{day.date}</th><td>{day.workflows}</td><td>{day.repairs}</td></tr>)}</tbody></table></div></details>
-    {metrics.total === 0 && <p className="analytics-source-note">No dated records in this period. Try a wider period or connect the missing sources.</p>}
+    <details className="analytics-data"><summary>View chart data</summary><div className="analytics-table-wrap"><table><caption>Exact daily record counts</caption><thead><tr><th>Date</th>{metrics.sources.map(source => <th key={source.key} scope="col">{source.name}</th>)}</tr></thead><tbody>{metrics.trend.map(day => <tr key={day.key}><th scope="row">{day.date}</th>{metrics.sources.map(source => <td key={source.key}>{day[source.key] || 0}</td>)}</tr>)}</tbody></table></div></details>
+    {metrics.total === 0 && <p className="analytics-source-note">{metrics.sources.length ? "No dated records in this period. Try a wider period or connect the missing sources." : "Analytics will appear when workspace tools are assigned to your account."}</p>}
   </section>;
 }
