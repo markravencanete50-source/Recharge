@@ -1,10 +1,22 @@
-import { useEffect, useState } from "react";
-import { Animated, Text, View } from "react-native";
-import { Feather } from "@expo/vector-icons";
-import Svg, { Circle, Line, Polyline, Text as SvgText } from "react-native-svg";
+import { Text } from "./Typography";
+import { useEffect, useState, useId } from "react";
+import { Animated, View } from "react-native";
+import Feather from "@expo/vector-icons/Feather";
+import Svg, {
+  Circle,
+  Line,
+  Polyline,
+  Path,
+  G,
+  Defs,
+  ClipPath,
+  Rect,
+  Text as SvgText,
+} from "react-native-svg";
 import { ui, type Palette } from "./theme";
 import type { buildAnalytics } from "./model";
 import { MotionPress, useReducedMotion } from "./motion";
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 type Analytics = ReturnType<typeof buildAnalytics>;
 export function LineChart({
   data,
@@ -13,6 +25,23 @@ export function LineChart({
   data: Analytics;
   palette: Palette;
 }) {
+  const reduced = useReducedMotion();
+  const [reveal] = useState(() => new Animated.Value(1));
+  const clipId = useId().replaceAll(":", "");
+  useEffect(() => {
+    if (reduced) {
+      reveal.setValue(1);
+      return;
+    }
+    reveal.setValue(0);
+    const animation = Animated.timing(reveal, {
+      toValue: 1,
+      duration: 450,
+      useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [data, reduced, reveal]);
   const values = data.trend.map((day) =>
     Object.entries(day).reduce(
       (total, [key, value]) =>
@@ -54,6 +83,19 @@ export function LineChart({
         }}
       >
         <Svg width="100%" height={170} viewBox="0 0 306 160">
+          <Defs>
+            <ClipPath id={clipId}>
+              <AnimatedRect
+                x="0"
+                y="0"
+                height="160"
+                width={reveal.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 306],
+                })}
+              />
+            </ClipPath>
+          </Defs>
           {[0, 1, 2, 3].map((index) => (
             <Line
               key={index}
@@ -71,41 +113,54 @@ export function LineChart({
           <SvgText x={9} y={133} fill={p.muted} fontSize={12}>
             0
           </SvgText>
-          <Polyline
-            points={points}
-            fill="none"
-            stroke={p.chart}
-            strokeWidth={3}
-            strokeLinejoin="round"
-          />
-          {values.length > 0 && (
-            <>
-              <Line
-                x1={28 + (selectedIndex / Math.max(1, values.length - 1)) * 260}
-                x2={28 + (selectedIndex / Math.max(1, values.length - 1)) * 260}
-                y1={20}
-                y2={130}
-                stroke={p.muted}
-                strokeDasharray="3 4"
-              />
-              <Circle
-                cx={28 + (selectedIndex / Math.max(1, values.length - 1)) * 260}
-                cy={130 - (values[selectedIndex] / max) * 110}
-                r={5}
-                fill={p.chart}
-                stroke={p.surface}
-                strokeWidth={2}
-              />
-            </>
-          )}
-          {values.length === 1 && (
-            <Circle
-              cx={28}
-              cy={130 - (values[0] / max) * 110}
-              r={4}
+          <G clipPath={`url(#${clipId})`}>
+            <Path
+              d={`M28 130 L${points.split(" ").join(" L")} L${values.length === 1 ? 28 : 288} 130Z`}
               fill={p.chart}
+              opacity="0.08"
             />
-          )}
+            <Polyline
+              points={points}
+              fill="none"
+              stroke={p.chart}
+              strokeWidth={3}
+              strokeLinejoin="round"
+            />
+            {values.length > 0 && (
+              <>
+                <Line
+                  x1={
+                    28 + (selectedIndex / Math.max(1, values.length - 1)) * 260
+                  }
+                  x2={
+                    28 + (selectedIndex / Math.max(1, values.length - 1)) * 260
+                  }
+                  y1={20}
+                  y2={130}
+                  stroke={p.muted}
+                  strokeDasharray="3 4"
+                />
+                <Circle
+                  cx={
+                    28 + (selectedIndex / Math.max(1, values.length - 1)) * 260
+                  }
+                  cy={130 - (values[selectedIndex] / max) * 110}
+                  r={5}
+                  fill={p.chart}
+                  stroke={p.surface}
+                  strokeWidth={2}
+                />
+              </>
+            )}
+            {values.length === 1 && (
+              <Circle
+                cx={28}
+                cy={130 - (values[0] / max) * 110}
+                r={4}
+                fill={p.chart}
+              />
+            )}
+          </G>
           <SvgText x={28} y={153} fill={p.muted} fontSize={12}>
             {data.trend[0]?.date.split(" ").slice(0, 2).join(" ")}
           </SvgText>

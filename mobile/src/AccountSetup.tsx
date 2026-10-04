@@ -1,15 +1,16 @@
+import { StateGraphic } from "./StateGraphic";
+import { Text } from "./Typography";
 import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
-  Text,
   TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
+import Feather from "@expo/vector-icons/Feather";
 import { ui, type Palette } from "./theme";
 import { Entrance, MotionPress as Pressable, useReducedMotion } from "./motion";
 
@@ -18,12 +19,12 @@ export type Profile = {
   avatar: keyof typeof avatarColors;
 };
 export const avatarColors = {
-  forest: "#315f50",
-  sage: "#587443",
-  ocean: "#285c75",
-  plum: "#715471",
-  clay: "#976044",
-  slate: "#4a5c70",
+  forest: "#243a75",
+  sage: "#137d73",
+  ocean: "#3457d5",
+  plum: "#6750a4",
+  clay: "#a14c31",
+  slate: "#526078",
 };
 export function initials(name: string) {
   return (
@@ -566,7 +567,8 @@ export function AccountSetup({
               {step === 4 && (
                 <>
                   <View style={{ alignItems: "center", gap: 16 }}>
-                    <Avatar profile={profile} size={88} />
+                    <StateGraphic palette={p} success />
+                    <Avatar profile={profile} size={64} />
                     <Text style={[ui.title, { color: p.text }]}>
                       All set, {profile.displayName.trim().split(" ")[0]}.
                     </Text>

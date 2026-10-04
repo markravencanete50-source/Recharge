@@ -1,3 +1,4 @@
+import { Text } from "./src/Typography";
 import {
   useEffect,
   useMemo,
@@ -16,7 +17,6 @@ import {
   Pressable as NativePressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   useColorScheme,
   useWindowDimensions,
@@ -31,15 +31,18 @@ import DateTimePicker, {
 import { router, useLocalSearchParams } from "expo-router";
 import { AccountSetup, Avatar, type Profile } from "./src/AccountSetup";
 import { Artwork } from "./src/Artwork";
+import { NavigationBar } from "./src/NavigationBar";
+import { FilterBar } from "./src/FilterBar";
+import { ProgressRing, StateGraphic } from "./src/StateGraphic";
 import { LineChart, QueueChart, StatusChart } from "./src/Charts";
-import { departmentColor, themes, ui, type Palette } from "./src/theme";
-import { WorkspaceScreens } from "./src/WorkspaceScreens";
+import { themes, ui, type Palette } from "./src/theme";
+import { WorkspaceScreens, Calendar } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
 import { exportReport } from "./src/exportReport";
 import { analyticsCsv, analyticsFilename } from "../lib/analytics-export";
 import { isWorkspaceAdmin } from "../lib/modules";
 import { usePreviewBookmarks } from "./src/usePreviewPreferences";
-import { navigationFor, WORKSPACE_MAP, type WorkspaceSection } from "../lib/workspace-map";
+import { WORKSPACE_MAP, type WorkspaceSection } from "../lib/workspace-map";
 import {
   Entrance,
   MotionPress as Pressable,
@@ -304,19 +307,65 @@ function RecordRow({
     </Pressable>
   );
 }
-function DetailScreen({ visible, onClose, title, palette: p, children }: { visible: boolean; onClose: () => void; title: string; palette: Palette; children: ReactNode }) {
+function DetailScreen({
+  visible,
+  onClose,
+  title,
+  palette: p,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  palette: Palette;
+  children: ReactNode;
+}) {
   const reduced = useReducedMotion();
-  return <Modal visible={visible} animationType={reduced ? "none" : "slide"} onRequestClose={onClose}>
-    <SafeAreaProvider>
-    <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]}>
-      <View style={[ui.row, { paddingHorizontal: 20, paddingVertical: 10, gap: 12, borderBottomWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
-        <IconButton label="Back to workspace" icon="arrow-left" onPress={onClose} palette={p} />
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, flex: 1 }]}>{title}</Text>
-      </View>
-      <ScrollView contentContainerStyle={ui.page} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">{children}</ScrollView>
-    </SafeAreaView>
-    </SafeAreaProvider>
-  </Modal>;
+  return (
+    <Modal
+      visible={visible}
+      animationType={reduced ? "none" : "slide"}
+      onRequestClose={onClose}
+    >
+      <SafeAreaProvider>
+        <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]}>
+          <View
+            style={[
+              ui.row,
+              {
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                gap: 12,
+                borderBottomWidth: 1,
+                borderColor: p.border,
+                backgroundColor: p.surface,
+              },
+            ]}
+          >
+            <IconButton
+              label="Back to workspace"
+              icon="arrow-left"
+              onPress={onClose}
+              palette={p}
+            />
+            <Text
+              accessibilityRole="header"
+              style={[ui.sectionTitle, { color: p.text, flex: 1 }]}
+            >
+              {title}
+            </Text>
+          </View>
+          <ScrollView
+            contentContainerStyle={ui.page}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            {children}
+          </ScrollView>
+        </SafeAreaView>
+      </SafeAreaProvider>
+    </Modal>
+  );
 }
 function AppContent() {
   const systemTheme = useColorScheme();
@@ -326,12 +375,24 @@ function AppContent() {
   const p = themes[theme];
   const [role, setRole] = useState<WorkspaceRole>("super_admin");
   const { section } = useLocalSearchParams<{ section: string }>();
-  const sections: WorkspaceSection[] = ["home", "work", "properties", "inbox", "more", "workspace", "analytics", "calendar", "approvals"];
-  const tab: Tab = sections.includes(section as Tab) ? section as Tab : "home";
+  const sections: WorkspaceSection[] = [
+    "home",
+    "work",
+    "properties",
+    "inbox",
+    "more",
+    "workspace",
+    "analytics",
+    "calendar",
+    "approvals",
+  ];
+  const tab: Tab = sections.includes(section as Tab)
+    ? (section as Tab)
+    : "home";
   const setTab = (value: Tab) => router.setParams({ section: value });
   const [profile, setProfile] = useState<Profile>({
     displayName: "Preview User",
-    avatar: "forest",
+    avatar: "ocean",
   });
   const [accountMode, setAccountMode] = useState<"register" | "preview" | null>(
     null,
@@ -340,7 +401,12 @@ function AppContent() {
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
   const [savedOnly, setSavedOnly] = useState(false);
-  const { saved: savedTools, toggle: toggleSaved, error: bookmarkError, loaded: bookmarksLoaded } = usePreviewBookmarks(role);
+  const {
+    saved: savedTools,
+    toggle: toggleSaved,
+    error: bookmarkError,
+    loaded: bookmarksLoaded,
+  } = usePreviewBookmarks(role);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<PreviewRecord | null>(
     null,
@@ -365,12 +431,27 @@ function AppContent() {
   const tools = useMemo(() => toolsFor(role), [role]);
   async function exportCsv() {
     if (!isWorkspaceAdmin(role) || exporting) return;
-    setExporting(true); setExportMessage("");
+    setExporting(true);
+    setExportMessage("");
     try {
-      await exportReport(analyticsCsv(snapshot, period, true), analyticsFilename(period));
-      setExportMessage(Platform.OS === "web" ? "Sample report download started." : "Sample report ready to save or share.");
-    } catch (error) { setExportMessage(error instanceof Error ? error.message : "Could not export. Please try again."); }
-    finally { setExporting(false); }
+      await exportReport(
+        analyticsCsv(snapshot, period, true),
+        analyticsFilename(period),
+      );
+      setExportMessage(
+        Platform.OS === "web"
+          ? "Sample report download started."
+          : "Sample report ready to save or share.",
+      );
+    } catch (error) {
+      setExportMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not export. Please try again.",
+      );
+    } finally {
+      setExporting(false);
+    }
   }
   const toolRecords = selectedTool ? recordsFor(role, selectedTool.id) : [];
   const visibleRecords = toolRecords.filter(
@@ -379,7 +460,7 @@ function AppContent() {
       (recordStatus === "All" || record.status === recordStatus),
   );
   const openTool = (tool: Tool, record: PreviewRecord | null = null) => {
-    if (!tools.some(allowed => allowed.id === tool.id)) return;
+    if (!tools.some((allowed) => allowed.id === tool.id)) return;
     Keyboard.dismiss();
     setRecordSearch("");
     setRecordStatus("All");
@@ -438,54 +519,76 @@ function AppContent() {
       edges={["top", "bottom"]}
     >
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
-      <View
-        style={[
-          ui.between,
-          {
-            paddingHorizontal: 22,
-            paddingVertical: 13,
-            borderBottomWidth: 0,
-            borderBottomColor: p.border,
-            backgroundColor: p.surface,
-          },
-        ]}
-      >
-        <View>
-          <Text
-            style={{
-              color: p.text,
-              fontSize: 23,
-              fontWeight: "700",
-              letterSpacing: -0.6,
-            }}
-          >
-            Recharge
-          </Text>
-          <Text
-            style={{
-              color: p.muted,
-              fontSize: 12,
-              letterSpacing: 0,
-              marginTop: 3,
-            }}
-          >
-            {roleLabel} · Preview
-          </Text>
-        </View>
-        <View style={[ui.row, { gap: 10 }]}>
-          <IconButton
-            label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            icon={theme === "dark" ? "sun" : "moon"}
-            palette={p}
-            onPress={() => setTheme(theme === "dark" ? "light" : "dark")}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open profile and preview roles"
-            onPress={() => setSettings(true)}
-          >
-            <Avatar profile={profile} />
-          </Pressable>
+      <View style={{ backgroundColor: p.background }}>
+        <View
+          style={[
+            ui.between,
+            {
+              width: "100%",
+              maxWidth: 760,
+              alignSelf: "center",
+              paddingHorizontal: 20,
+              paddingTop: 12,
+              paddingBottom: 8,
+              gap: 12,
+            },
+          ]}
+        >
+          <View style={[ui.row, { gap: 10, flex: 1 }]}>
+            <View
+              accessible={false}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 12,
+                backgroundColor: p.hero,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: p.heroText,
+                  fontSize: 23,
+                  fontWeight: "700",
+                  letterSpacing: -1,
+                }}
+              >
+                r
+              </Text>
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text
+                style={{
+                  color: p.text,
+                  fontSize: 18,
+                  fontWeight: "600",
+                  letterSpacing: -0.5,
+                }}
+              >
+                Recharge
+              </Text>
+              <Text style={{ color: p.muted, fontSize: 12, lineHeight: 17 }}>
+                {roleLabel}
+              </Text>
+            </View>
+          </View>
+          <View style={[ui.row, { gap: 8 }]}>
+            <IconButton
+              label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              icon={theme === "dark" ? "sun" : "moon"}
+              palette={p}
+              onPress={() => setTheme(theme === "dark" ? "light" : "dark")}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open profile and preview roles"
+              onPress={() => setSettings(true)}
+              style={{ minHeight: 48, minWidth: 44, justifyContent: "center" }}
+            >
+              <Avatar profile={profile} />
+            </Pressable>
+          </View>
         </View>
       </View>
       <ScrollView
@@ -499,7 +602,7 @@ function AppContent() {
         <Animated.View
           style={{
             opacity: fade,
-            gap: 22,
+            gap: 24,
             transform: [
               {
                 translateY: fade.interpolate({
@@ -510,7 +613,19 @@ function AppContent() {
             ],
           }}
         >
-          {tab === "analytics" && <View style={{ gap: 6 }}><Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{snapshot.title}</Text><Text style={[ui.body, { color: p.muted }]}>{snapshot.description}</Text></View>}
+          {tab === "analytics" && (
+            <View style={{ gap: 6 }}>
+              <Text
+                accessibilityRole="header"
+                style={[ui.title, { color: p.text }]}
+              >
+                {snapshot.title}
+              </Text>
+              <Text style={[ui.body, { color: p.muted }]}>
+                {snapshot.description}
+              </Text>
+            </View>
+          )}
           {tab === "analytics" && (
             <>
               <Pressable
@@ -533,53 +648,175 @@ function AppContent() {
                 <View style={[ui.row, { gap: 8 }]}>
                   <Feather name="calendar" size={17} color={p.text} />
                   <Text
-                    style={{ color: p.text, fontSize: 12, fontWeight: "600" }}
+                    style={{ color: p.text, fontSize: 13, fontWeight: "500" }}
                   >
                     {periodLabel(period)}
                   </Text>
                 </View>
                 <Feather name="chevron-down" size={16} color={p.muted} />
               </Pressable>
-              {isWorkspaceAdmin(role) && <Pressable accessibilityRole="button" accessibilityLabel="Export analytics CSV" accessibilityState={{ disabled: exporting }} disabled={exporting} onPress={exportCsv} style={[ui.button, ui.row, { backgroundColor: p.primary, justifyContent: "center", gap: 10 }]}><Feather name="download" size={18} color={p.onPrimary} /><Text style={[ui.buttonText, { color: p.onPrimary }]}>{exporting ? "Preparing report..." : "Export CSV report"}</Text></Pressable>}
-              {isWorkspaceAdmin(role) && exportMessage ? <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.text }]}>{exportMessage}</Text> : null}
-              <View style={ui.statGrid}>
-                {statItems.map((item) => (
-                  <Pressable
-                    key={item.label}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${item.label}: ${item.value}. Open analytics`}
-                    onPress={() => setTab("analytics")}
-                    style={[ui.stat, card]}
-                  >
-                    <View style={ui.between}>
+              {isWorkspaceAdmin(role) && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Export analytics CSV"
+                  accessibilityState={{ disabled: exporting }}
+                  disabled={exporting}
+                  onPress={exportCsv}
+                  style={[
+                    ui.button,
+                    ui.row,
+                    {
+                      backgroundColor: p.primary,
+                      justifyContent: "center",
+                      gap: 10,
+                    },
+                  ]}
+                >
+                  <Feather name="download" size={18} color={p.onPrimary} />
+                  <Text style={[ui.buttonText, { color: p.onPrimary }]}>
+                    {exporting ? "Preparing report..." : "Export CSV report"}
+                  </Text>
+                </Pressable>
+              )}
+              {isWorkspaceAdmin(role) && exportMessage ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={[ui.small, { color: p.text }]}
+                >
+                  {exportMessage}
+                </Text>
+              ) : null}
+              <Entrance trigger={`${period.from}:${period.to}:${role}`}>
+                <View
+                  style={{
+                    backgroundColor: p.hero,
+                    borderRadius: 24,
+                    padding: 22,
+                    gap: 20,
+                    overflow: "hidden",
+                  }}
+                >
+                  <View style={[ui.row, { gap: 18 }]}>
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Text style={{ color: p.heroMuted, fontSize: 13 }}>
+                        Activity in this period
+                      </Text>
                       <Text
                         style={{
-                          color: p.muted,
-                          fontSize: 13,
+                          color: p.heroText,
+                          fontSize: 42,
+                          lineHeight: 50,
                           fontWeight: "600",
-                          flex: 1,
-                          marginRight: 8,
+                          letterSpacing: -1.5,
                         }}
                       >
-                        {item.label}
+                        {data.total}
                       </Text>
-                      <Feather name={item.icon} size={17} color={p.muted} />
+                      <Text style={{ color: p.heroMuted, fontSize: 14 }}>
+                        recorded items
+                      </Text>
                     </View>
-                    <Text style={[ui.statValue, { color: p.text }]}>
-                      {item.value}
+                    <ProgressRing
+                      completed={data.complete}
+                      total={data.total}
+                    />
+                  </View>
+                  <View
+                    style={[
+                      ui.row,
+                      {
+                        gap: 16,
+                        flexWrap: "wrap",
+                        paddingTop: 16,
+                        borderTopWidth: 1,
+                        borderColor: p.heroLine,
+                      },
+                    ]}
+                  >
+                    {statItems.slice(1, 3).map((item) => (
+                      <View key={item.label} style={{ gap: 4, flex: 1 }}>
+                        <Text
+                          style={{
+                            color: p.heroText,
+                            fontSize: 22,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {item.value}
+                        </Text>
+                        <Text style={{ color: p.heroMuted, fontSize: 13 }}>
+                          {item.label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </Entrance>
+              <View style={[ui.between, { gap: 12, paddingHorizontal: 4 }]}>
+                <View style={[ui.row, { gap: 10, flex: 1 }]}>
+                  <View
+                    style={{
+                      backgroundColor: p.utilityArt,
+                      padding: 10,
+                      borderRadius: 13,
+                    }}
+                  >
+                    <Feather name="home" size={20} color={p.utilityInk} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{ color: p.text, fontSize: 14, fontWeight: "500" }}
+                    >
+                      {snapshot.propertyLabel}
                     </Text>
-                    <Text style={{ color: p.muted, fontSize: 12 }}>
-                      {item.icon === "home"
-                        ? "Current property snapshot"
-                        : "In the selected period"}
+                    <Text style={[ui.small, { color: p.muted }]}>
+                      Current snapshot
                     </Text>
-                  </Pressable>
-                ))}
+                  </View>
+                </View>
+                <Text
+                  style={{ color: p.text, fontSize: 24, fontWeight: "600" }}
+                >
+                  {snapshot.propertyCount}
+                </Text>
               </View>
             </>
           )}
-          <WorkspaceScreens key={role} section={tab} role={role} palette={p} onNavigate={setTab} onOpen={openTool} onProfile={() => setSettings(true)} savedTools={savedTools} onDepartment={(department) => { setSearch(""); setDepartment(department); setSavedOnly(false); setTab("workspace"); }} />
-          {tab === "workspace" && <ToolDirectory role={role} palette={p} query={search} onQuery={setSearch} area={department} onArea={setDepartment} saved={savedTools} onlySaved={savedOnly} onOnlySaved={() => setSavedOnly(!savedOnly)} onSave={toggleSaved} onOpen={openTool} storageError={bookmarksLoaded ? bookmarkError : "Loading saved tools..."} />}
+          <WorkspaceScreens
+            key={role}
+            section={tab}
+            role={role}
+            palette={p}
+            onNavigate={setTab}
+            onOpen={openTool}
+            onProfile={() => setSettings(true)}
+            savedTools={savedTools}
+            profileName={profile.displayName}
+            onDepartment={(department) => {
+              setSearch("");
+              setDepartment(department);
+              setSavedOnly(false);
+              setTab("workspace");
+            }}
+          />
+          {tab === "workspace" && (
+            <ToolDirectory
+              role={role}
+              palette={p}
+              query={search}
+              onQuery={setSearch}
+              area={department}
+              onArea={setDepartment}
+              saved={savedTools}
+              onlySaved={savedOnly}
+              onOnlySaved={() => setSavedOnly(!savedOnly)}
+              onSave={toggleSaved}
+              onOpen={openTool}
+              storageError={
+                bookmarksLoaded ? bookmarkError : "Loading saved tools..."
+              }
+            />
+          )}
           {tab === "analytics" && (
             <>
               <Entrance
@@ -662,48 +899,12 @@ function AppContent() {
           </Text>
         </Animated.View>
       </ScrollView>
-      <View
-        style={[
-          ui.tabs,
-          { backgroundColor: p.surface, borderTopColor: p.border },
-        ]}
-      >
-        {navigationFor(role).map((item) => (
-          <Pressable
-            key={item.value}
-            accessibilityRole="tab"
-            accessibilityLabel={item.label}
-            accessibilityState={{ selected: tab === item.value || (item.value === "more" && tab === "workspace") }}
-            onPress={() => setTab(item.value)}
-            style={({ pressed }) => [
-              ui.tab,
-              {
-                backgroundColor: (tab === item.value || (item.value === "more" && tab === "workspace")) ? p.wash : "transparent",
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            <Entrance
-              trigger={(tab === item.value || (item.value === "more" && tab === "workspace")) ? "active" : "inactive"}
-              style={{ alignItems: "center", gap: 5 }}
-            >
-              <Feather
-                name={item.icon}
-                size={21}
-                color={(tab === item.value || (item.value === "more" && tab === "workspace")) ? p.primary : p.muted}
-              />
-              <Text
-                style={[
-                  ui.tabLabel,
-                  { color: (tab === item.value || (item.value === "more" && tab === "workspace")) ? p.text : p.muted },
-                ]}
-              >
-                {item.label}
-              </Text>
-            </Entrance>
-          </Pressable>
-        ))}
-      </View>
+      <NavigationBar
+        role={role}
+        section={tab}
+        onNavigate={setTab}
+        palette={p}
+      />
       <Sheet
         visible={settings}
         onClose={() => setSettings(false)}
@@ -837,15 +1038,25 @@ function AppContent() {
             />
           </View>
         ))}
-        {editingDate && (
-          <DateTimePicker
-            value={parseAnalyticsDate(draft[editingDate])!}
-            mode="date"
-            display={Platform.OS === "ios" ? "inline" : "default"}
-            onChange={changeDate}
-            themeVariant={theme}
-          />
-        )}
+        {editingDate &&
+          (Platform.OS === "web" ? (
+            <Calendar
+              key={editingDate}
+              selected={draft[editingDate]}
+              palette={p}
+              onSelect={(date) =>
+                setDraft((current) => ({ ...current, [editingDate]: date }))
+              }
+            />
+          ) : (
+            <DateTimePicker
+              value={parseAnalyticsDate(draft[editingDate])!}
+              mode="date"
+              display={Platform.OS === "ios" ? "inline" : "default"}
+              onChange={changeDate}
+              themeVariant={theme}
+            />
+          ))}
         {draftError ? (
           <Text
             accessibilityRole="alert"
@@ -881,7 +1092,7 @@ function AppContent() {
         <View style={{ gap: 14 }}>
           {selectedTool && (
             <>
-              <View style={{ backgroundColor: departmentColor(WORKSPACE_MAP[selectedTool.id].tone, p).art, padding: 6, borderRadius: 24, alignSelf: "flex-start" }}><Artwork id={selectedTool.id} size={86} /></View>
+              <Artwork id={selectedTool.id} size={64} palette={p} />
               <Text style={[ui.body, { color: p.muted }]}>
                 {selectedTool.description}
               </Text>
@@ -902,6 +1113,16 @@ function AppContent() {
                     <Text style={[ui.small, { color: p.muted }]}>
                       {selectedRecord.date}
                     </Text>
+                  ) : null}
+                  {selectedRecord.details ? (
+                    <View style={[ui.card, card]}>
+                      <Text style={[ui.sectionTitle, { color: p.text }]}>
+                        Details
+                      </Text>
+                      <Text style={[ui.body, { color: p.muted }]}>
+                        {selectedRecord.details}
+                      </Text>
+                    </View>
                   ) : null}
                   <Action
                     label="Back to records"
@@ -930,46 +1151,19 @@ function AppContent() {
                       },
                     ]}
                   />
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 8 }}
-                  >
-                    {[
+                  <FilterBar
+                    values={[
                       "All",
                       ...new Set(toolRecords.map((record) => record.status)),
-                    ].map((status) => (
-                      <Pressable
-                        key={status}
-                        accessibilityRole="button"
-                        accessibilityState={{
-                          selected: recordStatus === status,
-                        }}
-                        onPress={() => setRecordStatus(status)}
-                        style={[
-                          ui.button,
-                          {
-                            paddingHorizontal: 12,
-                            backgroundColor:
-                              recordStatus === status ? p.primary : p.wash,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            ui.small,
-                            {
-                              color:
-                                recordStatus === status ? p.onPrimary : p.text,
-                              fontWeight: "600",
-                            },
-                          ]}
-                        >
-                          {status.replaceAll("_", " ")}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
+                    ].map((status) => status.replaceAll("_", " "))}
+                    selected={recordStatus.replaceAll("_", " ")}
+                    onSelect={(status) =>
+                      setRecordStatus(
+                        status === "All" ? "All" : status.replaceAll(" ", "_"),
+                      )
+                    }
+                    palette={p}
+                  />
                   <Text style={[ui.small, { color: p.muted }]}>
                     {visibleRecords.length} of {toolRecords.length} records
                   </Text>
@@ -1001,6 +1195,7 @@ function AppContent() {
                     { backgroundColor: p.wash, borderColor: p.border },
                   ]}
                 >
+                  <StateGraphic palette={p} icon="inbox" />
                   <Text style={[ui.sectionTitle, { color: p.text }]}>
                     No sample records
                   </Text>

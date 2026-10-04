@@ -51,28 +51,28 @@ export function navigationFor(role: WorkspaceRole) {
     { value: "work", label: "Jobs", icon: "check-square" },
     { value: "calendar", label: "Calendar", icon: "calendar" },
     { value: "inbox", label: "Inbox", icon: "message-circle" },
-    { value: "more", label: "More", icon: "grid" },
+    { value: "more", label: "Tools", icon: "grid" },
   ] as const;
   if (role === "client") return [
     { value: "home", label: "Home", icon: "home" },
     { value: "properties", label: "Properties", icon: "home" },
     { value: "approvals", label: "Approvals", icon: "check-circle" },
     { value: "inbox", label: "Inbox", icon: "message-circle" },
-    { value: "more", label: "More", icon: "grid" },
+    { value: "more", label: "Tools", icon: "grid" },
   ] as const;
   if (role === "admin" || role === "super_admin") return [
-    { value: "home", label: "Overview", icon: "home" },
+    { value: "home", label: "Today", icon: "home" },
     { value: "work", label: "Work", icon: "check-square" },
     { value: "properties", label: "Properties", icon: "home" },
     { value: "analytics", label: "Reports", icon: "bar-chart-2" },
-    { value: "more", label: "More", icon: "grid" },
+    { value: "more", label: "Tools", icon: "grid" },
   ] as const;
   return [
     { value: "home", label: "Home", icon: "home" },
     { value: "work", label: "Work", icon: "check-square" },
     { value: "properties", label: "Properties", icon: "home" },
     { value: "inbox", label: "Inbox", icon: "message-circle" },
-    { value: "more", label: "More", icon: "grid" },
+    { value: "more", label: "Tools", icon: "grid" },
   ] as const;
 }
 
