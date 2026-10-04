@@ -94,6 +94,7 @@ html.dark * { scrollbar-width: thin; scrollbar-color: #607c6a transparent; }
 .analytics-range-fields input:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 .analytics-range-dialog .analytics-calendar { width: 100%; padding: 8px 0; background: transparent; --cell-size: 40px; }
 .analytics-calendar .rdp-months { justify-content: space-between; gap: 24px; }
+.analytics-calendar-single .rdp-months { max-width: 350px; margin-inline: auto; }
 .analytics-calendar .rdp-month { min-width: 0; }
 .analytics-calendar .rdp-day button { min-height: 40px; }
 .analytics-calendar .rdp-dropdown_root { min-height: 32px; }

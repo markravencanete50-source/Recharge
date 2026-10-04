@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { dateKey, parseAnalyticsDate, periodError, periodLabel, presetPeriod, type AnalyticsPeriod } from "@/lib/analytics";
 
 function subscribeSize(callback: () => void) {
-  const query = window.matchMedia("(min-width: 640px)");
+  const query = window.matchMedia("(min-width: 768px)");
   query.addEventListener("change", callback);
   return () => query.removeEventListener("change", callback);
 }
@@ -19,7 +19,7 @@ export function AnalyticsDateRange({ period, choice, onChange }: {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(period);
   const [month, setMonth] = useState(parseAnalyticsDate(period.from));
-  const wide = useSyncExternalStore(subscribeSize, () => window.matchMedia("(min-width: 640px)").matches, () => false);
+  const wide = useSyncExternalStore(subscribeSize, () => window.matchMedia("(min-width: 768px)").matches, () => false);
   const error = periodError(draft);
   function changeOpen(next: boolean) {
     if (next) { setDraft(period); setMonth(parseAnalyticsDate(period.from)); }
@@ -43,7 +43,7 @@ export function AnalyticsDateRange({ period, choice, onChange }: {
           <label htmlFor="analytics-from">Start date<input id="analytics-from" type="date" value={draft.from} aria-describedby="analytics-range-feedback" onInput={event => { setDraft({ ...draft, from: event.currentTarget.value }); const day = parseAnalyticsDate(event.currentTarget.value); if (day) setMonth(day); }} /></label>
           <label htmlFor="analytics-to">End date<input id="analytics-to" type="date" value={draft.to} aria-describedby="analytics-range-feedback" aria-invalid={Boolean(error)} onInput={event => setDraft({ ...draft, to: event.currentTarget.value })} /></label>
         </div>
-        <Calendar className="analytics-calendar" mode="range" numberOfMonths={wide ? 2 : 1} month={month} onMonthChange={setMonth} weekStartsOn={1} captionLayout="dropdown" startMonth={new Date(2000, 0)} endMonth={new Date(2100, 11)} selected={{ from: parseAnalyticsDate(draft.from), to: parseAnalyticsDate(draft.to) }} onSelect={range => setDraft({ from: range?.from ? dateKey(range.from) : "", to: range?.to ? dateKey(range.to) : "" })} />
+        <Calendar className={`analytics-calendar ${wide ? "analytics-calendar-wide" : "analytics-calendar-single"}`} mode="range" numberOfMonths={wide ? 2 : 1} month={month} onMonthChange={setMonth} weekStartsOn={1} captionLayout="dropdown" startMonth={new Date(2000, 0)} endMonth={new Date(2100, 11)} selected={{ from: parseAnalyticsDate(draft.from), to: parseAnalyticsDate(draft.to) }} onSelect={range => setDraft({ from: range?.from ? dateKey(range.from) : "", to: range?.to ? dateKey(range.to) : "" })} />
         <p id="analytics-range-feedback" className={error ? "analytics-error" : "analytics-range-summary"} role="status" aria-live="polite">{error || periodLabel(draft)}</p>
         <DialogFooter><Button type="button" variant="outline" onClick={() => changeOpen(false)}>Cancel</Button><Button type="button" disabled={Boolean(error)} onClick={() => { onChange(draft, "custom"); changeOpen(false); }}>Apply dates</Button></DialogFooter>
       </DialogContent>
