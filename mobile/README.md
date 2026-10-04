@@ -40,6 +40,8 @@ The onboarding API rejects extra fields such as user IDs, roles, module lists or
 
 ## Verification
 
+On 4 October 2026, the interactive preview was checked in Appetize on iPhone 14 Pro, iOS 17.2. Verified bookmarks, saved filtering, title-only search, one-tap clearing, swipe and backdrop dismissal, calendar scrolling and custom-date recalculation, daily chart selection, status-share selection and dark-mode charts. The final simulator binary was built from commit f83fb78, EAS build b8fb6a48-ed2f-4aa1-9adb-ceddd8f1dbd0. Android bundling passed; Android runtime and live registration were not exercised in this pass. Screenshot evidence and the detailed verification report are stored locally under .audit.
+
 Run `npx tsc --noEmit` here. Run repository ESLint against mobile sources. `npx expo export --platform android` and `--platform ios` check both bundles. Server security regression tests include `tests/registration.test.mjs`. Exporting iOS validates bundling, not behavior on an iPhone.
 
 The SDK toolchain currently reports transitive dependency advisories. Do not force an Expo downgrade to satisfy npm audit. Keep the local development server bound to loopback and resolve remaining advisories before producing a release build.
