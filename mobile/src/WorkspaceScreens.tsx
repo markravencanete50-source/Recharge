@@ -1,6 +1,6 @@
 import { useMemo, useState, type ComponentProps } from "react";
 import { Modal, Platform, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Artwork } from "./Artwork";
 import { Entrance, MotionPress as Pressable, useReducedMotion } from "./motion";
@@ -131,6 +131,7 @@ export function WorkspaceScreens({ section, role, palette: p, onNavigate, onOpen
     {section === "more" ? <>{heading("Your workspace", "The right tools, without the clutter.")}<View style={[ui.card, card, { paddingVertical: 0 }]}><LinkRow title="All tools" subtitle={`${toolsFor(role).length} available features`} icon="grid" palette={p} onPress={() => onNavigate("workspace")} /><LinkRow title="Reports and analytics" subtitle="Choose dates and explore your progress" icon="bar-chart-2" palette={p} onPress={() => onNavigate("analytics")} /><LinkRow title="Calendar" subtitle="Your dated work and visits" icon="calendar" palette={p} onPress={() => onNavigate("calendar")} /><LinkRow title="Inbox" subtitle={`${inbox.length} sample ${inbox.length === 1 ? "conversation" : "items"}`} icon="message-circle" palette={p} onPress={() => onNavigate("inbox")} /><LinkRow title="Profile and preferences" subtitle="Your name, avatar and preview role" icon="user" palette={p} onPress={onProfile} /></View><View style={[ui.card, card]}><Text style={[ui.sectionTitle, { color: p.text }]}>Your saved tools</Text><Text style={[ui.body, { color: p.muted }]}>{savedCount ? `${savedCount} bookmarked features are ready in your tool directory.` : "Bookmark a feature in All tools to keep it close."}</Text></View></> : null}
 
     <Modal visible={Boolean(selectedProperty)} animationType={reduced ? "none" : "slide"} onRequestClose={() => setSelectedProperty(null)} onDismiss={() => { if (pendingTool) { setPendingTool(null); onOpen(pendingTool); } }}>
+      <SafeAreaProvider>
       <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]}>
         <View style={[ui.row, { gap: 12, paddingHorizontal: 20, paddingVertical: 8, borderBottomWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}><Pressable accessibilityRole="button" accessibilityLabel="Back to properties" onPress={() => setSelectedProperty(null)} style={[ui.iconButton, { backgroundColor: p.wash }]}><Feather name="arrow-left" size={22} color={p.text} /></Pressable><Text style={[ui.sectionTitle, { color: p.text, flex: 1 }]}>Property overview</Text></View>
         <ScrollView contentContainerStyle={ui.page}>{selectedProperty ? <>
@@ -142,6 +143,7 @@ export function WorkspaceScreens({ section, role, palette: p, onNavigate, onOpen
           <Text style={[ui.small, { color: p.muted }]}>Sample property. Connected documents and financial records are not available in this preview.</Text>
         </> : null}</ScrollView>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   </>;
 }

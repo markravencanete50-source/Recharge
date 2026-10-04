@@ -304,6 +304,7 @@ function RecordRow({
 function DetailScreen({ visible, onClose, title, palette: p, children }: { visible: boolean; onClose: () => void; title: string; palette: Palette; children: ReactNode }) {
   const reduced = useReducedMotion();
   return <Modal visible={visible} animationType={reduced ? "none" : "slide"} onRequestClose={onClose}>
+    <SafeAreaProvider>
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]}>
       <View style={[ui.row, { paddingHorizontal: 20, paddingVertical: 10, gap: 12, borderBottomWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
         <IconButton label="Back to workspace" icon="arrow-left" onPress={onClose} palette={p} />
@@ -311,6 +312,7 @@ function DetailScreen({ visible, onClose, title, palette: p, children }: { visib
       </View>
       <ScrollView contentContainerStyle={ui.page} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">{children}</ScrollView>
     </SafeAreaView>
+    </SafeAreaProvider>
   </Modal>;
 }
 function AppContent() {
