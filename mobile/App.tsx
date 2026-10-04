@@ -368,7 +368,7 @@ function AppContent() {
     setExporting(true); setExportMessage("");
     try {
       await exportReport(analyticsCsv(snapshot, period, true), analyticsFilename(period));
-      setExportMessage(Platform.OS === "web" ? "Sample report downloaded." : "Sample report ready to save or share.");
+      setExportMessage(Platform.OS === "web" ? "Sample report download started." : "Sample report ready to save or share.");
     } catch (error) { setExportMessage(error instanceof Error ? error.message : "Could not export. Please try again."); }
     finally { setExporting(false); }
   }
