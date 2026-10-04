@@ -25,7 +25,7 @@ test("direct requests cannot mutate records or invoke integrations", async () =>
 });
 
 test("unconnected APIs and legacy authentication routes never fall back to application HTML", async () => {
-  for (const path of ["/api", "/api/unknown", "/api/maintenance/evidence/demo", "/signin-with-chatgpt", "/sign-in", "/sign-out", "/api/session", "/tool/client-furnishing", "/_worker.js"]) {
+  for (const path of ["/api", "/api/unknown", "/api/maintenance/evidence/demo", "/signin-with-chatgpt", "/sign-in", "/sign-out", "/api/session", "/api/session/recovery", "/api/session/password", "/auth/recovery", "/reset-password", "/update-password", "/tool/client-furnishing", "/_worker.js"]) {
     const response = await fetch(`${base}${path}`);
     assert.equal(response.status, 404, path);
     assert.match(response.headers.get("content-type"), /application\/json/);

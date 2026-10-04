@@ -1,7 +1,5 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifiedWorkspaceUser, supabaseConfiguration } from "@/lib/supabase-server";
-import { env } from "cloudflare:workers";
+import { verifiedWorkspaceUser } from "@/lib/supabase-server";
 
 export type ChatGPTUser = {
   displayName: string;
@@ -9,41 +7,15 @@ export type ChatGPTUser = {
   fullName: string | null;
 };
 
-const USER_EMAIL_HEADER = "oai-authenticated-user-email";
-const USER_FULL_NAME_HEADER = "oai-authenticated-user-full-name";
-const USER_FULL_NAME_ENCODING_HEADER =
-  "oai-authenticated-user-full-name-encoding";
-const PERCENT_ENCODED_UTF8 = "percent-encoded-utf-8";
 const SIGN_IN_PATH = "/signin-with-chatgpt";
 const SIGN_OUT_PATH = "/signout-with-chatgpt";
 const CALLBACK_PATH = "/callback";
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
-  if (supabaseConfiguration()) {
-    const user = await verifiedWorkspaceUser();
-    if (!user) return null;
-    const fullName = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
-    return { email: user.email!, displayName: fullName || user.email!, fullName };
-  }
-  // Header identity is only safe behind the original trusted gateway. Public
-  // Cloudflare deployments fail closed unless Supabase is configured.
-  if ((env as unknown as Record<string, string>).TRUSTED_CHATGPT_GATEWAY !== "true") return null;
-  const requestHeaders = await headers();
-  const email = requestHeaders.get(USER_EMAIL_HEADER);
-  if (!email) return null;
-
-  const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get(USER_FULL_NAME_ENCODING_HEADER) === PERCENT_ENCODED_UTF8
-      ? safeDecodeURIComponent(encodedFullName)
-      : null;
-
-  return {
-    displayName: fullName ?? email,
-    email,
-    fullName,
-  };
+  const user = await verifiedWorkspaceUser();
+  if (!user) return null;
+  const fullName = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
+  return { email: user.email!, displayName: fullName || user.email!, fullName };
 }
 
 export async function requireChatGPTUser(
@@ -57,13 +29,12 @@ export async function requireChatGPTUser(
 
 export function chatGPTSignInPath(returnTo: string): string {
   const safeReturnTo = safeRelativeReturnPath(returnTo);
-  return `${supabaseConfiguration() ? "/sign-in" : SIGN_IN_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
+  return `/sign-in?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
 export function chatGPTSignOutPath(returnTo = "/"): string {
-  if (supabaseConfiguration()) return "/sign-out";
   const safeReturnTo = safeRelativeReturnPath(returnTo);
-  return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
+  return `/sign-out?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
 function safeRelativeReturnPath(value: string): string {
@@ -85,14 +56,6 @@ function isReservedAuthPath(pathname: string): boolean {
   return (
     pathname === SIGN_IN_PATH ||
     pathname === SIGN_OUT_PATH ||
-    pathname === CALLBACK_PATH
+    pathname === CALLBACK_PATH || pathname === "/sign-in" || pathname === "/sign-out" || pathname.startsWith("/auth/")
   );
-}
-
-function safeDecodeURIComponent(value: string): string | null {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
 }

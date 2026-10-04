@@ -26,10 +26,10 @@ Cookies are HTTP-only. Each request verifies the user with Auth, and workspace
 access is resolved by the authenticated user ID using a checked database RPC.
 User-editable metadata supplies display names only.
 
-The legacy ChatGPT header authentication is disabled by default. It is allowed
-only with `TRUSTED_CHATGPT_GATEWAY=true` behind the original gateway that removes
-and supplies those headers. Never enable this setting on a public Cloudflare app.
-There is no automatic privileged role based on an email address in Supabase mode.
+The subsequent security update removes legacy header authentication and
+email-based D1 access fallback entirely. There is no automatic privileged role
+based on an email address. See SECURITY-AUDIT.md for the approved-session guard,
+password lockout and additional activation requirements.
 
 Super admins have every module and administration access. Regular admins have
 every module but can manage only non-admin accounts. The database enforces this
@@ -43,8 +43,9 @@ the Auth account or its audit history.
 ## Live activation checklist
 
 1. Apply `20261003151028_workspace_administration.sql` after the access foundation.
-2. Configure `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` on the full server
-   deployment. Never supply a service-role key to the browser or preview bundle.
+2. Apply the additional authentication security migration and configure the
+   server settings listed in SECURITY-AUDIT.md. Never supply a privileged key
+   to the browser or preview bundle.
 3. Create and verify `enquiries@rechargestays.co.uk` in Supabase Auth. Alex sets
    his own password. Run `supabase/provision-owner.sql` from trusted administration
    once the email is verified. The file is idempotent for this owner and refuses

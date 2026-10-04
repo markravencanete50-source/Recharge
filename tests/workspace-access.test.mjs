@@ -21,6 +21,8 @@ await db.exec(`
 for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort()) await db.exec(await fs.readFile(`supabase/migrations/${file}`, 'utf8'));
 await db.query(`insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values ($1,'owner@example.com',now(),'{}'),($2,'admin@example.com',now(),'{}'),($3,'staff@example.com',now(),'{"role":"super_admin"}')`, [owner, admin, staff]);
 await db.query(`insert into auth.sessions(id,user_id) values($1,$2),($3,$4),($5,$6)`, [ownerSession, owner, adminSession, admin, staffSession, staff]);
+// Fixtures represent logins already approved by the password guard.
+await db.query(`insert into private.workspace_approved_sessions(session_id,user_id) values($1,$2),($3,$4),($5,$6)`, [ownerSession, owner, adminSession, admin, staffSession, staff]);
 await db.query(`update public.workspace_profiles set role=case user_id when $1 then 'super_admin' when $2 then 'admin' else 'stays' end, status='active'`, [owner, admin]);
 async function asUser(id, session) {
   await db.exec('reset role');

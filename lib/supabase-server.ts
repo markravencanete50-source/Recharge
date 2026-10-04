@@ -30,5 +30,7 @@ export const verifiedWorkspaceUser = cache(async () => {
   const client = await workspaceSupabase();
   if (!client) return null;
   const { data, error } = await client.auth.getUser();
-  return error || !data.user?.email || !data.user.email_confirmed_at ? null : data.user;
+  if (error || !data.user?.email || !data.user.email_confirmed_at) return null;
+  const allowed = await client.rpc("workspace_session_allowed");
+  return allowed.error || allowed.data !== true ? null : data.user;
 });

@@ -10,7 +10,7 @@ Run `tests/access_foundation.sql` through a trusted SQL session to check role is
 
 Signups default to pending clients regardless of their metadata. Provision Alex's first super admin account only after he registers and his Auth user ID and email confirmation have been verified. Use a trusted administrative session. Never authorize by a supplied email header or a role in user-editable metadata. Service credentials must remain server-side.
 
-Authenticated clients have no write privileges on access tables, including users with a `super_admin` profile. A server endpoint must verify the caller and their current active super admin role before changing roles or grants through trusted database access. The event trigger records profile creation and role/status changes. Module-grant auditing and the administration interface remain future work.
+Authenticated clients have no write privileges on access tables, including users with a `super_admin` profile. The pending administration migration adds checked role/module management and module-grant auditing. The subsequent authentication security migration adds persistent lockout, server-approved sessions, rate limiting and one-use recovery. Both must be applied before enabling live application access. See docs/SECURITY-AUDIT.md for activation requirements and verification limits.
 
 Business data is not migrated yet. Preserve existing D1 IDs and map legacy email ownership to verified Auth IDs during import. Add table-specific policies for client property ownership, staff assignments and department scope before granting Data API access. A module grant alone must never authorize every row in a business table.
 

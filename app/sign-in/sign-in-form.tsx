@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import { authResponseMessage } from "@/lib/auth-security-policy";
 export function SignInForm({ configured }: { configured: boolean }) {
   const [error, setError] = useState(""); const [saving, setSaving] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -7,7 +8,9 @@ export function SignInForm({ configured }: { configured: boolean }) {
     const form = new FormData(event.currentTarget);
     try {
       const response = await fetch("/api/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: form.get("email"), password: form.get("password") }) });
-      if (!response.ok) { setError("Sign-in failed. Check your email, password and account verification."); return; }
+      if (!response.ok) { const data = await authResponseMessage(response); setError(data.error || "Sign-in failed. Check your email, password and account verification."); return; }
+      // A full navigation discards pre-login router state after cookies change.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign("/");
     } catch { setError("Could not connect. Please try again."); } finally { setSaving(false); }
   }
