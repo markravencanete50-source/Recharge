@@ -48,6 +48,7 @@ export function MotionPress({
 }: PressableProps) {
   const reduced = useReducedMotion();
   const scale = useState(() => new Animated.Value(1))[0];
+  const [pressed, setPressed] = useState(false);
   useEffect(() => {
     if (reduced) {
       scale.stopAnimation();
@@ -59,6 +60,7 @@ export function MotionPress({
     <AnimatedPressable
       {...props}
       onPressIn={(event) => {
+        setPressed(true);
         if (!reduced)
           Animated.timing(scale, {
             toValue: 0.975,
@@ -68,6 +70,7 @@ export function MotionPress({
         onPressIn?.(event);
       }}
       onPressOut={(event) => {
+        setPressed(false);
         if (reduced) scale.setValue(1);
         else
           Animated.spring(scale, {
@@ -78,8 +81,8 @@ export function MotionPress({
           }).start();
         onPressOut?.(event);
       }}
-      style={(state) => [
-        typeof style === "function" ? style(state) : style,
+      style={[
+        typeof style === "function" ? style({ pressed }) : style,
         { transform: [{ scale }] },
       ]}
     />
