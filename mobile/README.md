@@ -1,10 +1,10 @@
 # Recharge mobile preview
 
-This is a native React Native and Expo SDK 57 app, with Expo Router navigation. It runs in Expo Go on the Recharge_Pixel Android emulator as a separate desktop window. It does not embed the website or a WebView.
+This is a native React Native and Expo SDK 57 app, with Expo Router navigation. The preferred Windows preview is an iOS simulator hosted by Appetize. It does not embed the website or a WebView. The local Android emulator boots, but its Expo Go connection has not been verified.
 
 ## Preferred iOS preview on Windows
 
-The user chose a cloud iPhone simulator. Sign in to Expo and Appetize. The preview-ios profile in eas.json creates a standalone iOS Simulator app with its JavaScript bundled, without needing a local Metro connection, TestFlight or Apple Developer membership. Register the Expo project under the intended owner, then run `npx eas-cli@latest build --platform ios --profile preview-ios`. Download its simulator .app archive and upload it to Appetize as a compressed .app bundle. An IPA store build is not accepted by Appetize. Select an iPhone and open its live stream in a separate browser window. Keep live account configuration disabled until the backend is configured and audited.
+The user chose a cloud iPhone simulator. The app is linked to the Expo project `@mrkrvn/recharge-mobile-preview`. Sign in to Expo and Appetize. The preview-ios profile in eas.json creates a standalone iOS Simulator app with its JavaScript bundled, without needing a local Metro connection, TestFlight or Apple Developer membership. Run `npx eas-cli@latest build --platform ios --profile preview-ios` from this folder. Download its simulator .app archive and upload it to Appetize as a compressed .app bundle. An IPA store build is not accepted by Appetize. Select an iPhone and open its live stream in a separate browser window. Keep live account configuration disabled until the backend is configured and audited.
 
 The iOS bundle export is a compilation check, not the simulator .app binary. A successful cloud build and a live simulator session are still needed before iOS runtime verification is complete. Appetize's free plan currently has 30 minutes per month; confirm the current limits before using paid plans.
 
@@ -16,7 +16,7 @@ For another development machine, install Android SDK tools and a compatible emul
 
 ## Available screens
 
-Home, searchable workspace tools with individual artwork, read-only tool and record sheets, light and dark themes, six sample role views, and role-scoped analytics with native calendar dates, line, donut and bar charts. Analytics reuse the existing tested calculation and access-scoping functions. Preview roles never grant live permissions. Detailed editing screens for every workflow remain part of the mobile implementation.
+Home, searchable workspace tools with individual artwork, read-only tool and record sheets, light and dark themes, six sample role views, and role-scoped analytics with native calendar dates, line, donut and bar charts. Tool search matches feature titles only, ignores capitalization and trims surrounding whitespace. Descriptions and category labels are excluded. Analytics reuse the existing tested calculation and access-scoping functions. Preview roles never grant live permissions. Detailed editing screens for every workflow remain part of the mobile implementation.
 
 Profile settings include custom names and six monogram avatar styles. Preview customization is local to the running app and creates no account. Uploaded profile photographs are not implemented yet.
 
