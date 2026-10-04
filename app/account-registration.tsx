@@ -53,7 +53,8 @@ const ROLE_LABELS: Record<WorkspaceRole, string> = {
   super_admin: "Super admin",
   client: "Client",
   stays: "Stays employee",
-  cleans: "Cleans employee",
+  cleans: "Cleaner",
+  cleaning_manager: "Cleaning manager",
   ready: "Ready employee",
   admin: "Admin",
 };

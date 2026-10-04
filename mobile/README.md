@@ -16,9 +16,9 @@ For another development machine, install Android SDK tools and a compatible emul
 
 ## Available screens
 
-Home, searchable workspace tools with individual artwork, read-only tool and record sheets, light and dark themes, six sample role views, and role-scoped analytics with native calendar dates, line, donut and bar charts. Tool search matches feature titles only, ignores capitalization and trims surrounding whitespace. Descriptions and category labels are excluded. Analytics reuse the existing tested calculation and access-scoping functions. Preview roles never grant live permissions. Detailed editing screens for every workflow remain part of the mobile implementation.
+Role-specific five-tab navigation, actionable Home, work lists and calendars, property detail screens, Inbox, approvals, searchable workspace tools with individual artwork, read-only tool and record sheets, light and dark themes, seven sample role views, and role-scoped analytics with native calendar dates, line, donut and bar charts. Tool search matches feature titles only, ignores capitalization and trims surrounding whitespace. Descriptions and category labels are excluded. Analytics reuse the existing tested calculation and access-scoping functions. Preview roles never grant live permissions. Detailed editing screens for every workflow remain part of the mobile implementation.
 
-The interactive mobile workspace adds department filters, bookmarks, a saved-tools view, clearable title-only search, searchable record lists and status filters. Saved tools are held only for the current app session. Analytics supports selecting individual days and status shares. Touch controls, cards, navigation, chart bars and onboarding steps use short animations that respect the device's Reduce Motion setting. Sheets support backdrop dismissal, a drag handle, keyboard avoidance and scrolling within the available screen height.
+The interactive mobile workspace adds department filters, bookmarks, a saved-tools view, clearable title-only search, searchable record lists and status filters. Saved tools are stored on the device separately for each preview role. Analytics supports selecting individual days and status shares. Touch controls, cards, navigation, chart bars and onboarding steps use short animations that respect the device's Reduce Motion setting. Sheets support backdrop dismissal, a drag handle, keyboard avoidance and scrolling within the available screen height.
 
 Profile settings include custom names and six monogram avatar styles. Preview customization is local to the running app and creates no account. Uploaded profile photographs are not implemented yet.
 
@@ -45,3 +45,5 @@ On 4 October 2026, the interactive preview was checked in Appetize on iPhone 14 
 Run `npx tsc --noEmit` here. Run repository ESLint against mobile sources. `npx expo export --platform android` and `--platform ios` check both bundles. Server security regression tests include `tests/registration.test.mjs`. Exporting iOS validates bundling, not behavior on an iPhone.
 
 The SDK toolchain currently reports transitive dependency advisories. Do not force an Expo downgrade to satisfy npm audit. Keep the local development server bound to loopback and resolve remaining advisories before producing a release build.
+
+The approved redesign and cleaner/cleaning-manager separation are documented in ../docs/MOBILE-REDESIGN-IMPLEMENTATION.md. The live workspace will start empty; synthetic preview data must not be imported.

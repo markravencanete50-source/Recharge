@@ -9,6 +9,7 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  Platform,
   Pressable,
   type PressableProps,
   type StyleProp,
@@ -59,13 +60,20 @@ export function MotionPress({
   return (
     <AnimatedPressable
       {...props}
+      {...(Platform.OS === "web" ? {
+        "aria-checked": props.accessibilityState?.checked,
+        "aria-selected": props.accessibilityState?.selected,
+        "aria-disabled": props.accessibilityState?.disabled,
+        "aria-busy": props.accessibilityState?.busy,
+        "aria-expanded": props.accessibilityState?.expanded,
+      } : {})}
       onPressIn={(event) => {
         setPressed(true);
         if (!reduced)
           Animated.timing(scale, {
             toValue: 0.975,
             duration: 100,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== "web",
           }).start();
         onPressIn?.(event);
       }}
@@ -77,7 +85,7 @@ export function MotionPress({
             toValue: 1,
             speed: 24,
             bounciness: 5,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== "web",
           }).start();
         onPressOut?.(event);
       }}
@@ -113,7 +121,7 @@ export function Entrance({
       duration: 280,
       delay: Math.min(delay, 210),
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     });
     animation.start();
     return () => animation.stop();

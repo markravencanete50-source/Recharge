@@ -1,4 +1,5 @@
 import { isWorkspaceAdmin } from "@/lib/modules";
+import { assertCleanerAction, scopeCleanerData } from "@/lib/clean-access";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
@@ -108,7 +109,7 @@ export async function getCleansData(profile: AccessProfile): Promise<CleansData 
       ]);
 
     const visibleTickets = profile.role === "client" ? [] : tickets.results;
-    return {
+    return scopeCleanerData(profile, {
       available: true,
       hostawayConnected: isHostawayConfigured(),
       properties: properties.results.map((row) => ({ id: row.id, hostawayListingId: row.hostaway_listing_id, propertyName: row.property_name, propertyAddress: row.property_address, accessInstructions: row.access_instructions, clientName: row.client_name, clientEmail: row.client_email, cleanerId: row.cleaner_id, cleanerName: row.cleaner_name, cleanPricePence: row.clean_price_pence, status: row.status })),
@@ -126,7 +127,7 @@ export async function getCleansData(profile: AccessProfile): Promise<CleansData 
       replenishments: replenishments.results.map((row) => ({ id: row.id, cleanTicketId: row.clean_ticket_id, propertyName: row.property_name, items: row.items, status: row.status, createdAt: row.created_at })),
       reviews: reviews.results.map((row) => ({ id: row.id, cleanerId: row.cleaner_id, cleanerName: row.cleaner_name, successRate: row.success_rate_bps / 100, reason: row.reason, status: row.status, createdAt: row.created_at })),
       onboarding: onboarding.results.map((row) => ({ id: row.id, propertyName: row.property_name, propertyAddress: row.property_address, details: row.details, status: row.status, createdAt: row.created_at })),
-    };
+    });
   } catch (error) {
     console.error("Unable to load Recharge Cleans", error);
     return { available: false, hostawayConnected: isHostawayConfigured(), properties: [], cleaners: [], tickets: [], mail: [], replenishments: [], reviews: [], onboarding: [] };
@@ -134,6 +135,7 @@ export async function getCleansData(profile: AccessProfile): Promise<CleansData 
 }
 
 export async function syncCleansFromHostaway(profile: AccessProfile) {
+  assertCleanerAction(profile.role, "sync");
   requireTeam(profile, "cleaning-schedule");
   const db = database();
   let properties;
@@ -168,6 +170,7 @@ export async function syncCleansFromHostaway(profile: AccessProfile) {
 }
 
 export async function applyCleanAction(profile: AccessProfile, input: CleanAction) {
+  assertCleanerAction(profile.role, input.action);
   const db = database();
   const now = nowSeconds();
   if (input.action === "save_cleaner") {
@@ -233,6 +236,7 @@ export async function applyCleanAction(profile: AccessProfile, input: CleanActio
 
   const ticket = await loadTicket(db, input.id);
   if (!ticket) throw new Error("Clean ticket not found");
+  await requireAssignedCleaner(profile, ticket);
   if (input.action === "assign_cleaner") {
     requireTeam(profile, "cleaning-schedule");
     const name = await cleanerName(db, input.cleanerId);
@@ -243,7 +247,8 @@ export async function applyCleanAction(profile: AccessProfile, input: CleanActio
   if (input.action === "start_clean") {
     requireTeam(profile, "cleaning-schedule");
     if (!ticket.assigned_cleaner_id) throw new Error("Assign a cleaner before starting the clean");
-    await db.prepare("UPDATE clean_tickets SET status = 'in_progress', updated_at = ? WHERE id = ? AND status = 'scheduled'").bind(now, ticket.id).run();
+    const changed = await db.prepare("UPDATE clean_tickets SET status = 'in_progress', updated_at = ? WHERE id = ? AND status = 'scheduled' AND (? != 'cleans' OR EXISTS (SELECT 1 FROM cleaners c WHERE c.id = clean_tickets.assigned_cleaner_id AND lower(c.email) = lower(?) AND c.status = 'active'))").bind(now, ticket.id, profile.role, profile.email).run();
+    if (!changed.meta.changes) throw new Error("The assignment or clean status changed. Refresh your jobs.");
     return;
   }
   if (input.action === "submit_clean") {
@@ -254,8 +259,9 @@ export async function applyCleanAction(profile: AccessProfile, input: CleanActio
     if (input.mailPresent && !fileRows.results.some((file) => file.kind === "mail_photo")) throw new Error("Upload a photo of the mail before submitting");
     const property = ticket.property_id ? await db.prepare("SELECT client_name, client_email FROM clean_properties WHERE id = ? LIMIT 1").bind(ticket.property_id).first<any>() : null;
     const maintenanceNeeded = !input.broadbandWorking || !input.heatingWorking || !input.hotWaterWorking || Boolean(input.maintenanceNotes.trim());
-    await db.prepare("UPDATE clean_tickets SET status = 'submitted', broadband_working = ?, heating_working = ?, hot_water_working = ?, maintenance_notes = ?, replenishment_notes = ?, mail_present = ?, mail_notes = ?, submitted_at = ?, updated_at = ? WHERE id = ?")
-      .bind(input.broadbandWorking ? 1 : 0, input.heatingWorking ? 1 : 0, input.hotWaterWorking ? 1 : 0, input.maintenanceNotes.trim(), input.replenishmentNotes.trim(), input.mailPresent ? 1 : 0, input.mailNotes.trim(), now, now, ticket.id).run();
+    const changed = await db.prepare("UPDATE clean_tickets SET status = 'submitted', broadband_working = ?, heating_working = ?, hot_water_working = ?, maintenance_notes = ?, replenishment_notes = ?, mail_present = ?, mail_notes = ?, submitted_at = ?, updated_at = ? WHERE id = ? AND status = 'in_progress' AND (? != 'cleans' OR EXISTS (SELECT 1 FROM cleaners c WHERE c.id = clean_tickets.assigned_cleaner_id AND lower(c.email) = lower(?) AND c.status = 'active'))")
+      .bind(input.broadbandWorking ? 1 : 0, input.heatingWorking ? 1 : 0, input.hotWaterWorking ? 1 : 0, input.maintenanceNotes.trim(), input.replenishmentNotes.trim(), input.mailPresent ? 1 : 0, input.mailNotes.trim(), now, now, ticket.id, profile.role, profile.email).run();
+    if (!changed.meta.changes) throw new Error("The assignment or clean status changed. Refresh your jobs.");
     if (maintenanceNeeded) {
       const failed = [!input.broadbandWorking && "Broadband", !input.heatingWorking && "Heating", !input.hotWaterWorking && "Hot water"].filter(Boolean).join(", ");
       await createMaintenanceTicket({ source: "clean", sourceMessageId: `clean:${ticket.id}`, propertyName: ticket.property_name, propertyAddress: ticket.property_address, clientName: property?.client_name || "", clientEmail: property?.client_email || "", guestName: ticket.guest_name, bookingReference: ticket.booking_reference, hostawayListingId: ticket.hostaway_listing_id, hostawayReservationId: ticket.hostaway_reservation_id, reservationArrivalDate: ticket.arrival_date, reservationDepartureDate: ticket.clean_date, reservationChannel: ticket.channel_name, category: !input.heatingWorking || !input.hotWaterWorking ? "Heating & hot water" : "General repair", priority: "normal", summary: `Clean issue at ${ticket.property_name}`, details: [failed && `Failed checks: ${failed}.`, input.maintenanceNotes].filter(Boolean).join(" "), actorEmail: profile.email, actorName: profile.fullName });
@@ -293,9 +299,12 @@ export async function applyCleanAction(profile: AccessProfile, input: CleanActio
 }
 
 export async function uploadCleanFile(profile: AccessProfile, input: { ticketId: string; kind: CleanFileKind; file: File }) {
+  assertCleanerAction(profile.role, "upload_evidence");
+  if (profile.role === "cleans" && input.kind === "guest_evidence") throw new Error("Cleaning manager access required");
   requireTeam(profile, input.kind === "guest_evidence" ? "clean-reporting" : "cleaning-schedule");
   const ticket = await loadTicket(database(), input.ticketId);
   if (!ticket) throw new Error("Clean ticket not found");
+  await requireAssignedCleaner(profile, ticket);
   const allowed = input.kind === "property_video" ? ["video/mp4", "video/quicktime", "video/webm"] : ["image/jpeg", "image/png", "image/webp", "application/pdf"];
   if (!allowed.includes(input.file.type)) throw new Error(input.kind === "property_video" ? "Upload an MP4, MOV or WebM video" : "Upload a JPG, PNG, WebP or PDF");
   if (input.file.size < 1 || input.file.size > 100 * 1024 * 1024) throw new Error("Files must be no larger than 100 MB");
@@ -318,7 +327,12 @@ export async function getCleanFile(profile: AccessProfile, id: string) {
   if (profile.role === "client") {
     const allowed = await database().prepare("SELECT id FROM client_mail_items WHERE photo_file_id = ? AND lower(client_email) = lower(?) LIMIT 1").bind(id, profile.email).first();
     if (!allowed) throw new Error("File access required");
-  } else if (!canUseCleans(profile)) throw new Error("File access required");
+  } else {
+    if (!canUseCleans(profile)) throw new Error("File access required");
+    const ticket = await loadTicket(database(), row.clean_ticket_id);
+    if (!ticket) throw new Error("File access required");
+    await requireAssignedCleaner(profile, ticket);
+  }
   if (!env.BUCKET) throw new Error("Recharge file storage is unavailable");
   const object = await env.BUCKET.get(row.object_key);
   return object ? { row, object } : null;
@@ -349,6 +363,13 @@ async function cleanerName(db: Db, id: string) {
 
 function requireTeam(profile: AccessProfile, moduleId: string) {
   if (profile.role === "client" || (!isWorkspaceAdmin(profile.role) && !profile.modules.includes(moduleId as any))) throw new Error("This Recharge Cleans tool is not assigned to your account");
+}
+
+async function requireAssignedCleaner(profile: AccessProfile, ticket: CleanTicketRow) {
+  if (profile.role !== "cleans") return;
+  const own = await database().prepare("SELECT id FROM cleaners WHERE id = ? AND lower(email) = lower(?) AND status = 'active' LIMIT 1")
+    .bind(ticket.assigned_cleaner_id, profile.email).first();
+  if (!own) throw new Error("This clean is not assigned to your account");
 }
 
 function database() {

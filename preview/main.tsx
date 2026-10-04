@@ -28,7 +28,7 @@ function Preview() {
     {!embedded && <section ref={banner} className="preview-banner" aria-label="Preview information">
       <div><strong>Recharge product preview</strong><span>Sample data only. Changes are disabled. Live accounts and integrations are still being connected.</span></div>
       <div className="preview-actions"><a className="preview-phone-link" href="?view=phone">Mobile preview</a><label>View as <select value={role} onChange={event => setRole(event.target.value as WorkspaceRole)}>
-        <option value="super_admin">Super admin</option><option value="admin">Admin</option><option value="stays">Stays</option><option value="cleans">Cleans</option><option value="ready">Ready</option><option value="client">Client</option>
+        <option value="super_admin">Super admin</option><option value="admin">Admin</option><option value="stays">Stays</option><option value="cleans">Cleaner</option><option value="cleaning_manager">Cleaning manager</option><option value="ready">Ready</option><option value="client">Client</option>
       </select></label></div>
     </section>}
     <div className="preview-workspace"><RechargePortal key={role} preview

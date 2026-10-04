@@ -32,7 +32,7 @@ export async function removeAccessUser(emailInput: string) {
   return supabaseSaveAccess({ ...account, status: "revoked" });
 }
 export async function registerAccessRequest(input: { email: string; fullName: string; role: WorkspaceRole }): Promise<AccessProfile> {
-  if (input.role === "super_admin" || input.role === "admin") throw new Error("Privileged roles must be assigned by a super admin");
+  if (input.role === "super_admin" || input.role === "admin" || input.role === "cleaning_manager") throw new Error("Management roles must be assigned by an authorised administrator");
   await supabaseRequestAccess(input.fullName, input.role);
   const account = await supabaseAccessAccount(input.email);
   if (!account) throw new Error("Account request could not be loaded");

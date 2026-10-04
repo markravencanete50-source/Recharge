@@ -70,9 +70,9 @@ export function scopeAnalytics(viewer: AnalyticsViewer, input: AnalyticsInput): 
   const client = viewer.role === "client";
   const email = viewer.email.trim().toLowerCase();
   const owns = (value: string) => Boolean(email && value && value.trim().toLowerCase() === email);
-  const cleanerIds = new Set((input.cleans?.cleaners || []).filter(cleaner => owns(cleaner.email)).map(cleaner => cleaner.id));
-  const personalCleans = viewer.role === "cleans" && (cleanerIds.size > 0 || !can("clean-client-database", "cleaner-database", "cleaner-performance", "cleans-invoices"));
-  const title = admin ? "Workspace analytics" : client ? "My property analytics" : personalCleans ? "My cleaning analytics" : viewer.role === "cleans" ? "Cleans analytics" : viewer.role === "ready" ? "Ready analytics" : "Stays analytics";
+  const cleanerIds = new Set((input.cleans?.cleaners || []).filter(cleaner => cleaner.status === "active" && owns(cleaner.email)).map(cleaner => cleaner.id));
+  const personalCleans = viewer.role === "cleans";
+  const title = admin ? "Workspace analytics" : client ? "My property analytics" : personalCleans ? "My cleaning analytics" : viewer.role === "cleaning_manager" ? "Cleaning team analytics" : viewer.role === "ready" ? "Ready analytics" : "Stays analytics";
   const description = admin ? "One clear picture across your workspace." : client ? "Your properties, requests and progress." : personalCleans ? "Your assigned cleans and progress." : "A clear picture of the work you can access.";
   const sources: AnalyticsSnapshot["sources"] = [];
   const add = (key: SourceKey, name: string, available: boolean | undefined, records: AnalyticsRecord[]) => sources.push({ key, name, available: available === true, records: available ? records : [] });

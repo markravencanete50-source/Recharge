@@ -33,11 +33,13 @@ const vite = await createServer({
           !id.replaceAll("\\", "/").endsWith("/app/api/mobile/account/route.ts")
         )
           return null;
-        for (const key of Object.keys(mocks))
+        for (const key of Object.keys(mocks)) {
           code = code.replaceAll(
             `from '${key}'`,
             `from 'registration-test:${key}'`,
           );
+          code = code.replaceAll(`from "${key}"`, `from "registration-test:${key}"`);
+        }
         return { code, map: null };
       },
       resolveId(id) {

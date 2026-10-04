@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native";
+import type { DepartmentTone } from "../../lib/workspace-map";
 export const themes = {
   light: {
     background: "#f2f5f2",
@@ -28,6 +29,25 @@ export const themes = {
   },
 };
 export type Palette = typeof themes.light;
+export const departmentColors = {
+  light: {
+    cleans: { ink: "#506337", wash: "#EDF2E4" },
+    ready: { ink: "#2F665B", wash: "#E7F2EE" },
+    stays: { ink: "#36596C", wash: "#EAF1F5" },
+    clients: { ink: "#625173", wash: "#F1EDF6" },
+    accounts: { ink: "#7A4936", wash: "#F8EEE7" },
+  },
+  dark: {
+    cleans: { ink: "#C0CDA8", wash: "#2D3727" },
+    ready: { ink: "#9DCEC1", wash: "#213A32" },
+    stays: { ink: "#AFC7D4", wash: "#20343D" },
+    clients: { ink: "#C6B7D9", wash: "#302B3B" },
+    accounts: { ink: "#DFB09A", wash: "#3B2D26" },
+  },
+};
+export function departmentColor(tone: DepartmentTone, palette: Palette) {
+  return departmentColors[palette.background === themes.dark.background ? "dark" : "light"][tone];
+}
 export const ui = StyleSheet.create({
   fill: { flex: 1 },
   row: { flexDirection: "row", alignItems: "center" },
@@ -36,20 +56,20 @@ export const ui = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  page: { padding: 22, paddingBottom: 28, gap: 22 },
-  title: { fontSize: 30, fontWeight: "700", letterSpacing: -1, lineHeight: 36 },
+  page: { padding: 20, paddingBottom: 28, gap: 20, width: "100%", maxWidth: 760, alignSelf: "center" },
+  title: { fontSize: 28, fontWeight: "700", letterSpacing: -0.7, lineHeight: 34 },
   eyebrow: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 2,
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.8,
     marginBottom: 8,
   },
-  body: { fontSize: 15, lineHeight: 24 },
-  small: { fontSize: 12, lineHeight: 18 },
+  body: { fontSize: 16, lineHeight: 24 },
+  small: { fontSize: 13, lineHeight: 19 },
   sectionTitle: { fontSize: 18, fontWeight: "700", letterSpacing: -0.4 },
-  card: { borderWidth: 1, borderRadius: 22, padding: 18, gap: 12 },
+  card: { borderWidth: 1, borderRadius: 20, padding: 18, gap: 12 },
   button: {
-    minHeight: 46,
+    minHeight: 48,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -60,8 +80,8 @@ export const ui = StyleSheet.create({
   },
   buttonText: { fontSize: 14, fontWeight: "600" },
   iconButton: {
-    height: 44,
-    width: 44,
+      height: 48,
+      width: 48,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
@@ -84,7 +104,7 @@ export const ui = StyleSheet.create({
     borderRadius: 10,
     alignSelf: "flex-start",
   },
-  tagText: { fontSize: 11, fontWeight: "600" },
+  tagText: { fontSize: 12, fontWeight: "600" },
   tab: {
     flex: 1,
     alignItems: "center",

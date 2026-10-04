@@ -1,9 +1,9 @@
-import { isWorkspaceAdmin, MODULE_IDS } from "@/lib/modules";
+import { defaultModulesForRole, isWorkspaceAdmin, MODULE_IDS } from "@/lib/modules";
 import { verifiedWorkspaceUser, workspaceSupabase } from "@/lib/supabase-server";
 import type { AccessProfile } from "@/lib/access";
 
 function normaliseProfile(profile: AccessProfile): AccessProfile {
-  return { ...profile, modules: isWorkspaceAdmin(profile.role) ? [...MODULE_IDS] : profile.modules.filter(id => MODULE_IDS.includes(id)) };
+  return { ...profile, modules: isWorkspaceAdmin(profile.role) ? [...MODULE_IDS] : profile.modules.filter(id => MODULE_IDS.includes(id) && (profile.role !== "cleans" || defaultModulesForRole("cleans").includes(id))) };
 }
 export async function supabaseAccessAccount(email: string): Promise<AccessProfile | null> {
   const user = await verifiedWorkspaceUser();

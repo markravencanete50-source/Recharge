@@ -71,6 +71,18 @@ test('access hierarchy, RLS and session revocation execute in PostgreSQL', async
     await assert.rejects(save('owner@example.com','super_admin','revoked'), /Another super admin/);
     await assert.rejects(db.query(`select public.workspace_request_access('Owner name','super_admin')`), /Invalid account request/);
   });
+  await t.test('cleaning managers require an admin assignment and cleaners cannot receive team tools', async () => {
+    await asUser(owner, ownerSession);
+    await assert.rejects(save('staff@example.com','cleans','active',['cleaner-database']), /Cleaner access is limited/);
+    await save('staff@example.com','cleaning_manager','active',['cleaner-database','cleaning-schedule']);
+    await asUser(staff, staffSession);
+    await assert.rejects(db.query("select public.workspace_request_access('Staff person','cleaning_manager')"), /Invalid account request/);
+    await assert.rejects(db.query('select public.workspace_accounts()'), /Admin access required/);
+    await asUser(owner, ownerSession);
+    await save('staff@example.com','cleans','active',['cleaning-schedule','cleans-invoices']);
+    await asUser(staff, staffSession);
+    assert.equal((await db.query("select private.has_workspace_module('cleaner-database') allowed")).rows[0].allowed, false);
+  });
   await t.test('a logged-out JWT cannot access privileged RPCs or module grants', async () => {
     await db.exec('reset role'); await db.query('delete from auth.sessions where id=$1', [ownerSession]);
     await asUser(owner, ownerSession);

@@ -7,6 +7,7 @@ import "./mobile-preview.css";
 export const previewRoles: { value: WorkspaceRole; label: string }[] = [
   { value: "super_admin", label: "Super admin" }, { value: "admin", label: "Admin" },
   { value: "stays", label: "Stays team" }, { value: "cleans", label: "Cleaner" },
+  { value: "cleaning_manager", label: "Cleaning manager" },
   { value: "ready", label: "Ready team" }, { value: "client", label: "Client" },
 ];
 const devices = {

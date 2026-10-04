@@ -233,7 +233,8 @@ const roleLabels: Record<Role, string> = {
   super_admin: "Super admin",
   admin: "Admin",
   stays: "Stays employee",
-  cleans: "Cleans employee",
+  cleans: "Cleaner",
+  cleaning_manager: "Cleaning manager",
   ready: "Ready employee",
   client: "Client",
 };
@@ -1577,7 +1578,8 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
                 <SelectContent>
                   {!teamOnly && <SelectItem value="client">Client</SelectItem>}
                   <SelectItem value="stays">Stays employee</SelectItem>
-                  <SelectItem value="cleans">Cleans employee</SelectItem>
+                  <SelectItem value="cleans">Cleaner</SelectItem>
+                  <SelectItem value="cleaning_manager">Cleaning manager</SelectItem>
                   <SelectItem value="ready">Ready employee</SelectItem>
                   {actorRole === "super_admin" && <><SelectItem value="admin">Admin</SelectItem><SelectItem value="super_admin">Super admin</SelectItem></>}
                 </SelectContent>

@@ -39,7 +39,7 @@ const input = {
     { clientEmail: "other@example.com", createdAt: date, status: "in_progress", readyReference: "READY-1", accountsStatus: "not_created" },
     { clientEmail: "me@example.com", createdAt: date, status: "closed", readyReference: "READY-2", accountsStatus: "paid" },
   ] },
-  cleans: { available: true, cleaners: [{ id: "mine", email: "ME@example.com" }, { id: "other", email: "other@example.com" }],
+  cleans: { available: true, cleaners: [{ id: "mine", email: "ME@example.com", status: "active" }, { id: "other", email: "other@example.com", status: "active" }],
     properties: [{ status: "active", cleanerId: "mine" }, { status: "active", cleanerId: "other" }],
     tickets: [{ cleanDate: "2026-10-03", assignedCleanerId: "mine", status: "approved" }, { cleanDate: "2026-10-03", assignedCleanerId: "other", status: "scheduled" }, { cleanDate: "2026-10-03", assignedCleanerId: null, status: "scheduled" }],
     mail: [{ clientEmail: "me@example.com", createdAt: date, status: "new" }, { clientEmail: "other@example.com", createdAt: date, status: "new" }],
@@ -94,6 +94,11 @@ test("cleaner analytics excludes other cleaners and unassigned jobs even with de
   assert.equal(buildAnalytics(snapshot, period).total, 1);
   const unlinked = scopeAnalytics(viewer("cleans", "not-linked@example.com", ["cleaning-schedule"]), input);
   assert.equal(buildAnalytics(unlinked, period).total, 0); assert.equal(unlinked.propertyCount, 0);
+  const unlinkedDefault = scopeAnalytics(viewer("cleans", "not-linked@example.com"), input);
+  assert.equal(buildAnalytics(unlinkedDefault, period).total, 0);
+  const manager = scopeAnalytics(viewer("cleaning_manager"), input);
+  assert.equal(manager.title, "Cleaning team analytics");
+  assert.equal(manager.sources.find(source => source.key === "cleans").records.length, 3);
 });
 test("department, custom accounts permissions and inactive accounts obey module grants", () => {
   assert.equal(buildAnalytics(scopeAnalytics(viewer("super_admin"), input), period).total, 10);

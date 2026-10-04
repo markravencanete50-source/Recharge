@@ -40,7 +40,7 @@ export const MODULE_IDS = [
 
 export type ModuleId = (typeof MODULE_IDS)[number];
 
-export type WorkspaceRole = "super_admin" | "admin" | "stays" | "cleans" | "ready" | "client";
+export type WorkspaceRole = "super_admin" | "admin" | "stays" | "cleans" | "cleaning_manager" | "ready" | "client";
 export function isWorkspaceAdmin(role: string | undefined): boolean {
   return role === "super_admin" || role === "admin";
 }
@@ -92,7 +92,8 @@ const STAYS_ONLY_MODULES = [
 
 export const DEFAULT_ROLE_MODULES: Record<WorkspaceRole, readonly ModuleId[]> = {
   client: CLIENT_MODULES,
-  cleans: CLEANS_MODULES,
+  cleans: ["cleaning-schedule", "cleaner-performance", "cleans-invoices"],
+  cleaning_manager: [...CLEANS_MODULES, "clean-reporting"],
   ready: READY_MODULES,
   stays: Array.from(
     new Set<ModuleId>([

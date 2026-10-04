@@ -24,7 +24,7 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Feather } from "@expo/vector-icons";
+import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
@@ -33,6 +33,10 @@ import { AccountSetup, Avatar, type Profile } from "./src/AccountSetup";
 import { Artwork } from "./src/Artwork";
 import { LineChart, QueueChart, StatusChart } from "./src/Charts";
 import { themes, ui, type Palette } from "./src/theme";
+import { WorkspaceScreens } from "./src/WorkspaceScreens";
+import { ToolDirectory } from "./src/ToolDirectory";
+import { usePreviewBookmarks } from "./src/usePreviewPreferences";
+import { navigationFor, type WorkspaceSection } from "../lib/workspace-map";
 import {
   Entrance,
   MotionPress as Pressable,
@@ -50,14 +54,13 @@ import {
   roles,
   snapshotFor,
   toolsFor,
-  upcomingFor,
   type AnalyticsPeriod,
   type PreviewRecord,
   type Tool,
   type WorkspaceRole,
 } from "./src/model";
 
-type Tab = "home" | "workspace" | "analytics";
+type Tab = WorkspaceSection;
 type IconName = ComponentProps<typeof Feather>["name"];
 function IconButton({
   label,
@@ -160,14 +163,14 @@ function Sheet({
           Animated.spring(drag, {
             toValue: 0,
             bounciness: 0,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== "web",
           }).start();
         },
         onPanResponderTerminate: () =>
           Animated.spring(drag, {
             toValue: 0,
             bounciness: 0,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== "web",
           }).start(),
       }),
     [drag, onClose, reduced],
@@ -298,6 +301,18 @@ function RecordRow({
     </Pressable>
   );
 }
+function DetailScreen({ visible, onClose, title, palette: p, children }: { visible: boolean; onClose: () => void; title: string; palette: Palette; children: ReactNode }) {
+  const reduced = useReducedMotion();
+  return <Modal visible={visible} animationType={reduced ? "none" : "slide"} onRequestClose={onClose}>
+    <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]}>
+      <View style={[ui.row, { paddingHorizontal: 20, paddingVertical: 10, gap: 12, borderBottomWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
+        <IconButton label="Back to workspace" icon="arrow-left" onPress={onClose} palette={p} />
+        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, flex: 1 }]}>{title}</Text>
+      </View>
+      <ScrollView contentContainerStyle={ui.page} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">{children}</ScrollView>
+    </SafeAreaView>
+  </Modal>;
+}
 function AppContent() {
   const systemTheme = useColorScheme();
   const [theme, setTheme] = useState<"light" | "dark">(
@@ -306,8 +321,8 @@ function AppContent() {
   const p = themes[theme];
   const [role, setRole] = useState<WorkspaceRole>("super_admin");
   const { section } = useLocalSearchParams<{ section: string }>();
-  const tab: Tab =
-    section === "analytics" || section === "workspace" ? section : "home";
+  const sections: WorkspaceSection[] = ["home", "work", "properties", "inbox", "more", "workspace", "analytics", "calendar", "approvals"];
+  const tab: Tab = sections.includes(section as Tab) ? section as Tab : "home";
   const setTab = (value: Tab) => router.setParams({ section: value });
   const [profile, setProfile] = useState<Profile>({
     displayName: "Preview User",
@@ -320,8 +335,7 @@ function AppContent() {
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
   const [savedOnly, setSavedOnly] = useState(false);
-  const [savedTools, setSavedTools] = useState<string[]>([]);
-  const [searchFocused, setSearchFocused] = useState(false);
+  const { saved: savedTools, toggle: toggleSaved, error: bookmarkError, loaded: bookmarksLoaded } = usePreviewBookmarks(role);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<PreviewRecord | null>(
     null,
@@ -342,16 +356,6 @@ function AppContent() {
     [snapshot, period],
   );
   const tools = useMemo(() => toolsFor(role), [role]);
-  const departments = useMemo(
-    () => ["All", ...new Set(tools.map((tool) => tool.category))],
-    [tools],
-  );
-  const visibleTools = tools.filter(
-    (tool) =>
-      tool.name.toLowerCase().includes(search.trim().toLowerCase()) &&
-      (department === "All" || tool.category === department) &&
-      (!savedOnly || savedTools.includes(tool.id)),
-  );
   const savedCount = tools.filter((tool) =>
     savedTools.includes(tool.id),
   ).length;
@@ -362,13 +366,13 @@ function AppContent() {
       (recordStatus === "All" || record.status === recordStatus),
   );
   const openTool = (tool: Tool, record: PreviewRecord | null = null) => {
+    if (!tools.some(allowed => allowed.id === tool.id)) return;
     Keyboard.dismiss();
     setRecordSearch("");
     setRecordStatus("All");
     setSelectedTool(tool);
     setSelectedRecord(record);
   };
-  const upcoming = useMemo(() => upcomingFor(role), [role]);
   const roleLabel = roles.find((item) => item.value === role)!.label;
   const draftError = periodError(draft);
   useEffect(() => {
@@ -382,7 +386,7 @@ function AppContent() {
     Animated.timing(fade, {
       toValue: 1,
       duration: 220,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start();
     return () => {
       fade.stopAnimation();
@@ -446,12 +450,12 @@ function AppContent() {
           <Text
             style={{
               color: p.muted,
-              fontSize: 9,
-              letterSpacing: 2,
+              fontSize: 12,
+              letterSpacing: 0,
               marginTop: 3,
             }}
           >
-            YOUR WORKSPACE
+            {roleLabel} · Sample workspace
           </Text>
         </View>
         <View style={[ui.row, { gap: 10 }]}>
@@ -469,29 +473,6 @@ function AppContent() {
             <Avatar profile={profile} />
           </Pressable>
         </View>
-      </View>
-      <View
-        style={[
-          ui.between,
-          {
-            paddingHorizontal: 22,
-            paddingVertical: 8,
-            backgroundColor: p.wash,
-          },
-        ]}
-      >
-        <Text style={{ color: p.muted, fontSize: 11 }}>PREVIEW WORKSPACE</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Change preview role"
-          onPress={() => setSettings(true)}
-          style={[ui.row, { gap: 5, minHeight: 44 }]}
-        >
-          <Text style={{ color: p.text, fontSize: 11, fontWeight: "600" }}>
-            {roleLabel}
-          </Text>
-          <Feather name="chevron-down" size={13} color={p.text} />
-        </Pressable>
       </View>
       <ScrollView
         ref={scroll}
@@ -515,33 +496,8 @@ function AppContent() {
             ],
           }}
         >
-          <View>
-            <Text style={[ui.eyebrow, { color: p.muted }]}>
-              {tab === "home"
-                ? "AT A GLANCE"
-                : tab === "workspace"
-                  ? "YOUR TOOLS"
-                  : "WORKSPACE INTELLIGENCE"}
-            </Text>
-            <Text
-              accessibilityRole="header"
-              style={[ui.title, { color: p.text }]}
-            >
-              {tab === "home"
-                ? "Welcome back."
-                : tab === "workspace"
-                  ? "Your workspace."
-                  : snapshot.title}
-            </Text>
-            <Text style={[ui.body, { color: p.muted, marginTop: 8 }]}>
-              {tab === "home"
-                ? "Every property. Every team. One clear picture."
-                : tab === "workspace"
-                  ? "Everything you need to keep your day moving."
-                  : snapshot.description}
-            </Text>
-          </View>
-          {tab !== "workspace" && (
+          {tab === "analytics" && <View style={{ gap: 6 }}><Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{snapshot.title}</Text><Text style={[ui.body, { color: p.muted }]}>{snapshot.description}</Text></View>}
+          {tab === "analytics" && (
             <>
               <Pressable
                 accessibilityRole="button"
@@ -583,7 +539,7 @@ function AppContent() {
                       <Text
                         style={{
                           color: p.muted,
-                          fontSize: 11,
+                          fontSize: 13,
                           fontWeight: "600",
                           flex: 1,
                           marginRight: 8,
@@ -606,341 +562,8 @@ function AppContent() {
               </View>
             </>
           )}
-          {tab === "home" && (
-            <>
-              <View
-                style={[
-                  ui.card,
-                  {
-                    backgroundColor: p.primary,
-                    borderColor: p.primary,
-                    padding: 22,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: p.onPrimary,
-                    fontSize: 10,
-                    letterSpacing: 1.5,
-                    fontWeight: "600",
-                  }}
-                >
-                  PERFECTION AT EVERY STAGE
-                </Text>
-                <Text
-                  style={{
-                    color: p.onPrimary,
-                    fontSize: 23,
-                    fontWeight: "600",
-                    lineHeight: 30,
-                    letterSpacing: -0.5,
-                  }}
-                >
-                  A simpler way to manage your day.
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setTab("workspace")}
-                  style={[ui.between, { marginTop: 8, paddingVertical: 8 }]}
-                >
-                  <Text
-                    style={{
-                      color: p.onPrimary,
-                      fontWeight: "600",
-                      fontSize: 13,
-                    }}
-                  >
-                    Explore your tools
-                  </Text>
-                  <Feather
-                    name="arrow-up-right"
-                    size={20}
-                    color={p.onPrimary}
-                  />
-                </Pressable>
-              </View>
-              <View style={ui.between}>
-                <Text
-                  accessibilityRole="header"
-                  style={[ui.sectionTitle, { color: p.text }]}
-                >
-                  Your next steps
-                </Text>
-                <Text style={[ui.small, { color: p.muted }]}>
-                  Sample activity
-                </Text>
-              </View>
-              <View style={[ui.card, card]}>
-                {upcoming.records.length ? (
-                  upcoming.records.map((record) => (
-                    <RecordRow
-                      key={record.id}
-                      record={record}
-                      palette={p}
-                      onPress={() => {
-                        if (upcoming.tool) openTool(upcoming.tool, record);
-                      }}
-                    />
-                  ))
-                ) : (
-                  <Text style={[ui.body, { color: p.muted }]}>
-                    No sample tasks in this workspace. Explore your tools to
-                    review the available areas.
-                  </Text>
-                )}
-              </View>
-              <Action
-                label="View your analytics"
-                palette={p}
-                secondary
-                onPress={() => setTab("analytics")}
-              />
-            </>
-          )}
-          {tab === "workspace" && (
-            <>
-              <View
-                style={[
-                  ui.row,
-                  {
-                    backgroundColor: p.surface,
-                    borderWidth: 1,
-                    borderColor: searchFocused ? p.primary : p.border,
-                    borderRadius: 16,
-                    paddingLeft: 14,
-                  },
-                ]}
-              >
-                <Feather name="search" size={18} color={p.muted} />
-                <TextInput
-                  accessibilityLabel="Search workspace tools"
-                  placeholder="Search feature titles"
-                  placeholderTextColor={p.muted}
-                  value={search}
-                  onChangeText={setSearch}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  returnKeyType="search"
-                  onSubmitEditing={() => Keyboard.dismiss()}
-                  selectionColor={p.primary}
-                  style={[
-                    ui.input,
-                    {
-                      flex: 1,
-                      borderWidth: 0,
-                      color: p.text,
-                      backgroundColor: p.surface,
-                      borderColor: p.border,
-                    },
-                  ]}
-                />
-                {search.length > 0 && (
-                  <IconButton
-                    label="Clear tool search"
-                    icon="x"
-                    palette={p}
-                    onPress={() => setSearch("")}
-                  />
-                )}
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 8 }}
-                style={{ marginTop: -10, marginHorizontal: -22 }}
-              >
-                <View style={{ width: 14 }} />
-                {departments.map((value) => (
-                  <Pressable
-                    key={value}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: department === value }}
-                    onPress={() => setDepartment(value)}
-                    style={[
-                      ui.button,
-                      {
-                        backgroundColor:
-                          department === value ? p.primary : p.surface,
-                        borderColor: p.border,
-                        borderWidth: 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        ui.buttonText,
-                        { color: department === value ? p.onPrimary : p.text },
-                      ]}
-                    >
-                      {value}
-                    </Text>
-                  </Pressable>
-                ))}
-                <View style={{ width: 14 }} />
-              </ScrollView>
-              <View style={[ui.between, { marginTop: -10 }]}>
-                <Text
-                  accessibilityLiveRegion="polite"
-                  style={[ui.small, { color: p.muted }]}
-                >
-                  {visibleTools.length} of {tools.length} tools
-                </Text>
-                <Pressable
-                  accessibilityRole="checkbox"
-                  accessibilityLabel={`Show saved tools, ${savedCount} available`}
-                  accessibilityState={{ checked: savedOnly }}
-                  onPress={() => setSavedOnly(!savedOnly)}
-                  style={[
-                    ui.row,
-                    {
-                      gap: 7,
-                      minHeight: 44,
-                      paddingHorizontal: 10,
-                      borderRadius: 12,
-                      backgroundColor: savedOnly ? p.wash : "transparent",
-                    },
-                  ]}
-                >
-                  <Feather name="bookmark" size={16} color={p.primary} />
-                  <Text
-                    style={[ui.small, { color: p.text, fontWeight: "600" }]}
-                  >
-                    Saved {savedCount}
-                  </Text>
-                </Pressable>
-              </View>
-              {visibleTools.map((tool, index) => (
-                <Entrance key={tool.id} delay={index * 30}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${tool.name}`}
-                    onPress={() => {
-                      openTool(tool);
-                    }}
-                    style={({ pressed }) => [
-                      ui.card,
-                      card,
-                      { opacity: pressed ? 0.75 : 1 },
-                    ]}
-                  >
-                    <View style={ui.between}>
-                      <Artwork id={tool.id} />
-                      <Pressable
-                        accessibilityRole="checkbox"
-                        accessibilityLabel={`Save ${tool.name}`}
-                        accessibilityState={{
-                          checked: savedTools.includes(tool.id),
-                        }}
-                        onPress={(event) => {
-                          event.stopPropagation();
-                          setSavedTools((current) =>
-                            current.includes(tool.id)
-                              ? current.filter((id) => id !== tool.id)
-                              : [...current, tool.id],
-                          );
-                        }}
-                        style={[
-                          ui.iconButton,
-                          {
-                            borderColor: p.border,
-                            backgroundColor: savedTools.includes(tool.id)
-                              ? p.wash
-                              : p.surface,
-                          },
-                        ]}
-                      >
-                        <Feather
-                          name={
-                            savedTools.includes(tool.id) ? "check" : "bookmark"
-                          }
-                          size={18}
-                          color={p.primary}
-                        />
-                      </Pressable>
-                    </View>
-                    <View style={[ui.tag, { backgroundColor: p.wash }]}>
-                      <Text style={[ui.tagText, { color: p.muted }]}>
-                        {tool.category}
-                      </Text>
-                    </View>
-                    <Text
-                      style={{
-                        color: p.text,
-                        fontSize: 19,
-                        fontWeight: "700",
-                        lineHeight: 25,
-                        letterSpacing: -0.3,
-                      }}
-                    >
-                      {tool.name}
-                    </Text>
-                    <Text style={[ui.body, { color: p.muted }]}>
-                      {tool.description}
-                    </Text>
-                    <View
-                      style={[
-                        ui.between,
-                        {
-                          marginTop: 4,
-                          paddingTop: 14,
-                          borderTopWidth: 1,
-                          borderTopColor: p.border,
-                        },
-                      ]}
-                    >
-                      <Text style={[ui.small, { color: p.muted }]}>
-                        {tool.audience}
-                      </Text>
-                      <View style={[ui.row, { gap: 10 }]}>
-                        <Text
-                          style={{
-                            color: p.text,
-                            fontWeight: "600",
-                            fontSize: 12,
-                          }}
-                        >
-                          View tool
-                        </Text>
-                        <Feather
-                          name="arrow-up-right"
-                          size={18}
-                          color={p.text}
-                        />
-                      </View>
-                    </View>
-                  </Pressable>
-                </Entrance>
-              ))}
-              {visibleTools.length === 0 && (
-                <View style={[ui.card, card]}>
-                  <Text style={[ui.sectionTitle, { color: p.text }]}>
-                    {savedOnly && !savedCount
-                      ? "Keep your go-to tools here"
-                      : "No matching tools"}
-                  </Text>
-                  <Text style={[ui.body, { color: p.muted }]}>
-                    {savedOnly && !savedCount
-                      ? "Tap the bookmark on a tool to save it. Your saved tools stay available during this preview."
-                      : "Try another feature title or department."}
-                  </Text>
-                  <Action
-                    label="Show all tools"
-                    secondary
-                    palette={p}
-                    onPress={() => {
-                      setSearch("");
-                      setDepartment("All");
-                      setSavedOnly(false);
-                      Keyboard.dismiss();
-                    }}
-                  />
-                </View>
-              )}
-            </>
-          )}
+          <WorkspaceScreens key={role} section={tab} role={role} palette={p} onNavigate={setTab} onOpen={openTool} onProfile={() => setSettings(true)} savedCount={savedCount} />
+          {tab === "workspace" && <ToolDirectory role={role} palette={p} query={search} onQuery={setSearch} area={department} onArea={setDepartment} saved={savedTools} onlySaved={savedOnly} onOnlySaved={() => setSavedOnly(!savedOnly)} onSave={toggleSaved} onOpen={openTool} storageError={bookmarksLoaded ? bookmarkError : "Loading saved tools"} />}
           {tab === "analytics" && (
             <>
               <Entrance
@@ -1014,7 +637,7 @@ function AppContent() {
           <Text
             style={{
               color: p.muted,
-              fontSize: 10,
+              fontSize: 12,
               lineHeight: 16,
               textAlign: "center",
             }}
@@ -1029,40 +652,34 @@ function AppContent() {
           { backgroundColor: p.surface, borderTopColor: p.border },
         ]}
       >
-        {(
-          [
-            { value: "home", label: "Home", icon: "home" },
-            { value: "workspace", label: "Workspace", icon: "grid" },
-            { value: "analytics", label: "Analytics", icon: "bar-chart-2" },
-          ] as const
-        ).map((item) => (
+        {navigationFor(role).map((item) => (
           <Pressable
             key={item.value}
             accessibilityRole="tab"
             accessibilityLabel={item.label}
-            accessibilityState={{ selected: tab === item.value }}
+            accessibilityState={{ selected: tab === item.value || (item.value === "more" && tab === "workspace") }}
             onPress={() => setTab(item.value)}
             style={({ pressed }) => [
               ui.tab,
               {
-                backgroundColor: tab === item.value ? p.wash : "transparent",
+                backgroundColor: (tab === item.value || (item.value === "more" && tab === "workspace")) ? p.wash : "transparent",
                 opacity: pressed ? 0.7 : 1,
               },
             ]}
           >
             <Entrance
-              trigger={tab === item.value ? "active" : "inactive"}
+              trigger={(tab === item.value || (item.value === "more" && tab === "workspace")) ? "active" : "inactive"}
               style={{ alignItems: "center", gap: 5 }}
             >
               <Feather
                 name={item.icon}
                 size={21}
-                color={tab === item.value ? p.primary : p.muted}
+                color={(tab === item.value || (item.value === "more" && tab === "workspace")) ? p.primary : p.muted}
               />
               <Text
                 style={[
                   ui.tabLabel,
-                  { color: tab === item.value ? p.text : p.muted },
+                  { color: (tab === item.value || (item.value === "more" && tab === "workspace")) ? p.text : p.muted },
                 ]}
               >
                 {item.label}
@@ -1236,7 +853,7 @@ function AppContent() {
           }}
         />
       </Sheet>
-      <Sheet
+      <DetailScreen
         visible={Boolean(selectedTool)}
         onClose={() => {
           setSelectedTool(null);
@@ -1381,7 +998,7 @@ function AppContent() {
                     palette={p}
                     secondary
                     onPress={() => {
-                      setDepartment(selectedTool.category);
+                      setDepartment("All");
                       setSearch("");
                       setSavedOnly(false);
                       setSelectedTool(null);
@@ -1396,7 +1013,7 @@ function AppContent() {
             </>
           )}
         </View>
-      </Sheet>
+      </DetailScreen>
       <Sheet
         visible={chartData}
         onClose={() => setChartData(false)}
