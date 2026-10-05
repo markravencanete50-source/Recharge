@@ -10,6 +10,8 @@ const endpoints = new Set([
   "/api/workspace/journeys", "/api/mobile/journeys",
   "/api/workspace/operations", "/api/mobile/operations",
   "/api/workspace/portfolio", "/api/mobile/portfolio",
+  "/api/workspace/integrations", "/api/mobile/integrations",
+  "/api/workspace/media", "/api/mobile/media",
   "/workspace", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);
 export function backendRouteAllowed(path: string) {

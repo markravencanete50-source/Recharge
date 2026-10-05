@@ -5,6 +5,7 @@ import { backendRouteAllowed } from "./backend-route-policy";
 
 interface Env {
   BACKEND_ONLY?: string;
+  INTEGRATION_SCHEDULE_ENABLED?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
@@ -33,6 +34,14 @@ interface ExecutionContext {
 // const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
 
 const worker = {
+  async scheduled(_controller: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Scheduling and provider flags are separately enabled after client configuration.
+    // The deployment config intentionally installs no cron trigger yet.
+    if (env.BACKEND_ONLY !== 'true' || env.INTEGRATION_SCHEDULE_ENABLED !== 'true') return;
+    ctx.waitUntil(import('../lib/integration-server').then(module => module.dispatchNotifications()).catch(() => {
+      console.error('Recharge integration batch failed; durable job state retained.');
+    }));
+  },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 

@@ -6,7 +6,7 @@ Build the server, generate the backend config with `node scripts/build-backend-c
 
 The public Pages product preview stays read-only. Its sample data must never be imported into the live database. The approved repository connection now deploys both Pages and the separate backend Worker from `codex/cloudflare-preview`.
 
-### Deployment status, 5 October 2026
+### Historical deployment status, 5 October 2026 (resolved below)
 
 The Home layout/navigation update (`cc653c5`) is published on Pages. Backend branding allowlist update `06f17b5` is built and tested locally, but neither that update nor the prepared property workflow handlers have been redeployed to the backend Worker. The existing CLI login cannot refresh because its connection to Cloudflare's authentication server fails. Stored credentials were not replaced and TLS validation was not bypassed.
 
@@ -64,3 +64,14 @@ Never place the Supabase secret/service key, email/SMS provider token, Hostaway 
 9. Complete the interface and real-device acceptance items in `ALEX-IMPLEMENTATION-MATRIX.md`. Test revoked access, offline failures, duplicate retries, private exports, accessibility and long-form scrolling before launch.
 
 No credentials are needed to continue the pending local interface work. Production integration validation and delivery must wait for the relevant service configuration.
+
+## Integration structure release, 6 October 2026
+
+Read `BACKEND-STRUCTURE-2026-10-06.md` before enabling external services. The new
+integration migration is locally tested but cannot be installed from the currently
+connected Supabase account: both the connector and dashboard deny access to the
+existing Recharge project. Keep all provider and scheduling flags off until this
+migration is installed and actual provider tests pass. Photo upload/viewing,
+reservation imports and separate notification channel/device receipt processing
+now have server contracts. The existing hosted onboarding/operation workflow
+migrations remain unchanged. No provider credentials were requested or added.

@@ -28,6 +28,8 @@ const protectedPaths = [
   '/api/workspace/operations', '/api/workspace/portfolio',
   '/api/mobile/workspace', '/api/mobile/journeys',
   '/api/mobile/operations', '/api/mobile/portfolio', '/api/mobile/reports/export',
+  '/api/workspace/integrations', '/api/mobile/integrations',
+  '/api/workspace/media', '/api/mobile/media',
 ];
 await Promise.all(protectedPaths.map(async path => {
   const payload = await (await request(path, 401)).json();
