@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Animated, ScrollView, View } from 'react-native';
+import { Animated, Platform, ScrollView, View } from 'react-native';
 import { navigationFor, type WorkspaceSection } from '../../lib/workspace-map';
 import { DEPARTMENTS } from './DepartmentGrid';
 import { toolsFor, type WorkspaceRole } from './model';
@@ -13,7 +13,7 @@ export function DesktopNavigation({role,section,palette:p,onNavigate,onDepartmen
   const [expanded,setExpanded]=useState(true); const tools=toolsFor(role);
   const index=Math.max(0,navigationFor(role).findIndex(item=>item.value===section));
   const [indicator]=useState(()=>new Animated.Value(index*60)); const reduced=useReducedMotion();
-  useEffect(()=>{if(reduced){indicator.setValue(index*60);return;}const animation=Animated.spring(indicator,{toValue:index*60,speed:24,bounciness:0,useNativeDriver:true});animation.start();return()=>animation.stop();},[indicator,index,reduced]);
+  useEffect(()=>{if(reduced){indicator.setValue(index*60);return;}const animation=Animated.spring(indicator,{toValue:index*60,speed:24,bounciness:0,useNativeDriver:Platform.OS!=='web'});animation.start();return()=>animation.stop();},[indicator,index,reduced]);
   return <View style={{width:240,backgroundColor:p.surface,borderRightWidth:1,borderColor:p.border,padding:16,gap:24}}>
     <View testID="sidebar-brand" style={{paddingVertical:18,alignItems:'center',backgroundColor:'#EFE9DB',borderRadius:12}}><CompanyLogo palette={p} width={200}/></View>
     <ScrollView contentContainerStyle={{gap:8,paddingBottom:24}} showsVerticalScrollIndicator={false}><Animated.View pointerEvents="none" style={{position:'absolute',left:0,top:0,width:3,height:52,borderRadius:999,zIndex:1,backgroundColor:p.primary,transform:[{translateY:indicator}]}}/>{navigationFor(role).map(item=><MotionPress key={item.value} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{selected:section===item.value}} onPress={()=>onNavigate(item.value)} style={[ui.row,{height:52,gap:14,paddingHorizontal:14,borderRadius:14,backgroundColor:section===item.value?p.wash:'transparent'}]}><NavSymbol name={item.icon} active={section===item.value} color={section===item.value?p.primary:p.muted}/><Text style={{fontSize:14,fontWeight:'600',color:section===item.value?p.primary:p.text}}>{item.label}</Text></MotionPress>)}

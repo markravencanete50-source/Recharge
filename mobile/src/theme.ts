@@ -74,7 +74,7 @@ export const ui = StyleSheet.create({
     padding: 16,
     gap: 12,
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 8px 24px var(--rc-shadow)" }
+      ? { boxShadow: "0 2px 8px var(--rc-shadow)" }
       : {}),
   },
   button: {

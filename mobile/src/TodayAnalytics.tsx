@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Animated, Platform, View } from 'react-native';
-import Svg, {Circle,Defs,Filter,FeGaussianBlur,LinearGradient,Path,Polyline,Stop,Text as SvgText} from 'react-native-svg';
+import { Animated, View } from 'react-native';
+import Svg, {Circle,Defs,Filter,FeGaussianBlur,Line,LinearGradient,Path,Polyline,Stop,Text as SvgText} from 'react-native-svg';
 import Feather from '@expo/vector-icons/Feather';
 import { todayColors, type todayPresentation } from '../../lib/today-presentation';
 import { Text } from './Typography';
@@ -10,6 +10,8 @@ import { ui, type Palette } from './theme';
 
 type Today=ReturnType<typeof todayPresentation>;
 const AnimatedCircle=Animated.createAnimatedComponent(Circle);
+const AnimatedPolyline=Animated.createAnimatedComponent(Polyline);
+const AnimatedPath=Animated.createAnimatedComponent(Path);
 
 export function TodayRing({completed,total,motionKey,size=88}:{completed:number;total:number;motionKey:string;size?:number}) {
   const {reduced,ready,seen}=useMotionPreference();
@@ -35,33 +37,60 @@ export function TodayRing({completed,total,motionKey,size=88}:{completed:number;
   </View>;
 }
 
-export function OpenTasksSparkline({data,motionKey,wide=false}:{data:Today;motionKey:string;wide?:boolean}) {
-  const [width,setWidth]=useState(112);
-  const values=data.days.map(day=>day.value),max=Math.max(1,...values);
-  const x=(i:number)=>8+i/Math.max(1,values.length-1)*(width-16),y=(value:number)=>32-value/max*23;
-  const points=values.map((v,i)=>`${x(i)},${y(v)}`).join(' ');
-  const {reduced,ready,seen}=useMotionPreference(),[opacity]=useState(()=>new Animated.Value(1));
-  useEffect(()=>{if(!ready)return;if(reduced||seen.has(motionKey)){opacity.setValue(1);return;}seen.add(motionKey);opacity.setValue(0);const animation=Animated.timing(opacity,{toValue:1,duration:300,useNativeDriver:Platform.OS!=='web'});animation.start();return()=>{animation.stop();opacity.setValue(1);};},[motionKey,opacity,ready,reduced,seen]);
-  return <View style={{gap:8}}><View style={[ui.row,{gap:12,flexWrap:'wrap'}]}>
-    <Animated.View onLayout={event=>setWidth(event.nativeEvent.layout.width)} accessible accessibilityLabel={`Currently open tasks by recorded date: ${data.days.map(day=>`${day.date}: ${day.value}`).join('; ')}. ${data.changeLabel}. Historical backlog is unavailable.`} style={{width:wide?200:112,opacity}}>
-      {data.available?<Svg width="100%" height={54} viewBox={`0 0 ${width} 54`}><Defs><LinearGradient id="today-open-area" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={todayColors.spark} stopOpacity={0.35}/><Stop offset="1" stopColor={todayColors.spark} stopOpacity={0}/></LinearGradient></Defs>
-        <Path d={`M8 36 L${points.split(' ').join(' L')} L${x(values.length-1)} 36 Z`} fill="url(#today-open-area)"/>
-        <Polyline points={points} fill="none" stroke={todayColors.spark} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
-        <Circle cx={x(values.length-1)} cy={y(values.at(-1)||0)} r={6} fill={todayColors.spark} fillOpacity={0.4}/><Circle cx={x(values.length-1)} cy={y(values.at(-1)||0)} r={2.5} fill="#FFFFFF"/>
-        <SvgText x={x(0)} y={51} fill="#FFFFFF" fontSize={12} fontFamily="Montserrat_500Medium" textAnchor="start">{values[0]}</SvgText><SvgText x={x(values.length-1)} y={51} fill="#FFFFFF" fontSize={12} fontFamily="Montserrat_500Medium" textAnchor="end">{values.at(-1)}</SvgText>
-      </Svg>:<Text style={{color:'#FFFFFF',fontSize:12}}>Data unavailable</Text>}
-    </Animated.View>
-    <View style={[ui.row,{gap:6,backgroundColor:'rgba(255,255,255,0.14)',paddingHorizontal:10,paddingVertical:8,borderRadius:999,flexShrink:1}]}><Feather name={data.direction==='down'?'arrow-down':data.direction==='up'?'arrow-up':'minus'} size={15} color={data.good?todayColors.mint:todayColors.unfavourable}/><Text style={{color:'#FFFFFF',fontSize:12,fontWeight:'500',flexShrink:1,lineHeight:18}}>{data.changeLabel}</Text></View>
-  </View><Text style={{color:'#FFFFFF',fontSize:12,lineHeight:18}}>Open tasks, last 7 days</Text></View>;
+export function OpenTasksTrend({data,motionKey,wide=false}:{data:Today;motionKey:string;wide?:boolean}) {
+  const [width,setWidth]=useState(300);
+  const [selectedDate,setSelectedDate]=useState(data.days.at(-1)?.date);
+  const values=data.days.map(day=>day.value),total=values.reduce((sum,value)=>sum+value,0);
+  const max=Math.max(2,Math.ceil(Math.max(0,...values)/2)*2),height=wide?180:150;
+  const x=(i:number)=>28+(i+0.5)/values.length*(width-28);
+  const y=(value:number)=>height-12-value/max*(height-36);
+  const points=values.map((value,i)=>`${x(i)},${y(value)}`).join(' ');
+  const length=values.reduce((sum,value,i)=>i?sum+Math.hypot(x(i)-x(i-1),y(value)-y(values[i-1])):sum,0);
+  const found=data.days.findIndex(day=>day.date===selectedDate);
+  const selected=found<0?data.days.length-1:found;
+  const day=data.days[selected];
+  const label=(date:string)=>new Date(date+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'Europe/London'});
+  const {reduced,ready,seen}=useMotionPreference(),[draw]=useState(()=>new Animated.Value(1));
+  useEffect(()=>{
+    if(!ready)return;
+    if(reduced||seen.has(motionKey)){draw.setValue(1);return;}
+    seen.add(motionKey);draw.setValue(0);
+    const animation=Animated.timing(draw,{toValue:1,duration:650,useNativeDriver:false});
+    animation.start();return()=>{animation.stop();draw.setValue(1);};
+  },[motionKey,draw,ready,reduced,seen]);
+  return <View testID="home-task-trend" style={{gap:14,backgroundColor:todayColors.heroStart,borderRadius:18,padding:16,overflow:'hidden'}}>
+    <View style={[ui.between,{gap:12,flexWrap:'wrap'}]}>
+      <View style={{gap:4}}><Text style={{color:'#FFFFFF',fontSize:15,fontWeight:'600'}}>Open tasks by date</Text><Text style={{color:'#FFFFFF',fontSize:12,lineHeight:18}}>{label(data.days[0].date)} to {label(data.days.at(-1)!.date)}</Text></View>
+      <View style={[ui.row,{gap:6,backgroundColor:'#FFFFFF24',paddingHorizontal:10,paddingVertical:7,borderRadius:999}]}><Feather name={data.direction==='down'?'arrow-down':data.direction==='up'?'arrow-up':'minus'} size={15} color={data.good?todayColors.mint:todayColors.unfavourable}/><Text style={{color:'#FFFFFF',fontSize:12,fontWeight:'500'}}>{data.changeLabel}</Text></View>
+    </View>
+    {data.available?<>
+      <Text style={{color:'#FFFFFF',fontSize:12,lineHeight:18}}>{total} currently open, recorded in these 7 days</Text>
+      <View onLayout={event=>setWidth(Math.max(80,event.nativeEvent.layout.width))} accessible accessibilityRole="image" accessibilityLabel={`Open tasks by recorded date. ${data.days.map(day=>`${day.date}: ${day.value}`).join('; ')}. ${data.changeLabel}. Counts use current task status, not historical backlog.`}>
+        <Svg accessible={false} width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
+          <Defs><LinearGradient id="today-open-area" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={todayColors.spark} stopOpacity={0.3}/><Stop offset="1" stopColor={todayColors.spark} stopOpacity={0}/></LinearGradient></Defs>
+          {[0,max/2,max].map(value=><Line key={'grid-'+value} x1={28} x2={width} y1={y(value)} y2={y(value)} stroke="#FFFFFF" strokeOpacity={0.18} strokeDasharray="3 5"/>)}
+          {[0,max/2,max].map(value=><SvgText key={'label-'+value} x={0} y={y(value)+4} fill="#FFFFFF" fontSize={12} fontFamily="Montserrat_500Medium">{value}</SvgText>)}
+          <AnimatedPath d={`M${x(0)} ${height-12} L${points.split(' ').join(' L')} L${x(values.length-1)} ${height-12} Z`} fill="url(#today-open-area)" opacity={draw}/>
+          <AnimatedPolyline points={points} fill="none" stroke={todayColors.spark} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={length||1} strokeDashoffset={draw.interpolate({inputRange:[0,1],outputRange:[length||1,0]})}/>
+          {values.map((value,i)=><Circle key={data.days[i].date} cx={x(i)} cy={y(value)} r={3} fill={todayColors.spark}/>)}
+          <Line x1={x(selected)} x2={x(selected)} y1={18} y2={height-12} stroke="#FFFFFF" strokeOpacity={0.5} strokeDasharray="3 4"/>
+          <Circle cx={x(selected)} cy={y(day.value)} r={8} fill={todayColors.spark} fillOpacity={0.3}/><Circle cx={x(selected)} cy={y(day.value)} r={4} fill="#FFFFFF"/>
+          <SvgText x={x(selected)} y={y(day.value)-12} textAnchor="middle" fill="#FFFFFF" fontSize={13} fontFamily="Montserrat_600SemiBold">{day.value}</SvgText>
+        </Svg>
+      </View>
+      <View style={{flexDirection:'row',paddingLeft:28}}>{data.days.map(item=><MotionPress key={item.date} accessibilityRole="button" accessibilityLabel={`${label(item.date)}, ${item.value} open tasks. Show daily count`} accessibilityState={{selected:item.date===day.date}} onPress={()=>setSelectedDate(item.date)} onHoverIn={()=>setSelectedDate(item.date)} style={{flex:1,minHeight:44,borderRadius:10,alignItems:'center',justifyContent:'center',backgroundColor:item.date===day.date?'#FFFFFF24':'transparent'}}><Text style={{color:'#FFFFFF',fontSize:12,fontWeight:item.date===day.date?'600':'400'}}>{wide?label(item.date):Number(item.date.slice(-2))}</Text></MotionPress>)}</View>
+      <View style={{gap:4}}><Text accessibilityLiveRegion="polite" style={{color:'#FFFFFF',fontSize:14,fontWeight:'600'}}>{label(day.date)} · {day.value} open {day.value===1?'task':'tasks'}</Text><Text style={{color:'#FFFFFF',fontSize:12,lineHeight:18}}>By record date, using current task status. Select a date to explore.</Text>{data.partial&&<Text style={{color:'#FFFFFF',fontSize:12}}>Some data sources are unavailable.</Text>}</View>
+    </>:<Text style={{color:'#FFFFFF',fontSize:14}}>Task data is unavailable. Try refreshing Reports.</Text>}
+  </View>;
 }
 
 export function TodayTiles({data,palette:p,onWaiting,onProperties,vertical=false}:{data:Today;palette:Palette;onWaiting:()=>void;onProperties:()=>void;vertical?:boolean}) {
   const tone=todayColors[p.isDark?'dark':'light'];
   return <View style={{flexDirection:vertical?'column':'row',gap:vertical?16:12,alignItems:'stretch',...(vertical?{flex:1,minWidth:0}:{})}}>{['waiting','properties'].map(kind=>{
     const waiting=kind==='waiting',icon=waiting?tone.waitingIcon:tone.propertyIcon;
-    return <MotionPress key={kind} accessibilityRole="button" accessibilityLabel={waiting?`${data.waiting} waiting, ${data.waiting} of ${data.open} open tasks`:`${data.properties??'Unavailable'} properties, as of today`} onPress={waiting?onWaiting:onProperties} style={{flex:1,minWidth:0,padding:16,borderRadius:22,borderWidth:1,borderColor:waiting?tone.waitingBorder:tone.propertyBorder,backgroundColor:waiting?tone.waitingBg:tone.propertyBg,gap:10}}>
+    return <MotionPress key={kind} accessibilityRole="button" accessibilityLabel={waiting?`${data.waiting} waiting, ${data.waiting} of ${data.open} open tasks`:`${data.properties??'Unavailable'} properties, as of today`} onPress={waiting?onWaiting:onProperties} style={{flex:1,minWidth:0,padding:vertical?24:16,justifyContent:vertical?'center':undefined,borderRadius:22,borderWidth:1,borderColor:waiting?tone.waitingBorder:tone.propertyBorder,backgroundColor:waiting?tone.waitingBg:tone.propertyBg,gap:vertical?18:10}}>
       <View style={ui.between}><View style={{width:30,height:30,borderRadius:10,backgroundColor:p.isDark?(waiting?'#FFB54729':'#A9BAFF29'):(waiting?'#B4530910':'#3457D510'),alignItems:'center',justifyContent:'center'}}><ReportSymbol kind={waiting?'waiting':'property'} color={icon} size={19}/></View><Feather name="arrow-up-right" size={16} color={icon}/></View>
-      <View style={[ui.row,{gap:6,flexWrap:'wrap'}]}><Text style={{fontSize:24,fontWeight:'600',letterSpacing:-0.8,color:p.text}}>{waiting?data.waiting:data.properties??'—'}</Text><Text style={{fontSize:13,color:p.text}}>{kind}</Text></View>
+      <View style={[ui.row,{gap:vertical?10:6,flexWrap:'wrap'}]}><Text style={{fontSize:vertical?42:24,fontWeight:'600',letterSpacing:-0.8,color:p.text}}>{waiting?data.waiting:data.properties??'—'}</Text><Text style={{fontSize:vertical?16:13,color:p.text}}>{kind}</Text></View>
       {waiting?<><View accessible accessibilityLabel={`${data.waiting} of ${data.open} open tasks waiting`} style={{height:6,borderRadius:3,backgroundColor:'#FFB54733',overflow:'hidden'}}><View style={{height:6,borderRadius:3,width:`${data.waitingShare*100}%`,backgroundColor:tone.waitingFill}}/></View><Text style={{fontSize:12,lineHeight:18,color:p.text}}>{data.waiting} of {data.open} open tasks</Text></>:<Text style={{fontSize:12,lineHeight:18,color:p.text}}>As of today</Text>}
     </MotionPress>;
   })}</View>;

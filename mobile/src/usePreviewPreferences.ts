@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect, useState } from "react";
-import { Animated, Platform, useColorScheme } from "react-native";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Platform, useColorScheme } from "react-native";
+import { commitThemeChange } from './commitThemeChange';
 import { MODULE_IDS, type WorkspaceRole } from "../../lib/modules";
 import { designTokenCss } from "../../lib/design-tokens";
 import { movePin } from "../../lib/pinned-tools";
@@ -59,7 +60,10 @@ export function usePreviewBookmarks(role: WorkspaceRole) {
   };
 }
 export function useThemePreference() {
-  const [themeOpacity] = useState(() => new Animated.Value(1));
+  const selected = useRef(false);
+  const version = useRef(0);
+  type ThemeTransition = { skipTransition: () => void; finished: Promise<void>; ready: Promise<void> };
+  const transition = useRef<ThemeTransition | null>(null);
   const system = useColorScheme();
   const [choice, setChoice] = useState<"light" | "dark" | null>(null);
   const theme = choice || (system === "dark" ? "dark" : "light");
@@ -67,14 +71,14 @@ export function useThemePreference() {
     let active = true;
     AsyncStorage.getItem("recharge:theme:v2")
       .then((value) => {
-        if (active && (value === "light" || value === "dark")) setChoice(value);
+        if (active && !selected.current && (value === "light" || value === "dark")) setChoice(value);
       })
       .catch(() => {});
     return () => {
       active = false;
     };
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (Platform.OS !== "web") return;
     let style = document.getElementById("recharge-design-tokens");
     if (!style) {
@@ -86,36 +90,31 @@ export function useThemePreference() {
     document.documentElement.dataset.rechargeTheme = theme;
   }, [theme]);
   function setTheme(value: "light" | "dark", reduced = false) {
+    selected.current = true;
+    const current = ++version.current;
+    transition.current?.skipTransition();
+    transition.current = null;
+    const update = () => {
+      if (current === version.current) commitThemeChange(() => setChoice(value));
+    };
     if (
       Platform.OS === "web" && !reduced &&
       !matchMedia("(prefers-reduced-motion: reduce)").matches &&
       "startViewTransition" in document
     ) {
-      (
+      const next = (
         document as Document & {
-          startViewTransition: (callback: () => void) => unknown;
+          startViewTransition: (callback: () => void) => ThemeTransition;
         }
-      ).startViewTransition(() => {
-        document.documentElement.dataset.rechargeTheme = value;
-        setChoice(value);
+      ).startViewTransition(update);
+      transition.current = next;
+      void next.ready.catch(() => {});
+      void next.finished.catch(() => {}).then(() => {
+        if (transition.current === next) transition.current = null;
       });
-    } else if (Platform.OS !== "web" && !reduced) {
-      themeOpacity.stopAnimation();
-      Animated.timing(themeOpacity, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (!finished) return;
-        setChoice(value);
-        Animated.timing(themeOpacity, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }).start();
-      });
-    } else setChoice(value);
+    } else update();
     void AsyncStorage.setItem("recharge:theme:v2", value).catch(() => {});
   }
-  return { theme, setTheme, themeOpacity };
+  useEffect(() => () => transition.current?.skipTransition(), []);
+  return { theme, setTheme };
 }

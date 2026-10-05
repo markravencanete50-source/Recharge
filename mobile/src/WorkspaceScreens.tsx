@@ -24,9 +24,7 @@ import Svg, {
   Rect,
   Defs,
   LinearGradient,
-  RadialGradient,
   Stop,
-  Circle,
 } from "react-native-svg";
 import { Entrance, CountUp, SlidingPill, MotionPress as Pressable, useReducedMotion } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
@@ -49,14 +47,13 @@ import {
   WORKSPACE_MAP,
   type WorkspaceSection,
 } from "../../lib/workspace-map";
-import { presetPeriod } from "../../lib/analytics";
+import { presetPeriod, periodLabel } from "../../lib/analytics";
 import { scheduleWeek, scheduleWeekLabel, moveScheduleDay, fullScheduleDate } from "../../lib/schedule-presentation";
-import { TodayRing, TodayTiles, OpenTasksSparkline } from "./TodayAnalytics";
+import { TodayRing, TodayTiles, OpenTasksTrend } from "./TodayAnalytics";
 import { todayPresentation, todayColors } from "../../lib/today-presentation";
 import type { AnalyticsSnapshot, AnalyticsPeriod } from "../../lib/analytics";
 import { DepartmentGrid } from "./DepartmentGrid";
 import { BuildingGlyph } from "./BuildingGlyph";
-import { ParallaxSurface } from "./ParallaxSurface";
 import { orderedPins } from "../../lib/pinned-tools";
 import { type PersonalActivity } from '../../lib/recent-activity';
 import { RecentActivity } from './AccessHelp';
@@ -652,12 +649,12 @@ export function WorkspaceScreens({
             </Text>
           </View>
           <View testID="home-task-summary" style={{flexDirection:desktop?'row':'column',gap:20,alignItems:'stretch'}}>
-          <Entrance sessionKey={"home:"+role+":hero"} style={desktop?{flex:2,minWidth:0}:undefined}><ParallaxSurface>
+          <Entrance sessionKey={"home:"+role+":hero"} style={desktop?{flex:2,minWidth:0}:undefined}>
             <View
               style={{
                 backgroundColor: todayColors.heroStart,
                 borderRadius: 28,
-                padding: 24,
+                padding: desktop?24:16,
                 gap: 20,
                 overflow: "hidden",
               }}
@@ -682,39 +679,9 @@ export function WorkspaceScreens({
                     <Stop offset="0" stopColor={todayColors.heroStart} />
                     <Stop offset="1" stopColor={todayColors.heroEnd} />
                   </LinearGradient>
-                  <RadialGradient id="today-glow" cx=".95" cy="0" r=".34">
-                    <Stop offset="0" stopColor={p.heroGlow} stopOpacity=".2" />
-                    <Stop offset="1" stopColor={p.heroGlow} stopOpacity="0" />
-                  </RadialGradient>
                 </Defs>
                 <Rect width="600" height="300" fill="url(#today-gradient)" />
-                <Circle cx="600" cy="0" r="50" fill="url(#today-glow)" />
-                {[65, 95, 125].map((r) => (
-                  <Circle
-                    key={r}
-                    cx="545"
-                    cy="25"
-                    r={r}
-                    stroke={p.heroText}
-                    strokeOpacity=".08"
-                    fill="none"
-                  />
-                ))}
               </Svg>
-              <View
-                accessible={false}
-                style={{
-                  position: "absolute",
-                  right: -55,
-                  top: -80,
-                  width: 240,
-                  height: 240,
-                  borderRadius: 120,
-                  borderWidth: 1,
-                  borderColor: p.heroLine,
-                  opacity: 0.35,
-                }}
-              />
               <View style={[ui.row, { gap: 18 }]}>
                 <View style={{ flex: 1, gap: 6 }}>
                   <Text
@@ -740,12 +707,14 @@ export function WorkspaceScreens({
                   >
                     tasks open
                   </Text>
+                  <Text style={{color:p.heroText,fontSize:12,lineHeight:18}}>{periodLabel(analyticsPeriod)}</Text>
                 </View>
                 <View style={{ gap: 5, alignItems: "center" }}>
                   <TodayRing size={desktop?112:88} motionKey={"overview:"+role+":ring:"+analyticsPeriod.from+":"+analyticsPeriod.to}
                     completed={today.current.complete} total={today.current.total}/>
                 </View>
               </View>
+              <OpenTasksTrend wide={desktop} data={today} motionKey={"overview:"+role+":trend:"+analyticsPeriod.to}/>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
@@ -773,8 +742,7 @@ export function WorkspaceScreens({
                 </Text>
                 <Feather name="arrow-right" size={20} color={p.heroText} />
               </Pressable>
-              <OpenTasksSparkline wide={desktop} data={today} motionKey={"overview:"+role+":spark:"+analyticsPeriod.to}/>
-            </View></ParallaxSurface>
+            </View>
           </Entrance>
           <TodayTiles vertical={desktop} data={today} palette={p} onWaiting={()=>openQueue("Waiting")} onProperties={()=>onNavigate("properties")}/>
           </View>

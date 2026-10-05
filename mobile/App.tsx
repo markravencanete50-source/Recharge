@@ -323,7 +323,7 @@ function DetailScreen({visible,onClose,title,palette,children}:{visible:boolean;
   return <Sheet visible={visible} title={title} onClose={onClose} palette={palette}>{children}</Sheet>;
 }
 function AppContent() {
-  const { theme, setTheme, themeOpacity } = useThemePreference();
+  const { theme, setTheme } = useThemePreference();
   const p = themes[theme];
   const {width: windowWidth} = useWindowDimensions();
   const desktop = windowWidth >= 1024;
@@ -490,7 +490,7 @@ function AppContent() {
   };
   return (
     <View style={[ui.fill, { backgroundColor: p.background }]}>
-      <Animated.View style={[ui.fill, { opacity: themeOpacity }]}>
+      <View style={ui.fill}>
         <SafeAreaView
           style={[ui.fill, { backgroundColor: p.background }]}
           edges={["top", "bottom"]}
@@ -500,7 +500,7 @@ function AppContent() {
           {desktop&&<DesktopNavigation role={role} section={tab} palette={p} onNavigate={setTab} onProfile={()=>setSettings(true)} onDepartment={(department)=>{setSearch("");setDepartment(department);setSavedOnly(false);setTab("workspace");}}/>}
           <View style={[ui.fill,{minWidth:0}]}>
           {offline&&<View accessibilityRole="alert" style={{backgroundColor:p.cautionWash,padding:12}}><Text style={[ui.small,{color:p.text}]}>You are offline. The sample workspace remains available. Live requests may fail until you reconnect.</Text></View>}
-          <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth:desktop?1:0, borderColor:p.headerBorder, ...(Platform.OS === "web" && scrolled ? {boxShadow:"0 6px 18px var(--rc-shadow)"}: {}) }}>
+          <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth:1, borderColor:scrolled?p.headerBorder:'transparent' }}>
             <View
               style={[
                 ui.between,
@@ -1035,7 +1035,7 @@ function AppContent() {
             </View>
           </Sheet>
         </SafeAreaView>
-      </Animated.View>
+      </View>
     </View>
   );
 }

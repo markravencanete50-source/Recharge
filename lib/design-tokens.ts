@@ -34,7 +34,7 @@ export const designTokens = {
     heroMuted: "#FFFFFF",
     heroLine: "#A7D9C1",
     overlay: "#070D2280",
-    shadow: "#1C393412",
+    shadow: "#152D280A",
   },
   dark: {
     background: "#0F1E1A",
@@ -100,4 +100,6 @@ const variables = (mode: "light" | "dark") =>
     )
     .join("");
 const aliases = `--background:var(--rc-background);--foreground:var(--rc-text);--card:var(--rc-surface);--card-foreground:var(--rc-text);--popover:var(--rc-elevated);--popover-foreground:var(--rc-text);--muted:var(--rc-elevated);--muted-foreground:var(--rc-muted);--border:var(--rc-border);--input:var(--rc-muted);--ring:var(--rc-primary);--primary:var(--rc-primary);--primary-foreground:var(--rc-onPrimary);--secondary:var(--rc-elevated);--secondary-foreground:var(--rc-text);--accent:var(--rc-wash);--accent-foreground:var(--rc-text);--chart-1:var(--rc-bright);--chart-2:var(--rc-chart);--chart-3:var(--rc-waiting);`;
-export const designTokenCss = `:root:not(.dark):not([data-recharge-theme="dark"]),[data-recharge-theme="light"]{${variables("light")}${aliases}}html.dark,[data-recharge-theme="dark"]{${variables("dark")}${aliases}color-scheme:dark}::view-transition-old(root),::view-transition-new(root){animation-duration:200ms}@media(prefers-reduced-motion:reduce){::view-transition-old(root),::view-transition-new(root){animation:none}}[data-testid="workspace-scroll"]{scrollbar-width:thin;scrollbar-color:var(--rc-muted) transparent}button:focus-visible,[role="button"]:focus-visible,[role="checkbox"]:focus-visible,input:focus-visible{outline:2px solid var(--rc-primary);outline-offset:3px} [data-search-shell] input:focus{outline:none;box-shadow:none}[data-search-shell]:focus-within{outline:2px solid var(--rc-primary);outline-offset:2px} [data-tool-section="collapsed"]{content-visibility:auto;contain-intrinsic-size:auto 76px}`;
+// Reveal one opaque palette over the other instead of blending both screenshots.
+const themeTransitionCss = `::view-transition-group(root){animation:none}::view-transition-image-pair(root){isolation:isolate}::view-transition-old(root){animation:none;opacity:1;mix-blend-mode:normal}::view-transition-new(root){animation:rc-theme-reveal 180ms ease-out;opacity:1;mix-blend-mode:normal}@keyframes rc-theme-reveal{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0)}}@media(prefers-reduced-motion:reduce){::view-transition-new(root){animation:none}}[data-reduce-motion="true"]::view-transition-new(root){animation:none}`;
+export const designTokenCss = `:root:not(.dark):not([data-recharge-theme="dark"]),[data-recharge-theme="light"]{${variables("light")}${aliases}color-scheme:light}:root.dark:not([data-recharge-theme="light"]),[data-recharge-theme="dark"]{${variables("dark")}${aliases}color-scheme:dark}${themeTransitionCss}[data-testid="workspace-scroll"]{scrollbar-width:thin;scrollbar-color:var(--rc-muted) transparent}button:focus-visible,[role="button"]:focus-visible,[role="checkbox"]:focus-visible,input:focus-visible{outline:2px solid var(--rc-primary);outline-offset:3px} [data-search-shell] input:focus{outline:none;box-shadow:none}[data-search-shell]:focus-within{outline:2px solid var(--rc-primary);outline-offset:2px} [data-tool-section="collapsed"]{content-visibility:auto;contain-intrinsic-size:auto 76px}`;
