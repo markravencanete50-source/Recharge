@@ -49,3 +49,5 @@ Five Home analytics/contrast tests and two backend deployment boundary tests
 passed. Local desktop and phone checks confirmed both themes and navigation.
 The live backend asset allowlist now includes the supplied dark-mode logo in
 source; publication of that Worker is tracked in WORKFLOW-ACTIVATION.md.
+The Pages release is published and the prepared backend is now deployed. Its
+cloud release checks passed, including exact hashes of both logo variants.

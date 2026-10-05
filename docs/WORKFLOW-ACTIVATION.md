@@ -37,8 +37,13 @@ and runs `npm run backend:verify` after uploading. The read-only release
 checks cover health/configuration, anonymous web/native route refusal,
 no-store/CORS boundaries, excluded legacy routes, invalid-origin write
 refusal, sign-in availability and exact hashes of both logo assets. They
-use no credentials and create no business records. Their first cloud run
-is pending; this laptop currently blocks direct Workers URL connections.
+use no credentials and create no business records. The first cloud run passed
+all 22 HTTP checks on commit `a8b1aec`, after deploying version
+`7aaf8416-0e8d-4e02-bb50-3651b2b7a507`. This verifies the installed API boundary
+and configuration presence; it does not prove real-user workflows or provider
+delivery. Running these checks in Cloudflare avoids this laptop's current
+Workers URL connection block. The client feedback is published on Pages and
+checked in both themes; the live workspace remains separate from sample data.
 
 ## Native build configuration
 
