@@ -216,6 +216,8 @@ html.dark * { scrollbar-width: thin; scrollbar-color: #607c6a transparent; }
 .dark .recharge-logo-dark,[data-recharge-theme="dark"] .recharge-logo-dark{display:block}
 [data-recharge-theme="light"] .recharge-logo-light{display:block}
 [data-recharge-theme="light"] .recharge-logo-dark{display:none}
+.recharge-company-logo[data-logo-variant="dark"]>.recharge-logo-light,.recharge-company-logo[data-logo-variant="light"]>.recharge-logo-dark{display:none}
+.recharge-company-logo[data-logo-variant="dark"]>.recharge-logo-dark,.recharge-company-logo[data-logo-variant="light"]>.recharge-logo-light{display:block}
 .recharge-workspace .workspace-header{background:var(--rc-header);color:var(--rc-headerText);--foreground:var(--rc-headerText);--muted-foreground:var(--rc-headerMuted);--muted:var(--rc-headerControl);--rc-text:var(--rc-headerText);--rc-muted:var(--rc-headerMuted);--rc-primary:var(--rc-headerText);--rc-onPrimary:var(--rc-header);--rc-surface:var(--rc-headerControl);--rc-border:var(--rc-headerBorder);border-color:var(--rc-headerBorder)}
 .recharge-workspace .workspace-header>div>button,.recharge-workspace .workspace-header .theme-toggle{background:var(--rc-headerControl);color:var(--rc-headerControlText);--foreground:var(--rc-headerControlText);--rc-text:var(--rc-headerControlText)}
 .recharge-workspace .workspace-header :is(button,a):focus-visible{outline-color:var(--rc-headerText)}

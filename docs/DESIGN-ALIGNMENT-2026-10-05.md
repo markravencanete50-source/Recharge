@@ -51,3 +51,21 @@ The live backend asset allowlist now includes the supplied dark-mode logo in
 source; publication of that Worker is tracked in WORKFLOW-ACTIVATION.md.
 The Pages release is published and the prepared backend is now deployed. Its
 cloud release checks passed, including exact hashes of both logo variants.
+
+## Header contrast correction, 6 October 2026
+
+Reviewing one visual frame from every second of the complete 55-second client
+video showed that the light page needs a contrasting green top bar. Both
+themes now use the supplied dark logo's green (#1B3E38) for the toolbar and
+desktop sidebar brand strip, with bone lettering (#EFE9DB). Light page content
+remains bone; dark page content remains dark green. Header controls use
+#182C26 with #FAF7F0 icons. The logo variant is selected for the header surface,
+independently of the page theme, in responsive, native and live web headers.
+Desktop retains one logo, in the sidebar; phone retains one toolbar logo.
+
+The control border was adjusted from #697A6D to #79998C in both themes:
+contrast against the header improved from 2.57:1 to 3.76:1. Bone header text
+has 9.68:1 contrast and control icons have 13.75:1 against their surface.
+Root/mobile TypeScript, scoped lint (no errors), nine design/analytics checks,
+production build and preview export passed. Desktop and 390px phone screenshots
+confirmed both themes, one logo and no horizontal overflow; quick search opened.

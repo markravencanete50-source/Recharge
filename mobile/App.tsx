@@ -515,7 +515,7 @@ function AppContent() {
               ]}
             >
               <View style={{flex:1,minWidth:0}}>
-                  {desktop?<Text style={{color:p.headerText,fontSize:16,fontWeight:"600"}}>{navigationFor(role).find(item=>item.value===tab)?.label??(tab==="workspace"?"Tools":tab==="analytics"?"Reports":tab.charAt(0).toUpperCase()+tab.slice(1))}</Text>:<CompanyLogo palette={headerPalette(p)} width={windowWidth<360?104:144}/>}
+                  {desktop?<Text style={{color:p.headerText,fontSize:16,fontWeight:"600"}}>{navigationFor(role).find(item=>item.value===tab)?.label??(tab==="workspace"?"Tools":tab==="analytics"?"Reports":tab.charAt(0).toUpperCase()+tab.slice(1))}</Text>:<CompanyLogo palette={headerPalette(p)} variant="dark" width={windowWidth<360?104:144}/>}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 <IconButton label="Open quick search" icon="search" palette={headerPalette(p)} onPress={()=>setCommandOpen(true)}/>
@@ -537,7 +537,7 @@ function AppContent() {
                     justifyContent: "center",
                   }}
                 >
-                  <Avatar profile={profile} backgroundColor={p.isDark?p.headerControl:undefined}/>
+                  <Avatar profile={profile} backgroundColor={p.headerControl}/>
                   {data.waiting > 0 && (
                     <View
                       accessible
