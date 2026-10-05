@@ -33,10 +33,10 @@ import { AccountSetup, Avatar, type Profile } from "./src/AccountSetup";
 import { Artwork } from "./src/Artwork";
 import { NavigationBar } from "./src/NavigationBar";
 import { FilterBar } from "./src/FilterBar";
-import { ProgressRing, StateGraphic } from "./src/StateGraphic";
+import { StateGraphic } from "./src/StateGraphic";
 import { Reports } from "./src/Reports";
 import { DesktopNavigation } from "./src/DesktopNavigation";
-import { themes, ui, type Palette } from "./src/theme";
+import { themes, headerPalette, ui, type Palette } from "./src/theme";
 import { WorkspaceScreens, Calendar } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
 import { CommandSearch } from "./src/CommandSearch";
@@ -51,9 +51,8 @@ import {
   usePreviewBookmarks,
   useThemePreference,
 } from "./src/usePreviewPreferences";
-import { WORKSPACE_MAP, type WorkspaceSection } from "../lib/workspace-map";
+import { type WorkspaceSection } from "../lib/workspace-map";
 import {
-  Entrance,
   MotionPress as Pressable,
   MotionProvider,
   useReducedMotion,
@@ -452,12 +451,13 @@ function AppContent() {
   const roleLabel = roles.find((item) => item.value === role)!.label;
   const draftError = periodError(draft);
   useEffect(() => {
+    let cancelled = false;
     scroll.current?.scrollTo({ y: 0, animated: false });
     Keyboard.dismiss();
-    setScrolled(false);
+    queueMicrotask(() => { if (!cancelled) setScrolled(false); });
     if (reduced) {
       fade.setValue(1);
-      return;
+      return () => { cancelled = true; };
     }
     fade.setValue(0);
     Animated.timing(fade, {
@@ -466,6 +466,7 @@ function AppContent() {
       useNativeDriver: Platform.OS !== "web",
     }).start();
     return () => {
+      cancelled = true;
       fade.stopAnimation();
     };
   }, [tab, role, fade, reduced]);
@@ -487,16 +488,6 @@ function AppContent() {
     if (event.type === "set" && date && editingDate)
       setDraft((current) => ({ ...current, [editingDate]: dateKey(date) }));
   };
-  const statItems = [
-    { label: "Recorded items", value: data.total, icon: "activity" as const },
-    { label: "Completed", value: data.complete, icon: "check-circle" as const },
-    { label: "Waiting", value: data.waiting, icon: "clock" as const },
-    {
-      label: snapshot.propertyLabel,
-      value: snapshot.propertyCount,
-      icon: "home" as const,
-    },
-  ];
   return (
     <View style={[ui.fill, { backgroundColor: p.background }]}>
       <Animated.View style={[ui.fill, { opacity: themeOpacity }]}>
@@ -508,8 +499,8 @@ function AppContent() {
           <View style={[ui.fill,{flexDirection:"row"}]}>
           {desktop&&<DesktopNavigation role={role} section={tab} palette={p} onNavigate={setTab} onProfile={()=>setSettings(true)} onDepartment={(department)=>{setSearch("");setDepartment(department);setSavedOnly(false);setTab("workspace");}}/>}
           <View style={[ui.fill,{minWidth:0}]}>
-          {offline&&<View accessibilityRole="alert" style={{backgroundColor:p.cautionWash,padding:12}}><Text style={[ui.small,{color:p.text}]}>You're offline. The sample workspace remains available. Live requests may fail until you reconnect.</Text></View>}
-          <View style={{ backgroundColor: p.background, borderBottomWidth:desktop?1:0, borderColor:p.border, ...(Platform.OS === "web" && scrolled ? {boxShadow:"0 6px 18px var(--rc-shadow)"}: {}) }}>
+          {offline&&<View accessibilityRole="alert" style={{backgroundColor:p.cautionWash,padding:12}}><Text style={[ui.small,{color:p.text}]}>You are offline. The sample workspace remains available. Live requests may fail until you reconnect.</Text></View>}
+          <View style={{ backgroundColor: p.header, borderBottomWidth:desktop?1:0, borderColor:p.headerBorder, ...(Platform.OS === "web" && scrolled ? {boxShadow:"0 6px 18px var(--rc-shadow)"}: {}) }}>
             <View
               style={[
                 ui.between,
@@ -525,19 +516,19 @@ function AppContent() {
               ]}
             >
               <View style={{flex:1,minWidth:0,gap:5}}>
-                  <CompanyLogo palette={p} width={windowWidth<360?104:144}/>
+                  <CompanyLogo palette={headerPalette(p)} width={windowWidth<360?104:144}/>
                   <Text
-                    style={{ color: p.muted, fontSize: 12, lineHeight: 17 }}
+                    style={{ color: p.headerMuted, fontSize: 12, lineHeight: 17 }}
                   >
                     {roleLabel}
                   </Text>
               </View>
               <View style={[ui.row, { gap: 8 }]}>
-                <IconButton label="Open quick search" icon="search" palette={p} onPress={()=>setCommandOpen(true)}/>
+                <IconButton label="Open quick search" icon="search" palette={headerPalette(p)} onPress={()=>setCommandOpen(true)}/>
                 <IconButton
                   label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
                   icon={theme === "dark" ? "sun" : "moon"}
-                  palette={p}
+                  palette={headerPalette(p)}
                   onPress={() =>
                     setTheme(theme === "dark" ? "light" : "dark", reduced)
                   }
@@ -565,7 +556,7 @@ function AppContent() {
                         height: 10,
                         borderRadius: 5,
                         borderWidth: 2,
-                        borderColor: p.background,
+                        borderColor: p.header,
                         backgroundColor: p.primary,
                       }}
                     />

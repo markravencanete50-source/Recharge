@@ -41,7 +41,10 @@ export async function POST(request: Request) {
         await client.auth.signOut({ scope: "local" });
         return respond({ error: "Please sign in again" }, 401);
       }
-      return respond({ session: sessionPayload(result.data.session) });
+      const account = await scoped.rpc("workspace_account");
+      const parsedAccount = workspaceAccountSchema.safeParse(account.data);
+      if (account.error || !parsedAccount.success) { await client.auth.signOut({ scope: "local" }); return respond({ error: "Workspace connection unavailable" }, 503); }
+      return respond({ session: sessionPayload(result.data.session), account: parsedAccount.data });
     }
     subject = await securityHash("password-account", input.data.email); attempt = crypto.randomUUID();
     const begin = await passwordDecision("auth_server_begin_password", { subject_hash: subject, attempt_id: attempt });

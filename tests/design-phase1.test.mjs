@@ -47,6 +47,10 @@ test("text, department tiles, input borders and primary action labels meet contr
       for (const ink of [p.text, p.muted])
         assert(ratio(ink, bg) >= 4.5, `${mode} ${ink} on ${bg}`);
     assert(ratio(p.onPrimary, p.primary) >= 4.5);
+    assert(ratio(p.headerText, p.header) >= 4.5);
+    assert(ratio(p.headerMuted, p.header) >= 4.5);
+    assert(ratio(p.headerText, p.headerControl) >= 4.5);
+    assert(ratio(p.headerBorder, p.header) >= 3);
     assert(ratio(p.controlBorder, p.surface) >= 3);
     assert(ratio(p.controlBorder, p.background) >= 3);
     for (const d of Object.values(departmentTokens[mode]))

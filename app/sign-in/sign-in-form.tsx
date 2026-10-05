@@ -11,7 +11,7 @@ export function SignInForm({ configured }: { configured: boolean }) {
       if (!response.ok) { const data = await authResponseMessage(response); setError(data.error || "Sign-in failed. Check your email, password and account verification."); return; }
       // A full navigation discards pre-login router state after cookies change.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.assign("/");
+      window.location.assign("/workspace");
     } catch { setError("Could not connect. Please try again."); } finally { setSaving(false); }
   }
   return <form className="mt-6 space-y-4" onSubmit={submit}><label className="block text-sm">Email<input className="field mt-2" name="email" type="email" required autoComplete="username" maxLength={254} /></label><label className="block text-sm">Password<input className="field mt-2" name="password" type="password" required autoComplete="current-password" maxLength={1024} /></label>{!configured && <p role="status" className="text-sm text-muted-foreground">Live sign-in is awaiting connection to Supabase.</p>}{error && <p role="alert" className="text-sm text-[var(--rc-danger-text)]">{error}</p>}<button className="primary-button w-full" disabled={!configured || saving}>{saving ? "Signing in…" : "Sign in"}</button></form>;

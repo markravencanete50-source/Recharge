@@ -19,7 +19,7 @@ export type Profile = {
   avatar: keyof typeof avatarColors;
 };
 export const avatarColors = {
-  forest: "#243a75",
+  forest: "#1C3934",
   sage: "#137d73",
   ocean: "#3457d5",
   plum: "#6750a4",

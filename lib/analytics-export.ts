@@ -1,6 +1,6 @@
 import { buildAnalytics, type AnalyticsPeriod, type AnalyticsSnapshot } from "./analytics";
 
-function cell(value: string | number) {
+export function csvCell(value: string | number) {
   const text = String(value);
   // Quoting alone does not prevent spreadsheet formula execution.
   const safe = /^[\s\uFEFF]*[=+\-@]/.test(text) ? "'" + text : text;
@@ -24,7 +24,7 @@ export function analyticsCsv(snapshot: AnalyticsSnapshot, period: AnalyticsPerio
     [], ["Date", "Tasks", "Completed", "Waiting", ...metrics.sources.map(source => source.name)],
     ...metrics.trend.map(day => [day.key, count(day.recorded), count(day.completed), count(day.waiting), ...metrics.sources.map(source => source.available ? day[source.key] || 0 : '-')]),
   ];
-  return "\uFEFF" + rows.map(row => row.map(cell).join(",")).join("\r\n") + "\r\n";
+  return "\uFEFF" + rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
 
 export function analyticsFilename(period: AnalyticsPeriod) {

@@ -35,6 +35,10 @@ test('guarded success returns only the required session and account with no-stor
 test('refresh cannot approve a token obtained by bypassing guarded sign-in',async()=>{
  reset();state.allowed=false;const response=await route.POST(request({action:'refresh',refreshToken}));assert.equal(response.status,401);assert.equal(state.signouts,1);assert.equal(state.calls.length,0);assert.ok(!(await response.text()).includes(accessToken));
 });
+test('refresh returns current database account access and fails closed on invalid access data',async()=>{
+ reset();state.account.status='revoked';const response=await route.POST(request({action:'refresh',refreshToken}));assert.equal(response.status,200);assert.equal((await response.json()).account.status,'revoked');
+ reset();state.account={role:'super_admin'};const failed=await route.POST(request({action:'refresh',refreshToken}));assert.equal(failed.status,503);assert.ok(!(await failed.text()).includes(accessToken));assert.equal(state.signouts,1);
+});
 test('quota and provider outages fail closed and do not count as incorrect passwords',async()=>{
  reset();state.quota={allowed:false,retryAfter:42};assert.equal((await route.POST(request(login))).status,429);assert.equal(state.signins,0);
  reset();state.identity=null;state.provider.error={code:'unexpected_failure'};assert.equal((await route.POST(request(login))).status,503);assert.equal(state.calls[1][1].outcome,'unavailable');

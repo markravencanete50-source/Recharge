@@ -7,7 +7,11 @@ const endpoints = new Set([
   "/api/mobile/workspace", "/api/mobile/reports", "/api/mobile/reports/export",
   "/api/mobile/property-details", "/api/mobile/devices",
   "/api/workspace", "/api/workspace/reports", "/api/workspace/reports/export", "/api/workspace/property-details",
+  "/api/workspace/journeys", "/api/mobile/journeys",
+  "/api/workspace/operations", "/api/mobile/operations",
+  "/api/workspace/portfolio", "/api/mobile/portfolio",
+  "/workspace", "/recharge-wordmark.svg",
 ]);
 export function backendRouteAllowed(path: string) {
-  return endpoints.has(path) || path.startsWith("/assets/");
+  return endpoints.has(path) || path.startsWith("/assets/") || /^\/fonts\/inter-(400|500|600|700)\.ttf$/.test(path);
 }
