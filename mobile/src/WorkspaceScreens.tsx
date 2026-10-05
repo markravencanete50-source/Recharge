@@ -58,6 +58,8 @@ import { DepartmentGrid } from "./DepartmentGrid";
 import { BuildingGlyph } from "./BuildingGlyph";
 import { ParallaxSurface } from "./ParallaxSurface";
 import { orderedPins } from "../../lib/pinned-tools";
+import { type PersonalActivity } from '../../lib/recent-activity';
+import { RecentActivity } from './AccessHelp';
 
 type IconName = ComponentProps<typeof Feather>["name"];
 type Props = {
@@ -70,6 +72,8 @@ type Props = {
   onDepartment: (department: string) => void;
   savedTools: string[];
   profileName: string;
+  activity?: PersonalActivity[];
+  activityError?: string;
 };
 
 function displayDate(value: string) {
@@ -470,6 +474,8 @@ export function WorkspaceScreens({
   onDepartment,
   savedTools,
   profileName,
+  activity=[],
+  activityError='',
 }: Props) {
   const items = useMemo(() => workFor(role), [role]);
   const {width}=useWindowDimensions();
@@ -961,6 +967,12 @@ export function WorkspaceScreens({
           </Entrance>
         </>
       ) : null}
+
+      {section === 'home' && <View style={{gap:16}}>
+        <View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>Recent activity</Text><Pressable accessibilityRole="button" accessibilityLabel="View all recent activity" onPress={()=>onNavigate('activity')} style={{minHeight:44,justifyContent:'center'}}><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>View all</Text></Pressable></View>
+        <RecentActivity items={activity.slice(0,3)} palette={p} error={activityError} onOpen={event=>{const tool=toolsFor(role).find(tool=>tool.id===event.moduleId);if(tool)onOpen(tool);}}/>
+        <Pressable accessibilityRole="button" accessibilityLabel="Help and FAQs" onPress={()=>onNavigate('help')} style={[ui.button,{backgroundColor:p.wash}]}><Feather name="help-circle" size={20} color={p.primary}/><Text style={[ui.buttonText,{color:p.primary}]}>Help for your role</Text><Feather name="arrow-right" size={18} color={p.primary}/></Pressable>
+      </View>}
 
       {section === "properties" ? (
         <>

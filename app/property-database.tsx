@@ -143,7 +143,7 @@ export function PropertyDatabase({
       <div>
         <BackButton onBack={onBack} />
         <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-7 text-[var(--rc-danger-text)]">
-          The Management Property Database is temporarily unavailable.
+          The Property Management Database is temporarily unavailable.
         </div>
       </div>
     );
@@ -155,7 +155,7 @@ export function PropertyDatabase({
       <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
           <p className="eyebrow">Recharge Stays</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">Management Property Database</h1>
+          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">Property Management Database</h1>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--muted-foreground)]">
             Property, owner, access, listing and payout information in one searchable record.
           </p>

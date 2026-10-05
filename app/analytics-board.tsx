@@ -13,7 +13,7 @@ import { analyticsCsv, analyticsFilename } from "@/lib/analytics-export";
 import { downloadReport } from "@/lib/download-report";
 
 const revealedReports=new Set<string>();
-export function AnalyticsBoard({ initialData, preview, role }: { initialData: AnalyticsSnapshot; preview: boolean; role: WorkspaceRole }) {
+export function AnalyticsBoard({ initialData, preview, role, onExported }: { initialData: AnalyticsSnapshot; preview: boolean; role: WorkspaceRole;onExported?:()=>void }) {
   const [period, setPeriod] = useState(() => presetPeriod(30));
   const [choice, setChoice] = useState("30");
   const [data, setData] = useState(initialData);
@@ -39,6 +39,7 @@ export function AnalyticsBoard({ initialData, preview, role }: { initialData: An
         downloadReport(await response.text(), analyticsFilename(period));
       }
       setExportNotice(preview?"Sample report download started.":"Report download started.");
+      onExported?.();
     } catch (error) { setError(error instanceof Error ? error.message : "Report export unavailable."); }
     finally { setExporting(false); }
   }

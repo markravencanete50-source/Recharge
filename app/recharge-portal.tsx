@@ -1,5 +1,7 @@
 "use client";
 import { isWorkspaceAdmin } from "@/lib/modules";
+import { WorkspaceHelp } from '@/components/workspace-help';
+import { usePersonalActivity } from '@/hooks/use-personal-activity';
 
 
 import { FormEvent, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -351,6 +353,7 @@ export function RechargePortal({
   preview?: boolean;
 }) {
   const [view, setView] = useState<View>(currentUser.role === "super_admin" ? "analytics" : defaultDepartment(currentUser.role));
+  const activity=usePersonalActivity(currentUser.email,currentUser.role,currentUser.modules);
   const [cleansMode, setCleansMode] = useState<CleansMode>("cleaning-schedule");
   const [onboardingMode, setOnboardingMode] = useState<"client" | "staff">(
     currentUser.role === "client" ? "client" : "staff",
@@ -467,7 +470,12 @@ export function RechargePortal({
 
   return (
     <PreviewContext.Provider value={preview}><ActorRoleContext.Provider value={currentUser.role}>
-    <div className="recharge-workspace min-h-screen text-[var(--foreground)]">
+    <div className="recharge-workspace min-h-screen text-[var(--foreground)]" onClickCapture={event=>{
+      const target=event.target as HTMLElement;
+      const action=target.closest('button.tool-card-hitarea,a.tool-card-hitarea');
+      const id=action?.closest('[data-module-id]')?.getAttribute('data-module-id') as ModuleId|undefined;
+      if(id&&currentUser.modules.includes(id))activity.record('open_tool',id);
+    }}>
       <GuestMessageNotifier
         enabled={!preview && currentUser.modules.includes("guest-communication") && currentUser.role !== "client"}
         paused={view === "communications"}
@@ -561,6 +569,7 @@ export function RechargePortal({
           )}
 
           <div className="mt-4 space-y-1"><NavButton active={view === "analytics"} icon={BarChart3} index="07" label="Analytics" onClick={() => changeView("analytics")} /></div>
+          <WorkspaceHelp key={currentUser.email+':'+currentUser.role} role={currentUser.role} modules={currentUser.modules} items={activity.items} error={activity.error}/>
 
           {isWorkspaceAdmin(currentUser.role) && (
             <div className="mt-7 space-y-2">
@@ -635,7 +644,7 @@ export function RechargePortal({
         </header>
 
         <div key={view} className="workspace-view mx-auto max-w-[92rem] p-5 sm:p-8 lg:p-10">
-          {view === "analytics" && <AnalyticsBoard initialData={analyticsData || scopeAnalytics(currentUser, {})} preview={preview} role={currentUser.role} />}
+          {view === "analytics" && <AnalyticsBoard initialData={analyticsData || scopeAnalytics(currentUser, {})} preview={preview} role={currentUser.role} onExported={()=>activity.record('export_report')} />}
           {view === "my-recharge" &&
             currentUser.role === "stays" &&
             myRecharge && <MyRecharge initialData={myRecharge} />}
@@ -1848,7 +1857,7 @@ function viewTitle(view: View, maintenanceWorkspace: MaintenanceWorkspace) {
     if (maintenanceWorkspace === "client") return "Property Maintenance";
     return "Maintenance Reporting";
   }
-  if (view === "property-database") return "Management Property Database";
+  if (view === "property-database") return "Property Management Database";
   if (view === "onboarding") return "Property Onboarding";
   if (view === "onboarding-invoices-board") return "Property Onboarding Invoices";
   if (view === "new-property-inspections-board") return "New Property Inspections";

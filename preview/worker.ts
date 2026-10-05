@@ -5,7 +5,7 @@ const worker = {
     const result = previewResponse(request);
     if (result) return result;
     const url = new URL(request.url);
-    const mobileRoutes = ["/home", "/work", "/properties", "/inbox", "/more", "/workspace", "/analytics", "/calendar", "/approvals"];
+    const mobileRoutes = ["/home", "/work", "/properties", "/inbox", "/more", "/workspace", "/analytics", "/calendar", "/approvals", "/help", "/activity"];
     // Pages redirects .html requests to extensionless URLs, even through ASSETS.
     // Request the canonical asset to preserve the user's route inside the frame.
     if (mobileRoutes.includes(url.pathname)) url.pathname = "/native";

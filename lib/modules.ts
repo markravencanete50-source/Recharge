@@ -205,7 +205,7 @@ export const MODULES = [
   {
     id: "property-database",
     stage: "01",
-    name: "Management Property Database",
+    name: "Property Management Database",
     shortName: "Management properties",
     description:
       "Keep every managed property record, key detail and operational reference in one place.",

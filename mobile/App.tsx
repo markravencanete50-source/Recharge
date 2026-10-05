@@ -40,6 +40,9 @@ import { themes, ui, type Palette } from "./src/theme";
 import { WorkspaceScreens, Calendar } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
 import { CommandSearch } from "./src/CommandSearch";
+import { CompanyLogo } from "./src/CompanyLogo";
+import { useRecentActivity } from "./src/useRecentActivity";
+import { AccessHelp, RecentActivity } from "./src/AccessHelp";
 import { exportReport } from "./src/exportReport";
 import { analyticsCsv, analyticsFilename } from "../lib/analytics-export";
 import { isWorkspaceAdmin } from "../lib/modules";
@@ -334,6 +337,7 @@ function AppContent() {
     return()=>{window.removeEventListener("online",update);window.removeEventListener("offline",update);};
   },[]);
   const [role, setRole] = useState<WorkspaceRole>("super_admin");
+  const activity = useRecentActivity(role);
   const { section } = useLocalSearchParams<{ section: string }>();
   const sections: WorkspaceSection[] = [
     "home",
@@ -345,6 +349,8 @@ function AppContent() {
     "analytics",
     "calendar",
     "approvals",
+    "help",
+    "activity",
   ];
   const tab: Tab = sections.includes(section as Tab)
     ? (section as Tab)
@@ -410,6 +416,7 @@ function AppContent() {
         analyticsCsv(snapshot, period, true),
         analyticsFilename(period),
       );
+      activity.record('export_report');
       setExportMessage(
         Platform.OS === "web"
           ? "Sample report download started."
@@ -438,6 +445,7 @@ function AppContent() {
     setRecordStatus("All");
     setSelectedTool(tool);
     setSelectedRecord(record);
+    activity.record(record?'view_record':'open_tool',tool.id);
   };
   const roleLabel = roles.find((item) => item.value === role)!.label;
   const draftError = periodError(draft);
@@ -514,46 +522,13 @@ function AppContent() {
                 },
               ]}
             >
-              <View style={[ui.row, { gap: 10, flex: 1 }]}>
-                <View
-                  accessible={false}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 12,
-                    backgroundColor: p.hero,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: p.heroText,
-                      fontSize: 23,
-                      fontWeight: "700",
-                      letterSpacing: -1,
-                    }}
-                  >
-                    r
-                  </Text>
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text
-                    style={{
-                      color: p.text,
-                      fontSize: 18,
-                      fontWeight: "600",
-                      letterSpacing: -0.5,
-                    }}
-                  >
-                    Recharge
-                  </Text>
+              <View style={{flex:1,minWidth:0,gap:5}}>
+                  <CompanyLogo palette={p} width={windowWidth<360?104:144}/>
                   <Text
                     style={{ color: p.muted, fontSize: 12, lineHeight: 17 }}
                   >
                     {roleLabel}
                   </Text>
-                </View>
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 <IconButton label="Open quick search" icon="search" palette={p} onPress={()=>setCommandOpen(true)}/>
@@ -611,7 +586,7 @@ function AppContent() {
               saved={savedTools}
               onlySaved={savedOnly}
               onOnlySaved={() => setSavedOnly(!savedOnly)}
-              onSave={toggleSaved}
+              onSave={id=>{activity.record(savedTools.includes(id)?'unsave_tool':'save_tool',id as Tool['id']);toggleSaved(id);}}
               onMovePin={moveSaved}
               onOpen={openTool}
               storageError={
@@ -641,6 +616,9 @@ function AppContent() {
                 }}
               >
                 {tab === "analytics" && <Reports snapshot={snapshot} period={period} role={role} palette={p} onDates={()=>{setDraft(period);setCalendar(true);}} onExport={exportCsv} exporting={exporting} exportMessage={exportMessage}/>}
+                {(tab==='help'||tab==='activity')&&<View style={[ui.row,{gap:12}]}><IconButton label="Back to Today" icon="arrow-left" onPress={()=>setTab('home')} palette={p}/><Text style={[ui.small,{color:p.muted}]}>Your workspace</Text></View>}
+                {tab==='help'&&<AccessHelp key={'help:'+role} role={role} palette={p} onOpen={openTool}/>}
+                {tab==='activity'&&<View style={{gap:18}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>Recent activity</Text><RecentActivity items={activity.items} palette={p} error={activity.error} onOpen={event=>{const tool=tools.find(tool=>tool.id===event.moduleId);if(tool)openTool(tool);}}/></View>}
                 <WorkspaceScreens
                   key={role}
                   section={tab}
@@ -651,6 +629,8 @@ function AppContent() {
                   onProfile={() => setSettings(true)}
                   savedTools={savedTools}
                   profileName={profile.displayName}
+                  activity={activity.items}
+                  activityError={activity.error}
                   onDepartment={(department) => {
                     setSearch("");
                     setDepartment(department);
@@ -757,7 +737,7 @@ function AppContent() {
               palette={p}
               current={profile}
               onClose={() => setAccountMode(null)}
-              onProfile={setProfile}
+              onProfile={value=>{setProfile(value);activity.record('update_profile');}}
             />
           )}
           {commandOpen&&<Sheet visible title="Quick search" onClose={()=>setCommandOpen(false)} palette={p}><CommandSearch tools={tools} palette={p} onOpen={openTool} onNavigate={setTab} onProfile={()=>setSettings(true)} onClose={()=>setCommandOpen(false)}/></Sheet>}
@@ -969,7 +949,7 @@ function AppContent() {
                           key={record.id}
                           record={record}
                           palette={p}
-                          onPress={() => setSelectedRecord(record)}
+                          onPress={() => {setSelectedRecord(record);if(selectedTool)activity.record('view_record',selectedTool.id);}}
                         />
                       ))}
                       {!visibleRecords.length && (

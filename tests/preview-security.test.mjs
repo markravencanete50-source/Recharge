@@ -22,7 +22,7 @@ test("hosted phone links serve the new mobile studio and reloadable mobile route
     assert.equal(response.status, 200);
     assert.match(await response.text(), /Recharge mobile studio/);
   }
-  for (const path of ["/home", "/analytics", "/workspace"]) {
+  for (const path of ["/home", "/analytics", "/workspace", "/help", "/activity"]) {
     const response = await fetch(base + path, { redirect: "manual" });
     assert.equal(response.status, 200, `${path} must load without changing the frame's URL`);
     assert.equal(response.headers.get("location"), null);
