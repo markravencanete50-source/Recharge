@@ -10,7 +10,7 @@ const endpoints = new Set([
   "/api/workspace/journeys", "/api/mobile/journeys",
   "/api/workspace/operations", "/api/mobile/operations",
   "/api/workspace/portfolio", "/api/mobile/portfolio",
-  "/workspace", "/recharge-wordmark.svg", "/recharge-company-logo.png",
+  "/workspace", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);
 export function backendRouteAllowed(path: string) {
   return endpoints.has(path) || path.startsWith("/assets/") || /^\/fonts\/(inter|montserrat)-(400|500|600|700)\.ttf$/.test(path);

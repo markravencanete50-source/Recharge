@@ -12,6 +12,19 @@ The Home layout/navigation update (`cc653c5`) is published on Pages. Backend bra
 
 An alternative Workers Builds connection is prepared in the signed-in dashboard for the existing Recharge repository and `codex/cloudflare-preview` branch, using `npm run build` and `npx wrangler deploy --config dist/server/wrangler.backend.json --keep-vars`, with preview builds disabled. It has not been connected. Cloudflare's proposed automatic build token includes account-wide product edit permissions beyond this Worker's needs. An approval request explaining the exact configuration and permissions was emailed to the user; no new token or expanded permissions have been created. Confirm that action or use a narrower deployment credential before connecting.
 
+### Release follow-up, 6 October 2026
+
+The latest production Worker bundle is built, with the property journey,
+operations and portfolio handlers and both company logo assets. The generated
+backend config and its two boundary tests passed. It remains undeployed:
+renewing the existing Wrangler login with its unchanged scopes failed during
+the OAuth token exchange with a connection reset. The dashboard code editor
+also failed to load and its Deploy control remained disabled. The active
+backend version is still `cdda731e`. No new credential or permission expansion
+was created. The prepared repository connection above still needs the stated
+approval or a narrower deployment credential. Pushing the source branch
+updates Pages only; it does not publish these backend handlers.
+
 ## Native build configuration
 
 Set `EXPO_PUBLIC_WORKSPACE_API_ORIGIN` to the deployed backend's canonical HTTPS origin, with no path, query, fragment or embedded credentials. This public value is a URL, not an API secret. Rebuild the native app after setting it. The native entry opens `/live` only when configured; web product previews continue using preview routes.

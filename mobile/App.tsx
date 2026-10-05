@@ -51,7 +51,7 @@ import {
   usePreviewBookmarks,
   useThemePreference,
 } from "./src/usePreviewPreferences";
-import { type WorkspaceSection } from "../lib/workspace-map";
+import { navigationFor, type WorkspaceSection } from "../lib/workspace-map";
 import {
   MotionPress as Pressable,
   MotionProvider,
@@ -515,7 +515,7 @@ function AppContent() {
               ]}
             >
               <View style={{flex:1,minWidth:0}}>
-                  <CompanyLogo palette={headerPalette(p)} width={windowWidth<360?104:144}/>
+                  {desktop?<Text style={{color:p.headerText,fontSize:16,fontWeight:"600"}}>{navigationFor(role).find(item=>item.value===tab)?.label??(tab==="workspace"?"Tools":tab==="analytics"?"Reports":tab.charAt(0).toUpperCase()+tab.slice(1))}</Text>:<CompanyLogo palette={headerPalette(p)} width={windowWidth<360?104:144}/>}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 <IconButton label="Open quick search" icon="search" palette={headerPalette(p)} onPress={()=>setCommandOpen(true)}/>

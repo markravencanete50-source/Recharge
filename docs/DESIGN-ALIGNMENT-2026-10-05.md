@@ -7,8 +7,11 @@ margins without redrawing the emblem, lettering or final dot.
 The main light background is bone #EFE9DB, sampled from the supplied artwork.
 Dark green #1F3D38 is used for lettering and actions. Cards use a lighter bone
 surface #FAF7F0. Status and department accents remain small and semantic.
-The latest palette supersedes the previous blue Today hero; its gradient now
-uses dark green. Both themes use locally bundled Montserrat 400/500/600/700.
+The latest palette supersedes the previous blue Today hero. Home analytics use
+bone surfaces and green text/strokes in light mode, then dark green surfaces
+and bone text/mint strokes in dark mode. The graph, ring, change chip and status
+tiles all change with the theme. Both themes use locally bundled Montserrat
+400/500/600/700.
 
 The public web preview at / and the phone studio at /studio now render the
 same responsive Expo component bundle. Desktop uses a sidebar and wider grids;
@@ -32,3 +35,17 @@ mobile-workspace checks passed. Browser checks covered desktop and phone
 layouts, both themes, title-only search, status highlighting and date selection.
 Original and bundled logo SHA-256 hashes match. Screenshots are saved locally
 under .audit/design-alignment (not included in the source commit).
+
+## Client feedback, 6 October 2026
+
+The supplied feedback video was transcribed locally with the cached Whisper
+model. Its design requests are one Recharge logo on desktop and contrasting
+green/bone colours when switching themes. Desktop now keeps the company logo
+in the sidebar and shows the current section name in the toolbar. Phone keeps
+its single toolbar logo. Navigation, counts and tap destinations are unchanged.
+
+Root/mobile typechecks, scoped lint, production and preview builds passed.
+Five Home analytics/contrast tests and two backend deployment boundary tests
+passed. Local desktop and phone checks confirmed both themes and navigation.
+The live backend asset allowlist now includes the supplied dark-mode logo in
+source; publication of that Worker is tracked in WORKFLOW-ACTIVATION.md.
