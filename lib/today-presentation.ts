@@ -1,11 +1,22 @@
 import { buildAnalytics, type AnalyticsSnapshot, type AnalyticsPeriod } from './analytics';
 import { reportPresentation } from './report-presentation';
 
-// Scoped to the Today analytics card and its two tiles, not the app palette.
+// Scoped Home analytics palettes. All visual elements follow the selected theme.
 export const todayColors = {
-  heroStart:'#1F3D38',heroEnd:'#315F50',mint:'#86EFAC',spark:'#A7D9C1',unfavourable:'#FFD08A',
-  light:{waitingBg:'#FFF0D6',waitingBorder:'#F6DCA8',waitingIcon:'#B45309',waitingFill:'#B56800',propertyBg:'#E8EEFF',propertyBorder:'#CBD7FF',propertyIcon:'#3457D5'},
-  dark:{waitingBg:'#3A2A12',waitingBorder:'#FFB54747',waitingIcon:'#FFB547',waitingFill:'#FFB547',propertyBg:'#1F2B55',propertyBorder:'#A9BAFF47',propertyIcon:'#A9BAFF'},
+  light:{
+    heroStart:'#FAF7F0',heroEnd:'#E0E7D9',heroText:'#152D28',heroMuted:'#4E6259',heroBorder:'#CCC8B8',
+    trendBg:'#EFE9DB',mint:'#177A41',spark:'#177A41',unfavourable:'#974200',
+    ringBg:'#FAF7F0',ringTrack:'#D4DDCF',grid:'#697A6D',gridOpacity:0.35,
+    selectionLine:'#4E6259',chipBg:'#E0E7D9',selectedBg:'#D4DDCF',dot:'#152D28',
+    waitingBg:'#FFF0D6',waitingBorder:'#F6DCA8',waitingIcon:'#B45309',waitingFill:'#B56800',propertyBg:'#E8EEFF',propertyBorder:'#CBD7FF',propertyIcon:'#3457D5',
+  },
+  dark:{
+    heroStart:'#182C26',heroEnd:'#213A32',heroText:'#FAF7F0',heroMuted:'#C7CBBE',heroBorder:'#345347',
+    trendBg:'#0F1E1A',mint:'#86EFAC',spark:'#A7D9C1',unfavourable:'#FFD08A',
+    ringBg:'#182C26',ringTrack:'#42564E',grid:'#79998C',gridOpacity:0.4,
+    selectionLine:'#C7CBBE',chipBg:'#213A32',selectedBg:'#254538',dot:'#FAF7F0',
+    waitingBg:'#3A2A12',waitingBorder:'#FFB54747',waitingIcon:'#FFB547',waitingFill:'#FFB547',propertyBg:'#1F2B55',propertyBorder:'#A9BAFF47',propertyIcon:'#A9BAFF',
+  },
 };
 
 export function todayPresentation(snapshot:AnalyticsSnapshot,period:AnalyticsPeriod) {

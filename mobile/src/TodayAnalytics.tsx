@@ -13,7 +13,8 @@ const AnimatedCircle=Animated.createAnimatedComponent(Circle);
 const AnimatedPolyline=Animated.createAnimatedComponent(Polyline);
 const AnimatedPath=Animated.createAnimatedComponent(Path);
 
-export function TodayRing({completed,total,motionKey,size=88}:{completed:number;total:number;motionKey:string;size?:number}) {
+export function TodayRing({completed,total,motionKey,size=88,palette:p}:{completed:number;total:number;motionKey:string;size?:number;palette:Palette}) {
+  const tone=todayColors[p.isDark?'dark':'light'];
   const {reduced,ready,seen}=useMotionPreference();
   const [draw]=useState(()=>new Animated.Value(1));
   const share=total?Math.min(1,completed/total):0,circumference=2*Math.PI*35;
@@ -24,20 +25,21 @@ export function TodayRing({completed,total,motionKey,size=88}:{completed:number;
     const animation=Animated.timing(draw,{toValue:1,duration:550,useNativeDriver:false});
     animation.start();return()=>{animation.stop();draw.setValue(1);};
   },[draw,motionKey,ready,reduced,seen]);
-  const ring={cx:44,cy:44,r:35,fill:'none',stroke:todayColors.mint,strokeWidth:6,strokeLinecap:'round' as const,strokeDasharray:circumference,strokeDashoffset:draw.interpolate({inputRange:[0,1],outputRange:[circumference,circumference*(1-share)]}),rotation:-90,origin:'44,44'};
+  const ring={cx:44,cy:44,r:35,fill:'none',stroke:tone.mint,strokeWidth:6,strokeLinecap:'round' as const,strokeDasharray:circumference,strokeDashoffset:draw.interpolate({inputRange:[0,1],outputRange:[circumference,circumference*(1-share)]}),rotation:-90,origin:'44,44'};
   return <View accessible accessibilityLabel={`${completed} of ${total} tasks done, ${total?Math.round(share*100):0} percent`} style={{width:size,height:size,alignItems:'center',justifyContent:'center',gap:1}}>
     <Svg width={size} height={size} style={{position:'absolute'}} viewBox="0 0 88 88">
       <Defs><Filter id="today-ring-glow" x="-50%" y="-50%" width="200%" height="200%"><FeGaussianBlur stdDeviation={4}/></Filter></Defs>
-      {/* Solid backing preserves contrast against the translucent white track. */}
-      <Circle cx={44} cy={44} r={42} fill={todayColors.heroStart}/>
-      <Circle cx={44} cy={44} r={35} fill="none" stroke="#FFFFFF" strokeOpacity={0.22} strokeWidth={6}/>
+      {/* Solid themed backing and track keep the progress stroke readable. */}
+      <Circle cx={44} cy={44} r={42} fill={tone.ringBg}/>
+      <Circle cx={44} cy={44} r={35} fill="none" stroke={tone.ringTrack} strokeWidth={6}/>
       {share>0&&<><AnimatedCircle {...ring} opacity={0.4} filter="url(#today-ring-glow)"/><AnimatedCircle {...ring}/></>}
     </Svg>
-    <Text style={{color:'#FFFFFF',fontSize:size>88?28:22,fontWeight:'600',letterSpacing:-0.7}}>{total?Math.round(share*100):0}%</Text><Text style={{color:'#FFFFFF',fontSize:12}}>done</Text>
+    <Text style={{color:tone.heroText,fontSize:size>88?28:22,fontWeight:'600',letterSpacing:-0.7}}>{total?Math.round(share*100):0}%</Text><Text style={{color:tone.heroMuted,fontSize:12}}>done</Text>
   </View>;
 }
 
-export function OpenTasksTrend({data,motionKey,wide=false}:{data:Today;motionKey:string;wide?:boolean}) {
+export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today;motionKey:string;wide?:boolean;palette:Palette}) {
+  const tone=todayColors[p.isDark?'dark':'light'];
   const [width,setWidth]=useState(300);
   const [selectedDate,setSelectedDate]=useState(data.days.at(-1)?.date);
   const values=data.days.map(day=>day.value),total=values.reduce((sum,value)=>sum+value,0);
@@ -58,29 +60,29 @@ export function OpenTasksTrend({data,motionKey,wide=false}:{data:Today;motionKey
     const animation=Animated.timing(draw,{toValue:1,duration:650,useNativeDriver:false});
     animation.start();return()=>{animation.stop();draw.setValue(1);};
   },[motionKey,draw,ready,reduced,seen]);
-  return <View testID="home-task-trend" style={{gap:14,backgroundColor:todayColors.heroStart,borderRadius:18,padding:16,overflow:'hidden'}}>
+  return <View testID="home-task-trend" style={{gap:14,backgroundColor:tone.trendBg,borderRadius:18,padding:16,overflow:'hidden'}}>
     <View style={[ui.between,{gap:12,flexWrap:'wrap'}]}>
-      <View style={{gap:4}}><Text style={{color:'#FFFFFF',fontSize:15,fontWeight:'600'}}>Open tasks by date</Text><Text style={{color:'#FFFFFF',fontSize:12,lineHeight:18}}>{label(data.days[0].date)} to {label(data.days.at(-1)!.date)}</Text></View>
-      <View style={[ui.row,{gap:6,backgroundColor:'#FFFFFF24',paddingHorizontal:10,paddingVertical:7,borderRadius:999}]}><Feather name={data.direction==='down'?'arrow-down':data.direction==='up'?'arrow-up':'minus'} size={15} color={data.good?todayColors.mint:todayColors.unfavourable}/><Text style={{color:'#FFFFFF',fontSize:12,fontWeight:'500'}}>{data.changeLabel}</Text></View>
+      <View style={{gap:4}}><Text style={{color:tone.heroText,fontSize:15,fontWeight:'600'}}>Open tasks by date</Text><Text style={{color:tone.heroText,fontSize:12,lineHeight:18}}>{label(data.days[0].date)} to {label(data.days.at(-1)!.date)}</Text></View>
+      <View style={[ui.row,{gap:6,backgroundColor:tone.chipBg,paddingHorizontal:10,paddingVertical:7,borderRadius:999}]}><Feather name={data.direction==='down'?'arrow-down':data.direction==='up'?'arrow-up':'minus'} size={15} color={data.good?tone.mint:tone.unfavourable}/><Text style={{color:tone.heroText,fontSize:12,fontWeight:'500'}}>{data.changeLabel}</Text></View>
     </View>
     {data.available?<>
-      <Text style={{color:'#FFFFFF',fontSize:12,lineHeight:18}}>{total} currently open, recorded in these 7 days</Text>
+      <Text style={{color:tone.heroText,fontSize:12,lineHeight:18}}>{total} currently open, recorded in these 7 days</Text>
       <View onLayout={event=>setWidth(Math.max(80,event.nativeEvent.layout.width))} accessible accessibilityRole="image" accessibilityLabel={`Open tasks by recorded date. ${data.days.map(day=>`${day.date}: ${day.value}`).join('; ')}. ${data.changeLabel}. Counts use current task status, not historical backlog.`}>
         <Svg accessible={false} width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
-          <Defs><LinearGradient id="today-open-area" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={todayColors.spark} stopOpacity={0.3}/><Stop offset="1" stopColor={todayColors.spark} stopOpacity={0}/></LinearGradient></Defs>
-          {[0,max/2,max].map(value=><Line key={'grid-'+value} x1={28} x2={width} y1={y(value)} y2={y(value)} stroke="#FFFFFF" strokeOpacity={0.18} strokeDasharray="3 5"/>)}
-          {[0,max/2,max].map(value=><SvgText key={'label-'+value} x={0} y={y(value)+4} fill="#FFFFFF" fontSize={12} fontFamily="Montserrat_500Medium">{value}</SvgText>)}
+          <Defs><LinearGradient id="today-open-area" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={tone.spark} stopOpacity={0.3}/><Stop offset="1" stopColor={tone.spark} stopOpacity={0}/></LinearGradient></Defs>
+          {[0,max/2,max].map(value=><Line key={'grid-'+value} x1={28} x2={width} y1={y(value)} y2={y(value)} stroke={tone.grid} strokeOpacity={tone.gridOpacity} strokeDasharray="3 5"/>)}
+          {[0,max/2,max].map(value=><SvgText key={'label-'+value} x={0} y={y(value)+4} fill={tone.heroText} fontSize={12} fontFamily="Montserrat_500Medium">{value}</SvgText>)}
           <AnimatedPath d={`M${x(0)} ${height-12} L${points.split(' ').join(' L')} L${x(values.length-1)} ${height-12} Z`} fill="url(#today-open-area)" opacity={draw}/>
-          <AnimatedPolyline points={points} fill="none" stroke={todayColors.spark} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={length||1} strokeDashoffset={draw.interpolate({inputRange:[0,1],outputRange:[length||1,0]})}/>
-          {values.map((value,i)=><Circle key={data.days[i].date} cx={x(i)} cy={y(value)} r={3} fill={todayColors.spark}/>)}
-          <Line x1={x(selected)} x2={x(selected)} y1={18} y2={height-12} stroke="#FFFFFF" strokeOpacity={0.5} strokeDasharray="3 4"/>
-          <Circle cx={x(selected)} cy={y(day.value)} r={8} fill={todayColors.spark} fillOpacity={0.3}/><Circle cx={x(selected)} cy={y(day.value)} r={4} fill="#FFFFFF"/>
-          <SvgText x={x(selected)} y={y(day.value)-12} textAnchor="middle" fill="#FFFFFF" fontSize={13} fontFamily="Montserrat_600SemiBold">{day.value}</SvgText>
+          <AnimatedPolyline points={points} fill="none" stroke={tone.spark} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={length||1} strokeDashoffset={draw.interpolate({inputRange:[0,1],outputRange:[length||1,0]})}/>
+          {values.map((value,i)=><Circle key={data.days[i].date} cx={x(i)} cy={y(value)} r={3} fill={tone.spark}/>)}
+          <Line x1={x(selected)} x2={x(selected)} y1={18} y2={height-12} stroke={tone.selectionLine} strokeOpacity={0.6} strokeDasharray="3 4"/>
+          <Circle cx={x(selected)} cy={y(day.value)} r={8} fill={tone.spark} fillOpacity={0.3}/><Circle cx={x(selected)} cy={y(day.value)} r={4} fill={tone.dot}/>
+          <SvgText x={x(selected)} y={y(day.value)-12} textAnchor="middle" fill={tone.heroText} fontSize={13} fontFamily="Montserrat_600SemiBold">{day.value}</SvgText>
         </Svg>
       </View>
-      <View style={{flexDirection:'row',paddingLeft:28}}>{data.days.map(item=><MotionPress key={item.date} accessibilityRole="button" accessibilityLabel={`${label(item.date)}, ${item.value} open tasks. Show daily count`} accessibilityState={{selected:item.date===day.date}} onPress={()=>setSelectedDate(item.date)} onHoverIn={()=>setSelectedDate(item.date)} style={{flex:1,minHeight:44,borderRadius:10,alignItems:'center',justifyContent:'center',backgroundColor:item.date===day.date?'#FFFFFF24':'transparent'}}><Text style={{color:'#FFFFFF',fontSize:12,fontWeight:item.date===day.date?'600':'400'}}>{wide?label(item.date):Number(item.date.slice(-2))}</Text></MotionPress>)}</View>
-      <View style={{gap:4}}><Text accessibilityLiveRegion="polite" style={{color:'#FFFFFF',fontSize:14,fontWeight:'600'}}>{label(day.date)} · {day.value} open {day.value===1?'task':'tasks'}</Text><Text style={{color:'#FFFFFF',fontSize:12,lineHeight:18}}>By record date, using current task status. Select a date to explore.</Text>{data.partial&&<Text style={{color:'#FFFFFF',fontSize:12}}>Some data sources are unavailable.</Text>}</View>
-    </>:<Text style={{color:'#FFFFFF',fontSize:14}}>Task data is unavailable. Try refreshing Reports.</Text>}
+      <View style={{flexDirection:'row',paddingLeft:28}}>{data.days.map(item=><MotionPress key={item.date} accessibilityRole="button" accessibilityLabel={`${label(item.date)}, ${item.value} open tasks. Show daily count`} accessibilityState={{selected:item.date===day.date}} onPress={()=>setSelectedDate(item.date)} onHoverIn={()=>setSelectedDate(item.date)} style={{flex:1,minHeight:44,borderRadius:10,alignItems:'center',justifyContent:'center',backgroundColor:item.date===day.date?tone.selectedBg:'transparent'}}><Text style={{color:tone.heroText,fontSize:12,fontWeight:item.date===day.date?'600':'400'}}>{wide?label(item.date):Number(item.date.slice(-2))}</Text></MotionPress>)}</View>
+      <View style={{gap:4}}><Text accessibilityLiveRegion="polite" style={{color:tone.heroText,fontSize:14,fontWeight:'600'}}>{label(day.date)} · {day.value} open {day.value===1?'task':'tasks'}</Text><Text style={{color:tone.heroText,fontSize:12,lineHeight:18}}>By record date, using current task status. Select a date to explore.</Text>{data.partial&&<Text style={{color:tone.heroText,fontSize:12}}>Some data sources are unavailable.</Text>}</View>
+    </>:<Text style={{color:tone.heroText,fontSize:14}}>Task data is unavailable. Try refreshing Reports.</Text>}
   </View>;
 }
 

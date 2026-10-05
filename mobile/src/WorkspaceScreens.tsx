@@ -483,6 +483,7 @@ export function WorkspaceScreens({
   const desktop=width>=1024;
   const fontsReady=useContext(FontsReady);
   const [compactFilters,setCompactFilters]=useState(false);
+  const homeTone=todayColors[p.isDark?"dark":"light"];
   const today=useMemo(()=>todayPresentation(analyticsSnapshot,analyticsPeriod),[analyticsSnapshot,analyticsPeriod]);
   const properties = useMemo(() => propertiesFor(role), [role]);
   const [query, setQuery] = useState("");
@@ -652,8 +653,10 @@ export function WorkspaceScreens({
           <Entrance sessionKey={"home:"+role+":hero"} style={desktop?{flex:2,minWidth:0}:undefined}>
             <View
               style={{
-                backgroundColor: todayColors.heroStart,
+                backgroundColor: homeTone.heroStart,
                 borderRadius: 28,
+                borderWidth: 1,
+                borderColor: homeTone.heroBorder,
                 padding: desktop?24:16,
                 gap: 20,
                 overflow: "hidden",
@@ -676,8 +679,8 @@ export function WorkspaceScreens({
                     y1="0"
                     y2="1"
                   >
-                    <Stop offset="0" stopColor={todayColors.heroStart} />
-                    <Stop offset="1" stopColor={todayColors.heroEnd} />
+                    <Stop offset="0" stopColor={homeTone.heroStart} />
+                    <Stop offset="1" stopColor={homeTone.heroEnd} />
                   </LinearGradient>
                 </Defs>
                 <Rect width="600" height="300" fill="url(#today-gradient)" />
@@ -686,7 +689,7 @@ export function WorkspaceScreens({
                 <View style={{ flex: 1, gap: 6 }}>
                   <Text
                     style={{
-                      color: p.heroMuted,
+                      color: homeTone.heroMuted,
                       fontSize: 13,
                       fontWeight: "500",
                     }}
@@ -695,7 +698,7 @@ export function WorkspaceScreens({
                   </Text>
                   <CountUp value={today.open} sessionKey={"overview:"+role+":pending:"+analyticsPeriod.from+":"+analyticsPeriod.to}
                     style={{
-                      color: p.heroText,
+                      color: homeTone.heroText,
                       fontSize: 42,
                       lineHeight: 50,
                       fontWeight: "600",
@@ -703,18 +706,18 @@ export function WorkspaceScreens({
                     }}
                   />
                   <Text
-                    style={{ color: p.heroMuted, fontSize: 14, lineHeight: 21 }}
+                    style={{ color: homeTone.heroMuted, fontSize: 14, lineHeight: 21 }}
                   >
                     tasks open
                   </Text>
-                  <Text style={{color:p.heroText,fontSize:12,lineHeight:18}}>{periodLabel(analyticsPeriod)}</Text>
+                  <Text style={{color:homeTone.heroText,fontSize:12,lineHeight:18}}>{periodLabel(analyticsPeriod)}</Text>
                 </View>
                 <View style={{ gap: 5, alignItems: "center" }}>
-                  <TodayRing size={desktop?112:88} motionKey={"overview:"+role+":ring:"+analyticsPeriod.from+":"+analyticsPeriod.to}
+                  <TodayRing palette={p} size={desktop?112:88} motionKey={"overview:"+role+":ring:"+analyticsPeriod.from+":"+analyticsPeriod.to}
                     completed={today.current.complete} total={today.current.total}/>
                 </View>
               </View>
-              <OpenTasksTrend wide={desktop} data={today} motionKey={"overview:"+role+":trend:"+analyticsPeriod.to}/>
+              <OpenTasksTrend palette={p} wide={desktop} data={today} motionKey={"overview:"+role+":trend:"+analyticsPeriod.to}/>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
@@ -729,18 +732,18 @@ export function WorkspaceScreens({
                   ui.between,
                   {
                     borderTopWidth: 1,
-                    borderColor: p.heroLine,
+                    borderColor: homeTone.heroBorder,
                     paddingTop: 16,
                     minHeight: 48,
                   },
                 ]}
               >
                 <Text
-                  style={{ color: p.heroText, fontSize: 14, fontWeight: "600" }}
+                  style={{ color: homeTone.heroText, fontSize: 14, fontWeight: "600" }}
                 >
                   View all tasks
                 </Text>
-                <Feather name="arrow-right" size={20} color={p.heroText} />
+                <Feather name="arrow-right" size={20} color={homeTone.heroText} />
               </Pressable>
             </View>
           </Entrance>

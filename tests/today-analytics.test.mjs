@@ -53,17 +53,19 @@ const mix=(a,b,alpha)=>a.map((v,i)=>v*alpha+b[i]*(1-alpha));
 const lum=rgb=>rgb.map(v=>{const c=v/255;return c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4;}).reduce((n,v,i)=>n+v*[0.2126,0.7152,0.0722][i],0);
 const ratio=(a,b)=>(Math.max(lum(a),lum(b))+0.05)/(Math.min(lum(a),lum(b))+0.05);
 test('Today text, chart strokes, change arrows and tile icons meet contrast targets in both themes',()=>{
-  const white=rgb('#FFFFFF'),mint=rgb(todayColors.mint);
-  for(let i=0;i<=100;i++){
-    const gradient=mix(rgb(todayColors.heroStart),rgb(todayColors.heroEnd),i/100),chip=mix(white,gradient,0.14);
-    assert.ok(ratio(white,gradient)>=4.5);
-    assert.ok(ratio(white,chip)>=4.5);
-    for(const ink of [todayColors.mint,todayColors.unfavourable])assert.ok(ratio(rgb(ink),chip)>=3);
-    assert.ok(ratio(rgb(todayColors.spark),gradient)>=3);
-  }
-  assert.ok(ratio(mint,mix(white,rgb(todayColors.heroStart),0.22))>=3);
   for(const theme of ['light','dark']){
     const colors=todayColors[theme],bg=rgb(colors.waitingBg),amber=rgb('#FFB547');
+    for(let i=0;i<=100;i++){
+      const gradient=mix(rgb(colors.heroStart),rgb(colors.heroEnd),i/100);
+      for(const text of [colors.heroText,colors.heroMuted])assert.ok(ratio(rgb(text),gradient)>=4.5,`${theme} hero text`);
+    }
+    for(const background of [colors.trendBg,colors.chipBg,colors.selectedBg,colors.ringBg]){
+      assert.ok(ratio(rgb(colors.heroText),rgb(background))>=4.5,`${theme} chart/control text`);
+    }
+    assert.ok(ratio(rgb(colors.mint),rgb(colors.ringTrack))>=3,`${theme} progress ring`);
+    for(const ink of [colors.mint,colors.unfavourable])assert.ok(ratio(rgb(ink),rgb(colors.chipBg))>=3,`${theme} change arrow`);
+    assert.ok(ratio(rgb(colors.spark),rgb(colors.trendBg))>=3,`${theme} trend line`);
+    assert.ok(ratio(rgb(colors.selectionLine),rgb(colors.trendBg))>=3,`${theme} selected date guide`);
     assert.ok(ratio(rgb(designTokens[theme].text),bg)>=4.5);
     assert.ok(ratio(rgb(designTokens[theme].text),rgb(colors.propertyBg))>=4.5);
     assert.ok(ratio(rgb(colors.waitingFill),mix(amber,bg,0.2))>=3);
