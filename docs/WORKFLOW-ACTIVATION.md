@@ -16,14 +16,19 @@ An alternative Workers Builds connection is prepared in the signed-in dashboard 
 
 The latest production Worker bundle is built, with the property journey,
 operations and portfolio handlers and both company logo assets. The generated
-backend config and its two boundary tests passed. It remains undeployed:
-renewing the existing Wrangler login with its unchanged scopes failed during
+backend config and its two boundary tests passed. Renewing the existing
+Wrangler login with its unchanged scopes failed during
 the OAuth token exchange with a connection reset. The dashboard code editor
 also failed to load and its Deploy control remained disabled. The active
-backend version is still `cdda731e`. No new credential or permission expansion
-was created. The prepared repository connection above still needs the stated
-approval or a narrower deployment credential. Pushing the source branch
-updates Pages only; it does not publish these backend handlers.
+backend version at that check was still `cdda731e`.
+
+The user then approved the prepared Workers Builds connection and its
+Cloudflare-managed deployment token. The repository is now connected to the
+same production branch, using the reviewed build/deploy commands above and
+preserving existing runtime variables/secrets. The first backend build is
+being triggered by this checkpoint commit; deployment and live route checks
+remain to be confirmed. Future pushes to this branch now trigger both the
+Pages preview and the backend build.
 
 ## Native build configuration
 
