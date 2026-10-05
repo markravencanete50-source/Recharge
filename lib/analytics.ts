@@ -10,7 +10,7 @@ export type AnalyticsInput = { workflows?: WorkflowData; maintenance?: Maintenan
 export type AnalyticsViewer = Pick<AccessProfile, "email" | "role" | "modules"> & { status?: AccessProfile["status"] };
 export type AnalyticsPeriod = { from: string; to: string };
 type SourceKey = "workflows" | "repairs" | "cleans" | "onboarding" | "mail";
-type AnalyticsRecord = { date: string; status: "waiting" | "progress" | "complete" };
+type AnalyticsRecord = { date: string; status: "waiting" | "progress" | "complete"; count?: number };
 export type AnalyticsSnapshot = {
   title: string; description: string; propertyLabel: string; propertyCount: number; propertyAvailable?: boolean;
   sources: { key: SourceKey; name: string; available: boolean; records: AnalyticsRecord[] }[];
@@ -112,8 +112,9 @@ export function buildAnalytics(input: AnalyticsSnapshot, selected: AnalyticsPeri
   if (error) throw new Error(error);
   const sources = input.sources.map(source => ({ ...source, records: source.available ? source.records.filter(t => parseAnalyticsDate(t.date) && t.date >= period.from && t.date <= period.to) : [] }));
   const records = sources.flatMap(s => s.records);
-  const total = records.length, complete = records.filter(t => t.status === "complete").length, waiting = records.filter(t => t.status === "waiting").length;
-  const progress = records.filter(t => t.status === "progress").length;
+  const sum = (items: AnalyticsRecord[]) => items.reduce((n, item) => n + (item.count ?? 1), 0);
+  const total = sum(records), complete = sum(records.filter(t => t.status === "complete")), waiting = sum(records.filter(t => t.status === "waiting"));
+  const progress = sum(records.filter(t => t.status === "progress"));
   const other = total - waiting - complete - progress;
   const status = [{ name: "Completed", value: complete, kind: "complete" }, { name: "Waiting", value: waiting, kind: "waiting" }, { name: "In progress", value: progress, kind: "progress" }, ...(other ? [{ name: "Other", value: other, kind: "other" }] : [])];
   const trend: ({ key: string; date: string; recorded: number; completed: number; waiting: number } & Partial<Record<SourceKey, number>>)[] = [];
@@ -121,11 +122,11 @@ export function buildAnalytics(input: AnalyticsSnapshot, selected: AnalyticsPeri
   while (dateKey(day) <= period.to) {
     const key = dateKey(day);
     const daily = records.filter(t => t.date === key);
-    trend.push({ key, date: day.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }), recorded: daily.length, completed: daily.filter(t => t.status === "complete").length, waiting: daily.filter(t => t.status === "waiting").length, ...Object.fromEntries(sources.map(s => [s.key, s.records.filter(t => t.date === key).length])) });
+    trend.push({ key, date: day.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }), recorded: sum(daily), completed: sum(daily.filter(t => t.status === "complete")), waiting: sum(daily.filter(t => t.status === "waiting")), ...Object.fromEntries(sources.map(s => [s.key, sum(s.records.filter(t => t.date === key))])) });
     // Calendar arithmetic preserves local days through daylight-saving changes.
     day.setDate(day.getDate() + 1);
   }
-  return { total, complete, waiting, properties: (input.propertyAvailable ?? sources.some(s => s.available)) ? input.propertyCount : null, status, trend, queues: sources.map(s => ({ name: s.name, value: s.records.length })), sources: sources.map(({ key, name, available }) => ({ key, name, available })) };
+  return { total, complete, waiting, properties: (input.propertyAvailable ?? sources.some(s => s.available)) ? input.propertyCount : null, status, trend, queues: sources.map(s => ({ name: s.name, value: sum(s.records) })), sources: sources.map(({ key, name, available }) => ({ key, name, available })) };
 }
 
 // Kept for existing callers; role-aware boards use server-scoped snapshots.

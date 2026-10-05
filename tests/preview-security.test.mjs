@@ -1,7 +1,20 @@
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
+import { unstable_dev } from "wrangler";
+import { fileURLToPath } from "node:url";
 
-const base = process.env.PREVIEW_TEST_URL || "http://127.0.0.1:4173";
+let base = process.env.PREVIEW_TEST_URL;
+let worker;
+before(async()=>{
+  if(base)return;
+  process.env.WRANGLER_SEND_METRICS="false";
+  worker=await unstable_dev(fileURLToPath(new URL('../preview-dist/_worker.js',import.meta.url)),{
+    config:fileURLToPath(new URL('../preview/wrangler.jsonc',import.meta.url)),local:true,ip:'127.0.0.1',port:0,persist:false,logLevel:'error',
+    experimental:{disableExperimentalWarning:true,watch:false,disableDevRegistry:true},
+  });
+  base=`http://${worker.address}:${worker.port}`;
+});
+after(async()=>{await worker?.stop();});
 
 test("preview serves the application and synthetic property data", async () => {
   const home = await fetch(base);

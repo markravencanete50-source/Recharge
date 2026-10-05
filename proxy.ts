@@ -3,11 +3,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { supabaseConfiguration } from "@/lib/supabase-server";
 import { authSecurityConfiguration, requestQuota } from "@/lib/auth-security";
 import { isSameOrigin, securityHeaders } from "@/lib/auth-security-policy";
+import { isNativeRequest } from "@/lib/native-request-policy";
 
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const security = authSecurityConfiguration();
-    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && !isSameOrigin(request, security?.origin)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403, headers: securityHeaders });
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && !isSameOrigin(request, security?.origin) && !isNativeRequest(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403, headers: securityHeaders });
     if (!security) return NextResponse.json({ error: "Security connection is awaiting configuration" }, { status: 503, headers: securityHeaders });
     try {
       const quota = await requestQuota(request, "api-ip", 120, 60);
@@ -22,6 +23,7 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   for (const [name, value] of responseHeaders) response.headers.set(name, value);
   response.headers.set("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)");
+  if (isNativeRequest(request)) { response.headers.set("Vary", "Authorization"); return response; }
   const config = supabaseConfiguration();
   if (!config) return response;
   const client = createServerClient(config.url, config.key, {

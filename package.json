@@ -10,9 +10,11 @@
     "preview:deploy": "wrangler deploy --config preview/wrangler.jsonc",
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
-    "build": "bash scripts/build-verified.sh",
+    "build": "bash scripts/build-verified.sh && node scripts/build-backend-config.mjs",
+    "backend:config": "node scripts/build-backend-config.mjs",
+    "backend:deploy": "wrangler deploy --config dist/server/wrangler.backend.json",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --test tests/*.test.mjs",
+    "test": "npm run build && npm run preview:build && node --test --test-concurrency=1 tests/*.test.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
   },
@@ -66,6 +68,7 @@
   },
   "type": "module",
   "overrides": {
-    "image-size": "2.0.4"
+    "image-size": "2.0.4",
+    "esbuild": "0.28.2"
   }
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isNativeRequest } from "@/lib/native-request-policy";
 import { requestQuota } from "@/lib/auth-security";
 import {
   boundedJson,
@@ -44,7 +45,7 @@ export function GET() {
 }
 export async function POST(request: Request) {
   const config = registrationConfiguration();
-  if (!isSameOrigin(request, config?.origin))
+  if (!isSameOrigin(request, config?.origin) && !isNativeRequest(request))
     return response({ error: "Invalid request origin" }, 403);
   if (!config) return unavailable();
   try {

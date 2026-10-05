@@ -54,6 +54,14 @@ const input = {
 };
 const period = { from: "2026-10-03", to: "2026-10-03" };
 
+test('database aggregate weights reconcile with raw record analytics', () => {
+ const groups=[{date:'2026-10-03',status:'waiting',count:14},{date:'2026-10-03',status:'progress',count:13},{date:'2026-10-03',status:'complete',count:12}];
+ const snapshot=records=>({title:'',description:'',propertyLabel:'Properties',propertyCount:2,propertyAvailable:true,sources:[{key:'workflows',name:'Workflows',available:true,records}]});
+ const weighted=buildAnalytics(snapshot(groups),period);
+ const raw=buildAnalytics(snapshot(groups.flatMap(({count,...record})=>Array.from({length:count},()=>record))),period);
+ assert.deepEqual(weighted,raw);assert.equal(weighted.total,39);assert.equal(weighted.waiting,14);assert.equal(weighted.complete,12);
+});
+
 test('schedule weeks contain Monday through Sunday across month, year and daylight-saving boundaries', () => {
   for (const date of ['2026-10-05','2026-10-11','2026-03-29','2026-10-25','2027-01-01']) {
     const week = scheduleWeek(date);

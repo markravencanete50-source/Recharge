@@ -84,17 +84,17 @@ test("renders sidebar skeletons deterministically", async () => {
   assert.match(first, /--skeleton-width:70%/);
 });
 
-test("every Recharge tool has distinct 3D artwork", async () => {
+test("every Recharge tool renders its assigned accessible 2D glyph", async () => {
   const { MODULES } = await vite.ssrLoadModule("/lib/modules.ts");
+  const { featureGlyphs, iconNodes } = await vite.ssrLoadModule("/lib/artwork.ts");
   const { ToolIllustration } = await vite.ssrLoadModule("/components/tool-illustration.tsx");
-  const artwork = MODULES.map(module => {
+  for (const module of MODULES) {
     const html = renderToStaticMarkup(React.createElement(ToolIllustration, {id: module.id}));
-    const src = html.match(/<img[^>]+src="([^"]+)"/)?.[1];
-    const position = html.match(/<img[^>]+style="([^"]+)"/)?.[1];
-    assert.ok(src && position, `${module.id} must have an illustration`);
-    return `${src}:${position}`;
-  });
-  assert.equal(new Set(artwork).size, MODULES.length, "No two tools may share an illustration");
+    assert.ok(iconNodes[featureGlyphs[module.id]]?.length, `${module.id} must have an assigned glyph`);
+    assert.match(html, /aria-hidden="true"/);
+    assert.match(html, /<svg[^>]+stroke="currentColor"/);
+    assert.doesNotMatch(html, /<img/);
+  }
 });
 
 test("analytics excludes old and future records and preserves exact status totals", async () => {
