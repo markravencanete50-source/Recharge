@@ -304,6 +304,7 @@ export function ToolDirectory({
       pointerEvents={hidden ? "none" : "auto"}
     >
       <View
+        {...(Platform.OS==='web'?{dataSet:{searchShell:'true'}}:{})}
         style={[
           ui.row,
           {

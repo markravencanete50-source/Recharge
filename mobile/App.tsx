@@ -41,6 +41,7 @@ import { WorkspaceScreens, Calendar } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
 import { CommandSearch } from "./src/CommandSearch";
 import { CompanyLogo } from "./src/CompanyLogo";
+import { FaqShortcut, useFaqShortcut } from "./src/FaqShortcut";
 import { useRecentActivity } from "./src/useRecentActivity";
 import { AccessHelp, RecentActivity } from "./src/AccessHelp";
 import { exportReport } from "./src/exportReport";
@@ -338,6 +339,7 @@ function AppContent() {
   },[]);
   const [role, setRole] = useState<WorkspaceRole>("super_admin");
   const activity = useRecentActivity(role);
+  const faqShortcut = useFaqShortcut();
   const { section } = useLocalSearchParams<{ section: string }>();
   const sections: WorkspaceSection[] = [
     "home",
@@ -595,7 +597,7 @@ function AppContent() {
             />
           )}
 
-          {(tab === "work" || tab === "calendar") && <WorkspaceScreens key={role} section={tab} role={role} palette={p} onNavigate={setTab} onOpen={openTool} onProfile={()=>setSettings(true)} savedTools={savedTools} profileName={profile.displayName} onDepartment={department=>{setDepartment(department);setTab("workspace");}}/>}
+          {(tab === "work" || tab === "calendar") && <WorkspaceScreens key={role} section={tab} role={role} palette={p} analyticsSnapshot={snapshot} analyticsPeriod={period} onNavigate={setTab} onOpen={openTool} onProfile={()=>setSettings(true)} savedTools={savedTools} profileName={profile.displayName} onDepartment={department=>{setDepartment(department);setTab("workspace");}}/>}
           {tab !== "workspace" && tab !== "more" && tab !== "work" && tab !== "calendar" && (
             <ScrollView
               ref={scroll}
@@ -624,6 +626,8 @@ function AppContent() {
                   section={tab}
                   role={role}
                   palette={p}
+                  analyticsSnapshot={snapshot}
+                  analyticsPeriod={period}
                   onNavigate={setTab}
                   onOpen={openTool}
                   onProfile={() => setSettings(true)}
@@ -651,6 +655,7 @@ function AppContent() {
               </Animated.View>
             </ScrollView>
           )}
+          {!faqShortcut.hidden&&<FaqShortcut palette={p} onOpen={()=>setTab('help')} onHide={()=>faqShortcut.setHidden(true)}/>}
           <View style={{ alignItems: "center", paddingVertical: 4 }}>
             <Text
               style={{
@@ -697,6 +702,7 @@ function AppContent() {
               }}
             />
             <View style={[ui.between,{gap:16,minHeight:56}]}><View style={{flex:1,gap:4}}><Text style={[ui.body,{color:p.text,fontWeight:"600"}]}>Reduce motion</Text><Text style={[ui.small,{color:p.muted}]}>{motionPreference.system?"Your device setting is respected.":"Use instant changes instead of decorative animation."}</Text></View><Switch accessibilityLabel="Reduce motion" value={reduced} disabled={motionPreference.system} onValueChange={motionPreference.setPreference} trackColor={{false:p.controlBorder,true:p.primary}} thumbColor={p.surface}/></View>
+            <View style={[ui.between,{gap:16,minHeight:56}]}><Text style={[ui.body,{color:p.text,flex:1}]}>Show FAQ shortcut</Text><Switch accessibilityLabel="Show FAQ shortcut" value={!faqShortcut.hidden} onValueChange={value=>faqShortcut.setHidden(!value)} trackColor={{false:p.controlBorder,true:p.success}} thumbColor={p.surface}/></View>
             <Text style={[ui.body, { color: p.muted }]}>
               Explore the app as each role. This selector only changes sample
               screens and never grants real access.

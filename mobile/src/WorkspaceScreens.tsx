@@ -19,7 +19,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Artwork } from "./Artwork";
 import { FilterBar } from "./FilterBar";
-import { ProgressRing, StateGraphic } from "./StateGraphic";
+import { StateGraphic } from "./StateGraphic";
 import Svg, {
   Rect,
   Defs,
@@ -51,9 +51,9 @@ import {
 } from "../../lib/workspace-map";
 import { presetPeriod } from "../../lib/analytics";
 import { scheduleWeek, scheduleWeekLabel, moveScheduleDay, fullScheduleDate } from "../../lib/schedule-presentation";
-import { Sparkline } from "./Charts";
-import { weeklySparkline } from "../../lib/report-presentation";
-import { snapshotFor } from "./model";
+import { TodayRing, TodayTiles, OpenTasksSparkline } from "./TodayAnalytics";
+import { todayPresentation, todayColors } from "../../lib/today-presentation";
+import type { AnalyticsSnapshot, AnalyticsPeriod } from "../../lib/analytics";
 import { DepartmentGrid } from "./DepartmentGrid";
 import { BuildingGlyph } from "./BuildingGlyph";
 import { ParallaxSurface } from "./ParallaxSurface";
@@ -74,6 +74,8 @@ type Props = {
   profileName: string;
   activity?: PersonalActivity[];
   activityError?: string;
+  analyticsSnapshot: AnalyticsSnapshot;
+  analyticsPeriod: AnalyticsPeriod;
 };
 
 function displayDate(value: string) {
@@ -476,13 +478,15 @@ export function WorkspaceScreens({
   profileName,
   activity=[],
   activityError='',
+  analyticsSnapshot,
+  analyticsPeriod,
 }: Props) {
   const items = useMemo(() => workFor(role), [role]);
   const {width}=useWindowDimensions();
   const desktop=width>=1024;
   const fontsReady=useContext(FontsReady);
   const [compactFilters,setCompactFilters]=useState(false);
-  const spark=useMemo(()=>weeklySparkline(snapshotFor(role),presetPeriod(1).to),[role]);
+  const today=useMemo(()=>todayPresentation(analyticsSnapshot,analyticsPeriod),[analyticsSnapshot,analyticsPeriod]);
   const properties = useMemo(() => propertiesFor(role), [role]);
   const [query, setQuery] = useState("");
   const [propertyQuery, setPropertyQuery] = useState("");
@@ -501,7 +505,6 @@ export function WorkspaceScreens({
   };
   const reduced = useReducedMotion();
   const pending = items.filter((item) => !isComplete(item.record.status));
-  const waiting = pending.filter((item) => isWaiting(item.record.status));
   const inbox = inboxFor(role);
   const card = { backgroundColor: p.surface, borderColor: p.border };
   const searchQuery = section === "properties" ? propertyQuery : query;
@@ -522,6 +525,7 @@ export function WorkspaceScreens({
   );
   const search = (placeholder: string) => (
     <View
+      {...(Platform.OS==="web"?{dataSet:{searchShell:"true"}}:{})}
       style={[
         ui.row,
         {
@@ -650,7 +654,7 @@ export function WorkspaceScreens({
           <Entrance sessionKey={"home:"+role+":hero"}><ParallaxSurface>
             <View
               style={{
-                backgroundColor: p.hero,
+                backgroundColor: todayColors.heroStart,
                 borderRadius: 28,
                 padding: 24,
                 gap: 20,
@@ -674,8 +678,8 @@ export function WorkspaceScreens({
                     y1="0"
                     y2="1"
                   >
-                    <Stop offset="0" stopColor={p.hero} />
-                    <Stop offset="1" stopColor={p.heroEnd} />
+                    <Stop offset="0" stopColor={todayColors.heroStart} />
+                    <Stop offset="1" stopColor={todayColors.heroEnd} />
                   </LinearGradient>
                   <RadialGradient id="today-glow" cx=".95" cy="0" r=".34">
                     <Stop offset="0" stopColor={p.heroGlow} stopOpacity=".2" />
@@ -683,7 +687,7 @@ export function WorkspaceScreens({
                   </RadialGradient>
                 </Defs>
                 <Rect width="600" height="300" fill="url(#today-gradient)" />
-                <Rect width="600" height="300" fill="url(#today-glow)" />
+                <Circle cx="600" cy="0" r="50" fill="url(#today-glow)" />
                 {[65, 95, 125].map((r) => (
                   <Circle
                     key={r}
@@ -719,11 +723,9 @@ export function WorkspaceScreens({
                       fontWeight: "500",
                     }}
                   >
-                    {role === "client"
-                      ? "Waiting for your decision"
-                      : "Your work at a glance"}
+                    Open tasks
                   </Text>
-                  <CountUp value={role === "client" ? approvalItems(role).length : pending.length} sessionKey={"overview:"+role+":pending"}
+                  <CountUp value={today.open} sessionKey={"overview:"+role+":pending:"+analyticsPeriod.from+":"+analyticsPeriod.to}
                     style={{
                       color: p.heroText,
                       fontSize: 42,
@@ -735,22 +737,12 @@ export function WorkspaceScreens({
                   <Text
                     style={{ color: p.heroMuted, fontSize: 14, lineHeight: 21 }}
                   >
-                    {role === "client"
-                      ? "approvals to review"
-                      : "open work items"}
+                    tasks open
                   </Text>
                 </View>
                 <View style={{ gap: 5, alignItems: "center" }}>
-                  <ProgressRing motionKey={"overview:"+role+":ring"}
-                    completed={
-                      items.filter((item) => isComplete(item.record.status))
-                        .length
-                    }
-                    total={items.length}
-                  />
-                  <Text style={{ fontSize: 12, color: p.heroMuted }}>
-                    {items.length ? "Work completed" : "No work yet"}
-                  </Text>
+                  <TodayRing motionKey={"overview:"+role+":ring:"+analyticsPeriod.from+":"+analyticsPeriod.to}
+                    completed={today.current.complete} total={today.current.total}/>
                 </View>
               </View>
               <Pressable
@@ -776,65 +768,14 @@ export function WorkspaceScreens({
                 <Text
                   style={{ color: p.heroText, fontSize: 14, fontWeight: "600" }}
                 >
-                  {role === "client" ? "Review approvals" : "See your work"}
+                  View all tasks
                 </Text>
                 <Feather name="arrow-right" size={20} color={p.heroText} />
               </Pressable>
-              <Sparkline values={spark.days.map(day=>day.value)} label={spark.deltaLabel} palette={p}/>
+              <OpenTasksSparkline data={today} motionKey={"overview:"+role+":spark:"+analyticsPeriod.to}/>
             </View></ParallaxSurface>
           </Entrance>
-          <View style={[ui.row, { gap: 12 }]}>
-            {[
-              {
-                label: "Waiting",
-                value: waiting.length,
-                icon: "clock" as const,
-                bg: p.elevated,
-                action: () => openQueue("Waiting"),
-              },
-              {
-                label: "Properties",
-                value: properties.length,
-                icon: "home" as const,
-                bg: p.elevated,
-                action: () => onNavigate("properties"),
-              },
-            ].map((stat) => (
-              <Pressable
-                key={stat.label}
-                accessibilityRole="button"
-                accessibilityLabel={stat.label + ": " + stat.value}
-                onPress={stat.action}
-                style={{
-                  flex: 1,
-                  padding: 16,
-                  backgroundColor: stat.bg,
-                  borderRadius: 22,
-                  gap: 10,
-                }}
-              >
-                <View style={ui.between}>
-                  <Feather name={stat.icon} size={19} color={p.text} />
-                  <Feather name="arrow-up-right" size={16} color={p.text} />
-                </View>
-                <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-                  <Text
-                    style={{
-                      fontSize: 26,
-                      fontWeight: "600",
-                      letterSpacing: -0.8,
-                      color: p.text,
-                    }}
-                  >
-                    {stat.value}
-                  </Text>
-                  <Text style={{ color: p.text, fontSize: 13 }}>
-                    {stat.label}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
+          <TodayTiles data={today} palette={p} onWaiting={()=>openQueue("Waiting")} onProperties={()=>onNavigate("properties")}/>
           <Entrance sessionKey={"home:"+role+":schedule"} delay={55} style={{ gap: 10 }}>
             <View style={ui.between}>
               <View style={{flex:1,gap:4}}><Text
