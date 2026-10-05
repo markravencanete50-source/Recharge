@@ -500,7 +500,7 @@ function AppContent() {
           {desktop&&<DesktopNavigation role={role} section={tab} palette={p} onNavigate={setTab} onProfile={()=>setSettings(true)} onDepartment={(department)=>{setSearch("");setDepartment(department);setSavedOnly(false);setTab("workspace");}}/>}
           <View style={[ui.fill,{minWidth:0}]}>
           {offline&&<View accessibilityRole="alert" style={{backgroundColor:p.cautionWash,padding:12}}><Text style={[ui.small,{color:p.text}]}>You are offline. The sample workspace remains available. Live requests may fail until you reconnect.</Text></View>}
-          <View style={{ backgroundColor: p.header, borderBottomWidth:desktop?1:0, borderColor:p.headerBorder, ...(Platform.OS === "web" && scrolled ? {boxShadow:"0 6px 18px var(--rc-shadow)"}: {}) }}>
+          <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth:desktop?1:0, borderColor:p.headerBorder, ...(Platform.OS === "web" && scrolled ? {boxShadow:"0 6px 18px var(--rc-shadow)"}: {}) }}>
             <View
               style={[
                 ui.between,
@@ -509,19 +509,13 @@ function AppContent() {
                   maxWidth: desktop ? undefined : 760,
                   alignSelf: "center",
                   paddingHorizontal: 20,
-                  paddingTop: 12,
-                  paddingBottom: 8,
+                  paddingVertical: 16,
                   gap: 12,
                 },
               ]}
             >
-              <View style={{flex:1,minWidth:0,gap:5}}>
+              <View style={{flex:1,minWidth:0}}>
                   <CompanyLogo palette={headerPalette(p)} width={windowWidth<360?104:144}/>
-                  <Text
-                    style={{ color: p.headerMuted, fontSize: 12, lineHeight: 17 }}
-                  >
-                    {roleLabel}
-                  </Text>
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 <IconButton label="Open quick search" icon="search" palette={headerPalette(p)} onPress={()=>setCommandOpen(true)}/>
@@ -535,7 +529,7 @@ function AppContent() {
                 />
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Open profile and preview roles"
+                  accessibilityLabel={`Open profile and preview roles, ${roleLabel}`}
                   onPress={() => setSettings(true)}
                   style={{
                     minHeight: 48,
@@ -557,7 +551,7 @@ function AppContent() {
                         borderRadius: 5,
                         borderWidth: 2,
                         borderColor: p.header,
-                        backgroundColor: p.primary,
+                        backgroundColor: p.headerText,
                       }}
                     />
                   )}
@@ -675,6 +669,10 @@ function AppContent() {
             title={profile.displayName}
             palette={p}
           >
+            <View style={{gap:4,paddingBottom:8,borderBottomWidth:1,borderColor:p.border}}>
+              <Text style={[ui.small,{color:p.muted}]}>Workspace role</Text>
+              <Text style={[ui.sectionTitle,{color:p.text}]}>{roleLabel}</Text>
+            </View>
             <Action
               label="Customize preview profile"
               palette={p}

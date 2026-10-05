@@ -17,7 +17,7 @@ export const themes = Object.fromEntries(
   ]),
 ) as Record<"light" | "dark", typeof designTokens.light & { isDark: boolean }>;
 export type Palette = typeof themes.light;
-// Header uses the same dark-green brand surface in both themes.
+// Light mode pairs a green toolbar with the bone canvas; dark mode reverses it.
 export function headerPalette(p: Palette): Palette {
   return {...p,background:p.header,surface:p.headerControl,text:p.headerText,
     muted:p.headerMuted,border:p.headerBorder,primary:p.headerText,onPrimary:p.header};
