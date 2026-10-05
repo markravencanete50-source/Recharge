@@ -6,6 +6,12 @@ Build the server, generate the backend config with `node scripts/build-backend-c
 
 The public Pages product preview stays read-only. Its sample data must never be imported into the live database. Git deployments of `codex/cloudflare-preview` update the preview; they do not deploy the backend Worker.
 
+### Deployment status, 5 October 2026
+
+The Home layout/navigation update (`cc653c5`) is published on Pages. Backend branding allowlist update `06f17b5` is built and tested locally, but neither that update nor the prepared property workflow handlers have been redeployed to the backend Worker. The existing CLI login cannot refresh because its connection to Cloudflare's authentication server fails. Stored credentials were not replaced and TLS validation was not bypassed.
+
+An alternative Workers Builds connection is prepared in the signed-in dashboard for the existing Recharge repository and `codex/cloudflare-preview` branch, using `npm run build` and `npx wrangler deploy --config dist/server/wrangler.backend.json --keep-vars`, with preview builds disabled. It has not been connected. Cloudflare's proposed automatic build token includes account-wide product edit permissions beyond this Worker's needs. An approval request explaining the exact configuration and permissions was emailed to the user; no new token or expanded permissions have been created. Confirm that action or use a narrower deployment credential before connecting.
+
 ## Native build configuration
 
 Set `EXPO_PUBLIC_WORKSPACE_API_ORIGIN` to the deployed backend's canonical HTTPS origin, with no path, query, fragment or embedded credentials. This public value is a URL, not an API secret. Rebuild the native app after setting it. The native entry opens `/live` only when configured; web product previews continue using preview routes.
