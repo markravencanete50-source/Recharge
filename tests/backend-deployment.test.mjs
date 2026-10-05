@@ -22,6 +22,8 @@ test('prepared Worker has no D1, R2, privileged keys or public sample data',asyn
   const origin=`http://${worker.address}:${worker.port}`;
   for(const path of ['/','/api/maintenance','/api/unknown','/api/onboarding/files']){const response=await worker.fetch(origin+path,{redirect:'manual'});assert.equal(response.status,404,path);assert.equal((await response.json()).error,'This endpoint is not available on the live backend');}
   const health=await worker.fetch(origin+'/health');assert.equal(health.status,503);assert.equal((await health.json()).configured,false);
-  const api=await worker.fetch(origin+'/api/mobile/workspace');assert.equal(api.status,503);assert.match(api.headers.get('cache-control'),/no-store/);assert.equal(api.headers.get('access-control-allow-origin'),null);
+  for(const path of ['/api/mobile/workspace','/api/workspace/integrations','/api/mobile/integrations','/api/workspace/media','/api/mobile/media']){
+   const api=await worker.fetch(origin+path);assert.equal(api.status,503,path);assert.match(api.headers.get('cache-control'),/no-store/);assert.equal(api.headers.get('access-control-allow-origin'),null);
+  }
  }finally{await worker.stop();}
 });

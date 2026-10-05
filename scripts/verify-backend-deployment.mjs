@@ -1,14 +1,24 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 
 // Anonymous boundary checks only: no accounts, credentials or business writes.
 const origin = 'https://recharge-backend.markravencanete50.workers.dev';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 async function request(path, expectedStatus, options = {}) {
-  const response = await fetch(new URL(path, origin), {
+  const fetchResponse = () => fetch(new URL(path, origin), {
     ...options, redirect: 'manual', signal: AbortSignal.timeout(15000),
   });
+  let response = await fetchResponse();
+  // Immediately after deployment an edge can still serve the prior route table.
+  // Retry only a missing protected route; never tolerate an exposed 200 response
+  // or relax the final authentication, cache or CORS assertions.
+  for (let attempt = 0; response.status === 404 && expectedStatus === 401 && attempt < 9; attempt++) {
+    await response.body?.cancel();
+    await delay(5000);
+    response = await fetchResponse();
+  }
   assert.equal(response.status, expectedStatus, `${path}: unexpected HTTP status`);
   assert.equal(response.headers.get('access-control-allow-origin'), null, `${path}: unexpected CORS grant`);
   if (path === '/health' || path.startsWith('/api/') || expectedStatus === 404) {
