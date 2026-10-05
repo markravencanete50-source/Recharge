@@ -1,5 +1,7 @@
 # Recharge workspace update
 
+Hosted update, 5 October 2026: all three subsequent access/security migrations are installed and hosted guard checks passed. Alex's account remains unprovisioned because there are no Auth users. See BACKEND-ACTIVATION-2026-10-05.md for current status; the unapplied-migration observations below are historical.
+
 The preview adds persistent light and dark themes, a compact navigation layout,
 37 independently cropped tool illustrations and an analytics board with daily
 line, status donut and queue bar charts. The chart data table provides exact

@@ -1,5 +1,7 @@
 # Mobile redesign implementation
 
+Hosted update, 5 October 2026: the three pending access/security migrations described below have now been applied and tested through the Supabase dashboard. Backend server configuration, business-schema migration and native account integration are still pending. See BACKEND-ACTIVATION-2026-10-05.md for the current deployment record.
+
 4 October 2026. This delivers the navigation and representative read-only flows from the approved plan. It is not a production launch or a claim that all 37 live workflows are complete.
 
 ## Delivered

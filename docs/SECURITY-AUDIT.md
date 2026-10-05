@@ -1,5 +1,7 @@
 # Recharge security review
 
+Hosted update, 5 October 2026: the administration, authentication-security and cleaning-manager migrations are now applied and their hosted rollback-only security checks passed. Automatic exposure of new tables is disabled; the private schema remains unexposed. Full server configuration, provider delivery and native sessions are still pending. See BACKEND-ACTIVATION-2026-10-05.md. The observations and migration-pending checklist below describe the 4 October review.
+
 Reviewed 4 October 2026. The following controls are implemented in the full
 application, but need the pending hosted migrations and server configuration
 before live activation. The public Pages preview is a separate synthetic,
