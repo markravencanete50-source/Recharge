@@ -12,7 +12,9 @@ if (!existsSync(expoCli)) {
   execFileSync(process.execPath, [process.env.npm_execpath, "ci", "--prefix", "mobile"], { cwd: root, stdio: "inherit" });
 }
 await build({ configFile: `${root}/preview/vite.config.ts` });
-// Ship the mobile components alongside the original desktop product preview.
+await cp(`${root}/preview-dist/index.html`,`${root}/preview-dist/desktop.html`);
+// One responsive component bundle powers desktop, mobile web and the studio.
+// Retain the original detailed portal at /legacy-preview during integration.
 execFileSync(process.execPath, [expoCli, "export", "--platform", "web", "--output-dir", "dist-web"], { cwd: `${root}/mobile`, stdio: "inherit" });
 await cp(`${root}/mobile/dist-web/index.html`, `${root}/preview-dist/native.html`);
 await cp(`${root}/mobile/dist-web/studio.html`, `${root}/preview-dist/studio.html`);

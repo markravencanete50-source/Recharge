@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CompanyLogo } from '@/components/company-logo';
 import type { AccessStatus, WorkspaceRole } from "@/lib/modules";
 
 const ROLE_OPTIONS = [
@@ -128,7 +129,7 @@ export function AccountRegistration({
     <main className="grid min-h-screen place-items-center bg-[var(--muted)] px-5 py-10 text-[var(--foreground)]">
       <section className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white shadow-[0_28px_90px_rgba(18,47,51,0.12)] lg:grid-cols-[0.72fr_1.28fr]">
         <div className="bg-[#1c3934] p-8 text-white sm:p-11">
-          <img src="/recharge-wordmark.svg" alt="Recharge" className="h-auto w-48" />
+          <CompanyLogo width={192}/>
           <p className="mt-16 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
             Secure workspace
           </p>
@@ -238,7 +239,7 @@ function AccountState({
     <main className="grid min-h-screen place-items-center bg-[var(--muted)] px-5 py-12 text-[var(--foreground)]">
       <section className="w-full max-w-xl rounded-[2rem] border border-[var(--border)] bg-white p-8 text-center shadow-[0_28px_90px_rgba(18,47,51,0.12)] sm:p-11">
         <div className="mx-auto w-56 rounded-2xl bg-[#1c3934] px-5 py-3">
-          <img src="/recharge-wordmark.svg" alt="Recharge" className="h-auto w-full" />
+          <CompanyLogo width="100%"/>
         </div>
         <div className="mx-auto mt-10 grid size-14 place-items-center rounded-2xl bg-[var(--muted)] text-[var(--muted-foreground)]">
           <Icon className="size-6" />

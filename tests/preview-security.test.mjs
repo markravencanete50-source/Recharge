@@ -19,7 +19,10 @@ after(async()=>{await worker?.stop();});
 test("preview serves the application and synthetic property data", async () => {
   const home = await fetch(base);
   assert.equal(home.status, 200);
-  assert.match(await home.text(), /Recharge \| Product preview/);
+  const html=await home.text();
+  assert.match(html, /Recharge Mobile Preview/);
+  const mobileHtml=await (await fetch(`${base}/home`)).text();
+  assert.equal(html,mobileHtml,'desktop and mobile must serve the same responsive screens');
   assert.match(home.headers.get("x-robots-tag"), /noindex/);
   const response = await fetch(`${base}/api/property-database`, {headers: {"oai-authenticated-user-email": "enquiries@rechargestays.co.uk"}});
   const result = await response.json();
@@ -27,6 +30,12 @@ test("preview serves the application and synthetic property data", async () => {
   assert.equal(result.data.properties.length, 2);
   assert.ok(result.data.properties.every(property => property.ownerEmail === "preview@example.com" && property.accessCode === ""));
   assert.equal(result.data.hostawayConnected, false);
+});
+
+test('the original detailed portal remains available during backend integration',async()=>{
+  const response=await fetch(`${base}/legacy-preview`,{redirect:'manual'});
+  assert.equal(response.status,200);
+  assert.match(await response.text(),/Recharge \| Product preview/);
 });
 
 test("hosted phone links serve the new mobile studio and reloadable mobile routes", async () => {

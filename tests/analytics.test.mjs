@@ -28,8 +28,22 @@ const exportRoute = await vite.ssrLoadModule("/app/api/analytics/export/route.ts
 const { analyticsCsv } = await vite.ssrLoadModule("/lib/analytics-export.ts");
 const { reportPresentation, weeklySparkline } = await vite.ssrLoadModule("/lib/report-presentation.ts");
 const { comparison } = await vite.ssrLoadModule("/lib/report-presentation.ts");
+const { statusBreakdown } = await vite.ssrLoadModule('/lib/report-graphs.ts');
 const { scheduleWeek, moveScheduleDay, scheduleWeekLabel } = await vite.ssrLoadModule("/lib/schedule-presentation.ts");
 const at = value => new Date(value).getTime() / 1000;
+
+test('status chart proportions reconcile with each role report, including zero counts and date changes',()=>{
+  for(const role of ['super_admin','admin','client','cleans','cleaning_manager','ready','stays']){
+    for(const range of [period,{from:'2020-01-01',to:'2020-01-02'}]){
+      const report=reportPresentation(scopeAnalytics(viewer(role),input),range);
+      const rows=statusBreakdown(report.current.status,report.current.total);
+      assert.equal(rows.reduce((n,row)=>n+row.value,0),report.current.total);
+      assert.ok(Math.abs(rows.reduce((n,row)=>n+row.share,0)-(report.current.total?1:0))<1e-10);
+      let offset=0;
+      for(const row of rows){assert.equal(row.offset,offset);offset+=row.length;assert.ok(Number.isFinite(row.length));assert.equal(row.percentage,Math.round(row.share*1000)/10);if(!row.value)assert.equal(row.length,0);}
+    }
+  }
+});
 const date = at("2026-10-03T12:00:00Z");
 const viewer = (role, email = "me@example.com", modules = defaultModulesForRole(role)) => ({ role, email, modules, status: "active" });
 const input = {

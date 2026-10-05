@@ -11,7 +11,7 @@ import { ActivityChart,StatusBar,SourceBars } from '../../components/report-char
 import { faqsForAccess } from '../../lib/access-faq';
 import { buildAnalytics,presetPeriod,type AnalyticsSnapshot } from '../../lib/analytics';
 import { isWorkspaceAdmin } from '../../lib/modules';
-import Image from 'next/image';
+import { CompanyLogo } from '../../components/company-logo';
 
 const propertySchema=z.object({id:z.string().uuid(),name:z.string(),address:z.string(),region:z.string(),status:z.string(),version:z.number(),bedrooms:z.number()});
 const journeySchema=z.object({propertyId:z.string().uuid(),clientId:z.string().uuid(),workId:z.string().uuid(),stage:z.string(),version:z.number(),agreement:z.string(),agreementRevision:z.number(),signedName:z.string().nullable(),inspectionReport:z.string().nullable(),invoiceId:z.string().uuid().nullable(),estimate:z.record(z.unknown()).nullable(),form:z.record(z.unknown()).nullable()});
@@ -65,7 +65,7 @@ export function LiveWorkspace({account}:{account:WorkspaceAccount}){
  const graphs=report?reportPresentation(report,period):null;
  const navigation=[{key:'properties',label:'Properties',Icon:Building2},{key:'work',label:'Work',Icon:ClipboardList},{key:'reports',label:'Reports',Icon:BarChart3},{key:'activity',label:'Activity',Icon:Activity},{key:'help',label:'Help',Icon:HelpCircle}];
  return <div className="live-workspace">
-  <header className="live-header"><a className="live-brand" href="/workspace"><Image src="/recharge-wordmark.svg" alt="Recharge" width={175} height={30} unoptimized/><span>Live workspace</span></a><div className="live-header-actions"><span>{account.fullName||account.email}<small>{title(account.role)}</small></span><ThemeToggle/><a href="/sign-out">Sign out</a></div></header>
+  <header className="live-header"><a className="live-brand" href="/workspace"><CompanyLogo/><span>Live workspace</span></a><div className="live-header-actions"><span>{account.fullName||account.email}<small>{title(account.role)}</small></span><ThemeToggle/><a href="/sign-out">Sign out</a></div></header>
   <div className="live-layout"><nav className="live-nav" aria-label="Workspace">{navigation.map(({key,label,Icon})=><button key={key} aria-current={tab===key?'page':undefined} onClick={()=>{setTab(key);setForm(null);}}><Icon size={20}/>{label}</button>)}</nav>
   <main className="live-content"><div className="live-heading"><div><p className="live-eyebrow">Your people and properties</p><h1>{title(tab)}</h1><p>Connected records, shared progress.</p></div><button className="live-secondary" disabled={loading} onClick={()=>void refresh()}><RefreshCw size={16}/> {loading?'Refreshing…':'Refresh'}</button></div>
    {error&&<p className="live-error" role="alert">{error}</p>}{loading&&<p role="status">Loading your permitted records…</p>}

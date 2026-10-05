@@ -1,10 +1,12 @@
-import { View } from 'react-native';
-import { SvgXml } from 'react-native-svg';
-import { rechargeWordmark } from '../../lib/recharge-brand';
+import { Image, View } from 'react-native';
 import type { Palette } from './theme';
 
-// The existing company wordmark, shared with the desktop portal.
-export function CompanyLogo({palette:p,width=144}:{palette:Palette;width?:number}) {
-  const xml = rechargeWordmark.replaceAll('#fff',p.text).replaceAll('#1c3934',p.background);
-  return <View accessible accessibilityRole="image" accessibilityLabel="Recharge company logo" style={{width,height:width*160/940}}><SvgXml xml={xml} width={width} height={width*160/940}/></View>;
+// Display the exact supplied artwork. Clip its generous outer margins in the
+// layout rather than redrawing, recolouring or modifying the original file.
+export function CompanyLogo({width=144}:{palette:Palette;width?:number}) {
+  const scale=width/1900;
+  // Metro requires a static asset reference to bundle the image on iOS/Android.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const logo=require('../../public/recharge-company-logo.png');
+  return <View accessible accessibilityRole="image" accessibilityLabel="Recharge company logo" style={{width,height:400*scale,overflow:'hidden',borderRadius:4,backgroundColor:'#EFE9DB'}}><Image accessible={false} source={logo} resizeMode="contain" style={{position:'absolute',width:2171*scale,height:724*scale,left:-105*scale,top:-110*scale}}/></View>;
 }

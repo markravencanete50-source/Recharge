@@ -551,7 +551,7 @@ export function WorkspaceScreens({
           flex: 1,
           color: p.text,
           fontSize: 15,
-          fontFamily: "Inter_400Regular",
+          fontFamily: "Montserrat_400Regular",
           minHeight: 48,
         }}
       />

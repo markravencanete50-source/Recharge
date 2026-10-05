@@ -5,15 +5,18 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Recharge mobile studio</title>
     <style>
+      @font-face {font-family:Montserrat;font-weight:400;src:url('/fonts/montserrat-400.ttf') format('truetype');font-display:swap}
+      @font-face {font-family:Montserrat;font-weight:600;src:url('/fonts/montserrat-600.ttf') format('truetype');font-display:swap}
+      @font-face {font-family:Montserrat;font-weight:700;src:url('/fonts/montserrat-700.ttf') format('truetype');font-display:swap}
       * {
         box-sizing: border-box;
       }
       body {
         margin: 0;
-        background: #f7faf8;
+        background: #efe9db;
         color: #172033;
         font-family:
-          Inter,
+          Montserrat,
           system-ui,
           -apple-system,
           BlinkMacSystemFont,
@@ -27,7 +30,7 @@
         align-items: center;
         justify-content: space-between;
         border-bottom: 1px solid #dce3f1;
-        background: #1c3934; color: #ffffff;
+        background: #efe9db; color: #1f3d38;
       }
       header strong {
         display: flex;
@@ -44,18 +47,18 @@
         align-items: center;
         justify-content: center;
         border-radius: 10px;
-        background: #1c3934;
+        background: #1f3d38;
         color: white;
         font-size: 23px;
       }
       header a {
         font-size: 14px;
-        color: #1c3934;
+        color: #1f3d38;
         text-decoration: none;
         padding: 14px 18px;
         border: 1px solid #c9d5f0;
         border-radius: 14px;
-        background: white;
+        background: #faf7f0;
         transition:
           background 0.18s,
           transform 0.18s;
@@ -82,14 +85,14 @@
         align-items: center;
         gap: 8px;
         font-size: 13px;
-        color: #1c3934;
+        color: #1f3d38;
         font-weight: 600;
       }
       .label:before {
         content: "";
         width: 7px;
         height: 7px;
-        background: #1c3934;
+        background: #1f3d38;
         border-radius: 50%;
       }
       h1 {
@@ -120,7 +123,7 @@
         font-size: 12px;
         padding: 8px 12px;
         border-radius: 10px;
-        background: white;
+        background: #faf7f0;
         color: #445271;
       }
       .frame-space {
@@ -146,14 +149,14 @@
         height: 100%;
         overflow: hidden;
         border-radius: 42px;
-        background: #f7faf8;
+        background: #efe9db;
         display: flex;
         flex-direction: column;
       }
       .status {
         height: 30px;
         flex-shrink: 0;
-        background: #f7faf8;
+        background: #efe9db;
         color: #172033;
         display: flex;
         align-items: center;
@@ -195,12 +198,12 @@
         flex: 1;
         min-height: 0;
         width: 100%;
-        background: #f7faf8;
+        background: #efe9db;
       }
       .home-indicator {
         height: 18px;
         flex-shrink: 0;
-        background: #f7faf8;
+        background: #efe9db;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -216,7 +219,7 @@
         position: absolute;
         inset: 30px 0 18px;
         z-index: 2;
-        background: #f7faf8;
+        background: #efe9db;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -244,23 +247,23 @@
           sans-serif;
         padding: 14px 20px;
         border-radius: 14px;
-        border: 1px solid #1c3934;
+        border: 1px solid #1f3d38;
         min-height: 48px;
       }
       .frame-status button {
-        background: #1c3934;
+        background: #1f3d38;
         color: white;
         cursor: pointer;
       }
       .frame-status a {
-        color: #1c3934;
+        color: #1f3d38;
         text-decoration: none;
       }
       .spinner {
         width: 32px;
         height: 32px;
         border: 3px solid #dce3f1;
-        border-top-color: #1c3934;
+        border-top-color: #1f3d38;
         border-radius: 50%;
         animation: spin 1s linear infinite;
       }
@@ -299,7 +302,7 @@
   </head>
   <body>
     <header>
-      <strong><img src="/recharge-wordmark.svg" alt="Recharge company logo" style="width:172px;height:auto;background:#1c3934;padding:10px 12px;border-radius:12px"></strong
+      <strong><span role="img" aria-label="Recharge company logo" style="position:relative;display:block;width:172px;aspect-ratio:1900/400;overflow:hidden;border-radius:4px"><img src="/recharge-company-logo.png" alt="" style="position:absolute;width:114.263%;max-width:none;height:auto;left:-5.526%;top:-27.5%"></span></strong
       ><a href="/home" target="_blank" rel="noopener">Open full view</a>
     </header>
     <main>

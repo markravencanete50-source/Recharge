@@ -8,8 +8,11 @@ const worker = {
     const mobileRoutes = ["/home", "/work", "/properties", "/inbox", "/more", "/workspace", "/analytics", "/calendar", "/approvals", "/help", "/activity"];
     // Pages redirects .html requests to extensionless URLs, even through ASSETS.
     // Request the canonical asset to preserve the user's route inside the frame.
-    if (mobileRoutes.includes(url.pathname)) url.pathname = "/native";
-    else if (url.pathname === "/studio.html" || (url.pathname === "/" && url.searchParams.get("view") === "phone")) url.pathname = "/studio";
+    if (url.pathname === "/studio.html" || (url.pathname === "/" && url.searchParams.get("view") === "phone")) url.pathname = "/studio";
+    // Desktop and phone previews render the same responsive Expo screens.
+    // Keep the original detailed portal available during backend integration.
+    else if (url.pathname === "/legacy-preview") url.pathname = "/desktop";
+    else if (url.pathname === "/" || mobileRoutes.includes(url.pathname)) url.pathname = "/native";
     const asset = await env.ASSETS.fetch(new Request(url, request));
     const response = new Response(asset.body, asset);
     response.headers.set("X-Robots-Tag", "noindex, nofollow");

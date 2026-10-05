@@ -48,7 +48,7 @@ export function OpenTasksSparkline({data,motionKey}:{data:Today;motionKey:string
         <Path d={`M8 36 L${points.split(' ').join(' L')} L${x(values.length-1)} 36 Z`} fill="url(#today-open-area)"/>
         <Polyline points={points} fill="none" stroke={todayColors.spark} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
         <Circle cx={x(values.length-1)} cy={y(values.at(-1)||0)} r={6} fill={todayColors.spark} fillOpacity={0.4}/><Circle cx={x(values.length-1)} cy={y(values.at(-1)||0)} r={2.5} fill="#FFFFFF"/>
-        <SvgText x={x(0)} y={51} fill="#FFFFFF" fontSize={12} fontFamily="Inter_500Medium" textAnchor="start">{values[0]}</SvgText><SvgText x={x(values.length-1)} y={51} fill="#FFFFFF" fontSize={12} fontFamily="Inter_500Medium" textAnchor="end">{values.at(-1)}</SvgText>
+        <SvgText x={x(0)} y={51} fill="#FFFFFF" fontSize={12} fontFamily="Montserrat_500Medium" textAnchor="start">{values[0]}</SvgText><SvgText x={x(values.length-1)} y={51} fill="#FFFFFF" fontSize={12} fontFamily="Montserrat_500Medium" textAnchor="end">{values.at(-1)}</SvgText>
       </Svg>:<Text style={{color:'#FFFFFF',fontSize:12}}>Data unavailable</Text>}
     </Animated.View>
     <View style={[ui.row,{gap:6,backgroundColor:'rgba(255,255,255,0.14)',paddingHorizontal:10,paddingVertical:8,borderRadius:999,flexShrink:1}]}><Feather name={data.direction==='down'?'arrow-down':data.direction==='up'?'arrow-up':'minus'} size={15} color={data.good?todayColors.mint:todayColors.unfavourable}/><Text style={{color:'#FFFFFF',fontSize:12,fontWeight:'500',flexShrink:1,lineHeight:18}}>{data.changeLabel}</Text></View>

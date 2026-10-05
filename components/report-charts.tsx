@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CircleCheck, Hourglass, Activity, MoreHorizontal } from 'lucide-react';
 import type { ReportPresentation } from '@/lib/report-presentation';
-import { graphGeometry, shortReportDate } from '@/lib/report-graphs';
+import { graphGeometry, shortReportDate, statusBreakdown } from '@/lib/report-graphs';
 
 function useWidth() {
   const ref=useRef<HTMLDivElement>(null),[width,setWidth]=useState(280);
@@ -29,13 +29,22 @@ export function ActivityChart({report}:{report:ReportPresentation}) {
     {[0,Math.floor((days.length-1)/2),days.length-1].filter((i,n,list)=>list.indexOf(i)===n).map(i=><text key={i} x={all.x(i)} y={209} textAnchor={i===0?'start':i===days.length-1?'end':'middle'} fontSize={12} fill="var(--rc-muted)">{shortReportDate(days[i].date)}</text>)}
   </svg></div>;
 }
-const statusColor=(kind:string)=>kind==='complete'?'var(--rc-success)':kind==='waiting'?'var(--rc-waiting)':kind==='other'?'var(--rc-danger)':'var(--rc-primary)';
+const statusColor=(kind:string)=>kind==='complete'?'var(--rc-success)':kind==='waiting'?'var(--rc-waiting)':kind==='other'?'var(--rc-danger)':'var(--rc-chart)';
 export function StatusBar({report}:{report:ReportPresentation}) {
-  const {ref,width}=useWidth(),data=report.current;
-  return <div ref={ref} className="report-status" role="img" aria-label={'Tasks by status. '+data.status.map(s=>s.name+' '+s.value).join(', ')+'. Total '+data.total+'.'}>
-    <p className="status-total">{data.total} tasks</p><div className="status-stack" aria-hidden="true">{data.status.map(s=>s.value>0?<span key={s.name} style={{width:s.value/Math.max(1,data.total)*100+'%',background:statusColor(s.kind)}}/>:null)}</div>
-    <svg width="100%" height={20} viewBox={`0 0 ${width} 20`} aria-hidden="true">{data.status.map((s,i)=>s.value>0?<line key={s.name} x1={(data.status.slice(0,i).reduce((n,s)=>n+s.value,0)+s.value/2)/Math.max(1,data.total)*width} y1={0} x2={(i+0.5)/data.status.length*width} y2={20} stroke={statusColor(s.kind)} strokeWidth={1.5} strokeDasharray={s.kind==='waiting'?'3 3':undefined}/>:null)}</svg>
-    <div className="status-labels">{data.status.map(s=>{const Icon=s.kind==='complete'?CircleCheck:s.kind==='waiting'?Hourglass:s.kind==='other'?MoreHorizontal:Activity;return <div key={s.name}><Icon size={16} color={statusColor(s.kind)} aria-hidden="true"/><span>{s.name}</span><b>{s.value}</b></div>;})}</div>
+  const [selected,setSelected]=useState<string|null>(null),data=report.current;
+  const segments=statusBreakdown(data.status,data.total),focused=segments.find(s=>s.name===selected);
+  return <div className="report-status">
+    <p>Current status of tasks recorded in the selected period.</p>
+    <div className="status-breakdown">
+      <div className="status-donut" role="img" aria-label={'Tasks by status. '+data.status.map(s=>s.name+' '+s.value).join(', ')+'. Total '+data.total+'.'}>
+        <svg viewBox="0 0 220 220" aria-hidden="true"><circle cx={110} cy={110} r={76} fill="none" stroke="var(--rc-elevated)" strokeWidth={20}/>{segments.filter(s=>s.value>0).map(s=><circle key={s.name} cx={110} cy={110} r={76} fill="none" stroke={statusColor(s.kind)} strokeWidth={20} strokeDasharray={`${Math.max(0,s.length-(s.share===1?0:3))} ${s.circumference}`} strokeDashoffset={-s.offset} transform="rotate(-90 110 110)" opacity={!focused||focused.name===s.name?1:0.22}/>)}</svg>
+        <div className="status-donut-value"><span>{focused?.name||'Total tasks'}</span><strong aria-live="polite">{focused?.value??data.total}</strong><span>{focused?`${focused.percentage}% of ${data.total}`:'In this period'}</span></div>
+      </div>
+      <div className="status-breakdown-rows">{segments.map(s=>{const Icon=s.kind==='complete'?CircleCheck:s.kind==='waiting'?Hourglass:s.kind==='other'?MoreHorizontal:Activity;return <button key={s.name} type="button" className="status-breakdown-row" aria-label={`Highlight ${s.name}: ${s.value} tasks, ${s.percentage} percent`} aria-pressed={focused?.name===s.name} onClick={()=>setSelected(selected===s.name?null:s.name)} style={{borderColor:focused?.name===s.name?statusColor(s.kind):undefined}}>
+        <span className="status-breakdown-label"><Icon size={18} color={statusColor(s.kind)} aria-hidden="true"/><span>{s.name}</span><b>{s.value}</b><small>{s.percentage}%</small></span><span className="status-breakdown-track" aria-hidden="true"><i style={{width:s.share*100+'%',background:statusColor(s.kind)}}/></span>
+      </button>;})}</div>
+    </div>
+    <div className="status-breakdown-hint"><p>{data.total===0?'No tasks recorded in this period.':'Choose a status to highlight its share.'}</p>{focused&&<button type="button" onClick={()=>setSelected(null)}>Show all statuses</button>}</div>
   </div>;
 }
 export function SourceBars({report}:{report:ReportPresentation}) {

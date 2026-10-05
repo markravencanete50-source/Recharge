@@ -3,7 +3,7 @@ import { reportPresentation } from './report-presentation';
 
 // Scoped to the Today analytics card and its two tiles, not the app palette.
 export const todayColors = {
-  heroStart:'#2440B8',heroEnd:'#5B4BDB',mint:'#86EFAC',spark:'#7DD3FC',unfavourable:'#FFD08A',
+  heroStart:'#1F3D38',heroEnd:'#315F50',mint:'#86EFAC',spark:'#A7D9C1',unfavourable:'#FFD08A',
   light:{waitingBg:'#FFF0D6',waitingBorder:'#F6DCA8',waitingIcon:'#B45309',waitingFill:'#B56800',propertyBg:'#E8EEFF',propertyBorder:'#CBD7FF',propertyIcon:'#3457D5'},
   dark:{waitingBg:'#3A2A12',waitingBorder:'#FFB54747',waitingIcon:'#FFB547',waitingFill:'#FFB547',propertyBg:'#1F2B55',propertyBorder:'#A9BAFF47',propertyIcon:'#A9BAFF'},
 };

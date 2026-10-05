@@ -10,12 +10,12 @@ export function Text({ style, ...props }: TextProps) {
     weight === "800" ||
     weight === "900" ||
     weight === "bold"
-      ? "Inter_700Bold"
+      ? "Montserrat_700Bold"
       : weight === "600"
-        ? "Inter_600SemiBold"
+        ? "Montserrat_600SemiBold"
         : weight === "500"
-          ? "Inter_500Medium"
-          : "Inter_400Regular";
+          ? "Montserrat_500Medium"
+          : "Montserrat_400Regular";
   return (
     <NativeText
       {...props}

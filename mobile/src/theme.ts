@@ -143,7 +143,7 @@ export const ui = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Montserrat_400Regular",
   },
   modalOverlay: {
     flex: 1,

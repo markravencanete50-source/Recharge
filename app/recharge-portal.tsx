@@ -1,6 +1,7 @@
 "use client";
 import { isWorkspaceAdmin } from "@/lib/modules";
 import { WorkspaceHelp } from '@/components/workspace-help';
+import { CompanyLogo } from '@/components/company-logo';
 import { usePersonalActivity } from '@/hooks/use-personal-activity';
 
 
@@ -502,11 +503,7 @@ export function RechargePortal({
             }
           >
             <span>
-              <img
-                src="/recharge-wordmark.svg"
-                alt="Recharge"
-                className="h-auto w-[9.8rem]"
-              />
+              <CompanyLogo width={157}/>
               <span className="mt-2 block text-[0.62rem] font-semibold uppercase tracking-[0.28em] text-white/45">
                 Workspace
               </span>

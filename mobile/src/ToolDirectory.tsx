@@ -335,7 +335,7 @@ export function ToolDirectory({
             flex: 1,
             minHeight: 52,
             color: p.text,
-            fontFamily: "Inter_400Regular",
+            fontFamily: "Montserrat_400Regular",
             fontSize: 15,
           }}
         />
