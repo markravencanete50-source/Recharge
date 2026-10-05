@@ -27,6 +27,8 @@ const route = await vite.ssrLoadModule("/app/api/analytics/route.ts");
 const exportRoute = await vite.ssrLoadModule("/app/api/analytics/export/route.ts");
 const { analyticsCsv } = await vite.ssrLoadModule("/lib/analytics-export.ts");
 const { reportPresentation, weeklySparkline } = await vite.ssrLoadModule("/lib/report-presentation.ts");
+const { comparison } = await vite.ssrLoadModule("/lib/report-presentation.ts");
+const { scheduleWeek, moveScheduleDay, scheduleWeekLabel } = await vite.ssrLoadModule("/lib/schedule-presentation.ts");
 const at = value => new Date(value).getTime() / 1000;
 const date = at("2026-10-03T12:00:00Z");
 const viewer = (role, email = "me@example.com", modules = defaultModulesForRole(role)) => ({ role, email, modules, status: "active" });
@@ -52,6 +54,58 @@ const input = {
 };
 const period = { from: "2026-10-03", to: "2026-10-03" };
 
+test('schedule weeks contain Monday through Sunday across month, year and daylight-saving boundaries', () => {
+  for (const date of ['2026-10-05','2026-10-11','2026-03-29','2026-10-25','2027-01-01']) {
+    const week = scheduleWeek(date);
+    assert.equal(week.length,7); assert.equal(new Set(week).size,7);
+    assert.equal(new Date(week[0]+'T12:00:00Z').getUTCDay(),1);
+    assert.equal(new Date(week[6]+'T12:00:00Z').getUTCDay(),0);
+    assert.equal(moveScheduleDay(week[0],6),week[6]);
+    assert.equal(moveScheduleDay(moveScheduleDay(date,7),-7),date);
+  }
+  assert.equal(scheduleWeekLabel('2026-10-05'),'5 to 11 Oct');
+  assert.equal(scheduleWeekLabel('2026-09-30'),'28 Sept to 4 Oct');
+});
+
+test('comparisons describe the real previous count and actual inclusive period length', () => {
+  assert.equal(comparison(38,1,30).text,'Up from 1 in the previous 30 days');
+  assert.equal(comparison(12,20,7).text,'Down from 20 in the previous 7 days');
+  assert.equal(comparison(0,0,30).text,'Same as before');
+  assert.equal(comparison(3,0,30).text,'New this period');
+  assert.equal(comparison(5,3,1).text,'Up from 3 in the previous 1 day');
+});
+
+test('daily status series, weekly chart buckets, summary and export share reconciled totals', () => {
+  const records = Array.from({length:38},(_,i)=>({date:'2026-09-'+String(1+i%30).padStart(2,'0'),status:i<12?'complete':i<26?'waiting':'progress'}));
+  const snapshot={title:'Example',description:'',propertyCount:2,propertyAvailable:true,propertyLabel:'Properties',sources:[{key:'workflows',name:'Workflows',available:true,records}]};
+  const range={from:'2026-09-01',to:'2026-10-04'},report=reportPresentation(snapshot,range);
+  assert.equal(report.headline,'12 of 38 tasks are done.');
+  assert.equal(report.chartDays.length,5);
+  for (const [field,total] of [['value',38],['completed',12],['waiting',14]]) {
+    assert.equal(report.days.reduce((sum,day)=>sum+day[field],0),total);
+    assert.equal(report.chartDays.reduce((sum,day)=>sum+day[field],0),total);
+  }
+  assert.equal(report.current.properties,2);
+  assert.equal(report.current.status.reduce((sum,status)=>sum+status.value,0),38);
+  assert.equal(report.summary,'Most work is in Workflows: 38 of 38 tasks.');
+  assert.match(analyticsCsv(snapshot,range),/"Tasks","38"/);
+  assert.match(analyticsCsv(snapshot,range),/"Completed","12"/);
+  assert.match(analyticsCsv(snapshot,range),/"Waiting","14"/);
+  assert.equal(report.queues[0].tone,'primary');
+  assert.equal(report.sparkReady.total,true);
+});
+
+test('sparse metric graphs, unknown statuses and missing property data are handled honestly', () => {
+  const snapshot={title:'Example',description:'',propertyCount:0,propertyAvailable:false,propertyLabel:'Properties',sources:[{key:'cleans',name:'Cleans',available:true,records:[{date:'2026-10-01',status:'complete'},{date:'2026-10-02',status:'future-status'}]}]};
+  const report=reportPresentation(snapshot,{from:'2026-10-01',to:'2026-10-03'});
+  assert.equal(report.sparkReady.total,false); assert.equal(report.sparkReady.complete,false);
+  assert.equal(report.current.status.find(status=>status.name==='Other').value,1);
+  assert.equal(report.current.status.reduce((n,status)=>n+status.value,0),2);
+  assert.equal(report.current.properties,null);
+  assert.equal(report.queues[0].tone,'cleans');
+  assert.match(analyticsCsv(snapshot,{from:'2026-10-01',to:'2026-10-03'}),/"Properties \(as of today, not date-filtered\)","'-"/);
+});
+
 test('presentation comparisons use equal calendar periods across daylight saving and preserve export totals', () => {
   const snapshot = scopeAnalytics(viewer('admin'), input);
   for (const range of [{from:'2026-03-28',to:'2026-03-30'}, {from:'2026-10-24',to:'2026-10-26'}, period]) {
@@ -68,11 +122,11 @@ test('presentation comparisons use equal calendar periods across daylight saving
 test('presentation distinguishes unavailable sources from a connected empty period', () => {
   const unavailable = reportPresentation(scopeAnalytics(viewer('admin'),{}),period);
   assert.equal(unavailable.available,false);
-  assert.equal(unavailable.deltas.total,'Source not connected');
+  assert.equal(unavailable.deltas.total,'Data unavailable');
   assert.ok(unavailable.queues.every(queue=>!queue.available));
   const empty = reportPresentation({...scopeAnalytics(viewer('admin'),input),sources:[{key:'cleans',name:'Cleans',available:true,records:[]}]},period);
   assert.equal(empty.available,true);
-  assert.equal(empty.headline,'No dated records in this period.');
+  assert.equal(empty.headline,'0 of 0 tasks are done.');
 });
 test('weekly overview delta is calculated only from the permitted source snapshot',()=>{
   const snapshot=scopeAnalytics(viewer('client'),input), spark=weeklySparkline(snapshot,'2026-10-03');
@@ -183,7 +237,7 @@ test("report downloads require active admin identity and reject forged roles, re
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "private, no-store");
     assert.match(response.headers.get("content-disposition"), /2026-10-03-2026-10-03.csv/);
-    assert.match(await response.text(), /"Recorded items","10"/);
+    assert.match(await response.text(), /"Tasks","10"/);
     assert.equal((await exportRoute.GET(new Request("https://recharge.example/api/analytics/export?from=2026-02-30&to=2026-03-01"))).status, 400);
   }
 });
@@ -193,11 +247,11 @@ test("CSV exports reconcile with selected charts, distinguish unavailable data a
   snapshot.title = '=HYPERLINK("evil")';
   const csv = analyticsCsv(snapshot, period, true);
   assert.match(csv, /SAMPLE DATA ONLY/);
-  assert.match(csv, /"Recorded items","7"/);
+  assert.match(csv, /"Tasks","7"/);
   assert.match(csv, /Not connected, excluded/);
   assert.match(csv, /"Report","'=HYPERLINK\(""evil""\)"/);
-  assert.match(csv, /current snapshot, not date-filtered/);
+  assert.match(csv, /as of today, not date-filtered/);
   const empty = analyticsCsv(snapshot, { from: "2020-01-01", to: "2020-01-02" });
-  assert.match(empty, /"Recorded items","0"/);
+  assert.match(empty, /"Tasks","0"/);
   assert(!empty.includes("private description"));
 });

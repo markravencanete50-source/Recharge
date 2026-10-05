@@ -3,7 +3,6 @@ import {
   useMemo,
   useContext,
   useState,
-  useRef,
   useEffect,
   type ComponentProps,
 } from "react";
@@ -14,6 +13,7 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  type ViewStyle,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
@@ -50,6 +50,7 @@ import {
   type WorkspaceSection,
 } from "../../lib/workspace-map";
 import { presetPeriod } from "../../lib/analytics";
+import { scheduleWeek, scheduleWeekLabel, moveScheduleDay, fullScheduleDate } from "../../lib/schedule-presentation";
 import { Sparkline } from "./Charts";
 import { weeklySparkline } from "../../lib/report-presentation";
 import { snapshotFor } from "./model";
@@ -307,104 +308,23 @@ function Chips({
     />
   );
 }
-function WeekStrip({
-  selected,
-  onSelect,
-  palette: p,
-  items,
-}: {
-  selected: string;
-  onSelect: (date: string) => void;
-  palette: Palette;
-  items: WorkItem[];
-}) {
-  const reduced = useReducedMotion();
-  const scroll = useRef<ScrollView>(null);
-  const { width } = useWindowDimensions();
-  const dayWidth = Math.max(44, (Math.min(width, 760) - 40 - 36) / 7);
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(`${presetPeriod(1).to}T12:00:00Z`);
-    day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7) + i);
-    return { date: day, key: day.toISOString().slice(0, 10) };
-  });
-  const selectedIndex = days.findIndex((day) => day.key === selected);
-  useEffect(() => {
-    scroll.current?.scrollTo({
-      x: Math.max(
-        0,
-        selectedIndex * (dayWidth + 6) -
-          (Math.min(width, 760) - 40 - dayWidth) / 2,
-      ),
-      animated: !reduced,
-    });
-  }, [dayWidth, width, selectedIndex, reduced]);
-  return (
-    <ScrollView
-      ref={scroll}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 6, paddingVertical: 1 }}
-    >
-      <SlidingPill x={Math.max(0,selectedIndex)*(dayWidth+6)} y={1} width={dayWidth} height={72} color={p.primary} visible={selectedIndex>=0}/>
-      {days.map(({ date, key }) => {
-        const active = selected === key;
-        return (
-          <Pressable
-            key={key}
-            accessibilityRole="button"
-            accessibilityLabel={`Schedule for ${displayDate(key)}${key === presetPeriod(1).to ? ", today" : ""}`}
-            accessibilityState={{ selected: active }}
-            onPress={() => onSelect(key)}
-            style={{
-              width: dayWidth,
-              minHeight: 72,
-              borderRadius: 999,
-              borderWidth: key === presetPeriod(1).to ? 2 : 1,
-              borderColor: key === presetPeriod(1).to ? p.primary : p.border,
-              backgroundColor: active ? "transparent" : p.surface,
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 7,
-            }}
-          >
-            <Text
-              style={{ color: active ? p.onPrimary : p.muted, fontSize: 12 }}
-            >
-              {date
-                .toLocaleDateString("en-GB", {
-                  weekday: "short",
-                  timeZone: "UTC",
-                })
-                .slice(0, 2)}
-            </Text>
-            <Text
-              style={{
-                color: active ? p.onPrimary : p.text,
-                fontSize: 17,
-                fontWeight: "600",
-              }}
-            >
-              {date.getUTCDate()}
-            </Text>
-            <View
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: items.some((item) => item.record.date === key)
-                  ? active
-                    ? p.onPrimary
-                    : p.primary
-                  : "transparent",
-              }}
-            />
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
+function WeekStrip({selected,onSelect,palette:p,items}:{selected:string;onSelect:(date:string)=>void;palette:Palette;items:WorkItem[]}) {
+  const {width}=useWindowDimensions(),[gridWidth,setGridWidth]=useState(0);
+  const gap=width<400?4:width<=600?6:8, days=scheduleWeek(selected), today=presetPeriod(1).to;
+  const selectedIndex=days.indexOf(selected), stride=(gridWidth+gap)/7;
+  const webGrid=Platform.OS==='web'?{display:'grid',gridTemplateColumns:'repeat(7, minmax(0, 1fr))',columnGap:gap} as unknown as ViewStyle:{};
+  return <View onLayout={event=>setGridWidth(event.nativeEvent.layout.width)} {...(Platform.OS==='web'?{dataSet:{scheduleWeek:'true'}}:{})} style={[{flexDirection:'row',gap,marginHorizontal:gap/2,maxWidth:520-gap},webGrid]}>
+    <SlidingPill x={selectedIndex*stride} width={Math.max(0,stride-gap)} height={72} color={p.hero} visible={gridWidth>0}/>
+    {days.map(key=>{const active=key===selected,hasTasks=items.some(item=>item.record.date===key);return <View key={key} style={{flex:1,minWidth:0}}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Schedule for ${fullScheduleDate(key)}${key===today?', today':''}${hasTasks?', has tasks':''}`} accessibilityState={{selected:active}} onPress={()=>onSelect(key)} style={{minHeight:72,marginHorizontal:-gap/2,alignItems:'center',justifyContent:'center',gap:5}}>
+        <View pointerEvents="none" style={{position:'absolute',top:0,bottom:0,left:gap/2,right:gap/2,borderRadius:999,borderWidth:active?0:key===today?1.5:1,borderColor:key===today?p.primary:p.border,backgroundColor:active?'transparent':p.surface}}/>
+        <Text style={{color:active?p.heroText:p.muted,fontSize:12,fontWeight:'500'}}>{new Date(key+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'short',timeZone:'UTC'}).slice(0,2)}</Text>
+        <Text style={{color:active?p.heroText:p.text,fontSize:16,fontWeight:'600',fontVariant:['tabular-nums']}}>{Number(key.slice(-2))}</Text>
+        <View style={{width:4,height:4,borderRadius:2,backgroundColor:hasTasks?active?p.heroText:p.primary:'transparent'}}/>
+      </Pressable>
+    </View>;})}
+  </View>;
 }
-
 export function Calendar({
   selected,
   onSelect,
@@ -911,21 +831,27 @@ export function WorkspaceScreens({
           </View>
           <Entrance sessionKey={"home:"+role+":schedule"} delay={55} style={{ gap: 10 }}>
             <View style={ui.between}>
-              <Text
+              <View style={{flex:1,gap:4}}><Text
                 accessibilityRole="header"
                 style={[ui.sectionTitle, { color: p.text }]}
               >
-                Your schedule
+                This week
               </Text>
+              <Text style={[ui.small,{color:p.muted}]}>{scheduleWeekLabel(homeDate)}</Text></View>
+              <View style={[ui.row,{gap:0}]}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Previous week" onPress={()=>setHomeDate(moveScheduleDay(homeDate,-7))} style={{width:44,height:44,alignItems:'center',justifyContent:'center'}}><Feather name="chevron-left" size={19} color={p.primary}/></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Next week" onPress={()=>setHomeDate(moveScheduleDay(homeDate,7))} style={{width:44,height:44,alignItems:'center',justifyContent:'center'}}><Feather name="chevron-right" size={19} color={p.primary}/></Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Open calendar"
                 onPress={() => onNavigate("calendar")}
-                style={{ minHeight: 44, justifyContent: "center" }}
+                style={{ width:44,height:44,alignItems:'center',justifyContent: "center" }}
               >
                 <Feather name="arrow-up-right" size={20} color={p.primary} />
               </Pressable>
+              </View>
             </View>
+            {scheduleWeek(homeDate)[0]!==scheduleWeek(presetPeriod(1).to)[0]&&<Pressable accessibilityRole="button" accessibilityLabel="Return schedule to today" onPress={()=>setHomeDate(presetPeriod(1).to)} style={{minHeight:44,justifyContent:'center',alignSelf:'flex-start'}}><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>Today</Text></Pressable>}
             <WeekStrip
               selected={homeDate}
               onSelect={setHomeDate}
@@ -937,7 +863,7 @@ export function WorkspaceScreens({
                 accessibilityLiveRegion="polite"
                 style={[ui.small, { color: p.muted }]}
               >
-                {displayDate(homeDate)}
+                {fullScheduleDate(homeDate)}{items.some(item=>item.record.date===homeDate)?` · ${items.filter(item=>item.record.date===homeDate).length} ${items.filter(item=>item.record.date===homeDate).length===1?'task':'tasks'}`:''}
               </Text>
               {items.some((item) => item.record.date === homeDate) ? (
                 items
@@ -953,20 +879,21 @@ export function WorkspaceScreens({
                       borderRadius: 13,
                     }}
                   >
-                    <Feather name="coffee" size={21} color={p.success} />
+                    <Feather name="calendar" size={21} color={p.success} />
                   </View>
                   <View style={{ flex: 1, gap: 3 }}>
                     <Text
                       style={{ color: p.text, fontSize: 14, fontWeight: "500" }}
                     >
-                      A little breathing room
+                      No tasks on this day
                     </Text>
                     <Text style={[ui.small, { color: p.muted }]}>
-                      No sample work scheduled for this day.
+                      {role==='client'?'Your requests will appear here.':'Scheduled work will appear here.'}
                     </Text>
                   </View>
                 </View>
               )}
+              {!items.some(item=>item.record.date===homeDate)&&role!=='client'&&<Pressable accessibilityRole="button" accessibilityLabel="View your work" onPress={()=>openQueue('All')} style={[ui.button,{backgroundColor:p.wash,alignSelf:'flex-start'}]}><Text style={[ui.buttonText,{color:p.primary}]}>View your work</Text><Feather name="arrow-right" size={16} color={p.primary}/></Pressable>}
             </Entrance>
           </Entrance>
           <Entrance sessionKey={"home:"+role+":departments"} delay={110} style={{ gap: 10 }}>

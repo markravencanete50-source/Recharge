@@ -308,3 +308,30 @@ html[data-reduce-motion="true"] :is(.recharge-workspace,.phase-two-reports) *,ht
 .command-result .tool-illustration{width:40px;height:40px;margin:0;flex-shrink:0}
 .property-directory-art > .building-glyph{height:148px;width:132px}
 @media(max-width:767px){.command-trigger{padding:0;width:48px;flex-shrink:0}.command-trigger span,.command-trigger kbd{display:none}.workspace-header>div{min-width:0}.workspace-header>div:first-child{gap:8px}}
+/* Targeted schedule/report revision. Existing shell and access stay intact. */
+.reports-revision .analytics-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+.reports-revision .analytics-metric{min-width:0;min-height:210px}
+.reports-revision .report-metric-label{justify-content:flex-start;gap:8px;font-size:13px}
+.report-metric-icon{width:26px;height:26px;border-radius:8px;background:var(--rc-wash);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.reports-revision .analytics-metric strong{margin-top:12px;font-variant-numeric:tabular-nums}
+.reports-revision .metric-spark{display:block;margin-top:12px;width:100%;font-family:var(--font-inter);font-variant-numeric:tabular-nums}
+.metric-spark svg{display:block;overflow:visible}
+.reports-revision .spark-empty{min-height:36px}
+.reports-revision .metric-comparison{display:flex;gap:6px;align-items:flex-start}
+.metric-comparison svg{flex-shrink:0;margin-top:3px}
+.report-inclusive{font-size:13px;color:var(--rc-muted);margin-top:5px}
+.reports-revision .report-status-card{grid-column:1/-1}
+.reports-revision .analytics-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.report-status{margin-top:16px}
+.report-status .status-total{text-align:right;font-variant-numeric:tabular-nums;margin-bottom:12px}
+.status-stack{display:flex;height:24px;border-radius:8px;overflow:hidden;background:var(--rc-elevated)}
+.status-stack span{height:24px;border-right:2px solid var(--rc-surface)}
+.status-labels{display:flex;gap:6px}
+.status-labels>div{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;align-items:center;text-align:center}
+.status-labels span{font-size:12px;line-height:18px;color:var(--rc-text)}
+.status-labels b{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.reports-revision .report-line{height:218px;overflow:visible}
+.report-accessible-summary{margin-top:24px;font-size:15px;line-height:1.6}
+.report-table-toggle{min-height:48px;padding:12px 18px;border:1px solid var(--rc-controlBorder);border-radius:14px;color:var(--rc-text);background:var(--rc-surface);margin-top:16px;font-size:14px;font-weight:600}
+.report-table-toggle[aria-pressed=true]{background:var(--rc-wash);border-color:var(--rc-primary)}
+@media(max-width:640px){.reports-revision .analytics-chart-grid{grid-template-columns:minmax(0,1fr)}.reports-revision .analytics-metric{padding:14px}.reports-revision .analytics-chart{padding:16px}.reports-revision .analytics-metrics{gap:12px}}

@@ -54,6 +54,19 @@ test("text, department tiles, input borders and primary action labels meet contr
     assert(ratio(p.success, p.successWash) >= 4.5);
   }
 });
+test("report lines, status fills and schedule text preserve contrast in both themes", () => {
+  for (const mode of ["light", "dark"]) {
+    const p = designTokens[mode];
+    for (const ink of [p.primary, p.success, p.waiting, p.danger]) {
+      assert(ratio(ink, p.surface) >= 3, `${mode} graph on card`);
+      assert(ratio(ink, p.elevated) >= 3, `${mode} bar on track`);
+      assert(ratio(ink, p.surface) >= 4.5, `${mode} direct graph label`);
+    }
+    for (const d of Object.values(departmentTokens[mode]))
+      assert(ratio(d.ink, p.elevated) >= 3, `${mode} department bar`);
+    assert(ratio(p.heroText, p.hero) >= 4.5, `${mode} selected day`);
+  }
+});
 test("finder scales to 100 entries without truncating counts, saved rows or literal title matching", () => {
   const catalog = Array.from({ length: 100 }, (_, i) => {
     const tool = MODULES[i % 37];
