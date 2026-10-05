@@ -17,7 +17,7 @@ export const themes = Object.fromEntries(
   ]),
 ) as Record<"light" | "dark", typeof designTokens.light & { isDark: boolean }>;
 export type Palette = typeof themes.light;
-// Branding stays on bone; control backgrounds and icons follow the selected theme.
+// Branding and control colours follow the selected theme and its supplied logo.
 export function headerPalette(p: Palette): Palette {
   return {...p,background:p.header,surface:p.headerControl,text:p.headerControlText,
     muted:p.headerMuted,border:p.headerBorder,primary:p.headerControlText,onPrimary:p.headerControl};

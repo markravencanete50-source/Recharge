@@ -210,7 +210,12 @@ html.dark * { scrollbar-width: thin; scrollbar-color: #607c6a transparent; }
 .recharge-workspace .sidebar button:focus-visible,.recharge-workspace .sidebar a:focus-visible {outline:2px solid var(--rc-primary);outline-offset:2px}
 .workspace-header-scrolled {box-shadow:0 6px 20px var(--rc-shadow)}
 .workspace-avatar {background:var(--rc-primary);color:var(--rc-onPrimary)}
-/* Logo canvas stays bone while header controls follow the selected theme. */
+/* Branding and header controls follow the selected theme. */
+.recharge-logo-dark{display:none}
+.dark .recharge-logo-light,[data-recharge-theme="dark"] .recharge-logo-light{display:none}
+.dark .recharge-logo-dark,[data-recharge-theme="dark"] .recharge-logo-dark{display:block}
+[data-recharge-theme="light"] .recharge-logo-light{display:block}
+[data-recharge-theme="light"] .recharge-logo-dark{display:none}
 .recharge-workspace .workspace-header{background:var(--rc-header);color:var(--rc-headerText);--foreground:var(--rc-headerText);--muted-foreground:var(--rc-headerMuted);--muted:var(--rc-headerControl);--rc-text:var(--rc-headerText);--rc-muted:var(--rc-headerMuted);--rc-primary:var(--rc-headerText);--rc-onPrimary:var(--rc-header);--rc-surface:var(--rc-headerControl);--rc-border:var(--rc-headerBorder);border-color:var(--rc-headerBorder)}
 .recharge-workspace .workspace-header>div>button,.recharge-workspace .workspace-header .theme-toggle{background:var(--rc-headerControl);color:var(--rc-headerControlText);--foreground:var(--rc-headerControlText);--rc-text:var(--rc-headerControlText)}
 .recharge-workspace .workspace-header :is(button,a):focus-visible{outline-color:var(--rc-headerText)}

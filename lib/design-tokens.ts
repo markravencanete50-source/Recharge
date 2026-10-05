@@ -1,6 +1,8 @@
 // One source for CSS variables on the web and resolved colours on iOS/Android.
 // Dominant background sampled from the supplied company logo, RGB 239/233/219.
 export const brandCanvas = "#EFE9DB";
+// Dominant dark background sampled from the supplied alternate logo, RGB 27/62/56.
+export const darkBrandCanvas = "#1B3E38";
 export const designTokens = {
   light: {
     background: brandCanvas,
@@ -52,9 +54,9 @@ export const designTokens = {
     onPrimary: "#1F3D38",
     wash: "#254538",
     accent: "#A7D9C1",
-    header: brandCanvas,
-    headerText: "#1F3D38",
-    headerMuted: "#4E6259",
+    header: darkBrandCanvas,
+    headerText: "#EFE9DB",
+    headerMuted: "#C7CBBE",
     headerControl: "#182C26",
     headerControlText: "#FAF7F0",
     headerBorder: "#697A6D",
