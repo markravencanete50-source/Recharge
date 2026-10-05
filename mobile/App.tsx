@@ -609,7 +609,7 @@ function AppContent() {
                 }}
               >
                 {tab === "analytics" && <Reports snapshot={snapshot} period={period} role={role} palette={p} onDates={()=>{setDraft(period);setCalendar(true);}} onExport={exportCsv} exporting={exporting} exportMessage={exportMessage}/>}
-                {(tab==='help'||tab==='activity')&&<View style={[ui.row,{gap:12}]}><IconButton label="Back to Today" icon="arrow-left" onPress={()=>setTab('home')} palette={p}/><Text style={[ui.small,{color:p.muted}]}>Your workspace</Text></View>}
+                {(tab==='help'||tab==='activity')&&<View style={[ui.row,{gap:12}]}><IconButton label="Back to Home" icon="arrow-left" onPress={()=>setTab('home')} palette={p}/><Text style={[ui.small,{color:p.muted}]}>Your workspace</Text></View>}
                 {tab==='help'&&<AccessHelp key={'help:'+role} role={role} palette={p} onOpen={openTool}/>}
                 {tab==='activity'&&<View style={{gap:18}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>Recent activity</Text><RecentActivity items={activity.items} palette={p} error={activity.error} onOpen={event=>{const tool=tools.find(tool=>tool.id===event.moduleId);if(tool)openTool(tool);}}/></View>}
                 <WorkspaceScreens

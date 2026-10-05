@@ -651,7 +651,8 @@ export function WorkspaceScreens({
                   : "Your people and properties, working together."}
             </Text>
           </View>
-          <Entrance sessionKey={"home:"+role+":hero"}><ParallaxSurface>
+          <View testID="home-task-summary" style={{flexDirection:desktop?'row':'column',gap:20,alignItems:'stretch'}}>
+          <Entrance sessionKey={"home:"+role+":hero"} style={desktop?{flex:2,minWidth:0}:undefined}><ParallaxSurface>
             <View
               style={{
                 backgroundColor: todayColors.heroStart,
@@ -741,7 +742,7 @@ export function WorkspaceScreens({
                   </Text>
                 </View>
                 <View style={{ gap: 5, alignItems: "center" }}>
-                  <TodayRing motionKey={"overview:"+role+":ring:"+analyticsPeriod.from+":"+analyticsPeriod.to}
+                  <TodayRing size={desktop?112:88} motionKey={"overview:"+role+":ring:"+analyticsPeriod.from+":"+analyticsPeriod.to}
                     completed={today.current.complete} total={today.current.total}/>
                 </View>
               </View>
@@ -772,10 +773,11 @@ export function WorkspaceScreens({
                 </Text>
                 <Feather name="arrow-right" size={20} color={p.heroText} />
               </Pressable>
-              <OpenTasksSparkline data={today} motionKey={"overview:"+role+":spark:"+analyticsPeriod.to}/>
+              <OpenTasksSparkline wide={desktop} data={today} motionKey={"overview:"+role+":spark:"+analyticsPeriod.to}/>
             </View></ParallaxSurface>
           </Entrance>
-          <TodayTiles data={today} palette={p} onWaiting={()=>openQueue("Waiting")} onProperties={()=>onNavigate("properties")}/>
+          <TodayTiles vertical={desktop} data={today} palette={p} onWaiting={()=>openQueue("Waiting")} onProperties={()=>onNavigate("properties")}/>
+          </View>
           <Entrance sessionKey={"home:"+role+":schedule"} delay={55} style={{ gap: 10 }}>
             <View style={ui.between}>
               <View style={{flex:1,gap:4}}><Text

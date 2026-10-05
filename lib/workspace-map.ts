@@ -47,7 +47,7 @@ export const WORKSPACE_MAP: Record<ModuleId, Destination> = {
 
 export function navigationFor(role: WorkspaceRole) {
   if (role === "cleans") return [
-    { value: "home", label: "Today", icon: "home" },
+    { value: "home", label: "Home", icon: "home" },
     { value: "work", label: "Jobs", icon: "check-square" },
     { value: "calendar", label: "Calendar", icon: "calendar" },
     { value: "inbox", label: "Inbox", icon: "message-circle" },
@@ -61,7 +61,7 @@ export function navigationFor(role: WorkspaceRole) {
     { value: "more", label: "Tools", icon: "grid" },
   ] as const;
   if (role === "admin" || role === "super_admin") return [
-    { value: "home", label: "Today", icon: "home" },
+    { value: "home", label: "Home", icon: "home" },
     { value: "work", label: "Work", icon: "check-square" },
     { value: "properties", label: "Properties", icon: "home" },
     { value: "analytics", label: "Reports", icon: "bar-chart-2" },
