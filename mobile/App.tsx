@@ -82,16 +82,19 @@ function IconButton({
   icon,
   onPress,
   palette: p,
+  expanded,
 }: {
   label: string;
   icon: IconName;
   onPress: () => void;
   palette: Palette;
+  expanded?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={expanded === undefined ? undefined : { expanded }}
       onPress={onPress}
       style={({ pressed }) => [
         ui.iconButton,
@@ -327,6 +330,7 @@ function AppContent() {
   const p = themes[theme];
   const {width: windowWidth} = useWindowDimensions();
   const desktop = windowWidth >= 1024;
+  const [sidebarHidden, setSidebarHidden] = useState(false);
   const motionPreference = useMotionPreference();
   const [scrolled,setScrolled] = useState(false);
   const [offline,setOffline] = useState(false);
@@ -497,7 +501,7 @@ function AppContent() {
         >
           <StatusBar style={theme === "dark" ? "light" : "dark"} />
           <View style={[ui.fill,{flexDirection:"row"}]}>
-          {desktop&&<DesktopNavigation role={role} section={tab} palette={p} onNavigate={setTab} onProfile={()=>setSettings(true)} onDepartment={(department)=>{setSearch("");setDepartment(department);setSavedOnly(false);setTab("workspace");}}/>}
+          {desktop&&!sidebarHidden&&<DesktopNavigation role={role} section={tab} palette={p} onNavigate={setTab} onProfile={()=>setSettings(true)} onDepartment={(department)=>{setSearch("");setDepartment(department);setSavedOnly(false);setTab("workspace");}}/>}
           <View style={[ui.fill,{minWidth:0}]}>
           {offline&&<View accessibilityRole="alert" style={{backgroundColor:p.cautionWash,padding:12}}><Text style={[ui.small,{color:p.text}]}>You are offline. The sample workspace remains available. Live requests may fail until you reconnect.</Text></View>}
           <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth:1, borderColor:scrolled?p.headerBorder:'transparent' }}>
@@ -514,8 +518,10 @@ function AppContent() {
                 },
               ]}
             >
-              <View style={{flex:1,minWidth:0}}>
-                  {desktop?<Text style={{color:p.headerText,fontSize:16,fontWeight:"600"}}>{navigationFor(role).find(item=>item.value===tab)?.label??(tab==="workspace"?"Tools":tab==="analytics"?"Reports":tab.charAt(0).toUpperCase()+tab.slice(1))}</Text>:<CompanyLogo palette={headerPalette(p)} variant="dark" width={windowWidth<360?104:144}/>}
+              <View style={[ui.row,{flex:1,minWidth:0,gap:16}]}>
+                  {desktop&&<IconButton label={sidebarHidden?"Show left panel":"Hide left panel"} icon="sidebar" palette={headerPalette(p)} expanded={!sidebarHidden} onPress={()=>setSidebarHidden(hidden=>!hidden)}/>}
+                  {desktop&&sidebarHidden&&<CompanyLogo palette={headerPalette(p)} variant="dark" width={144}/>}
+                  {desktop?<Text style={{color:p.headerText,fontSize:16,fontWeight:"600",flexShrink:1}}>{navigationFor(role).find(item=>item.value===tab)?.label??(tab==="workspace"?"Tools":tab==="analytics"?"Reports":tab.charAt(0).toUpperCase()+tab.slice(1))}</Text>:<CompanyLogo palette={headerPalette(p)} variant="dark" width={windowWidth<360?104:144}/>}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 <IconButton label="Open quick search" icon="search" palette={headerPalette(p)} onPress={()=>setCommandOpen(true)}/>

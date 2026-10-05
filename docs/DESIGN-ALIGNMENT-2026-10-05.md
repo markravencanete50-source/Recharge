@@ -69,3 +69,14 @@ has 9.68:1 contrast and control icons have 13.75:1 against their surface.
 Root/mobile TypeScript, scoped lint (no errors), nine design/analytics checks,
 production build and preview export passed. Desktop and 390px phone screenshots
 confirmed both themes, one logo and no horizontal overflow; quick search opened.
+
+## Desktop panel visibility, 6 October 2026
+
+A toolbar sidebar button hides and reopens the entire 240px left panel.
+It announces its expanded state and supports keyboard activation. While hidden,
+the single company logo moves to the toolbar and the workspace gains the freed
+width. The choice remains during section and theme changes in the current
+session. Phone layouts retain their existing bottom navigation.
+Root/mobile TypeScript, scoped lint and preview export passed. Browser checks
+confirmed hide/reopen, keyboard activation, Reports navigation while hidden,
+both themes, one logo and no overflow at desktop and 390px phone widths.
