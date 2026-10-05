@@ -4,7 +4,7 @@
 
 Build the server, generate the backend config with `node scripts/build-backend-config.mjs`, and deploy with `npm run backend:deploy`. The production Worker must keep the existing encrypted Supabase keys, canonical `APP_ORIGIN` and durable authentication limiter secret. The generated config contains no production credentials or legacy D1/R2 bindings. Deploy only `dist/server/wrangler.backend.json` for this backend.
 
-The public Pages product preview stays read-only. Its sample data must never be imported into the live database. Git deployments of `codex/cloudflare-preview` update the preview; they do not deploy the backend Worker.
+The public Pages product preview stays read-only. Its sample data must never be imported into the live database. The approved repository connection now deploys both Pages and the separate backend Worker from `codex/cloudflare-preview`.
 
 ### Deployment status, 5 October 2026
 
@@ -25,10 +25,20 @@ backend version at that check was still `cdda731e`.
 The user then approved the prepared Workers Builds connection and its
 Cloudflare-managed deployment token. The repository is now connected to the
 same production branch, using the reviewed build/deploy commands above and
-preserving existing runtime variables/secrets. The first backend build is
-being triggered by this checkpoint commit; deployment and live route checks
-remain to be confirmed. Future pushes to this branch now trigger both the
-Pages preview and the backend build.
+preserving existing runtime variables/secrets. The first build exposed missing
+Linux executable bits on the build helpers; those Git file permissions were
+restored. The next build deployed commit `edea813` successfully as Worker
+version `49a0b862-9a65-4edf-91bb-7cca9aca78bf`. The dashboard confirms the four
+existing encrypted runtime secrets remain. Future pushes to this branch now
+trigger both the Pages preview and the backend build.
+
+`npm run backend:deploy` now preserves runtime variables with `--keep-vars`
+and runs `npm run backend:verify` after uploading. The read-only release
+checks cover health/configuration, anonymous web/native route refusal,
+no-store/CORS boundaries, excluded legacy routes, invalid-origin write
+refusal, sign-in availability and exact hashes of both logo assets. They
+use no credentials and create no business records. Their first cloud run
+is pending; this laptop currently blocks direct Workers URL connections.
 
 ## Native build configuration
 
