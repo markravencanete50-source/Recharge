@@ -41,9 +41,11 @@ export function initials(name: string) {
 export function Avatar({
   profile,
   size = 44,
+  backgroundColor,
 }: {
   profile: Profile;
   size?: number;
+  backgroundColor?: string;
 }) {
   return (
     <View
@@ -51,7 +53,7 @@ export function Avatar({
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: avatarColors[profile.avatar],
+        backgroundColor: backgroundColor || avatarColors[profile.avatar],
         alignItems: "center",
         justifyContent: "center",
       }}

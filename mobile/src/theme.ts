@@ -17,10 +17,10 @@ export const themes = Object.fromEntries(
   ]),
 ) as Record<"light" | "dark", typeof designTokens.light & { isDark: boolean }>;
 export type Palette = typeof themes.light;
-// Branding uses the logo's bone canvas in both modes, with readable green controls.
+// Branding stays on bone; control backgrounds and icons follow the selected theme.
 export function headerPalette(p: Palette): Palette {
-  return {...p,background:p.header,surface:p.headerControl,text:p.headerText,
-    muted:p.headerMuted,border:p.headerBorder,primary:p.headerText,onPrimary:p.header};
+  return {...p,background:p.header,surface:p.headerControl,text:p.headerControlText,
+    muted:p.headerMuted,border:p.headerBorder,primary:p.headerControlText,onPrimary:p.headerControl};
 }
 export function departmentColor(tone: DepartmentTone, palette: Palette) {
   const values = departmentTokens[palette.isDark ? "dark" : "light"][tone];

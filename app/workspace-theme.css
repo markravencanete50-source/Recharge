@@ -210,9 +210,9 @@ html.dark * { scrollbar-width: thin; scrollbar-color: #607c6a transparent; }
 .recharge-workspace .sidebar button:focus-visible,.recharge-workspace .sidebar a:focus-visible {outline:2px solid var(--rc-primary);outline-offset:2px}
 .workspace-header-scrolled {box-shadow:0 6px 20px var(--rc-shadow)}
 .workspace-avatar {background:var(--rc-primary);color:var(--rc-onPrimary)}
-/* Brand header remains dark green while page surfaces follow the theme. */
+/* Logo canvas stays bone while header controls follow the selected theme. */
 .recharge-workspace .workspace-header{background:var(--rc-header);color:var(--rc-headerText);--foreground:var(--rc-headerText);--muted-foreground:var(--rc-headerMuted);--muted:var(--rc-headerControl);--rc-text:var(--rc-headerText);--rc-muted:var(--rc-headerMuted);--rc-primary:var(--rc-headerText);--rc-onPrimary:var(--rc-header);--rc-surface:var(--rc-headerControl);--rc-border:var(--rc-headerBorder);border-color:var(--rc-headerBorder)}
-.recharge-workspace .workspace-header>div>button,.recharge-workspace .workspace-header .theme-toggle{background:var(--rc-headerControl);color:var(--rc-headerText)}
+.recharge-workspace .workspace-header>div>button,.recharge-workspace .workspace-header .theme-toggle{background:var(--rc-headerControl);color:var(--rc-headerControlText);--foreground:var(--rc-headerControlText);--rc-text:var(--rc-headerControlText)}
 .recharge-workspace .workspace-header :is(button,a):focus-visible{outline-color:var(--rc-headerText)}
 .workspace-offline {position:sticky;top:var(--preview-bar-height,0px);z-index:55;padding:12px 20px;background:var(--rc-cautionWash);color:var(--rc-text);font-size:14px;border-bottom:1px solid var(--rc-border)}
 .reduce-motion-control {display:flex;justify-content:space-between;align-items:center;width:100%;min-height:44px;margin-top:12px;font-size:12px;color:var(--rc-text);border:1px solid var(--rc-controlBorder);border-radius:12px;padding:8px 12px}

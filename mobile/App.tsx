@@ -537,7 +537,7 @@ function AppContent() {
                     justifyContent: "center",
                   }}
                 >
-                  <Avatar profile={profile} />
+                  <Avatar profile={profile} backgroundColor={p.isDark?p.headerControl:undefined}/>
                   {data.waiting > 0 && (
                     <View
                       accessible
@@ -551,7 +551,7 @@ function AppContent() {
                         borderRadius: 5,
                         borderWidth: 2,
                         borderColor: p.header,
-                        backgroundColor: p.headerText,
+                        backgroundColor: p.waiting,
                       }}
                     />
                   )}
