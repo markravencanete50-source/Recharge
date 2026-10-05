@@ -7,7 +7,8 @@ import { backendRouteAllowed } from '../worker/backend-route-policy.ts';
 
 test('live backend excludes legacy D1 handlers, sample pages and unconfigured integrations',()=>{
  for(const path of ['/','/team','/tool/property-onboarding','/api/analytics','/api/maintenance','/api/communications/hostaway/sync','/api/onboarding/files','/api/mobile/unknown'])assert.equal(backendRouteAllowed(path),false,path);
- for(const path of ['/sign-in','/api/session/password','/api/workspace','/api/mobile/workspace','/api/mobile/reports/export','/api/access'])assert.equal(backendRouteAllowed(path),true,path);
+ for(const path of ['/sign-in','/api/session/password','/api/workspace','/api/mobile/workspace','/api/mobile/reports/export','/api/access','/recharge-company-logo.png','/fonts/montserrat-400.ttf','/fonts/montserrat-700.ttf'])assert.equal(backendRouteAllowed(path),true,path);
+ for(const path of ['/fonts/montserrat-secret.ttf','/fonts/montserrat-400.ttf/extra','/recharge-company-logo.png/extra'])assert.equal(backendRouteAllowed(path),false,path);
 });
 test('prepared Worker has no D1, R2, privileged keys or public sample data',async()=>{
  const configPath=fileURLToPath(new URL('../dist/server/wrangler.backend.json',import.meta.url));
