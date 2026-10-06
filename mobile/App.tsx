@@ -12,6 +12,7 @@ import {
   Switch,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   PanResponder,
   Platform,
@@ -32,6 +33,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import { AccountSetup, Avatar, type Profile } from "./src/AccountSetup";
 import { Artwork, FeatureTile } from "./src/Artwork";
 import { GreetingCard, LoginSplash } from "./src/WelcomeMoment";
+
+// The Supabase-backed web workspace served by the recharge-backend Worker.
+const LIVE_WORKSPACE_SIGN_IN = process.env.EXPO_PUBLIC_LIVE_WORKSPACE_URL || "https://recharge-backend.markravencanete50.workers.dev/sign-in";
 import { NavigationBar } from "./src/NavigationBar";
 import { FilterBar } from "./src/FilterBar";
 import { StateGraphic } from "./src/StateGraphic";
@@ -750,6 +754,20 @@ function AppContent() {
                 </Pressable>
               </View>
             </View>
+
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Open the live workspace sign-in in a new tab"
+              onPress={() => { void Linking.openURL(LIVE_WORKSPACE_SIGN_IN); }}
+              style={[ui.between, { gap: 14, minHeight: 72, padding: 14, borderRadius: 20, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }]}
+            >
+              <FeatureTile icon="log-in" hue="forest" size={40} palette={p} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Live workspace</Text>
+                <Text style={[ui.small, { color: p.muted }]}>Sign in with a real account to test with live data.</Text>
+              </View>
+              <Feather name="external-link" size={17} color={p.muted} />
+            </Pressable>
 
             <View style={{ gap: 8 }}>
               <Text style={{ color: p.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>Comfort</Text>
