@@ -238,6 +238,7 @@ const liveInternalModules = new Set<ModuleId>([
 
 const roleLabels: Record<Role, string> = {
   super_admin: "Super admin",
+  accounts: "Accounts team",
   admin: "Admin",
   stays: "Stays employee",
   cleans: "Cleaner",

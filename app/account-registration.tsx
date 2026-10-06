@@ -52,6 +52,7 @@ const ROLE_OPTIONS = [
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
   super_admin: "Super admin",
+  accounts: "Accounts team",
   client: "Client",
   stays: "Stays employee",
   cleans: "Cleaner",

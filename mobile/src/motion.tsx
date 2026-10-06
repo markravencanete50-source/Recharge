@@ -67,10 +67,11 @@ export function CountUp({value, sessionKey, ...props}: ComponentProps<typeof Tex
   },[value,sessionKey,reduced,ready,seen]);
   return <Text {...props} accessibilityLabel={String(value)}>{shown}</Text>;
 }
+const FILLED:string[]=['home','grid','bar-chart-2','check-square','calendar','key','check-circle','message-circle'];
 export function NavSymbol({name,active,color}: {name:ComponentProps<typeof Feather>['name'];active:boolean;color:string}) {
   const reduced = useReducedMotion(), scale = useState(()=>new Animated.Value(1))[0];
   useEffect(() => { if (!active || reduced) { scale.setValue(1);return; } scale.setValue(0.88); const a=Animated.spring(scale,{toValue:1,speed:22,bounciness:6,useNativeDriver:Platform.OS!=='web'});a.start();return()=>a.stop(); },[active,reduced,scale]);
-  return <Animated.View style={{transform:[{scale}]}}>{active?<Svg width={22} height={22} viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+  return <Animated.View style={{transform:[{scale}]}}>{active&&FILLED.includes(name)?<Svg width={22} height={22} viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
     {name==='home'?<Path d="M3 10 12 3 21 10V20H15V13H9V20H3Z"/>:name==='grid'?<><Rect x={3} y={3} width={7} height={7} rx={1}/><Rect x={14} y={3} width={7} height={7} rx={1}/><Rect x={3} y={14} width={7} height={7} rx={1}/><Rect x={14} y={14} width={7} height={7} rx={1}/></>:name==='bar-chart-2'?<><Rect x={4} y={12} width={3} height={9} rx={1}/><Rect x={10} y={4} width={3} height={17} rx={1}/><Rect x={16} y={8} width={3} height={13} rx={1}/></>:name==='check-square'?<><Path d="M3 3H15V6H6V18H18V13H21V21H3Z"/><Path d="m10 10 3 3 8-8" fill="none"/></>:name==='calendar'?<><Path d="M3 7H21V21H3Z"/><Path d="M7 2V6M17 2V6" fill="none"/></>:name==='key'?<><Circle cx={7.5} cy={15.5} r={5}/><Path d="M11 12 21 2M16 7l3 3M14 9l2 2" fill="none"/></>:name==='check-circle'?<><Path d="M10 3a9 9 0 1 0 11 11h-3a6 6 0 1 1-8-8Z"/><Path d="m10 10 3 3 8-8" fill="none"/></>:<Path d="M3 3H21V16H9L3 21Z"/>}
   </Svg>:<Feather name={name} size={22} color={color}/>}</Animated.View>;
 }

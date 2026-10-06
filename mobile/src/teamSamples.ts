@@ -11,6 +11,7 @@ export const QUICK_TOOLS: Record<WorkspaceRole, ModuleId[]> = {
   cleans: ["cleaning-schedule", "cleaner-performance", "cleans-invoices"],
   cleaning_manager: ["cleaning-schedule", "cleaner-database", "cleaner-performance", "clean-reporting"],
   ready: ["maintenance-reporting", "routine-bin-garden-board", "new-property-inspection-board", "purchase-order"],
+  accounts: ["owner-statements", "maintenance-reconciliation", "purchase-order-invoices", "cleans-invoices"],
   client: ["client-dashboard", "client-property-maintenance", "client-purchase-order-quotes", "client-mailbox"],
 };
 

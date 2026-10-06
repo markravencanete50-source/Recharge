@@ -1,7 +1,7 @@
 # Client feedback, 6 October 2026
 
-Four walkthrough videos of the phone version: client view, Stays and admin team view, Cleans view and
-Ready view. This note records what is now in the preview (sample data, nothing is saved or sent) and
+Four walkthrough videos of the phone version (client, Stays and admin team, Cleans, Ready) and a
+final note on the Management and Accounts views. This note records what is now in the preview (sample data, nothing is saved or sent) and
 what each flow still needs from the live backend.
 
 ## In the preview now
@@ -10,13 +10,19 @@ what each flow still needs from the live backend.
 - Loading screen with a seamless logo, then a time-of-day greeting card.
 - Dark mode reverses the top bar to bone with forest lettering; light mode keeps the forest bar.
 - A Training centre (Home, Tools) with courses by team and progress. Admins see an upload area.
+- The opening animation: a guest walks home, goes to sleep and the battery charges from 0% to 100%.
+- Every calendar is interactive. Tapping a day lists what is happening (cleans, check-ins and outs,
+  repairs, visits, payment runs), and tapping an entry opens its details.
 
 ### Clients
 - Home: properties, items to approve, new messages, earnings this month; onboarding progress per
   property with the next step; a "Start a new enquiry" card and form.
 - Navigation: Home, Properties, Inbox (raised centre), Approvals, Reports. Tools from Home.
-- Reports: earnings, occupancy, average nightly rate, a 14-day multi-property booking calendar,
-  guests staying now, upcoming bookings and earnings by property.
+- Home also shows the client's tools (Quick access); on desktop a Tools item sits in the sidebar.
+- Reports: earnings, occupancy, average nightly rate, a month booking calendar in the style of
+  Google Calendar (stays as bars across nights, a colour per property, property filters, Today and
+  month arrows; tap a stay for dates, guests, channel, reservation code and payout, or a day for
+  arrivals and departures), guests staying now, upcoming bookings and earnings by property.
 
 ### Stays and admin team
 - Home: Quick access to the four most used tools instead of task counts.
@@ -36,6 +42,26 @@ what each flow still needs from the live backend.
 
 ### Cleaning managers and admins
 - Cleaner performance with approved and rejected counts and warning status.
+- The calendar can be filtered by cleaner, showing each person's schedule for the day.
+
+### Management
+- The two managers use the Management role, which sees every team, property and tool.
+- Home opens with "Across the business": Stays, Cleans, Ready and Accounts at a glance, and
+  "Needs a management decision" (contested cleans, quotes over the limit, second quality warnings,
+  unusual owner payouts) with approve or decline.
+
+### Accounts team
+- Navigation: Home, Invoices, Statements (raised centre), Inbox, Tools.
+- Invoices: supplier invoices with the property, category, amount and the evidence attached (invoice,
+  before and after photos, quotation, Ready sign-off). Approval needs the invoice plus proof of the
+  work; otherwise the team can query it. Approved costs are queued for Xero against the property.
+- Owner statements, in four steps:
+  1. Upload the Airbnb and Booking.com payout CSVs (or use the example files).
+  2. Reconcile by reservation code: matched, amount differs, not in the report, or not on our
+     system. Differences can be agreed manually.
+  3. Review each property's statement: revenue received, cleaning, approved costs, the 15%
+     management fee and the owner payout. Details and a CSV download are available.
+  4. Mark as paid by bank transfer or, later, Stripe.
 
 ### Ready
 - Home: repairs in progress by stage, from the Stays report to payment by Accounts, and routine
@@ -59,6 +85,12 @@ what each flow still needs from the live backend.
 | Training centre | Storage for uploaded documents and videos, and course progress per person |
 | Notifications | Resend email and Expo push (keys pending), triggered at each hand-over |
 | The client's cleaner form | Replace the sample checklist with the form the client will send |
+| Accounts role | Add `accounts` to the workspace role check constraint in Supabase and to invitations |
+| Supplier invoices by email | An inbound address (for example invoices@) that stores each email's attachments against a draft expense |
+| Xero | OAuth 2.0 app, then create bills through the Accounting API with a tracking category per property; read back paid status. Expenses for statements come from Xero per property |
+| Payout reconciliation | Store uploaded reports and match results; reservation codes and amounts from Hostaway reservations |
+| Owner statements | The fee rate and cleaning cost per property from the management agreement; issue the statement as PDF and email it to the owner |
+| Owner payouts | Manual bank transfer recorded by Accounts, or Stripe Connect payouts (per-payout fees) once keys are added |
 
 ## Ideas for approval flows
 

@@ -61,6 +61,14 @@ export function navigationFor(role: WorkspaceRole) {
     { value: "approvals", label: "Approvals", icon: "check-circle" },
     { value: "analytics", label: "Reports", icon: "bar-chart-2" },
   ] as const;
+  // Accounts: invoices to approve and owner statements are the daily work.
+  if (role === "accounts") return [
+    { value: "home", label: "Home", icon: "home" },
+    { value: "work", label: "Invoices", icon: "file-text" },
+    { value: "analytics", label: "Statements", icon: "bar-chart-2" },
+    { value: "inbox", label: "Inbox", icon: "message-circle" },
+    { value: "more", label: "Tools", icon: "grid" },
+  ] as const;
   if (role === "admin" || role === "super_admin") return [
     { value: "home", label: "Home", icon: "home" },
     { value: "work", label: "Work", icon: "check-square" },

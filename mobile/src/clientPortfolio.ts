@@ -29,6 +29,8 @@ export type Booking = {
   checkOut: string;
   guests: number;
   payoutMinor: number;
+  // Platform reservation code used to reconcile payouts.
+  code: string;
 };
 
 const day = 86400000;
@@ -70,6 +72,7 @@ export function clientPortfolio(now = new Date()) {
     .filter((row): row is [string, string, Booking["channel"], number, number, number, number] => !!row[0])
     .map(([propertyId, guest, channel, start, end, guests, payoutMinor], index) => ({
       id: "sample-booking-" + index, propertyId, guest, channel, checkIn: at(start), checkOut: at(end), guests, payoutMinor,
+      code: channel === "Airbnb" ? "HM" + ["Q4K2T8XW", "8NPL3RZD", "J2WX7VCF", "T9DM4QHA", "R6CB2KPN", "W3HZ8LQD", "5FYT9MXE", "K7VN4DRS"][index % 8] : channel === "Booking.com" ? String(4172839560 + index * 7919) : "RCH-" + String(1040 + index),
     }));
   const todayKey = iso(today);
   const monthStart = iso(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)));

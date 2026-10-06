@@ -20,6 +20,9 @@ import Feather from "@expo/vector-icons/Feather";
 import { Artwork, FeatureTile } from "./Artwork";
 import { ClientPropertyProgress, EnquiryCard, EnquirySheet, JumpBackIn, QuickOverview, WelcomeHeader } from "./HomeOverview";
 import { clientPortfolio } from "./clientPortfolio";
+import { DayAgenda } from "./Calendars";
+import { CLEANERS, scheduleFor } from "./schedule";
+import { AccountsApprovals, AccountsOverview, ManagementOverview } from "./AccountsFlows";
 import { CleanJobSheet, CleanerPerformance, CleansToApprove, DailyRoutine, QuickAccess, RepairPipeline, TeamInbox, TrainingCentre } from "./TeamFlows";
 
 // Each role gets its own line under the greeting.
@@ -31,6 +34,7 @@ const HOME_SUBTITLE: Record<string, string> = {
   cleans: "Your cleans, schedule and updates in one place.",
   cleaning_manager: "Your team's cleans and quality checks today.",
   client: "Here is how your properties are doing today.",
+  accounts: "Invoices to approve and owner statements to send.",
 };
 import { FilterBar } from "./FilterBar";
 import { StateGraphic } from "./StateGraphic";
@@ -274,14 +278,14 @@ function Chips({
     />
   );
 }
-function WeekStrip({selected,onSelect,palette:p,items}:{selected:string;onSelect:(date:string)=>void;palette:Palette;items:WorkItem[]}) {
+function WeekStrip({selected,onSelect,palette:p,items,marks=[]}:{selected:string;onSelect:(date:string)=>void;palette:Palette;items:WorkItem[];marks?:string[]}) {
   const {width}=useWindowDimensions(),[gridWidth,setGridWidth]=useState(0);
   const gap=width<400?4:width<=600?6:8, days=scheduleWeek(selected), today=presetPeriod(1).to;
   const selectedIndex=days.indexOf(selected), stride=(gridWidth+gap)/7;
   const webGrid=Platform.OS==='web'?{display:'grid',gridTemplateColumns:'repeat(7, minmax(0, 1fr))',columnGap:gap} as unknown as ViewStyle:{};
   return <View onLayout={event=>setGridWidth(event.nativeEvent.layout.width)} {...(Platform.OS==='web'?{dataSet:{scheduleWeek:'true'}}:{})} style={[{flexDirection:'row',gap,marginHorizontal:gap/2,maxWidth:520-gap},webGrid]}>
     <SlidingPill x={selectedIndex*stride} width={Math.max(0,stride-gap)} height={72} color={p.hero} visible={gridWidth>0}/>
-    {days.map(key=>{const active=key===selected,hasTasks=items.some(item=>item.record.date===key);return <View key={key} style={{flex:1,minWidth:0}}>
+    {days.map(key=>{const active=key===selected,hasTasks=items.some(item=>item.record.date===key)||marks.includes(key);return <View key={key} style={{flex:1,minWidth:0}}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Schedule for ${fullScheduleDate(key)}${key===today?', today':''}${hasTasks?', has tasks':''}`} accessibilityState={{selected:active}} onPress={()=>onSelect(key)} style={{minHeight:72,marginHorizontal:-gap/2,alignItems:'center',justifyContent:'center',gap:5}}>
         <View pointerEvents="none" style={{position:'absolute',top:0,bottom:0,left:gap/2,right:gap/2,borderRadius:999,borderWidth:active?0:key===today?1.5:1,borderColor:key===today?p.primary:p.border,backgroundColor:active?'transparent':p.surface}}/>
         <Text style={{color:active?p.heroText:p.muted,fontSize:12,fontWeight:'500'}}>{new Date(key+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'short',timeZone:'UTC'}).slice(0,2)}</Text>
@@ -296,11 +300,13 @@ export function Calendar({
   onSelect,
   palette: p,
   items,
+  marks,
 }: {
   selected: string;
   onSelect: (value: string) => void;
   palette: Palette;
   items?: WorkItem[];
+  marks?: string[];
 }) {
   const { width } = useWindowDimensions();
   const [month, setMonth] = useState(selected.slice(0, 7));
@@ -312,7 +318,7 @@ export function Calendar({
     date.setUTCMonth(date.getUTCMonth() + step);
     setMonth(date.toISOString().slice(0, 7));
   };
-  const dates = new Set((items || []).map((item) => item.record.date));
+  const dates = new Set([...(items || []).map((item) => item.record.date), ...(marks || [])]);
   return (
     <View
       style={[
@@ -454,6 +460,8 @@ export function WorkspaceScreens({
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [cleanJob, setCleanJob] = useState<WorkItem | null>(null);
   const [team, setTeam] = useState("Everyone");
+  const [cleaner, setCleaner] = useState("All cleaners");
+  const schedule = useMemo(() => scheduleFor(role), [role]);
   const client = useMemo(() => clientPortfolio(), []);
   const [filter, setFilter] = useState("Active");
   const [homeDate, setHomeDate] = useState(() => presetPeriod(1).to);
@@ -548,17 +556,20 @@ export function WorkspaceScreens({
   const saved = orderedPins(toolsFor(role).map(tool=>({key:tool.id,name:tool.name,tone:WORKSPACE_MAP[tool.id].tone,tool})),savedTools).map(entry=>entry.tool);
 
 
+  if(section==='work'&&role==='accounts') return <ScrollView testID="workspace-scroll" style={{flex:1}} keyboardShouldPersistTaps="handled" contentContainerStyle={{width:'100%',maxWidth:desktop?1400:760,alignSelf:'center',padding:20,paddingBottom:112}}><AccountsApprovals palette={p} desktop={desktop}/></ScrollView>;
   if(section==='work'||section==='calendar') {
     const calendarView=section==='calendar'||view==='Calendar';
+    const teamOf=(kind:string)=>kind==='clean'?'Cleans':['repair','routine','inspection'].includes(kind)?'Ready':kind==='payment'?'Accounts':'Stays';
+    const visibleSchedule=schedule.filter(event=>(team==='Everyone'||teamOf(event.kind)===team)&&(role!=='cleaning_manager'||cleaner==='All cleaners'||event.person===cleaner));
     const teamItems=calendarView&&team!=='Everyone'?items.filter(item=>WORKSPACE_MAP[item.tool.id].tone===team.toLowerCase()):items;
     const results=teamItems.filter(item=>(item.record.title+' '+(item.record.propertyName||'')).toLowerCase().includes(query.trim().toLowerCase())).filter(item=>calendarView?item.record.date===date:filter==='All'||(filter==='Completed'?isComplete(item.record.status):filter==='Waiting'?isWaiting(item.record.status):!isComplete(item.record.status)));
     return <ScrollView testID="workspace-scroll" style={{flex:1}} stickyHeaderIndices={[1]} onScroll={event=>setCompactFilters(event.nativeEvent.contentOffset.y>90)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS==='web'} contentContainerStyle={{width:'100%',maxWidth:desktop?1400:760,alignSelf:'center',paddingBottom:112}}>
       <Entrance sessionKey={'work:'+role+':heading'} style={{padding:20,gap:16}}>{heading(role==='cleans'?'Your jobs':'Your work','Find the next action, then keep things moving.')}<Chips values={['List','Calendar']} selected={calendarView?'Calendar':'List'} onSelect={value=>{setView(value);if(section==='calendar'&&value==='List')onNavigate('work');}} palette={p}/></Entrance>
       <View style={{gap:8,paddingHorizontal:20,paddingVertical:compactFilters?8:16,backgroundColor:p.background,borderBottomWidth:compactFilters?1:0,borderColor:p.border}}>{search('Search job or property titles')}{!calendarView&&<Chips values={['Active','Waiting','Completed','All']} selected={filter} onSelect={setFilter} palette={p}/>}</View>
       <View style={{padding:20,gap:20}}>
-        {calendarView&&<><WeekStrip selected={date} onSelect={setDate} items={teamItems} palette={p}/><Calendar selected={date} onSelect={setDate} items={teamItems} palette={p}/><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{displayDate(date)}</Text><Pressable accessibilityRole="button" accessibilityLabel="Return to today" onPress={()=>setDate(presetPeriod(1).to)} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>Today</Text></Pressable></View></>}
+        {calendarView&&<><WeekStrip selected={date} onSelect={setDate} items={teamItems} marks={visibleSchedule.map(event=>event.date)} palette={p}/><Calendar selected={date} onSelect={setDate} items={teamItems} marks={visibleSchedule.map(event=>event.date)} palette={p}/><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{displayDate(date)}</Text><Pressable accessibilityRole="button" accessibilityLabel="Return to today" onPress={()=>setDate(presetPeriod(1).to)} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>Today</Text></Pressable></View><DayAgenda palette={p} date={date} events={visibleSchedule} actionLabel={event=>role==='cleans'&&event.kind==='clean'?'Complete this clean':null} onAction={event=>{const job=items.find(item=>item.tool.id==='cleaning-schedule');if(job)setCleanJob({...job,record:{...job.record,propertyName:event.property}});}}/></>}
         {!calendarView&&filter==='Active'&&(role==='stays'||role==='admin'||role==='super_admin')&&<View style={{flexDirection:desktop?'row':'column',gap:20,alignItems:'flex-start'}}><View style={{flex:desktop?1:undefined,alignSelf:'stretch'}}><DailyRoutine palette={p} tools={toolsFor(role)} onOpen={tool=>onOpen(tool)}/></View><View style={{flex:desktop?1:undefined,alignSelf:'stretch'}}><CleansToApprove palette={p}/></View></View>}
-        {calendarView&&role!=='cleans'&&role!=='client'&&<View style={{gap:8}}><Text style={[ui.small,{color:p.muted,fontWeight:'600'}]}>Show the schedule for</Text><Chips values={['Everyone','Stays','Ready','Cleans']} selected={team} onSelect={setTeam} palette={p}/></View>}
+        {calendarView&&role!=='cleans'&&role!=='client'&&<View style={{gap:8}}><Text style={[ui.small,{color:p.muted,fontWeight:'600'}]}>Show the schedule for</Text>{role==='cleaning_manager'?<Chips values={['All cleaners',...CLEANERS]} selected={cleaner} onSelect={setCleaner} palette={p}/>:<Chips values={['Everyone','Stays','Ready','Cleans']} selected={team} onSelect={setTeam} palette={p}/>}</View>}
         <Text accessibilityLiveRegion="polite" style={[ui.small,{color:p.muted}]}>{results.length} {results.length===1?'item':'items'} within your access</Text>
         <Entrance trigger={calendarView?date:filter} style={{gap:12}}>{results.length?(!calendarView&&filter==='Active'?(()=>{const todayKey=presetPeriod(1).to;const due=results.filter(item=>(item.record.date||'9999')<=todayKey),ongoing=results.filter(item=>(item.record.date||'9999')>todayKey);return <>{!!due.length&&<View style={{gap:8}}><Text accessibilityRole="header" style={{color:p.text,fontSize:15,fontWeight:'700'}}>Due today or overdue · {due.length}</Text><View style={[ui.card,card,{paddingVertical:6,gap:0}]}>{due.map(openRow)}</View></View>}{!!ongoing.length&&<View style={{gap:8}}><Text accessibilityRole="header" style={{color:p.text,fontSize:15,fontWeight:'700'}}>Ongoing · {ongoing.length}</Text><View style={[ui.card,card,{paddingVertical:6,gap:0}]}>{ongoing.map(openRow)}</View></View>}</>;})():<View style={[ui.card,card,{paddingVertical:6,gap:0}]}>{results.map(openRow)}</View>):<View style={{gap:12}}><Empty title="No work in this view" detail="Try another status, search or calendar date." palette={p}/><Pressable accessibilityRole="button" onPress={()=>{setQuery('');setFilter('All');setDate(presetPeriod(1).to);}} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.buttonText,{color:p.text}]}>Reset work filters</Text></Pressable></View>}</Entrance>
       </View>
@@ -591,9 +602,11 @@ export function WorkspaceScreens({
             />
             <EnquiryCard palette={p} onStart={() => setEnquiryOpen(true)}/>
             <ClientPropertyProgress palette={p} properties={client.properties} onOpen={() => onNavigate("properties")}/>
-            <LinkRow title="All tools" subtitle="Documents, quotes, maintenance and more for your properties" icon="grid" palette={p} onPress={() => onNavigate("more")}/>
+            <QuickAccess palette={p} role={role} tools={toolsFor(role)} columns={desktop?4:2} onOpen={tool=>onOpen(tool)} onAll={()=>onNavigate("more")}/>
             <EnquirySheet palette={p} visible={enquiryOpen} onClose={() => setEnquiryOpen(false)}/>
           </>}
+          {role==="accounts"&&<AccountsOverview palette={p} columns={desktop?4:2} onInvoices={()=>onNavigate("work")} onStatements={()=>onNavigate("analytics")}/>}
+          {(role==="admin"||role==="super_admin")&&<ManagementOverview palette={p} desktop={desktop} onOpenWork={()=>openQueue()}/>}
           {role!=="client"&&!desktop&&<QuickAccess palette={p} role={role} tools={toolsFor(role)} onOpen={tool=>onOpen(tool)} onAll={()=>onNavigate("more")}/>}
           {role!=="client"&&<View testID="home-task-summary" style={{flexDirection:desktop?'row':'column',gap:20,alignItems:'stretch'}}>
           <Entrance sessionKey={"home:"+role+":hero"} style={desktop?{flex:2,minWidth:0}:undefined}>
@@ -709,6 +722,7 @@ export function WorkspaceScreens({
               onSelect={setHomeDate}
               palette={p}
               items={items}
+              marks={schedule.map(event => event.date)}
             />
             <Entrance trigger={homeDate}>
               <Text
@@ -722,6 +736,8 @@ export function WorkspaceScreens({
                   .filter((item) => item.record.date === homeDate)
                   .slice(0, 3)
                   .map(openRow)
+              ) : schedule.some(event => event.date === homeDate) ? (
+                <View style={{ marginTop: 10 }}><DayAgenda palette={p} date={homeDate} events={schedule} /></View>
               ) : (
                 <View style={[ui.row, { paddingVertical: 16, gap: 12 }]}>
                   <View
@@ -745,7 +761,7 @@ export function WorkspaceScreens({
                   </View>
                 </View>
               )}
-              {!items.some(item=>item.record.date===homeDate)&&role!=='client'&&<Pressable accessibilityRole="button" accessibilityLabel="View your work" onPress={()=>openQueue('All')} style={[ui.button,{backgroundColor:p.wash,alignSelf:'flex-start'}]}><Text style={[ui.buttonText,{color:p.primary}]}>View your work</Text><Feather name="arrow-right" size={16} color={p.primary}/></Pressable>}
+              {!items.some(item=>item.record.date===homeDate)&&!schedule.some(event=>event.date===homeDate)&&role!=='client'&&<Pressable accessibilityRole="button" accessibilityLabel="View your work" onPress={()=>openQueue('All')} style={[ui.button,{backgroundColor:p.wash,alignSelf:'flex-start'}]}><Text style={[ui.buttonText,{color:p.primary}]}>View your work</Text><Feather name="arrow-right" size={16} color={p.primary}/></Pressable>}
             </Entrance>
           </Entrance>
           <Entrance sessionKey={"home:"+role+":departments"} delay={110} style={{ gap: 10 }}>

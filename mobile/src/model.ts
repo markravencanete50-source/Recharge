@@ -37,11 +37,12 @@ export type { WorkspaceRole, ModuleId, AnalyticsPeriod };
 export type Tool = (typeof MODULES)[number];
 export const roles: { value: WorkspaceRole; label: string }[] = [
   { value: "super_admin", label: "Super admin" },
-  { value: "admin", label: "Admin" },
+  { value: "admin", label: "Management" },
   { value: "stays", label: "Stays team" },
   { value: "cleans", label: "Cleaner" },
   { value: "cleaning_manager", label: "Cleaning manager" },
   { value: "ready", label: "Ready team" },
+  { value: "accounts", label: "Accounts team" },
   { value: "client", label: "Client" },
 ];
 export function toolsFor(role: WorkspaceRole) {

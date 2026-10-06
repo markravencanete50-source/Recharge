@@ -1,9 +1,10 @@
 import { useMemo } from "react";
-import { Platform, ScrollView, View, useWindowDimensions } from "react-native";
+import { Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { clientPortfolio, formatMoney, nights, type Booking } from "./clientPortfolio";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { CountUp, Entrance } from "./motion";
+import { BookingMonthCalendar } from "./Calendars";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 
@@ -12,7 +13,6 @@ const CHANNEL = {
   "Booking.com": { light: "#3B5866", dark: "#A9C6D2" },
   Direct: { light: "#1F5F55", dark: "#8FD3C2" },
 } as const;
-const DAYS = 14;
 const shortDate = (value: string) => new Date(value + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
 // Client reporting: one place for how every property is performing, who is
@@ -35,9 +35,6 @@ export function ClientReports({ palette: p }: { palette: Palette }) {
     { key: "rate", icon: "key", value: Math.round(data.averageNightlyMinor / 100), prefix: "£", label: "Average nightly rate" },
     { key: "upcoming", icon: "calendar", value: data.upcoming.length, label: "Upcoming bookings" },
   ];
-  const start = data.today;
-  const dayKeys = Array.from({ length: DAYS }, (_, index) => new Date(Date.parse(start + "T00:00:00Z") + index * 86400000).toISOString().slice(0, 10));
-  const end = dayKeys[DAYS - 1];
   const bookingRow = (booking: Booking, now: boolean) => {
     const colour = CHANNEL[booking.channel][p.isDark ? "dark" : "light"];
     return (
@@ -82,48 +79,8 @@ export function ClientReports({ palette: p }: { palette: Palette }) {
       </View>
 
       <View style={[card, { gap: 14 }]}>
-        {heading("Booking calendar", `Next ${DAYS} days across your live properties`)}
-        <ScrollView horizontal={!desktop} scrollEnabled={!desktop} showsHorizontalScrollIndicator={Platform.OS === "web" && !desktop} style={{ width: "100%" }} contentContainerStyle={desktop ? { width: "100%" } : undefined}>
-          <View style={{ minWidth: desktop ? undefined : 640, width: "100%", gap: 8, flexGrow: 1 }}>
-            <View style={{ flexDirection: "row" }}>
-              <View style={{ width: 140 }} />
-              <View style={{ flex: 1, flexDirection: "row" }}>
-                {dayKeys.map((key, index) => (
-                  <View key={key} style={{ flex: 1, alignItems: "center", paddingVertical: 4, borderRadius: 10, backgroundColor: index === 0 ? p.wash : "transparent" }}>
-                    <Text style={{ color: p.muted, fontSize: 10, fontWeight: "600" }}>{new Date(key + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "narrow", timeZone: "UTC" })}</Text>
-                    <Text style={{ color: p.text, fontSize: 12, fontWeight: index === 0 ? "700" : "500" }}>{Number(key.slice(8))}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-            {data.perProperty.map((property) => (
-              <View key={property.id} style={{ flexDirection: "row", alignItems: "center", minHeight: 44 }}>
-                <Text numberOfLines={2} style={{ width: 140, paddingRight: 10, color: p.text, fontSize: 13, fontWeight: "600" }}>{property.name}</Text>
-                <View style={{ flex: 1, height: 36, borderRadius: 12, backgroundColor: p.background, overflow: "hidden" }}>
-                  {data.bookings.filter((booking) => booking.propertyId === property.id && booking.checkOut > start && booking.checkIn <= end).map((booking) => {
-                    const from = booking.checkIn < start ? start : booking.checkIn;
-                    const offset = nights(start, from);
-                    const span = Math.min(DAYS - offset, nights(from, booking.checkOut));
-                    const colour = CHANNEL[booking.channel][p.isDark ? "dark" : "light"];
-                    return (
-                      <View key={booking.id} accessible accessibilityLabel={`${booking.guest}, ${shortDate(booking.checkIn)} to ${shortDate(booking.checkOut)}, ${booking.channel}`} style={{ position: "absolute", top: 4, bottom: 4, left: `${(offset / DAYS) * 100}%`, width: `${(span / DAYS) * 100}%`, paddingHorizontal: 8, justifyContent: "center", borderRadius: 9, backgroundColor: colour }}>
-                        <Text numberOfLines={1} style={{ color: p.isDark ? "#0F1E1A" : "#FFFFFF", fontSize: 11, fontWeight: "700" }}>{booking.guest.replace("Example guest ", "Guest ")}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
-            <View style={[ui.row, { gap: 14, flexWrap: "wrap", paddingLeft: 140 }]}>
-              {(Object.keys(CHANNEL) as (keyof typeof CHANNEL)[]).map((channel) => (
-                <View key={channel} style={[ui.row, { gap: 6 }]}>
-                  <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: CHANNEL[channel][p.isDark ? "dark" : "light"] }} />
-                  <Text style={{ color: p.muted, fontSize: 12 }}>{channel}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
+        {heading("Booking calendar", "Every stay across your properties. Tap a stay or a day for details.")}
+        <BookingMonthCalendar palette={p} />
       </View>
 
       <View style={{ flexDirection: desktop ? "row" : "column", gap: 16, alignItems: "flex-start" }}>

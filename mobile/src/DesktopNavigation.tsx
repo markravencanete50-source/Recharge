@@ -16,7 +16,8 @@ const hover=Platform.OS==='web'?{dataSet:{hover:'tint'}}:{};
 
 export function DesktopNavigation({role,section,palette:p,onNavigate,onDepartment,onProfile,onCollapse}:{role:WorkspaceRole;section:WorkspaceSection;palette:Palette;onNavigate:(section:WorkspaceSection)=>void;onDepartment:(department:string)=>void;onProfile:()=>void;onCollapse:()=>void}) {
   const [expanded,setExpanded]=useState(true); const tools=toolsFor(role);
-  const items=navigationFor(role);
+  // Clients reach tools from Home on phones; desktop has room to list them too.
+  const items=role==='client'?[...navigationFor(role),{value:'more' as const,label:'Tools',icon:'grid' as const}]:navigationFor(role);
   const found=items.findIndex(item=>item.value===section);
   const index=Math.max(0,found);
   const [indicator]=useState(()=>new Animated.Value(index*(ROW+GAP))); const reduced=useReducedMotion();

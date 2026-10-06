@@ -1,83 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Animated, Easing, Modal, Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import { Avatar, type Profile } from "./AccountSetup";
-import { CompanyLogo } from "./CompanyLogo";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
-import { HomeScene } from "./HomeScene";
 import { MotionPress, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 
 const native = Platform.OS !== "web";
-const STEPS = ["Opening your workspace", "Gathering your properties", "Lining up today's tasks", "Almost there"];
-
-// Signing in: the brand scene rises, a ring pulses and a progress line fills
-// while short status lines rotate. Reduced motion shows a brief static frame.
-export function LoginSplash({ palette: p, onDone }: { palette: Palette; onDone: () => void }) {
-  const reduced = useReducedMotion();
-  const duration = reduced ? 700 : 2400;
-  const [progress] = useState(() => new Animated.Value(0));
-  const [pulse] = useState(() => new Animated.Value(0));
-  const [rise] = useState(() => new Animated.Value(reduced ? 1 : 0));
-  const [exit] = useState(() => new Animated.Value(1));
-  const [step, setStep] = useState(0);
-  const done = useRef(onDone);
-  useEffect(() => { done.current = onDone; }, [onDone]);
-  useEffect(() => {
-    const fill = Animated.timing(progress, { toValue: 1, duration, easing: Easing.bezier(0.45, 0, 0.2, 1), useNativeDriver: false });
-    const up = Animated.spring(rise, { toValue: 1, speed: 6, bounciness: 8, useNativeDriver: native });
-    const ring = Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 1400, easing: Easing.out(Easing.quad), useNativeDriver: native }));
-    if (!reduced) { up.start(); ring.start(); }
-    fill.start(({ finished }) => {
-      if (!finished) return;
-      Animated.timing(exit, { toValue: 0, duration: reduced ? 1 : 320, useNativeDriver: native }).start(() => done.current());
-    });
-    const ticker = setInterval(() => setStep(value => Math.min(STEPS.length - 1, value + 1)), duration / STEPS.length);
-    return () => { fill.stop(); up.stop(); ring.stop(); clearInterval(ticker); };
-  }, [duration, exit, progress, pulse, reduced, rise]);
-  // Mirrors the header: mint accents on forest (light mode), forest on bone (dark mode).
-  const accent = p.isDark ? "#2F6F5E" : "#A7D9C1";
-  const track = p.isDark ? "#1B3E3826" : "#FFFFFF1F";
-  const ringStyle = (delay: number) => ({
-    position: "absolute" as const,
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-    borderWidth: 2,
-    borderColor: accent,
-    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [delay ? 0.25 : 0.45, 0] }),
-    transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.62 + delay, 1.15 + delay] }) }],
-  });
-  return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={() => done.current()}>
-      <Animated.View accessibilityViewIsModal accessibilityLiveRegion="polite" accessibilityLabel={STEPS[step]} style={{ flex: 1, opacity: exit, backgroundColor: p.header, alignItems: "center", justifyContent: "center", padding: 24, overflow: "hidden" }}>
-        <Svg pointerEvents="none" width="100%" height="100%" style={{ position: "absolute" }}>
-          <Defs>
-            <RadialGradient id="splashGlow" cx="0.5" cy="0.36" r="0.32">
-              <Stop offset="0" stopColor={accent} stopOpacity={0.24} />
-              <Stop offset="1" stopColor={accent} stopOpacity={0} />
-            </RadialGradient>
-          </Defs>
-          <Rect x="0" y="0" width="100%" height="100%" fill="url(#splashGlow)" />
-        </Svg>
-        <View style={{ width: 230, height: 210, alignItems: "center", justifyContent: "center" }}>
-          {!reduced && <Animated.View style={ringStyle(0)} />}
-          {!reduced && <Animated.View style={ringStyle(0.22)} />}
-          <Animated.View style={{ opacity: rise, transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) }, { scale: rise.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }}>
-            <HomeScene width={200} />
-          </Animated.View>
-        </View>
-        <View style={{ marginTop: 22 }}><CompanyLogo palette={p} width={190} /></View>
-        <View style={{ width: 220, height: 6, borderRadius: 3, marginTop: 28, backgroundColor: track, overflow: "hidden" }}>
-          <Animated.View style={{ height: 6, borderRadius: 3, backgroundColor: accent, width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }} />
-        </View>
-        <Text style={{ marginTop: 14, color: p.headerMuted, fontSize: 14, fontWeight: "500" }}>{STEPS[step]}…</Text>
-      </Animated.View>
-    </Modal>
-  );
-}
 
 type Moment = { icon: DimensionalName; greeting: string; line: string; band: [string, string] };
 export function momentFor(hour: number): Moment {
