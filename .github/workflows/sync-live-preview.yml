@@ -1,0 +1,30 @@
+# The Cloudflare Pages project `recharge-preview` deploys from the
+# `codex/cloudflare-preview` branch. Mirror every push to `main` onto that
+# branch so `main` is what goes live.
+#
+# Fast-forward only: if someone pushes directly to the preview branch and it
+# diverges from `main`, this job fails instead of overwriting their work.
+# Once Pages is switched to build from `main`, this workflow can be deleted.
+name: Sync main to live preview
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-live-preview
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fast-forward codex/cloudflare-preview to main
+        run: git push origin "${GITHUB_SHA}:refs/heads/codex/cloudflare-preview"
