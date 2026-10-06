@@ -27,7 +27,15 @@
       "@react-native-community/datetimepicker",
       "expo-font",
       "expo-sharing",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Recharge uses your photo library so you can choose a profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ],
     "scheme": "recharge-preview",
     "extra": {

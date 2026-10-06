@@ -20,7 +20,10 @@ export type DimensionalName =
   | "toolbox"
   | "calendar"
   | "chat"
-  | "compass";
+  | "compass"
+  | "sun"
+  | "sunset"
+  | "moon";
 
 const C = {
   forest: ["#2F6F5E", "#163A32"],
@@ -158,6 +161,28 @@ function draw(name: DimensionalName, g: Grad): ReactNode {
         <Circle cx={21} cy={29} r={2.6} fill="#2F6F5E" />
         <Circle cx={30} cy={29} r={2.6} fill="#2F6F5E" />
         <Circle cx={39} cy={29} r={2.6} fill="#2F6F5E" />
+      </>;
+    case "sun":
+      return <>
+        {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => <Rect key={angle} x={30} y={4} width={4} height={10} rx={2} fill={g("gold")} transform={`rotate(${angle} 32 30)`} />)}
+        <Circle cx={32} cy={30} r={14} fill={g("gold")} />
+        <Circle cx={27} cy={25} r={5} fill="#FFF3D2" opacity={0.65} />
+      </>;
+    case "sunset":
+      return <>
+        {[-60, -30, 0, 30, 60].map(angle => <Rect key={angle} x={30} y={6} width={4} height={9} rx={2} fill={g("terracotta")} transform={`rotate(${angle} 32 38)`} />)}
+        <Path d="M14 40 A18 18 0 0 1 50 40 Z" fill={g("terracotta")} />
+        <Rect x={8} y={40} width={48} height={4} rx={2} fill={g("forest")} />
+        <Rect x={16} y={47} width={32} height={3} rx={1.5} fill={g("slate")} />
+        <Rect x={23} y={53} width={18} height={3} rx={1.5} fill={g("slate")} opacity={0.7} />
+      </>;
+    case "moon":
+      return <>
+        <Path d="M38 10 A22 22 0 1 0 54 42 A17 17 0 1 1 38 10 Z" fill={g("bone")} />
+        <Circle cx={26} cy={34} r={3} fill="#E3DAC6" />
+        <Circle cx={33} cy={45} r={2} fill="#E3DAC6" />
+        <Path d="M50 12 l1.1 2.6 2.6 1.1 -2.6 1.1 -1.1 2.6 -1.1 -2.6 -2.6 -1.1 2.6 -1.1 Z" fill="#F6D58A" />
+        <Path d="M56 26 l.8 1.8 1.8 .8 -1.8 .8 -.8 1.8 -.8 -1.8 -1.8 -.8 1.8 -.8 Z" fill="#C9EBDB" />
       </>;
     case "compass":
       return <>

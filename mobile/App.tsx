@@ -31,6 +31,7 @@ import DateTimePicker, {
 import { router, useLocalSearchParams } from "expo-router";
 import { AccountSetup, Avatar, type Profile } from "./src/AccountSetup";
 import { Artwork, FeatureTile } from "./src/Artwork";
+import { GreetingCard, LoginSplash } from "./src/WelcomeMoment";
 import { NavigationBar } from "./src/NavigationBar";
 import { FilterBar } from "./src/FilterBar";
 import { StateGraphic } from "./src/StateGraphic";
@@ -390,6 +391,16 @@ function AppContent() {
     null,
   );
   const [settings, setSettings] = useState(false);
+  // Signing in plays the loading moment, then a time-of-day greeting. Web
+  // shows it once per browser session; apps once per launch.
+  const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(() => {
+    if (Platform.OS !== "web") return "splash";
+    try { return globalThis.sessionStorage?.getItem("rc-welcomed") ? null : "splash"; } catch { return "splash"; }
+  });
+  const finishWelcome = () => {
+    setWelcome(null);
+    if (Platform.OS === "web") { try { globalThis.sessionStorage?.setItem("rc-welcomed", "1"); } catch { /* storage unavailable */ } }
+  };
   const [commandOpen,setCommandOpen]=useState(false);
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
@@ -561,10 +572,23 @@ function AppContent() {
                   style={{
                     minHeight: 48,
                     minWidth: 44,
-                    justifyContent: "center",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    paddingLeft: desktop ? 14 : 0,
+                    borderRadius: 999,
+                    backgroundColor: desktop ? p.headerControl : "transparent",
+                    borderWidth: desktop ? 1 : 0,
+                    borderColor: p.headerBorder,
                   }}
                 >
-                  <Avatar profile={profile} backgroundColor={p.headerControl} textColor={p.headerControlText}/>
+                  {desktop && (
+                    <View style={{ maxWidth: 180 }}>
+                      <Text numberOfLines={1} style={{ color: p.headerText, fontSize: 14, fontWeight: "600" }}>{profile.displayName.trim() || "Your profile"}</Text>
+                      <Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 11 }}>{roleLabel}</Text>
+                    </View>
+                  )}
+                  <Avatar profile={profile} backgroundColor={desktop ? undefined : p.headerControl} textColor={desktop ? "#FFFFFF" : p.headerControlText}/>
                   {data.waiting > 0 && (
                     <View
                       accessible
@@ -784,9 +808,11 @@ function AppContent() {
               palette={p}
               current={profile}
               onClose={() => setAccountMode(null)}
-              onProfile={value=>{setProfile(value);activity.record('update_profile');}}
+              onProfile={value=>{setProfile(value);activity.record('update_profile');if(accountMode==='register')setWelcome('splash');}}
             />
           )}
+          {welcome==="splash"&&<LoginSplash palette={p} onDone={()=>setWelcome("greeting")}/>}
+          {welcome==="greeting"&&<GreetingCard palette={p} profile={profile} openTasks={Math.max(0,data.total-data.complete)} waiting={data.waiting} onClose={finishWelcome} onWork={()=>{finishWelcome();setTab("work");}}/>}
           {commandOpen&&<Sheet visible title="Quick search" subtitle="Jump to any tool or page within your access" icon="search" onClose={()=>setCommandOpen(false)} palette={p}><CommandSearch tools={tools} palette={p} onOpen={openTool} onNavigate={setTab} onProfile={()=>setSettings(true)} onClose={()=>setCommandOpen(false)}/></Sheet>}
           <Sheet
             visible={calendar}

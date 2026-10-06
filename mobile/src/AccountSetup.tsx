@@ -1,7 +1,9 @@
 import { StateGraphic } from "./StateGraphic";
 import { Text } from "./Typography";
 import { useEffect, useRef, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
 import {
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,7 +20,10 @@ import { Entrance, MotionPress as Pressable, useReducedMotion } from "./motion";
 export type Profile = {
   displayName: string;
   avatar: keyof typeof avatarColors;
+  // Optional picture chosen from the device, kept for this session only.
+  photo?: string;
 };
+export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 // Earthy avatar choices that sit with the bone and forest palette.
 export const avatarColors = {
   forest: "#1C3934",
@@ -60,13 +65,23 @@ export function Avatar({
         backgroundColor: backgroundColor || avatarColors[profile.avatar],
         alignItems: "center",
         justifyContent: "center",
+        overflow: "hidden",
       }}
     >
-      <Text
-        style={{ color: textColor, fontWeight: "700", fontSize: size * 0.3 }}
-      >
-        {initials(profile.displayName)}
-      </Text>
+      {profile.photo ? (
+        <Image
+          accessibilityIgnoresInvertColors
+          source={{ uri: profile.photo }}
+          style={{ width: size, height: size }}
+          resizeMode="cover"
+        />
+      ) : (
+        <Text
+          style={{ color: textColor, fontWeight: "700", fontSize: size * 0.3 }}
+        >
+          {initials(profile.displayName)}
+        </Text>
+      )}
     </View>
   );
 }
@@ -172,6 +187,35 @@ export function AccountSetup({
     borderColor: p.border,
   };
   const label = { ...ui.small, color: p.muted };
+  const [photoError, setPhotoError] = useState("");
+  const pickPhoto = async () => {
+    setPhotoError("");
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      const bytes =
+        asset.fileSize ?? (asset as { file?: { size?: number } }).file?.size ?? 0;
+      if (asset.mimeType && !asset.mimeType.startsWith("image/")) {
+        setPhotoError("Choose an image file, such as JPG, PNG or HEIC.");
+        return;
+      }
+      if (bytes > MAX_PHOTO_BYTES) {
+        setPhotoError(
+          `That picture is ${(bytes / 1024 / 1024).toFixed(1)} MB. Choose one up to 8 MB.`,
+        );
+        return;
+      }
+      setProfile((current) => ({ ...current, photo: asset.uri }));
+    } catch {
+      setPhotoError("Your photos could not be opened. Please try again.");
+    }
+  };
   const next = async () => {
     setError("");
     if (step === 0) {
@@ -526,8 +570,50 @@ export function AccountSetup({
                   <Text style={[ui.title, { color: p.text }]}>
                     Make it yours.
                   </Text>
-                  <View style={{ alignItems: "center", padding: 10 }}>
-                    <Avatar profile={profile} size={88} />
+                  <View style={{ alignItems: "center", paddingTop: 6, gap: 10 }}>
+                    <View>
+                      <Avatar profile={profile} size={104} />
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={profile.photo ? "Change your profile picture" : "Upload a profile picture"}
+                        onPress={pickPhoto}
+                        style={{ position: "absolute", right: -2, bottom: -2, width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: p.primary, borderWidth: 3, borderColor: p.surface }}
+                      >
+                        <Feather name="camera" size={16} color={p.onPrimary} />
+                      </Pressable>
+                    </View>
+                    <View style={{ alignItems: "center", gap: 2 }}>
+                      <Text numberOfLines={1} style={{ color: p.text, fontSize: 20, fontWeight: "700", letterSpacing: -0.4 }}>
+                        {profile.displayName.trim() || "Your name"}
+                      </Text>
+                      <Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", letterSpacing: 1.2, textTransform: "uppercase" }}>
+                        {mode === "preview" ? "Preview profile" : "Your profile"}
+                      </Text>
+                    </View>
+                    <View style={[ui.row, { gap: 8, flexWrap: "wrap", justifyContent: "center" }]}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={pickPhoto}
+                        style={[ui.row, { gap: 8, minHeight: 44, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.surface }]}
+                      >
+                        <Feather name="image" size={16} color={p.text} />
+                        <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{profile.photo ? "Change photo" : "Upload photo"}</Text>
+                      </Pressable>
+                      {!!profile.photo && (
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => { setPhotoError(""); setProfile({ ...profile, photo: undefined }); }}
+                          style={[ui.row, { gap: 8, minHeight: 44, paddingHorizontal: 16, borderRadius: 999 }]}
+                        >
+                          <Feather name="trash-2" size={16} color={p.muted} />
+                          <Text style={{ color: p.muted, fontSize: 14, fontWeight: "600" }}>Remove</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                    <Text style={[label, { textAlign: "center" }]}>JPG, PNG or HEIC, up to 8 MB.</Text>
+                    {!!photoError && (
+                      <Text accessibilityRole="alert" style={[ui.small, { color: p.danger, textAlign: "center" }]}>{photoError}</Text>
+                    )}
                   </View>
                   <Text style={label}>Profile name</Text>
                   <TextInput
@@ -542,7 +628,7 @@ export function AccountSetup({
                     placeholder="Your name"
                     placeholderTextColor={p.muted}
                   />
-                  <Text style={label}>Choose your avatar</Text>
+                  <Text style={label}>{profile.photo ? "Fallback colour" : "Or choose a colour"}</Text>
                   <View
                     style={[
                       ui.row,
@@ -576,6 +662,7 @@ export function AccountSetup({
                         <Avatar
                           profile={{
                             ...profile,
+                            photo: undefined,
                             avatar: value as Profile["avatar"],
                           }}
                           size={52}
