@@ -67,4 +67,3 @@ returns boolean language sql stable security definer set search_path = '' as $$
       and ((nullif(u.email,'') is not null and u.email_confirmed_at is not null) or (nullif(to_jsonb(u)->>'phone','') is not null and nullif(to_jsonb(u)->>'phone_confirmed_at','') is not null)) and a.expires_at>now() and (s.not_after is null or s.not_after>now())
   );
 $$;
-

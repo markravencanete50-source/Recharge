@@ -43,11 +43,16 @@ const protectedPaths = [
   '/api/workspace/media', '/api/mobile/media',
 ];
 await Promise.all(protectedPaths.map(async path => {
-  const payload = await (await request(path, 401)).json();
+  const options = path.startsWith('/api/mobile/') ? { headers: { 'x-recharge-client': 'native' } } : {};
+  const payload = await (await request(path, 401, options)).json();
   assert.equal(typeof payload.error, 'string', `${path}: missing refusal message`);
   assert.equal(payload.data, undefined, `${path}: anonymous data exposure`);
 }));
 console.log(`PASS: ${protectedPaths.length} protected web/native routes refuse anonymous requests with no-store and no CORS grant`);
+
+await request('/api/mobile/controls', 403);
+await request('/api/mobile/controls', 403, { headers: { 'x-recharge-client': 'native', cookie: 'session=untrusted' } });
+console.log('PASS: native controls reject missing transport headers and ambient browser credentials');
 
 const deniedPaths = ['/api/analytics', '/api/onboarding/files', '/api/communications/threads', '/tool/property-onboarding'];
 await Promise.all(deniedPaths.map(path => request(path, 404)));
