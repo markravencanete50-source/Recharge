@@ -285,7 +285,7 @@ function ClientDashboard({
           <DashboardCard icon={BarChart3} title="Property performance" value={`${live} live`} note="Performance reporting for your active properties." />
           <DashboardCard icon={ClipboardCheck} title="Property onboarding" value={`${cases.filter((item) => item.status !== "live" && item.status !== "not_proceeding").length} active`} note="Follow every onboarding milestone." />
         </div>
-        <section className="rounded-[1.5rem] border border-[#d9e2df] bg-white p-6">
+        <section className="surface rounded-[1.5rem] border border-[#d9e2df] bg-white p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="eyebrow">Portfolio</p>
@@ -561,8 +561,8 @@ type CaseActionProps = {
 
 function CaseShell({ caseItem, children }: { caseItem: OnboardingCase; children: React.ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-[1.6rem] border border-[#d9e2df] bg-white">
-      <div className="bg-[#1c3934] px-6 py-6 text-white sm:px-7">
+    <section className="surface overflow-hidden rounded-[1.6rem] border border-[#d9e2df] bg-white">
+      <div className="forest-panel bg-[#1c3934] px-6 py-6 text-white sm:px-7">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8fb3a2]">Enquiry received {dateTime(caseItem.createdAt)}</p>
@@ -691,7 +691,7 @@ function EstimatePresentation({ caseItem, compact = false }: { caseItem: Onboard
     <div className="space-y-5">
       {!compact && <ServicesAndProcess />}
       <ActionCard icon={BarChart3} eyebrow="Performance estimate" title="See how occupancy changes your revenue" description="Adjust the occupancy level to compare projected gross revenue by month and year.">
-        <div className="mt-5 rounded-2xl bg-[#1c3934] p-5 text-white sm:p-6">
+        <div className="forest-panel mt-5 rounded-2xl bg-[#1c3934] p-5 text-white sm:p-6">
           <div className="flex items-end justify-between gap-4">
             <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Projected occupancy</p><p className="mt-1 text-sm text-white/70">Move the slider to model different booking levels.</p></div>
             <span className="text-3xl font-semibold text-[#8fb3a2]">{occupancy}%</span>
@@ -842,7 +842,7 @@ function AgreementPreview({ caseItem }: { caseItem: OnboardingCase }) {
     ["7. Term and termination", "The agreement continues until either party gives 90 days’ written notice, with immediate termination available for serious breach, illegality or unsafe conditions."],
     ["8–11. Data, confidentiality and law", "Both parties will protect confidential and personal information. Written variations, severability, Scots law and exclusive Scottish court jurisdiction apply."],
   ];
-  return <div className="max-h-96 overflow-y-auto rounded-2xl border border-[#dce5e2] bg-white p-5 text-sm leading-6"><h4 className="text-base font-semibold">Short-Term Let Management Agreement</h4><p className="mt-2 text-[#61736f]">Recharge Group Ltd (SC799955), trading as Recharge, 14 Newton Place, Glasgow, G3 7PY. Property: {caseItem.propertyAddress}.</p><div className="mt-4 rounded-xl bg-[#f2f6f4] p-4 font-semibold">15% + VAT management fee · £475 onboarding fee including VAT per property</div>{sections.map(([title,text])=><div key={title} className="mt-4"><p className="font-semibold">{title}</p><p className="mt-1 text-[#61736f]">{text}</p></div>)}<div className="mt-6 border-t border-[#dce5e2] pt-4"><p className="font-['Brush_Script_MT',cursive] text-3xl">Alexander Coghill</p><p className="font-semibold">Alexander Coghill</p><p className="text-[#61736f]">Director, Recharge Group Ltd · signed for the Manager</p></div></div>;
+  return <div className="surface max-h-96 overflow-y-auto rounded-2xl border border-[#dce5e2] bg-white p-5 text-sm leading-6"><h4 className="text-base font-semibold">Short-Term Let Management Agreement</h4><p className="mt-2 text-[#61736f]">Recharge Group Ltd (SC799955), trading as Recharge, 14 Newton Place, Glasgow, G3 7PY. Property: {caseItem.propertyAddress}.</p><div className="mt-4 rounded-xl bg-[#f2f6f4] p-4 font-semibold">15% + VAT management fee · £475 onboarding fee including VAT per property</div>{sections.map(([title,text])=><div key={title} className="mt-4"><p className="font-semibold">{title}</p><p className="mt-1 text-[#61736f]">{text}</p></div>)}<div className="mt-6 border-t border-[#dce5e2] pt-4"><p className="font-['Brush_Script_MT',cursive] text-3xl">Alexander Coghill</p><p className="font-semibold">Alexander Coghill</p><p className="text-[#61736f]">Director, Recharge Group Ltd · signed for the Manager</p></div></div>;
 }
 
 function EstimatePhotos({ caseItem }: { caseItem: OnboardingCase }) { const photos=caseItem.files.filter((file)=>file.kind==="enquiry_media" && file.contentType.startsWith("image/")); return <ActionCard icon={Sparkles} eyebrow="Photos" title="Estimate photos" description="Property images supplied with the enquiry are displayed here for estimate preparation.">{photos.length?<div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3">{photos.map((file)=><a key={file.id} href={`/api/onboarding/files/${file.id}`} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-xl border border-[#dfe7e4]"><img src={`/api/onboarding/files/${file.id}`} alt={file.fileName} className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]" /><p className="truncate px-3 py-2 text-xs font-semibold">{file.fileName}</p></a>)}</div>:<p className="mt-4 rounded-xl bg-[#f4f7f5] px-4 py-4 text-sm text-[#718184]">No estimate photos were supplied.</p>}</ActionCard>; }
@@ -1258,11 +1258,11 @@ function RoomPhotoUpload({ caseItem, upload }: { caseItem: OnboardingCase; uploa
 }
 
 function ActionCard({ icon: Icon, eyebrow, title, description, children }: { icon: typeof Home; eyebrow: string; title: string; description: string; children?: React.ReactNode }) {
-  return <section className="rounded-[1.35rem] border border-[#dfe7e4] bg-white p-5"><div className="flex items-start gap-4"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#edf5f0] text-[#315f4d]"><Icon className="size-4" /></div><div><p className="text-[0.66rem] font-semibold uppercase tracking-[0.15em] text-[#6e8580]">{eyebrow}</p><h3 className="mt-1.5 text-xl font-semibold tracking-[-0.025em]">{title}</h3><p className="mt-1 text-sm leading-6 text-[#647577]">{description}</p></div></div>{children}</section>;
+  return <section className="surface rounded-[1.35rem] border border-[#dfe7e4] bg-white p-5"><div className="flex items-start gap-4"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#edf5f0] text-[#315f4d]"><Icon className="size-4" /></div><div><p className="text-[0.66rem] font-semibold uppercase tracking-[0.15em] text-[#6e8580]">{eyebrow}</p><h3 className="mt-1.5 text-xl font-semibold tracking-[-0.025em]">{title}</h3><p className="mt-1 text-sm leading-6 text-[#647577]">{description}</p></div></div>{children}</section>;
 }
 
 function DashboardCard({ icon: Icon, title, value, note }: { icon: typeof Home; title: string; value: string; note: string }) {
-  return <article className="rounded-[1.35rem] border border-[#d9e2df] bg-white p-5"><div className="flex items-center justify-between"><Icon className="size-5 text-[#5c7b73]" /><span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#718184]">{title}</span></div><p className="mt-8 text-3xl font-semibold tracking-[-0.04em]">{value}</p><p className="mt-2 text-sm text-[#718184]">{note}</p></article>;
+  return <article className="surface rounded-[1.35rem] border border-[#d9e2df] bg-white p-5"><div className="flex items-center justify-between"><Icon className="size-5 text-[#5c7b73]" /><span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#718184]">{title}</span></div><p className="mt-8 text-3xl font-semibold tracking-[-0.04em]">{value}</p><p className="mt-2 text-sm text-[#718184]">{note}</p></article>;
 }
 
 function MiniStat({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) {
@@ -1310,7 +1310,7 @@ function EmptyCases() {
 }
 
 function Unavailable({ onBack }: { onBack: () => void }) {
-  return <section className="rounded-[1.5rem] border border-[#d9e2df] bg-white p-8"><Button variant="ghost" onClick={onBack}><ArrowLeft /> Back</Button><h1 className="mt-5 text-3xl font-semibold">Property onboarding is temporarily unavailable</h1><p className="mt-3 text-[#647577]">Please try again shortly.</p></section>;
+  return <section className="surface rounded-[1.5rem] border border-[#d9e2df] bg-white p-8"><Button variant="ghost" onClick={onBack}><ArrowLeft /> Back</Button><h1 className="mt-5 text-3xl font-semibold">Property onboarding is temporarily unavailable</h1><p className="mt-3 text-[#647577]">Please try again shortly.</p></section>;
 }
 
 function NextStepSummary({ caseItem }: { caseItem: OnboardingCase }) {

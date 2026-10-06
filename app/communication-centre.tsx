@@ -359,7 +359,7 @@ function ChannelWorkspace({
   }
 
   return (
-    <div className="grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white xl:h-[40rem] xl:grid-cols-[20rem_minmax(0,1fr)_21rem]">
+    <div className="surface grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white xl:h-[40rem] xl:grid-cols-[20rem_minmax(0,1fr)_21rem]">
       <aside className="min-h-0 border-b border-[#dfe7e4] bg-[#f7f9f8] xl:border-r xl:border-b-0">
         <div className="space-y-3 border-b border-[#dfe7e4] p-4">
           <p className="text-sm font-semibold">{details.title}</p>
@@ -448,7 +448,7 @@ function ChannelEmptyState({
 }) {
   const Icon = details.icon;
   return (
-    <section className="grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white lg:grid-cols-[1.2fr_0.8fr]">
+    <section className="surface grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white lg:grid-cols-[1.2fr_0.8fr]">
       <div className="p-7 sm:p-9">
         <div className="grid size-12 place-items-center rounded-2xl bg-[#eaf2ee] text-[#315f4d]">
           <Icon className="size-5" />
@@ -472,7 +472,7 @@ function ChannelEmptyState({
           </div>
         </div>
       </div>
-      <div className="border-t border-[#dfe7e4] bg-[#1c3934] p-7 text-white sm:p-9 lg:border-t-0 lg:border-l lg:border-white/10">
+      <div className="forest-panel border-t border-[#dfe7e4] bg-[#1c3934] p-7 text-white sm:p-9 lg:border-t-0 lg:border-l lg:border-white/10">
         <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#8fb3a2]">Connection route</p>
         <h3 className="mt-4 text-xl font-semibold">{connectionTitle(source)}</h3>
         <p className="mt-3 text-sm leading-6 text-white/60">{connectionCopy(source)}</p>
@@ -821,7 +821,7 @@ function GuidancePanel({
       )}
       {workflow ? (
         <div className="mt-4 space-y-4">
-          <div className="rounded-2xl border border-[#dbe5df] bg-white p-4">
+          <div className="surface rounded-2xl border border-[#dbe5df] bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="font-semibold">{workflow.name}</p>
               {workflow.priority === "urgent" && (
@@ -839,7 +839,7 @@ function GuidancePanel({
           </p>
         </div>
       )}
-      {replyNeeded ? <div className="mt-4 rounded-2xl bg-[#1c3934] p-4 text-white"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8fb3a2]">Recommended response</p><Badge className="border-0 bg-white/10 text-white">Reply needed</Badge></div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/80">{suggestedResponse}</p><p className="mt-3 text-xs leading-5 text-white/50">Based on the guest&apos;s latest unanswered message, the matched workflow and Recharge&apos;s warm service tone.</p><Button size="sm" className="mt-4 bg-white text-[#1c3934] hover:bg-white/90" onClick={() => onUseResponse(suggestedResponse)}>Use response</Button></div> : <div className="mt-4 rounded-2xl border border-[#cbd8d3] bg-white p-4"><div className="flex items-center gap-2 text-sm font-semibold text-[#315f50]"><Check className="size-4" /> Response sent</div><p className="mt-2 text-xs leading-5 text-[#718184]">No further reply is suggested. This conversation will return to New messages if the guest sends another message.</p></div>}
+      {replyNeeded ? <div className="forest-panel mt-4 rounded-2xl bg-[#1c3934] p-4 text-white"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8fb3a2]">Recommended response</p><Badge className="border-0 bg-white/10 text-white">Reply needed</Badge></div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/80">{suggestedResponse}</p><p className="mt-3 text-xs leading-5 text-white/50">Based on the guest&apos;s latest unanswered message, the matched workflow and Recharge&apos;s warm service tone.</p><Button size="sm" className="mt-4 bg-white text-[#1c3934] hover:bg-white/90" onClick={() => onUseResponse(suggestedResponse)}>Use response</Button></div> : <div className="surface mt-4 rounded-2xl border border-[#cbd8d3] bg-white p-4"><div className="flex items-center gap-2 text-sm font-semibold text-[#315f50]"><Check className="size-4" /> Response sent</div><p className="mt-2 text-xs leading-5 text-[#718184]">No further reply is suggested. This conversation will return to New messages if the guest sends another message.</p></div>}
     </aside>
   );
 }
@@ -908,7 +908,7 @@ function ReportActions({
   }
 
   return (
-    <div className="mt-4 rounded-2xl border border-[#dbe5df] bg-white p-4">
+    <div className="surface mt-4 rounded-2xl border border-[#dbe5df] bg-white p-4">
       <p className="text-sm font-semibold">Action required</p>
       <p className="mt-1 text-xs leading-5 text-[#718184]">
         A possible issue was detected. Approve the ticket before it is added to the relevant board.
@@ -1082,7 +1082,7 @@ function WorkflowCard({ workflow, admin }: { workflow: CommunicationWorkflow; ad
     if (response.ok) router.refresh();
   }
   return (
-    <article className="rounded-[1.4rem] border border-[#d9e2df] bg-white p-5">
+    <article className="surface rounded-[1.4rem] border border-[#d9e2df] bg-white p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1137,7 +1137,7 @@ function PerformanceWorkspace({ data }: { data: CommunicationCentreData }) {
         <CentreStat label="Over 30 minutes" value={String(overThirtyMinutes)} note="Responses taking more than 30 minutes" tone="amber" alert={overThirtyMinutes > 0} />
         <CentreStat label="Over 1 hour" value={String(overOneHour)} note="Responses taking more than 60 minutes" tone="red" alert={overOneHour > 0} />
       </section>
-      <section className="mt-5 overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+      <section className="surface mt-5 overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
         <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-[#e2e9e7] bg-[#f6f8f7] px-5 py-4 text-xs font-semibold uppercase tracking-[0.1em] text-[#718184]">
           <span>Team member</span><span>Responses</span><span>Average</span>
         </div>
@@ -1150,7 +1150,7 @@ function PerformanceWorkspace({ data }: { data: CommunicationCentreData }) {
         ))}
         {team.size === 0 && <p className="px-5 py-10 text-center text-sm text-[#718184]">Performance will populate as team members respond through Recharge.</p>}
       </section>
-      <section className="mt-5 overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+      <section className="surface mt-5 overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
         <div className="border-b border-[#e2e9e7] bg-[#f6f8f7] px-5 py-4">
           <p className="text-sm font-semibold">Scheduled communication cover</p>
           <p className="mt-1 text-xs text-[#718184]">The next seven days from My Recharge. Response ownership is measured against the staff rota.</p>

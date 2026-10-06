@@ -109,7 +109,7 @@ export function WorkflowPanels({
     return null;
   if (!data.available) {
     return (
-      <div className="mt-8 rounded-2xl border border-[#d9e2df] bg-white p-5 text-sm text-[#647577]">
+      <div className="surface mt-8 rounded-2xl border border-[#d9e2df] bg-white p-5 text-sm text-[#647577]">
         Department workflows are temporarily unavailable. Please try again shortly.
       </div>
     );
@@ -129,7 +129,7 @@ function StaysWorkflow({ data }: { data: WorkflowData }) {
   return (
     <section className="mt-8 space-y-4">
       <div className="grid gap-4">
-        <article className="rounded-[1.5rem] bg-[#1c3934] p-6 text-white sm:p-7">
+        <article className="forest-panel rounded-[1.5rem] bg-[#1c3934] p-6 text-white sm:p-7">
         <div className="flex items-start justify-between gap-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8fb3a2]">
@@ -208,7 +208,7 @@ function ReferralDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="mt-6 h-11 rounded-xl bg-[#315f50] px-5 font-semibold text-[#1c3934] hover:bg-[#c8fa7c]">
+        <Button className="mt-6 h-11 rounded-xl bg-[#c9e7a4] px-5 font-semibold text-[#1c3934] hover:bg-[#d8efb9]">
           <Plus /> New Ready referral
         </Button>
       </DialogTrigger>
@@ -385,7 +385,7 @@ function TicketBoard({
   tickets: WorkflowTicket[];
 }) {
   return (
-    <article className="rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
+    <article className="surface rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#edf5f0] text-[#315f4d]">

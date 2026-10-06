@@ -200,7 +200,7 @@ export function PropertyDatabase({
       {section === "reporting" ? (
         <PropertyReporting data={data} />
       ) : section !== "clients" ? (
-        <section className="mt-5 grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white xl:h-[42rem] xl:grid-cols-[22rem_minmax(0,1fr)]">
+        <section className="surface mt-5 grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white xl:h-[42rem] xl:grid-cols-[22rem_minmax(0,1fr)]">
           <aside className="border-b border-[#dfe7e4] bg-[#f7f9f8] xl:border-r xl:border-b-0">
             <SearchBox value={propertySearch} onChange={setPropertySearch} placeholder="Search property, address or owner" />
             <div className="border-b border-[#dfe7e4] px-4 pb-4">
@@ -239,7 +239,7 @@ export function PropertyDatabase({
           )}
         </section>
       ) : (
-        <section className="mt-5 rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5 sm:p-6">
+        <section className="surface mt-5 rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5 sm:p-6">
           <div className="max-w-xl"><SearchBox value={clientSearch} onChange={setClientSearch} placeholder="Search clients or portfolio properties" /></div>
           <div className="mt-5 grid gap-4 xl:grid-cols-2">
             {clients.map((client) => (
@@ -286,14 +286,14 @@ function PropertyReporting({ data }: { data: PropertyDatabaseData }) {
   return (
     <section className="mt-5 space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {periods.map(([label, value]) => <article key={label} className="rounded-2xl border border-[#d9e2df] bg-white p-5"><div className="flex items-center justify-between"><p className="text-sm font-medium text-[#647577]">New enquiries</p><CalendarDays className="size-4 text-[#527261]" /></div><p className="mt-4 text-3xl font-semibold">{value}</p><p className="mt-1 text-sm text-[#718184]">{label}</p></article>)}
+        {periods.map(([label, value]) => <article key={label} className="surface rounded-2xl border border-[#d9e2df] bg-white p-5"><div className="flex items-center justify-between"><p className="text-sm font-medium text-[#647577]">New enquiries</p><CalendarDays className="size-4 text-[#527261]" /></div><p className="mt-4 text-3xl font-semibold">{value}</p><p className="mt-1 text-sm text-[#718184]">{label}</p></article>)}
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <article className="rounded-2xl bg-[#1c3934] p-6 text-white"><TrendingUp className="size-5 text-[#8fb3a2]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{data.reporting.strikeRate}%</p><p className="mt-2 font-medium">Enquiry-to-onboarding strike rate</p><p className="mt-2 text-sm leading-6 text-white/60">The percentage of recorded enquiries that progressed into onboarding.</p></article>
-        <article className="rounded-2xl border border-[#d9e2df] bg-white p-6"><UsersRound className="size-5 text-[#527261]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{portfolios.length}</p><p className="mt-2 font-medium">Clients</p><p className="mt-2 text-sm leading-6 text-[#718184]">Landlords or companies with a named portfolio, excluding archived properties.</p></article>
-        <article className="rounded-2xl border border-[#d9e2df] bg-white p-6"><Building2 className="size-5 text-[#527261]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{averagePortfolio.toFixed(1)}</p><p className="mt-2 font-medium">Average portfolio size</p><p className="mt-2 text-sm leading-6 text-[#718184]">Average active properties managed per landlord or company.</p></article>
+        <article className="forest-panel rounded-2xl bg-[#1c3934] p-6 text-white"><TrendingUp className="size-5 text-[#8fb3a2]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{data.reporting.strikeRate}%</p><p className="mt-2 font-medium">Enquiry-to-onboarding strike rate</p><p className="mt-2 text-sm leading-6 text-white/60">The percentage of recorded enquiries that progressed into onboarding.</p></article>
+        <article className="surface rounded-2xl border border-[#d9e2df] bg-white p-6"><UsersRound className="size-5 text-[#527261]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{portfolios.length}</p><p className="mt-2 font-medium">Clients</p><p className="mt-2 text-sm leading-6 text-[#718184]">Landlords or companies with a named portfolio, excluding archived properties.</p></article>
+        <article className="surface rounded-2xl border border-[#d9e2df] bg-white p-6"><Building2 className="size-5 text-[#527261]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{averagePortfolio.toFixed(1)}</p><p className="mt-2 font-medium">Average portfolio size</p><p className="mt-2 text-sm leading-6 text-[#718184]">Average active properties managed per landlord or company.</p></article>
       </div>
-      <article className="overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white">
+      <article className="surface overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white">
         <div className="flex items-center gap-3 border-b border-[#dfe7e4] px-5 py-5 sm:px-6"><BarChart3 className="size-5 text-[#527261]" /><div><h2 className="font-semibold">Properties signed up</h2><p className="mt-1 text-sm text-[#718184]">Recorded when the management agreement was signed.</p></div></div>
         <div className="divide-y divide-[#e3e9e7]">
           {data.reporting.signedUp.map((item) => <div key={`${item.propertyName}:${item.signedAt}`} className="flex flex-col justify-between gap-1 px-5 py-4 sm:flex-row sm:items-center sm:px-6"><p className="font-medium text-[#27443f]">{item.propertyName}</p><p className="text-sm text-[#718184]">{formatDate(item.signedAt)}</p></div>)}
@@ -519,7 +519,7 @@ function ArchiveSection({ title, icon: Icon, children }: { title: string; icon: 
 }
 
 function ArchiveStat({ icon: Icon, label, value }: { icon: typeof Archive; label: string; value: string }) {
-  return <div className="rounded-2xl border border-[#dfe7e4] bg-white p-4"><Icon className="size-4 text-[#52706a]" /><p className="mt-3 text-2xl font-semibold tracking-[-0.04em]">{value}</p><p className="mt-1 text-xs text-[#718184]">{label}</p></div>;
+  return <div className="surface rounded-2xl border border-[#dfe7e4] bg-white p-4"><Icon className="size-4 text-[#52706a]" /><p className="mt-3 text-2xl font-semibold tracking-[-0.04em]">{value}</p><p className="mt-1 text-xs text-[#718184]">{label}</p></div>;
 }
 
 function PropertyDialog({
@@ -630,11 +630,11 @@ function SearchBox({ value, onChange, placeholder }: { value: string; onChange: 
 }
 
 function Stat({ label, value, icon: Icon }: { label: string; value: number; icon: typeof Building2 }) {
-  return <article className="rounded-2xl border border-[#d9e2df] bg-white p-5"><div className="flex items-center justify-between"><p className="text-sm font-medium text-[#647577]">{label}</p><Icon className="size-4 text-[#527261]" /></div><p className="mt-4 text-3xl font-semibold">{value}</p></article>;
+  return <article className="surface rounded-2xl border border-[#d9e2df] bg-white p-5"><div className="flex items-center justify-between"><p className="text-sm font-medium text-[#647577]">{label}</p><Icon className="size-4 text-[#527261]" /></div><p className="mt-4 text-3xl font-semibold">{value}</p></article>;
 }
 
 function InfoCard({ title, icon: Icon, children }: { title: string; icon: typeof Building2; children: React.ReactNode }) {
-  return <section className="rounded-2xl border border-[#dfe7e4] bg-white p-5"><div className="flex items-center gap-2 font-semibold"><Icon className="size-4 text-[#527261]" /> {title}</div><div className="mt-4 space-y-3">{children}</div></section>;
+  return <section className="surface rounded-2xl border border-[#dfe7e4] bg-white p-5"><div className="flex items-center gap-2 font-semibold"><Icon className="size-4 text-[#527261]" /> {title}</div><div className="mt-4 space-y-3">{children}</div></section>;
 }
 
 function InfoLine({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {

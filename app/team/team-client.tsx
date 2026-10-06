@@ -268,7 +268,7 @@ function PeopleDirectory({
         const people = members.filter((member) => member.role === department.role);
         const roles = structure.roles.filter((role) => normalizeDepartment(role.department) === department.role);
         return (
-          <section key={department.role} className="overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white shadow-[0_8px_30px_rgba(28,57,52,.04)]">
+          <section key={department.role} className="surface overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white shadow-[0_8px_30px_rgba(28,57,52,.04)]">
             <div className="flex flex-col justify-between gap-3 border-b border-[#e2e9e7] bg-[#f7f9f8] px-5 py-5 sm:flex-row sm:items-start sm:px-6">
               <div className="flex gap-3">
                 <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#dce7e2] text-[#315f50]">
@@ -284,7 +284,7 @@ function PeopleDirectory({
             {roles.length > 0 && (
               <div className="grid gap-3 border-b border-[#e6ecea] bg-[#fbfcfb] p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">
                 {roles.map((role) => (
-                  <article key={role.id} className="rounded-2xl border border-[#dce5e2] bg-white p-4">
+                  <article key={role.id} className="surface rounded-2xl border border-[#dce5e2] bg-white p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h3 className="font-semibold">{role.name}</h3>
@@ -368,7 +368,7 @@ function DepartmentSchedules({
   }
 
   return (
-    <section className="overflow-hidden rounded-[1.7rem] border border-[#d9e2df] bg-white">
+    <section className="surface overflow-hidden rounded-[1.7rem] border border-[#d9e2df] bg-white">
       <div className="flex flex-col justify-between gap-4 border-b border-[#dfe7e4] bg-[#f7f9f8] p-5 sm:flex-row sm:items-center sm:p-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[.13em] text-[#60756f]">Department schedule</p>
@@ -505,7 +505,7 @@ function CoverageMap({ members, structure }: { members: TeamMember[]; structure:
           </div>
         </div>
       </section>
-      <section className="rounded-[1.7rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
+      <section className="surface rounded-[1.7rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
         <div className="flex items-center justify-between">
           <div><p className="text-xs font-semibold uppercase tracking-[.13em] text-[#60756f]">Coverage directory</p><h2 className="mt-1 text-2xl font-semibold">{visible.length} team members</h2></div>
           {region !== "all" && <button className="text-sm font-semibold text-[#315f50]" onClick={() => setRegion("all")}>Clear</button>}
@@ -664,7 +664,7 @@ function ScheduleEditor({ department, members, onClose, onSaved }: { department:
 }
 
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#10271f]/55 p-4 backdrop-blur-sm"><div className="w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-[#d8e2df] bg-white shadow-2xl"><div className="flex items-start justify-between gap-4 border-b border-[#e2e9e7] px-6 py-5"><div><h2 className="text-2xl font-semibold">{title}</h2><p className="mt-1 text-sm text-[#718184]">{subtitle}</p></div><button className="icon-button" onClick={onClose} aria-label="Close"><X className="size-5" /></button></div>{children}</div></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#10271f]/55 p-4 backdrop-blur-sm"><div className="surface w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-[#d8e2df] bg-white shadow-2xl"><div className="flex items-start justify-between gap-4 border-b border-[#e2e9e7] px-6 py-5"><div><h2 className="text-2xl font-semibold">{title}</h2><p className="mt-1 text-sm text-[#718184]">{subtitle}</p></div><button className="icon-button" onClick={onClose} aria-label="Close"><X className="size-5" /></button></div>{children}</div></div>;
 }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block"><span className="mb-2 block text-sm font-semibold">{label}</span>{children}</label>; }
 function Choice({ selected, onClick, label }: { selected: boolean; onClick: () => void; label: string }) { return <button type="button" onClick={onClick} className={"flex items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-medium " + (selected ? "border-[#315f50] bg-[#e2ebe7]" : "border-[#d7e0dd] bg-white")}><span>{label}</span><span className={"grid size-5 place-items-center rounded-full border " + (selected ? "border-[#315f50] bg-[#315f50] text-white" : "border-[#acbbb6]")} >{selected && <Check className="size-3" />}</span></button>; }

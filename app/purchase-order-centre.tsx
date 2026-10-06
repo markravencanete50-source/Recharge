@@ -175,7 +175,7 @@ export function PurchaseOrderCentre({
 
   if (!data) {
     return (
-      <section className="rounded-[1.5rem] border border-[#d9e2df] bg-white p-8">
+      <section className="surface rounded-[1.5rem] border border-[#d9e2df] bg-white p-8">
         <p className="text-sm text-[#647577]">Loading Recharge Purchase Orders…</p>
         {message && <p className="mt-3 text-sm text-[#9a4747]">{message}</p>}
       </section>
@@ -292,7 +292,7 @@ function RequestForm({
   }
 
   return (
-    <section className="mt-7 rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
+    <section className="surface mt-7 rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-xl font-semibold">New quotation request</h2>
@@ -349,7 +349,7 @@ function TicketList({
   workspace: PurchaseOrderWorkspace;
 }) {
   return (
-    <aside className="overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+    <aside className="surface overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
       <div className="border-b border-[#e2e9e7] px-5 py-4">
         <p className="text-sm font-semibold">{workspace === "ready" ? "New & active tickets" : "Purchase order tickets"}</p>
         <p className="mt-1 text-xs text-[#78888a]">{orders.length} {orders.length === 1 ? "record" : "records"}</p>
@@ -415,7 +415,7 @@ function OrderHeader({ order }: { order: PurchaseOrderCase }) {
 
 function StaysOrder({ order }: { order: PurchaseOrderCase }) {
   return (
-    <article className="overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+    <article className="surface overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
       <OrderHeader order={order} />
       <div className="p-5 sm:p-6">
         <p className="text-sm leading-6 text-[#637477]">{order.notes || "No additional request notes."}</p>
@@ -466,7 +466,7 @@ function ReadyOrder({
   }
 
   return (
-    <article className="overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+    <article className="surface overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
       <OrderHeader order={order} />
       <div className="p-5 sm:p-6">
         {order.status === "revision_requested" && (
@@ -593,7 +593,7 @@ function ManagementOrder({
   }
 
   return (
-    <article className="overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+    <article className="surface overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
       <OrderHeader order={order} />
       <div className="p-5 sm:p-6">
         {editable ? (
@@ -638,10 +638,10 @@ function ClientOrder({
   const [note, setNote] = useState(order.clientDecisionNotes);
   const awaiting = order.status === "client_review";
   return (
-    <article className="overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+    <article className="surface overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
       <OrderHeader order={order} />
       <div className="p-5 sm:p-6">
-        <div className="rounded-[1.3rem] bg-[#1c3934] p-5 text-white sm:p-6">
+        <div className="forest-panel rounded-[1.3rem] bg-[#1c3934] p-5 text-white sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/55">Purchase order quote</p>
           <div className="mt-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div><h3 className="text-2xl font-semibold">{order.propertyName}</h3><p className="mt-1 text-sm text-white/65">Prepared by Recharge · {order.reference}</p></div>
@@ -677,7 +677,7 @@ function AccountsOrder({
 }) {
   const accountAction = (update: string) => mutate("PATCH", { action: "accounts_update", id: order.id, update });
   return (
-    <article className="overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+    <article className="surface overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
       <OrderHeader order={order} />
       <div className="p-5 sm:p-6">
         <div className="grid gap-4 lg:grid-cols-3">

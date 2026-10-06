@@ -130,8 +130,8 @@ export function AccountRegistration({
 
   return (
     <main className="grid min-h-screen place-items-center bg-[#eef3f0] px-5 py-10 text-[#1c3934]">
-      <section className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-[#d8e2df] bg-white shadow-[0_28px_90px_rgba(18,47,51,0.12)] lg:grid-cols-[0.72fr_1.28fr]">
-        <div className="bg-[#1c3934] p-8 text-white sm:p-11">
+      <section className="surface grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-[#d8e2df] bg-white shadow-[0_28px_90px_rgba(18,47,51,0.12)] lg:grid-cols-[0.72fr_1.28fr]">
+        <div className="forest-panel bg-[#1c3934] p-8 text-white sm:p-11">
           <img src="/recharge-wordmark.svg" alt="Recharge" className="h-auto w-48" />
           <p className="mt-16 text-xs font-semibold uppercase tracking-[0.18em] text-[#8fb3a2]">
             Secure workspace
@@ -240,7 +240,7 @@ function AccountState({
 }) {
   return (
     <main className="grid min-h-screen place-items-center bg-[#eef3f0] px-5 py-12 text-[#1c3934]">
-      <section className="w-full max-w-xl rounded-[2rem] border border-[#d8e2df] bg-white p-8 text-center shadow-[0_28px_90px_rgba(18,47,51,0.12)] sm:p-11">
+      <section className="surface w-full max-w-xl rounded-[2rem] border border-[#d8e2df] bg-white p-8 text-center shadow-[0_28px_90px_rgba(18,47,51,0.12)] sm:p-11">
         <div className="mx-auto w-56 rounded-2xl bg-[#1c3934] px-5 py-3">
           <img src="/recharge-wordmark.svg" alt="Recharge" className="h-auto w-full" />
         </div>

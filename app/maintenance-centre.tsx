@@ -292,7 +292,7 @@ export function MaintenanceCentre({
       ) : (
         <>
           {activeWorkspace === "ready" && <ReadyCalendar tickets={tickets} />}
-          <div className="mt-5 grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white xl:h-[46rem] xl:grid-cols-[22rem_minmax(0,1fr)]">
+          <div className="surface mt-5 grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white xl:h-[46rem] xl:grid-cols-[22rem_minmax(0,1fr)]">
             <aside className="border-b border-[#dfe7e4] bg-[#f7f9f8] xl:min-h-0 xl:border-r xl:border-b-0">
               <div className="border-b border-[#dfe7e4] px-5 py-4">
                 <p className="text-sm font-semibold">{workspaceLabel(activeWorkspace)}</p>
@@ -347,7 +347,7 @@ function BackButton({ onBack }: { onBack: () => void }) {
 
 function MaintenanceStat({ label, value, icon: Icon }: { label: string; value: number; icon: typeof Wrench }) {
   return (
-    <article className="rounded-2xl border border-[#d9e2df] bg-white p-5">
+    <article className="surface rounded-2xl border border-[#d9e2df] bg-white p-5">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm font-medium text-[#647577]">{label}</p>
         <Icon className="size-4 text-[#527261]" />
@@ -507,7 +507,7 @@ function MaintenanceReporting({ tickets, nowMs }: { tickets: MaintenanceTicket[]
   const overdue = tickets.filter((ticket) => isOpen(ticket) && nowMs / 1000 - ticket.updatedAt >= 86400).length;
   const trend = buckets.map((bucket) => ({ ...bucket, count: tickets.filter((ticket) => ticket.createdAt >= bucket.start && ticket.createdAt < bucket.end).length }));
   const maximum = Math.max(1, ...trend.map((bucket) => bucket.count));
-  return <section className="mt-5 space-y-5"><div className="flex flex-col justify-between gap-4 rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5 sm:flex-row sm:items-end"><div><p className="eyebrow">Maintenance analytics</p><h2 className="mt-2 text-2xl font-semibold">Ticket reporting</h2><p className="mt-2 text-sm text-[#647577]">New demand, resolution speed and update compliance.</p></div><Tabs value={period} onValueChange={(value) => setPeriod(value as typeof period)}><TabsList className="grid h-auto grid-cols-4 bg-[#e8efec]"><TabsTrigger value="day">Daily</TabsTrigger><TabsTrigger value="week">Weekly</TabsTrigger><TabsTrigger value="month">Monthly</TabsTrigger><TabsTrigger value="year">Yearly</TabsTrigger></TabsList></Tabs></div><div className="grid gap-3 md:grid-cols-3"><ReportMetric label={`New tickets · ${current.label}`} value={String(opened.length)} /><ReportMetric label="Average resolution time" value={resolved.length ? formatDuration(averageHours) : "—"} note={`${resolved.length} resolved in this period`} /><ReportMetric label="Over 24 hours without update" value={String(overdue)} alert={overdue > 0} note="Currently open tickets" /></div><div className="rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5"><div className="flex items-center justify-between gap-4"><p className="font-semibold">New tickets over time</p><p className="text-xs text-[#718184]">{period === "day" ? "Last 14 days" : period === "week" ? "Last 12 weeks" : period === "month" ? "Last 12 months" : "Last 5 years"}</p></div><div className="mt-6 flex h-56 items-end gap-2 overflow-x-auto border-b border-[#dfe7e4] pb-1">{trend.map((bucket) => <div key={bucket.start} className="flex h-full min-w-10 flex-1 flex-col justify-end text-center"><span className="mb-2 text-xs font-semibold">{bucket.count}</span><div className="mx-auto w-full max-w-12 rounded-t-lg bg-[#76ad49]" style={{ height: `${Math.max(4, bucket.count / maximum * 150)}px` }} /><span className="mt-2 truncate text-[0.65rem] text-[#718184]">{bucket.shortLabel}</span></div>)}</div></div></section>;
+  return <section className="mt-5 space-y-5"><div className="surface flex flex-col justify-between gap-4 rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5 sm:flex-row sm:items-end"><div><p className="eyebrow">Maintenance analytics</p><h2 className="mt-2 text-2xl font-semibold">Ticket reporting</h2><p className="mt-2 text-sm text-[#647577]">New demand, resolution speed and update compliance.</p></div><Tabs value={period} onValueChange={(value) => setPeriod(value as typeof period)}><TabsList className="grid h-auto grid-cols-4 bg-[#e8efec]"><TabsTrigger value="day">Daily</TabsTrigger><TabsTrigger value="week">Weekly</TabsTrigger><TabsTrigger value="month">Monthly</TabsTrigger><TabsTrigger value="year">Yearly</TabsTrigger></TabsList></Tabs></div><div className="grid gap-3 md:grid-cols-3"><ReportMetric label={`New tickets · ${current.label}`} value={String(opened.length)} /><ReportMetric label="Average resolution time" value={resolved.length ? formatDuration(averageHours) : "—"} note={`${resolved.length} resolved in this period`} /><ReportMetric label="Over 24 hours without update" value={String(overdue)} alert={overdue > 0} note="Currently open tickets" /></div><div className="surface rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5"><div className="flex items-center justify-between gap-4"><p className="font-semibold">New tickets over time</p><p className="text-xs text-[#718184]">{period === "day" ? "Last 14 days" : period === "week" ? "Last 12 weeks" : period === "month" ? "Last 12 months" : "Last 5 years"}</p></div><div className="mt-6 flex h-56 items-end gap-2 overflow-x-auto border-b border-[#dfe7e4] pb-1">{trend.map((bucket) => <div key={bucket.start} className="flex h-full min-w-10 flex-1 flex-col justify-end text-center"><span className="mb-2 text-xs font-semibold">{bucket.count}</span><div className="mx-auto w-full max-w-12 rounded-t-lg bg-[#76ad49]" style={{ height: `${Math.max(4, bucket.count / maximum * 150)}px` }} /><span className="mt-2 truncate text-[0.65rem] text-[#718184]">{bucket.shortLabel}</span></div>)}</div></div></section>;
 }
 
 function ReportMetric({ label, value, note, alert = false }: { label: string; value: string; note?: string; alert?: boolean }) { return <article className={`rounded-2xl border p-5 ${alert ? "border-red-200 bg-red-50" : "border-[#d9e2df] bg-white"}`}><p className="text-sm text-[#647577]">{label}</p><p className={`mt-3 text-3xl font-semibold ${alert ? "text-red-700" : ""}`}>{value}</p>{note && <p className="mt-2 text-xs text-[#718184]">{note}</p>}</article>; }
@@ -523,7 +523,7 @@ function ReadyCalendar({ tickets }: { tickets: MaintenanceTicket[] }) {
     .slice(0, 12);
   if (!scheduled.length) return null;
   return (
-    <section className="mt-5 rounded-2xl border border-[#d9e2df] bg-white p-5">
+    <section className="surface mt-5 rounded-2xl border border-[#d9e2df] bg-white p-5">
       <div className="flex items-center gap-2 text-sm font-semibold"><CalendarDays className="size-4 text-[#527261]" /> Ready calendar</div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {scheduled.map((ticket) => (
@@ -608,7 +608,7 @@ function TicketDetail({
         </div>
       </header>
       <div className="space-y-5 p-5 sm:p-6">
-        <section className="rounded-2xl border border-[#dfe7e4] bg-white p-5">
+        <section className="surface rounded-2xl border border-[#dfe7e4] bg-white p-5">
           <p className="text-lg font-semibold">{ticket.summary}</p>
           <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#607174]">{ticket.details}</p>
           <div className="mt-5 grid gap-4 border-t border-[#e6ecea] pt-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -633,7 +633,7 @@ function TicketDetail({
         ) : null}
 
         {ticket.quoteAmountPence !== null && (
-          <section className="rounded-2xl bg-[#1c3934] p-5 text-white">
+          <section className="forest-panel rounded-2xl bg-[#1c3934] p-5 text-white">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8fb3a2]">Ready quote</p>
@@ -750,7 +750,7 @@ function TroubleshootingPanel({
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#cedbd6] bg-white">
+    <section className="surface overflow-hidden rounded-2xl border border-[#cedbd6] bg-white">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#e2e9e6] bg-[#f7faf8] p-5">
         <div className="flex items-start gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#1c3934] text-white"><Bot className="size-5" /></span>
@@ -797,7 +797,7 @@ function TroubleshootingPanel({
               <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#698077]">Next safe check</span>
               <span className="mt-1 block">{currentStep.label}</span>
             </AssistantBubble>
-            <div className="ml-auto max-w-[42rem] rounded-2xl rounded-br-md border border-[#cbd9d3] bg-white p-4">
+            <div className="surface ml-auto max-w-[42rem] rounded-2xl rounded-br-md border border-[#cbd9d3] bg-white p-4">
               <Textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} placeholder="Tell the assistant what you checked and what happened…" />
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button type="button" size="sm" onClick={() => answerStep("remains")} className="bg-[#1c3934] text-white hover:bg-[#10271f]">Checked — issue remains</Button>
@@ -839,7 +839,7 @@ function TroubleshootingPanel({
 }
 
 function AssistantBubble({ children }: { children: React.ReactNode }) {
-  return <div className="flex max-w-[46rem] items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#1c3934] text-white"><Bot className="size-4" /></span><div className="rounded-2xl rounded-tl-md border border-[#dce5e1] bg-white px-4 py-3 text-sm leading-6 text-[#43585a]">{children}</div></div>;
+  return <div className="flex max-w-[46rem] items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#1c3934] text-white"><Bot className="size-4" /></span><div className="surface rounded-2xl rounded-tl-md border border-[#dce5e1] bg-white px-4 py-3 text-sm leading-6 text-[#43585a]">{children}</div></div>;
 }
 
 function UserBubble({ children }: { children: React.ReactNode }) {
@@ -1019,7 +1019,7 @@ function ReadyProgress({ ticket, mutate }: { ticket: MaintenanceTicket; mutate: 
     setSaving(false);
   }
   return (
-    <section className="rounded-2xl border border-[#dbe5df] bg-white p-5">
+    <section className="surface rounded-2xl border border-[#dbe5df] bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="font-semibold">Ready job progress</p>
@@ -1122,7 +1122,7 @@ function EvidencePanel({
   upload: (ticketId: string, kind: EvidenceKind, file: File) => Promise<boolean>;
 }) {
   return (
-    <section className="rounded-2xl border border-[#dbe5df] bg-white p-5">
+    <section className="surface rounded-2xl border border-[#dbe5df] bg-white p-5">
       <div className="flex items-center gap-2 font-semibold"><ImagePlus className="size-4 text-[#527261]" /> Evidence & invoices</div>
       <div className="mt-4 flex flex-wrap gap-2">
         {toolWorkspace === "stays" && permissions.stays && <EvidenceUpload ticket={ticket} kind="issue" label="Issue evidence" upload={upload} />}
@@ -1169,7 +1169,7 @@ function Timeline({ ticket, canAddNote, mutate }: { ticket: MaintenanceTicket; c
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   return (
-    <section className="rounded-2xl border border-[#dbe5df] bg-white p-5">
+    <section className="surface rounded-2xl border border-[#dbe5df] bg-white p-5">
       <div className="flex items-center gap-2 font-semibold"><History className="size-4 text-[#527261]" /> Connected updates</div>
       {canAddNote && (
         <div className="mt-4 flex gap-2">
@@ -1202,7 +1202,7 @@ function Timeline({ ticket, canAddNote, mutate }: { ticket: MaintenanceTicket; c
 
 function ThresholdWorkspace({ thresholds, onData, onError }: { thresholds: MaintenanceThreshold[]; onData: (data: MaintenanceData) => void; onError: (error: string) => void }) {
   return (
-    <section className="mt-5 rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5 sm:p-6">
+    <section className="surface mt-5 rounded-[1.6rem] border border-[#d5dfdc] bg-white p-5 sm:p-6">
       <div className="max-w-3xl">
         <p className="eyebrow">Approval matrix</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">Repair thresholds</h2>
