@@ -9,18 +9,30 @@ const mocks={
  'auth-security':`const s=globalThis.__workflowHttp; export const authSecurityConfiguration=()=>({origin:'https://recharge.example'}); export const requestQuota=async()=>s.quota;`,
 };
 const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},plugins:[{
- name:'isolated-workflow-http',enforce:'pre',transform(code,id){if(!/\/(journey|portfolio)-server\.ts$/.test(id.replaceAll('\\','/')))return;
+ name:'isolated-workflow-http',enforce:'pre',transform(code,id){if(!/\/(journey|portfolio|workspace-controls)-server\.ts$/.test(id.replaceAll('\\','/')))return;
  for(const name of Object.keys(mocks))code=code.replaceAll(`from './${name}'`,`from 'workflow-test:${name}'`);return {code,map:null};},
  resolveId:id=>id.startsWith('workflow-test:')?'\0'+id:null,load:id=>id.startsWith('\0workflow-test:')?mocks[id.slice(15)]:null,
 }]});
 after(async()=>{delete globalThis.__workflowHttp;await vite.close();});
 const {journeyRoute,operationsRoute}=await vite.ssrLoadModule('/lib/journey-server.ts');
 const {portfolioRoute}=await vite.ssrLoadModule('/lib/portfolio-server.ts');
+const {workspaceControls}=await vite.ssrLoadModule('/lib/workspace-controls-server.ts');
+const {controlsActionSchema,controlsReadSchema}=await vite.ssrLoadModule('/lib/workspace-controls-policy.ts');
 const {weeklyReportCsv}=await vite.ssrLoadModule('/lib/weekly-report.ts');
 const {workflowValues,journeyForms}=await vite.ssrLoadModule('/lib/workflow-forms.ts');
 const {onboardingFormSchema}=await vite.ssrLoadModule('/lib/journey-policy.ts');
 const {estimateComparables}=await vite.ssrLoadModule('/lib/workspace-view.ts');
-const routes=[journeyRoute,operationsRoute,portfolioRoute];
+const routes=[journeyRoute,operationsRoute,portfolioRoute,workspaceControls];
+
+test('internal controls reject impossible dates, extra privileges, invented assumptions and embedded source credentials',()=>{
+ const reservation={action:'updateReservation',requestId:uuid,propertyId:uuid,reservationId:uuid,version:1,checkIn:'2026-11-01',checkOut:'2026-11-05',status:'confirmed'};
+ assert.ok(controlsActionSchema.safeParse(reservation).success);
+ for(const patch of [{checkOut:'2026-11-01'},{checkIn:'2026-02-30'},{role:'super_admin'},{status:'paid'},{checkOut:'2027-11-03'}])assert.equal(controlsActionSchema.safeParse({...reservation,...patch}).success,false);
+ assert.equal(controlsReadSchema.safeParse({section:'resources'}).success,false);
+ assert.equal(controlsActionSchema.safeParse({action:'saveEstimate',requestId:uuid,propertyId:uuid,version:0,assumptions:{}}).success,false);
+ const event={action:'updateEvent',requestId:uuid,propertyId:uuid,eventId:uuid,version:1,name:'Example event',eventOn:'2026-11-01',sourceUrl:'https://user:password@example.com',opportunity:'Recorded demand'};
+ assert.equal(controlsActionSchema.safeParse(event).success,false);
+});
 const uuid='11111111-1111-4111-8111-111111111111';
 test('comparable links exclude unsafe schemes, embedded credentials and malformed provider data',()=>{
  const comparable={name:'Recorded comparable',url:'https://example.com/listing',adrMinor:12299};

@@ -50,10 +50,15 @@ Browser checks use an ignored localhost-only harness of the actual web workspace
 
 ## Remaining development and activation
 
+The internal editing, forecast, resource-candidate, operation-invoice and phone-only
+authentication contracts are now implemented. See
+`BACKEND-INTERNAL-CONTROLS-2026-10-06.md` for migration order, tests and the distinction
+between completed backend contracts and pending interface/provider acceptance.
+
 1. The existing backend Worker is deployed through the approved Git build connection. Install the new, locally tested `20261005172019_integration_foundation.sql` migration once Recharge database access is restored; the current connector/dashboard account cannot access that project. The existing hosted migrations remain unchanged.
 2. Photo evidence upload/viewing, notification email/push delivery and scoped reservation import adapters are now built and locally tested. See `BACKEND-STRUCTURE-2026-10-06.md` for endpoint contracts, flags, secrets and failure handling. Configure providers later, connect the pending upload controls, add deliberate scheduling, and verify actual imports/deliveries and native devices. Provider webhooks/automatic polling are not yet enabled or claimed tested. Do not put privileged keys in the native app or repository.
 3. Create verified real accounts and bootstrap Alex's approved owner address through the existing guarded administration process. Assign separate cleaner and cleaning-manager roles, then run cross-role acceptance tests. No role is granted by an email address alone.
-4. Finish the map renderer, estimate occupancy/direct-booking-mix calculator, resource-assignment pickers, reservation/local-event editing screens, restricted OTA details screen, and operation-specific invoice creation controls. Their stored-data/API foundations exist, but a tested API is not a finished user interface.
+4. Finish the map renderer, estimate calculator interface, resource-assignment pickers, reservation/local-event editing screens, restricted OTA details screen, and operation-specific invoice creation controls. Their stored-data/API foundations exist, but a tested API is not a finished user interface.
 5. Exercise the new native live screen on an actual iOS build and Android device after the backend origin is configured. Email/phone registration and avatar upload require their production services; the current native live sign-in explicitly gates those paths.
 6. The refreshed mobile audit confirms 20 high findings propagated from braces and node-forge advisories. Their current latest published versions are affected and no patched SDK-compatible release is available at this check. Root npm audit still resets; a direct root lockfile advisory lookup also reports braces. These remain unresolved. Do not apply the audit's incompatible Expo/React Native downgrade recommendation.
 

@@ -82,8 +82,14 @@ export async function businessWrite(request: Request, native = false) {
   } catch { return businessResponse({ error: "The workspace connection is temporarily unavailable" }, 503); }
 }
 export async function scopedPropertyDetails(client: SupabaseClient, input: unknown) {
-  const parsed = z.object({ propertyId: z.string().uuid(), section: z.enum(["access", "finance"]) }).strict().safeParse(input);
+  const parsed = z.object({ propertyId: z.string().uuid(), section: z.enum(["access", "ota", "finance"]) }).strict().safeParse(input);
   if (!parsed.success) return businessResponse({ error: "Check the property details" }, 400);
   const result = await client.rpc("workspace_property_details", { target_property: parsed.data.propertyId, section: parsed.data.section });
-  return result.error ? databaseFailure(result.error) : businessResponse({ data: result.data });
+  if (result.error) return databaseFailure(result.error);
+  const data = result.data || {};
+  // Keep the HTTP projection safe while a database migration is awaiting installation.
+  const exposed = parsed.data.section === 'access' ? { accessInstructions: data.accessInstructions || '' }
+    : parsed.data.section === 'ota' ? { otaInstructions: data.otaInstructions || '' }
+    : { managementFeeBps: data.managementFeeBps ?? null, paymentNotes: data.paymentNotes || '' };
+  return businessResponse({ data: exposed });
 }

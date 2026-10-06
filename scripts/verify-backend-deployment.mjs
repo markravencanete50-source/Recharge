@@ -39,6 +39,7 @@ const protectedPaths = [
   '/api/mobile/workspace', '/api/mobile/journeys',
   '/api/mobile/operations', '/api/mobile/portfolio', '/api/mobile/reports/export',
   '/api/workspace/integrations', '/api/mobile/integrations',
+  '/api/workspace/controls', '/api/mobile/controls',
   '/api/workspace/media', '/api/mobile/media',
 ];
 await Promise.all(protectedPaths.map(async path => {

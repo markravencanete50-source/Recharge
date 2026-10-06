@@ -3,7 +3,12 @@ export const LOCKOUT_SECONDS = 24 * 60 * 60;
 export const MAX_PASSWORD_FAILURES = 5;
 export const RECOVERY_COOKIE = "recharge-recovery-proof";
 export const emailSchema = z.string().trim().email().max(254).transform(value => value.toLowerCase());
-export const loginSchema = z.object({ email: emailSchema, password: z.string().min(1).max(1024) });
+export const phoneSchema = z.string().trim().regex(/^\+[1-9]\d{7,14}$/, 'Include your country code, for example +447123456789.');
+export const loginSchema = z.union([
+  z.object({ email: emailSchema, password: z.string().min(1).max(1024) }).strict(),
+  z.object({ phone: phoneSchema, password: z.string().min(1).max(1024) }).strict(),
+]);
+export function loginContact(input: z.infer<typeof loginSchema>) { return 'email' in input ? input.email : input.phone; }
 export const newPasswordSchema = z.object({ password: z.string().min(12).max(72).refine(value => new TextEncoder().encode(value).byteLength <= 72) });
 export const uuidSchema = z.string().uuid();
 export function isSameOrigin(request: Request, origin?: string): boolean {

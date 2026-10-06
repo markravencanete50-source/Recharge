@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { supabaseConfiguration, workspaceSupabase } from "@/lib/supabase-server";
 import { uuidSchema } from "@/lib/auth-security-policy";
 import { z } from "zod";
+import { confirmedContact } from './registration-policy';
 export function authSecurityConfiguration() {
   const config = supabaseConfiguration(); const settings = env as unknown as Record<string, string | undefined>;
   const key = settings.SUPABASE_SECRET_KEY || process.env.SUPABASE_SECRET_KEY;
@@ -45,7 +46,7 @@ export async function requestQuota(request: Request, scope: string, maximum: num
 export async function providerIdentity() {
   const client = await workspaceSupabase(); if (!client) return null;
   const { data: userData, error: userError } = await client.auth.getUser();
-  if (userError || !userData.user?.email || !userData.user.email_confirmed_at) return null;
+  if (userError || !userData.user || !confirmedContact(userData.user)) return null;
   const { data, error } = await client.auth.getClaims(); const id = uuidSchema.safeParse(data?.claims.session_id);
   if (error || !id.success || data?.claims.sub !== userData.user.id) return null;
   return { user: userData.user, sessionId: id.data };

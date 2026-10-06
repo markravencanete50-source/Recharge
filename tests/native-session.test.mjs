@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 import { fileURLToPath } from 'node:url';
 const root=fileURLToPath(new URL('..',import.meta.url)),state={};globalThis.__nativeAuthTest=state;
-const identity={user:{id:'11111111-1111-4111-8111-111111111111',email:'person@example.com'},sessionId:'22222222-2222-4222-8222-222222222222'};
+const identity={user:{id:'11111111-1111-4111-8111-111111111111',email:'person@example.com',email_confirmed_at:'2026-10-06'},sessionId:'22222222-2222-4222-8222-222222222222'};
 const mocks={
  '@/lib/auth-security':`const s=globalThis.__nativeAuthTest;export const authSecurityConfiguration=()=>s.config;export const requestQuota=async()=>s.quota;export const securityHash=async(scope,value)=>{s.hash=[scope,value];return 'a'.repeat(64)};export const passwordDecision=async(name,args)=>{s.calls.push([name,args]);return name.endsWith('begin_password')?s.begin:s.finish};`,
  '@/lib/native-session':`const s=globalThis.__nativeAuthTest;export const nativeIdentity=async()=>s.identity;export const nativeWorkspace=async()=>s.workspace;
@@ -31,6 +31,16 @@ test('unverified provider sessions never receive approved workspace tokens',asyn
 });
 test('guarded success returns only the required session and account with no-store caching',async()=>{
  reset();const response=await route.POST(request(login));assert.equal(response.status,200);const data=await response.json();assert.equal(data.session.accessToken,accessToken);assert.equal(data.session.refreshToken,refreshToken);assert.match(response.headers.get('cache-control'),/no-store/);assert.equal(response.headers.get('set-cookie'),null);assert.equal(data.account.status,'pending');assert.equal(state.calls[1][1].session_id,identity.sessionId);
+});
+
+test('phone login uses the same lockout and requires the submitted contact to be verified',async()=>{
+ reset();const phone='+447123456789';state.identity={...identity,user:{id:identity.user.id,phone:phone.slice(1),phone_confirmed_at:'2026-10-06'}};state.account.email=null;
+ const input={action:'loginPhone',phone,password:'synthetic-password'};
+ const response=await route.POST(request(input));assert.equal(response.status,200);assert.equal(state.hash[1],phone);assert.deepEqual(state.credentials,{phone,password:input.password});
+ reset();state.identity={...identity,user:{...identity.user,phone}};
+ assert.equal((await route.POST(request(input))).status,503);assert.equal(state.calls[1][1].outcome,'unavailable');
+ reset();state.begin={allowed:false,locked:true,retryAfter:86400};assert.equal((await route.POST(request(input))).status,429);assert.equal(state.signins,0);
+ for(const invalid of [{...input,phone:'07123456789'},{...input,email:'person@example.com'}]){reset();assert.equal((await route.POST(request(invalid))).status,400);assert.equal(state.signins,0);}
 });
 test('refresh cannot approve a token obtained by bypassing guarded sign-in',async()=>{
  reset();state.allowed=false;const response=await route.POST(request({action:'refresh',refreshToken}));assert.equal(response.status,401);assert.equal(state.signouts,1);assert.equal(state.calls.length,0);assert.ok(!(await response.text()).includes(accessToken));

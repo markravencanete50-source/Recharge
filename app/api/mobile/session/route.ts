@@ -4,6 +4,7 @@ import { boundedJson, securityHeaders } from "@/lib/auth-security-policy";
 import { isNativeRequest, nativeSessionSchema, bearerToken } from "@/lib/native-request-policy";
 import { nativeProvider, nativeIdentity, nativeWorkspace } from "@/lib/native-session";
 import { workspaceAccountSchema } from "@/lib/workspace-account-policy";
+import { confirmedContact } from '@/lib/registration-policy';
 
 function respond(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { ...securityHeaders, Vary: "Authorization" } });
@@ -46,12 +47,15 @@ export async function POST(request: Request) {
       if (account.error || !parsedAccount.success) { await client.auth.signOut({ scope: "local" }); return respond({ error: "Workspace connection unavailable" }, 503); }
       return respond({ session: sessionPayload(result.data.session), account: parsedAccount.data });
     }
-    subject = await securityHash("password-account", input.data.email); attempt = crypto.randomUUID();
+    const credentials = input.data.action === 'loginPhone' ? { phone: input.data.phone, password: input.data.password } : { email: input.data.email, password: input.data.password };
+    const address = input.data.action === 'loginPhone' ? input.data.phone : input.data.email;
+    subject = await securityHash("password-account", address); attempt = crypto.randomUUID();
     const begin = await passwordDecision("auth_server_begin_password", { subject_hash: subject, attempt_id: attempt });
     if (!begin.allowed) return limited(begin.retryAfter, begin.locked);
-    const result = await client.auth.signInWithPassword({ email: input.data.email, password: input.data.password });
+    const result = await client.auth.signInWithPassword(credentials);
     const token = result.data.session?.access_token;
-    const identity = !result.error && token ? await nativeIdentity(client, token) : null;
+    const candidate = !result.error && token ? await nativeIdentity(client, token) : null;
+    const identity = candidate && confirmedContact(candidate.user, input.data.action === 'loginPhone' ? 'phone' : 'email', address) ? candidate : null;
     const decision = await passwordDecision("auth_server_finish_password", { subject_hash: subject, attempt_id: attempt,
       outcome: identity ? "success" : result.error?.code === "invalid_credentials" ? "failure" : "unavailable",
       user_id: identity?.user.id || null, session_id: identity?.sessionId || null });
@@ -59,7 +63,7 @@ export async function POST(request: Request) {
     if (!identity || !decision.allowed || !result.data.session) {
       await client.auth.signOut({ scope: "local" });
       if (decision.locked) return limited(decision.retryAfter, true);
-      return respond({ error: result.error?.code === "invalid_credentials" ? "Check your email and password." : "Verify your email or try again later." }, result.error?.code === "invalid_credentials" ? 401 : 503);
+      return respond({ error: result.error?.code === "invalid_credentials" ? "Check your contact details and password." : "Verify your email or phone number, or try again later." }, result.error?.code === "invalid_credentials" ? 401 : 503);
     }
     const scoped = nativeProvider(token)!;
     const account = await scoped.rpc("workspace_account");

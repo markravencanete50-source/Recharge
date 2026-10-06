@@ -3,6 +3,7 @@ import { supabaseConfiguration } from "./supabase-server";
 import { bearerToken } from "./native-request-policy";
 import { uuidSchema } from "./auth-security-policy";
 import { workspaceAccountSchema } from "./workspace-account-policy";
+import { confirmedContact } from './registration-policy';
 export { workspaceAccountSchema } from "./workspace-account-policy";
 
 export function nativeProvider(accessToken?: string) {
@@ -17,7 +18,7 @@ export async function nativeIdentity(client: SupabaseClient, token: string) {
   const claimsResult = await client.auth.getClaims(token);
   const sessionId = uuidSchema.safeParse(claimsResult.data?.claims.session_id);
   const user = userResult.data.user;
-  if (userResult.error || claimsResult.error || !user?.email_confirmed_at || !user.email || !sessionId.success || claimsResult.data?.claims.sub !== user.id) return null;
+  if (userResult.error || claimsResult.error || !user || !confirmedContact(user) || !sessionId.success || claimsResult.data?.claims.sub !== user.id) return null;
   return { user, sessionId: sessionId.data };
 }
 export async function nativeWorkspace(request: Request) {

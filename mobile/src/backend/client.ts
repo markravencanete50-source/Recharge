@@ -7,6 +7,7 @@ import type { AnalyticsPeriod } from "../../../lib/analytics";
 import type { JourneyAction } from "../../../lib/journey-policy";
 import type { OperationsAction } from "../../../lib/operations-policy";
 import type { PortfolioAction } from "../../../lib/portfolio-policy";
+import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -33,10 +34,11 @@ async function call(path: string, body?: unknown, accessToken?: string) {
   if (!origin) throw new WorkspaceApiError("The live mobile backend is awaiting configuration.", 503);
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 15000);
   try {
+    const multipart = body instanceof FormData;
     const response = await fetch(origin + path, {
       method: body === undefined ? "GET" : "POST", credentials: "omit", redirect: "error", signal: controller.signal,
-      headers: { "X-Recharge-Client": "native", ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      headers: { "X-Recharge-Client": "native", ...(body === undefined || multipart ? {} : { "Content-Type": "application/json" }), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+      ...(body === undefined ? {} : { body: multipart ? body : JSON.stringify(body) }),
     });
     if (!response.ok) {
       const error = z.object({ error: z.string().max(500).optional() }).safeParse(await response.json().catch(() => ({})));
@@ -59,7 +61,8 @@ async function saveSession(value: unknown) {
   return parsed.account;
 }
 export async function signIn(email: string, password: string) {
-  const response = await call("/api/mobile/session", { action: "login", email, password });
+  const contact = email.trim();
+  const response = await call("/api/mobile/session", contact.startsWith('+') ? { action: "loginPhone", phone: contact, password } : { action: "login", email: contact, password });
   return saveSession(await response.json());
 }
 async function refresh() {
@@ -77,8 +80,8 @@ async function refresh() {
   })().finally(() => { refreshInFlight = null; });
   return refreshInFlight;
 }
-export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown>) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
 }
@@ -97,3 +100,14 @@ export const readOperations = async (propertyId?:string) => (await workspaceRequ
 export const writeOperation = async (action:OperationsAction) => (await workspaceRequest('/api/mobile/operations',action)).json();
 export const readPortfolio = async (query:Record<string,string>={}) => (await workspaceRequest('/api/mobile/portfolio?'+new URLSearchParams(query))).json();
 export const writePortfolio = async (action:PortfolioAction) => (await workspaceRequest('/api/mobile/portfolio',action)).json();
+export const readControls = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/controls?'+new URLSearchParams(query))).json();
+export const writeControls = async (action: ControlsAction) => (await workspaceRequest('/api/mobile/controls',action)).json();
+export const requestPhoneReset = async (phone: string) => (await call('/api/mobile/recovery',{action:'request',phone})).json();
+export const completePhoneReset = async (phone: string, code: string, password: string) => (await call('/api/mobile/recovery',{action:'verify',phone,code,password})).json();
+export async function uploadWorkPhoto(input: {requestId: string;workId: string;purpose: 'cleaning'|'mailbox'|'delivery'|'licence'|'maintenance'}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
+  const form = new FormData();
+  form.append('requestId', input.requestId); form.append('workId', input.workId); form.append('purpose', input.purpose);
+  // React Native's multipart transport accepts a local file descriptor. The server verifies bytes, size and permission.
+  form.append('photo', photo as unknown as Blob);
+  return (await workspaceRequest('/api/mobile/media', form)).json();
+}

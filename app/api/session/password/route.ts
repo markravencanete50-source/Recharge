@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     if (!body.success) return NextResponse.json({ error: "Use at least 12 characters, with a maximum of 72 UTF-8 bytes." }, { status: 400, headers: securityHeaders });
     const token = uuidSchema.safeParse((await cookies()).get(RECOVERY_COOKIE)?.value);
     const identity = await providerIdentity(); const client = await workspaceSupabase();
-    if (!token.success || !identity || !client) return denied();
+    if (!token.success || !identity?.user.email || !identity.user.email_confirmed_at || !client) return denied();
     recovery = { proofHash: await securityHash("recovery-proof", token.data), userId: identity.user.id, sessionId: identity.sessionId, phase: "begin", leaseId: crypto.randomUUID() };
     if (!await recoveryPhase(recovery)) return denied();
     const { error } = await client.auth.updateUser({ password: body.data.password });

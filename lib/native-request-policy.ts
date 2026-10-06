@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { emailSchema } from "./auth-security-policy";
+import { emailSchema, phoneSchema } from "./auth-security-policy";
 
 const token = z.string().min(20).max(8192).regex(/^[A-Za-z0-9_.-]+$/);
 export const nativeSessionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("login"), email: emailSchema, password: z.string().min(1).max(1024) }).strict(),
+  z.object({ action: z.literal("loginPhone"), phone: phoneSchema, password: z.string().min(1).max(1024) }).strict(),
   z.object({ action: z.literal("refresh"), refreshToken: token }).strict(),
   z.object({ action: z.literal("logout") }).strict(),
 ]);

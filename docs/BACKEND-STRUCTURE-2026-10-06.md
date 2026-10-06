@@ -1,5 +1,9 @@
 # Integration structure, 6 October 2026
 
+See [Internal backend controls](BACKEND-INTERNAL-CONTROLS-2026-10-06.md) for the
+subsequent editing, invoice, estimate, assignment, restricted-field and phone
+authentication release, including migration installation order and remaining work.
+
 This release adds provider adapters and database contracts alongside the existing
 property journey, operation, invoice, portfolio, report and access APIs. It does
 not enable external services or import preview records. The Communication Centre

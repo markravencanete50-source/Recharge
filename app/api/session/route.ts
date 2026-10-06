@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { workspaceSupabase } from "@/lib/supabase-server";
 import { authSecurityConfiguration, passwordDecision, providerIdentity, requestQuota, securityHash } from "@/lib/auth-security";
-import { boundedJson, isSameOrigin, loginSchema, securityHeaders } from "@/lib/auth-security-policy";
+import { boundedJson, isSameOrigin, loginSchema, loginContact, securityHeaders } from "@/lib/auth-security-policy";
+import { confirmedContact } from '@/lib/registration-policy';
 export async function POST(request: Request) {
   const config = authSecurityConfiguration();
   if (!isSameOrigin(request, config?.origin)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403, headers: securityHeaders });
@@ -13,11 +14,12 @@ export async function POST(request: Request) {
     if (!quota.allowed) return limited(quota.retryAfter);
     const body = loginSchema.safeParse(await boundedJson(request));
     if (!body.success || !client) return NextResponse.json({ error: "Check your sign-in details" }, { status: 400, headers: securityHeaders });
-    subject = await securityHash("password-account", body.data.email); attempt = crypto.randomUUID();
+    subject = await securityHash("password-account", loginContact(body.data)); attempt = crypto.randomUUID();
     const begin = await passwordDecision("auth_server_begin_password", { subject_hash: subject, attempt_id: attempt });
     if (!begin.allowed) return limited(begin.retryAfter, begin.locked);
     const { error } = await client.auth.signInWithPassword(body.data);
-    const identity = error ? null : await providerIdentity();
+    const candidate = error ? null : await providerIdentity();
+    const identity = candidate && confirmedContact(candidate.user, 'phone' in body.data ? 'phone' : 'email', loginContact(body.data)) ? candidate : null;
     const finish = await passwordDecision("auth_server_finish_password", { subject_hash: subject, attempt_id: attempt,
       outcome: identity ? "success" : error?.code === "invalid_credentials" ? "failure" : "unavailable",
       user_id: identity?.user.id || null, session_id: identity?.sessionId || null });
@@ -25,7 +27,7 @@ export async function POST(request: Request) {
     if (!identity || !finish.allowed) {
       if (identity) await client.auth.signOut({ scope: "local" });
       if (finish.locked) return limited(finish.retryAfter, true);
-      return NextResponse.json({ error: error?.code === "invalid_credentials" ? "Sign-in failed. Check your email and password." : "Sign-in failed. Check your account verification or try again later." }, { status: error?.code === "invalid_credentials" ? 401 : 503, headers: securityHeaders });
+      return NextResponse.json({ error: error?.code === "invalid_credentials" ? "Sign-in failed. Check your contact details and password." : "Sign-in failed. Check your account verification or try again later." }, { status: error?.code === "invalid_credentials" ? 401 : 503, headers: securityHeaders });
     }
     return NextResponse.json({ ok: true }, { headers: securityHeaders });
   } catch {

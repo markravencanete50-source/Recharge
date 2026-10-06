@@ -111,8 +111,8 @@ test('thread and message retries remain unique and cross-owner messaging is deni
  await as(owner);assert.equal((await db.query('select count(*)::int n from public.workspace_messages')).rows[0].n,1);
 });
 test('restricted property fields are absent from ordinary rows and cleaner access expires after submission',async()=>{
- await as(owner);await db.query('select public.workspace_save_property_details($1,$2,$3,$4)',[p2,1,'access',JSON.stringify({accessInstructions:'Synthetic access code',otaInstructions:'Synthetic staff-only OTA notes'})]);
- await assert.rejects(db.query('select public.workspace_save_property_details($1,$2,$3,$4)',[p2,1,'access','{}']),/Record changed/);
+ await as(owner);await db.query('select public.workspace_save_property_details($1,$2,$3,$4)',[p2,1,'access',JSON.stringify({accessInstructions:'Synthetic access code'})]);
+ await assert.rejects(db.query('select public.workspace_save_property_details($1,$2,$3,$4)',[p2,1,'access','{}']),/Property changed/);
  await as(otherCleaner);const details=(await db.query('select public.workspace_property_details($1,$2) data',[p2,'access'])).rows[0].data;
  assert.deepEqual(details,{accessInstructions:'Synthetic access code'});
  await assert.rejects(db.query('select public.workspace_property_details($1,$2)',[p1,'access']),/Property access denied/);

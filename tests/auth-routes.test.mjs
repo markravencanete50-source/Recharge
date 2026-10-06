@@ -6,7 +6,7 @@ import { NextRequest } from 'next/server.js';
 
 const root=fileURLToPath(new URL('..',import.meta.url));
 const state={}; globalThis.__rechargeSecurityTest=state;
-const user={id:'11111111-1111-4111-8111-111111111111',email:'staff@example.com'};
+const user={id:'11111111-1111-4111-8111-111111111111',email:'staff@example.com',email_confirmed_at:'2026-10-06'};
 const identity={user,sessionId:'22222222-2222-4222-8222-222222222222'};
 const mocks={
   '@/lib/auth-security': `const s=globalThis.__rechargeSecurityTest;

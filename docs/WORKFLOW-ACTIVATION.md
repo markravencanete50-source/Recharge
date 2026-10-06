@@ -67,6 +67,13 @@ No credentials are needed to continue the pending local interface work. Producti
 
 ## Integration structure release, 6 October 2026
 
+The subsequent internal-controls release also requires
+`20261006021530_backend_internal_controls.sql` and
+`20261006022727_verified_phone_sessions.sql`, after the integration migration.
+Read `BACKEND-INTERNAL-CONTROLS-2026-10-06.md` for API contracts, SMS reset gates,
+compatibility protection and precise verification limits. None of these three
+pending migrations is installed in the inaccessible hosted Recharge project.
+
 Read `BACKEND-STRUCTURE-2026-10-06.md` before enabling external services. The new
 integration migration is locally tested but cannot be installed from the currently
 connected Supabase account: both the connector and dashboard deny access to the

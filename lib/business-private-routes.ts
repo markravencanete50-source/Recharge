@@ -9,7 +9,8 @@ const deviceSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("unregister"), deviceId: z.string().uuid() }).strict(),
 ]);
 const propertyDetailsSchema = z.discriminatedUnion("section", [
-  z.object({ propertyId: z.string().uuid(), version: z.number().int().positive(), section: z.literal("access"), input: z.object({ accessInstructions: z.string().max(5000), otaInstructions: z.string().max(5000) }).strict() }).strict(),
+  z.object({ propertyId: z.string().uuid(), version: z.number().int().positive(), section: z.literal("access"), input: z.object({ accessInstructions: z.string().max(5000) }).strict() }).strict(),
+  z.object({ propertyId: z.string().uuid(), version: z.number().int().positive(), section: z.literal("ota"), input: z.object({ otaInstructions: z.string().max(5000) }).strict() }).strict(),
   z.object({ propertyId: z.string().uuid(), version: z.number().int().positive(), section: z.literal("finance"), input: z.object({ managementFeeBps: z.number().int().min(0).max(10000).nullable(), paymentNotes: z.string().max(5000) }).strict() }).strict(),
 ]);
 export async function deviceWrite(request: Request) {
@@ -17,6 +18,7 @@ export async function deviceWrite(request: Request) {
   try {
     const session = await businessContext(request, true);
     if (!session) return businessResponse({ error: "Sign in required" }, 401);
+    if (session.account.status !== 'active') return businessResponse({ error: 'Active workspace access required' }, 403);
     const quota = await requestQuota(request, "device-user", 10, 60, session.account.userId);
     if (!quota.allowed) return businessResponse({ error: "Too many device updates" }, 429);
     const input = deviceSchema.safeParse(await boundedJson(request));
@@ -30,7 +32,11 @@ export async function propertyDetails(request: Request, native = false) {
   try {
     const session = await businessContext(request, native);
     if (!session) return businessResponse({ error: "Sign in required" }, 401);
+    if (session.account.status !== 'active') return businessResponse({ error: 'Active workspace access required' }, 403);
     if (request.method === "GET") return scopedPropertyDetails(session.client, Object.fromEntries(new URL(request.url).searchParams));
+    // The old SQL access writer also cleared OTA fields. Require the separated-field migration before writing.
+    const capability = await session.client.rpc('workspace_controls_version');
+    if (capability.error || capability.data !== 1) return businessResponse({ error: 'Property detail updates are awaiting the database upgrade' }, 503);
     const quota = await requestQuota(request, "property-details-user", 20, 60, session.account.userId);
     if (!quota.allowed) return businessResponse({ error: "Too many property updates" }, 429);
     const input = propertyDetailsSchema.safeParse(await boundedJson(request));

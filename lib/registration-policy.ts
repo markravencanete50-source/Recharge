@@ -1,13 +1,7 @@
 import { z } from "zod";
-import { emailSchema, newPasswordSchema } from "./auth-security-policy";
+import { emailSchema, newPasswordSchema, phoneSchema } from "./auth-security-policy";
 
-export const phoneSchema = z
-  .string()
-  .trim()
-  .regex(
-    /^\+[1-9]\d{7,14}$/,
-    "Include your country code, for example +447123456789.",
-  );
+export { phoneSchema };
 export const avatarIds = [
   "forest",
   "sage",
@@ -79,9 +73,10 @@ export function confirmedContact(
   address?: string,
 ) {
   const email = Boolean(user.email && user.email_confirmed_at);
-  const phone = Boolean(user.phone && user.phone_confirmed_at);
+  const phone = Boolean(user.phone && /^\+?[1-9]\d{7,14}$/.test(user.phone) && user.phone_confirmed_at);
   if (!method) return email || phone;
   return method === "email"
     ? email && user.email?.toLowerCase() === address
-    : phone && user.phone === address;
+    // Supabase Auth stores the canonical number without its leading +.
+    : phone && user.phone?.replace(/^\+/, '') === address?.replace(/^\+/, '');
 }
