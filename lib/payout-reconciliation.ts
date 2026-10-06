@@ -56,14 +56,17 @@ export function readPayoutReport(text: string): { rows: PayoutRow[]; source: Pay
   const amountIndex = AMOUNT_HEADERS.map(name => headers.indexOf(name)).find(index => index >= 0) ?? -1;
   if (codeIndex < 0 || amountIndex < 0) return { rows: [], source: "Unknown", error: "Could not find the reservation code and amount columns." };
   const source: PayoutRow["source"] = headers.includes("confirmation code") ? "Airbnb" : headers.includes("reservation number") ? "Booking.com" : "Unknown";
-  const totals = new Map<string, number>();
+  // Codes are case-insensitive; the first spelling seen is kept for display.
+  const totals = new Map<string, { code: string; amountMinor: number }>();
   for (const line of table.slice(1)) {
     const code = (line[codeIndex] ?? "").trim();
     const amount = parseMoneyMinor(line[amountIndex] ?? "");
     if (!code || amount === null) continue;
-    totals.set(code, (totals.get(code) ?? 0) + amount);
+    const entry = totals.get(code.toUpperCase()) ?? { code, amountMinor: 0 };
+    entry.amountMinor += amount;
+    totals.set(code.toUpperCase(), entry);
   }
-  return { rows: [...totals].map(([code, amountMinor]) => ({ code, amountMinor, source })), source };
+  return { rows: [...totals.values()].map(({ code, amountMinor }) => ({ code, amountMinor, source })), source };
 }
 
 export function reconcile(expected: ExpectedPayout[], received: PayoutRow[], tolerancePence = 0): MatchRow[] {

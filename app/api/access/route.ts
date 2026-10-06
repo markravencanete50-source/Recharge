@@ -10,7 +10,7 @@ const accessSchema = z.object({
   email: z.string().trim().email().max(254),
   fullName: z.string().trim().min(2).max(120),
   responsibilities: z.string().trim().max(5000).default(""),
-  role: z.enum(["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "client"]),
+  role: z.enum(["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts", "client"]),
   status: z.enum(["active", "pending", "revoked"]),
   modules: z.array(z.enum(MODULE_IDS)),
 });

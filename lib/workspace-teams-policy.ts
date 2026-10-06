@@ -1,0 +1,41 @@
+import { z } from 'zod';
+import { parseAnalyticsDate } from './analytics';
+
+const id = z.string().uuid();
+const version = z.number().int().positive();
+const date = z.string().refine(value => Boolean(parseAnalyticsDate(value)), 'Choose a valid date');
+const text = (min: number, max: number) => z.string().trim().min(min).max(max);
+const note = text(5, 2000);
+const https = z.string().url().max(1000).refine(value => {
+  const url = new URL(value);
+  return url.protocol === 'https:' && !url.username && !url.password;
+}, 'Use a public HTTPS link');
+
+export const teamsReadSchema = z.object({
+  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training']),
+  from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
+}).strict().superRefine((value, context) => {
+  if (value.section === 'schedule') {
+    if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the schedule dates' });
+    else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
+  }
+});
+
+export const teamsActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('decideComplaint'), requestId: id, workId: id, version, outcome: z.enum(['upheld', 'overturned']), note }).strict(),
+  z.object({ action: z.literal('decideCleanerReview'), requestId: id, workId: id, version, outcome: z.enum(['no_action', 'supervised', 'removed_from_rota']), note }).strict(),
+  z.object({ action: z.literal('addCleanerStatement'), requestId: id, workId: id, statement: text(10, 2000) }).strict(),
+  z.object({ action: z.literal('saveRoutinePlan'), requestId: id, planId: id.optional(), version: version.optional(), propertyId: id,
+    moduleId: z.enum(['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']), title: text(2, 200),
+    checklist: z.array(text(1, 200)).min(1).max(30), frequency: z.enum(['monthly', 'quarterly']), dayOfMonth: z.number().int().min(1).max(28),
+    assigneeId: id.nullable().optional(), active: z.boolean() }).strict(),
+  z.object({ action: z.literal('generateRoutineVisits'), requestId: id, period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Choose a month') }).strict(),
+  z.object({ action: z.literal('saveCourse'), requestId: id, courseId: id.optional(), version: version.optional(), title: text(2, 200),
+    audience: z.array(z.enum(['all', 'super_admin', 'admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts', 'client'])).min(1).max(9),
+    summary: z.string().trim().max(1000).optional(), body: text(10, 50000), videoUrl: https.optional(), minutes: z.number().int().min(1).max(600), published: z.boolean() }).strict(),
+  z.object({ action: z.literal('completeCourse'), requestId: id, courseId: id }).strict(),
+]).superRefine((value, context) => {
+  if (value.action === 'saveRoutinePlan' && Boolean(value.planId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a plan needs its current version' });
+  if (value.action === 'saveCourse' && Boolean(value.courseId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a course needs its current version' });
+});
+export type TeamsAction = z.infer<typeof teamsActionSchema>;

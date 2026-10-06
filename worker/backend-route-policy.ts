@@ -14,6 +14,8 @@ const endpoints = new Set([
   "/api/session/phone-recovery", "/api/mobile/recovery",
   "/api/workspace/integrations", "/api/mobile/integrations",
   "/api/workspace/media", "/api/mobile/media",
+  "/api/workspace/finance", "/api/mobile/finance",
+  "/api/workspace/teams", "/api/mobile/teams",
   "/workspace", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);
 export function backendRouteAllowed(path: string) {
