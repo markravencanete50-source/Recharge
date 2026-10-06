@@ -501,7 +501,8 @@ function AppContent() {
         >
           <StatusBar style={theme === "dark" ? "light" : "dark"} />
           <View style={[ui.fill,{flexDirection:"row"}]}>
-          {desktop&&!sidebarHidden&&<DesktopNavigation role={role} section={tab} palette={p} onNavigate={setTab} onProfile={()=>setSettings(true)} onDepartment={(department)=>{setSearch("");setDepartment(department);setSavedOnly(false);setTab("workspace");}}/>}
+          {desktop&&!sidebarHidden&&<DesktopNavigation role={role} section={tab} palette={p} onNavigate={setTab} onProfile={()=>setSettings(true)} onCollapse={()=>setSidebarHidden(true)} onDepartment={(department)=>{setSearch("");setDepartment(department);setSavedOnly(false);setTab("workspace");}}/>}
+          {desktop&&sidebarHidden&&<View testID="workspace-sidebar-collapsed" style={{width:64,backgroundColor:p.isDark?p.surface:p.background,borderRightWidth:1,borderColor:p.border}}><View style={{height:81,alignItems:"center",justifyContent:"center",backgroundColor:p.header}}><IconButton label="Show left panel" icon="chevrons-right" palette={headerPalette(p)} expanded={false} onPress={()=>setSidebarHidden(false)}/></View></View>}
           <View style={[ui.fill,{minWidth:0}]}>
           {offline&&<View accessibilityRole="alert" style={{backgroundColor:p.cautionWash,padding:12}}><Text style={[ui.small,{color:p.text}]}>You are offline. The sample workspace remains available. Live requests may fail until you reconnect.</Text></View>}
           <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth:1, borderColor:scrolled?p.headerBorder:'transparent' }}>
@@ -519,9 +520,8 @@ function AppContent() {
               ]}
             >
               <View style={[ui.row,{flex:1,minWidth:0,gap:16}]}>
-                  {desktop&&<IconButton label={sidebarHidden?"Show left panel":"Hide left panel"} icon="sidebar" palette={headerPalette(p)} expanded={!sidebarHidden} onPress={()=>setSidebarHidden(hidden=>!hidden)}/>}
-                  {desktop&&sidebarHidden&&<CompanyLogo palette={headerPalette(p)} variant="dark" width={144}/>}
-                  {desktop?<Text style={{color:p.headerText,fontSize:16,fontWeight:"600",flexShrink:1}}>{navigationFor(role).find(item=>item.value===tab)?.label??(tab==="workspace"?"Tools":tab==="analytics"?"Reports":tab.charAt(0).toUpperCase()+tab.slice(1))}</Text>:<CompanyLogo palette={headerPalette(p)} variant="dark" width={windowWidth<360?104:144}/>}
+                  {desktop&&sidebarHidden&&<CompanyLogo palette={headerPalette(p)} width={144}/>}
+                  {desktop?<Text style={{color:p.headerText,fontSize:16,fontWeight:"600",flexShrink:1}}>{navigationFor(role).find(item=>item.value===tab)?.label??(tab==="workspace"?"Tools":tab==="analytics"?"Reports":tab.charAt(0).toUpperCase()+tab.slice(1))}</Text>:<CompanyLogo palette={headerPalette(p)} width={windowWidth<360?104:144}/>}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 <IconButton label="Open quick search" icon="search" palette={headerPalette(p)} onPress={()=>setCommandOpen(true)}/>
@@ -543,7 +543,7 @@ function AppContent() {
                     justifyContent: "center",
                   }}
                 >
-                  <Avatar profile={profile} backgroundColor={p.headerControl}/>
+                  <Avatar profile={profile} backgroundColor={p.headerControl} textColor={p.headerControlText}/>
                   {data.waiting > 0 && (
                     <View
                       accessible

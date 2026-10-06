@@ -211,6 +211,7 @@ html.dark * { scrollbar-width: thin; scrollbar-color: #607c6a transparent; }
 .workspace-header-scrolled {box-shadow:0 6px 20px var(--rc-shadow)}
 .workspace-avatar {background:var(--rc-primary);color:var(--rc-onPrimary)}
 /* Branding and header controls follow the selected theme. */
+.recharge-workspace .sidebar-brand{background:var(--rc-header)}
 .recharge-logo-dark{display:none}
 .dark .recharge-logo-light,[data-recharge-theme="dark"] .recharge-logo-light{display:none}
 .dark .recharge-logo-dark,[data-recharge-theme="dark"] .recharge-logo-dark{display:block}

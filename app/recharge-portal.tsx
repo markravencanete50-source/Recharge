@@ -503,7 +503,7 @@ export function RechargePortal({
             }
           >
             <span>
-              <CompanyLogo width={157} variant="dark"/>
+              <CompanyLogo width={157}/>
               <span className="mt-2 block text-[0.62rem] font-semibold uppercase tracking-[0.28em] text-white/45">
                 Workspace
               </span>

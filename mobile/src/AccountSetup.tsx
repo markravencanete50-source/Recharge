@@ -42,10 +42,12 @@ export function Avatar({
   profile,
   size = 44,
   backgroundColor,
+  textColor = "#ffffff",
 }: {
   profile: Profile;
   size?: number;
   backgroundColor?: string;
+  textColor?: string;
 }) {
   return (
     <View
@@ -59,7 +61,7 @@ export function Avatar({
       }}
     >
       <Text
-        style={{ color: "#ffffff", fontWeight: "700", fontSize: size * 0.3 }}
+        style={{ color: textColor, fontWeight: "700", fontSize: size * 0.3 }}
       >
         {initials(profile.displayName)}
       </Text>
