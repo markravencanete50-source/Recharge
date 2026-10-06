@@ -317,14 +317,11 @@ export function Calendar({
           accessibilityRole="button"
           accessibilityLabel="Previous month"
           onPress={() => moveMonth(-1)}
-          style={[
-            ui.iconButton,
-            { backgroundColor: p.wash, borderColor: p.border },
-          ]}
+          style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
         >
-          <Feather name="chevron-left" size={20} color={p.text} />
+          <Feather name="chevron-left" size={18} color={p.text} />
         </Pressable>
-        <Text style={{ fontSize: 16, fontWeight: "600", color: p.text }}>
+        <Text style={{ fontSize: 16, fontWeight: "700", letterSpacing: -0.3, color: p.text }}>
           {new Date(`${month}-15T12:00:00Z`).toLocaleDateString("en-GB", {
             month: "long",
             year: "numeric",
@@ -335,12 +332,9 @@ export function Calendar({
           accessibilityRole="button"
           accessibilityLabel="Next month"
           onPress={() => moveMonth(1)}
-          style={[
-            ui.iconButton,
-            { backgroundColor: p.wash, borderColor: p.border },
-          ]}
+          style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
         >
-          <Feather name="chevron-right" size={20} color={p.text} />
+          <Feather name="chevron-right" size={18} color={p.text} />
         </Pressable>
       </View>
       <View style={ui.row}>
@@ -350,7 +344,9 @@ export function Calendar({
             style={{
               width: "14.2857%",
               textAlign: "center",
-              fontSize: 13,
+              fontSize: 11,
+              fontWeight: "600",
+              letterSpacing: 1,
               color: p.muted,
               paddingVertical: 8,
             }}
@@ -360,7 +356,8 @@ export function Calendar({
         ))}
       </View>
       <View onLayout={event=>setGridWidth(event.nativeEvent.layout.width)} style={{ flexDirection: "row", flexWrap: "wrap" }}>
-        <SlidingPill x={Math.max(0,selectedCell)%7*gridWidth/7} y={Math.floor(Math.max(0,selectedCell)/7)*48} width={gridWidth/7} height={48} color={p.primary} visible={selectedCell>=0}/>
+        {/* A day-sized circle, centred in its cell, rather than a cell-wide bar. */}
+        <SlidingPill x={Math.max(0,selectedCell)%7*gridWidth/7+(gridWidth/7-44)/2} y={Math.floor(Math.max(0,selectedCell)/7)*48+2} width={44} height={44} color={p.primary} visible={selectedCell>=0&&gridWidth>0}/>
         {calendarCells(month).map((day, index) => (
           <View
             key={day || `blank-${index}`}
@@ -373,14 +370,17 @@ export function Calendar({
                 accessibilityState={{ selected: selected === day }}
                 onPress={() => onSelect(day)}
                 style={{
-                  flex: 1,
+                  width: 44,
+                  height: 44,
+                  marginTop: 2,
+                  alignSelf: "center",
                   alignItems: "center",
                   justifyContent: "center",
-                  borderRadius: 999,
-                  borderWidth:day===presetPeriod(1).to?2:0,
+                  borderRadius: 22,
+                  borderWidth:day===presetPeriod(1).to&&selected!==day?1.5:0,
                   borderColor:p.primary,
                   backgroundColor: "transparent",
-                  gap: 3,
+                  gap: 2,
                 }}
               >
                 <Text
@@ -971,10 +971,8 @@ export function WorkspaceScreens({
                 {
                   gap: 12,
                   paddingHorizontal: 20,
-                  paddingVertical: 8,
-                  borderBottomWidth: 1,
-                  borderColor: p.border,
-                  backgroundColor: p.surface,
+                  paddingVertical: 12,
+                  backgroundColor: p.header,
                 },
               ]}
             >
@@ -984,39 +982,52 @@ export function WorkspaceScreens({
                 onPress={() => setSelectedProperty(null)}
                 style={[
                   ui.iconButton,
-                  { backgroundColor: p.wash, borderColor: p.border },
+                  { backgroundColor: p.headerControl, borderColor: p.headerBorder },
                 ]}
               >
-                <Feather name="arrow-left" size={22} color={p.text} />
+                <Feather name="arrow-left" size={20} color={p.headerControlText} />
               </Pressable>
-              <Text style={[ui.sectionTitle, { color: p.text, flex: 1 }]}>
+              <Text style={[ui.sectionTitle, { color: p.headerText, flex: 1 }]}>
                 Property overview
               </Text>
             </View>
             <ScrollView contentContainerStyle={ui.page}>
               {selectedProperty ? (
                 <>
-                  {heading(
-                    selectedProperty.propertyName,
-                    selectedProperty.region,
-                  )}
-                  <View style={[ui.card, card]}>
-                    <Text style={[ui.sectionTitle, { color: p.text }]}>
-                      Property details
-                    </Text>
-                    <Text style={[ui.body, { color: p.muted }]}>
-                      {selectedProperty.propertyAddress}
-                    </Text>
-                    <Text style={[ui.body, { color: p.text }]}>
-                      {selectedProperty.bedrooms} bedrooms,{" "}
-                      {selectedProperty.bathrooms}{" "}
-                      {Number(selectedProperty.bathrooms) === 1
-                        ? "bathroom"
-                        : "bathrooms"}
-                    </Text>
-                    <Text style={[ui.small, { color: p.muted }]}>
-                      Status: {selectedProperty.status}
-                    </Text>
+                  <Entrance sessionKey={"property:"+selectedProperty.id} style={{ borderRadius: 28, overflow: "hidden", borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
+                    <View style={{ minHeight: 180, alignItems: "center", justifyContent: "center", backgroundColor: departmentColor(properties.indexOf(selectedProperty) % 2 ? "clients" : "stays", p).wash }}>
+                      <PropertyScene palette={p} variant={Math.max(0, properties.indexOf(selectedProperty))} />
+                      <View style={{ position: "absolute", left: 16, top: 16, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: p.surface }}>
+                        <Feather name={selectedProperty.status === "live" ? "check-circle" : "clock"} size={14} color={selectedProperty.status === "live" ? p.success : p.waiting} />
+                        <Text style={[ui.small, { color: p.text, fontWeight: "600", textTransform: "capitalize" }]}>{selectedProperty.status.replaceAll("_", " ")}</Text>
+                      </View>
+                    </View>
+                    <View style={{ padding: 20, gap: 6 }}>
+                      <Text accessibilityRole="header" style={[ui.title, { color: p.text, fontSize: 28, lineHeight: 34 }]}>{selectedProperty.propertyName}</Text>
+                      <View style={[ui.row, { gap: 7 }]}>
+                        <Feather name="map-pin" size={15} color={p.muted} />
+                        <Text style={[ui.body, { color: p.muted, flex: 1 }]}>{selectedProperty.region}</Text>
+                      </View>
+                    </View>
+                  </Entrance>
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    {([
+                      ["moon", "Bedrooms", String(selectedProperty.bedrooms)],
+                      ["droplet", "Bathrooms", String(selectedProperty.bathrooms)],
+                    ] as const).map(([icon, label, value]) => (
+                      <View key={label} style={[ui.card, card, { flex: 1, gap: 8, padding: 16 }]}>
+                        <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name={icon} size={16} color={p.primary} /></View>
+                        <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.8, color: p.text }}>{value}</Text>
+                        <Text style={[ui.small, { color: p.muted }]}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={[ui.card, card, { flexDirection: "row", alignItems: "center", gap: 12 }]}>
+                    <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name="map" size={16} color={p.primary} /></View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "600", letterSpacing: 1.2, textTransform: "uppercase", color: p.muted }}>Address</Text>
+                      <Text style={[ui.body, { color: p.text }]}>{selectedProperty.propertyAddress}</Text>
+                    </View>
                   </View>
                   <View style={[ui.card, card, { paddingVertical: 6, gap: 0 }]}>
                     <LinkRow

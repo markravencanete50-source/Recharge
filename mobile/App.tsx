@@ -36,7 +36,8 @@ import { FilterBar } from "./src/FilterBar";
 import { StateGraphic } from "./src/StateGraphic";
 import { Reports } from "./src/Reports";
 import { DesktopNavigation } from "./src/DesktopNavigation";
-import { themes, headerPalette, ui, type Palette } from "./src/theme";
+import { themes, headerPalette, departmentColor, ui, type Palette } from "./src/theme";
+import { DEPARTMENTS } from "./src/DepartmentGrid";
 import { WorkspaceScreens, Calendar } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
 import { CommandSearch } from "./src/CommandSearch";
@@ -51,7 +52,7 @@ import {
   usePreviewBookmarks,
   useThemePreference,
 } from "./src/usePreviewPreferences";
-import { navigationFor, type WorkspaceSection } from "../lib/workspace-map";
+import { navigationFor, WORKSPACE_MAP, type WorkspaceSection } from "../lib/workspace-map";
 import {
   MotionPress as Pressable,
   MotionProvider,
@@ -148,12 +149,16 @@ function Sheet({
   visible,
   onClose,
   title,
+  subtitle,
+  icon,
   palette: p,
   children,
 }: {
   visible: boolean;
   onClose: () => void;
   title: string;
+  subtitle?: string;
+  icon?: IconName;
   palette: Palette;
   children: ReactNode;
 }) {
@@ -204,7 +209,7 @@ function Sheet({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={[ui.modalOverlay, { backgroundColor: p.overlay, justifyContent:desktop?"center":"flex-end", alignItems:desktop?"center":undefined }]}>
+      <View {...(Platform.OS==="web"?{dataSet:{overlay:"blur"}}:{})} style={[ui.modalOverlay, { backgroundColor: p.overlay, justifyContent:desktop?"center":"flex-end", alignItems:desktop?"center":undefined }]}>
         <NativePressable
           accessibilityRole="button"
           accessibilityLabel={`Dismiss ${title}`}
@@ -226,39 +231,55 @@ function Sheet({
               edges={["bottom"]}
               style={[
                 ui.modalSheet,
-                { backgroundColor: p.surface, maxHeight: height * 0.9, borderRadius:desktop?28:undefined },
+                {
+                  backgroundColor: p.surface,
+                  maxHeight: height * 0.9,
+                  borderRadius: desktop ? 30 : undefined,
+                  borderWidth: desktop ? 1 : 0,
+                  borderColor: p.border,
+                  ...(Platform.OS === "web" ? { boxShadow: "0 40px 100px -30px rgba(8, 22, 18, 0.55)" } : {}),
+                },
               ]}
               accessibilityViewIsModal
             >
-              <View
-                {...gesture.panHandlers}
-                style={{
-                  height: 44,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginTop: -12,
-                  marginBottom: -10,
-                }}
-              >
-                <View style={[ui.handle, { backgroundColor: p.muted }]} />
-              </View>
-              <View style={ui.between}>
-                <Text
-                  accessibilityRole="header"
-                  style={[
-                    ui.sectionTitle,
-                    { color: p.text, flex: 1, marginRight: 12 },
-                  ]}
+              {/* The drag handle is a touch affordance; desktop dialogs omit it. */}
+              {!desktop && (
+                <View
+                  {...gesture.panHandlers}
+                  style={{
+                    height: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginTop: -12,
+                    marginBottom: -10,
+                  }}
                 >
-                  {title}
-                </Text>
-                <IconButton
-                  label={`Close ${title}`}
-                  icon="x"
+                  <View style={[ui.handle, { backgroundColor: p.muted }]} />
+                </View>
+              )}
+              <View style={[ui.row, { gap: 14 }]}>
+                {icon && (
+                  <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.header, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name={icon} size={19} color={p.headerText} />
+                  </View>
+                )}
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, fontSize: 20, letterSpacing: -0.6 }]}>
+                    {title}
+                  </Text>
+                  {subtitle ? <Text style={[ui.small, { color: p.muted }]}>{subtitle}</Text> : null}
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Close ${title}`}
                   onPress={onClose}
-                  palette={p}
-                />
+                  {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})}
+                  style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
+                >
+                  <Feather name="x" size={18} color={p.text} />
+                </Pressable>
               </View>
+              <View style={{ height: 1, backgroundColor: p.border, marginHorizontal: -22 }} />
               <ScrollView
                 style={{ flexShrink: 1 }}
                 contentContainerStyle={{ gap: 18, paddingBottom: 4 }}
@@ -322,8 +343,8 @@ function RecordRow({
     </Pressable>
   );
 }
-function DetailScreen({visible,onClose,title,palette,children}:{visible:boolean;onClose:()=>void;title:string;palette:Palette;children:ReactNode}) {
-  return <Sheet visible={visible} title={title} onClose={onClose} palette={palette}>{children}</Sheet>;
+function DetailScreen({visible,onClose,title,subtitle,palette,children}:{visible:boolean;onClose:()=>void;title:string;subtitle?:string;palette:Palette;children:ReactNode}) {
+  return <Sheet visible={visible} title={title} subtitle={subtitle} onClose={onClose} palette={palette}>{children}</Sheet>;
 }
 function AppContent() {
   const { theme, setTheme } = useThemePreference();
@@ -611,7 +632,7 @@ function AppContent() {
                 {tab === "analytics" && <Reports snapshot={snapshot} period={period} role={role} palette={p} onDates={()=>{setDraft(period);setCalendar(true);}} onExport={exportCsv} exporting={exporting} exportMessage={exportMessage}/>}
                 {(tab==='help'||tab==='activity')&&<View style={[ui.row,{gap:12}]}><IconButton label="Back to Home" icon="arrow-left" onPress={()=>setTab('home')} palette={p}/><Text style={[ui.small,{color:p.muted}]}>Your workspace</Text></View>}
                 {tab==='help'&&<AccessHelp key={'help:'+role} role={role} palette={p} onOpen={openTool}/>}
-                {tab==='activity'&&<View style={{gap:18}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>Recent activity</Text><RecentActivity items={activity.items} palette={p} error={activity.error} onOpen={event=>{const tool=tools.find(tool=>tool.id===event.moduleId);if(tool)openTool(tool);}}/></View>}
+                {tab==='activity'&&<View style={{gap:18}}><View style={{gap:6}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>Recent activity</Text><Text style={[ui.body,{color:p.muted}]}>What you have opened, saved and changed on this device.</Text></View><RecentActivity framed items={activity.items} palette={p} error={activity.error} onOpen={event=>{const tool=tools.find(tool=>tool.id===event.moduleId);if(tool)openTool(tool);}}/></View>}
                 <WorkspaceScreens
                   key={role}
                   section={tab}
@@ -672,64 +693,89 @@ function AppContent() {
           <Sheet
             visible={settings}
             onClose={() => setSettings(false)}
-            title={profile.displayName}
+            title="Profile & preferences"
+            subtitle="Your preview identity, comfort settings and role"
+            icon="settings"
             palette={p}
           >
-            <View style={{gap:4,paddingBottom:8,borderBottomWidth:1,borderColor:p.border}}>
-              <Text style={[ui.small,{color:p.muted}]}>Workspace role</Text>
-              <Text style={[ui.sectionTitle,{color:p.text}]}>{roleLabel}</Text>
-            </View>
-            <Action
-              label="Customize preview profile"
-              palette={p}
-              secondary
-              onPress={() => {
-                setSettings(false);
-                setAccountMode("preview");
-              }}
-            />
-            <Action
-              label="Create an account"
-              palette={p}
-              onPress={() => {
-                setSettings(false);
-                setAccountMode("register");
-              }}
-            />
-            <View style={[ui.between,{gap:16,minHeight:56}]}><View style={{flex:1,gap:4}}><Text style={[ui.body,{color:p.text,fontWeight:"600"}]}>Reduce motion</Text><Text style={[ui.small,{color:p.muted}]}>{motionPreference.system?"Your device setting is respected.":"Use instant changes instead of decorative animation."}</Text></View><Switch accessibilityLabel="Reduce motion" value={reduced} disabled={motionPreference.system} onValueChange={motionPreference.setPreference} trackColor={{false:p.controlBorder,true:p.primary}} thumbColor={p.surface}/></View>
-            <View style={[ui.between,{gap:16,minHeight:56}]}><Text style={[ui.body,{color:p.text,flex:1}]}>Show FAQ shortcut</Text><Switch accessibilityLabel="Show FAQ shortcut" value={!faqShortcut.hidden} onValueChange={value=>faqShortcut.setHidden(!value)} trackColor={{false:p.controlBorder,true:p.success}} thumbColor={p.surface}/></View>
-            <Text style={[ui.body, { color: p.muted }]}>
-              Explore the app as each role. This selector only changes sample
-              screens and never grants real access.
-            </Text>
-            <View>
-              {roles.map((item) => (
+            {/* Identity card echoes the forest header. */}
+            <View style={{ borderRadius: 22, padding: 18, gap: 16, backgroundColor: p.header, overflow: "hidden" }}>
+              <View style={[ui.row, { gap: 14 }]}>
+                <Avatar profile={profile} size={56} backgroundColor={p.headerControl} textColor={p.headerControlText} />
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text numberOfLines={1} style={{ color: p.headerText, fontSize: 18, fontWeight: "700", letterSpacing: -0.4 }}>{profile.displayName}</Text>
+                  <Text style={{ color: p.headerMuted, fontSize: 13 }}>{roleLabel}</Text>
+                </View>
+              </View>
+              <View style={[ui.row, { gap: 10 }]}>
                 <Pressable
-                  key={item.value}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: item.value === role }}
-                  onPress={() => switchRole(item.value)}
-                  style={[
-                    ui.between,
-                    {
-                      padding: 15,
-                      marginBottom: 7,
-                      borderRadius: 14,
-                      backgroundColor:
-                        item.value === role ? p.wash : "transparent",
-                    },
-                  ]}
+                  accessibilityRole="button"
+                  onPress={() => { setSettings(false); setAccountMode("preview"); }}
+                  style={[ui.button, { flex: 1, minHeight: 44, backgroundColor: p.headerControl, borderWidth: 1, borderColor: p.headerBorder }]}
                 >
-                  <Text
-                    style={{ color: p.text, fontSize: 14, fontWeight: "600" }}
-                  >
-                    {item.label}
-                  </Text>
-                  {item.value === role && (
-                    <Feather name="check" size={18} color={p.primary} />
-                  )}
+                  <Feather name="edit-3" size={15} color={p.headerControlText} />
+                  <Text style={[ui.buttonText, { color: p.headerControlText }]}>Customize</Text>
                 </Pressable>
-              ))}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => { setSettings(false); setAccountMode("register"); }}
+                  style={[ui.button, { flex: 1, minHeight: 44, backgroundColor: p.headerText }]}
+                >
+                  <Feather name="user-plus" size={15} color={p.header} />
+                  <Text style={[ui.buttonText, { color: p.header }]}>Create account</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: p.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>Comfort</Text>
+              <View style={{ borderRadius: 20, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
+                <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>
+                  <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name="wind" size={16} color={p.primary} /></View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Reduce motion</Text>
+                    <Text style={[ui.small, { color: p.muted }]}>{motionPreference.system ? "Your device setting is respected." : "Use instant changes instead of decorative animation."}</Text>
+                  </View>
+                  <Switch accessibilityLabel="Reduce motion" value={reduced} disabled={motionPreference.system} onValueChange={motionPreference.setPreference} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
+                </View>
+                <View style={{ height: 1, backgroundColor: p.border, marginLeft: 68 }} />
+                <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>
+                  <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name="help-circle" size={16} color={p.primary} /></View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Show FAQ shortcut</Text>
+                    <Text style={[ui.small, { color: p.muted }]}>A Help button in the corner of every page.</Text>
+                  </View>
+                  <Switch accessibilityLabel="Show FAQ shortcut" value={!faqShortcut.hidden} onValueChange={value=>faqShortcut.setHidden(!value)} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
+                </View>
+              </View>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: p.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>Preview as</Text>
+              <Text style={[ui.small, { color: p.muted }]}>
+                Explore the app as each role. This only changes sample screens and never grants real access.
+              </Text>
+              <View style={{ gap: 6, marginTop: 4 }}>
+                {roles.map((item) => {
+                  const checked = item.value === role;
+                  return (
+                    <Pressable
+                      key={item.value}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked }}
+                      onPress={() => switchRole(item.value)}
+                      {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})}
+                      style={[ui.row, { gap: 12, minHeight: 52, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, borderColor: checked ? p.primary : p.border, backgroundColor: checked ? p.wash : "transparent" }]}
+                    >
+                      <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: checked ? p.primary : p.controlBorder, alignItems: "center", justifyContent: "center" }}>
+                        {checked && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: p.primary }} />}
+                      </View>
+                      <Text style={{ flex: 1, color: p.text, fontSize: 14, fontWeight: checked ? "700" : "500" }}>{item.label}</Text>
+                      {checked && <Text style={{ color: p.primary, fontSize: 12, fontWeight: "600" }}>Current</Text>}
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           </Sheet>
           {accountMode && (
@@ -741,77 +787,64 @@ function AppContent() {
               onProfile={value=>{setProfile(value);activity.record('update_profile');}}
             />
           )}
-          {commandOpen&&<Sheet visible title="Quick search" onClose={()=>setCommandOpen(false)} palette={p}><CommandSearch tools={tools} palette={p} onOpen={openTool} onNavigate={setTab} onProfile={()=>setSettings(true)} onClose={()=>setCommandOpen(false)}/></Sheet>}
+          {commandOpen&&<Sheet visible title="Quick search" subtitle="Jump to any tool or page within your access" icon="search" onClose={()=>setCommandOpen(false)} palette={p}><CommandSearch tools={tools} palette={p} onOpen={openTool} onNavigate={setTab} onProfile={()=>setSettings(true)} onClose={()=>setCommandOpen(false)}/></Sheet>}
           <Sheet
             visible={calendar}
             onClose={() => {
               setCalendar(false);
               setEditingDate(null);
             }}
-            title="Choose your date range"
+            title="Date range"
+            subtitle="All charts update together. Up to 366 days."
+            icon="calendar"
             palette={p}
           >
-            <Text style={[ui.body, { color: p.muted }]}>
-              All charts update together. Choose up to 366 days.
-            </Text>
-            <View style={[ui.row, { gap: 8 }]}>
-              {[7, 30, 90].map((days) => (
-                <Pressable
-                  key={days}
-                  accessibilityRole="button"
-                  accessibilityState={{
-                    selected:
-                      draft.from === presetPeriod(days).from &&
-                      draft.to === presetPeriod(days).to,
-                  }}
-                  onPress={() => {
-                    setDraft(presetPeriod(days));
-                    setEditingDate(null);
-                  }}
-                  style={[
-                    ui.button,
-                    {
-                      flex: 1,
-                      paddingHorizontal: 6,
-                      backgroundColor:
-                        draft.from === presetPeriod(days).from &&
-                        draft.to === presetPeriod(days).to
-                          ? p.primary
-                          : p.wash,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      ui.buttonText,
-                      {
-                        color:
-                          draft.from === presetPeriod(days).from &&
-                          draft.to === presetPeriod(days).to
-                            ? p.onPrimary
-                            : p.text,
-                        fontSize: 12,
-                      },
-                    ]}
+            <View style={{ flexDirection: "row", gap: 6, padding: 4, borderRadius: 999, backgroundColor: p.elevated }}>
+              {[7, 30, 90].map((days) => {
+                const active = draft.from === presetPeriod(days).from && draft.to === presetPeriod(days).to;
+                return (
+                  <Pressable
+                    key={days}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => {
+                      setDraft(presetPeriod(days));
+                      setEditingDate(null);
+                    }}
+                    style={{ flex: 1, minHeight: 40, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: active ? p.primary : "transparent" }}
                   >
-                    Last {days} days
-                  </Text>
-                </Pressable>
-              ))}
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: active ? p.onPrimary : p.muted }}>
+                      Last {days} days
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
-            {(["from", "to"] as const).map((field) => (
-              <View key={field} style={{ gap: 7 }}>
-                <Text style={[ui.small, { color: p.muted }]}>
-                  {field === "from" ? "Start date" : "End date"}
-                </Text>
-                <Action
-                  label={draft[field]}
-                  palette={p}
-                  secondary
-                  onPress={() => setEditingDate(field)}
-                />
-              </View>
-            ))}
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              {(["from", "to"] as const).map((field) => {
+                const active = editingDate === field;
+                const value = parseAnalyticsDate(draft[field]);
+                return (
+                  <Pressable
+                    key={field}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${field === "from" ? "Start" : "End"} date, ${draft[field]}`}
+                    accessibilityState={{ expanded: active }}
+                    onPress={() => setEditingDate(active ? null : field)}
+                    {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})}
+                    style={{ flex: 1, gap: 6, padding: 14, borderRadius: 18, borderWidth: active ? 2 : 1, borderColor: active ? p.primary : p.border, backgroundColor: active ? p.wash : p.background }}
+                  >
+                    <View style={[ui.row, { gap: 6 }]}>
+                      <Feather name={field === "from" ? "log-in" : "log-out"} size={13} color={p.muted} />
+                      <Text style={{ fontSize: 11, fontWeight: "600", letterSpacing: 1.2, textTransform: "uppercase", color: p.muted }}>{field === "from" ? "Start" : "End"}</Text>
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: "700", color: p.text, letterSpacing: -0.3 }}>
+                      {value ? value.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : draft[field]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             {editingDate &&
               (Platform.OS === "web" ? (
                 <Calendar
@@ -832,12 +865,10 @@ function AppContent() {
                 />
               ))}
             {draftError ? (
-              <Text
-                accessibilityRole="alert"
-                style={[ui.small, { color: p.waiting }]}
-              >
-                {draftError}
-              </Text>
+              <View accessibilityRole="alert" style={[ui.row, { gap: 8, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}>
+                <Feather name="alert-circle" size={16} color={p.waiting} />
+                <Text style={[ui.small, { color: p.text, flex: 1 }]}>{draftError}</Text>
+              </View>
             ) : (
               <Text style={[ui.small, { color: p.muted }]}>
                 {periodLabel(draft)}
@@ -861,15 +892,18 @@ function AppContent() {
               setSelectedRecord(null);
             }}
             title={selectedTool?.name ?? "Workspace tool"}
+            subtitle={selectedTool ? (()=>{const department=DEPARTMENTS.find(d=>d.id===WORKSPACE_MAP[selectedTool.id].tone)?.name??"";return department&&department!==selectedTool.category?department+" · "+selectedTool.category:selectedTool.category;})() : undefined}
             palette={p}
           >
             <View style={{ gap: 14 }}>
               {selectedTool && (
                 <>
-                  <Artwork id={selectedTool.id} size={64} palette={p} />
-                  <Text style={[ui.body, { color: p.muted }]}>
-                    {selectedTool.description}
-                  </Text>
+                  <View style={[ui.row,{gap:16,padding:16,borderRadius:22,backgroundColor:departmentColor(WORKSPACE_MAP[selectedTool.id].tone,p).wash}]}>
+                    <View style={{padding:6,borderRadius:20,backgroundColor:p.surface}}><Artwork id={selectedTool.id} size={56} palette={p} /></View>
+                    <Text style={[ui.body, { color: p.text, flex: 1 }]}>
+                      {selectedTool.description}
+                    </Text>
+                  </View>
                   {selectedRecord ? (
                     <>
                       <Text style={[ui.sectionTitle, { color: p.text }]}>
@@ -970,7 +1004,7 @@ function AppContent() {
                     <View
                       style={[
                         ui.card,
-                        { backgroundColor: p.wash, borderColor: p.border },
+                        { backgroundColor: p.background, borderColor: p.controlBorder, borderStyle: "dashed", alignItems: "center", paddingVertical: 24 },
                       ]}
                     >
                       <StateGraphic palette={p} icon="inbox" />
@@ -1007,6 +1041,8 @@ function AppContent() {
             visible={chartData}
             onClose={() => setChartData(false)}
             title="Daily chart data"
+            subtitle="Records per day in the selected range"
+            icon="bar-chart-2"
             palette={p}
           >
             <View>

@@ -8,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
@@ -272,6 +273,8 @@ export function AccountSetup({
       if (alive.current) setBusy(false);
     }
   };
+  const { width: windowWidth } = useWindowDimensions();
+  const desktop = windowWidth >= 768;
   const close = () => {
     alive.current = false;
     token.current = null;
@@ -289,36 +292,54 @@ export function AccountSetup({
       statusBarTranslucent
     >
       <KeyboardAvoidingView
-        style={ui.modalOverlay}
+        {...(Platform.OS === "web" ? { dataSet: { overlay: "blur" } } : {})}
+        style={[ui.modalOverlay, { backgroundColor: p.overlay, justifyContent: desktop ? "center" : "flex-end", alignItems: desktop ? "center" : undefined }]}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <SafeAreaView
           edges={["bottom"]}
           style={[
             ui.modalSheet,
-            { backgroundColor: p.surface, maxHeight: "95%" },
+            {
+              backgroundColor: p.surface,
+              maxHeight: "95%",
+              width: desktop ? Math.min(600, windowWidth - 48) : "100%",
+              borderRadius: desktop ? 30 : undefined,
+              borderWidth: desktop ? 1 : 0,
+              borderColor: p.border,
+              ...(Platform.OS === "web" ? { boxShadow: "0 40px 100px -30px rgba(8, 22, 18, 0.55)" } : {}),
+            },
           ]}
           accessibilityViewIsModal
         >
-          <View style={ui.between}>
-            <Text
-              accessibilityRole="header"
-              style={[ui.sectionTitle, { color: p.text }]}
-            >
-              {mode === "preview"
-                ? "Your preview profile"
-                : "Create your account"}
-            </Text>
+          <View style={[ui.row, { gap: 14 }]}>
+            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.header, alignItems: "center", justifyContent: "center" }}>
+              <Feather name={mode === "preview" ? "user" : "user-plus"} size={19} color={p.headerText} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <Text
+                accessibilityRole="header"
+                style={[ui.sectionTitle, { color: p.text, fontSize: 20, letterSpacing: -0.6 }]}
+              >
+                {mode === "preview"
+                  ? "Your preview profile"
+                  : "Create your account"}
+              </Text>
+              <Text style={[ui.small, { color: p.muted }]}>
+                {mode === "preview" ? "Name and avatar for this preview" : "A few quick steps to get started"}
+              </Text>
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close account setup"
               disabled={busy}
               onPress={close}
-              style={ui.iconButton}
+              style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
             >
-              <Feather name="x" size={21} color={p.text} />
+              <Feather name="x" size={18} color={p.text} />
             </Pressable>
           </View>
+          <View style={{ height: 1, backgroundColor: p.border, marginHorizontal: -22 }} />
           <ScrollView
             contentContainerStyle={{ gap: 16, paddingBottom: 12 }}
             keyboardShouldPersistTaps="handled"
@@ -347,7 +368,7 @@ export function AccountSetup({
               {step < 4 && (
                 <Text style={[ui.eyebrow, { color: p.muted }]}>
                   {mode === "preview"
-                    ? "MAKE IT YOURS"
+                    ? "PREVIEW PROFILE"
                     : `STEP ${step + 1} OF 4`}
                 </Text>
               )}
