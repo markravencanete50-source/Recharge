@@ -211,7 +211,7 @@ input {
     transform: translateY(14px);
   }
   to {
-    filter: blur(0);
+    filter: none;
     opacity: 1;
     transform: none;
   }
@@ -247,7 +247,31 @@ input {
   to { transform: translateX(220%) skewX(-18deg); }
 }
 
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
 .animate-rise { animation: rise 700ms var(--ease-out) both; }
+
+.msg-in { animation: msg-in 480ms var(--ease-out) both; }
+
+.grow-x {
+  animation: grow-x 1100ms var(--ease-out) both;
+  transform-origin: left center;
+}
+
+/* Quiet dotted canvas behind conversations. */
+.chat-canvas {
+  background-color: #fafbfa;
+  background-image: radial-gradient(rgba(28, 57, 52, 0.07) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
 .animate-fade { animation: fade 500ms var(--ease-out) both; }
 
 /* Each view enters as a gentle cascade of its top-level blocks. */

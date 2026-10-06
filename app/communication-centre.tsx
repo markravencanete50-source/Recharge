@@ -1,19 +1,38 @@
 "use client";
 
-import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
+  CalendarDays,
   Check,
+  CheckCheck,
   ChevronRight,
   Clock3,
   ExternalLink,
+  Hash,
   Inbox,
+  LoaderCircle,
   Mail,
   MessageCircle,
   MessagesSquare,
+  Pause,
+  Play,
+  PlugZap,
   Plus,
+  PoundSterling,
   Search,
   Send,
   ShieldCheck,
@@ -22,6 +41,7 @@ import {
   Trash2,
   Users,
   Wrench,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +63,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type {
@@ -63,10 +90,15 @@ type CentreUser = {
   role: WorkspaceRole;
 };
 
+type CentreTabValue = CommunicationSource | "workflows" | "performance";
+type SortMode = "waiting" | "unopened" | "newest" | "property";
+type Tone = "green" | "amber" | "red";
+
 const sourceDetails: Record<
   CommunicationSource,
   {
     title: string;
+    label: string;
     description: string;
     icon: typeof Inbox;
     connection: keyof CommunicationCentreData["integrations"];
@@ -76,6 +108,7 @@ const sourceDetails: Record<
 > = {
   guests: {
     title: "Guest inbox",
+    label: "Hostaway",
     description: "All guest conversations received through Hostaway.",
     icon: MessagesSquare,
     connection: "hostaway",
@@ -84,6 +117,7 @@ const sourceDetails: Record<
   },
   email: {
     title: "Email inbox",
+    label: "Email",
     description: "Fasthosts mailboxes, subjects, ownership and response times.",
     icon: Mail,
     connection: "email",
@@ -92,6 +126,7 @@ const sourceDetails: Record<
   },
   whatsapp: {
     title: "WhatsApp inbox",
+    label: "WhatsApp",
     description: "Direct WhatsApp Business conversations kept separate from Hostaway.",
     icon: MessageCircle,
     connection: "whatsapp",
@@ -99,6 +134,71 @@ const sourceDetails: Record<
     redSeconds: 600,
   },
 };
+
+const toneStyles: Record<Tone, { pill: string; rail: string; dot: string; onDark: string }> = {
+  green: {
+    pill: "bg-[#e6f2dc] text-[#3f6327]",
+    rail: "bg-[#7cb356]",
+    dot: "bg-[#6aa441]",
+    onDark: "text-[#c9e7a4]",
+  },
+  amber: {
+    pill: "bg-[#fbefcf] text-[#86601a]",
+    rail: "bg-[#dca23a]",
+    dot: "bg-[#d39a2f]",
+    onDark: "text-[#f3d08a]",
+  },
+  red: {
+    pill: "bg-[#fbe4e2] text-[#9c3737]",
+    rail: "bg-[#cf5b55]",
+    dot: "bg-[#c24c4c]",
+    onDark: "text-[#f4aaa4]",
+  },
+};
+
+const avatarTones = [
+  "bg-[#dfe9e4] text-[#24473f]",
+  "bg-[#e7eedd] text-[#4a6230]",
+  "bg-[#e3ece8] text-[#315f50]",
+  "bg-[#efe9de] text-[#6b5531]",
+  "bg-[#1c3934] text-[#c9e7a4]",
+];
+
+/* ───────────────────────── Shared hooks ───────────────────────── */
+
+function useNow(enabled = true, interval = 1000) {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    if (!enabled) return;
+    const timer = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), interval);
+    return () => window.clearInterval(timer);
+  }, [enabled, interval]);
+  return now;
+}
+
+function useMediaQuery(query: string, serverValue = true) {
+  const subscribe = useCallback(
+    (callback: () => void) => {
+      const media = window.matchMedia(query);
+      media.addEventListener("change", callback);
+      return () => media.removeEventListener("change", callback);
+    },
+    [query],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(query).matches,
+    () => serverValue,
+  );
+}
+
+function waitTone(elapsed: number, source: CommunicationSource): Tone {
+  const { amberSeconds, redSeconds } = sourceDetails[source];
+  return elapsed >= redSeconds ? "red" : elapsed >= amberSeconds ? "amber" : "green";
+}
+
+
+/* ───────────────────────── Centre ───────────────────────── */
 
 export function CommunicationCentre({
   data,
@@ -114,6 +214,7 @@ export function CommunicationCentre({
     "idle",
   );
   const [syncMessage, setSyncMessage] = useState("");
+  const [tab, setTab] = useState<CentreTabValue>("guests");
 
   useEffect(() => {
     if (!data?.integrations.hostaway) return;
@@ -164,60 +265,98 @@ export function CommunicationCentre({
   }, [data?.integrations.hostaway]);
 
   const safeData = liveData ?? data ?? unavailableData();
+  const waitingBySource = (source: CommunicationSource) =>
+    safeData.threads.filter(
+      (thread) => thread.source === source && Boolean(waitingMessage(thread)),
+    ).length;
+  const guestThreads = safeData.threads.filter((thread) => thread.source === "guests");
+  const waitingSentAt = guestThreads
+    .map((thread) => waitingMessage(thread)?.sentAt)
+    .filter((value): value is number => typeof value === "number");
+  const oldestWaiting = waitingSentAt.length ? Math.min(...waitingSentAt) : null;
+  const now = useNow(oldestWaiting !== null);
+  const longestWait = oldestWaiting !== null ? Math.max(0, now - oldestWaiting) : 0;
+  const averageResponse = averageResponseSeconds(guestThreads);
+  const activeWorkflows = safeData.workflows.filter(
+    (workflow) =>
+      workflow.status === "active" &&
+      (workflow.channel === "all" || workflow.channel === "guests"),
+  ).length;
 
   return (
     <div>
       <button
-        className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#4f6966] hover:text-[#1c3934]"
+        className="press group mb-4 inline-flex items-center gap-2 rounded-full py-1 pr-3 text-sm font-semibold text-[#4f6966] transition-colors hover:text-[#1c3934]"
         onClick={onBack}
       >
-        <ArrowLeft className="size-4" /> Back to Stays
+        <ArrowLeft className="size-4 transition-transform duration-300 group-hover:-translate-x-0.5" /> Stays
       </button>
 
-      <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
-        <div>
-          <p className="eyebrow">Recharge Stays</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
-            Communication Centre
-          </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
-            Live guest messages, friendly assisted replies and clear response accountability.
-          </p>
+      <section className="forest-panel overflow-hidden rounded-[1.75rem] px-5 py-6 shadow-[0_30px_70px_-34px_rgba(16,39,31,0.6)] sm:rounded-[2rem] sm:px-8 sm:py-8">
+        <span className="orb -right-16 -top-24 size-72 bg-[#8fb3a2]/30" aria-hidden="true" />
+        <span
+          className="orb -bottom-28 left-1/4 size-64 bg-[#c9e7a4]/12"
+          style={{ animationDelay: "-9s", animationDuration: "26s" }}
+          aria-hidden="true"
+        />
+        <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-[#8fb3a2]">
+                Recharge Stays
+              </p>
+              <SyncPill state={syncState} connected={safeData.integrations.hostaway} />
+            </div>
+            <h1 className="mt-4 text-[2.4rem] font-semibold leading-[0.98] tracking-[-0.05em] sm:text-[3.4rem]">
+              Communication{" "}
+              <span className="font-display text-[#c9e7a4]">Centre</span>
+            </h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-white/60 sm:text-[0.95rem] sm:leading-7">
+              Live guest messages, assisted replies and clear response accountability.
+            </p>
+          </div>
+          <dl className="grid grid-cols-3 gap-2 sm:gap-3 lg:min-w-[27rem]">
+            <PulseStat
+              label="Waiting"
+              value={String(waitingSentAt.length)}
+              live={waitingSentAt.length > 0}
+            />
+            <PulseStat
+              label="Longest wait"
+              value={oldestWaiting !== null ? formatDuration(longestWait) : "—"}
+              tone={oldestWaiting !== null ? waitTone(longestWait, "guests") : undefined}
+            />
+            <PulseStat
+              label="Avg reply"
+              value={averageResponse === null ? "—" : formatDuration(averageResponse)}
+              tone={averageResponse === null ? undefined : waitTone(averageResponse, "guests")}
+            />
+          </dl>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <ConnectionBadge
-            label={
-              syncState === "syncing"
-                ? "Hostaway syncing"
-                : syncState === "error"
-                  ? "Hostaway needs attention"
-                  : syncState === "live"
-                    ? "Hostaway live"
-                    : "Hostaway"
-            }
-            connected={safeData.integrations.hostaway && syncState !== "error"}
-          />
-        </div>
-      </div>
+      </section>
 
       {syncMessage && (
-        <div className="mt-6 rounded-2xl border border-[#ead8a5] bg-[#fff9e8] px-5 py-4 text-sm leading-6 text-[#765e22]">
+        <Notice tone="amber" icon={AlertTriangle}>
           {syncMessage}
-        </div>
+        </Notice>
       )}
 
       {!safeData.available && (
-        <div className="mt-6 rounded-2xl border border-[#ead8a5] bg-[#fff9e8] px-5 py-4 text-sm leading-6 text-[#765e22]">
+        <Notice tone="amber" icon={PlugZap}>
           The Communication Centre is ready, but its live connections still need to be authorised. Typed workflows are available after the new workspace database finishes activating.
-        </div>
+        </Notice>
       )}
 
-      <Tabs defaultValue="guests" className="mt-7">
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl bg-[#e3ebe7] p-1.5">
-          <CentreTab value="guests" icon={MessagesSquare} label="Guests" />
-          <CentreTab value="whatsapp" icon={MessageCircle} label="WhatsApp" />
-          <CentreTab value="email" icon={Mail} label="Email" />
-          <CentreTab value="workflows" icon={Sparkles} label="Workflows" />
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as CentreTabValue)}
+        className="mt-6"
+      >
+        <TabsList className="scrollbar-none h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl border-[#dbe4e0] bg-white/75 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur sm:w-fit">
+          <CentreTab value="guests" icon={MessagesSquare} label="Guests" count={waitingBySource("guests")} />
+          <CentreTab value="whatsapp" icon={MessageCircle} label="WhatsApp" count={waitingBySource("whatsapp")} />
+          <CentreTab value="email" icon={Mail} label="Email" count={waitingBySource("email")} />
+          <CentreTab value="workflows" icon={Sparkles} label="Workflows" count={activeWorkflows} muted />
           <CentreTab value="performance" icon={Users} label="Response report" />
         </TabsList>
 
@@ -246,21 +385,108 @@ export function CommunicationCentre({
   );
 }
 
+function SyncPill({
+  state,
+  connected,
+}: {
+  state: "idle" | "syncing" | "live" | "error";
+  connected: boolean;
+}) {
+  const content = !connected
+    ? { label: "Hostaway offline", className: "border-white/10 bg-white/5 text-white/55", icon: <span className="size-1.5 rounded-full bg-white/35" /> }
+    : state === "error"
+      ? { label: "Needs attention", className: "border-[#f3d08a]/30 bg-[#f3d08a]/10 text-[#f3d08a]", icon: <AlertTriangle className="size-3" /> }
+      : state === "live"
+        ? { label: "Hostaway live", className: "border-[#c9e7a4]/25 bg-[#c9e7a4]/10 text-[#c9e7a4]", icon: <span className="live-dot" /> }
+        : { label: "Syncing", className: "border-white/15 bg-white/5 text-white/70", icon: <LoaderCircle className="size-3 animate-spin" /> };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold backdrop-blur ${content.className}`}
+      role="status"
+    >
+      {content.icon}
+      {content.label}
+    </span>
+  );
+}
+
+function PulseStat({
+  label,
+  value,
+  tone,
+  live = false,
+}: {
+  label: string;
+  value: string;
+  tone?: Tone;
+  live?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-3 backdrop-blur sm:px-4 sm:py-4">
+      <dt className="flex items-center gap-1.5 truncate text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/45">
+        {live && <span className="live-dot" aria-hidden="true" />}
+        {label}
+      </dt>
+      <dd
+        className={`mt-2 truncate text-xl font-semibold tabular-nums tracking-[-0.04em] sm:text-[1.75rem] ${tone ? toneStyles[tone].onDark : "text-white"}`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function Notice({
+  tone,
+  icon: Icon,
+  children,
+}: {
+  tone: "amber";
+  icon: typeof Inbox;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`animate-rise mt-5 flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-sm leading-6 ${tone === "amber" ? "border-[#ead8a5] bg-[#fffaec] text-[#765e22]" : ""}`}
+    >
+      <Icon className="mt-0.5 size-4 shrink-0" />
+      <p>{children}</p>
+    </div>
+  );
+}
+
 function CentreTab({
   value,
   icon: Icon,
   label,
+  count,
+  muted = false,
 }: {
   value: string;
   icon: typeof Inbox;
   label: string;
+  count?: number;
+  muted?: boolean;
 }) {
   return (
-    <TabsTrigger value={value} className="min-h-10 shrink-0 gap-2 rounded-xl px-4">
+    <TabsTrigger
+      value={value}
+      className="min-h-10 shrink-0 gap-2 rounded-xl px-4 data-[state=active]:bg-[#1c3934] data-[state=active]:text-white"
+    >
       <Icon className="size-4" /> {label}
+      {count !== undefined && count > 0 && (
+        <span
+          className={`grid min-w-5 place-items-center rounded-full px-1.5 py-px text-[0.65rem] font-bold tabular-nums transition-colors ${muted ? "bg-[#1c3934]/8 text-[#526b67] in-data-[state=active]:bg-white/15 in-data-[state=active]:text-white" : "bg-[#c24c4c] text-white in-data-[state=active]:bg-[#c9e7a4] in-data-[state=active]:text-[#1c3934]"}`}
+        >
+          {count}
+        </span>
+      )}
     </TabsTrigger>
   );
 }
+
+
+/* ───────────────────────── Inbox ───────────────────────── */
 
 function ChannelWorkspace({
   source,
@@ -277,11 +503,12 @@ function ChannelWorkspace({
   const threads = data.threads.filter((thread) => thread.source === source);
   const [search, setSearch] = useState("");
   const [queue, setQueue] = useState<"new" | "responded">("new");
-  const [sortBy, setSortBy] = useState<"unopened" | "newest" | "property">("unopened");
+  const [sortBy, setSortBy] = useState<SortMode>("waiting");
   const [propertyFilter, setPropertyFilter] = useState("all");
   const properties = useMemo(() => Array.from(new Set(threads.map((thread) => thread.propertyName).filter(Boolean))).sort((a, b) => a.localeCompare(b, "en-GB", { sensitivity: "base" })), [threads]);
   const newCount = threads.filter((thread) => Boolean(waitingMessage(thread))).length;
   const respondedCount = threads.length - newCount;
+  const unopenedCount = threads.filter((thread) => thread.unread).length;
   const visibleThreads = useMemo(() => {
     const query = search.trim().toLowerCase();
     const filtered = threads.filter((thread) => {
@@ -301,6 +528,11 @@ function ChannelWorkspace({
             .includes(query);
     });
     return [...filtered].sort((a, b) => {
+      if (sortBy === "waiting") {
+        const waitingA = waitingMessage(a)?.sentAt ?? Infinity;
+        const waitingB = waitingMessage(b)?.sentAt ?? Infinity;
+        if (waitingA !== waitingB) return waitingA - waitingB;
+      }
       if (sortBy === "unopened" && a.unread !== b.unread) return Number(b.unread) - Number(a.unread);
       if (sortBy === "property") {
         return a.propertyName.localeCompare(b.propertyName, "en-GB", { sensitivity: "base" });
@@ -312,31 +544,41 @@ function ChannelWorkspace({
   const selected = visibleThreads.find((thread) => thread.id === selectedId) ?? visibleThreads[0];
   const connected = data.integrations[details.connection];
   const [draft, setDraft] = useState("");
-  const [reservation, setReservation] = useState<HostawayReservation | null>(null);
-  const [reservationLoading, setReservationLoading] = useState(false);
+  const [reservationState, setReservationState] = useState<{ key: string; reservation: HostawayReservation | null }>({ key: "", reservation: null });
   const markingRead = useRef(new Set<string>());
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const isWide = useMediaQuery("(min-width: 1536px)");
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const overlayOpen = mobileThreadOpen && !isDesktop;
+  // Only mark a conversation read once someone can actually see it.
+  const conversationVisible = isDesktop || mobileThreadOpen;
+
+  const listingId = source === "guests" ? selected?.hostawayListingId || "" : "";
+  const reservationId = selected?.hostawayReservationId || "";
+  const reference = selected ? bookingReference(selected) : "";
+  const reservationKey = listingId ? `${selected?.id}:${listingId}` : "";
 
   useEffect(() => {
-    if (source !== "guests" || !selected?.hostawayListingId) {
-      setReservation(null);
-      return;
-    }
+    if (!reservationKey) return;
     let cancelled = false;
-    setReservationLoading(true);
-    void fetch(`/api/hostaway/reservations?listingId=${encodeURIComponent(selected.hostawayListingId)}`, { cache: "no-store" })
+    void fetch(`/api/hostaway/reservations?listingId=${encodeURIComponent(listingId)}`, { cache: "no-store" })
       .then((response) => response.json())
       .then((result: { reservations?: HostawayReservation[] }) => {
         if (cancelled) return;
-        const match = result.reservations?.find((item) => item.id === selected.hostawayReservationId || item.bookingReference === bookingReference(selected));
-        setReservation(match || null);
+        const match = result.reservations?.find((item) => item.id === reservationId || item.bookingReference === reference);
+        setReservationState({ key: reservationKey, reservation: match || null });
       })
-      .catch(() => { if (!cancelled) setReservation(null); })
-      .finally(() => { if (!cancelled) setReservationLoading(false); });
+      .catch(() => { if (!cancelled) setReservationState({ key: reservationKey, reservation: null }); });
     return () => { cancelled = true; };
-  }, [selected?.hostawayListingId, selected?.hostawayReservationId, selected?.id, source]);
+  }, [listingId, reference, reservationId, reservationKey]);
+
+  // Reservation details belong to one thread; anything else is still loading.
+  const reservation = reservationKey && reservationState.key === reservationKey ? reservationState.reservation : null;
+  const reservationLoading = Boolean(reservationKey) && reservationState.key !== reservationKey;
 
   useEffect(() => {
-    if (!selected?.unread || document.visibilityState !== "visible" || !document.hasFocus() || markingRead.current.has(selected.id)) return;
+    if (!conversationVisible || !selected?.unread || document.visibilityState !== "visible" || !document.hasFocus() || markingRead.current.has(selected.id)) return;
     markingRead.current.add(selected.id);
     void fetch("/api/communications/threads", {
       method: "PATCH",
@@ -346,7 +588,38 @@ function ChannelWorkspace({
       const result = await response.json().catch(() => null) as { data?: CommunicationCentreData } | null;
       if (response.ok && result?.data) onData(result.data);
     }).finally(() => markingRead.current.delete(selected.id));
-  }, [onData, selected]);
+  }, [conversationVisible, onData, selected]);
+
+  // The full-screen mobile conversation behaves like a page: the device back
+  // gesture returns to the inbox, and the page behind it stops scrolling.
+  useEffect(() => {
+    if (!overlayOpen) return;
+    const onPop = () => setMobileThreadOpen(false);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("popstate", onPop);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("popstate", onPop);
+    };
+  }, [overlayOpen]);
+
+  function openThread(id: string) {
+    setSelectedId(id);
+    setDraft("");
+    if (!isDesktop) {
+      setMobileThreadOpen(true);
+      window.history.pushState({ rechargeThread: id }, "");
+    }
+  }
+
+  function closeThread() {
+    if ((window.history.state as { rechargeThread?: string } | null)?.rechargeThread) {
+      window.history.back();
+    } else {
+      setMobileThreadOpen(false);
+    }
+  }
 
   if (threads.length === 0) {
     return (
@@ -358,81 +631,274 @@ function ChannelWorkspace({
     );
   }
 
+  const guidance = selected ? (
+    <GuidancePanel
+      thread={selected}
+      source={source}
+      workflows={data.workflows}
+      reservation={reservation}
+      reservationLoading={reservationLoading}
+    />
+  ) : null;
+
+  const conversation = selected ? (
+    <ConversationPanel
+      key={selected.id}
+      thread={selected}
+      source={source}
+      connected={connected}
+      currentUser={currentUser}
+      draft={draft}
+      onDraftChange={setDraft}
+      onData={onData}
+      reservation={reservation}
+      reservationLoading={reservationLoading}
+      workflows={data.workflows}
+      onBack={isDesktop ? undefined : closeThread}
+      onOpenInsights={isWide ? undefined : () => setInsightsOpen(true)}
+    />
+  ) : null;
+
+  const Icon = details.icon;
+
   return (
-    <div className="surface grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white xl:h-[40rem] xl:grid-cols-[20rem_minmax(0,1fr)_21rem]">
-      <aside className="min-h-0 border-b border-[#dfe7e4] bg-[#f7f9f8] xl:border-r xl:border-b-0">
-        <div className="space-y-3 border-b border-[#dfe7e4] p-4">
-          <p className="text-sm font-semibold">{details.title}</p>
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#e7eeeb] p-1">
-            <button className={`rounded-lg px-3 py-2 text-xs font-semibold ${queue === "new" ? "bg-[#1c3934] text-white" : "text-[#526b67]"}`} onClick={() => { setQueue("new"); setSelectedId(""); }}>New messages · {newCount}</button>
-            <button className={`rounded-lg px-3 py-2 text-xs font-semibold ${queue === "responded" ? "bg-[#1c3934] text-white" : "text-[#526b67]"}`} onClick={() => { setQueue("responded"); setSelectedId(""); }}>Responded · {respondedCount}</button>
-          </div>
-          <p className="text-xs text-[#718184]">{threads.filter((thread) => thread.unread).length} unopened · {threads.length} conversations</p>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#718184]" />
-            <Input
-              aria-label="Search guest messages"
-              className="h-10 bg-white pl-9"
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search guest messages"
-            />
-          </div>
-          <Select value={propertyFilter} onValueChange={setPropertyFilter}>
-            <SelectTrigger aria-label="Filter messages by property" className="h-10 bg-white"><SelectValue placeholder="All properties" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">All properties</SelectItem>{properties.map((property) => <SelectItem key={property} value={property}>{property}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={sortBy} onValueChange={(value) => setSortBy(value as "unopened" | "newest" | "property")}> 
-            <SelectTrigger aria-label="Sort guest messages" className="h-10 bg-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="unopened">Unopened first</SelectItem>
-              <SelectItem value="newest">Newest message first</SelectItem>
-              <SelectItem value="property">Property name A–Z</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="max-h-56 overflow-y-auto xl:max-h-[calc(40rem-13rem)]">
-          {visibleThreads.map((thread) => (
-            <ThreadListItem
-              key={thread.id}
-              thread={thread}
-              source={source}
-              active={selected?.id === thread.id}
-              onClick={() => {
-                setSelectedId(thread.id);
-                setDraft("");
+    <>
+      <div className="surface overflow-hidden rounded-[1.75rem] border border-[#d5dfdc] bg-white lg:grid lg:h-[min(54rem,calc(100dvh-7rem))] lg:min-h-[36rem] lg:grid-cols-[20.5rem_minmax(0,1fr)] 2xl:grid-cols-[21rem_minmax(0,1fr)_21rem]">
+        <aside className="flex min-h-0 flex-col bg-[#f7f9f8] lg:border-r lg:border-[#e3eae7]">
+          <div className="space-y-3 border-b border-[#e3eae7] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[0.95rem] font-semibold tracking-[-0.01em]">{details.title}</p>
+                <p className="mt-0.5 text-xs text-[#718184]">
+                  {unopenedCount} unopened · {threads.length} conversations
+                </p>
+              </div>
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-[#dde6e2] bg-white text-[#315f50]">
+                <Icon className="size-4" />
+              </span>
+            </div>
+            <QueueToggle
+              value={queue}
+              newCount={newCount}
+              respondedCount={respondedCount}
+              onChange={(next) => {
+                setQueue(next);
+                setSelectedId("");
               }}
             />
-          ))}
-          {visibleThreads.length === 0 && (
-            <p className="px-5 py-10 text-center text-sm text-[#718184]">{queue === "new" ? "No new messages need a response." : "No responded conversations match these filters."}</p>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#7d8f89]" />
+              <Input
+                aria-label={`Search ${details.title.toLowerCase()}`}
+                className="h-10 rounded-xl bg-white pl-9 text-sm"
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search guests, properties, messages"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={propertyFilter} onValueChange={setPropertyFilter}>
+                <SelectTrigger aria-label="Filter messages by property" size="sm" className="h-9 w-full rounded-full bg-white text-xs font-medium"><SelectValue placeholder="All properties" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All properties</SelectItem>{properties.map((property) => <SelectItem key={property} value={property}>{property}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortMode)}>
+                <SelectTrigger aria-label="Sort messages" size="sm" className="h-9 w-full rounded-full bg-white text-xs font-medium">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="waiting">Longest waiting</SelectItem>
+                  <SelectItem value="unopened">Unopened first</SelectItem>
+                  <SelectItem value="newest">Newest first</SelectItem>
+                  <SelectItem value="property">Property A–Z</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+            <div key={`${queue}-${sortBy}-${propertyFilter}`} className="stagger space-y-1">
+              {visibleThreads.map((thread, index) => (
+                <ThreadListItem
+                  key={thread.id}
+                  order={index}
+                  thread={thread}
+                  source={source}
+                  active={isDesktop && selected?.id === thread.id}
+                  onClick={() => openThread(thread.id)}
+                />
+              ))}
+            </div>
+            {visibleThreads.length === 0 && (
+              <div className="animate-rise px-6 py-12 text-center">
+                <span className="mx-auto grid size-11 place-items-center rounded-2xl bg-white text-[#527261] shadow-[var(--shadow-soft)]">
+                  {queue === "new" ? <CheckCheck className="size-5" /> : <Search className="size-5" />}
+                </span>
+                <p className="mt-4 text-sm font-semibold">
+                  {queue === "new" ? "All caught up" : "Nothing found"}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[#718184]">
+                  {queue === "new" ? "No new messages need a response." : "No responded conversations match these filters."}
+                </p>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {isDesktop && (conversation ?? <NoConversation />)}
+        {isWide && guidance && (
+          <aside className="min-h-0 overflow-y-auto overscroll-contain border-l border-[#e3eae7] bg-[#f7f9f8]">
+            {guidance}
+          </aside>
+        )}
+      </div>
+
+      {overlayOpen && conversation && createPortal(
+        <div className="fixed inset-0 z-50 flex flex-col bg-white animate-in fade-in slide-in-from-right-10 duration-300 lg:hidden">
+          {conversation}
+        </div>,
+        document.body,
+      )}
+
+      {!isWide && guidance && (
+        <Sheet open={insightsOpen} onOpenChange={setInsightsOpen}>
+          <SheetContent className="w-full gap-0 overflow-y-auto border-[#d9e2df] bg-[#f7f9f8] p-0 sm:max-w-md">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Guest insights</SheetTitle>
+              <SheetDescription>Guest read, matched workflow, suggested actions and booking details.</SheetDescription>
+            </SheetHeader>
+            {guidance}
+          </SheetContent>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+function QueueToggle({
+  value,
+  newCount,
+  respondedCount,
+  onChange,
+}: {
+  value: "new" | "responded";
+  newCount: number;
+  respondedCount: number;
+  onChange: (value: "new" | "responded") => void;
+}) {
+  return (
+    <div className="relative grid grid-cols-2 rounded-xl border border-[#dde6e2] bg-[#e9efec] p-1" role="tablist" aria-label="Message queue">
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-[#1c3934] shadow-[0_6px_16px_-8px_rgba(16,39,31,0.6)] transition-transform duration-500"
+        style={{
+          transform: value === "new" ? "translateX(0)" : "translateX(100%)",
+          transitionTimingFunction: "var(--ease-spring)",
+        }}
+      />
+      {(["new", "responded"] as const).map((option) => (
+        <button
+          key={option}
+          role="tab"
+          aria-selected={value === option}
+          className={`relative z-10 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors duration-300 ${value === option ? "text-white" : "text-[#526b67] hover:text-[#1c3934]"}`}
+          onClick={() => onChange(option)}
+        >
+          {option === "new" ? "Needs reply" : "Responded"}
+          <span className={`rounded-full px-1.5 text-[0.65rem] tabular-nums transition-colors duration-300 ${value === option ? "bg-white/15" : "bg-[#1c3934]/8"}`}>
+            {option === "new" ? newCount : respondedCount}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ThreadListItem({
+  thread,
+  source,
+  active,
+  order,
+  onClick,
+}: {
+  thread: CommunicationThread;
+  source: CommunicationSource;
+  active: boolean;
+  order: number;
+  onClick: () => void;
+}) {
+  const waiting = waitingMessage(thread);
+  const now = useNow(Boolean(waiting));
+  const elapsed = waiting ? Math.max(0, now - waiting.sentAt) : 0;
+  const tone = waiting ? waitTone(elapsed, source) : null;
+  const last = thread.messages.at(-1);
+  const name = source === "email" ? thread.senderAddress : thread.guestName || "Guest";
+  return (
+    <button
+      data-thread-item
+      style={{ "--i": order } as CSSProperties}
+      aria-current={active ? "true" : undefined}
+      className={`group relative w-full overflow-hidden rounded-2xl px-3.5 py-3 text-left transition-[background-color,box-shadow] duration-300 ${active ? "bg-white shadow-[var(--shadow-lift)] ring-1 ring-[#cbd9d3]" : "hover:bg-white/80"}`}
+      onClick={onClick}
+    >
+      {tone && (
+        <span
+          aria-hidden="true"
+          className={`absolute inset-y-3 left-0 w-[3px] rounded-r-full ${toneStyles[tone].rail} ${tone === "red" ? "animate-pulse" : ""}`}
+        />
+      )}
+      <div className="flex gap-3">
+        <GuestAvatar name={name} thread={thread} source={source} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className={`truncate text-sm ${thread.unread ? "font-bold text-[#10271f]" : "font-semibold"}`}>
+              {name}
+            </p>
+            <span className="shrink-0 text-[0.68rem] font-medium tabular-nums text-[#81908d]">
+              {last ? relativeTime(last.sentAt, now) : ""}
+            </span>
+          </div>
+          <div className="mt-0.5 flex items-center justify-between gap-2">
+            <p className="truncate text-xs text-[#5e7470]">{thread.propertyName || "Property not identified"}</p>
+            {thread.unread && (
+              <span className="shrink-0 rounded-full bg-[#1c3934] px-1.5 py-px text-[0.6rem] font-bold uppercase tracking-[0.04em] text-white">
+                {thread.unreadCount > 1 ? `${thread.unreadCount} new` : "New"}
+              </span>
+            )}
+          </div>
+          <p className={`mt-1.5 line-clamp-2 text-xs leading-5 ${thread.unread ? "text-[#33504a]" : "text-[#6b7b7d]"}`}>
+            {last?.direction === "outbound" && <span className="font-semibold text-[#527261]">You: </span>}
+            {messagePreview(last)}
+          </p>
+          {tone && (
+            <div className="mt-2">
+              <TimerPill elapsed={elapsed} tone={tone} label="waiting" />
+            </div>
           )}
         </div>
-      </aside>
+      </div>
+    </button>
+  );
+}
 
-      {selected && (
-        <>
-          <ConversationPanel
-            thread={selected}
-            source={source}
-            connected={connected}
-            currentUser={currentUser}
-            draft={draft}
-            onDraftChange={setDraft}
-            onData={onData}
-            reservation={reservation}
-            reservationLoading={reservationLoading}
-          />
-          <GuidancePanel
-            thread={selected}
-            workflows={data.workflows}
-            onUseResponse={setDraft}
-          />
-        </>
-      )}
+function TimerPill({ elapsed, tone, label }: { elapsed: number; tone: Tone; label?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.66rem] font-semibold tabular-nums ${toneStyles[tone].pill}`}>
+      <Clock3 className="size-3" /> {formatDuration(elapsed)}
+      {label && <span className="font-medium opacity-75">{label}</span>}
+    </span>
+  );
+}
+
+function NoConversation() {
+  return (
+    <div className="chat-canvas grid place-items-center p-10 text-center">
+      <div className="animate-rise">
+        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-white text-[#527261] shadow-[var(--shadow-soft)]">
+          <MessagesSquare className="size-6" />
+        </span>
+        <p className="mt-4 font-semibold">Select a conversation</p>
+        <p className="mt-1 text-sm text-[#718184]">Pick a guest from the inbox to read and reply.</p>
+      </div>
     </div>
   );
 }
@@ -447,36 +913,47 @@ function ChannelEmptyState({
   details: (typeof sourceDetails)[CommunicationSource];
 }) {
   const Icon = details.icon;
+  const steps = [
+    "Authorise the connection securely",
+    "Conversations sync in automatically",
+    "Reply with live timers and assisted guidance",
+  ];
   return (
-    <section className="surface grid overflow-hidden rounded-[1.6rem] border border-[#d5dfdc] bg-white lg:grid-cols-[1.2fr_0.8fr]">
-      <div className="p-7 sm:p-9">
-        <div className="grid size-12 place-items-center rounded-2xl bg-[#eaf2ee] text-[#315f4d]">
-          <Icon className="size-5" />
+    <section className="surface overflow-hidden rounded-[1.75rem] border border-[#d5dfdc] bg-white lg:grid lg:grid-cols-[1.2fr_0.8fr]">
+      <div className="p-7 sm:p-10">
+        <div className="relative grid size-16 place-items-center">
+          <span className="ring-spin absolute inset-0 rounded-full border border-dashed border-[#bfd0c9]" aria-hidden="true" />
+          <span className="absolute inset-2 rounded-full bg-[#eaf2ee]" aria-hidden="true" />
+          <Icon className="relative size-6 text-[#315f50]" />
         </div>
         <div className="mt-6 flex flex-wrap items-center gap-3">
-          <h2 className="text-2xl font-semibold tracking-[-0.035em]">{details.title}</h2>
+          <h2 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">{details.title}</h2>
           <ConnectionBadge label={connected ? "Connected" : "Awaiting connection"} connected={connected} />
         </div>
-        <p className="mt-3 max-w-xl text-base leading-7 text-[#647577]">{details.description}</p>
+        <p className="mt-3 max-w-xl text-[0.95rem] leading-7 text-[#647577]">{details.description}</p>
         {connected && source === "guests" && (
-          <p className="mt-3 text-sm leading-6 text-[#527261]">
-            Hostaway is connected. New conversations will appear here automatically while this page is open.
+          <p className="mt-3 flex items-center gap-2 text-sm leading-6 text-[#527261]">
+            <span className="live-dot" /> Hostaway is connected. New conversations appear here automatically.
           </p>
         )}
-        <div className="mt-7 rounded-2xl bg-[#f4f7f5] p-5">
-          <p className="text-sm font-semibold">Response timer</p>
-          <div className="mt-4 flex flex-wrap gap-3 text-sm">
-            <LegendDot tone="bg-[#78a84f]" label="Light green · under 5 min" />
-            <LegendDot tone="bg-[#d39a2f]" label="Amber · 5+ min" />
-            <LegendDot tone="bg-[#c24c4c]" label="Red · 10+ min" />
-          </div>
-        </div>
+        <ResponseStandard source={source} />
       </div>
-      <div className="forest-panel border-t border-[#dfe7e4] bg-[#1c3934] p-7 text-white sm:p-9 lg:border-t-0 lg:border-l lg:border-white/10">
-        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#8fb3a2]">Connection route</p>
-        <h3 className="mt-4 text-xl font-semibold">{connectionTitle(source)}</h3>
+      <div className="forest-panel overflow-hidden p-7 sm:p-10">
+        <span className="orb -right-20 -top-20 size-56 bg-[#8fb3a2]/25" aria-hidden="true" />
+        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[#8fb3a2]">Connection route</p>
+        <h3 className="mt-4 text-xl font-semibold tracking-[-0.02em]">{connectionTitle(source)}</h3>
         <p className="mt-3 text-sm leading-6 text-white/60">{connectionCopy(source)}</p>
-        <div className="mt-7 flex items-center gap-2 text-sm font-semibold text-white/80">
+        <ol className="mt-7 space-y-3">
+          {steps.map((step, index) => (
+            <li key={step} className="flex items-center gap-3 text-sm text-white/80">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full border border-white/15 bg-white/5 text-xs font-semibold text-[#c9e7a4]">
+                {index + 1}
+              </span>
+              {step}
+            </li>
+          ))}
+        </ol>
+        <div className="mt-8 flex items-center gap-2 text-xs font-semibold text-white/60">
           <ShieldCheck className="size-4 text-[#8fb3a2]" /> Secure, private workspace
         </div>
       </div>
@@ -484,56 +961,27 @@ function ChannelEmptyState({
   );
 }
 
-function ThreadListItem({
-  thread,
-  source,
-  active,
-  onClick,
-}: {
-  thread: CommunicationThread;
-  source: CommunicationSource;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const waiting = waitingMessage(thread);
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
-  useEffect(() => {
-    if (!waiting) return;
-    const timer = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
-    return () => window.clearInterval(timer);
-  }, [waiting]);
-  const elapsed = waiting ? Math.max(0, now - waiting.sentAt) : 0;
-  const waitingTone = waiting
-    ? elapsed >= 600
-      ? "bg-[#fde8e8] hover:bg-[#f9dddd]"
-      : elapsed >= 300
-        ? "bg-[#fff2cf] hover:bg-[#f9e8b9]"
-        : "bg-[#e9f7dc] hover:bg-[#ddf0cd]"
-    : active
-      ? "bg-white"
-      : "hover:bg-white/70";
+function ResponseStandard({ source }: { source: CommunicationSource }) {
+  const { amberSeconds, redSeconds } = sourceDetails[source];
   return (
-    <button
-      className={`w-full border-b border-[#e4eae8] p-4 text-left transition-colors ${waitingTone} ${active ? "ring-1 ring-inset ring-[#9aafa8]" : ""}`}
-      onClick={onClick}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2"><ChannelLogo thread={thread} source={source} /><p className={`truncate text-sm ${thread.unread ? "font-bold" : "font-semibold"}`}>{source === "email" ? thread.senderAddress : thread.guestName || "Guest"}</p>{thread.unread && <Badge className="shrink-0 border-0 bg-[#315f50] px-2 py-0.5 text-[0.65rem] font-bold text-white">NEW{thread.unreadCount > 1 ? ` · ${thread.unreadCount}` : ""}</Badge>}</div>
-          <p className="mt-1 truncate text-xs font-medium text-[#5e7470]">{thread.propertyName || "Property not identified"}</p>
-        </div>
-        <div className="shrink-0 text-right"><p className="text-[0.68rem] font-medium text-[#718184]">{thread.messages.at(-1) ? formatListTimestamp(thread.messages.at(-1)!.sentAt) : ""}</p>{waiting && <div className="mt-1"><ResponseTimer message={waiting} source={source} compact /></div>}</div>
+    <div className="mt-8 rounded-2xl border border-[#e3eae7] bg-[#f7f9f8] p-5">
+      <p className="eyebrow">Response standard</p>
+      <div className="mt-4 flex h-2 gap-1 overflow-hidden rounded-full">
+        <span className="grow-x flex-1 rounded-full bg-[#7cb356]" />
+        <span className="grow-x flex-1 rounded-full bg-[#dca23a]" style={{ animationDelay: "120ms" }} />
+        <span className="grow-x flex-1 rounded-full bg-[#cf5b55]" style={{ animationDelay: "240ms" }} />
       </div>
-      <p className="mt-3 line-clamp-2 text-xs leading-5 text-[#607174]">
-        {messagePreview(thread.messages.at(-1))}
-      </p>
-      <div className="mt-3 flex items-center justify-between text-[0.7rem] text-[#819093]">
-        <span>{thread.unread ? "Unopened" : "Opened"}</span>
-        <ChevronRight className="size-3.5" />
+      <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-[#5e7470]">
+        <span><strong className="block text-[#3f6327]">On time</strong>Under {amberSeconds / 60} min</span>
+        <span><strong className="block text-[#86601a]">Slipping</strong>{amberSeconds / 60}–{redSeconds / 60} min</span>
+        <span><strong className="block text-[#9c3737]">Overdue</strong>{redSeconds / 60}+ min</span>
       </div>
-    </button>
+    </div>
   );
 }
+
+
+/* ───────────────────────── Conversation ───────────────────────── */
 
 function ConversationPanel({
   thread,
@@ -545,6 +993,9 @@ function ConversationPanel({
   onData,
   reservation,
   reservationLoading,
+  workflows,
+  onBack,
+  onOpenInsights,
 }: {
   thread: CommunicationThread;
   source: CommunicationSource;
@@ -555,6 +1006,9 @@ function ConversationPanel({
   onData: (data: CommunicationCentreData) => void;
   reservation: HostawayReservation | null;
   reservationLoading: boolean;
+  workflows: CommunicationWorkflow[];
+  onBack?: () => void;
+  onOpenInsights?: () => void;
 }) {
   const router = useRouter();
   const messageWindowRef = useRef<HTMLDivElement>(null);
@@ -562,10 +1016,17 @@ function ConversationPanel({
   const [replyError, setReplyError] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [tidiedDraft, setTidiedDraft] = useState("");
+  const guidance = useMemo(() => threadGuidance(thread, workflows), [thread, workflows]);
+  const name = thread.guestName || thread.senderAddress || "Conversation";
+
+  const hasScrolled = useRef(false);
 
   useEffect(() => {
     const messageWindow = messageWindowRef.current;
-    if (messageWindow) messageWindow.scrollTop = messageWindow.scrollHeight;
+    if (!messageWindow) return;
+    // Jump straight to the latest message on open; glide for new arrivals.
+    messageWindow.scrollTo({ top: messageWindow.scrollHeight, behavior: hasScrolled.current ? "smooth" : "auto" });
+    hasScrolled.current = true;
   }, [thread.id, thread.messages.length]);
 
   async function act(action: "junk" | "close" | "reopen") {
@@ -608,88 +1069,129 @@ function ConversationPanel({
   }
 
   function reviewReply() {
+    if (!draft.trim()) return;
     setTidiedDraft(tidyGuestReply(draft, thread.guestName));
     setReviewOpen(true);
   }
 
   return (
-    <section className="flex h-[34rem] min-h-0 flex-col xl:h-full">
-      <header className="border-b border-[#dfe7e4] px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2"><ChannelLogo thread={thread} source={source} large /><p className="font-semibold">{thread.guestName || thread.senderAddress || "Conversation"}</p></div>
-            <p className="mt-1 text-sm font-medium text-[#526b67]">{thread.propertyName || "Property not identified"}</p>
-            <details className="mt-3 rounded-xl border border-[#d8e2de] bg-[#f6f9f7] px-3 py-2 text-xs text-[#526b67]">
-              <summary className="cursor-pointer font-semibold">Booking details</summary>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <BookingDetail label="Channel" value={communicationPlatform(thread, source)} />
-                <BookingDetail label="Booking reference" value={bookingReference(thread) || "Not supplied"} />
-                <BookingDetail label="Guest" value={thread.guestName || "Not supplied"} />
-                <BookingDetail label="Guest email" value={thread.senderAddress || "Not supplied"} />
-                <BookingDetail label="Phone number" value={reservationLoading ? "Loading…" : reservation?.guestPhone || "Not supplied"} />
-                <BookingDetail label="Number of guests" value={reservationLoading ? "Loading…" : reservation?.guestCount ? String(reservation.guestCount) : "Not supplied"} />
-                <BookingDetail label="Booking value" value={reservationLoading ? "Loading…" : reservation ? formatMoney(reservation.grossRevenuePence) : "Not supplied"} />
-                <BookingDetail label="Stay dates" value={reservationLoading ? "Loading…" : reservation ? `${formatBookingDate(reservation.arrivalDate)} – ${formatBookingDate(reservation.departureDate)}` : "Not supplied"} />
-                <BookingDetail label="Property" value={thread.propertyName || "Not identified"} />
-                <BookingDetail label="Conversation" value={thread.status === "closed" ? "Closed" : "Open"} />
-              </div>
-              {(thread.hostawayReservationId || thread.hostawayListingId) && <div className="mt-3 flex flex-wrap gap-2">{thread.hostawayReservationId && <a href={`https://dashboard.hostaway.com/reservations/${encodeURIComponent(thread.hostawayReservationId)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-[#cfdbd7] bg-white px-3 py-1.5 font-semibold text-[#315f50]">Open full booking <ExternalLink className="size-3" /></a>}{thread.hostawayListingId && <a href={`https://dashboard.hostaway.com/listings/${encodeURIComponent(thread.hostawayListingId)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-[#cfdbd7] bg-white px-3 py-1.5 font-semibold text-[#315f50]">Open property <ExternalLink className="size-3" /></a>}</div>}
-            </details>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {source === "email" && (
-              <Button size="sm" variant="outline" disabled={saving} onClick={() => act("junk")}>
-                <Trash2 /> Junk
-              </Button>
-            )}
-            <Button size="sm" variant="outline" disabled={saving} onClick={() => act(thread.status === "closed" ? "reopen" : "close")}>
-              <Check /> {thread.status === "closed" ? "Reopen" : "Close"}
+    <section className="flex h-full min-h-0 flex-col bg-white">
+      <header className="flex items-center gap-3 border-b border-[#e3eae7] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5">
+        {onBack && (
+          <button
+            className="press grid size-10 shrink-0 place-items-center rounded-xl text-[#1c3934] transition-colors hover:bg-[#f1f5f3]"
+            aria-label="Back to inbox"
+            onClick={onBack}
+          >
+            <ArrowLeft className="size-5" />
+          </button>
+        )}
+        <GuestAvatar name={name} thread={thread} source={source} size="lg" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold tracking-[-0.01em]">{name}</p>
+          <p className="truncate text-xs text-[#5e7470]">
+            {communicationPlatform(thread, source)} · {thread.propertyName || "Property not identified"}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {source === "email" && (
+            <Button size="sm" variant="outline" aria-label="Mark as junk" disabled={saving} onClick={() => act("junk")}>
+              <Trash2 /> <span className="hidden sm:inline">Junk</span>
             </Button>
-          </div>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label={thread.status === "closed" ? "Reopen conversation" : "Close conversation"}
+            disabled={saving}
+            onClick={() => act(thread.status === "closed" ? "reopen" : "close")}
+          >
+            <Check /> <span className="hidden sm:inline">{thread.status === "closed" ? "Reopen" : "Close"}</span>
+          </Button>
+          {onOpenInsights && (
+            <Button size="sm" variant="outline" className="relative" aria-label="Open guest insights" onClick={onOpenInsights}>
+              <Sparkles /> <span className="hidden sm:inline">Insights</span>
+              {guidance.suggestedTargets.length > 0 && guidance.replyNeeded && (
+                <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-[#dca23a] ring-2 ring-white" aria-hidden="true" />
+              )}
+            </Button>
+          )}
         </div>
       </header>
 
+      <StayStrip thread={thread} source={source} reservation={reservation} loading={reservationLoading} />
+
+      {guidance.replyNeeded && guidance.suggestedTargets.length > 0 && onOpenInsights && (
+        <button
+          className="flex items-center gap-2 border-b border-[#f0e2bd] bg-[#fffaec] px-4 py-2 text-left text-xs font-semibold text-[#765e22] transition-colors hover:bg-[#fff5dc] sm:px-5"
+          onClick={onOpenInsights}
+        >
+          <AlertTriangle className="size-3.5 shrink-0" />
+          <span className="flex-1">Possible issue detected — review the suggested ticket</span>
+          <ChevronRight className="size-3.5" />
+        </button>
+      )}
+
       <div
         ref={messageWindowRef}
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[#fbfcfb] p-5"
+        className="chat-canvas min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-6"
       >
-        {thread.messages.map((message) => (
-          <MessageBubble key={message.id} message={message} source={source} />
-        ))}
+        <MessageTimeline thread={thread} source={source} name={name} />
       </div>
 
-      <footer className="border-t border-[#dfe7e4] p-4">
-        <Textarea
-          disabled={!connected}
-          rows={3}
-          placeholder={connected ? "Write a reply…" : "Connect this channel to send replies."}
-          value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
-        />
-        {replyError && <p className="mt-2 text-sm font-medium text-red-700">{replyError}</p>}
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <p className="text-xs text-[#718184]">
-            Replies will be attributed to {currentUser.name}.
-          </p>
-          <Button
-            disabled={!connected || !draft.trim() || saving}
-            className="bg-[#1c3934] text-white"
-            onClick={reviewReply}
-          >
-            Review reply <Sparkles />
-          </Button>
-        </div>
-      </footer>
+      <Composer
+        key={thread.id}
+        connected={connected}
+        source={source}
+        draft={draft}
+        onDraftChange={onDraftChange}
+        onReview={reviewReply}
+        saving={saving}
+        replyError={replyError}
+        currentUser={currentUser}
+        suggestion={guidance.replyNeeded ? guidance.suggestedResponse : ""}
+        workflowName={guidance.workflow?.name}
+      />
+
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
-        <DialogContent className="rounded-3xl border-[#d8e2de] sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>AI-tidied reply</DialogTitle>
-            <DialogDescription>Spelling, grammar and tone have been improved without changing the meaning. You can edit it before sending.</DialogDescription>
+        <DialogContent className="gap-0 rounded-3xl border-[#d8e2de] p-0 sm:max-w-xl">
+          <DialogHeader className="border-b border-[#e3eae7] px-6 py-5 text-left">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-xl bg-[#1c3934] text-[#c9e7a4]">
+                <Sparkles className="size-4" />
+              </span>
+              <div>
+                <DialogTitle className="text-lg tracking-[-0.02em]">Review before sending</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Spelling, grammar and tone tidied without changing the meaning.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <Textarea rows={8} value={tidiedDraft} onChange={(event) => setTidiedDraft(event.target.value)} />
-          <DialogFooter>
+          <div className="space-y-3 px-6 py-5">
+            <Textarea
+              rows={9}
+              className="rounded-2xl text-sm leading-6"
+              value={tidiedDraft}
+              onChange={(event) => setTidiedDraft(event.target.value)}
+              aria-label="Reply to send"
+            />
+            <details className="group rounded-xl bg-[#f5f8f6] px-4 py-3 text-xs text-[#5e7470]">
+              <summary className="cursor-pointer list-none font-semibold text-[#315f50]">
+                <ChevronRight className="mr-1 inline size-3.5 transition-transform group-open:rotate-90" />
+                Your original draft
+              </summary>
+              <p className="mt-2 whitespace-pre-wrap leading-5">{draft}</p>
+            </details>
+            <p className="text-xs text-[#81908d]">Sending to {name} as {currentUser.name}.</p>
+            {replyError && <p className="text-sm font-medium text-red-700">{replyError}</p>}
+          </div>
+          <DialogFooter className="border-t border-[#e3eae7] px-6 py-4">
             <Button variant="outline" onClick={() => setReviewOpen(false)}>Keep editing</Button>
-            <Button disabled={saving || !tidiedDraft.trim()} className="bg-[#1c3934] text-white" onClick={() => void sendReply(tidiedDraft)}>{saving ? "Sending…" : "Send tidied reply"} <Send /></Button>
+            <Button disabled={saving || !tidiedDraft.trim()} onClick={() => void sendReply(tidiedDraft)}>
+              {saving ? <LoaderCircle className="animate-spin" /> : <Send />}
+              {saving ? "Sending…" : "Send reply"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -697,29 +1199,153 @@ function ConversationPanel({
   );
 }
 
+function StayStrip({
+  thread,
+  source,
+  reservation,
+  loading,
+}: {
+  thread: CommunicationThread;
+  source: CommunicationSource;
+  reservation: HostawayReservation | null;
+  loading: boolean;
+}) {
+  if (source !== "guests") return null;
+  const reference = bookingReference(thread);
+  const chip = "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e1e9e5] bg-white px-2.5 py-1 text-[0.7rem] font-medium text-[#40585b]";
+  return (
+    <div className="scrollbar-none flex items-center gap-2 overflow-x-auto border-b border-[#eef2f0] bg-[#fbfcfb] px-3 py-2.5 sm:px-5">
+      {loading ? (
+        [0, 1, 2].map((item) => (
+          <span key={item} className="h-6 w-24 shrink-0 animate-pulse rounded-full bg-[#e9efec]" />
+        ))
+      ) : reservation ? (
+        <>
+          <span className={chip}>
+            <CalendarDays className="size-3.5 text-[#6f8f80]" />
+            {formatBookingDate(reservation.arrivalDate)} – {formatBookingDate(reservation.departureDate)}
+          </span>
+          {reservation.guestCount ? (
+            <span className={chip}><Users className="size-3.5 text-[#6f8f80]" />{reservation.guestCount} guests</span>
+          ) : null}
+          <span className={chip}><PoundSterling className="size-3.5 text-[#6f8f80]" />{formatMoney(reservation.grossRevenuePence)}</span>
+        </>
+      ) : (
+        <span className="shrink-0 text-[0.7rem] text-[#81908d]">No reservation details found</span>
+      )}
+      {reference && <span className={chip}><Hash className="size-3.5 text-[#6f8f80]" />{reference}</span>}
+      {thread.hostawayReservationId && (
+        <a
+          href={`https://dashboard.hostaway.com/reservations/${encodeURIComponent(thread.hostawayReservationId)}`}
+          target="_blank"
+          rel="noreferrer"
+          className={chip + " text-[#315f50] transition-colors hover:border-[#b9c9c3]"}
+        >
+          Booking <ExternalLink className="size-3" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+function MessageTimeline({
+  thread,
+  source,
+  name,
+}: {
+  thread: CommunicationThread;
+  source: CommunicationSource;
+  name: string;
+}) {
+  const now = useNow(false);
+  const messages = thread.messages;
+  return (
+    <div className="mx-auto max-w-3xl">
+      {messages.map((message, index) => {
+        const previous = messages[index - 1];
+        const next = messages[index + 1];
+        const newDay = !previous || dayKey(previous.sentAt) !== dayKey(message.sentAt);
+        const groupedWithPrevious =
+          !newDay && previous?.direction === message.direction && message.sentAt - previous.sentAt < 300;
+        const groupedWithNext =
+          next !== undefined &&
+          dayKey(next.sentAt) === dayKey(message.sentAt) &&
+          next.direction === message.direction &&
+          next.sentAt - message.sentAt < 300;
+        return (
+          <div key={message.id}>
+            {newDay && (
+              <div className="my-4 flex items-center gap-3 text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-[#8a9a95]">
+                <span className="h-px flex-1 bg-[#e3eae7]" />
+                {dayLabel(message.sentAt, now)}
+                <span className="h-px flex-1 bg-[#e3eae7]" />
+              </div>
+            )}
+            <MessageBubble
+              message={message}
+              source={source}
+              name={name}
+              grouped={groupedWithPrevious}
+              showMeta={!groupedWithNext}
+              delay={Math.max(0, index - (messages.length - 6)) * 45}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function MessageBubble({
   message,
   source,
+  name,
+  grouped,
+  showMeta,
+  delay,
 }: {
   message: CommunicationMessage;
   source: CommunicationSource;
+  name: string;
+  grouped: boolean;
+  showMeta: boolean;
+  delay: number;
 }) {
   const inbound = message.direction === "inbound";
   return (
-    <div className={`flex ${inbound ? "justify-start" : "justify-end"}`}>
-      <div className={`max-w-[82%] rounded-2xl px-4 py-3 ${inbound ? "border border-[#dfe7e4] bg-white" : "bg-[#1c3934] text-white"}`}>
-        {message.body && <p className="break-words whitespace-pre-wrap text-sm leading-6">{message.body}</p>}
-        {message.attachments.length > 0 && (
-          <div className={`${message.body ? "mt-3" : ""} grid gap-2`}>
-            {message.attachments.map((attachment, index) => <AttachmentPreview key={`${attachment.url}-${index}`} attachment={attachment} />)}
+    <div
+      className={`msg-in flex items-end gap-2 ${inbound ? "" : "flex-row-reverse"} ${grouped ? "mt-1" : "mt-3"}`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      {inbound && (
+        <div className="w-7 shrink-0">
+          {showMeta && (
+            <span className="grid size-7 place-items-center rounded-full bg-[#dfe9e4] text-[0.6rem] font-bold text-[#24473f]">
+              {initialsOf(name)}
+            </span>
+          )}
+        </div>
+      )}
+      <div className={`flex max-w-[85%] flex-col sm:max-w-[72%] ${inbound ? "items-start" : "items-end"}`}>
+        <div
+          className={`rounded-[1.3rem] px-4 py-2.5 ${inbound ? "border border-[#e3eae7] bg-white text-[#1c3934] shadow-[0_1px_2px_rgba(16,39,31,0.04)]" : "bg-gradient-to-br from-[#2a5047] to-[#1c3934] text-white shadow-[0_6px_18px_-10px_rgba(16,39,31,0.7)]"} ${showMeta ? (inbound ? "rounded-bl-md" : "rounded-br-md") : ""}`}
+        >
+          {message.body && <p className="break-words whitespace-pre-wrap text-sm leading-6">{message.body}</p>}
+          {message.attachments.length > 0 && (
+            <div className={`${message.body ? "mt-3" : ""} grid gap-2`}>
+              {message.attachments.map((attachment, index) => <AttachmentPreview key={`${attachment.url}-${index}`} attachment={attachment} />)}
+            </div>
+          )}
+        </div>
+        {showMeta && (
+          <div className={`mt-1 flex flex-wrap items-center gap-1.5 px-1 text-[0.68rem] text-[#81908d] ${inbound ? "" : "justify-end"}`}>
+            <span className="tabular-nums">{formatTime(message.sentAt)}</span>
+            {inbound && <ResponseTimer message={message} source={source} />}
+            {!inbound && message.respondedByName && <span>· {message.respondedByName}</span>}
+            {!inbound && message.isAutomated && <span>· Automated</span>}
+            {!inbound && <CheckCheck className="size-3.5 text-[#6f8f80]" aria-label="Sent" />}
           </div>
         )}
-        <div className={`mt-2 flex flex-wrap items-center gap-2 text-xs ${inbound ? "text-[#6e807d]" : "text-white/55"}`}>
-          <span className="font-medium">{inbound ? "Received" : "Sent"} {formatTimestamp(message.sentAt)}</span>
-          {inbound && <ResponseTimer message={message} source={source} />}
-          {!inbound && message.respondedByName && <span>· {message.respondedByName}</span>}
-          {!inbound && message.isAutomated && <span>· Automated</span>}
-        </div>
       </div>
     </div>
   );
@@ -728,7 +1354,7 @@ function MessageBubble({
 function AttachmentPreview({ attachment }: { attachment: CommunicationMessage["attachments"][number] }) {
   const type = attachment.contentType.toLowerCase();
   if (type.startsWith("image") || /\.(jpg|jpeg|png|gif|webp|heic)(\?|$)/i.test(attachment.url)) {
-    return <a href={attachment.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl border border-black/10 bg-black/5"><img src={attachment.url} alt={attachment.name || "Guest photo"} className="max-h-72 w-full object-contain" /></a>;
+    return <a href={attachment.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl border border-black/10 bg-black/5 transition-opacity hover:opacity-90"><img src={attachment.url} alt={attachment.name || "Guest photo"} className="max-h-72 w-full object-contain" /></a>;
   }
   if (type.startsWith("video") || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(attachment.url)) {
     return <video controls preload="metadata" className="max-h-72 w-full rounded-xl border border-black/10 bg-black" src={attachment.url}>Your browser cannot play this guest video.</video>;
@@ -739,51 +1365,149 @@ function AttachmentPreview({ attachment }: { attachment: CommunicationMessage["a
 function ResponseTimer({
   message,
   source,
-  compact = false,
 }: {
   message: CommunicationMessage;
   source: CommunicationSource;
-  compact?: boolean;
 }) {
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
-  useEffect(() => {
-    if (message.respondedAt) return;
-    const timer = window.setInterval(
-      () => setNow(Math.floor(Date.now() / 1000)),
-      1000,
-    );
-    return () => window.clearInterval(timer);
-  }, [message.respondedAt]);
-
+  const now = useNow(!message.respondedAt);
   const elapsed = Math.max(0, (message.respondedAt ?? now) - message.sentAt);
-  const { amberSeconds, redSeconds } = sourceDetails[source];
-  const tone =
-    elapsed >= redSeconds
-      ? "bg-[#fee8e8] text-[#9c3737]"
-      : elapsed >= amberSeconds
-        ? "bg-[#fff1ce] text-[#8a641c]"
-        : "bg-[#e4f5d7] text-[#426529]";
-
+  const tone = waitTone(elapsed, source);
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full font-semibold ${tone} ${compact ? "px-2 py-1 text-[0.66rem]" : "px-2 py-1"}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-px font-semibold tabular-nums ${toneStyles[tone].pill}`}
+      title={message.respondedAt ? "Time taken to reply" : "Waiting for a reply"}
+    >
       <Clock3 className="size-3" /> {formatDuration(elapsed)}
+      <span className="font-medium opacity-75">{message.respondedAt ? "to reply" : "waiting"}</span>
     </span>
   );
 }
 
-function GuidancePanel({
-  thread,
-  workflows,
-  onUseResponse,
+function Composer({
+  connected,
+  source,
+  draft,
+  onDraftChange,
+  onReview,
+  saving,
+  replyError,
+  currentUser,
+  suggestion,
+  workflowName,
 }: {
-  thread: CommunicationThread;
-  workflows: CommunicationWorkflow[];
-  onUseResponse: (response: string) => void;
+  connected: boolean;
+  source: CommunicationSource;
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onReview: () => void;
+  saving: boolean;
+  replyError: string;
+  currentUser: CentreUser;
+  suggestion: string;
+  workflowName?: string;
 }) {
-  const workflow = useMemo(
-    () => matchWorkflow(thread, workflows),
-    [thread, workflows],
+  const [dismissed, setDismissed] = useState(false);
+  const footer = "border-t border-[#e3eae7] bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4";
+
+  if (!connected) {
+    return (
+      <footer className={footer}>
+        <div className="flex items-start gap-3 rounded-2xl border border-dashed border-[#cbd8d3] bg-[#f7f9f8] p-4">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-[#527261] shadow-[var(--shadow-soft)]">
+            <PlugZap className="size-4" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold">Read-only until {sourceDetails[source].label} is connected</p>
+            <p className="mt-0.5 text-xs leading-5 text-[#718184]">
+              You can still read the conversation and insights. Replies unlock automatically once the connection is live.
+            </p>
+          </div>
+        </div>
+      </footer>
+    );
+  }
+
+  return (
+    <footer className={footer}>
+      {suggestion && !draft.trim() && !dismissed && (
+        <div className="animate-rise mb-3 rounded-2xl border border-[#d6e5cf] bg-gradient-to-br from-[#f3f9ee] to-[#eef5f1] p-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex min-w-0 items-center gap-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#4a6a3a]">
+              <Sparkles className="size-3.5 shrink-0" /> Suggested reply
+              {workflowName && <span className="truncate font-medium normal-case tracking-normal text-[#6b7f73]">· {workflowName}</span>}
+            </p>
+            <button
+              aria-label="Dismiss suggestion"
+              className="press grid size-6 shrink-0 place-items-center rounded-full text-[#7c8f88] transition-colors hover:bg-white"
+              onClick={() => setDismissed(true)}
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+          <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-[#2c4a42]">{suggestion}</p>
+          <Button size="sm" className="mt-3" onClick={() => onDraftChange(suggestion)}>
+            <Check /> Use this reply
+          </Button>
+        </div>
+      )}
+      <div className="rounded-2xl border border-[#cfdbd6] bg-white transition-[border-color,box-shadow] duration-200 focus-within:border-[#315f50] focus-within:shadow-[0_0_0_4px_rgba(49,95,80,0.1)]">
+        <textarea
+          aria-label="Write a reply"
+          className="field-sizing-content block max-h-48 min-h-[3.25rem] w-full resize-none bg-transparent px-4 pt-3 text-sm leading-6 outline-none placeholder:text-[#8a9a95] focus-visible:outline-none"
+          placeholder="Write a reply…"
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              onReview();
+            }
+          }}
+        />
+        <div className="flex items-center justify-between gap-3 px-3 pb-2.5 pt-1">
+          <p className="truncate text-[0.7rem] text-[#81908d]">
+            Replying as {currentUser.name}
+            <span className="hidden sm:inline"> · Ctrl/⌘ + Enter to review</span>
+          </p>
+          <Button size="sm" disabled={!draft.trim() || saving} onClick={onReview}>
+            Review <Send />
+          </Button>
+        </div>
+      </div>
+      {replyError && <p className="mt-2 text-sm font-medium text-red-700">{replyError}</p>}
+    </footer>
   );
+}
+
+function GuestAvatar({
+  name,
+  thread,
+  source,
+  size = "md",
+}: {
+  name: string;
+  thread: CommunicationThread;
+  source: CommunicationSource;
+  size?: "md" | "lg";
+}) {
+  const tone = avatarTones[hashString(name) % avatarTones.length];
+  return (
+    <span className={`relative grid shrink-0 place-items-center rounded-full font-bold ${tone} ${size === "lg" ? "size-11 text-sm" : "size-10 text-xs"}`}>
+      {initialsOf(name)}
+      <span className="absolute -bottom-0.5 -right-0.5 rounded-full ring-2 ring-white">
+        <ChannelLogo thread={thread} source={source} />
+      </span>
+    </span>
+  );
+}
+
+
+/* ───────────────────────── Guest insights ───────────────────────── */
+
+type ReportTarget = "ready" | "cleans" | "direct";
+
+function threadGuidance(thread: CommunicationThread, workflows: CommunicationWorkflow[]) {
+  const workflow = matchWorkflow(thread, workflows);
   const latestInbound = [...thread.messages]
     .reverse()
     .find((message) => message.direction === "inbound");
@@ -792,84 +1516,187 @@ function GuidancePanel({
   const maintenance = detectMaintenanceCategory(responseContext);
   const directBooking = detectDirectBookingOpportunity(responseContext);
   const suggestedResponse = replyNeeded ? buildSuggestedResponse(thread, responseContext, workflow, maintenance) : "";
-  const sentiment = guestSentiment(thread);
-  const experienceSummary = summariseGuestExperience(thread);
-  const travelReason = detectTravelReason(thread);
   const suggestedTargets: ReportTarget[] = [
     ...(maintenance ? ["ready" as const] : []),
     ...(workflow?.escalationTarget === "cleans" ? ["cleans" as const] : []),
     ...(directBooking ? ["direct" as const] : []),
   ];
+  return { workflow, replyNeeded, suggestedResponse, suggestedTargets, maintenance };
+}
+
+function GuidancePanel({
+  thread,
+  source,
+  workflows,
+  reservation,
+  reservationLoading,
+}: {
+  thread: CommunicationThread;
+  source: CommunicationSource;
+  workflows: CommunicationWorkflow[];
+  reservation: HostawayReservation | null;
+  reservationLoading: boolean;
+}) {
+  const { workflow, replyNeeded, suggestedTargets, maintenance } = useMemo(
+    () => threadGuidance(thread, workflows),
+    [thread, workflows],
+  );
+  const sentiment = guestSentiment(thread);
+  const experienceSummary = summariseGuestExperience(thread);
+  const travelReason = detectTravelReason(thread);
+  const steps = workflow
+    ? workflow.instructions
+        .split("\n")
+        .map((line) => line.replace(/^\s*(\d+[.)]|[-•*])\s*/, "").trim())
+        .filter(Boolean)
+    : [];
+  const sentimentDot = {
+    positive: "bg-[#6aa441]",
+    neutral: "bg-[#8fb3a2]",
+    warning: "bg-[#d39a2f]",
+    negative: "bg-[#c24c4c]",
+  }[sentiment.tone];
+  const loadingValue = (value: string) => (reservationLoading ? "Loading…" : value);
 
   return (
-    <aside className="max-h-[34rem] overflow-y-auto border-t border-[#dfe7e4] bg-[#f5f8f6] p-5 xl:max-h-none xl:border-t-0 xl:border-l">
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        <Sparkles className="size-4 text-[#557c3a]" /> AI response assistant
+    <div key={thread.id} className="view-enter space-y-6 p-5">
+      <div className="flex items-center gap-3">
+        <span className="grid size-10 place-items-center rounded-xl bg-[#1c3934] text-[#c9e7a4] shadow-[0_6px_16px_-8px_rgba(16,39,31,0.6)]">
+          <Sparkles className="size-4" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold">Guest insights</p>
+          <p className="text-xs text-[#718184]">Read from this conversation</p>
+        </div>
       </div>
-      <div className="mt-4 grid gap-2">
-        <InsightCard label="Guest sentiment" value={sentiment.label} note={sentiment.note} tone={sentiment.tone} />
-        <InsightCard label="Experience summary" value={experienceSummary} />
-        <InsightCard label="Reason for travel" value={travelReason} />
-      </div>
+
       {replyNeeded && suggestedTargets.length > 0 && (
         <ReportActions
           key={thread.id}
           thread={thread}
           message={replyNeeded}
           suggestedTargets={suggestedTargets}
+          maintenance={maintenance}
         />
       )}
-      {workflow ? (
-        <div className="mt-4 space-y-4">
-          <div className="surface rounded-2xl border border-[#dbe5df] bg-white p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-semibold">{workflow.name}</p>
-              {workflow.priority === "urgent" && (
-                <Badge className="border-0 bg-[#fee8e8] text-[#9c3737]">Urgent</Badge>
-              )}
-            </div>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#5e7072]">{workflow.instructions}</p>
+
+      <PanelSection title="Guest read">
+        <div className="divide-y divide-[#edf1ef] overflow-hidden rounded-2xl border border-[#e1e9e5] bg-white">
+          <div className="p-3.5">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#81908d]">Sentiment</p>
+            <p className="mt-1.5 flex items-center gap-2 text-sm font-semibold text-[#29443e]">
+              <span className={`size-2 rounded-full ${sentimentDot}`} />
+              {sentiment.label}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[#718184]">{sentiment.note}</p>
+          </div>
+          <div className="p-3.5">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#81908d]">Reason for travel</p>
+            <p className="mt-1.5 text-sm font-semibold text-[#29443e]">{travelReason}</p>
           </div>
         </div>
-      ) : (
-        <div className="mt-4 rounded-2xl border border-dashed border-[#cbd8d3] bg-white p-5">
-          <p className="text-sm font-semibold">Common-sense response guidance</p>
-          <p className="mt-2 text-xs leading-5 text-[#718184]">
-            No exact SOP matched, so the suggestion uses the guest&apos;s message, context and Recharge&apos;s warm service tone.
-          </p>
+        <blockquote className="mt-2 rounded-2xl border-l-2 border-[#8fb3a2] bg-white/70 px-4 py-3 text-xs leading-5 text-[#40585b]">
+          {experienceSummary}
+        </blockquote>
+      </PanelSection>
+
+      <PanelSection title="Matched workflow">
+        {workflow ? (
+          <div className="rounded-2xl border border-[#e1e9e5] bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold">{workflow.name}</p>
+              {workflow.priority === "urgent" && (
+                <Badge className="shrink-0 border-0 bg-[#fbe4e2] text-[#9c3737]">Urgent</Badge>
+              )}
+            </div>
+            <ol className="mt-3 space-y-2">
+              {steps.map((step, index) => (
+                <li key={`${index}-${step}`} className="flex gap-2.5 text-xs leading-5 text-[#526568]">
+                  <span className="grid size-5 shrink-0 place-items-center rounded-full bg-[#eef3f0] text-[0.6rem] font-bold text-[#315f50]">
+                    {index + 1}
+                  </span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-[#cbd8d3] bg-white/60 p-4">
+            <p className="text-sm font-semibold">No exact workflow matched</p>
+            <p className="mt-1 text-xs leading-5 text-[#718184]">
+              The suggestion uses the guest&apos;s message, context and Recharge&apos;s warm service tone.
+            </p>
+          </div>
+        )}
+      </PanelSection>
+
+      {source === "guests" && (
+        <PanelSection title="Booking">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-2xl border border-[#e1e9e5] bg-white p-4 text-xs">
+            <BookingDetail label="Channel" value={communicationPlatform(thread, source)} />
+            <BookingDetail label="Reference" value={bookingReference(thread) || "Not supplied"} />
+            <BookingDetail label="Guest email" value={thread.senderAddress || "Not supplied"} />
+            <BookingDetail label="Phone" value={loadingValue(reservation?.guestPhone || "Not supplied")} />
+            <BookingDetail label="Guests" value={loadingValue(reservation?.guestCount ? String(reservation.guestCount) : "Not supplied")} />
+            <BookingDetail label="Booking value" value={loadingValue(reservation ? formatMoney(reservation.grossRevenuePence) : "Not supplied")} />
+            <BookingDetail label="Stay dates" value={loadingValue(reservation ? `${formatBookingDate(reservation.arrivalDate)} – ${formatBookingDate(reservation.departureDate)}` : "Not supplied")} />
+            <BookingDetail label="Conversation" value={thread.status === "closed" ? "Closed" : "Open"} />
+          </div>
+          {(thread.hostawayReservationId || thread.hostawayListingId) && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {thread.hostawayReservationId && <a href={`https://dashboard.hostaway.com/reservations/${encodeURIComponent(thread.hostawayReservationId)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-[#cfdbd7] bg-white px-3 py-1.5 text-xs font-semibold text-[#315f50] transition-colors hover:border-[#b9c9c3]">Full booking <ExternalLink className="size-3" /></a>}
+              {thread.hostawayListingId && <a href={`https://dashboard.hostaway.com/listings/${encodeURIComponent(thread.hostawayListingId)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-[#cfdbd7] bg-white px-3 py-1.5 text-xs font-semibold text-[#315f50] transition-colors hover:border-[#b9c9c3]">Property <ExternalLink className="size-3" /></a>}
+            </div>
+          )}
+        </PanelSection>
+      )}
+
+      {!replyNeeded && (
+        <div className="flex items-start gap-3 rounded-2xl border border-[#cfe0d6] bg-[#eef5f1] p-4">
+          <CheckCheck className="mt-0.5 size-4 shrink-0 text-[#315f50]" />
+          <div>
+            <p className="text-sm font-semibold text-[#315f50]">Response sent</p>
+            <p className="mt-1 text-xs leading-5 text-[#5e7470]">
+              This conversation returns to Needs reply if the guest writes again.
+            </p>
+          </div>
         </div>
       )}
-      {replyNeeded ? <div className="forest-panel mt-4 rounded-2xl bg-[#1c3934] p-4 text-white"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8fb3a2]">Recommended response</p><Badge className="border-0 bg-white/10 text-white">Reply needed</Badge></div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/80">{suggestedResponse}</p><p className="mt-3 text-xs leading-5 text-white/50">Based on the guest&apos;s latest unanswered message, the matched workflow and Recharge&apos;s warm service tone.</p><Button size="sm" className="mt-4 bg-white text-[#1c3934] hover:bg-white/90" onClick={() => onUseResponse(suggestedResponse)}>Use response</Button></div> : <div className="surface mt-4 rounded-2xl border border-[#cbd8d3] bg-white p-4"><div className="flex items-center gap-2 text-sm font-semibold text-[#315f50]"><Check className="size-4" /> Response sent</div><p className="mt-2 text-xs leading-5 text-[#718184]">No further reply is suggested. This conversation will return to New messages if the guest sends another message.</p></div>}
-    </aside>
+    </div>
   );
 }
 
-function InsightCard({ label, value, note, tone = "neutral" }: { label: string; value: string; note?: string; tone?: "neutral" | "positive" | "warning" | "negative" }) {
-  const toneClass = tone === "positive" ? "border-[#b8d2c6] bg-[#edf5f1]" : tone === "warning" ? "border-[#e7d19c] bg-[#fff8e7]" : tone === "negative" ? "border-[#e7b7b7] bg-[#fff1f1]" : "border-[#dbe5df] bg-white";
-  return <div className={`rounded-2xl border p-4 ${toneClass}`}><p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-[#718184]">{label}</p><p className="mt-2 text-sm font-semibold leading-5 text-[#29443e]">{value}</p>{note && <p className="mt-1 text-xs leading-5 text-[#718184]">{note}</p>}</div>;
+function PanelSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <p className="mb-2 px-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#6f8f80]">{title}</p>
+      {children}
+    </section>
+  );
 }
-
-type ReportTarget = "ready" | "cleans" | "direct";
 
 const reportActions: Array<{
   target: ReportTarget;
   label: string;
+  done: string;
   destination: string;
   icon: typeof Wrench;
 }> = [
-  { target: "ready", label: "Approve maintenance ticket", destination: "Maintenance board", icon: Wrench },
-  { target: "cleans", label: "Clean issue", destination: "Cleans", icon: SprayCan },
-  { target: "direct", label: "Create direct booking ticket", destination: "Direct bookings", icon: Plus },
+  { target: "ready", label: "Approve maintenance ticket", done: "Maintenance ticket created", destination: "Adds to the maintenance board", icon: Wrench },
+  { target: "cleans", label: "Raise clean issue", done: "Clean issue created", destination: "Sends to Recharge Cleans", icon: SprayCan },
+  { target: "direct", label: "Create direct booking ticket", done: "Direct booking ticket created", destination: "Adds to direct bookings", icon: Plus },
 ];
 
 function ReportActions({
   thread,
   message,
   suggestedTargets,
+  maintenance,
 }: {
   thread: CommunicationThread;
   message: CommunicationMessage;
   suggestedTargets: ReportTarget[];
+  maintenance: MaintenanceCategory | null;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState<ReportTarget | null>(null);
@@ -908,32 +1735,33 @@ function ReportActions({
   }
 
   return (
-    <div className="surface mt-4 rounded-2xl border border-[#dbe5df] bg-white p-4">
-      <p className="text-sm font-semibold">Action required</p>
-      <p className="mt-1 text-xs leading-5 text-[#718184]">
-        A possible issue was detected. Approve the ticket before it is added to the relevant board.
+    <div className="rounded-2xl border border-[#ecd9a8] bg-gradient-to-br from-[#fffaec] to-[#fff6e0] p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold text-[#6b5520]">
+        <AlertTriangle className="size-4" /> Action suggested
+      </p>
+      <p className="mt-1 text-xs leading-5 text-[#86703a]">
+        {maintenance ? `Possible ${maintenance.toLowerCase()} issue detected.` : "A possible follow-up was detected."} Approve before it is added to a board.
       </p>
       <div className="mt-3 space-y-2">
         {reportActions.filter((action) => suggestedTargets.includes(action.target)).map((action) => {
           const Icon = action.icon;
           const complete = done.includes(action.target);
-          const isRecommended = suggestedTargets.includes(action.target);
           return (
-            <Button
+            <button
               key={action.target}
-              variant="outline"
-              className={`w-full justify-between ${isRecommended ? "border-[#86aa68] bg-[#f1f8e9]" : ""}`}
+              className={`press flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors disabled:cursor-not-allowed ${complete ? "border-[#cfe0d6] bg-[#eef5f1]" : "border-[#ecdcb0] bg-white hover:border-[#d9bf7a]"}`}
               disabled={saving !== null || complete}
               onClick={() => report(action.target)}
             >
-              <span className="inline-flex items-center gap-2">
-                {complete ? <Check /> : <Icon />}
-                {complete ? (action.target === "ready" ? "Maintenance ticket created" : action.target === "direct" ? "Direct booking ticket created" : "Clean issue created") : action.label}
+              <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${complete ? "bg-[#315f50] text-white" : "bg-[#fbefcf] text-[#86601a]"}`}>
+                {saving === action.target ? <LoaderCircle className="size-4 animate-spin" /> : complete ? <Check className="size-4" /> : <Icon className="size-4" />}
               </span>
-              <span className="text-xs font-medium text-[#718184]">
-                {isRecommended ? "Recommended" : action.destination}
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-[#29443e]">{complete ? action.done : action.label}</span>
+                <span className="block text-[0.7rem] text-[#81908d]">{action.destination}</span>
               </span>
-            </Button>
+              {!complete && <ChevronRight className="size-4 shrink-0 text-[#b19650]" />}
+            </button>
           );
         })}
       </div>
@@ -942,6 +1770,9 @@ function ReportActions({
   );
 }
 
+
+/* ───────────────────────── Workflows ───────────────────────── */
+
 function WorkflowWorkspace({
   data,
   currentUser,
@@ -949,34 +1780,112 @@ function WorkflowWorkspace({
   data: CommunicationCentreData;
   currentUser: CentreUser;
 }) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const hostawayWorkflows = data.workflows.filter(
     (workflow) => workflow.channel === "all" || workflow.channel === "guests",
   );
+  const activeCount = hostawayWorkflows.filter((workflow) => workflow.status === "active").length;
+  const visible = hostawayWorkflows.filter((workflow) => {
+    if (filter !== "all" && workflow.status !== filter) return false;
+    const text = `${workflow.name} ${workflow.triggerText} ${workflow.instructions}`.toLowerCase();
+    return text.includes(query.trim().toLowerCase());
+  });
 
   return (
     <div>
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="eyebrow">Response standards</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">Typed workflows</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">Typed workflows</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#647577]">
-            Guidance is matched to incoming messages and shown beside the conversation.
+            Matched to incoming messages and shown beside the conversation, with an approved reply ready to use.
           </p>
         </div>
         {currentUser.role === "admin" && <WorkflowDialog />}
       </div>
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        {hostawayWorkflows.map((workflow) => (
-          <WorkflowCard key={workflow.id} workflow={workflow} admin={currentUser.role === "admin"} />
-        ))}
-      </div>
-      {hostawayWorkflows.length === 0 && (
-        <div className="mt-6 rounded-[1.5rem] border border-dashed border-[#bdcbc7] bg-white p-10 text-center">
-          <Sparkles className="mx-auto size-6 text-[#527261]" />
-          <h3 className="mt-4 font-semibold">No workflows added yet</h3>
-          <p className="mt-2 text-sm text-[#718184]">Admin users can type the first response workflow here.</p>
+
+      {hostawayWorkflows.length > 0 && (
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative sm:max-w-sm sm:flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#7d8f89]" />
+            <Input
+              className="h-10 rounded-xl bg-white pl-9"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search workflows or triggers"
+              aria-label="Search workflows"
+            />
+          </div>
+          <Segmented
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: "all", label: `All · ${hostawayWorkflows.length}` },
+              { value: "active", label: `Active · ${activeCount}` },
+              { value: "inactive", label: `Paused · ${hostawayWorkflows.length - activeCount}` },
+            ]}
+          />
         </div>
       )}
+
+      <div key={filter} className="stagger mt-5 grid gap-4 lg:grid-cols-2">
+        {visible.map((workflow, index) => (
+          <WorkflowCard key={workflow.id} order={index} workflow={workflow} admin={currentUser.role === "admin"} />
+        ))}
+      </div>
+      {hostawayWorkflows.length > 0 && visible.length === 0 && (
+        <p className="mt-6 rounded-2xl border border-dashed border-[#cbd8d3] bg-white/60 px-6 py-10 text-center text-sm text-[#718184]">
+          No workflows match these filters.
+        </p>
+      )}
+      {hostawayWorkflows.length === 0 && (
+        <div className="mt-6 rounded-[1.75rem] border border-dashed border-[#bdcbc7] bg-white/70 px-6 py-14 text-center">
+          <span className="relative mx-auto grid size-16 place-items-center">
+            <span className="ring-spin absolute inset-0 rounded-full border border-dashed border-[#bfd0c9]" aria-hidden="true" />
+            <span className="absolute inset-2 rounded-full bg-[#eaf2ee]" aria-hidden="true" />
+            <Sparkles className="relative size-6 text-[#315f50]" />
+          </span>
+          <h3 className="mt-5 text-lg font-semibold">No workflows yet</h3>
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#718184]">
+            Workflows teach the inbox how Recharge responds — triggers, steps and approved wording.
+            {currentUser.role === "admin" ? " Add the first one above." : " An admin can add the first one."}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: Array<{ value: T; label: string; icon?: typeof Inbox }>;
+}) {
+  return (
+    <div className="inline-flex w-full flex-wrap gap-1 rounded-xl border border-[#dde6e2] bg-[#e9efec] p-1 sm:w-auto" role="radiogroup">
+      {options.map((option) => {
+        const Icon = option.icon;
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            className={`press inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-300 sm:flex-none ${selected ? "bg-white text-[#1c3934] shadow-[0_1px_2px_rgba(16,39,31,0.06),0_4px_12px_-4px_rgba(16,39,31,0.14)]" : "text-[#5e7470] hover:text-[#1c3934]"}`}
+            onClick={() => onChange(option.value)}
+          >
+            {Icon && <Icon className="size-3.5" />}
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -986,8 +1895,10 @@ function WorkflowDialog() {
   const [open, setOpen] = useState(false);
   const [priority, setPriority] = useState<"standard" | "urgent">("standard");
   const [escalationTarget, setEscalationTarget] = useState<"none" | "ready" | "cleans">("none");
+  const [triggerText, setTriggerText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const triggerChips = splitTriggers(triggerText);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1015,52 +1926,82 @@ function WorkflowDialog() {
     }
     setOpen(false);
     setSaving(false);
+    setTriggerText("");
     router.refresh();
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="h-11 rounded-xl bg-[#1c3934] px-5 text-white hover:bg-[#10271f]">
+        <Button className="h-11 px-5">
           <Plus /> Add workflow
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[#d9e2df] p-0 sm:max-w-2xl">
+      <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto rounded-3xl border-[#d9e2df] p-0 sm:max-w-2xl">
         <form onSubmit={submit}>
-          <DialogHeader className="border-b border-[#e2e9e7] px-6 py-6 text-left">
-            <DialogTitle className="text-2xl tracking-[-0.035em]">Add response workflow</DialogTitle>
-            <DialogDescription>Type the trigger, required steps and approved response wording.</DialogDescription>
+          <DialogHeader className="border-b border-[#e2e9e7] px-6 py-5 text-left">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-xl bg-[#1c3934] text-[#c9e7a4]">
+                <Sparkles className="size-4" />
+              </span>
+              <div>
+                <DialogTitle className="text-xl tracking-[-0.03em]">New response workflow</DialogTitle>
+                <DialogDescription className="text-xs">Triggers, required steps and the approved wording.</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           <div className="space-y-5 px-6 py-6">
-            <Field label="Workflow name"><Input name="name" required placeholder="No heating or hot water" /></Field>
+            <Field label="Workflow name"><Input name="name" required placeholder="No heating or hot water" className="h-11" /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Priority">
-                <Select value={priority} onValueChange={(value) => setPriority(value as "standard" | "urgent")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="standard">Standard</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent>
-                </Select>
+                <Segmented
+                  value={priority}
+                  onChange={setPriority}
+                  options={[
+                    { value: "standard", label: "Standard" },
+                    { value: "urgent", label: "Urgent", icon: AlertTriangle },
+                  ]}
+                />
               </Field>
-              <Field label="Escalation">
-                <Select value={escalationTarget} onValueChange={(value) => setEscalationTarget(value as "none" | "ready" | "cleans")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">None</SelectItem><SelectItem value="ready">Ready</SelectItem><SelectItem value="cleans">Cleans</SelectItem></SelectContent>
-                </Select>
+              <Field label="Escalate to">
+                <Segmented
+                  value={escalationTarget}
+                  onChange={setEscalationTarget}
+                  options={[
+                    { value: "none", label: "None" },
+                    { value: "ready", label: "Ready", icon: Wrench },
+                    { value: "cleans", label: "Cleans", icon: SprayCan },
+                  ]}
+                />
               </Field>
             </div>
             <Field label="Trigger words or situations">
-              <Textarea name="triggerText" required rows={3} placeholder="heating, boiler, no hot water, radiator" />
+              <Textarea
+                name="triggerText"
+                required
+                rows={2}
+                value={triggerText}
+                onChange={(event) => setTriggerText(event.target.value)}
+                placeholder="heating, boiler, no hot water, radiator"
+              />
+              {triggerChips.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {triggerChips.map((trigger) => <TriggerChip key={trigger}>{trigger}</TriggerChip>)}
+                </div>
+              )}
             </Field>
-            <Field label="Instructions">
-              <Textarea name="instructions" required rows={6} placeholder={"1. Acknowledge the guest\n2. Check the property notes\n3. Provide the approved troubleshooting\n4. Escalate if unresolved"} />
+            <Field label="Steps (one per line)">
+              <Textarea name="instructions" required rows={5} placeholder={"Acknowledge the guest\nCheck the property notes\nProvide the approved troubleshooting\nEscalate if unresolved"} />
             </Field>
             <Field label="Approved response (optional)">
-              <Textarea name="approvedResponse" rows={5} placeholder="Hello {{guest_name}}, thank you for letting us know…" />
+              <Textarea name="approvedResponse" rows={4} placeholder="Hello {{guest_name}}, thank you for letting us know…" />
+              <p className="text-xs text-[#81908d]">Use {"{{guest_name}}"} and {"{{property_name}}"} to personalise.</p>
             </Field>
-            {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+            {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
           </div>
-          <DialogFooter className="border-t border-[#e2e9e7] px-6 py-5">
+          <DialogFooter className="border-t border-[#e2e9e7] px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={saving} className="bg-[#1c3934] text-white hover:bg-[#10271f]">{saving ? "Saving…" : "Save workflow"}</Button>
+            <Button disabled={saving}>{saving ? "Saving…" : "Save workflow"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -1068,40 +2009,98 @@ function WorkflowDialog() {
   );
 }
 
-function WorkflowCard({ workflow, admin }: { workflow: CommunicationWorkflow; admin: boolean }) {
+function WorkflowCard({ workflow, admin, order }: { workflow: CommunicationWorkflow; admin: boolean; order: number }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const active = workflow.status === "active";
+  const triggers = splitTriggers(workflow.triggerText);
+  const steps = workflow.instructions
+    .split("\n")
+    .map((line) => line.replace(/^\s*(\d+[.)]|[-•*])\s*/, "").trim())
+    .filter(Boolean);
+
   async function toggle() {
     setSaving(true);
     const response = await fetch("/api/communications/workflows", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: workflow.id, status: workflow.status === "active" ? "inactive" : "active" }),
+      body: JSON.stringify({ id: workflow.id, status: active ? "inactive" : "active" }),
     });
     setSaving(false);
     if (response.ok) router.refresh();
   }
+
   return (
-    <article className="surface rounded-[1.4rem] border border-[#d9e2df] bg-white p-5">
+    <article
+      style={{ "--i": order } as CSSProperties}
+      className={`surface group flex flex-col rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 transition-[transform,box-shadow,border-color] duration-500 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] ${active ? "" : "opacity-75"}`}
+    >
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">{workflow.name}</h3>
-            {workflow.priority === "urgent" && <Badge className="border-0 bg-[#fee8e8] text-[#9c3737]">Urgent</Badge>}
+        <div className="flex min-w-0 items-start gap-3">
+          <span className={`grid size-10 shrink-0 place-items-center rounded-xl transition-transform duration-500 group-hover:-rotate-6 ${workflow.priority === "urgent" ? "bg-[#fbe4e2] text-[#9c3737]" : "bg-[#eef3f0] text-[#315f50]"}`}>
+            {workflow.priority === "urgent" ? <AlertTriangle className="size-4" /> : <Sparkles className="size-4" />}
+          </span>
+          <div className="min-w-0">
+            <h3 className="font-semibold tracking-[-0.01em]">{workflow.name}</h3>
+            <p className="mt-0.5 text-xs text-[#81908d]">
+              Guest messages
+              {workflow.escalationTarget !== "none" && ` · escalates to ${workflow.escalationTarget === "ready" ? "Ready" : "Cleans"}`}
+            </p>
           </div>
-          <p className="mt-1 text-xs font-medium uppercase tracking-[0.1em] text-[#819093]">Hostaway guests</p>
         </div>
-        <Badge className={workflow.status === "active" ? "border-0 bg-[#e8f7d6] text-[#36561d]" : "border-0 bg-[#eef1f0] text-[#667977]"}>{workflow.status}</Badge>
+        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.08em] ${active ? "bg-[#e6f2dc] text-[#3f6327]" : "bg-[#eef1f0] text-[#667977]"}`}>
+          {active ? <span className="live-dot" /> : <Pause className="size-3" />}
+          {active ? "Active" : "Paused"}
+        </span>
       </div>
-      <p className="mt-4 text-xs leading-5 text-[#718184]">Triggers: {workflow.triggerText}</p>
-      <p className="mt-4 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-[#526568]">{workflow.instructions}</p>
-      <div className="mt-5 flex items-center justify-between border-t border-[#e6ecea] pt-4">
-        <span className="text-xs text-[#819093]">Updated {formatDate(workflow.updatedAt)}</span>
-        {admin && <Button size="sm" variant="ghost" disabled={saving} onClick={toggle}>{workflow.status === "active" ? "Pause" : "Activate"}</Button>}
+
+      {triggers.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {triggers.slice(0, 6).map((trigger) => <TriggerChip key={trigger}>{trigger}</TriggerChip>)}
+          {triggers.length > 6 && <TriggerChip muted>+{triggers.length - 6}</TriggerChip>}
+        </div>
+      )}
+
+      <ol className="mt-4 space-y-1.5">
+        {steps.slice(0, 3).map((step, index) => (
+          <li key={`${index}-${step}`} className="flex gap-2.5 text-sm leading-6 text-[#526568]">
+            <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-[#eef3f0] text-[0.6rem] font-bold text-[#315f50]">{index + 1}</span>
+            <span className="line-clamp-2">{step}</span>
+          </li>
+        ))}
+        {steps.length > 3 && <li className="pl-7 text-xs font-medium text-[#81908d]">+{steps.length - 3} more steps</li>}
+      </ol>
+
+      {workflow.approvedResponse && (
+        <blockquote className="mt-4 line-clamp-2 rounded-xl border-l-2 border-[#8fb3a2] bg-[#f6f8f7] px-3 py-2 text-xs leading-5 text-[#5e7470]">
+          “{workflow.approvedResponse}”
+        </blockquote>
+      )}
+
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-[#e8eeeb] pt-4 [margin-top:max(1.25rem,auto)]">
+        <span className="truncate text-xs text-[#81908d]">
+          Updated {formatDate(workflow.updatedAt)}{workflow.createdByName ? ` · ${workflow.createdByName}` : ""}
+        </span>
+        {admin && (
+          <Button size="sm" variant="outline" disabled={saving} onClick={toggle}>
+            {saving ? <LoaderCircle className="animate-spin" /> : active ? <Pause /> : <Play />}
+            {active ? "Pause" : "Activate"}
+          </Button>
+        )}
       </div>
     </article>
   );
 }
+
+function TriggerChip({ children, muted = false }: { children: ReactNode; muted?: boolean }) {
+  return (
+    <span className={`rounded-full border px-2.5 py-0.5 text-[0.7rem] font-medium ${muted ? "border-[#e3eae7] bg-white text-[#81908d]" : "border-[#d9e6df] bg-[#f1f6f3] text-[#315f50]"}`}>
+      {children}
+    </span>
+  );
+}
+
+/* ───────────────────────── Response report ───────────────────────── */
 
 function PerformanceWorkspace({ data }: { data: CommunicationCentreData }) {
   const guestThreads = data.threads.filter((thread) => thread.source === "guests");
@@ -1122,64 +2121,156 @@ function PerformanceWorkspace({ data }: { data: CommunicationCentreData }) {
     current.seconds += Math.max(0, (message.respondedAt || message.sentAt) - message.sentAt);
     team.set(name, current);
   }
+  const teamRows = [...team.entries()].sort((a, b) => b[1].responses - a[1].responses);
+  const total = responseSeconds.length;
+  const share = (count: number) => (total ? Math.round((count / total) * 100) : 0);
+  const averageTone = total ? waitTone(average, "guests") : null;
+  const scheduleByDay = data.schedule.reduce<Map<string, CommunicationCentreData["schedule"]>>((days, shift) => {
+    days.set(shift.shiftDate, [...(days.get(shift.shiftDate) || []), shift]);
+    return days;
+  }, new Map());
 
   return (
-    <div>
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <CentreStat label="Average response" value={formatDuration(Math.round(average))} note="Across Hostaway messages" />
-        <CentreStat label="Green responses" value={String(green)} note="Answered within 5 minutes" tone="green" />
-        <CentreStat label="Amber responses" value={String(amber)} note="Answered within 5–10 minutes" tone="amber" />
-        <CentreStat label="Red responses" value={String(red)} note="Answered after 10 minutes" tone="red" />
-      </section>
-      <section className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <CentreStat label="Messages answered" value={String(answered.length)} note="Hostaway replies recorded" />
-        <CentreStat label="Open conversations" value={String(guestThreads.filter((thread) => thread.status === "open").length)} note="Hostaway guest threads" />
-        <CentreStat label="Over 30 minutes" value={String(overThirtyMinutes)} note="Responses taking more than 30 minutes" tone="amber" alert={overThirtyMinutes > 0} />
-        <CentreStat label="Over 1 hour" value={String(overOneHour)} note="Responses taking more than 60 minutes" tone="red" alert={overOneHour > 0} />
-      </section>
-      <section className="surface mt-5 overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
-        <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-[#e2e9e7] bg-[#f6f8f7] px-5 py-4 text-xs font-semibold uppercase tracking-[0.1em] text-[#718184]">
-          <span>Team member</span><span>Responses</span><span>Average</span>
-        </div>
-        {[...team.entries()].map(([name, result]) => (
-          <div key={name} className="grid grid-cols-[1fr_auto_auto] gap-6 border-b border-[#e6ecea] px-5 py-4 last:border-0">
-            <span className="text-sm font-semibold">{name}</span>
-            <span className="text-sm text-[#647577]">{result.responses}</span>
-            <span className="text-sm font-semibold">{formatDuration(Math.round(result.seconds / result.responses))}</span>
+    <div className="space-y-5">
+      <section className="grid gap-4 xl:grid-cols-[1.25fr_1fr]">
+        <article className="forest-panel overflow-hidden rounded-[1.75rem] p-6 sm:p-8">
+          <span className="orb -right-16 -top-16 size-60 bg-[#8fb3a2]/25" aria-hidden="true" />
+          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-[#8fb3a2]">Average response</p>
+          <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
+            <p className={`text-6xl font-semibold tabular-nums tracking-[-0.06em] sm:text-7xl ${averageTone ? toneStyles[averageTone].onDark : "text-white"}`}>
+              {total ? formatDuration(Math.round(average)) : "—"}
+            </p>
+            <p className="pb-2 text-sm text-white/60">
+              {averageTone === "green" ? "Inside the 5-minute standard" : averageTone === "amber" ? "Slipping past 5 minutes" : averageTone === "red" ? "Outside the 10-minute standard" : "No replies recorded yet"}
+            </p>
           </div>
-        ))}
-        {team.size === 0 && <p className="px-5 py-10 text-center text-sm text-[#718184]">Performance will populate as team members respond through Recharge.</p>}
-      </section>
-      <section className="surface mt-5 overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
-        <div className="border-b border-[#e2e9e7] bg-[#f6f8f7] px-5 py-4">
-          <p className="text-sm font-semibold">Scheduled communication cover</p>
-          <p className="mt-1 text-xs text-[#718184]">The next seven days from My Recharge. Response ownership is measured against the staff rota.</p>
-        </div>
-        {data.schedule.map((shift) => (
-          <div key={shift.id} className="grid gap-2 border-b border-[#e6ecea] px-5 py-4 last:border-0 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-6">
-            <span className="text-sm font-semibold">{shift.name}</span>
-            <span className="text-sm text-[#647577]">{formatScheduleDate(shift.shiftDate)}</span>
-            <span className="text-sm font-semibold">{shift.startTime}–{shift.endTime}</span>
+          <div className="mt-7 flex h-3 gap-1 overflow-hidden rounded-full bg-white/10">
+            {total > 0 && (
+              <>
+                {green > 0 && <span className="grow-x rounded-full bg-[#9fd174]" style={{ flexGrow: green }} />}
+                {amber > 0 && <span className="grow-x rounded-full bg-[#e9b85a]" style={{ flexGrow: amber, animationDelay: "150ms" }} />}
+                {red > 0 && <span className="grow-x rounded-full bg-[#e07a73]" style={{ flexGrow: red, animationDelay: "300ms" }} />}
+              </>
+            )}
           </div>
-        ))}
+          <dl className="mt-5 grid grid-cols-3 gap-3">
+            {([
+              ["On time", "Under 5 min", green, "bg-[#9fd174]"],
+              ["Slipping", "5–10 min", amber, "bg-[#e9b85a]"],
+              ["Overdue", "10+ min", red, "bg-[#e07a73]"],
+            ] as const).map(([label, note, count, dot]) => (
+              <div key={label}>
+                <dt className="flex items-center gap-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-white/50">
+                  <span className={`size-1.5 rounded-full ${dot}`} /> {label}
+                </dt>
+                <dd className="mt-1.5 text-2xl font-semibold tabular-nums tracking-[-0.04em]">
+                  {count}
+                  <span className="ml-1.5 text-xs font-medium text-white/45">{share(count)}%</span>
+                </dd>
+                <p className="text-[0.7rem] text-white/45">{note}</p>
+              </div>
+            ))}
+          </dl>
+        </article>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <CentreStat label="Messages answered" value={String(answered.length)} note="Hostaway replies recorded" />
+          <CentreStat label="Open conversations" value={String(guestThreads.filter((thread) => thread.status === "open").length)} note="Hostaway guest threads" />
+          <CentreStat label="Over 30 minutes" value={String(overThirtyMinutes)} note="Replies after 30 min" tone="amber" alert={overThirtyMinutes > 0} />
+          <CentreStat label="Over 1 hour" value={String(overOneHour)} note="Replies after 60 min" tone="red" alert={overOneHour > 0} />
+        </div>
+      </section>
+
+      <section className="surface overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+        <div className="flex items-end justify-between gap-4 border-b border-[#e8eeeb] px-5 py-4 sm:px-6">
+          <div>
+            <p className="text-sm font-semibold">Team response times</p>
+            <p className="mt-0.5 text-xs text-[#718184]">Ranked by replies sent through Recharge</p>
+          </div>
+          <span className="text-xs font-medium text-[#81908d]">{teamRows.length} people</span>
+        </div>
+        <div className="stagger divide-y divide-[#eef2f0]">
+          {teamRows.map(([name, result], index) => {
+            const averageSeconds = Math.round(result.seconds / result.responses);
+            const tone = waitTone(averageSeconds, "guests");
+            return (
+              <div key={name} style={{ "--i": index } as CSSProperties} className="flex items-center gap-3 px-5 py-3.5 sm:gap-4 sm:px-6">
+                <span className="w-5 text-xs font-semibold tabular-nums text-[#9aa8a4]">{index + 1}</span>
+                <span className={`grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold ${avatarTones[hashString(name) % avatarTones.length]}`}>
+                  {initialsOf(name)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{name}</p>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#eef2f0]">
+                    <span
+                      className="grow-x block h-full rounded-full bg-[#315f50]"
+                      style={{ width: `${Math.max(4, (result.responses / Math.max(1, answered.length)) * 100)}%`, animationDelay: `${index * 80}ms` }}
+                    />
+                  </div>
+                </div>
+                <span className="w-16 text-right text-xs text-[#647577] tabular-nums sm:w-20">
+                  {result.responses} {result.responses === 1 ? "reply" : "replies"}
+                </span>
+                <TimerPill elapsed={averageSeconds} tone={tone} />
+              </div>
+            );
+          })}
+        </div>
+        {team.size === 0 && <p className="px-5 py-12 text-center text-sm text-[#718184]">Performance will populate as team members respond through Recharge.</p>}
+      </section>
+
+      <section className="surface overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
+        <div className="border-b border-[#e8eeeb] px-5 py-4 sm:px-6">
+          <p className="text-sm font-semibold">Communication cover</p>
+          <p className="mt-0.5 text-xs text-[#718184]">The next seven days from My Recharge. Response ownership is measured against this rota.</p>
+        </div>
+        <div className="divide-y divide-[#eef2f0]">
+          {[...scheduleByDay.entries()].map(([date, shifts]) => (
+            <div key={date} className="flex gap-4 px-5 py-4 sm:px-6">
+              <ShiftDate value={date} />
+              <div className="flex flex-1 flex-wrap gap-2">
+                {shifts.map((shift) => (
+                  <span key={shift.id} className="inline-flex items-center gap-2 rounded-full border border-[#e1e9e5] bg-[#f8faf9] py-1 pl-1 pr-3 text-xs">
+                    <span className={`grid size-6 place-items-center rounded-full text-[0.6rem] font-bold ${avatarTones[hashString(shift.name) % avatarTones.length]}`}>
+                      {initialsOf(shift.name)}
+                    </span>
+                    <span className="font-semibold">{shift.name}</span>
+                    <span className="tabular-nums text-[#718184]">{shift.startTime}–{shift.endTime}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
         {data.schedule.length === 0 && (
-          <p className="px-5 py-8 text-center text-sm text-[#718184]">No communication shifts are scheduled in the next seven days.</p>
+          <p className="px-5 py-10 text-center text-sm text-[#718184]">No communication shifts are scheduled in the next seven days.</p>
         )}
       </section>
     </div>
   );
 }
 
-function CentreStat({ label, value, note, alert = false, tone = "neutral" }: { label: string; value: string; note: string; alert?: boolean; tone?: "neutral" | "green" | "amber" | "red" }) {
-  const toneClass = tone === "green" ? "border-[#bdd9a9] bg-[#eef8e6]" : tone === "amber" ? "border-[#ead39b] bg-[#fff7df]" : tone === "red" ? "border-[#ebbbbb] bg-[#fff0f0]" : "border-[#d9e2df] bg-white";
+function ShiftDate({ value }: { value: string }) {
+  const date = new Date(`${value}T12:00:00Z`);
   return (
-    <article className={`rounded-[1.4rem] border p-5 ${toneClass}`}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#718184]">{label}</p>
-        {alert && <AlertTriangle className="size-4 text-[#ba7b26]" />}
+    <div className="grid w-12 shrink-0 place-items-center rounded-xl border border-[#e1e9e5] bg-white py-1.5 text-center">
+      <span className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-[#81908d]">
+        {new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(date)}
+      </span>
+      <span className="text-lg font-semibold leading-tight tabular-nums">{date.getUTCDate()}</span>
+    </div>
+  );
+}
+
+function CentreStat({ label, value, note, alert = false, tone = "neutral" }: { label: string; value: string; note: string; alert?: boolean; tone?: "neutral" | "amber" | "red" }) {
+  const accent = alert ? (tone === "red" ? "text-[#9c3737]" : "text-[#86601a]") : "text-[#1c3934]";
+  return (
+    <article className={`surface flex flex-col rounded-[1.4rem] border bg-white p-4 sm:p-5 ${alert ? (tone === "red" ? "border-[#efc6c3]" : "border-[#ecd9a8]") : "border-[#d9e2df]"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-[#718184]">{label}</p>
+        {alert && <AlertTriangle className={`size-4 shrink-0 ${accent}`} />}
       </div>
-      <p className="mt-6 text-4xl font-semibold tracking-[-0.05em]">{value}</p>
-      <p className="mt-2 text-xs text-[#819093]">{note}</p>
+      <p className={`mt-auto pt-5 text-3xl font-semibold tabular-nums tracking-[-0.05em] sm:text-4xl ${accent}`}>{value}</p>
+      <p className="mt-1 text-xs text-[#819093]">{note}</p>
     </article>
   );
 }
@@ -1193,8 +2284,63 @@ function ConnectionBadge({ label, connected }: { label: string; connected: boole
   );
 }
 
-function LegendDot({ tone, label }: { tone: string; label: string }) {
-  return <span className="inline-flex items-center gap-2"><span className={`size-2 rounded-full ${tone}`} />{label}</span>;
+/* ───────────────────────── Helpers ───────────────────────── */
+
+function averageResponseSeconds(threads: CommunicationThread[]) {
+  const seconds = threads.flatMap((thread) =>
+    thread.messages
+      .filter((message) => message.direction === "inbound" && message.respondedAt)
+      .map((message) => Math.max(0, (message.respondedAt || message.sentAt) - message.sentAt)),
+  );
+  return seconds.length ? Math.round(seconds.reduce((sum, value) => sum + value, 0) / seconds.length) : null;
+}
+
+function splitTriggers(value: string) {
+  return Array.from(new Set(value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean)));
+}
+
+function initialsOf(value: string) {
+  const clean = value.includes("@") ? value.split("@")[0] : value;
+  return (
+    clean
+      .split(/[ ._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase())
+      .join("") || "G"
+  );
+}
+
+function hashString(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function relativeTime(timestamp: number, now: number) {
+  const diff = Math.max(0, now - timestamp);
+  if (diff < 60) return "now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  if (diff < 7 * 86400) return new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(timestamp * 1000));
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(timestamp * 1000));
+}
+
+function dayKey(timestamp: number) {
+  const date = new Date(timestamp * 1000);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function dayLabel(timestamp: number, now: number) {
+  if (dayKey(timestamp) === dayKey(now)) return "Today";
+  if (dayKey(timestamp) === dayKey(now - 86400)) return "Yesterday";
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" }).format(new Date(timestamp * 1000));
+}
+
+function formatTime(timestamp: number) {
+  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp * 1000));
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -1364,14 +2510,6 @@ function formatDuration(seconds: number) {
   return `${minutes}:${String(remaining).padStart(2, "0")}`;
 }
 
-function formatTimestamp(timestamp: number) {
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp * 1000));
-}
-
-function formatListTimestamp(timestamp: number) {
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp * 1000));
-}
-
 function formatMoney(pence: number) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 }
@@ -1399,32 +2537,12 @@ function bookingReference(thread: CommunicationThread) {
   return match?.[1]?.trim() || thread.hostawayReservationId;
 }
 
-function ChannelLogo({ thread, source, large = false }: { thread: CommunicationThread; source: CommunicationSource; large?: boolean }) {
-  const platform = communicationPlatform(thread, source);
-  const size = large ? "size-8" : "size-6";
-  if (platform === "Recharge Direct") {
-    return <span className={`grid ${size} shrink-0 place-items-center overflow-hidden rounded-lg bg-[#1c3934]`} title="Recharge Direct"><img src="/favicon.svg" alt="Recharge" className="size-full object-cover" /></span>;
-  }
-  if (platform === "Airbnb") return <span className={`grid ${size} shrink-0 place-items-center rounded-full bg-[#ff5a5f] text-[0.65rem] font-black text-white`} title="Airbnb">A</span>;
-  if (platform === "Booking.com") return <span className={`grid ${size} shrink-0 place-items-center rounded-full bg-[#003580] text-[0.65rem] font-black text-white`} title="Booking.com">B.</span>;
-  return <span className={`grid ${size} shrink-0 place-items-center rounded-full bg-[#315f50] text-[0.6rem] font-bold text-white`}>{platform.slice(0, 1)}</span>;
-}
 
-function BookingDetail({ label, value }: { label: string; value: string }) {
-  return <div><span className="block text-[#81908d]">{label}</span><strong className="mt-0.5 block break-words text-[#29443e]">{value}</strong></div>;
-}
 
 function formatDate(timestamp: number) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date(timestamp * 1000));
 }
 
-function formatScheduleDate(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  }).format(new Date(`${value}T12:00:00Z`));
-}
 
 function unavailableData(): CommunicationCentreData {
   return {
@@ -1435,4 +2553,20 @@ function unavailableData(): CommunicationCentreData {
     calls: [],
     schedule: [],
   };
+}
+
+function ChannelLogo({ thread, source }: { thread: CommunicationThread; source: CommunicationSource }) {
+  const platform = communicationPlatform(thread, source);
+  const base = "grid size-4 shrink-0 place-items-center overflow-hidden rounded-full text-[0.45rem] font-black text-white";
+  if (platform === "Recharge Direct") {
+    return <span className={`${base} bg-[#1c3934]`} title="Recharge Direct"><img src="/favicon.svg" alt="" className="size-full object-cover" /></span>;
+  }
+  if (platform === "Airbnb") return <span className={`${base} bg-[#ff5a5f]`} title="Airbnb">A</span>;
+  if (platform === "Booking.com") return <span className={`${base} bg-[#003580]`} title="Booking.com">B.</span>;
+  if (platform === "WhatsApp") return <span className={`${base} bg-[#25d366]`} title="WhatsApp"><MessageCircle className="size-2.5" /></span>;
+  return <span className={`${base} bg-[#315f50]`} title={platform}><Mail className="size-2.5" /></span>;
+}
+
+function BookingDetail({ label, value }: { label: string; value: string }) {
+  return <div className="min-w-0"><span className="block text-[#81908d]">{label}</span><strong className="mt-0.5 block break-words font-semibold text-[#29443e]">{value}</strong></div>;
 }
