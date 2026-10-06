@@ -4,6 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import Svg, { Path } from "react-native-svg";
 import { designTokens } from "../../lib/design-tokens";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
+import { HomeScene } from "./HomeScene";
 import { CountUp, Entrance, MotionPress, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
@@ -44,7 +45,7 @@ export function WelcomeHeader({
     return () => loop.stop();
   }, [float, reduced]);
   const t = designTokens[p.isDark ? "dark" : "light"];
-  const bob = float.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+  const bob = float.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
   const drift = float.interpolate({ inputRange: [0, 1], outputRange: [0, 8] });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -55,9 +56,8 @@ export function WelcomeHeader({
         <View style={{ width: 54, height: 18, borderRadius: 9, backgroundColor: "#FAF7F0" }} />
         <View style={{ position: "absolute", left: 12, top: -9, width: 26, height: 22, borderRadius: 11, backgroundColor: "#FAF7F0" }} />
       </Animated.View>
-      <Animated.View pointerEvents="none" style={{ position: "absolute", right: 4, bottom: 18, flexDirection: "row", alignItems: "flex-end", transform: [{ translateY: bob }] }}>
-        <View style={{ marginRight: -22, marginBottom: 2 }}><DimensionalIcon name="house" size={84} /></View>
-        <DimensionalIcon name="building" size={104} />
+      <Animated.View pointerEvents="none" style={{ position: "absolute", right: -6, bottom: 20, transform: [{ translateY: bob }] }}>
+        <HomeScene width={176} />
       </Animated.View>
       <View style={[ui.row, { gap: 14, paddingRight: 120 }]}>
         <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: "#FAF7F0", alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: p.isDark ? "#2E6B5E" : "#A7D9C1" }}>

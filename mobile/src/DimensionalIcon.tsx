@@ -38,23 +38,27 @@ type Grad = (key: keyof typeof C, x2?: string, y2?: string) => string;
 function draw(name: DimensionalName, g: Grad): ReactNode {
   switch (name) {
     case "house":
+      // 2.5D: gable front, shaded side wall and a receding roof plane.
       return <>
-        <Rect x={14} y={30} width={36} height={22} rx={3} fill={g("bone")} />
-        <Path d="M10 32 L32 13 L54 32 L50 35 L32 19.5 L14 35 Z" fill={g("terracotta")} />
-        <Rect x={41} y={15} width={6} height={10} rx={1.5} fill={g("terracotta")} />
-        <Rect x={27} y={38} width={10} height={14} rx={2} fill={g("forest")} />
-        <Circle cx={35} cy={45.5} r={1} fill="#F6D58A" />
-        <Rect x={17.5} y={36} width={7} height={7} rx={1.5} fill={g("gold")} />
-        <Rect x={39.5} y={36} width={7} height={7} rx={1.5} fill={g("gold")} />
+        <Path d="M44 30 L54 25 L54 49 L44 54 Z" fill="#C9BEA4" />
+        <Path d="M12 54 L12 32 L28 17 L44 32 L44 54 Z" fill={g("bone", "0", "1")} />
+        <Path d="M28 17 L38 12 L54 26 L44 31 Z" fill="#B4512F" />
+        <Path d="M9 34 L28 16 L47 34" fill="none" stroke={g("terracotta")} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
+        <Rect x={41} y={12} width={5} height={10} rx={1} fill="#C9BEA4" />
+        <Circle cx={28} cy={29} r={3.4} fill={g("gold")} />
+        <Path d="M23.5 54 V44.5 a4.5 4.5 0 0 1 9 0 V54 Z" fill={g("forest")} />
+        <Rect x={15} y={40} width={6.5} height={6.5} rx={1} fill={g("slate")} />
+        <Rect x={34.5} y={40} width={6.5} height={6.5} rx={1} fill={g("gold")} />
       </>;
     case "building":
+      // 2.5D block: lit front, shaded side and a calm window rhythm.
       return <>
-        <Rect x={16} y={12} width={24} height={40} rx={3} fill={g("forest")} />
-        <Rect x={36} y={24} width={14} height={28} rx={2.5} fill={g("slate")} />
-        {[0, 1, 2, 3].map(row => [0, 1].map(col => <Rect key={row + "-" + col} x={20.5 + col * 9} y={17 + row * 8} width={5.5} height={5} rx={1} fill={(row + col) % 3 === 0 ? "#F6D58A" : "#C9EBDB"} opacity={(row + col) % 3 === 0 ? 1 : 0.55} />))}
-        <Rect x={39.5} y={29} width={7} height={4} rx={1} fill="#FFFDF7" opacity={0.7} />
-        <Rect x={39.5} y={37} width={7} height={4} rx={1} fill="#F6D58A" />
-        <Rect x={25} y={44} width={6} height={8} rx={1.5} fill="#F6D58A" />
+        <Path d="M18 14 L28 9 L50 9 L40 14 Z" fill="#F4EFE4" />
+        <Rect x={18} y={14} width={22} height={41} fill={g("bone", "0", "1")} />
+        <Path d="M40 14 L50 9 L50 50 L40 55 Z" fill="#9DB5AC" />
+        {[0, 1, 2, 3].map(row => [0, 1].map(col => <Rect key={row + "-" + col} x={21.5 + col * 9} y={18 + row * 8.5} width={6} height={5} rx={1} fill={row === 1 && col === 0 || row === 3 && col === 1 ? g("gold") : g("slate")} />))}
+        {[0, 1, 2, 3].map(row => <Path key={"s" + row} d={`M42.5 ${19 + row * 8.5} L47.5 ${16.5 + row * 8.5} L47.5 ${21.5 + row * 8.5} L42.5 ${24 + row * 8.5} Z`} fill="#5E7F87" opacity={0.55} />)}
+        <Rect x={26} y={48} width={6} height={7} rx={1} fill={g("forest")} />
       </>;
     case "hardhat":
       return <>
