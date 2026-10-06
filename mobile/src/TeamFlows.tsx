@@ -332,6 +332,32 @@ export function RepairPipeline({ palette: p }: { palette: Palette }) {
   );
 }
 
+function ThreadBody({ palette: p, thread, draft, setDraft, onSent }: { palette: Palette; thread: Thread; draft: string; setDraft: (value: string) => void; onSent: () => void }) {
+  const open = thread;
+  return (
+    <>
+        {open?.messages.map((message, index) => (
+          <View key={index} style={{ alignSelf: message.from === "us" ? "flex-end" : "flex-start", maxWidth: "86%", padding: 12, borderRadius: 18, borderBottomRightRadius: message.from === "us" ? 4 : 18, borderBottomLeftRadius: message.from === "us" ? 18 : 4, backgroundColor: message.from === "us" ? p.primary : p.background, gap: 4 }}>
+            <Text style={{ color: message.from === "us" ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20 }}>{message.body}</Text>
+            <Text style={{ color: message.from === "us" ? p.onPrimary : p.muted, fontSize: 11, opacity: 0.8 }}>{message.author} · {message.time}</Text>
+          </View>
+        ))}
+        {!!open?.suggestion && (
+          <View style={{ padding: 14, gap: 10, borderRadius: 18, borderWidth: 1, borderColor: p.border, backgroundColor: p.wash }}>
+            <View style={[ui.row, { gap: 8 }]}><Feather name="zap" size={15} color={p.text} /><Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>Suggested reply</Text><Text style={[ui.small, { color: p.muted }]}>from your workflows</Text></View>
+            <Text style={{ color: p.text, fontSize: 14, lineHeight: 20 }}>{open.suggestion}</Text>
+            <MotionPress accessibilityRole="button" onPress={() => setDraft(open.suggestion ?? "")} style={{ alignSelf: "flex-start", minHeight: 38, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
+              <Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>Use this reply</Text>
+            </MotionPress>
+          </View>
+        )}
+        <TextInput accessibilityLabel="Your reply" value={draft} onChangeText={setDraft} placeholder="Write a reply…" placeholderTextColor={p.muted} multiline style={[ui.input, { color: p.text, backgroundColor: p.background, borderColor: p.border, minHeight: 90, textAlignVertical: "top" }]} />
+        <PrimaryButton palette={p} label="Send" icon="send" onPress={() => { setDraft(""); onSent(); }} />
+        <Text style={[ui.small, { color: p.muted, textAlign: "center" }]}>Preview only. Nothing is sent.</Text>
+    </>
+  );
+}
+
 // Inbox split by channel, with an AI-suggested reply for guest messages.
 export function TeamInbox({ palette: p, role }: { palette: Palette; role: WorkspaceRole }) {
   const cleaner = role === "cleans" || role === "cleaning_manager";
@@ -342,6 +368,10 @@ export function TeamInbox({ palette: p, role }: { palette: Palette; role: Worksp
   const [draft, setDraft] = useState("");
   const shown = threads.filter(thread => channel === "all" || thread.channel === channel);
   const icon = (key: InboxChannel) => CHANNELS.find(entry => entry.key === key)?.icon ?? "message-circle";
+  const { width } = useWindowDimensions();
+  const wide = width >= 1024;
+  // Desktop keeps the conversation beside the list instead of in a sheet.
+  const active = wide ? (open && shown.includes(open) ? open : shown[0] ?? null) : open;
   return (
     <View style={{ gap: 14 }}>
       {!!channels.length && (
@@ -359,9 +389,10 @@ export function TeamInbox({ palette: p, role }: { palette: Palette; role: Worksp
           })}
         </ScrollView>
       )}
-      <View style={{ borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
+      <View style={{ flexDirection: wide ? "row" : "column", gap: 16, alignItems: "flex-start" }}>
+      <View style={{ flex: wide ? 5 : undefined, alignSelf: "stretch", borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
         {shown.map((thread, index) => (
-          <MotionPress key={thread.id} {...tint} accessibilityRole="button" accessibilityLabel={`${thread.name}, ${thread.property}, ${thread.unread ? "unread" : "read"}`} onPress={() => { setOpen(thread); setDraft(""); }} style={[ui.row, { gap: 12, padding: 14, borderTopWidth: index ? 1 : 0, borderColor: p.border }]}>
+          <MotionPress key={thread.id} {...tint} accessibilityRole="button" accessibilityLabel={`${thread.name}, ${thread.property}, ${thread.unread ? "unread" : "read"}`} onPress={() => { setOpen(thread); setDraft(""); }} style={[ui.row, { gap: 12, padding: 14, borderTopWidth: index ? 1 : 0, borderColor: p.border, backgroundColor: wide && active?.id === thread.id ? p.wash : "transparent" }]}>
             <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name={icon(thread.channel)} size={18} color={p.text} /></View>
             <View style={{ flex: 1, gap: 2 }}>
               <View style={ui.between}>
@@ -376,27 +407,25 @@ export function TeamInbox({ palette: p, role }: { palette: Palette; role: Worksp
         ))}
         {!shown.length && <Text style={[ui.small, { color: p.muted, padding: 16 }]}>No conversations in this channel yet.</Text>}
       </View>
+      {wide && active && (
+        <View style={{ flex: 7, alignSelf: "stretch", padding: 18, gap: 14, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
+          <View style={[ui.row, { gap: 12, paddingBottom: 12, borderBottomWidth: 1, borderColor: p.border }]}>
+            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name={icon(active.channel)} size={18} color={p.text} /></View>
+            <View style={{ flex: 1 }}>
+              <Text accessibilityRole="header" style={{ color: p.text, fontSize: 17, fontWeight: "700" }}>{active.name}</Text>
+              <Text style={[ui.small, { color: p.muted }]}>{active.property} · {active.source}</Text>
+            </View>
+          </View>
+          <ThreadBody palette={p} thread={active} draft={draft} setDraft={setDraft} onSent={() => setDraft("")} />
+        </View>
+      )}
+      </View>
       <Text style={[ui.small, { color: p.muted }]}>Sample conversations. Guest messages arrive from Hostaway, and WhatsApp and email connect when their accounts are linked.</Text>
-      <Sheet palette={p} visible={!!open} onClose={() => setOpen(null)} title={open?.name ?? ""} subtitle={open ? `${open.property} · ${open.source}` : ""} icon="chat">
-        {open?.messages.map((message, index) => (
-          <View key={index} style={{ alignSelf: message.from === "us" ? "flex-end" : "flex-start", maxWidth: "86%", padding: 12, borderRadius: 18, borderBottomRightRadius: message.from === "us" ? 4 : 18, borderBottomLeftRadius: message.from === "us" ? 18 : 4, backgroundColor: message.from === "us" ? p.primary : p.background, gap: 4 }}>
-            <Text style={{ color: message.from === "us" ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20 }}>{message.body}</Text>
-            <Text style={{ color: message.from === "us" ? p.onPrimary : p.muted, fontSize: 11, opacity: 0.8 }}>{message.author} · {message.time}</Text>
-          </View>
-        ))}
-        {!!open?.suggestion && (
-          <View style={{ padding: 14, gap: 10, borderRadius: 18, borderWidth: 1, borderColor: p.border, backgroundColor: p.wash }}>
-            <View style={[ui.row, { gap: 8 }]}><Feather name="zap" size={15} color={p.text} /><Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>Suggested reply</Text><Text style={[ui.small, { color: p.muted }]}>from your workflows</Text></View>
-            <Text style={{ color: p.text, fontSize: 14, lineHeight: 20 }}>{open.suggestion}</Text>
-            <MotionPress accessibilityRole="button" onPress={() => setDraft(open.suggestion ?? "")} style={{ alignSelf: "flex-start", minHeight: 38, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
-              <Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>Use this reply</Text>
-            </MotionPress>
-          </View>
-        )}
-        <TextInput accessibilityLabel="Your reply" value={draft} onChangeText={setDraft} placeholder="Write a reply…" placeholderTextColor={p.muted} multiline style={[ui.input, { color: p.text, backgroundColor: p.background, borderColor: p.border, minHeight: 90, textAlignVertical: "top" }]} />
-        <PrimaryButton palette={p} label="Send" icon="send" onPress={() => { setDraft(""); setOpen(null); }} />
-        <Text style={[ui.small, { color: p.muted, textAlign: "center" }]}>Preview only. Nothing is sent.</Text>
-      </Sheet>
+      {wide ? null : (
+        <Sheet palette={p} visible={!!open} onClose={() => setOpen(null)} title={open?.name ?? ""} subtitle={open ? `${open.property} · ${open.source}` : ""} icon="chat">
+          {open && <ThreadBody palette={p} thread={open} draft={draft} setDraft={setDraft} onSent={() => { setDraft(""); setOpen(null); }} />}
+        </Sheet>
+      )}
     </View>
   );
 }

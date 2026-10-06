@@ -83,8 +83,8 @@ export function ClientReports({ palette: p }: { palette: Palette }) {
 
       <View style={[card, { gap: 14 }]}>
         {heading("Booking calendar", `Next ${DAYS} days across your live properties`)}
-        <ScrollView horizontal showsHorizontalScrollIndicator={Platform.OS === "web"}>
-          <View style={{ minWidth: desktop ? undefined : 640, width: desktop ? "100%" : undefined, gap: 8, flexGrow: 1 }}>
+        <ScrollView horizontal={!desktop} scrollEnabled={!desktop} showsHorizontalScrollIndicator={Platform.OS === "web" && !desktop} style={{ width: "100%" }} contentContainerStyle={desktop ? { width: "100%" } : undefined}>
+          <View style={{ minWidth: desktop ? undefined : 640, width: "100%", gap: 8, flexGrow: 1 }}>
             <View style={{ flexDirection: "row" }}>
               <View style={{ width: 140 }} />
               <View style={{ flex: 1, flexDirection: "row" }}>
