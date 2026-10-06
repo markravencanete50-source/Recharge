@@ -33,6 +33,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { AccountSetup, Avatar, type Profile } from "./src/AccountSetup";
 import { Artwork, FeatureTile } from "./src/Artwork";
 import { GreetingCard, LoginSplash } from "./src/WelcomeMoment";
+import { ClientReports } from "./src/ClientReports";
 
 // The Supabase-backed web workspace served by the recharge-backend Worker.
 const LIVE_WORKSPACE_SIGN_IN = process.env.EXPO_PUBLIC_LIVE_WORKSPACE_URL || "https://recharge-backend.markravencanete50.workers.dev/sign-in";
@@ -657,7 +658,8 @@ function AppContent() {
                   transform: desktop ? [{translateY:fade.interpolate({inputRange:[0,1],outputRange:[8,0]})}] : [{translateX:fade.interpolate({inputRange:[0,1],outputRange:[14,0]})}],
                 }}
               >
-                {tab === "analytics" && <Reports snapshot={snapshot} period={period} role={role} palette={p} onDates={()=>{setDraft(period);setCalendar(true);}} onExport={exportCsv} exporting={exporting} exportMessage={exportMessage}/>}
+                {tab === "analytics" && role === "client" && <ClientReports palette={p}/>}
+                {tab === "analytics" && role !== "client" && <Reports snapshot={snapshot} period={period} role={role} palette={p} onDates={()=>{setDraft(period);setCalendar(true);}} onExport={exportCsv} exporting={exporting} exportMessage={exportMessage}/>}
                 {(tab==='help'||tab==='activity')&&<View style={[ui.row,{gap:12}]}><IconButton label="Back to Home" icon="arrow-left" onPress={()=>setTab('home')} palette={p}/><Text style={[ui.small,{color:p.muted}]}>Your workspace</Text></View>}
                 {tab==='help'&&<AccessHelp key={'help:'+role} role={role} palette={p} onOpen={openTool}/>}
                 {tab==='activity'&&<View style={{gap:18}}><View style={{gap:6}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>Recent activity</Text><Text style={[ui.body,{color:p.muted}]}>What you have opened, saved and changed on this device.</Text></View><RecentActivity framed items={activity.items} palette={p} error={activity.error} onOpen={event=>{const tool=tools.find(tool=>tool.id===event.moduleId);if(tool)openTool(tool);}}/></View>}

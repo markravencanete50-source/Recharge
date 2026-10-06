@@ -37,13 +37,16 @@ export function LoginSplash({ palette: p, onDone }: { palette: Palette; onDone: 
     const ticker = setInterval(() => setStep(value => Math.min(STEPS.length - 1, value + 1)), duration / STEPS.length);
     return () => { fill.stop(); up.stop(); ring.stop(); clearInterval(ticker); };
   }, [duration, exit, progress, pulse, reduced, rise]);
+  // Mirrors the header: mint accents on forest (light mode), forest on bone (dark mode).
+  const accent = p.isDark ? "#2F6F5E" : "#A7D9C1";
+  const track = p.isDark ? "#1B3E3826" : "#FFFFFF1F";
   const ringStyle = (delay: number) => ({
     position: "absolute" as const,
     width: 210,
     height: 210,
     borderRadius: 105,
     borderWidth: 2,
-    borderColor: "#A7D9C1",
+    borderColor: accent,
     opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [delay ? 0.25 : 0.45, 0] }),
     transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.62 + delay, 1.15 + delay] }) }],
   });
@@ -52,9 +55,9 @@ export function LoginSplash({ palette: p, onDone }: { palette: Palette; onDone: 
       <Animated.View accessibilityViewIsModal accessibilityLiveRegion="polite" accessibilityLabel={STEPS[step]} style={{ flex: 1, opacity: exit, backgroundColor: p.header, alignItems: "center", justifyContent: "center", padding: 24, overflow: "hidden" }}>
         <Svg pointerEvents="none" width="100%" height="100%" style={{ position: "absolute" }}>
           <Defs>
-            <RadialGradient id="splashGlow" cx="0.5" cy="0.42" r="0.6">
-              <Stop offset="0" stopColor="#A7D9C1" stopOpacity={0.22} />
-              <Stop offset="1" stopColor="#A7D9C1" stopOpacity={0} />
+            <RadialGradient id="splashGlow" cx="0.5" cy="0.36" r="0.32">
+              <Stop offset="0" stopColor={accent} stopOpacity={0.24} />
+              <Stop offset="1" stopColor={accent} stopOpacity={0} />
             </RadialGradient>
           </Defs>
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#splashGlow)" />
@@ -66,9 +69,9 @@ export function LoginSplash({ palette: p, onDone }: { palette: Palette; onDone: 
             <HomeScene width={200} />
           </Animated.View>
         </View>
-        <View style={{ marginTop: 18, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16, backgroundColor: "#1B3E38", borderWidth: 1, borderColor: "#3E6658" }}><CompanyLogo palette={{ ...p, isDark: false }} width={170} /></View>
-        <View style={{ width: 220, height: 6, borderRadius: 3, marginTop: 28, backgroundColor: "#FFFFFF1F", overflow: "hidden" }}>
-          <Animated.View style={{ height: 6, borderRadius: 3, backgroundColor: "#A7D9C1", width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }} />
+        <View style={{ marginTop: 22 }}><CompanyLogo palette={p} width={190} /></View>
+        <View style={{ width: 220, height: 6, borderRadius: 3, marginTop: 28, backgroundColor: track, overflow: "hidden" }}>
+          <Animated.View style={{ height: 6, borderRadius: 3, backgroundColor: accent, width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }} />
         </View>
         <Text style={{ marginTop: 14, color: p.headerMuted, fontSize: 14, fontWeight: "500" }}>{STEPS[step]}…</Text>
       </Animated.View>

@@ -207,7 +207,7 @@ html.dark * { scrollbar-width: thin; scrollbar-color: #607c6a transparent; }
 .department-collapse {display:flex;align-items:center;justify-content:space-between;width:100%;min-height:48px;padding:8px 12px;gap:12px;font-size:12px;font-weight:600;color:var(--rc-muted)}
 .department-collapse span {font-size:11px;font-weight:400}
 .recharge-workspace .sidebar-brand img {filter:brightness(0);opacity:.9}
-.dark .recharge-workspace .sidebar-brand img {filter:brightness(0) invert(1)}
+.dark .recharge-workspace .sidebar-brand img {filter:none}
 .recharge-workspace .sidebar-footer {border-color:var(--rc-border);padding:16px}
 .recharge-workspace .sidebar-footer p:first-child {color:var(--rc-text)}
 .recharge-workspace .sidebar button:focus-visible,.recharge-workspace .sidebar a:focus-visible {outline:2px solid var(--rc-primary);outline-offset:2px}
@@ -398,5 +398,7 @@ html.dark [class~="bg-[#1c3934]"] { background-color: #1F3D38; box-shadow: inset
   .recharge-workspace .sidebar-brand{height:4.75rem;padding-top:0;padding-bottom:0;box-shadow:inset 0 -1px 0 var(--border)}
   .recharge-workspace .sidebar-brand span > span{margin-top:4px}
 }
-/* The logo artwork carries its own green canvas; on the dark-mode night bar it sits on a plate of that canvas. */
-.dark .recharge-company-logo{background:#1B3E38!important;border-radius:5px;box-shadow:0 0 0 7px #1B3E38,0 0 0 8px var(--rc-headerBorder,#527867)}
+/* Dark mode reverses the header to bone with forest lettering, so header logos switch to the bone artwork and sit flush. */
+:is(.dark,[data-recharge-theme="dark"]) :is(.sidebar-brand,.workspace-header,.live-header) .recharge-company-logo>.recharge-logo-dark{display:none}
+:is(.dark,[data-recharge-theme="dark"]) :is(.sidebar-brand,.workspace-header,.live-header) .recharge-company-logo>.recharge-logo-light{display:block}
+:is(.dark,[data-recharge-theme="dark"]) :is(.sidebar-brand,.workspace-header,.live-header) .recharge-company-logo{background:#EFE9DB!important}

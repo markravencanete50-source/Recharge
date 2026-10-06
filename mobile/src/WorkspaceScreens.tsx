@@ -18,7 +18,19 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Artwork, FeatureTile } from "./Artwork";
-import { JumpBackIn, QuickOverview, WelcomeHeader } from "./HomeOverview";
+import { ClientPropertyProgress, EnquiryCard, EnquirySheet, JumpBackIn, QuickOverview, WelcomeHeader } from "./HomeOverview";
+import { clientPortfolio } from "./clientPortfolio";
+
+// Each role gets its own line under the greeting.
+const HOME_SUBTITLE: Record<string, string> = {
+  super_admin: "Here is what needs you across the business today.",
+  admin: "Here is what needs you across the business today.",
+  stays: "Your guests, listings and bookings at a glance.",
+  ready: "Your inspections, repairs and orders for today.",
+  cleans: "Your cleans, schedule and updates in one place.",
+  cleaning_manager: "Your team's cleans and quality checks today.",
+  client: "Here is how your properties are doing today.",
+};
 import { FilterBar } from "./FilterBar";
 import { StateGraphic } from "./StateGraphic";
 import { Entrance, CountUp, SlidingPill, MotionPress as Pressable, useReducedMotion } from "./motion";
@@ -438,6 +450,8 @@ export function WorkspaceScreens({
   const properties = useMemo(() => propertiesFor(role), [role]);
   const [query, setQuery] = useState("");
   const [propertyQuery, setPropertyQuery] = useState("");
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
+  const client = useMemo(() => clientPortfolio(), []);
   const [filter, setFilter] = useState("Active");
   const [homeDate, setHomeDate] = useState(() => presetPeriod(1).to);
   const [date, setDate] = useState(() => presetPeriod(1).from);
@@ -548,14 +562,32 @@ export function WorkspaceScreens({
     <>
       {section === "home" ? (
         <>
-          {!desktop&&<WelcomeHeader
+          {(role==="client"||!desktop)&&<WelcomeHeader
             palette={p}
             name={profileName}
             dateLabel={displayDate(presetPeriod(1).to).replace(/ \d{4}$/, "")}
-            subtitle={role === "cleans" ? "Your jobs, schedule and updates in one place." : role === "client" ? "Your properties, decisions and latest updates." : "Your people and properties, working together."}
+            subtitle={HOME_SUBTITLE[role]}
             onCalendar={() => onNavigate("calendar")}
           />}
-          {!desktop&&<QuickOverview
+          {role==="client"&&<>
+            <QuickOverview
+              palette={p}
+              columns={desktop?4:2}
+              sessionKey={"home:client:overview"}
+              onReports={() => onNavigate("analytics")}
+              items={[
+                { key: "properties", icon: "house", value: client.properties.length, label: "Properties", hint: "Open your properties", onPress: () => onNavigate("properties") },
+                { key: "approvals", icon: "clipboard", value: approvalItems(role).length, label: "To approve", hint: "Open approvals", onPress: () => onNavigate("approvals") },
+                { key: "messages", icon: "chat", value: inboxFor(role).filter(item => ["new", "unread"].includes(item.record.status)).length, label: "New messages", hint: "Open your inbox", onPress: () => onNavigate("inbox") },
+                { key: "earnings", icon: "coins", value: Math.round(client.earningsMinor / 100), prefix: "£", label: "Earned this month", hint: "Open reports", onPress: () => onNavigate("analytics") },
+              ]}
+            />
+            <EnquiryCard palette={p} onStart={() => setEnquiryOpen(true)}/>
+            <ClientPropertyProgress palette={p} properties={client.properties} onOpen={() => onNavigate("properties")}/>
+            <LinkRow title="All tools" subtitle="Documents, quotes, maintenance and more for your properties" icon="grid" palette={p} onPress={() => onNavigate("more")}/>
+            <EnquirySheet palette={p} visible={enquiryOpen} onClose={() => setEnquiryOpen(false)}/>
+          </>}
+          {role!=="client"&&!desktop&&<QuickOverview
             palette={p}
             sessionKey={"home:"+role+":overview:"+analyticsPeriod.from+":"+analyticsPeriod.to}
             onReports={() => onNavigate("analytics")}
@@ -566,7 +598,7 @@ export function WorkspaceScreens({
               { key: "properties", icon: "house", value: today.properties ?? null, label: "Properties", hint: "Open properties", onPress: () => onNavigate("properties") },
             ]}
           />}
-          <View testID="home-task-summary" style={{flexDirection:desktop?'row':'column',gap:20,alignItems:'stretch'}}>
+          {role!=="client"&&<View testID="home-task-summary" style={{flexDirection:desktop?'row':'column',gap:20,alignItems:'stretch'}}>
           <Entrance sessionKey={"home:"+role+":hero"} style={desktop?{flex:2,minWidth:0}:undefined}>
             <View
               style={{
@@ -602,14 +634,10 @@ export function WorkspaceScreens({
               </View>
               <View style={{gap:6,marginTop:-6}}>
                 <Text accessibilityRole="header" style={[ui.title,{color:homeTone.heroText,fontSize:desktop?38:30,lineHeight:desktop?44:36}]}>
-                  {role === "client" ? "A clearer picture." : "Let's make progress."}
+                  Let&apos;s make progress.
                 </Text>
                 <Text style={[ui.body,{color:homeTone.heroMuted}]}>
-                  {role === "cleans"
-                    ? "Your jobs, schedule and updates in one place."
-                    : role === "client"
-                      ? "Your properties, decisions and latest updates."
-                      : "Your people and properties, working together."}
+                  {HOME_SUBTITLE[role]}
                 </Text>
               </View>
               <View style={[ui.row, { gap: 18, paddingTop: 4 }]}>
@@ -630,12 +658,12 @@ export function WorkspaceScreens({
               <OpenTasksTrend palette={p} wide={desktop} data={today} motionKey={"overview:"+role+":trend:"+analyticsPeriod.to}/>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={role === "client" ? "Review your approvals" : "Open your work queue"}
-                onPress={() => role === "client" ? onNavigate("approvals") : openQueue()}
+                accessibilityLabel="Open your work queue"
+                onPress={() => openQueue()}
                 style={[ui.between,{minHeight:52,paddingHorizontal:18,borderRadius:18,backgroundColor:homeTone.heroText}]}
               >
                 <Text style={{ color: homeTone.heroStart, fontSize: 14, fontWeight: "700" }}>
-                  {role === "client" ? "Review approvals" : "View all tasks"}
+                  View all tasks
                 </Text>
                 <View style={{width:32,height:32,borderRadius:16,alignItems:"center",justifyContent:"center",backgroundColor:homeTone.heroStart}}>
                   <Feather name="arrow-right" size={17} color={homeTone.heroText} />
@@ -650,7 +678,7 @@ export function WorkspaceScreens({
               { key: "tools", icon: "toolbox", title: "All tools", detail: "Every centre within your access", onPress: () => onNavigate("more") },
             ]}/>
           </TodayTiles>}
-          </View>
+          </View>}
           <Entrance sessionKey={"home:"+role+":schedule"} delay={55} style={{ gap: 10 }}>
             <View style={ui.between}>
               <View style={{flex:1,gap:4}}><Text

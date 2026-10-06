@@ -53,12 +53,13 @@ export function navigationFor(role: WorkspaceRole) {
     { value: "inbox", label: "Inbox", icon: "message-circle" },
     { value: "more", label: "Tools", icon: "grid" },
   ] as const;
+  // Clients: messages sit in the centre; tools stay reachable from Home and each property.
   if (role === "client") return [
     { value: "home", label: "Home", icon: "home" },
     { value: "properties", label: "Properties", icon: "key" },
-    { value: "approvals", label: "Approvals", icon: "check-circle" },
     { value: "inbox", label: "Inbox", icon: "message-circle" },
-    { value: "more", label: "Tools", icon: "grid" },
+    { value: "approvals", label: "Approvals", icon: "check-circle" },
+    { value: "analytics", label: "Reports", icon: "bar-chart-2" },
   ] as const;
   if (role === "admin" || role === "super_admin") return [
     { value: "home", label: "Home", icon: "home" },

@@ -55,13 +55,14 @@ export const designTokens = {
     onPrimary: "#1F3D38",
     wash: "#254538",
     accent: "#A7D9C1",
-    // Dark mode swaps the forest bar for a deeper night bar so the theme change reads at a glance.
-    header: "#0B1714",
-    headerText: "#FAF7F0",
-    headerMuted: "#C7CBBE",
-    headerControl: "#172B25",
-    headerControlText: "#FAF7F0",
-    headerBorder: "#527867",
+    // Client direction: dark mode reverses the light bar, bone with forest lettering, so the
+    // two themes mirror each other and the bone logo artwork sits flush on it.
+    header: brandCanvas,
+    headerText: "#1B3E38",
+    headerMuted: "#4E6259",
+    headerControl: "#E3DAC6",
+    headerControlText: "#1B3E38",
+    headerBorder: "#697A6D",
     chart: "#8FD3C2",
     waiting: "#E8C27D",
     success: "#86D99B",
