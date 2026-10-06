@@ -188,7 +188,7 @@ export function AccountRegistration({
                       onChange={() => setRole(option.id)}
                     />
                     <span className="flex items-start gap-3">
-                      <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${selected ? "bg-[#1c3934] text-white" : "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>
+                      <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${selected ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>
                         <Icon className="size-4" />
                       </span>
                       <span>
@@ -207,8 +207,8 @@ export function AccountRegistration({
               This account type requires admin approval. You’ll see a confirmation screen while your request is reviewed.
             </p>
           )}
-          {error && <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-          <Button disabled={saving} className="mt-7 h-12 w-full rounded-xl bg-[#1c3934] text-white hover:bg-[#10271f]">
+          {error && <p className="mt-5 rounded-xl bg-[var(--rc-danger-bg)] px-4 py-3 text-sm text-[var(--rc-danger-text)]">{error}</p>}
+          <Button disabled={saving} className="mt-7 h-12 w-full rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">
             {saving ? "Creating account…" : role === "client" ? "Create account" : "Request access"} <ArrowRight />
           </Button>
           <a href={signOutPath} className="mt-5 block text-center text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]">

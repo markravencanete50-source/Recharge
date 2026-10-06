@@ -11,6 +11,7 @@ export default defineConfig({
   resolve: { alias: {
     "@": projectRoot,
     "next/navigation": fileURLToPath(new URL("./navigation.ts", import.meta.url)),
+    "next/image": fileURLToPath(new URL("./image.tsx", import.meta.url)),
   } },
   css: { postcss: projectRoot },
   build: { outDir: `${projectRoot}/preview-dist`, emptyOutDir: true },

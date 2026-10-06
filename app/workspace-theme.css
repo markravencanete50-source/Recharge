@@ -8,25 +8,28 @@
 .recharge-workspace .sidebar-brand span span,.recharge-workspace .sidebar-navigation > div > p {font-size:11px}
 .phase-two-reports .eyebrow {color:var(--rc-muted);opacity:1}
 :root:not(.dark) {
-  --background: #f2f5f2; --foreground: #1c3934; --card: #ffffff; --card-foreground: #1c3934;
-  --popover: #ffffff; --popover-foreground: #1c3934; --muted: #edf3ef; --muted-foreground: #526960;
-  --border: #d2dfd7; --input: #bdcec3; --ring: #547863; --secondary: #edf3ef; --secondary-foreground: #244637;
-  --accent: #e5eee8; --accent-foreground: #244637; --primary: #315f50; --primary-foreground: #ffffff;
-  --chart-1: #39714f; --chart-2: #3f858b; --chart-3: #99712f;
-  --rc-danger-text: #923f3f; --rc-danger-bg: #fff0f0; --rc-danger-border: #e7b7b7;
-  --rc-warning-text: #76531c; --rc-warning-bg: #fff8e7; --rc-warning-border: #d9b76b;
-  --rc-info-text: #384978; --rc-info-bg: #eef0ff; --rc-info-border: #d9dff0;
+  /* Same bone & forest palette as the app (lib/design-tokens.ts). */
+  --background: #EFE9DB; --foreground: #152D28; --card: #FAF7F0; --card-foreground: #152D28;
+  --popover: #FAF7F0; --popover-foreground: #152D28; --muted: #E7E0D0; --muted-foreground: #4E6259;
+  --border: #CCC8B8; --input: #697A6D; --ring: #315F50; --secondary: #E7E0D0; --secondary-foreground: #152D28;
+  --accent: #E0E7D9; --accent-foreground: #152D28; --primary: #1F3D38; --primary-foreground: #FAF7F0; --primary-hover: #10271F;
+  --chart-1: #1F5F55; --chart-2: #2F6F63; --chart-3: #9A5A12;
+  --rc-danger-text: #8E3F38; --rc-danger-bg: #F2E1DB; --rc-danger-border: #E2BFB6;
+  --rc-warning-text: #7A4A10; --rc-warning-bg: #F3E7CF; --rc-warning-border: #E3CFA6;
+  --rc-info-text: #3B5866; --rc-info-bg: #DFE7E8; --rc-info-border: #C3D2D6;
+  --rc-success-ink: #3F6327; --rc-success-bg: #E4EDD8;
 }
 html.dark {
   color-scheme: dark;
-  --background: #101e1b; --foreground: #e8f2eb; --card: #192b25; --card-foreground: #e8f2eb;
-  --popover: #20362d; --popover-foreground: #e8f2eb; --muted: #243c31; --muted-foreground: #b4c9ba;
-  --border: #3e594a; --input: #607c6a; --ring: #a9c598; --secondary: #243c31; --secondary-foreground: #e8f2eb;
-  --accent: #2e4a3b; --accent-foreground: #e8f2eb; --primary: #a9c598; --primary-foreground: #12241c;
-  --chart-1: #a9bd81; --chart-2: #70b4a3; --chart-3: #d4ac6d;
-  --rc-danger-text: #ffb5b5; --rc-danger-bg: #442c2d; --rc-danger-border: #885454;
-  --rc-warning-text: #f0cf89; --rc-warning-bg: #3d3524; --rc-warning-border: #78643c;
-  --rc-info-text: #c4ceff; --rc-info-bg: #2b344f; --rc-info-border: #59658a;
+  --background: #0F1E1A; --foreground: #FAF7F0; --card: #182C26; --card-foreground: #FAF7F0;
+  --popover: #213A32; --popover-foreground: #FAF7F0; --muted: #213A32; --muted-foreground: #C7CBBE;
+  --border: #345347; --input: #79998C; --ring: #A7D9C1; --secondary: #213A32; --secondary-foreground: #FAF7F0;
+  --accent: #254538; --accent-foreground: #FAF7F0; --primary: #A7D9C1; --primary-foreground: #1F3D38; --primary-hover: #C3E8D6;
+  --chart-1: #8FD3C2; --chart-2: #B7DA92; --chart-3: #E8C27D;
+  --rc-danger-text: #EDAAA1; --rc-danger-bg: #3A201D; --rc-danger-border: #6E3F38;
+  --rc-warning-text: #E8C27D; --rc-warning-bg: #3A2C15; --rc-warning-border: #6E5530;
+  --rc-info-text: #A9C6D2; --rc-info-bg: #1D2F36; --rc-info-border: #3F5A66;
+  --rc-success-ink: #B7DA92; --rc-success-bg: #22341A;
 }
 /* Existing white utility surfaces participate in the same palette. */
 html { scrollbar-width: thin; scrollbar-color: #8ba798 transparent; }
@@ -51,7 +54,7 @@ html.dark * { scrollbar-width: thin; scrollbar-color: #607c6a transparent; }
 .dark :is(input, textarea, select) { color: var(--foreground); }
 .dark :is(.field, .secondary-button, .icon-button) { background: var(--card); color: var(--foreground); border-color: var(--border); }
 .dark :is(.secondary-button, .icon-button):hover { background: var(--accent); }
-.dark .recharge-workspace { background: radial-gradient(ellipse at 100% 0, #243c312e, transparent 50%), var(--background); }
+.dark .recharge-workspace { background: radial-gradient(ellipse at 100% 0, #254538 0, transparent 45%), var(--background); }
 .dark .eyebrow { color: #b4c9ba; }
 .dark .org-card { background: var(--card); border-color: var(--border); }
 .dark .tool-card { background: linear-gradient(135deg, #20382c, #192b25 70%); border-color: var(--border); box-shadow: inset 0 1px #ffffff09, 0 12px 30px #00000015; }
@@ -310,6 +313,9 @@ html[data-reduce-motion="true"] :is(.recharge-workspace,.phase-two-reports) *,ht
 .command-input{display:flex;align-items:center;gap:12px;border:1px solid var(--rc-controlBorder);border-radius:16px;padding:0 16px;color:var(--rc-muted);background:var(--rc-background)}
 .command-input input{min-height:52px;background:transparent!important;border:0;box-shadow:none;font-size:16px;color:var(--rc-text);padding:0;flex:1}
 .command-input input::placeholder{color:var(--rc-muted)}
+.command-input{transition:border-color 160ms ease,box-shadow 160ms ease}
+.command-input input:focus-visible{outline:none!important;box-shadow:none!important;--tw-ring-shadow:0 0 #0000}
+.command-input:focus-within{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
 .command-hint,.command-group{color:var(--rc-muted);font-size:13px;line-height:20px}
 .command-group{font-weight:600;margin:12px 0 6px}
 .command-results{max-height:min(48vh,420px);overflow:auto;overscroll-behavior:contain;padding:4px}
@@ -382,3 +388,5 @@ html[data-reduce-motion="true"] :is(.recharge-workspace,.phase-two-reports) *,ht
 .workspace-activity-row p{font-size:14px;line-height:22px;color:var(--rc-text)}
 .workspace-activity-row time{font-size:12px;color:var(--rc-muted)}
 @media(prefers-reduced-motion:reduce){.workspace-help-results summary svg{transition:none}}
+/* Forest feature panels keep their colour in dark mode, lifted by a hairline so they separate from the page. */
+html.dark [class~="bg-[#1c3934]"] { background-color: #1F3D38; box-shadow: inset 0 0 0 1px #345347; }

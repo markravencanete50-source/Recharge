@@ -256,11 +256,11 @@ function ReferralDialog() {
             <Field label="Details">
               <Textarea name="details" required rows={5} placeholder="Add the context, access details and expected outcome." />
             </Field>
-            {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+            {error && <p className="text-sm font-medium text-[var(--rc-danger-text)]">{error}</p>}
           </div>
           <DialogFooter className="border-t border-[var(--border)] px-6 py-5">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={saving} className="bg-[#1c3934] text-white hover:bg-[#10271f]">
+            <Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">
               {saving ? "Sending…" : "Send to Ready"} <ArrowRight />
             </Button>
           </DialogFooter>

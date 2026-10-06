@@ -631,7 +631,7 @@ export function RechargePortal({
                 onOpenOnboarding={() => openOnboarding(currentUser.role === "client" ? "client" : "staff")}
               />
             )}
-            <Badge className="border-0 bg-[var(--muted)] px-3 py-1 text-[var(--muted-foreground)]">
+            <Badge className="header-role-badge border-0 bg-[var(--muted)] px-3 py-1 text-[var(--muted-foreground)]">
               {roleLabels[currentUser.role]}
             </Badge>
             <div className="grid size-9 place-items-center rounded-full workspace-avatar text-sm font-bold">
@@ -823,7 +823,7 @@ function Overview({
           </p>
         </div>
         <Button
-          className="h-11 rounded-xl bg-[#1c3934] px-5 text-white hover:bg-[#10271f]"
+          className="h-11 rounded-xl bg-[var(--primary)] px-5 text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]"
           onClick={onViewTools}
         >
           Open your tools <ArrowUpRight />
@@ -1096,7 +1096,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
             </div>
           </section>
           {error && (
-            <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p className="mt-4 rounded-xl bg-[var(--rc-danger-bg)] px-4 py-3 text-sm text-[var(--rc-danger-text)]">
               {error}
             </p>
           )}
@@ -1245,38 +1245,33 @@ function OperationsSection({
 
   return (
     <div>
-      <div className="department-heading flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-        <div className="department-heading-content">
-          <DepartmentIllustration department={section.id} />
-          <div>
-          <p className="eyebrow">Recharge department</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.045em] sm:text-[2.75rem]">
-            {section.label}
-          </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
-            {section.description}
-          </p>
+      <section className="dept-hero">
+        <span className="dept-hero-orb dept-hero-orb-a" aria-hidden="true" />
+        <span className="dept-hero-orb dept-hero-orb-b" aria-hidden="true" />
+        <div className="dept-hero-top">
+          <div className="dept-hero-art"><DepartmentIllustration department={section.id} /></div>
+          <div className="dept-hero-copy">
+            <p className="dept-hero-eyebrow">Recharge department</p>
+            <h1>{section.label}</h1>
+            <p className="dept-hero-description">{section.description}</p>
           </div>
+          <dl className="dept-hero-stats">
+            <div><dt>Tools</dt><dd>{modules.length}</dd></div>
+            <div><dt><span className="dept-hero-live" aria-hidden="true" />Live</dt><dd>{modules.filter((module) => liveInternalModules.has(module.id)).length}</dd></div>
+            <div><dt>Planned</dt><dd>{modules.filter((module) => !liveInternalModules.has(module.id) && !module.url).length}</dd></div>
+          </dl>
         </div>
-        <Badge
-          variant="outline"
-          className="h-fit border-[var(--border)] bg-white px-3 py-1.5 text-[var(--muted-foreground)]"
-        >
-          {modules.length} {modules.length === 1 ? "tool" : "tools"}
-        </Badge>
-      </div>
-
-      <div className="tool-search relative mt-7 max-w-2xl">
-        <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
-        <Input
-          className="h-12 rounded-2xl border-[var(--border)] bg-white pl-11 pr-12"
-          value={toolSearch}
-          onChange={(event) => setToolSearch(event.target.value)}
-          placeholder={`Search ${section.label} tools`}
-          aria-label={`Search ${section.label} tools`}
-        />
-        {toolSearch && <button className="absolute right-1 top-1 grid size-10 place-items-center rounded-xl text-[var(--muted-foreground)] hover:bg-[var(--muted)]" aria-label="Clear tool search" onClick={() => setToolSearch("")}><X className="size-4" /></button>}
-      </div>
+        <div className="dept-hero-search">
+          <Search className="dept-hero-search-icon size-4" aria-hidden="true" />
+          <input
+            value={toolSearch}
+            onChange={(event) => setToolSearch(event.target.value)}
+            placeholder={`Search ${section.label} tools`}
+            aria-label={`Search ${section.label} tools`}
+          />
+          {toolSearch && <button aria-label="Clear tool search" onClick={() => setToolSearch("")}><X className="size-4" /></button>}
+        </div>
+      </section>
       {toolSearch && <p className="mt-3 text-xs text-[var(--muted-foreground)]" role="status">{filteredModules.length} of {modules.length} tools match your search</p>}
 
       {section.id !== "cleans" && (
@@ -1383,7 +1378,16 @@ function ToolCard({
   const action = onOpen ? "Open centre" : module.url && !preview ? "Open tool" : "View details";
   return (
     <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-    <article data-module-id={module.id} className={"tool-card group " + (large ? "tool-card-large" : "")}>
+    <article
+      data-module-id={module.id}
+      className={"tool-card group " + (large ? "tool-card-large" : "")}
+      onMouseMove={(event) => {
+        // Feeds the cursor-following glow in .tool-card::before.
+        const rect = event.currentTarget.getBoundingClientRect();
+        event.currentTarget.style.setProperty("--mx", `${event.clientX - rect.left}px`);
+        event.currentTarget.style.setProperty("--my", `${event.clientY - rect.top}px`);
+      }}
+    >
       <div className="flex items-start justify-between gap-4">
         <span className="tool-art-stage"><ToolIllustration id={module.id} fallback={icons[module.id]} /></span>
         <Badge className="tool-audience border-0 bg-[var(--muted)] text-[0.6rem] uppercase tracking-[0.12em] text-[var(--muted-foreground)]">
@@ -1571,7 +1575,7 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
             Manage
           </Button>
         ) : (
-          <Button className="h-11 rounded-xl bg-[#1c3934] px-5 text-white hover:bg-[#10271f]">
+          <Button className="h-11 rounded-xl bg-[var(--primary)] px-5 text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">
             <Plus /> {teamOnly ? "Add team member" : "Add account"}
           </Button>
         )}
@@ -1713,7 +1717,7 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
               </div>
             </div>
             {error && (
-              <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p role="alert" className="rounded-xl bg-[var(--rc-danger-bg)] px-4 py-3 text-sm text-[var(--rc-danger-text)]">
                 {error}
               </p>
             )}
@@ -1733,7 +1737,7 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
                 preview || saving ||
                 (status === "active" && !isWorkspaceAdmin(role) && selected.length === 0)
               }
-              className="rounded-xl bg-[#1c3934] text-white hover:bg-[#10271f]"
+              className="rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]"
             >
               {saving
                 ? "Saving…"

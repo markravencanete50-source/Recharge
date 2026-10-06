@@ -302,7 +302,7 @@ function PropertyReporting({ data }: { data: PropertyDatabaseData }) {
         {periods.map(([label, value]) => <article key={label} className="rounded-2xl border border-[var(--border)] bg-white p-5"><div className="flex items-center justify-between"><p className="text-sm font-medium text-[var(--muted-foreground)]">New enquiries</p><CalendarDays className="size-4 text-[var(--muted-foreground)]" /></div><p className="mt-4 text-3xl font-semibold">{value}</p><p className="mt-1 text-sm text-[var(--muted-foreground)]">{label}</p></article>)}
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <article className="rounded-2xl bg-[#1c3934] p-6 text-white"><TrendingUp className="size-5 text-[var(--muted-foreground)]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{data.reporting.strikeRate}%</p><p className="mt-2 font-medium">Enquiry-to-onboarding strike rate</p><p className="mt-2 text-sm leading-6 text-white/60">The percentage of recorded enquiries that progressed into onboarding.</p></article>
+        <article className="rounded-2xl bg-[#1c3934] p-6 text-white"><TrendingUp className="size-5 text-[#c9e7a4]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{data.reporting.strikeRate}%</p><p className="mt-2 font-medium">Enquiry-to-onboarding strike rate</p><p className="mt-2 text-sm leading-6 text-white/60">The percentage of recorded enquiries that progressed into onboarding.</p></article>
         <article className="rounded-2xl border border-[var(--border)] bg-white p-6"><UsersRound className="size-5 text-[var(--muted-foreground)]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{portfolios.length}</p><p className="mt-2 font-medium">Clients</p><p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">Landlords or companies with a named portfolio, excluding archived properties.</p></article>
         <article className="rounded-2xl border border-[var(--border)] bg-white p-6"><Building2 className="size-5 text-[var(--muted-foreground)]" /><p className="mt-6 text-4xl font-semibold tracking-[-0.04em]">{averagePortfolio.toFixed(1)}</p><p className="mt-2 font-medium">Average portfolio size</p><p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">Average active properties managed per landlord or company.</p></article>
       </div>
@@ -599,7 +599,7 @@ function PropertyDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant={property ? "outline" : "default"} className={property ? "" : "bg-[#1c3934] text-white hover:bg-[#10271f]"}>
+        <Button variant={property ? "outline" : "default"} className={property ? "" : "bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]"}>
           {property ? <Pencil /> : <Plus />} {property ? "Edit property" : "Add property"}
         </Button>
       </DialogTrigger>
@@ -632,7 +632,7 @@ function PropertyDialog({
             <div className="grid gap-4 sm:grid-cols-3"><Field label="Payout date"><Input name="payoutSchedule" defaultValue={property?.payoutSchedule || ""} placeholder="For example: 10th of each month" /></Field><Field label="Management fee (%)"><Input name="managementFeePercent" type="number" min="0" max="100" step="0.01" defaultValue={property?.managementFeePercent || 0} /></Field><Field label="Cleaning cost per changeover (£)"><Input name="cleaningCost" type="number" min="0" step="0.01" defaultValue={((property?.cleaningCostPence || 0) / 100).toFixed(2)} /></Field></div>
             <Field label="Payout information"><Textarea name="payoutNotes" rows={4} defaultValue={property?.payoutNotes || ""} placeholder="Payout arrangement, deductions and owner-specific notes." /></Field>
           </div>
-          <DialogFooter className="border-t border-[var(--border)] px-6 py-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={saving} className="bg-[#1c3934] text-white">{saving ? "Saving…" : "Save property"}</Button></DialogFooter>
+          <DialogFooter className="border-t border-[var(--border)] px-6 py-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)]">{saving ? "Saving…" : "Save property"}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

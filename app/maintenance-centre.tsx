@@ -435,7 +435,7 @@ function NewTicketDialog({ properties, onSaved }: { properties: MaintenancePrope
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="h-11 rounded-xl bg-[#1c3934] px-5 text-white hover:bg-[#10271f]">
+        <Button className="h-11 rounded-xl bg-[var(--primary)] px-5 text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">
           <Plus /> Raise maintenance ticket
         </Button>
       </DialogTrigger>
@@ -484,11 +484,11 @@ function NewTicketDialog({ properties, onSaved }: { properties: MaintenancePrope
                 <span className="mt-1 block text-xs leading-5 text-[var(--muted-foreground)]">The ticket stays with Stays until every issue-specific check is completed. If it remains unresolved, the connected Ready ticket is created then.</span>
               </span>
             </div>
-            {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+            {error && <p className="text-sm font-medium text-[var(--rc-danger-text)]">{error}</p>}
           </div>
           <DialogFooter className="border-t border-[var(--border)] px-6 py-5">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={saving} className="bg-[#1c3934] text-white hover:bg-[#10271f]">{saving ? "Raising…" : "Raise ticket"}</Button>
+            <Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">{saving ? "Raising…" : "Raise ticket"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -512,7 +512,7 @@ function MaintenanceReporting({ tickets, nowMs }: { tickets: MaintenanceTicket[]
   return <section className="mt-5 space-y-5"><div className="flex flex-col justify-between gap-4 rounded-[1.6rem] border border-[var(--border)] bg-white p-5 sm:flex-row sm:items-end"><div><p className="eyebrow">Maintenance analytics</p><h2 className="mt-2 text-2xl font-semibold">Ticket reporting</h2><p className="mt-2 text-sm text-[var(--muted-foreground)]">New demand, resolution speed and update compliance.</p></div><Tabs value={period} onValueChange={(value) => setPeriod(value as typeof period)}><TabsList className="grid h-auto grid-cols-4 bg-[var(--muted)]"><TabsTrigger value="day">Daily</TabsTrigger><TabsTrigger value="week">Weekly</TabsTrigger><TabsTrigger value="month">Monthly</TabsTrigger><TabsTrigger value="year">Yearly</TabsTrigger></TabsList></Tabs></div><div className="grid gap-3 md:grid-cols-3"><ReportMetric label={`New tickets · ${current.label}`} value={String(opened.length)} /><ReportMetric label="Average resolution time" value={resolved.length ? formatDuration(averageHours) : "—"} note={`${resolved.length} resolved in this period`} /><ReportMetric label="Over 24 hours without update" value={String(overdue)} alert={overdue > 0} note="Currently open tickets" /></div><div className="rounded-[1.6rem] border border-[var(--border)] bg-white p-5"><div className="flex items-center justify-between gap-4"><p className="font-semibold">New tickets over time</p><p className="text-xs text-[var(--muted-foreground)]">{period === "day" ? "Last 14 days" : period === "week" ? "Last 12 weeks" : period === "month" ? "Last 12 months" : "Last 5 years"}</p></div><div className="mt-6 flex h-56 items-end gap-2 overflow-x-auto border-b border-[var(--border)] pb-1">{trend.map((bucket) => <div key={bucket.start} className="flex h-full min-w-10 flex-1 flex-col justify-end text-center"><span className="mb-2 text-xs font-semibold">{bucket.count}</span><div className="mx-auto w-full max-w-12 rounded-t-lg bg-[#76ad49]" style={{ height: `${Math.max(4, bucket.count / maximum * 150)}px` }} /><span className="mt-2 truncate text-[0.65rem] text-[var(--muted-foreground)]">{bucket.shortLabel}</span></div>)}</div></div></section>;
 }
 
-function ReportMetric({ label, value, note, alert = false }: { label: string; value: string; note?: string; alert?: boolean }) { return <article className={`rounded-2xl border p-5 ${alert ? "border-red-200 bg-red-50" : "border-[var(--border)] bg-white"}`}><p className="text-sm text-[var(--muted-foreground)]">{label}</p><p className={`mt-3 text-3xl font-semibold ${alert ? "text-red-700" : ""}`}>{value}</p>{note && <p className="mt-2 text-xs text-[var(--muted-foreground)]">{note}</p>}</article>; }
+function ReportMetric({ label, value, note, alert = false }: { label: string; value: string; note?: string; alert?: boolean }) { return <article className={`rounded-2xl border p-5 ${alert ? "border-[var(--rc-danger-border)] bg-[var(--rc-danger-bg)]" : "border-[var(--border)] bg-white"}`}><p className="text-sm text-[var(--muted-foreground)]">{label}</p><p className={`mt-3 text-3xl font-semibold ${alert ? "text-[var(--rc-danger-text)]" : ""}`}>{value}</p>{note && <p className="mt-2 text-xs text-[var(--muted-foreground)]">{note}</p>}</article>; }
 
 function ReadyCalendar({ tickets }: { tickets: MaintenanceTicket[] }) {
   const scheduled = tickets
@@ -554,7 +554,7 @@ function TicketListItem({
 }) {
   const freshness = updateFreshness(ticket);
   return (
-    <button className={`w-full border-b border-l-4 border-b-[#e4eae8] p-4 text-left transition-colors ${freshness.tone === "red" ? "border-l-red-500 bg-red-50/40" : freshness.tone === "yellow" ? "border-l-amber-400 bg-amber-50/40" : "border-l-transparent"} ${active ? "bg-white" : "hover:bg-white/70"}`} onClick={onClick}>
+    <button className={`w-full border-b border-l-4 border-b-[#e4eae8] p-4 text-left transition-colors ${freshness.tone === "red" ? "border-l-red-500 bg-[var(--rc-danger-bg)]/40" : freshness.tone === "yellow" ? "border-l-amber-400 bg-amber-50/40" : "border-l-transparent"} ${active ? "bg-white" : "hover:bg-white/70"}`} onClick={onClick}>
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
           {workspace === "ready" ? ticket.readyReference : ticket.reference}
@@ -567,7 +567,7 @@ function TicketListItem({
       </p>
       <div className="mt-3 flex items-center justify-between text-xs text-[var(--muted-foreground)]">
         <span>{ticket.category}</span>
-        <span className={freshness.tone === "red" ? "font-semibold text-red-700" : freshness.tone === "yellow" ? "font-semibold text-amber-700" : ""}>{freshness.shortLabel}</span>
+        <span className={freshness.tone === "red" ? "font-semibold text-[var(--rc-danger-text)]" : freshness.tone === "yellow" ? "font-semibold text-amber-700" : ""}>{freshness.shortLabel}</span>
       </div>
     </button>
   );
@@ -575,7 +575,7 @@ function TicketListItem({
 
 function UpdateDueAlert({ ticket }: { ticket: MaintenanceTicket }) {
   const freshness = updateFreshness(ticket);
-  const tone = freshness.tone === "red" ? "border-red-200 bg-red-50 text-red-800" : freshness.tone === "yellow" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)]";
+  const tone = freshness.tone === "red" ? "border-[var(--rc-danger-border)] bg-[var(--rc-danger-bg)] text-[var(--rc-danger-text)]" : freshness.tone === "yellow" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)]";
   return <section className={`rounded-2xl border p-4 ${tone}`}><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0" /><div><p className="font-semibold">{freshness.title}</p><p className="mt-1 text-sm leading-6">{freshness.description} Add an update in the activity section below; this requirement continues while the ticket is with Recharge Ready.</p></div></div></section>;
 }
 
@@ -775,7 +775,7 @@ function TroubleshootingPanel({
               First, is there any immediate danger: injury, fire, smoke, sparks, burning smell, electric shock, exposed wiring, gas smell, uncontrolled water near electrics, or no safe way for the guest to enter or leave?
             </AssistantBubble>
             <div className="flex flex-wrap gap-2 pl-12">
-              <Button type="button" onClick={() => setSafetyCleared(true)} className="bg-[#1c3934] text-white hover:bg-[#10271f]">No immediate danger</Button>
+              <Button type="button" onClick={() => setSafetyCleared(true)} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">No immediate danger</Button>
               <Button type="button" onClick={() => setSafetyEscalation(true)} variant="destructive">Yes — stop and escalate</Button>
             </div>
           </>
@@ -802,7 +802,7 @@ function TroubleshootingPanel({
             <div className="ml-auto max-w-[42rem] rounded-2xl rounded-br-md border border-[var(--border)] bg-white p-4">
               <Textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} placeholder="Tell the assistant what you checked and what happened…" />
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" size="sm" onClick={() => answerStep("remains")} className="bg-[#1c3934] text-white hover:bg-[#10271f]">Checked — issue remains</Button>
+                <Button type="button" size="sm" onClick={() => answerStep("remains")} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">Checked — issue remains</Button>
                 <Button type="button" size="sm" onClick={() => answerStep("resolved")} variant="outline"><Check className="size-4" /> This fixed it</Button>
                 <Button type="button" size="sm" onClick={() => answerStep("unable")} variant="outline">Unable / not safe</Button>
               </div>
@@ -828,9 +828,9 @@ function TroubleshootingPanel({
           </Field>
         )}
 
-      {validationError && <p className="mt-4 text-sm font-medium text-red-700">{validationError}</p>}
+      {validationError && <p className="mt-4 text-sm font-medium text-[var(--rc-danger-text)]">{validationError}</p>}
       <div className="mt-5 flex flex-wrap gap-2">
-        {!resolvedAnswer && <Button type="button" disabled={Boolean(saving) || !allReviewed} onClick={() => finish("ready_required")} className="bg-[#1c3934] text-white hover:bg-[#10271f]"><Wrench /> {saving === "ready_required" ? "Creating Ready ticket…" : safetyEscalation ? "Urgent referral to Ready" : "Refer to Ready with transcript"}</Button>}
+        {!resolvedAnswer && <Button type="button" disabled={Boolean(saving) || !allReviewed} onClick={() => finish("ready_required")} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]"><Wrench /> {saving === "ready_required" ? "Creating Ready ticket…" : safetyEscalation ? "Urgent referral to Ready" : "Refer to Ready with transcript"}</Button>}
         {resolvedAnswer && <Button type="button" disabled={Boolean(saving)} onClick={() => finish("resolved")} className="bg-[#5f8b4a] text-white hover:bg-[#4b713a]"><Check /> {saving === "resolved" ? "Closing ticket…" : "Confirm resolved & close"}</Button>}
         {(answers.length > 0 || safetyCleared || safetyEscalation) && <Button type="button" variant="outline" disabled={Boolean(saving)} onClick={() => { setAnswers([]); setDraft(""); setClosureReason(""); setSafetyCleared(false); setSafetyEscalation(false); setValidationError(""); }}>Restart conversation</Button>}
       </div>
@@ -929,7 +929,7 @@ function QuoteForm({ ticket, mutate, threshold }: { ticket: MaintenanceTicket; m
         <Field label="Proposed repair date"><Input name="proposedRepairDate" required type="date" /></Field>
       </div>
       <div className="mt-4"><Field label="Work required"><Textarea name="workRequired" required rows={4} placeholder="Describe the repair, labour, parts and expected outcome." /></Field></div>
-      <Button disabled={saving} className="mt-4 bg-[#1c3934] text-white hover:bg-[#10271f]">{saving ? "Saving quote…" : "Save quote & assess approval"}</Button>
+      <Button disabled={saving} className="mt-4 bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">{saving ? "Saving quote…" : "Save quote & assess approval"}</Button>
     </form>
   );
 }
@@ -963,7 +963,7 @@ function ApprovalBox({ ticket, kind, mutate }: { ticket: MaintenanceTicket; kind
     <div className="rounded-xl border border-[var(--border)] bg-white p-4">
       <p className="text-sm font-semibold">{kind === "management" ? "Management decision" : "Client decision"}</p>
       <div className="mt-3 flex gap-2">
-        <Button size="sm" disabled={saving} onClick={() => decide("approved")} className="bg-[#1c3934] text-white"><Check /> Approve</Button>
+        <Button size="sm" disabled={saving} onClick={() => decide("approved")} className="bg-[var(--primary)] text-[var(--primary-foreground)]"><Check /> Approve</Button>
         <Button size="sm" disabled={saving} onClick={() => decide("rejected")} variant="outline">Reject</Button>
       </div>
     </div>
@@ -1008,7 +1008,7 @@ function ScheduleForm({ ticket, currentUser, mutate }: { ticket: MaintenanceTick
         <Field label="Assigned to"><Input name="assignedName" required defaultValue={currentUser.name} /></Field>
         <Field label="Assignee email"><Input name="assignedEmail" required type="email" defaultValue={currentUser.email} /></Field>
       </div>
-      <Button disabled={saving} className="mt-4 bg-[#1c3934] text-white">{saving ? "Scheduling…" : "Confirm schedule"}</Button>
+      <Button disabled={saving} className="mt-4 bg-[var(--primary)] text-[var(--primary-foreground)]">{saving ? "Scheduling…" : "Confirm schedule"}</Button>
     </form>
   );
 }
@@ -1028,9 +1028,9 @@ function ReadyProgress({ ticket, mutate }: { ticket: MaintenanceTicket; mutate: 
           <p className="mt-1 text-xs text-[var(--muted-foreground)]">{formatShortDate(ticket.scheduledDate)} · {ticket.scheduledStartTime}-{ticket.scheduledEndTime} · {ticket.assignedReadyName}</p>
         </div>
         {ticket.status === "scheduled" ? (
-          <Button disabled={saving} onClick={() => action("start")} className="bg-[#1c3934] text-white">Start work</Button>
+          <Button disabled={saving} onClick={() => action("start")} className="bg-[var(--primary)] text-[var(--primary-foreground)]">Start work</Button>
         ) : (
-          <Button disabled={saving} onClick={() => action("complete")} className="bg-[#1c3934] text-white"><CheckCircle2 /> Mark work complete</Button>
+          <Button disabled={saving} onClick={() => action("complete")} className="bg-[var(--primary)] text-[var(--primary-foreground)]"><CheckCircle2 /> Mark work complete</Button>
         )}
       </div>
       {ticket.status === "in_progress" && !ticket.evidence.some((item) => item.kind === "completion") && (
@@ -1055,7 +1055,7 @@ function FinalApproval({ ticket, mutate }: { ticket: MaintenanceTicket; mutate: 
           <p className="mt-1 text-xs text-[var(--muted-foreground)]">Review Ready&apos;s completion evidence before creating the Accounts ticket.</p>
         </div>
         <div className="flex gap-2">
-          <Button disabled={saving} onClick={() => decide("approved")} className="bg-[#1c3934] text-white"><Check /> Approve work</Button>
+          <Button disabled={saving} onClick={() => decide("approved")} className="bg-[var(--primary)] text-[var(--primary-foreground)]"><Check /> Approve work</Button>
           <Button disabled={saving} onClick={() => decide("rejected")} variant="outline">Return to Ready</Button>
         </div>
       </div>
@@ -1085,7 +1085,7 @@ function AccountsPayment({ ticket, mutate }: { ticket: MaintenanceTicket; mutate
         <Field label="Payment reference"><Input name="paymentReference" required placeholder="Bank or payment reference" /></Field>
         <Field label="Payment note"><Input name="note" placeholder="Optional payment detail" /></Field>
       </div>
-      <Button disabled={saving} className="mt-4 bg-[#1c3934] text-white">{saving ? "Marking paid…" : "Move to paid"}</Button>
+      <Button disabled={saving} className="mt-4 bg-[var(--primary)] text-[var(--primary-foreground)]">{saving ? "Marking paid…" : "Move to paid"}</Button>
     </form>
   );
 }
@@ -1107,7 +1107,7 @@ function AccountsReconciliation({ ticket, mutate }: { ticket: MaintenanceTicket;
         <Field label="Invoice reference"><Input name="invoiceReference" required placeholder="Supplier invoice number" /></Field>
         <Field label="Reconciliation note"><Input name="note" placeholder="Account, payout or payment note" /></Field>
       </div>
-      <Button disabled={saving} className="mt-4 bg-[#1c3934] text-white">{saving ? "Reconciling…" : "Mark reconciled"}</Button>
+      <Button disabled={saving} className="mt-4 bg-[var(--primary)] text-[var(--primary-foreground)]">{saving ? "Reconciling…" : "Mark reconciled"}</Button>
     </form>
   );
 }

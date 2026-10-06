@@ -225,7 +225,7 @@ export function OnboardingCentre({
           </p>
         </div>
       )}
-      {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-[var(--rc-danger-bg)] px-4 py-3 text-sm font-medium text-[var(--rc-danger-text)]">{error}</p>}
 
       {mode === "client" ? (
         <ClientDashboard
@@ -404,7 +404,7 @@ function CaseList({ cases, selectedId, onSelect }: { cases: OnboardingCase[]; se
         <button
           key={item.id}
           onClick={() => onSelect(item.id)}
-          className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === item.id ? "border-[var(--border)] bg-[#1c3934] text-white" : hasUnansweredClientQuestion(item) ? "border-amber-400 bg-amber-50 hover:border-amber-500" : "border-[var(--border)] bg-white hover:border-[var(--border)]"}`}
+          className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === item.id ? "border-[var(--border)] bg-[var(--primary)] text-[var(--primary-foreground)]" : hasUnansweredClientQuestion(item) ? "border-amber-400 bg-amber-50 hover:border-amber-500" : "border-[var(--border)] bg-white hover:border-[var(--border)]"}`}
         >
           <div className="flex items-start justify-between gap-3">
             <p className="truncate text-sm font-semibold">{item.propertyName || item.propertyAddress}</p>
@@ -502,7 +502,7 @@ export function ClientPropertyOnboarding({
 
   return (
     <div className="space-y-5">
-      {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
+      {error && <p className="rounded-xl bg-[var(--rc-danger-bg)] px-4 py-3 text-sm font-medium text-[var(--rc-danger-text)]">{error}</p>}
       {["enquiry_received", "estimate_drafting", "estimate_received", "reviewing"].includes(caseItem.status) && <ServicesAndProcess />}
       {caseItem.estimatePublishedAt && ["estimate_received", "reviewing"].includes(caseItem.status) && <EstimatePresentation caseItem={caseItem} compact />}
       {["estimate_received", "reviewing"].includes(caseItem.status) && (
@@ -599,7 +599,7 @@ export function OnboardingJourneyButton({ caseItem, inverse = false }: { caseIte
           {JOURNEY_STAGES.map((stage, index) => {
             const complete = index < current || caseItem.status === "live";
             const active = index === current && caseItem.status !== "live";
-            return <div key={stage.title} className={`flex gap-4 rounded-2xl border p-4 ${active ? "border-[var(--border)] bg-[var(--muted)]" : complete ? "border-[var(--border)] bg-[var(--card)]" : "border-[var(--border)] bg-white"}`}><span className={`grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold ${complete ? "bg-[#315f50] text-white" : active ? "bg-[#1c3934] text-white" : "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>{complete ? <CheckCircle2 className="size-4" /> : String(index + 1).padStart(2, "0")}</span><div><p className="font-semibold">{stage.title}</p><p className="mt-1 text-sm leading-5 text-[var(--muted-foreground)]">{stage.description}</p>{active && <Badge className="mt-2 border-0 bg-[#1c3934] text-white">Current stage</Badge>}</div></div>;
+            return <div key={stage.title} className={`flex gap-4 rounded-2xl border p-4 ${active ? "border-[var(--border)] bg-[var(--muted)]" : complete ? "border-[var(--border)] bg-[var(--card)]" : "border-[var(--border)] bg-white"}`}><span className={`grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold ${complete ? "bg-[#315f50] text-white" : active ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>{complete ? <CheckCircle2 className="size-4" /> : String(index + 1).padStart(2, "0")}</span><div><p className="font-semibold">{stage.title}</p><p className="mt-1 text-sm leading-5 text-[var(--muted-foreground)]">{stage.description}</p>{active && <Badge className="mt-2 border-0 bg-[#1c3934] text-white">Current stage</Badge>}</div></div>;
           })}
         </div>
       </DialogContent>
@@ -675,7 +675,7 @@ function EstimateBuilder({ caseItem, act, saving }: Omit<CaseActionProps, "uploa
           </div>
         </div>
         <Field label="Additional comments"><Textarea name="comments" rows={4} placeholder="Seasonality, demand drivers, limitations or recommended positioning." /></Field>
-        <Button disabled={saving} className="bg-[#1c3934] text-white hover:bg-[#10271f]">{saving ? "Publishing…" : "Publish estimate"} <ArrowRight /></Button>
+        <Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">{saving ? "Publishing…" : "Publish estimate"} <ArrowRight /></Button>
       </form>
     </ActionCard>
   );
@@ -764,7 +764,7 @@ function ServicesAndProcess() {
       </ActionCard>
       <ActionCard icon={ClipboardCheck} eyebrow="Onboarding process" title="Your route from enquiry to booked-out property" description="Every stage is tracked in your dashboard, with the next action and responsible team made clear.">
         <div className="relative mt-6 grid gap-3 md:grid-cols-2">
-          {stages.map(([number, title, text]) => <div key={number} className="group relative rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 transition hover:border-[var(--border)] hover:bg-[var(--muted)]"><div className="flex gap-4"><span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#1c3934] text-xs font-bold text-[var(--muted-foreground)]">{number}</span><div><p className="font-semibold text-[var(--foreground)]">{title}</p><p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">{text}</p></div></div></div>)}
+          {stages.map(([number, title, text]) => <div key={number} className="group relative rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 transition hover:border-[var(--border)] hover:bg-[var(--muted)]"><div className="flex gap-4"><span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#1c3934] text-xs font-bold text-[#c9e7a4]">{number}</span><div><p className="font-semibold text-[var(--foreground)]">{title}</p><p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">{text}</p></div></div></div>)}
         </div>
       </ActionCard>
     </div>
@@ -797,7 +797,7 @@ function ClientDecisionForm({ caseItem, act, saving }: Omit<CaseActionProps, "up
         </div>
         {decision === "reviewing" && <div className="grid gap-4 sm:grid-cols-2"><Field label="Questions for the Recharge team"><Textarea name="feedback" rows={4} required placeholder="Ask anything you would like us to clarify about the estimate or service." /></Field><Field label="When should we check in again?"><Input name="reviewDate" type="date" required /></Field></div>}
         {decision === "not_proceeding" && <Field label="Why have you decided not to proceed?"><Textarea name="feedback" rows={3} required placeholder="Your feedback helps us understand whether we can improve the proposal." /></Field>}
-        <Button disabled={saving} className="bg-[#1c3934] text-white hover:bg-[#10271f]">Confirm response</Button>
+        <Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">Confirm response</Button>
       </form>
     </ActionCard>
     <FrequentlyAskedQuestions />
@@ -824,7 +824,7 @@ function AgreementForm({ caseItem, act, saving }: Omit<CaseActionProps, "upload"
           <Checkbox required />
           <span>I have reviewed the management agreement and agree to sign electronically.</span>
         </label>
-        <Button disabled={saving} className="bg-[#1c3934] text-white hover:bg-[#10271f]">Sign agreement <ArrowRight /></Button>
+        <Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">Sign agreement <ArrowRight /></Button>
       </form>
     </ActionCard>
   );
@@ -974,7 +974,7 @@ function ClientOnboardingForm({ caseItem, act, saving }: Omit<CaseActionProps, "
             <div className="mt-4"><Field label="Confirmed inspection date (optional for now)"><Input name="inspectionDate" type="date" /></Field></div>
           </div>
         )}
-        <Button disabled={saving} className="bg-[#1c3934] text-white hover:bg-[#10271f]">Submit onboarding form <ArrowRight /></Button>
+        <Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">Submit onboarding form <ArrowRight /></Button>
       </form>
     </ActionCard>
   );
@@ -988,7 +988,7 @@ function StaffReviewResponse({ caseItem, act, saving }: Omit<CaseActionProps, "u
     await act({ action: "staff_update", id: caseItem.id, note: form.get("note"), nextFollowUpDate: form.get("nextFollowUpDate") || null, resolution: form.get("resolution") }).catch(() => undefined);
     event.currentTarget.reset();
   }
-  return <ActionCard icon={Clock3} eyebrow="Sign-up activity" title={caseItem.status === "not_proceeding" ? "Review the client's feedback" : overdue ? "Follow-up overdue" : `Follow up ${caseItem.reviewFollowUpDate ? `on ${caseItem.reviewFollowUpDate}` : "within 48 hours"}`} description={caseItem.decisionFeedback || "Respond to the client's questions and keep the next follow-up date visible to both sides."}><form onSubmit={submit} className="mt-5 space-y-4"><Field label="Response or update"><Textarea name="note" rows={4} required placeholder="Answer each question or record the latest follow-up outcome." /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Next follow-up date"><Input name="nextFollowUpDate" type="date" /></Field><Field label="Outcome"><Select name="resolution" defaultValue={caseItem.status === "not_proceeding" ? "archive" : "response"}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="response">Reply and keep current status</SelectItem><SelectItem value="continue">Continue conversation</SelectItem><SelectItem value="archive">Archive as not proceeding</SelectItem></SelectContent></Select></Field></div><Button disabled={saving} className="bg-[#1c3934] text-white">Send update to client</Button></form></ActionCard>;
+  return <ActionCard icon={Clock3} eyebrow="Sign-up activity" title={caseItem.status === "not_proceeding" ? "Review the client's feedback" : overdue ? "Follow-up overdue" : `Follow up ${caseItem.reviewFollowUpDate ? `on ${caseItem.reviewFollowUpDate}` : "within 48 hours"}`} description={caseItem.decisionFeedback || "Respond to the client's questions and keep the next follow-up date visible to both sides."}><form onSubmit={submit} className="mt-5 space-y-4"><Field label="Response or update"><Textarea name="note" rows={4} required placeholder="Answer each question or record the latest follow-up outcome." /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Next follow-up date"><Input name="nextFollowUpDate" type="date" /></Field><Field label="Outcome"><Select name="resolution" defaultValue={caseItem.status === "not_proceeding" ? "archive" : "response"}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="response">Reply and keep current status</SelectItem><SelectItem value="continue">Continue conversation</SelectItem><SelectItem value="archive">Archive as not proceeding</SelectItem></SelectContent></Select></Field></div><Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)]">Send update to client</Button></form></ActionCard>;
 }
 
 function SelfFurnishInspectionDate({ caseItem, act, saving }: Omit<CaseActionProps, "upload">) {
@@ -997,7 +997,7 @@ function SelfFurnishInspectionDate({ caseItem, act, saving }: Omit<CaseActionPro
     const form = new FormData(event.currentTarget);
     await act({ action: "set_self_inspection_date", id: caseItem.id, inspectionDate: form.get("inspectionDate") }).catch(() => undefined);
   }
-  return <ActionCard icon={CalendarDays} eyebrow="Self-furnishing" title="Confirm your guest-readiness inspection date" description="Only enter this once you are absolutely certain. There is no rush—the inspection team will use this date when planning the visit."><form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"><Field label="Confirmed inspection date"><Input name="inspectionDate" type="date" required /></Field><Button disabled={saving} className="bg-[#1c3934] text-white">Confirm inspection date</Button></form><a className="mt-4 inline-flex text-sm font-semibold text-[var(--foreground)] underline" href="/tool/client-furnishing" target="_blank">Open the self-furnishing calculator</a></ActionCard>;
+  return <ActionCard icon={CalendarDays} eyebrow="Self-furnishing" title="Confirm your guest-readiness inspection date" description="Only enter this once you are absolutely certain. There is no rush—the inspection team will use this date when planning the visit."><form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"><Field label="Confirmed inspection date"><Input name="inspectionDate" type="date" required /></Field><Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)]">Confirm inspection date</Button></form><a className="mt-4 inline-flex text-sm font-semibold text-[var(--foreground)] underline" href="/tool/client-furnishing" target="_blank">Open the self-furnishing calculator</a></ActionCard>;
 }
 
 function InspectionBooking({ caseItem, act, saving }: Omit<CaseActionProps, "upload">) {
@@ -1014,7 +1014,7 @@ function SimpleDateAction({ icon, title, label, action, caseItem, act, saving }:
     const form = new FormData(event.currentTarget);
     await act({ action, id: caseItem.id, date: form.get("date"), inspectionDate: form.get("date") }).catch(() => undefined);
   }
-  return <ActionCard icon={icon} eyebrow="Ready task" title={title} description="This date updates the client dashboard and queues an email notification."><form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"><Field label={label}><Input name="date" type="date" required /></Field><Button disabled={saving} className="h-10 bg-[#1c3934] text-white">Save date</Button></form></ActionCard>;
+  return <ActionCard icon={icon} eyebrow="Ready task" title={title} description="This date updates the client dashboard and queues an email notification."><form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"><Field label={label}><Input name="date" type="date" required /></Field><Button disabled={saving} className="h-10 bg-[var(--primary)] text-[var(--primary-foreground)]">Save date</Button></form></ActionCard>;
 }
 
 function ReportPublishing({ caseItem, act, upload, saving }: CaseActionProps) {
@@ -1036,7 +1036,7 @@ function ReportPublishing({ caseItem, act, upload, saving }: CaseActionProps) {
       <RoomPhotoUpload caseItem={caseItem} upload={upload} />
       <form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
         <Field label="Health & safety completion %"><Input type="number" min="0" max="100" value={percent} onChange={(event) => setPercent(Number(event.target.value))} /></Field>
-        <Button disabled={saving} className="h-10 bg-[#1c3934] text-white">Publish reports to client</Button>
+        <Button disabled={saving} className="h-10 bg-[var(--primary)] text-[var(--primary-foreground)]">Publish reports to client</Button>
       </form>
     </ActionCard>
   );
@@ -1060,14 +1060,14 @@ function PurchaseOrderDecision({ caseItem, act, saving }: Omit<CaseActionProps, 
         </div>
         {decision === "consider" && <Field label="When should Ready follow up?"><Input name="followUpDate" type="date" required /></Field>}
         {["contest", "reject"].includes(decision) && <Field label={decision === "contest" ? "What would you like changed?" : "Why are you rejecting the quote?"}><Textarea name="reason" required rows={3} /></Field>}
-        <Button disabled={saving} className="bg-[#1c3934] text-white">Confirm decision</Button>
+        <Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)]">Confirm decision</Button>
       </form>
     </ActionCard>
   );
 }
 
 function QuoteRevisionPanel({ caseItem, act, saving }: Omit<CaseActionProps, "upload">) {
-  return <ActionCard icon={FileCheck2} eyebrow="Ready response" title="Respond and send a revised quote" description={caseItem.purchaseOrderRejectionReason || "Review the client's feedback within 24 hours and decide whether to revise or archive the furnishing quote."}><div className="mt-5 flex flex-wrap gap-3"><Button disabled={saving} className="bg-[#1c3934] text-white" onClick={() => act({ action: "publish_reports", id: caseItem.id, healthSafetyPercent: caseItem.healthSafetyPercent }).catch(() => undefined)}>Send revised quote</Button><Button variant="outline" disabled={saving} onClick={() => act({ action: "staff_update", id: caseItem.id, note: "Ready reviewed the rejected quote and archived the furnishing proposal. Property onboarding remains active.", nextFollowUpDate: null, resolution: "response" }).catch(() => undefined)}>Archive furnishing quote</Button></div></ActionCard>;
+  return <ActionCard icon={FileCheck2} eyebrow="Ready response" title="Respond and send a revised quote" description={caseItem.purchaseOrderRejectionReason || "Review the client's feedback within 24 hours and decide whether to revise or archive the furnishing quote."}><div className="mt-5 flex flex-wrap gap-3"><Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)]" onClick={() => act({ action: "publish_reports", id: caseItem.id, healthSafetyPercent: caseItem.healthSafetyPercent }).catch(() => undefined)}>Send revised quote</Button><Button variant="outline" disabled={saving} onClick={() => act({ action: "staff_update", id: caseItem.id, note: "Ready reviewed the rejected quote and archived the furnishing proposal. Property onboarding remains active.", nextFollowUpDate: null, resolution: "response" }).catch(() => undefined)}>Archive furnishing quote</Button></div></ActionCard>;
 }
 
 function AccountsControls({ caseItem, act, saving }: Omit<CaseActionProps, "upload">) {
@@ -1084,7 +1084,7 @@ function AccountsControls({ caseItem, act, saving }: Omit<CaseActionProps, "uplo
             <div><p className="text-sm font-semibold">{label}</p><p className="mt-1 text-xs text-[var(--muted-foreground)]">Status: {humanise(status)}</p></div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={saving || status === "pending"} onClick={() => act({ action: "invoice_status", id: caseItem.id, invoice, status: "pending" }).catch(() => undefined)}>Invoice sent</Button>
-              <Button size="sm" disabled={saving || status === "settled"} className="bg-[#1c3934] text-white" onClick={() => act({ action: "invoice_status", id: caseItem.id, invoice, status: "settled" }).catch(() => undefined)}>Settled</Button>
+              <Button size="sm" disabled={saving || status === "settled"} className="bg-[var(--primary)] text-[var(--primary-foreground)]" onClick={() => act({ action: "invoice_status", id: caseItem.id, invoice, status: "settled" }).catch(() => undefined)}>Settled</Button>
             </div>
           </div>
         ))}
@@ -1095,7 +1095,7 @@ function AccountsControls({ caseItem, act, saving }: Omit<CaseActionProps, "uplo
 
 function GuestReadyConfirmation({ caseItem, act, saving }: Omit<CaseActionProps, "upload">) {
   const rooms = roomCounts(caseItem);
-  return <ActionCard icon={CheckCircle2} eyebrow="Final inspection" title="Confirm the property is guest ready" description="A 100% guest-readiness result and three photos per labelled room are required."><div className="mt-4 flex flex-wrap gap-2">{Object.entries(rooms).map(([room, count]) => <Badge key={room} variant="outline">{room}: {count}/3 photos</Badge>)}</div><Button disabled={saving} className="mt-5 bg-[#1c3934] text-white" onClick={() => act({ action: "confirm_guest_ready", id: caseItem.id }).catch(() => undefined)}>Mark guest ready</Button></ActionCard>;
+  return <ActionCard icon={CheckCircle2} eyebrow="Final inspection" title="Confirm the property is guest ready" description="A 100% guest-readiness result and three photos per labelled room are required."><div className="mt-4 flex flex-wrap gap-2">{Object.entries(rooms).map(([room, count]) => <Badge key={room} variant="outline">{room}: {count}/3 photos</Badge>)}</div><Button disabled={saving} className="mt-5 bg-[var(--primary)] text-[var(--primary-foreground)]" onClick={() => act({ action: "confirm_guest_ready", id: caseItem.id }).catch(() => undefined)}>Mark guest ready</Button></ActionCard>;
 }
 
 function LaunchChecklist({ caseItem, act, saving }: Omit<CaseActionProps, "upload">) {
@@ -1123,7 +1123,7 @@ function LaunchChecklist({ caseItem, act, saving }: Omit<CaseActionProps, "uploa
         </div>
         <Field label="Guest guidebook URL"><Input name="guidebookUrl" type="url" required /></Field>
         <div className="grid gap-3 sm:grid-cols-2">{[[messages,setMessages,"Automated guest messages added"],[photos,setPhotos,"All Ready photos improved with AI"],[pricing,setPricing,"Minimum stay and PriceLabs pricing set"],[amenities,setAmenities,"AI amenity check completed"],[secondary,setSecondary,"Secondary 14-night enquiry listing created"],[approval,setApproval,"Management approval received"]].map(([checked,setChecked,label]) => <label key={String(label)} className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-3 text-sm"><Checkbox checked={checked as boolean} onCheckedChange={(value) => (setChecked as (value:boolean)=>void)(value === true)} />{String(label)}</label>)}</div>
-        <Button disabled={saving || !messages || !photos || !pricing || !amenities || !secondary || !approval} className="bg-[#1c3934] text-white">Publish property live <Sparkles /></Button>
+        <Button disabled={saving || !messages || !photos || !pricing || !amenities || !secondary || !approval} className="bg-[var(--primary)] text-[var(--primary-foreground)]">Publish property live <Sparkles /></Button>
       </form>
     </ActionCard>
   );
@@ -1170,10 +1170,10 @@ function PropertyGroupChat({ caseItem, act, saving, client = false }: { caseItem
   }
   return <ActionCard icon={MessageSquare} eyebrow="Property group chat" title={caseItem.propertyName || caseItem.propertyAddress} description="Keep questions, decisions and property updates in one shared conversation for the client and Recharge teams.">
     <div className="mt-5 max-h-80 space-y-3 overflow-y-auto rounded-2xl bg-[var(--muted)] p-4">
-      {messages.map((message) => { const mine = client ? message.actorName === caseItem.clientName : message.actorName !== caseItem.clientName; return <div key={message.id} className={`max-w-[88%] rounded-2xl px-4 py-3 ${mine ? "ml-auto bg-[#1c3934] text-white" : "bg-white"}`}><p className="text-sm leading-6">{message.note}</p><p className={`mt-2 text-xs ${mine ? "text-white/55" : "text-[var(--muted-foreground)]"}`}>{message.actorName} · {dateTime(message.createdAt)}</p></div>; })}
+      {messages.map((message) => { const mine = client ? message.actorName === caseItem.clientName : message.actorName !== caseItem.clientName; return <div key={message.id} className={`max-w-[88%] rounded-2xl px-4 py-3 ${mine ? "ml-auto bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-white"}`}><p className="text-sm leading-6">{message.note}</p><p className={`mt-2 text-xs ${mine ? "text-white/55" : "text-[var(--muted-foreground)]"}`}>{message.actorName} · {dateTime(message.createdAt)}</p></div>; })}
       {!messages.length && <p className="text-sm text-[var(--muted-foreground)]">No messages yet. Start the property conversation below.</p>}
     </div>
-    <form onSubmit={submit} className="mt-4 space-y-3"><Field label="Message"><Textarea name="message" rows={3} required placeholder="Ask a question or post an update for this property…" /></Field><div className="flex items-center gap-3"><Button disabled={saving} className="bg-[#1c3934] text-white">Send message</Button>{sent && <span className="text-sm font-semibold text-[var(--muted-foreground)]">Message submitted</span>}</div></form>
+    <form onSubmit={submit} className="mt-4 space-y-3"><Field label="Message"><Textarea name="message" rows={3} required placeholder="Ask a question or post an update for this property…" /></Field><div className="flex items-center gap-3"><Button disabled={saving} className="bg-[var(--primary)] text-[var(--primary-foreground)]">Send message</Button>{sent && <span className="text-sm font-semibold text-[var(--muted-foreground)]">Message submitted</span>}</div></form>
   </ActionCard>;
 }
 
@@ -1222,9 +1222,9 @@ function NewEnquiryDialog({ currentUser, act, upload, saving }: { currentUser: U
   }
   return (
     <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setSubmitted(false); }}>
-      <DialogTrigger asChild><Button className="h-11 rounded-xl bg-[#1c3934] px-5 text-white hover:bg-[#10271f]"><Plus /> New property enquiry</Button></DialogTrigger>
+      <DialogTrigger asChild><Button className="h-11 rounded-xl bg-[var(--primary)] px-5 text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]"><Plus /> New property enquiry</Button></DialogTrigger>
       <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[var(--border)] p-0 sm:max-w-2xl">
-        {submitted ? <div className="p-8 text-center"><div className="mx-auto grid size-14 place-items-center rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]"><CheckCircle2 /></div><DialogTitle className="mt-5 text-2xl">Estimate request submitted</DialogTitle><DialogDescription className="mx-auto mt-3 max-w-md text-sm leading-6">Your performance estimate request has been submitted. A member of the Recharge team will send your estimate within 48 hours.</DialogDescription><Button className="mt-6 bg-[#1c3934] text-white" onClick={() => setOpen(false)}>Done</Button></div> : <form onSubmit={submit}>
+        {submitted ? <div className="p-8 text-center"><div className="mx-auto grid size-14 place-items-center rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]"><CheckCircle2 /></div><DialogTitle className="mt-5 text-2xl">Estimate request submitted</DialogTitle><DialogDescription className="mx-auto mt-3 max-w-md text-sm leading-6">Your performance estimate request has been submitted. A member of the Recharge team will send your estimate within 48 hours.</DialogDescription><Button className="mt-6 bg-[var(--primary)] text-[var(--primary-foreground)]" onClick={() => setOpen(false)}>Done</Button></div> : <form onSubmit={submit}>
           <DialogHeader className="border-b border-[var(--border)] px-6 py-6 text-left">
             <DialogTitle className="text-2xl tracking-[-0.035em]">Request a performance estimate</DialogTitle>
             <DialogDescription>Tell us about the property and add any useful photos or videos. We aim to deliver your estimate within 48 hours.</DialogDescription>
@@ -1240,7 +1240,7 @@ function NewEnquiryDialog({ currentUser, act, upload, saving }: { currentUser: U
             <Field label="Photos and videos (optional)"><Input name="media" type="file" accept="image/*,video/*" multiple /></Field>
             <div className="rounded-xl bg-[var(--muted)] px-4 py-3 text-sm leading-6 text-[var(--muted-foreground)]">Thank you for filling out the form. Recharge aims to deliver performance estimates within 48 hours of your request.</div>
           </div>
-          <DialogFooter className="border-t border-[var(--border)] px-6 py-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={saving || uploading} className="bg-[#1c3934] text-white">{uploading ? "Uploading…" : saving ? "Submitting…" : "Submit enquiry"}</Button></DialogFooter>
+          <DialogFooter className="border-t border-[var(--border)] px-6 py-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={saving || uploading} className="bg-[var(--primary)] text-[var(--primary-foreground)]">{uploading ? "Uploading…" : saving ? "Submitting…" : "Submit enquiry"}</Button></DialogFooter>
         </form>}
       </DialogContent>
     </Dialog>
@@ -1271,7 +1271,7 @@ function MiniStat({ label, value, accent = false }: { label: string; value: numb
 }
 
 function DecisionButton({ active, tone, title, onClick }: { active: boolean; tone: "green" | "amber" | "red"; title: string; onClick: () => void }) {
-  const tones = { green: "border-green-300 bg-green-50 text-green-900", amber: "border-amber-300 bg-amber-50 text-amber-900", red: "border-red-300 bg-red-50 text-red-900" };
+  const tones = { green: "border-green-300 bg-green-50 text-green-900", amber: "border-amber-300 bg-amber-50 text-amber-900", red: "border-[var(--rc-danger-border)] bg-[var(--rc-danger-bg)] text-[var(--rc-danger-text)]" };
   return <button type="button" onClick={onClick} className={`rounded-xl border p-4 text-left text-sm font-semibold transition ${active ? tones[tone] : "border-[var(--border)] bg-white text-[var(--muted-foreground)]"}`}>{title}</button>;
 }
 
@@ -1280,7 +1280,7 @@ function ChoiceCard({ active, title, text, onClick }: { active: boolean; title: 
 }
 
 function YesNo({ title, value, onChange }: { title: string; value: boolean; onChange: (value: boolean) => void }) {
-  return <div className="rounded-xl border border-[var(--border)] p-4"><p className="text-sm font-semibold">{title}</p><div className="mt-3 flex gap-2"><Button type="button" size="sm" variant={value ? "default" : "outline"} className={value ? "bg-[#1c3934] text-white" : ""} onClick={() => onChange(true)}>Yes</Button><Button type="button" size="sm" variant={!value ? "default" : "outline"} className={!value ? "bg-[#1c3934] text-white" : ""} onClick={() => onChange(false)}>No</Button></div></div>;
+  return <div className="rounded-xl border border-[var(--border)] p-4"><p className="text-sm font-semibold">{title}</p><div className="mt-3 flex gap-2"><Button type="button" size="sm" variant={value ? "default" : "outline"} className={value ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : ""} onClick={() => onChange(true)}>Yes</Button><Button type="button" size="sm" variant={!value ? "default" : "outline"} className={!value ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : ""} onClick={() => onChange(false)}>No</Button></div></div>;
 }
 
 function ServiceAccordion({ value, number, title, children }: { value: string; number: string; title: string; children: React.ReactNode }) {

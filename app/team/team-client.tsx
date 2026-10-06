@@ -157,7 +157,7 @@ export function TeamClient({
           </div>
         )}
       </div>
-      {error && <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="mt-5 rounded-xl bg-[var(--rc-danger-bg)] px-4 py-3 text-sm text-[var(--rc-danger-text)]">{error}</p>}
       <Tabs defaultValue="people" className="mt-8">
         <TabsList className="h-auto max-w-full flex-wrap justify-start rounded-xl bg-[var(--muted)] p-1">
           <TabsTrigger value="people">People &amp; roles</TabsTrigger>
@@ -326,8 +326,8 @@ function PeopleDirectory({
                         </div>
                       </div>
                       <div className="space-y-3">
-                        <div className="rounded-2xl bg-[var(--muted)] p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[.12em] text-[var(--muted-foreground)]">Personal responsibilities</p>
+                        <div className="rounded-2xl border border-[var(--border)] border-l-[3px] border-l-[var(--primary)] bg-[var(--background)] p-4">
+                          <p className="text-[0.68rem] font-semibold uppercase tracking-[.16em] text-[var(--muted-foreground)]">Personal responsibilities</p>
                           <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[var(--muted-foreground)]">{member.responsibilities || "No individual responsibilities have been added yet."}</p>
                         </div>
                         {areas.length > 0 && <div className="flex flex-wrap gap-2">{areas.map((area) => <RegionPill key={area} area={area} />)}</div>}
@@ -385,7 +385,7 @@ function DepartmentSchedules({
       </div>
       <div className="flex gap-2 overflow-x-auto border-b border-[var(--border)] px-5 py-4 sm:px-6">
         {departments.map((item) => (
-          <button key={item.role} onClick={() => setDepartment(item.role)} className={"whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold " + (department === item.role ? "bg-[#1c3934] text-white" : "bg-[var(--muted)] text-[var(--muted-foreground)]")}>{item.label}</button>
+          <button key={item.role} onClick={() => setDepartment(item.role)} className={"whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold " + (department === item.role ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-[var(--muted)] text-[var(--muted-foreground)]")}>{item.label}</button>
         ))}
       </div>
       <div className="p-5 sm:p-6">
@@ -401,7 +401,7 @@ function DepartmentSchedules({
                   <h3 className="font-semibold">{item.title}</h3>
                   <p className="mt-1 text-sm text-[var(--muted-foreground)]">{item.assignedEmail ? memberName(item.assignedEmail) : "Whole department"}{item.note ? " · " + item.note : ""}</p>
                 </div>
-                {isAdmin && <button className="icon-button text-red-700" onClick={() => void remove(item.id)} aria-label="Remove schedule item"><Trash2 className="size-4" /></button>}
+                {isAdmin && <button className="icon-button text-[var(--rc-danger-text)]" onClick={() => void remove(item.id)} aria-label="Remove schedule item"><Trash2 className="size-4" /></button>}
               </article>
             ))}
           </div>
@@ -569,10 +569,10 @@ function TeamMemberEditor({ member, structure, onClose, onSaved }: { member?: Te
           <Field label="Roles"><div className="grid gap-2 sm:grid-cols-2">{structure.roles.filter((role) => normalizeDepartment(role.department) === department).map((role) => <Choice key={role.id} selected={roleIds.includes(role.id)} onClick={() => toggle(role.id, roleIds, setRoleIds)} label={role.name} />)}{!structure.roles.some((role) => normalizeDepartment(role.department) === department) && <p className="text-sm text-[var(--muted-foreground)]">Create a role for this department first.</p>}</div></Field>
           <Field label="Individual Scotland coverage"><div className="grid gap-2 sm:grid-cols-2">{structure.regions.map((region) => <Choice key={region} selected={regions.includes(region)} onClick={() => toggle(region, regions, setRegions)} label={region} />)}</div></Field>
           <Field label="Individual responsibilities"><textarea className="field min-h-28 py-3" name="responsibilities" defaultValue={member?.responsibilities || ""} placeholder="Describe work this person owns beyond their role responsibilities." /></Field>
-          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-xl bg-[var(--rc-danger-bg)] px-4 py-3 text-sm text-[var(--rc-danger-text)]">{error}</p>}
         </div>
         <div className="flex flex-col-reverse justify-between gap-3 border-t border-[var(--border)] bg-[var(--card)] px-6 py-4 sm:flex-row">
-          {member ? <button type="button" className="h-10 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700" disabled={removing || saving} onClick={remove}>{removing ? "Removing…" : "Remove team member"}</button> : <span />}
+          {member ? <button type="button" className="h-10 rounded-xl border border-[var(--rc-danger-border)] bg-white px-4 text-sm font-semibold text-[var(--rc-danger-text)]" disabled={removing || saving} onClick={remove}>{removing ? "Removing…" : "Remove team member"}</button> : <span />}
           <div className="flex justify-end gap-3"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button" disabled={saving || removing}>{saving ? "Saving…" : "Save team member"}</button></div>
         </div>
       </form>
@@ -625,10 +625,10 @@ function RoleEditor({ role, structure, onClose, onSaved }: { role?: TeamCustomRo
           <Field label="Role purpose"><textarea className="field min-h-24 py-3" name="description" defaultValue={role?.description || ""} placeholder="A short explanation of why this role exists." /></Field>
           <Field label="Responsibilities — one per line"><textarea className="field min-h-36 py-3" name="responsibilities" defaultValue={role?.responsibilities.join("\n") || ""} placeholder={"Own client onboarding\nApprove weekly owner reports\nEscalate service issues"} /></Field>
           <Field label="Role regions"><p className="mb-3 text-sm text-[var(--muted-foreground)]">Choose General for Scotland-wide roles, or select more than one specific region.</p><div className="grid gap-2 sm:grid-cols-2">{structure.regions.map((region) => <Choice key={region} selected={regions.includes(region)} onClick={() => toggleRegion(region)} label={region} />)}</div></Field>
-          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-xl bg-[var(--rc-danger-bg)] px-4 py-3 text-sm text-[var(--rc-danger-text)]">{error}</p>}
         </div>
         <div className="flex flex-col-reverse justify-between gap-3 border-t border-[var(--border)] bg-[var(--card)] px-6 py-4 sm:flex-row">
-          {role ? <button type="button" className="h-10 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700" disabled={removing || saving} onClick={() => void remove()}>{removing ? "Removing…" : "Remove role"}</button> : <span />}
+          {role ? <button type="button" className="h-10 rounded-xl border border-[var(--rc-danger-border)] bg-white px-4 text-sm font-semibold text-[var(--rc-danger-text)]" disabled={removing || saving} onClick={() => void remove()}>{removing ? "Removing…" : "Remove role"}</button> : <span />}
           <div className="flex justify-end gap-3"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button" disabled={saving || removing}>{saving ? "Saving…" : "Save role"}</button></div>
         </div>
       </form>
@@ -661,7 +661,7 @@ function ScheduleEditor({ department, members, onClose, onSaved }: { department:
           <div className="grid gap-4 sm:grid-cols-3"><Field label="Date"><input className="field" type="date" name="scheduleDate" required /></Field><Field label="Start"><input className="field" type="time" name="startTime" required /></Field><Field label="End"><input className="field" type="time" name="endTime" required /></Field></div>
           <Field label="Assigned to"><select className="field bg-white" name="assignedEmail"><option value="">Whole department</option>{eligible.map((member) => <option key={member.id} value={member.id}>{member.fullName}</option>)}</select></Field>
           <Field label="Notes"><textarea className="field min-h-24 py-3" name="note" placeholder="Location, links or anything the team needs to know." /></Field>
-          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-xl bg-[var(--rc-danger-bg)] px-4 py-3 text-sm text-[var(--rc-danger-text)]">{error}</p>}
         </div>
         <div className="flex justify-end gap-3 border-t border-[var(--border)] bg-[var(--card)] px-6 py-4"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button" disabled={saving}>{saving ? "Saving…" : "Add to schedule"}</button></div>
       </form>
@@ -684,7 +684,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 function Choice({ selected, onClick, label }: { selected: boolean; onClick: () => void; label: string }) { return <button type="button" onClick={onClick} aria-pressed={selected} className={"flex items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-medium " + (selected ? "border-[var(--border)] bg-[var(--muted)]" : "border-[var(--border)] bg-white")}><span>{label}</span><span className={"grid size-5 place-items-center rounded-full border " + (selected ? "border-[var(--border)] bg-[#315f50] text-white" : "border-[var(--border)]")} >{selected && <Check className="size-3" />}</span></button>; }
 function RegionPill({ area }: { area: string }) { return <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-white px-2.5 py-1 text-xs text-[var(--muted-foreground)]"><MapPin className="size-3" />{area}</span>; }
-function StatusPill({ status }: { status: AccessStatus | "vacancy" }) { const styles = status === "active" ? "bg-emerald-50 text-emerald-700" : status === "vacancy" ? "bg-amber-100 text-amber-800" : status === "pending" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"; return <span className={"rounded-full px-2 py-1 text-[11px] font-semibold " + styles}>{status}</span>; }
+function StatusPill({ status }: { status: AccessStatus | "vacancy" }) { const styles = status === "active" ? "bg-emerald-50 text-emerald-700" : status === "vacancy" ? "bg-amber-100 text-amber-800" : status === "pending" ? "bg-amber-50 text-amber-700" : "bg-[var(--rc-danger-bg)] text-[var(--rc-danger-text)]"; return <span className={"rounded-full px-2 py-1 text-[11px] font-semibold " + styles}>{status}</span>; }
 function initials(name: string) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "RS"; }
 function normalizeDepartment(value: string): TeamDepartment { return value === "admin" ? "leadership" : (value as TeamDepartment); }
 function memberRoleIds(member: TeamMember, structure: TeamStructureData) { return member.roleIds || structure.roles.filter((role) => member.email && role.memberEmails.includes(member.email)).map((role) => role.id); }

@@ -215,7 +215,7 @@ export function PurchaseOrderCentre({
               variant={workspace === item ? "default" : "outline"}
               className={
                 workspace === item
-                  ? "bg-[#1c3934] text-white hover:bg-[#264a43]"
+                  ? "bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]"
                   : "border-[var(--border)] bg-white text-[var(--muted-foreground)]"
               }
               onClick={() => {
@@ -304,7 +304,7 @@ function RequestForm({
         </div>
         <Button
           type="button"
-          className="bg-[#1c3934] text-white hover:bg-[#264a43]"
+          className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]"
           onClick={() => setOpen((value) => !value)}
         >
           {open ? <X className="mr-2 size-4" /> : <Plus className="mr-2 size-4" />}
@@ -329,7 +329,7 @@ function RequestForm({
             <Field label="Request notes"><Textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Access, furnishing brief, deadlines or anything Ready should know" /></Field>
           </div>
           <div className="md:col-span-2 xl:col-span-4">
-            <Button disabled={busy} className="bg-[#1c3934] text-white hover:bg-[#264a43]">
+            <Button disabled={busy} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]">
               Send to Recharge Ready <ChevronRight className="ml-2 size-4" />
             </Button>
           </div>
@@ -513,7 +513,7 @@ function ReadyOrder({
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button disabled={busy} variant="outline" className="border-[var(--border)]" onClick={saveQuote}>Save draft</Button>
-              <Button disabled={busy || order.status === "new"} className="bg-[#1c3934] text-white hover:bg-[#264a43]" onClick={() => mutate("PATCH", { action: "submit_management", id: order.id })}>
+              <Button disabled={busy || order.status === "new"} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]" onClick={() => mutate("PATCH", { action: "submit_management", id: order.id })}>
                 Submit for management approval <ChevronRight className="ml-2 size-4" />
               </Button>
             </div>
@@ -522,7 +522,7 @@ function ReadyOrder({
 
         {order.status === "client_accepted" && (
           <div className="mt-5">
-            <Button disabled={busy || order.clientInvoiceStatus !== "paid"} className="bg-[#1c3934] text-white hover:bg-[#264a43]" onClick={() => mutate("PATCH", { action: "start_purchasing", id: order.id })}>
+            <Button disabled={busy || order.clientInvoiceStatus !== "paid"} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]" onClick={() => mutate("PATCH", { action: "start_purchasing", id: order.id })}>
               <ShoppingCart className="mr-2 size-4" /> Start purchasing
             </Button>
             {order.clientInvoiceStatus !== "paid" && <p className="mt-2 text-sm text-[var(--muted-foreground)]">Waiting for Accounts to mark the client invoice paid.</p>}
@@ -543,7 +543,7 @@ function ReadyOrder({
             {purchasing && (
               <div className="mt-6 flex flex-wrap gap-3">
                 <Button disabled={busy} variant="outline" className="border-[var(--border)]" onClick={saveActuals}>Save actual costs</Button>
-                <Button disabled={busy} className="bg-[#1c3934] text-white hover:bg-[#264a43]" onClick={() => mutate("PATCH", { action: "submit_evidence", id: order.id })}>
+                <Button disabled={busy} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]" onClick={() => mutate("PATCH", { action: "submit_evidence", id: order.id })}>
                   Submit for reconciliation <ChevronRight className="ml-2 size-4" />
                 </Button>
               </div>
@@ -617,7 +617,7 @@ function ManagementOrder({
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button disabled={busy} variant="outline" className="border-[var(--rc-warning-border)] text-[var(--rc-danger-text)]" onClick={() => decide("request_revision")}><RotateCcw className="mr-2 size-4" /> Request Ready review</Button>
-              <Button disabled={busy} className="bg-[#1c3934] text-white hover:bg-[#264a43]" onClick={() => decide("approve")}><Check className="mr-2 size-4" /> Approve and send to client</Button>
+              <Button disabled={busy} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]" onClick={() => decide("approve")}><Check className="mr-2 size-4" /> Approve and send to client</Button>
             </div>
           </>
         ) : (
@@ -656,7 +656,7 @@ function ClientOrder({
             <Field label="Decision notes"><Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional for acceptance; required if rejecting" /></Field>
             <div className="mt-4 flex flex-wrap gap-3">
               <Button disabled={busy || !note.trim()} variant="outline" className="border-[var(--rc-danger-border)] text-[var(--rc-danger-text)]" onClick={() => mutate("PATCH", { action: "client_decision", id: order.id, decision: "reject", note })}><X className="mr-2 size-4" /> Reject quote</Button>
-              <Button disabled={busy} className="bg-[#1c3934] text-white hover:bg-[#264a43]" onClick={() => mutate("PATCH", { action: "client_decision", id: order.id, decision: "accept", note })}><Check className="mr-2 size-4" /> Accept quote</Button>
+              <Button disabled={busy} className="bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]" onClick={() => mutate("PATCH", { action: "client_decision", id: order.id, decision: "accept", note })}><Check className="mr-2 size-4" /> Accept quote</Button>
             </div>
           </div>
         ) : (
@@ -684,15 +684,15 @@ function AccountsOrder({
       <div className="p-5 sm:p-6">
         <div className="grid gap-4 lg:grid-cols-3">
           <AccountTask title="Client invoice" amount={order.approvedClientTotalPence} status={order.clientInvoiceStatus}>
-            {order.clientInvoiceStatus === "to_send" && <Button disabled={busy} size="sm" className="bg-[#1c3934] text-white" onClick={() => accountAction("client_invoice_sent")}>Mark invoice sent</Button>}
-            {order.clientInvoiceStatus === "sent" && <Button disabled={busy} size="sm" className="bg-[#1c3934] text-white" onClick={() => accountAction("client_invoice_paid")}>Mark client paid</Button>}
+            {order.clientInvoiceStatus === "to_send" && <Button disabled={busy} size="sm" className="bg-[var(--primary)] text-[var(--primary-foreground)]" onClick={() => accountAction("client_invoice_sent")}>Mark invoice sent</Button>}
+            {order.clientInvoiceStatus === "sent" && <Button disabled={busy} size="sm" className="bg-[var(--primary)] text-[var(--primary-foreground)]" onClick={() => accountAction("client_invoice_paid")}>Mark client paid</Button>}
           </AccountTask>
           <AccountTask title="Ready manager invoice" amount={order.readyInvoicePence} status={order.readyInvoiceStatus}>
             {order.readyInvoiceStatus === "requested" && <Button disabled={busy} size="sm" variant="outline" onClick={() => accountAction("ready_invoice_received")}>Mark invoice received</Button>}
-            {order.readyInvoiceStatus === "received" && <Button disabled={busy} size="sm" className="bg-[#1c3934] text-white" onClick={() => accountAction("ready_invoice_settled")}>Mark Ready paid</Button>}
+            {order.readyInvoiceStatus === "received" && <Button disabled={busy} size="sm" className="bg-[var(--primary)] text-[var(--primary-foreground)]" onClick={() => accountAction("ready_invoice_settled")}>Mark Ready paid</Button>}
           </AccountTask>
           <AccountTask title="Final balance" amount={Math.abs(order.balancePence)} status={order.reconciliationStatus}>
-            {order.status === "reconciliation" && order.reconciliationStatus !== "settled" && <Button disabled={busy} size="sm" className="bg-[#1c3934] text-white" onClick={() => accountAction("reconciliation_settled")}>Mark balance settled</Button>}
+            {order.status === "reconciliation" && order.reconciliationStatus !== "settled" && <Button disabled={busy} size="sm" className="bg-[var(--primary)] text-[var(--primary-foreground)]" onClick={() => accountAction("reconciliation_settled")}>Mark balance settled</Button>}
           </AccountTask>
         </div>
         {order.status === "reconciliation" && (
