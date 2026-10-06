@@ -197,13 +197,13 @@ export function JumpBackIn({ palette: p, links }: { palette: Palette; links: { k
 }
 
 // Client Home: where each property is in onboarding, with the next step.
-export function ClientPropertyProgress({ palette: p, properties, onOpen }: { palette: Palette; properties: ClientProperty[]; onOpen: () => void }) {
+export function ClientPropertyProgress({ palette: p, properties, onOpen, title = "Your properties", detail = "Where each property is, from enquiry to live" }: { palette: Palette; properties: ClientProperty[]; onOpen: () => void; title?: string; detail?: string }) {
   return (
     <Entrance sessionKey="client-home:properties" delay={40} style={{ gap: 12 }}>
       <View style={ui.between}>
         <View style={{ flex: 1, gap: 3 }}>
-          <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Your properties</Text>
-          <Text style={[ui.small, { color: p.muted }]}>Where each property is, from enquiry to live</Text>
+          <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>{title}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{detail}</Text>
         </View>
         <MotionPress accessibilityRole="button" onPress={onOpen} style={[ui.row, { gap: 4, minHeight: 44, paddingHorizontal: 6 }]}>
           <Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>View all</Text>

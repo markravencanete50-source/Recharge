@@ -383,6 +383,7 @@ function AppContent() {
     "approvals",
     "help",
     "activity",
+    "training",
   ];
   const tab: Tab = sections.includes(section as Tab)
     ? (section as Tab)

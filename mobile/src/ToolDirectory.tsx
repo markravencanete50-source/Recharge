@@ -754,6 +754,7 @@ export function ToolDirectory({
             {[
               {name:"Help and FAQs",icon:"help-circle" as const,action:()=>onNavigate("help")},
               {name:"Recent activity",icon:"activity" as const,action:()=>onNavigate("activity")},
+              ...(role!=="client"?[{name:"Training centre",icon:"book-open" as const,action:()=>onNavigate("training")}]:[]),
               {
                 name: "Reports and analytics",
                 icon: "bar-chart-2" as const,

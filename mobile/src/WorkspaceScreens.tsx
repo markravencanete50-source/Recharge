@@ -20,6 +20,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { Artwork, FeatureTile } from "./Artwork";
 import { ClientPropertyProgress, EnquiryCard, EnquirySheet, JumpBackIn, QuickOverview, WelcomeHeader } from "./HomeOverview";
 import { clientPortfolio } from "./clientPortfolio";
+import { CleanJobSheet, CleanerPerformance, CleansToApprove, DailyRoutine, QuickAccess, RepairPipeline, TeamInbox, TrainingCentre } from "./TeamFlows";
 
 // Each role gets its own line under the greeting.
 const HOME_SUBTITLE: Record<string, string> = {
@@ -451,6 +452,8 @@ export function WorkspaceScreens({
   const [query, setQuery] = useState("");
   const [propertyQuery, setPropertyQuery] = useState("");
   const [enquiryOpen, setEnquiryOpen] = useState(false);
+  const [cleanJob, setCleanJob] = useState<WorkItem | null>(null);
+  const [team, setTeam] = useState("Everyone");
   const client = useMemo(() => clientPortfolio(), []);
   const [filter, setFilter] = useState("Active");
   const [homeDate, setHomeDate] = useState(() => presetPeriod(1).to);
@@ -539,7 +542,7 @@ export function WorkspaceScreens({
       key={`${item.tool.id}:${item.record.id}`}
       item={item}
       palette={p}
-      onPress={() => onOpen(item.tool, item.record)}
+      onPress={() => role === "cleans" && item.tool.id === "cleaning-schedule" ? setCleanJob(item) : onOpen(item.tool, item.record)}
     />
   );
   const saved = orderedPins(toolsFor(role).map(tool=>({key:tool.id,name:tool.name,tone:WORKSPACE_MAP[tool.id].tone,tool})),savedTools).map(entry=>entry.tool);
@@ -547,15 +550,19 @@ export function WorkspaceScreens({
 
   if(section==='work'||section==='calendar') {
     const calendarView=section==='calendar'||view==='Calendar';
-    const results=items.filter(item=>(item.record.title+' '+(item.record.propertyName||'')).toLowerCase().includes(query.trim().toLowerCase())).filter(item=>calendarView?item.record.date===date:filter==='All'||(filter==='Completed'?isComplete(item.record.status):filter==='Waiting'?isWaiting(item.record.status):!isComplete(item.record.status)));
+    const teamItems=calendarView&&team!=='Everyone'?items.filter(item=>WORKSPACE_MAP[item.tool.id].tone===team.toLowerCase()):items;
+    const results=teamItems.filter(item=>(item.record.title+' '+(item.record.propertyName||'')).toLowerCase().includes(query.trim().toLowerCase())).filter(item=>calendarView?item.record.date===date:filter==='All'||(filter==='Completed'?isComplete(item.record.status):filter==='Waiting'?isWaiting(item.record.status):!isComplete(item.record.status)));
     return <ScrollView testID="workspace-scroll" style={{flex:1}} stickyHeaderIndices={[1]} onScroll={event=>setCompactFilters(event.nativeEvent.contentOffset.y>90)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS==='web'} contentContainerStyle={{width:'100%',maxWidth:desktop?1400:760,alignSelf:'center',paddingBottom:112}}>
       <Entrance sessionKey={'work:'+role+':heading'} style={{padding:20,gap:16}}>{heading(role==='cleans'?'Your jobs':'Your work','Find the next action, then keep things moving.')}<Chips values={['List','Calendar']} selected={calendarView?'Calendar':'List'} onSelect={value=>{setView(value);if(section==='calendar'&&value==='List')onNavigate('work');}} palette={p}/></Entrance>
       <View style={{gap:8,paddingHorizontal:20,paddingVertical:compactFilters?8:16,backgroundColor:p.background,borderBottomWidth:compactFilters?1:0,borderColor:p.border}}>{search('Search job or property titles')}{!calendarView&&<Chips values={['Active','Waiting','Completed','All']} selected={filter} onSelect={setFilter} palette={p}/>}</View>
       <View style={{padding:20,gap:20}}>
-        {calendarView&&<><WeekStrip selected={date} onSelect={setDate} items={items} palette={p}/><Calendar selected={date} onSelect={setDate} items={items} palette={p}/><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{displayDate(date)}</Text><Pressable accessibilityRole="button" accessibilityLabel="Return to today" onPress={()=>setDate(presetPeriod(1).to)} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>Today</Text></Pressable></View></>}
+        {calendarView&&<><WeekStrip selected={date} onSelect={setDate} items={teamItems} palette={p}/><Calendar selected={date} onSelect={setDate} items={teamItems} palette={p}/><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{displayDate(date)}</Text><Pressable accessibilityRole="button" accessibilityLabel="Return to today" onPress={()=>setDate(presetPeriod(1).to)} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>Today</Text></Pressable></View></>}
+        {!calendarView&&filter==='Active'&&(role==='stays'||role==='admin'||role==='super_admin')&&<><DailyRoutine palette={p} tools={toolsFor(role)} onOpen={tool=>onOpen(tool)}/><CleansToApprove palette={p}/></>}
+        {calendarView&&role!=='cleans'&&role!=='client'&&<View style={{gap:8}}><Text style={[ui.small,{color:p.muted,fontWeight:'600'}]}>Show the schedule for</Text><Chips values={['Everyone','Stays','Ready','Cleans']} selected={team} onSelect={setTeam} palette={p}/></View>}
         <Text accessibilityLiveRegion="polite" style={[ui.small,{color:p.muted}]}>{results.length} {results.length===1?'item':'items'} within your access</Text>
-        <Entrance trigger={calendarView?date:filter} style={{gap:12}}>{results.length?<View style={[ui.card,card,{paddingVertical:6,gap:0}]}>{results.map(openRow)}</View>:<View style={{gap:12}}><Empty title="No work in this view" detail="Try another status, search or calendar date." palette={p}/><Pressable accessibilityRole="button" onPress={()=>{setQuery('');setFilter('All');setDate(presetPeriod(1).to);}} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.buttonText,{color:p.text}]}>Reset work filters</Text></Pressable></View>}</Entrance>
+        <Entrance trigger={calendarView?date:filter} style={{gap:12}}>{results.length?(!calendarView&&filter==='Active'?(()=>{const todayKey=presetPeriod(1).to;const due=results.filter(item=>(item.record.date||'9999')<=todayKey),ongoing=results.filter(item=>(item.record.date||'9999')>todayKey);return <>{!!due.length&&<View style={{gap:8}}><Text accessibilityRole="header" style={{color:p.text,fontSize:15,fontWeight:'700'}}>Due today or overdue · {due.length}</Text><View style={[ui.card,card,{paddingVertical:6,gap:0}]}>{due.map(openRow)}</View></View>}{!!ongoing.length&&<View style={{gap:8}}><Text accessibilityRole="header" style={{color:p.text,fontSize:15,fontWeight:'700'}}>Ongoing · {ongoing.length}</Text><View style={[ui.card,card,{paddingVertical:6,gap:0}]}>{ongoing.map(openRow)}</View></View>}</>;})():<View style={[ui.card,card,{paddingVertical:6,gap:0}]}>{results.map(openRow)}</View>):<View style={{gap:12}}><Empty title="No work in this view" detail="Try another status, search or calendar date." palette={p}/><Pressable accessibilityRole="button" onPress={()=>{setQuery('');setFilter('All');setDate(presetPeriod(1).to);}} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.buttonText,{color:p.text}]}>Reset work filters</Text></Pressable></View>}</Entrance>
       </View>
+      <CleanJobSheet palette={p} visible={!!cleanJob} onClose={()=>setCleanJob(null)} property={cleanJob?.record.propertyName||cleanJob?.record.title||''} guests={2}/>
     </ScrollView>;
   }
   return (
@@ -587,17 +594,7 @@ export function WorkspaceScreens({
             <LinkRow title="All tools" subtitle="Documents, quotes, maintenance and more for your properties" icon="grid" palette={p} onPress={() => onNavigate("more")}/>
             <EnquirySheet palette={p} visible={enquiryOpen} onClose={() => setEnquiryOpen(false)}/>
           </>}
-          {role!=="client"&&!desktop&&<QuickOverview
-            palette={p}
-            sessionKey={"home:"+role+":overview:"+analyticsPeriod.from+":"+analyticsPeriod.to}
-            onReports={() => onNavigate("analytics")}
-            items={[
-              { key: "open", icon: "clipboard", value: today.open, label: "Open tasks", hint: "Open your work queue", onPress: () => openQueue() },
-              { key: "waiting", icon: "hourglass", value: today.waiting, label: "Waiting", hint: "Show tasks waiting on a response", onPress: () => openQueue("Waiting") },
-              { key: "done", icon: "medal", value: today.percent, suffix: "%", label: "Completed", hint: "Open reports", onPress: () => onNavigate("analytics") },
-              { key: "properties", icon: "house", value: today.properties ?? null, label: "Properties", hint: "Open properties", onPress: () => onNavigate("properties") },
-            ]}
-          />}
+          {role!=="client"&&!desktop&&<QuickAccess palette={p} role={role} tools={toolsFor(role)} onOpen={tool=>onOpen(tool)} onAll={()=>onNavigate("more")}/>}
           {role!=="client"&&<View testID="home-task-summary" style={{flexDirection:desktop?'row':'column',gap:20,alignItems:'stretch'}}>
           <Entrance sessionKey={"home:"+role+":hero"} style={desktop?{flex:2,minWidth:0}:undefined}>
             <View
@@ -679,6 +676,11 @@ export function WorkspaceScreens({
             ]}/>
           </TodayTiles>}
           </View>}
+          {role!=="client"&&desktop&&<QuickAccess palette={p} role={role} tools={toolsFor(role)} columns={4} onOpen={tool=>onOpen(tool)} onAll={()=>onNavigate("more")}/>}
+          {role==="cleans"&&<CleanerPerformance palette={p} mine/>}
+          {(role==="cleaning_manager"||role==="admin"||role==="super_admin")&&<CleanerPerformance palette={p} mine={false}/>}
+          {role==="ready"&&<RepairPipeline palette={p}/>}
+          {role!=="client"&&<LinkRow title="Training centre" subtitle="Guides and standards for every team" icon="book-open" palette={p} onPress={() => onNavigate("training")}/>}
           <Entrance sessionKey={"home:"+role+":schedule"} delay={55} style={{ gap: 10 }}>
             <View style={ui.between}>
               <View style={{flex:1,gap:4}}><Text
@@ -828,6 +830,7 @@ export function WorkspaceScreens({
                 : "Properties",
             "One place for the details and work you can access.",
           )}
+          {(role==="admin"||role==="super_admin"||role==="stays")&&<ClientPropertyProgress palette={p} properties={client.properties} title="Onboarding pipeline" detail="New enquiries and the next action to move each one forward" onOpen={() => { const tool = toolsFor(role).find(entry => entry.id === "property-onboarding"); if (tool) onOpen(tool); }}/>}
           {search("Search property names")}
 
           <View style={{flexDirection:desktop?'row':'column',flexWrap:'wrap',gap:20}}>
@@ -885,7 +888,14 @@ export function WorkspaceScreens({
         </>
       ) : null}
 
-      {section === "inbox" ? (
+      {section === "training" ? <TrainingCentre palette={p} role={role}/> : null}
+      {section === "inbox" && role !== "client" ? (
+        <>
+          {heading("Inbox", role === "cleans" || role === "cleaning_manager" ? "Conversations about your properties with the Stays and Ready teams." : "Guests, clients, team, WhatsApp and email in one place.")}
+          <TeamInbox palette={p} role={role}/>
+        </>
+      ) : null}
+      {section === "inbox" && role === "client" ? (
         <>
           {heading(
             "Inbox",
