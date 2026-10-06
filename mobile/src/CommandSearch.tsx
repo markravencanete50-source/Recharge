@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Text } from './Typography';
-import { Artwork } from './Artwork';
+import { Artwork, FeatureTile } from './Artwork';
 import { MotionPress } from './motion';
 import { ui, type Palette } from './theme';
 import type { Tool } from './model';
@@ -51,7 +51,7 @@ export function CommandSearch({tools,palette:p,onOpen,onNavigate,onProfile,onClo
   return <View ref={root} style={{gap:10}}>
     <View {...(Platform.OS==='web'?{dataSet:{searchShell:'true'}}:{})} style={[ui.row,{gap:12,borderWidth:1,borderColor:p.border,borderRadius:18,paddingHorizontal:16,backgroundColor:p.background}]}><Feather name="search" size={20} color={p.muted}/><TextInput ref={input} accessibilityLabel="Quick search feature titles" placeholder="Where do you want to go?" placeholderTextColor={p.muted} value={query} onChangeText={value=>{setQuery(value);setSelected(0);}} autoCorrect={false} returnKeyType="go" onSubmitEditing={Platform.OS==='web'?undefined:()=>choose(selected)} style={{flex:1,minHeight:52,fontSize:16,color:p.text,fontFamily:'Montserrat_400Regular'}}/></View>
     <Text accessibilityLiveRegion="polite" style={[ui.small,{color:p.muted}]}>{grouped.length} matching tools. {actions[selected]?'Selected: '+actions[selected].name:'No tool matches. Try a shorter word.'}</Text>
-    {!!quick.length&&<><Text style={heading}>Quick access</Text>{quick.map((link,index)=>row(link.key,link.name,index,<View style={{width:36,height:36,borderRadius:12,backgroundColor:p.wash,alignItems:'center',justifyContent:'center'}}><Feather name={link.icon} size={17} color={p.primary}/></View>))}</>}
+    {!!quick.length&&<><Text style={heading}>Quick access</Text>{quick.map((link,index)=>row(link.key,link.name,index,<FeatureTile icon={link.icon} size={36} palette={p}/>))}</>}
     {DEPARTMENTS.map(department=>{const matches=grouped.filter(entry=>entry.tone===department.id);return matches.length?<View key={department.id} style={{gap:2}}><Text style={[heading,{paddingTop:10}]}>{department.name} · {matches.length}</Text>{matches.map(entry=>row(entry.key,entry.name,quick.length+grouped.indexOf(entry),<Artwork id={entry.tool.id} size={36} palette={p}/>))}</View>:null;})}
     {Platform.OS==='web'?<View style={[ui.row,{gap:14,flexWrap:'wrap',paddingTop:4}]}>{[['↑ ↓','move'],['Enter','open'],['Esc','close']].map(([key,label])=><View key={key} style={[ui.row,{gap:6}]}><View style={{paddingHorizontal:7,paddingVertical:2,borderRadius:7,borderWidth:1,borderColor:p.border,backgroundColor:p.background}}><Text style={{fontSize:11,fontWeight:'600',color:p.text}}>{key}</Text></View><Text style={{fontSize:12,color:p.muted}}>{label}</Text></View>)}</View>:<Text style={[ui.small,{color:p.muted}]}>Tap a result to open it.</Text>}
   </View>;

@@ -55,12 +55,13 @@ export const designTokens = {
     onPrimary: "#1F3D38",
     wash: "#254538",
     accent: "#A7D9C1",
-    header: darkBrandCanvas,
-    headerText: "#EFE9DB",
+    // Dark mode swaps the forest bar for a deeper night bar so the theme change reads at a glance.
+    header: "#0B1714",
+    headerText: "#FAF7F0",
     headerMuted: "#C7CBBE",
-    headerControl: "#182C26",
+    headerControl: "#172B25",
     headerControlText: "#FAF7F0",
-    headerBorder: "#79998C",
+    headerBorder: "#527867",
     chart: "#8FD3C2",
     waiting: "#E8C27D",
     success: "#86D99B",
@@ -114,5 +115,5 @@ const themeTransitionCss = `::view-transition-group(root){animation:none}::view-
 const headerCss = `:is([data-testid="workspace-toolbar"],[data-testid="sidebar-brand"],[data-testid="workspace-sidebar-collapsed"]),:is([data-testid="workspace-toolbar"],[data-testid="sidebar-brand"],[data-testid="workspace-sidebar-collapsed"]) *{color:var(--rc-headerText)}:is([data-testid="workspace-toolbar"],[data-testid="sidebar-brand"],[data-testid="workspace-sidebar-collapsed"]) [role="button"]:focus-visible{outline-color:var(--rc-headerText)}`;
 // Web-only hover feedback. `translate` composes with the inline `transform`
 // that the press animation owns, so hover lift and press scale never fight.
-const hoverCss = `[data-hover]{transition:background-color 260ms cubic-bezier(.16,1,.3,1),box-shadow 420ms cubic-bezier(.16,1,.3,1),translate 420ms cubic-bezier(.16,1,.3,1),border-color 260ms ease}@media(hover:hover) and (pointer:fine){[data-hover="tint"]:hover{background-color:color-mix(in srgb,var(--rc-elevated) 70%,transparent)}[data-hover="lift"]:hover{translate:0 -3px;box-shadow:0 22px 44px -22px rgba(21,45,40,.42);border-color:var(--rc-controlBorder)}}[data-reduce-motion="true"] [data-hover]{transition:none}[data-reduce-motion="true"] [data-hover="lift"]:hover{translate:none}@media(prefers-reduced-motion:reduce){[data-hover]{transition:none}[data-hover="lift"]:hover{translate:none}}::selection{background:var(--rc-primary);color:var(--rc-onPrimary)}[data-overlay="blur"]{backdrop-filter:blur(8px) saturate(120%);-webkit-backdrop-filter:blur(8px) saturate(120%)}`;
+const hoverCss = `[data-glyph-mark]{transition:transform 520ms cubic-bezier(.34,1.56,.64,1)}[data-glyph-tile]{transition:translate 420ms cubic-bezier(.16,1,.3,1),box-shadow 420ms ease}@media(hover:hover) and (pointer:fine){:is([data-hover],[role="button"]):hover [data-glyph-mark]{transform:rotate(-8deg) scale(1.1)}:is([data-hover],[role="button"]):hover [data-glyph-tile]{translate:0 -2px;box-shadow:0 10px 18px -10px rgba(21,45,40,.45)}}[data-reduce-motion="true"] :is([data-glyph-mark],[data-glyph-tile]){transition:none!important;transform:none!important;translate:none!important}@media(prefers-reduced-motion:reduce){:is([data-glyph-mark],[data-glyph-tile]){transition:none!important}}[data-hover]{transition:background-color 260ms cubic-bezier(.16,1,.3,1),box-shadow 420ms cubic-bezier(.16,1,.3,1),translate 420ms cubic-bezier(.16,1,.3,1),border-color 260ms ease}@media(hover:hover) and (pointer:fine){[data-hover="tint"]:hover{background-color:color-mix(in srgb,var(--rc-elevated) 70%,transparent)}[data-hover="lift"]:hover{translate:0 -3px;box-shadow:0 22px 44px -22px rgba(21,45,40,.42);border-color:var(--rc-controlBorder)}}[data-reduce-motion="true"] [data-hover]{transition:none}[data-reduce-motion="true"] [data-hover="lift"]:hover{translate:none}@media(prefers-reduced-motion:reduce){[data-hover]{transition:none}[data-hover="lift"]:hover{translate:none}}::selection{background:var(--rc-primary);color:var(--rc-onPrimary)}[data-overlay="blur"]{backdrop-filter:blur(8px) saturate(120%);-webkit-backdrop-filter:blur(8px) saturate(120%)}`;
 export const designTokenCss = `${hoverCss}:root:not(.dark):not([data-recharge-theme="dark"]),[data-recharge-theme="light"]{${variables("light")}${aliases}color-scheme:light}:root.dark:not([data-recharge-theme="light"]),[data-recharge-theme="dark"]{${variables("dark")}${aliases}color-scheme:dark}${themeTransitionCss}${headerCss}[data-testid="workspace-scroll"]{scrollbar-width:thin;scrollbar-color:var(--rc-muted) transparent}button:focus-visible,[role="button"]:focus-visible,[role="checkbox"]:focus-visible,input:focus-visible{outline:2px solid var(--rc-primary);outline-offset:3px} [data-search-shell] input:focus{outline:none;box-shadow:none}[data-search-shell]:focus-within{outline:none;border-color:var(--rc-primary)!important;box-shadow:inset 0 0 0 1px var(--rc-primary)} [data-tool-section="collapsed"]{content-visibility:auto;contain-intrinsic-size:auto 76px}`;

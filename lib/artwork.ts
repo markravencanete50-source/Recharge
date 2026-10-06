@@ -47,6 +47,68 @@ export const departmentGlyphs = {
   clients: "handshake",
   accounts: "circle-pound-sterling",
 } as const satisfies Record<DepartmentTone, string>;
+// Each tool carries its own earthy hue, chosen by the kind of work it does
+// (calendars teal, money ochre, repairs terracotta, people heather) so tiles
+// stay distinct inside a department while the palette stays minimal.
+export const toolHueSwatches = {
+  forest: { light: { ink: "#1F5F55", wash: "#DCEAE4", glow: "#A7D9C1" }, dark: { ink: "#8FD3C2", wash: "#173A33", glow: "#2E6B5E" } },
+  moss: { light: { ink: "#3F6A2A", wash: "#E4EDD8", glow: "#B7DA92" }, dark: { ink: "#B7DA92", wash: "#22341A", glow: "#47662F" } },
+  ochre: { light: { ink: "#875A1C", wash: "#F3E7CF", glow: "#E8C27D" }, dark: { ink: "#E8C27D", wash: "#3A2C15", glow: "#6E5225" } },
+  terracotta: { light: { ink: "#9A4426", wash: "#F5E0D3", glow: "#F2AE8C" }, dark: { ink: "#F2AE8C", wash: "#3D2217", glow: "#74402A" } },
+  clay: { light: { ink: "#8E3F38", wash: "#F2E1DB", glow: "#EDAAA1" }, dark: { ink: "#EDAAA1", wash: "#3A201D", glow: "#6E3A33" } },
+  slate: { light: { ink: "#3B5866", wash: "#DFE7E8", glow: "#A9C6D2" }, dark: { ink: "#A9C6D2", wash: "#1D2F36", glow: "#3B5A66" } },
+  heather: { light: { ink: "#6B4768", wash: "#EDE1EA", glow: "#D9B5D5" }, dark: { ink: "#D9B5D5", wash: "#30212F", glow: "#5E405B" } },
+  teal: { light: { ink: "#1D6470", wash: "#D8EBEC", glow: "#8CCFD8" }, dark: { ink: "#8CCFD8", wash: "#15343A", glow: "#2C6570" } },
+  olive: { light: { ink: "#635D1C", wash: "#EEEBCF", glow: "#D9CF85" }, dark: { ink: "#D9CF85", wash: "#302D14", glow: "#5E5726" } },
+} as const;
+export type ToolHue = keyof typeof toolHueSwatches;
+export const toolHues = {
+  "clean-client-database": "heather",
+  "cleaner-database": "forest",
+  "client-dashboard": "moss",
+  "clean-reporting": "slate",
+  "clean-property-onboarding": "olive",
+  "cleaner-performance": "ochre",
+  "cleaning-schedule": "teal",
+  "ready-schedule": "teal",
+  "maintenance-reporting": "terracotta",
+  "stays-maintenance-reporting": "terracotta",
+  "client-property-maintenance": "clay",
+  "property-database": "forest",
+  "property-onboarding": "olive",
+  "direct-bookings": "teal",
+  "new-property-inspection-board": "slate",
+  "safety-maintenance": "moss",
+  "routine-bin-garden-board": "moss",
+  "guest-communication": "slate",
+  "client-mailbox": "heather",
+  "purchase-order": "terracotta",
+  "purchase-order-requests": "teal",
+  "client-purchase-order-quotes": "forest",
+  "replenishment-requests": "ochre",
+  "property-furnishing-board": "heather",
+  "client-furnishing": "slate",
+  "aircover-reporting": "clay",
+  "ota-logins": "forest",
+  licensing: "olive",
+  "daily-pricing": "moss",
+  "weekly-performance": "teal",
+  "listing-health": "forest",
+  "cleans-invoices": "ochre",
+  "maintenance-reconciliation": "slate",
+  "onboarding-invoices": "olive",
+  "purchase-order-invoices": "terracotta",
+  "purchase-order-accounts": "heather",
+  "owner-statements": "ochre",
+} as const satisfies Record<ModuleId, ToolHue>;
+export const departmentHues = {
+  // Mirrors departmentTokens so department tiles match department pills.
+  stays: "forest",
+  ready: "moss",
+  cleans: "ochre",
+  clients: "slate",
+  accounts: "clay",
+} as const satisfies Record<DepartmentTone, ToolHue>;
 export const iconNodes: Record<
   string,
   readonly (readonly [string, Record<string, string | number>])[]

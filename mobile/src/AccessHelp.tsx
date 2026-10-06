@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Platform, TextInput, View } from 'react-native';
+import { FeatureTile } from './Artwork';
 import Feather from '@expo/vector-icons/Feather';
 import { faqsForAccess } from '../../lib/access-faq';
 import { activityText, type PersonalActivity } from '../../lib/recent-activity';
@@ -26,7 +27,7 @@ export function AccessHelp({role,palette:p,onOpen}:{role:WorkspaceRole;palette:P
 
 export function RecentActivity({items,palette:p,onOpen,error='',framed=false}:{items:PersonalActivity[];palette:Palette;onOpen?:(event:PersonalActivity)=>void;error?:string;framed?:boolean}) {
   return <View style={[{gap:framed?0:12},framed&&items.length?[ui.card,{backgroundColor:p.surface,borderColor:p.border,paddingVertical:6}]:null]}><Text style={[ui.small,{color:p.muted}]}>Your actions on this device</Text>{!!error&&<Text accessibilityRole="alert" style={[ui.small,{color:p.muted}]}>{error}</Text>}
-    {!items.length?<View style={[ui.card,{backgroundColor:p.surface,borderColor:p.border}]}><Feather name="activity" size={24} color={p.primary}/><Text style={[ui.body,{color:p.text}]}>Your recent actions will appear here.</Text><Text style={[ui.small,{color:p.muted}]}>Open a tool or pin a favourite to start your history.</Text></View>:items.map(event=>{
+    {!items.length?<View style={[ui.card,{backgroundColor:p.surface,borderColor:p.border}]}><FeatureTile icon="activity" size={44} palette={p}/><Text style={[ui.body,{color:p.text}]}>Your recent actions will appear here.</Text><Text style={[ui.small,{color:p.muted}]}>Open a tool or pin a favourite to start your history.</Text></View>:items.map(event=>{
       const title=toolsFor('super_admin').find(tool=>tool.id===event.moduleId)?.name;
       return <MotionPress key={event.id} accessibilityRole={event.moduleId&&onOpen?'button':undefined} disabled={!event.moduleId||!onOpen} onPress={()=>onOpen?.(event)} {...(Platform.OS==='web'?{dataSet:{hover:'tint'}}:{})} style={[ui.row,{gap:12,minHeight:68,paddingVertical:12,paddingHorizontal:12,marginHorizontal:-12,borderRadius:16}]}><View style={{width:40,height:40,backgroundColor:p.wash,borderRadius:13,alignItems:'center',justifyContent:'center'}}><Feather name={event.action==='export_report'?'download':event.action==='save_tool'||event.action==='unsave_tool'?'bookmark':event.action==='update_profile'?'user':'eye'} size={18} color={p.primary}/></View><View style={{flex:1,gap:4}}><Text style={{color:p.text,fontSize:14,lineHeight:20,fontWeight:'500'}}>{activityText(event,title)}</Text><Text style={{color:p.muted,fontSize:12,lineHeight:18}}>{new Date(event.at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</Text></View>{event.moduleId&&onOpen&&<Feather name="chevron-right" size={18} color={p.muted}/>}</MotionPress>;
     })}</View>;

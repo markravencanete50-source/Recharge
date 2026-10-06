@@ -390,3 +390,13 @@ html[data-reduce-motion="true"] :is(.recharge-workspace,.phase-two-reports) *,ht
 @media(prefers-reduced-motion:reduce){.workspace-help-results summary svg{transition:none}}
 /* Forest feature panels keep their colour in dark mode, lifted by a hairline so they separate from the page. */
 html.dark [class~="bg-[#1c3934]"] { background-color: #1F3D38; box-shadow: inset 0 0 0 1px #345347; }
+/* Dark mode: the night header and sidebar brand sit on a hairline instead of blending into the page. */
+.dark .recharge-workspace :is(.workspace-header,.sidebar-brand){box-shadow:inset 0 -1px 0 var(--rc-border)}
+.dark .recharge-workspace .workspace-header.workspace-header-scrolled{box-shadow:inset 0 -1px 0 var(--rc-border),0 6px 20px var(--rc-shadow)}
+/* Keep the sidebar brand exactly as tall as the top bar so their bottom edges line up. */
+@media (min-width:1024px){
+  .recharge-workspace .sidebar-brand{height:4.75rem;padding-top:0;padding-bottom:0;box-shadow:inset 0 -1px 0 var(--border)}
+  .recharge-workspace .sidebar-brand span > span{margin-top:4px}
+}
+/* The logo artwork carries its own green canvas; on the dark-mode night bar it sits on a plate of that canvas. */
+.dark .recharge-company-logo{background:#1B3E38!important;border-radius:5px;box-shadow:0 0 0 7px #1B3E38,0 0 0 8px var(--rc-headerBorder,#527867)}

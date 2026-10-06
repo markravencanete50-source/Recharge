@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
-import { Artwork, Glyph, DepartmentArtwork } from "./Artwork";
+import { Artwork, Glyph, DepartmentArtwork, FeatureTile } from "./Artwork";
 import { MotionPress as Pressable, useReducedMotion } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import { toolsFor, type Tool, type WorkspaceRole } from "./model";
@@ -781,7 +781,7 @@ export function ToolDirectory({
                 onPress={link.action}
                 style={[ui.row, { minHeight: 64, gap: 12 }]}
               >
-                <Feather name={link.icon} size={20} color={p.primary} />
+                <FeatureTile icon={link.icon} size={40} palette={p} />
                 <Text
                   style={{
                     flex: 1,

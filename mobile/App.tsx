@@ -30,7 +30,7 @@ import DateTimePicker, {
 } from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
 import { AccountSetup, Avatar, type Profile } from "./src/AccountSetup";
-import { Artwork } from "./src/Artwork";
+import { Artwork, FeatureTile } from "./src/Artwork";
 import { NavigationBar } from "./src/NavigationBar";
 import { FilterBar } from "./src/FilterBar";
 import { StateGraphic } from "./src/StateGraphic";
@@ -526,7 +526,7 @@ function AppContent() {
           {desktop&&sidebarHidden&&<View testID="workspace-sidebar-collapsed" style={{width:64,backgroundColor:p.isDark?p.surface:p.background,borderRightWidth:1,borderColor:p.border}}><View style={{height:81,alignItems:"center",justifyContent:"center",backgroundColor:p.header}}><IconButton label="Show left panel" icon="chevrons-right" palette={headerPalette(p)} expanded={false} onPress={()=>setSidebarHidden(false)}/></View></View>}
           <View style={[ui.fill,{minWidth:0}]}>
           {offline&&<View accessibilityRole="alert" style={{backgroundColor:p.cautionWash,padding:12}}><Text style={[ui.small,{color:p.text}]}>You are offline. The sample workspace remains available. Live requests may fail until you reconnect.</Text></View>}
-          <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth:1, borderColor:scrolled?p.headerBorder:'transparent' }}>
+          <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth:1, borderColor:scrolled?p.headerBorder:p.isDark?p.border:'transparent' }}>
             <View
               style={[
                 ui.between,
@@ -731,7 +731,7 @@ function AppContent() {
               <Text style={{ color: p.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>Comfort</Text>
               <View style={{ borderRadius: 20, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
                 <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>
-                  <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name="wind" size={16} color={p.primary} /></View>
+                  <FeatureTile icon="wind" size={36} palette={p} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Reduce motion</Text>
                     <Text style={[ui.small, { color: p.muted }]}>{motionPreference.system ? "Your device setting is respected." : "Use instant changes instead of decorative animation."}</Text>
@@ -740,7 +740,7 @@ function AppContent() {
                 </View>
                 <View style={{ height: 1, backgroundColor: p.border, marginLeft: 68 }} />
                 <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>
-                  <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name="help-circle" size={16} color={p.primary} /></View>
+                  <FeatureTile icon="help-circle" size={36} palette={p} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Show FAQ shortcut</Text>
                     <Text style={[ui.small, { color: p.muted }]}>A Help button in the corner of every page.</Text>

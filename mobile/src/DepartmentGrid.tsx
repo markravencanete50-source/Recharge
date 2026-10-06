@@ -1,7 +1,7 @@
 import { Text } from "./Typography";
 import { View, ScrollView } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import { DepartmentArtwork } from "./Artwork";
+import { DepartmentArtwork, FeatureTile } from "./Artwork";
 import { Entrance, MotionPress as Pressable } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import { toolsFor, type ModuleId, type WorkspaceRole } from "./model";
@@ -104,13 +104,12 @@ export function DepartmentGrid({
             style={{
               width: 52,
               height: 52,
-              backgroundColor: p.wash,
               borderRadius: 16,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Feather name="grid" size={24} color={p.primary} />
+            <FeatureTile icon="grid" size={52} palette={p} />
           </View>
           <Text style={{ color: p.text, fontSize: 12, fontWeight: "500" }}>
             All tools
@@ -130,7 +129,7 @@ export function DepartmentGrid({
         ]}
       >
         <View style={[ui.row, { gap: 14, flex: 1 }]}>
-          <Feather name="grid" size={26} color={p.primary} />
+          <FeatureTile icon="grid" size={48} palette={p} />
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ color: p.text, fontSize: 17, fontWeight: "600" }}>
               Explore all tools

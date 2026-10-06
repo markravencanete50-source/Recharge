@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
-import { Artwork } from "./Artwork";
+import { Artwork, FeatureTile } from "./Artwork";
 import { FilterBar } from "./FilterBar";
 import { StateGraphic } from "./StateGraphic";
 import { Entrance, CountUp, SlidingPill, MotionPress as Pressable, useReducedMotion } from "./motion";
@@ -132,7 +132,6 @@ function LinkRow({
     >
       <View
         style={{
-          backgroundColor: p.wash,
           width: 44,
           height: 44,
           borderRadius: 14,
@@ -143,7 +142,7 @@ function LinkRow({
         {toolId ? (
           <Artwork id={toolId} size={44} palette={p} />
         ) : (
-          <Feather name={icon || "grid"} size={20} color={p.primary} />
+          <FeatureTile icon={icon || "grid"} size={44} palette={p} />
         )}
       </View>
       <View style={{ flex: 1, gap: 3 }}>
@@ -1016,14 +1015,14 @@ export function WorkspaceScreens({
                       ["droplet", "Bathrooms", String(selectedProperty.bathrooms)],
                     ] as const).map(([icon, label, value]) => (
                       <View key={label} style={[ui.card, card, { flex: 1, gap: 8, padding: 16 }]}>
-                        <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name={icon} size={16} color={p.primary} /></View>
+                        <FeatureTile icon={icon} size={36} palette={p} />
                         <Text style={{ fontSize: 26, fontWeight: "700", letterSpacing: -0.8, color: p.text }}>{value}</Text>
                         <Text style={[ui.small, { color: p.muted }]}>{label}</Text>
                       </View>
                     ))}
                   </View>
                   <View style={[ui.card, card, { flexDirection: "row", alignItems: "center", gap: 12 }]}>
-                    <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name="map" size={16} color={p.primary} /></View>
+                    <FeatureTile icon="map" size={36} palette={p} />
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text style={{ fontSize: 11, fontWeight: "600", letterSpacing: 1.2, textTransform: "uppercase", color: p.muted }}>Address</Text>
                       <Text style={[ui.body, { color: p.text }]}>{selectedProperty.propertyAddress}</Text>
