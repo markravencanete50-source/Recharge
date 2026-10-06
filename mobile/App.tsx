@@ -526,7 +526,7 @@ function AppContent() {
           {desktop&&sidebarHidden&&<View testID="workspace-sidebar-collapsed" style={{width:64,backgroundColor:p.isDark?p.surface:p.background,borderRightWidth:1,borderColor:p.border}}><View style={{height:81,alignItems:"center",justifyContent:"center",backgroundColor:p.header}}><IconButton label="Show left panel" icon="chevrons-right" palette={headerPalette(p)} expanded={false} onPress={()=>setSidebarHidden(false)}/></View></View>}
           <View style={[ui.fill,{minWidth:0}]}>
           {offline&&<View accessibilityRole="alert" style={{backgroundColor:p.cautionWash,padding:12}}><Text style={[ui.small,{color:p.text}]}>You are offline. The sample workspace remains available. Live requests may fail until you reconnect.</Text></View>}
-          <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth:1, borderColor:scrolled?p.headerBorder:p.isDark?p.border:'transparent' }}>
+          <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth:1, borderColor:scrolled?p.headerBorder:p.isDark&&desktop?p.border:'transparent' }}>
             <View
               style={[
                 ui.between,
@@ -668,7 +668,7 @@ function AppContent() {
             </ScrollView>
           )}
           {!faqShortcut.hidden&&<FaqShortcut palette={p} onOpen={()=>setTab('help')} onHide={()=>faqShortcut.setHidden(true)}/>}
-          <View style={{ alignItems: "center", paddingVertical: 4 }}>
+          <View style={{ alignItems: "center", paddingTop: 4, paddingBottom: desktop ? 4 : 30 }}>
             <Text
               style={{
                 fontSize: 11,

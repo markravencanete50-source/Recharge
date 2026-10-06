@@ -50,7 +50,7 @@ export function StatusChart({report,palette:p,motionKey='report:status'}:{report
     <Text style={[ui.small,{color:p.muted}]}>Current status of tasks recorded in the selected period.</Text>
     <View style={{flexDirection:width>=520?'row':'column',alignItems:'center',gap:24}}>
       <View accessible accessibilityRole="image" accessibilityLabel={'Tasks by status. '+data.status.map(s=>s.name+' '+s.value).join(', ')+'. Total '+data.total+'.'} style={{width:220,height:220,flexShrink:0,alignItems:'center',justifyContent:'center'}}>
-        <Svg accessible={false} width={220} height={220} viewBox="0 0 220 220" style={{position:'absolute'}}>
+        <Svg width={220} height={220} viewBox="0 0 220 220" style={{position:'absolute'}}>
           <Circle cx={110} cy={110} r={76} stroke={p.elevated} strokeWidth={20} fill="none"/>
           {segments.filter(s=>s.value>0).map(s=><Circle key={s.name} cx={110} cy={110} r={76} stroke={color(s.kind)} strokeWidth={20} fill="none" strokeDasharray={`${Math.max(0,s.length-(s.share===1?0:3))} ${s.circumference}`} strokeDashoffset={-s.offset} rotation={-90} origin="110,110" opacity={!focused||focused.name===s.name?1:0.22}/>)}
         </Svg>

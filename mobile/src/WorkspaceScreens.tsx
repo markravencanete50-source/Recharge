@@ -18,6 +18,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Artwork, FeatureTile } from "./Artwork";
+import { QuickOverview, WelcomeHeader } from "./HomeOverview";
 import { FilterBar } from "./FilterBar";
 import { StateGraphic } from "./StateGraphic";
 import { Entrance, CountUp, SlidingPill, MotionPress as Pressable, useReducedMotion } from "./motion";
@@ -547,6 +548,24 @@ export function WorkspaceScreens({
     <>
       {section === "home" ? (
         <>
+          {!desktop&&<WelcomeHeader
+            palette={p}
+            name={profileName}
+            dateLabel={displayDate(presetPeriod(1).to).replace(/ \d{4}$/, "")}
+            subtitle={role === "cleans" ? "Your jobs, schedule and updates in one place." : role === "client" ? "Your properties, decisions and latest updates." : "Your people and properties, working together."}
+            onCalendar={() => onNavigate("calendar")}
+          />}
+          {!desktop&&<QuickOverview
+            palette={p}
+            sessionKey={"home:"+role+":overview:"+analyticsPeriod.from+":"+analyticsPeriod.to}
+            onReports={() => onNavigate("analytics")}
+            items={[
+              { key: "open", icon: "clipboard", value: today.open, label: "Open tasks", hint: "Open your work queue", onPress: () => openQueue() },
+              { key: "waiting", icon: "hourglass", value: today.waiting, label: "Waiting", hint: "Show tasks waiting on a response", onPress: () => openQueue("Waiting") },
+              { key: "done", icon: "medal", value: today.percent, suffix: "%", label: "Completed", hint: "Open reports", onPress: () => onNavigate("analytics") },
+              { key: "properties", icon: "house", value: today.properties ?? null, label: "Properties", hint: "Open properties", onPress: () => onNavigate("properties") },
+            ]}
+          />}
           <View testID="home-task-summary" style={{flexDirection:desktop?'row':'column',gap:20,alignItems:'stretch'}}>
           <Entrance sessionKey={"home:"+role+":hero"} style={desktop?{flex:2,minWidth:0}:undefined}>
             <View
@@ -559,6 +578,7 @@ export function WorkspaceScreens({
               }}
             >
               <HeroGlow palette={p}/>
+              {desktop&&<>
               <View style={[ui.between,{gap:12}]}>
                 <Text style={{color:homeTone.heroMuted,fontSize:13,fontWeight:"500",flex:1}}>
                   {new Date().getHours() < 12
@@ -606,6 +626,7 @@ export function WorkspaceScreens({
                 <TodayRing palette={p} size={desktop?116:92} motionKey={"overview:"+role+":ring:"+analyticsPeriod.from+":"+analyticsPeriod.to}
                   completed={today.current.complete} total={today.current.total}/>
               </View>
+              </>}
               <OpenTasksTrend palette={p} wide={desktop} data={today} motionKey={"overview:"+role+":trend:"+analyticsPeriod.to}/>
               <Pressable
                 accessibilityRole="button"
@@ -622,7 +643,7 @@ export function WorkspaceScreens({
               </Pressable>
             </View>
           </Entrance>
-          <TodayTiles vertical={desktop} data={today} palette={p} onWaiting={()=>openQueue("Waiting")} onProperties={()=>onNavigate("properties")}/>
+          {desktop&&<TodayTiles vertical={desktop} data={today} palette={p} onWaiting={()=>openQueue("Waiting")} onProperties={()=>onNavigate("properties")}/>}
           </View>
           <Entrance sessionKey={"home:"+role+":schedule"} delay={55} style={{ gap: 10 }}>
             <View style={ui.between}>

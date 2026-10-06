@@ -1,10 +1,10 @@
+import { DimensionalIcon } from './DimensionalIcon';
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import Svg, {Circle,Defs,Filter,FeGaussianBlur,Line,LinearGradient,Path,Polyline,RadialGradient,Rect,Stop,Text as SvgText} from 'react-native-svg';
 import Feather from '@expo/vector-icons/Feather';
 import { todayColors, type todayPresentation } from '../../lib/today-presentation';
 import { Text } from './Typography';
-import { ReportSymbol } from './Charts';
 import { MotionPress, useMotionPreference, useReducedMotion } from './motion';
 import { ui, type Palette } from './theme';
 
@@ -27,7 +27,7 @@ export function HeroGlow({palette:p}:{palette:Palette}) {
   },[drift,reduced]);
   const glow=(id:string,color:string,opacity:number,size:number)=><Svg width={size} height={size}><Defs><RadialGradient id={id} cx="50%" cy="50%" r="50%"><Stop offset="0" stopColor={color} stopOpacity={opacity}/><Stop offset="1" stopColor={color} stopOpacity={0}/></RadialGradient></Defs><Circle cx={size/2} cy={size/2} r={size/2} fill={`url(#${id})`}/></Svg>;
   return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-    <Svg accessible={false} width="100%" height="100%" viewBox="0 0 600 300" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
+    <Svg width="100%" height="100%" viewBox="0 0 600 300" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
       <Defs><LinearGradient id="home-hero-base" x1="0" x2="1" y1="0" y2="1"><Stop offset="0" stopColor={tone.heroStart}/><Stop offset="1" stopColor={tone.heroEnd}/></LinearGradient></Defs>
       <Rect width="600" height="300" fill="url(#home-hero-base)"/>
     </Svg>
@@ -94,7 +94,7 @@ export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today
     {data.available?<>
       <Text style={{color:tone.heroText,fontSize:12,lineHeight:18}}>{total} currently open, recorded in these 7 days</Text>
       <View onLayout={event=>setWidth(Math.max(80,event.nativeEvent.layout.width))} accessible accessibilityRole="image" accessibilityLabel={`Open tasks by recorded date. ${data.days.map(day=>`${day.date}: ${day.value}`).join('; ')}. ${data.changeLabel}. Counts use current task status, not historical backlog.`}>
-        <Svg accessible={false} width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
+        <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
           <Defs><LinearGradient id="today-open-area" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={tone.spark} stopOpacity={0.3}/><Stop offset="1" stopColor={tone.spark} stopOpacity={0}/></LinearGradient></Defs>
           {[0,max/2,max].map(value=><Line key={'grid-'+value} x1={28} x2={width} y1={y(value)} y2={y(value)} stroke={tone.grid} strokeOpacity={tone.gridOpacity} strokeDasharray="3 5"/>)}
           {[0,max/2,max].map(value=><SvgText key={'label-'+value} x={0} y={y(value)+4} fill={tone.heroText} fontSize={12} fontFamily="Montserrat_500Medium">{value}</SvgText>)}
@@ -121,7 +121,7 @@ export function TodayTiles({data,palette:p,onWaiting,onProperties,vertical=false
     const waiting=kind==='waiting',icon=waiting?tone.waitingIcon:tone.propertyIcon;
     return <MotionPress key={kind} {...(Platform.OS==='web'?{dataSet:{hover:'lift'}}:{})} accessibilityRole="button" accessibilityLabel={waiting?`${data.waiting} waiting, ${data.waiting} of ${data.open} open tasks`:`${data.properties??'Unavailable'} properties, as of today`} onPress={waiting?onWaiting:onProperties} style={{flex:1,minWidth:0,padding:vertical?24:16,justifyContent:'space-between',borderRadius:26,borderWidth:1,borderColor:waiting?tone.waitingBorder:tone.propertyBorder,backgroundColor:waiting?tone.waitingBg:tone.propertyBg,gap:vertical?20:12,overflow:'hidden'}}>
       <View style={ui.between}>
-        <View style={{width:40,height:40,borderRadius:13,backgroundColor:icon+(p.isDark?'29':'14'),alignItems:'center',justifyContent:'center'}}><ReportSymbol kind={waiting?'waiting':'property'} color={icon} size={20}/></View>
+        <View style={{width:vertical?104:54,height:vertical?104:54,borderRadius:vertical?30:18,backgroundColor:p.isDark?'#FFFFFF0D':'#FFFFFF80',alignItems:'center',justifyContent:'center'}}><DimensionalIcon name={waiting?'hourglass':'house'} size={vertical?84:42}/></View>
         <View style={{width:34,height:34,borderRadius:17,borderWidth:1,borderColor:icon+'40',alignItems:'center',justifyContent:'center'}}><Feather name="arrow-up-right" size={16} color={icon}/></View>
       </View>
       <View style={{gap:vertical?12:8}}>

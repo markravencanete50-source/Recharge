@@ -1,5 +1,6 @@
 import { useId, type ComponentProps, type ReactNode } from "react";
 import Feather from "@expo/vector-icons/Feather";
+import { DimensionalIcon, departmentDimensional } from "./DimensionalIcon";
 import { Platform, View } from "react-native";
 import Svg, {
   Path,
@@ -16,7 +17,7 @@ import Svg, {
 } from "react-native-svg";
 import type { ModuleId } from "./model";
 import type { DepartmentTone } from "../../lib/workspace-map";
-import { featureGlyphs, departmentGlyphs, iconNodes, toolHues, departmentHues, toolHueSwatches, type ToolHue } from "../../lib/artwork";
+import { featureGlyphs, iconNodes, toolHues, toolHueSwatches, type ToolHue } from "../../lib/artwork";
 import { themes, type Palette } from "./theme";
 const shapes = {
   path: Path,
@@ -40,7 +41,6 @@ export function Glyph({
 }) {
   return (
     <Svg
-      accessible={false}
       width={size}
       height={size}
       viewBox="0 0 24 24"
@@ -88,7 +88,6 @@ function TileFrame({
     >
       {/* Soft gradient tile with a glow orb and a top-left sheen. */}
       <Svg
-        accessible={false}
         width={size}
         height={size}
         style={{ position: "absolute", left: 0, top: 0 }}
@@ -186,18 +185,12 @@ export function Artwork({
 export function DepartmentArtwork({
   department,
   size = 48,
-  palette = themes.light,
 }: {
   department: DepartmentTone;
   size?: number;
   palette?: Palette;
 }) {
-  return (
-    <Tile
-      name={departmentGlyphs[department]}
-      hue={departmentHues[department]}
-      size={size}
-      palette={palette}
-    />
-  );
+  // Departments use dimensional illustrations so they read as places, while
+  // individual tools keep their flat duotone tiles.
+  return <DimensionalIcon name={departmentDimensional[department]} size={size} />;
 }

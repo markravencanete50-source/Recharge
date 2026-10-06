@@ -55,7 +55,7 @@ export function navigationFor(role: WorkspaceRole) {
   ] as const;
   if (role === "client") return [
     { value: "home", label: "Home", icon: "home" },
-    { value: "properties", label: "Properties", icon: "home" },
+    { value: "properties", label: "Properties", icon: "key" },
     { value: "approvals", label: "Approvals", icon: "check-circle" },
     { value: "inbox", label: "Inbox", icon: "message-circle" },
     { value: "more", label: "Tools", icon: "grid" },
@@ -63,14 +63,14 @@ export function navigationFor(role: WorkspaceRole) {
   if (role === "admin" || role === "super_admin") return [
     { value: "home", label: "Home", icon: "home" },
     { value: "work", label: "Work", icon: "check-square" },
-    { value: "properties", label: "Properties", icon: "home" },
+    { value: "properties", label: "Properties", icon: "key" },
     { value: "analytics", label: "Reports", icon: "bar-chart-2" },
     { value: "more", label: "Tools", icon: "grid" },
   ] as const;
   return [
     { value: "home", label: "Home", icon: "home" },
     { value: "work", label: "Work", icon: "check-square" },
-    { value: "properties", label: "Properties", icon: "home" },
+    { value: "properties", label: "Properties", icon: "key" },
     { value: "inbox", label: "Inbox", icon: "message-circle" },
     { value: "more", label: "Tools", icon: "grid" },
   ] as const;
