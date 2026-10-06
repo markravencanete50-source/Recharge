@@ -17,7 +17,7 @@ export const themes = Object.fromEntries(
   ]),
 ) as Record<"light" | "dark", typeof designTokens.light & { isDark: boolean }>;
 export type Palette = typeof themes.light;
-// Branding and control colours follow the selected theme and its supplied logo.
+// The client-approved green header has its own contrasting branding/control palette.
 export function headerPalette(p: Palette): Palette {
   return {...p,background:p.header,surface:p.headerControl,text:p.headerControlText,
     muted:p.headerMuted,border:p.headerBorder,primary:p.headerControlText,onPrimary:p.headerControl};

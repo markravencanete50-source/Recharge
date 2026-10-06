@@ -3,7 +3,8 @@ import type { Palette } from './theme';
 
 // Display the exact supplied artwork. Clip its generous outer margins in the
 // layout rather than redrawing, recolouring or modifying the original file.
-export function CompanyLogo({width=144,palette,variant=palette.isDark?'dark':'light'}:{palette:Palette;width?:number;variant?:'light'|'dark'}) {
+// The branding strip stays green in both modes; choose artwork for its surface.
+export function CompanyLogo({width=144,palette,variant='dark'}:{palette:Palette;width?:number;variant?:'light'|'dark'}) {
   const scale=width/1900;
   // Metro requires a static asset reference to bundle the image on iOS/Android.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
