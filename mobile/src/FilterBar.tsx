@@ -36,14 +36,16 @@ export function FilterBar({
       return;
     }
     const animation = Animated.parallel([
-      Animated.timing(x, {
+      Animated.spring(x, {
         toValue: box.x + box.width / 2 - 50,
-        duration: 180,
+        speed: 18,
+        bounciness: 6,
         useNativeDriver: false,
       }),
-      Animated.timing(width, {
+      Animated.spring(width, {
         toValue: box.width,
-        duration: 180,
+        speed: 18,
+        bounciness: 6,
         useNativeDriver: false,
       }),
     ]);
@@ -66,7 +68,8 @@ export function FilterBar({
     <View
       style={[
         ui.row,
-        { backgroundColor: p.elevated, borderRadius: 17, overflow: "hidden" },
+        // Hug the options rather than stretching across the page.
+        { backgroundColor: p.elevated, borderRadius: 999, overflow: "hidden", alignSelf: "flex-start", maxWidth: "100%" },
       ]}
     >
       <ScrollView
@@ -76,7 +79,7 @@ export function FilterBar({
           scrollX.current = event.nativeEvent.contentOffset.x;
         }}
         scrollEventThrottle={16}
-        style={{ flex: 1 }}
+        style={{ flexGrow: 0, flexShrink: 1 }}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingVertical: 1 }}
@@ -88,7 +91,7 @@ export function FilterBar({
               gap: 2,
               padding: 4,
               backgroundColor: p.elevated,
-              borderRadius: 17,
+              borderRadius: 999,
             },
           ]}
         >
@@ -100,8 +103,8 @@ export function FilterBar({
                 top: 4,
                 bottom: 4,
                 left: 0,
-                borderRadius: 13,
-                backgroundColor: p.surface,
+                borderRadius: 999,
+                backgroundColor: p.primary,
                 width:100,
                 transform: [{ translateX: x }, {scaleX:width.interpolate({inputRange:[0,100],outputRange:[0,1]})}],
               }}
@@ -122,11 +125,11 @@ export function FilterBar({
                 );
               }}
               style={{
-                minHeight: 44,
-                paddingHorizontal: 15,
+                minHeight: 40,
+                paddingHorizontal: 16,
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: 13,
+                borderRadius: 999,
               }}
             >
               <Text
@@ -134,7 +137,7 @@ export function FilterBar({
                   fontSize: 13,
                   lineHeight: 20,
                   fontWeight: "600",
-                  color: selected === value ? p.primary : p.muted,
+                  color: selected === value ? p.onPrimary : p.muted,
                 }}
               >
                 {value}

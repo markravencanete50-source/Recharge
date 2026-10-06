@@ -1,14 +1,40 @@
 import { useEffect, useState } from 'react';
-import { Animated, View } from 'react-native';
-import Svg, {Circle,Defs,Filter,FeGaussianBlur,Line,LinearGradient,Path,Polyline,Stop,Text as SvgText} from 'react-native-svg';
+import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
+import Svg, {Circle,Defs,Filter,FeGaussianBlur,Line,LinearGradient,Path,Polyline,RadialGradient,Rect,Stop,Text as SvgText} from 'react-native-svg';
 import Feather from '@expo/vector-icons/Feather';
 import { todayColors, type todayPresentation } from '../../lib/today-presentation';
 import { Text } from './Typography';
 import { ReportSymbol } from './Charts';
-import { MotionPress, useMotionPreference } from './motion';
+import { MotionPress, useMotionPreference, useReducedMotion } from './motion';
 import { ui, type Palette } from './theme';
 
 type Today=ReturnType<typeof todayPresentation>;
+
+// Forest gradient with two soft lights drifting slowly behind the Home hero.
+// Glow opacity stays low so hero text keeps its tested contrast.
+export function HeroGlow({palette:p}:{palette:Palette}) {
+  const tone=todayColors[p.isDark?'dark':'light'];
+  const reduced=useReducedMotion();
+  const [drift]=useState(()=>new Animated.Value(0));
+  useEffect(()=>{
+    if(reduced){drift.stopAnimation();drift.setValue(0);return;}
+    const ease=Easing.inOut(Easing.sin),native=Platform.OS!=='web';
+    const loop=Animated.loop(Animated.sequence([
+      Animated.timing(drift,{toValue:1,duration:9000,easing:ease,useNativeDriver:native}),
+      Animated.timing(drift,{toValue:0,duration:9000,easing:ease,useNativeDriver:native}),
+    ]));
+    loop.start();return()=>loop.stop();
+  },[drift,reduced]);
+  const glow=(id:string,color:string,opacity:number,size:number)=><Svg width={size} height={size}><Defs><RadialGradient id={id} cx="50%" cy="50%" r="50%"><Stop offset="0" stopColor={color} stopOpacity={opacity}/><Stop offset="1" stopColor={color} stopOpacity={0}/></RadialGradient></Defs><Circle cx={size/2} cy={size/2} r={size/2} fill={`url(#${id})`}/></Svg>;
+  return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <Svg accessible={false} width="100%" height="100%" viewBox="0 0 600 300" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
+      <Defs><LinearGradient id="home-hero-base" x1="0" x2="1" y1="0" y2="1"><Stop offset="0" stopColor={tone.heroStart}/><Stop offset="1" stopColor={tone.heroEnd}/></LinearGradient></Defs>
+      <Rect width="600" height="300" fill="url(#home-hero-base)"/>
+    </Svg>
+    <Animated.View style={{position:'absolute',right:-120,top:-140,transform:[{translateX:drift.interpolate({inputRange:[0,1],outputRange:[0,-48]})},{translateY:drift.interpolate({inputRange:[0,1],outputRange:[0,36]})}]}}>{glow('home-hero-glow-a',tone.mint,0.2,380)}</Animated.View>
+    <Animated.View style={{position:'absolute',left:-140,bottom:-160,transform:[{translateX:drift.interpolate({inputRange:[0,1],outputRange:[0,40]})},{translateY:drift.interpolate({inputRange:[0,1],outputRange:[0,-28]})}]}}>{glow('home-hero-glow-b','#EFE9DB',0.08,340)}</Animated.View>
+  </View>;
+}
 const AnimatedCircle=Animated.createAnimatedComponent(Circle);
 const AnimatedPolyline=Animated.createAnimatedComponent(Polyline);
 const AnimatedPath=Animated.createAnimatedComponent(Path);
@@ -88,12 +114,21 @@ export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today
 
 export function TodayTiles({data,palette:p,onWaiting,onProperties,vertical=false}:{data:Today;palette:Palette;onWaiting:()=>void;onProperties:()=>void;vertical?:boolean}) {
   const tone=todayColors[p.isDark?'dark':'light'];
-  return <View style={{flexDirection:vertical?'column':'row',gap:vertical?16:12,alignItems:'stretch',...(vertical?{flex:1,minWidth:0}:{})}}>{['waiting','properties'].map(kind=>{
+  const reduced=useReducedMotion();
+  const [fill]=useState(()=>new Animated.Value(reduced?1:0));
+  useEffect(()=>{if(reduced){fill.setValue(1);return;}fill.setValue(0);const a=Animated.timing(fill,{toValue:1,duration:900,delay:250,easing:Easing.bezier(0.16,1,0.3,1),useNativeDriver:false});a.start();return()=>a.stop();},[fill,reduced,data.waitingShare]);
+  return <View style={{flexDirection:vertical?'column':'row',gap:vertical?16:12,alignItems:'stretch',...(vertical?{flex:1,minWidth:0}:{})}}>{(['waiting','properties'] as const).map(kind=>{
     const waiting=kind==='waiting',icon=waiting?tone.waitingIcon:tone.propertyIcon;
-    return <MotionPress key={kind} accessibilityRole="button" accessibilityLabel={waiting?`${data.waiting} waiting, ${data.waiting} of ${data.open} open tasks`:`${data.properties??'Unavailable'} properties, as of today`} onPress={waiting?onWaiting:onProperties} style={{flex:1,minWidth:0,padding:vertical?24:16,justifyContent:vertical?'center':undefined,borderRadius:22,borderWidth:1,borderColor:waiting?tone.waitingBorder:tone.propertyBorder,backgroundColor:waiting?tone.waitingBg:tone.propertyBg,gap:vertical?18:10}}>
-      <View style={ui.between}><View style={{width:30,height:30,borderRadius:10,backgroundColor:p.isDark?(waiting?'#FFB54729':'#A9BAFF29'):(waiting?'#B4530910':'#3457D510'),alignItems:'center',justifyContent:'center'}}><ReportSymbol kind={waiting?'waiting':'property'} color={icon} size={19}/></View><Feather name="arrow-up-right" size={16} color={icon}/></View>
-      <View style={[ui.row,{gap:vertical?10:6,flexWrap:'wrap'}]}><Text style={{fontSize:vertical?42:24,fontWeight:'600',letterSpacing:-0.8,color:p.text}}>{waiting?data.waiting:data.properties??'—'}</Text><Text style={{fontSize:vertical?16:13,color:p.text}}>{kind}</Text></View>
-      {waiting?<><View accessible accessibilityLabel={`${data.waiting} of ${data.open} open tasks waiting`} style={{height:6,borderRadius:3,backgroundColor:'#FFB54733',overflow:'hidden'}}><View style={{height:6,borderRadius:3,width:`${data.waitingShare*100}%`,backgroundColor:tone.waitingFill}}/></View><Text style={{fontSize:12,lineHeight:18,color:p.text}}>{data.waiting} of {data.open} open tasks</Text></>:<Text style={{fontSize:12,lineHeight:18,color:p.text}}>As of today</Text>}
+    return <MotionPress key={kind} {...(Platform.OS==='web'?{dataSet:{hover:'lift'}}:{})} accessibilityRole="button" accessibilityLabel={waiting?`${data.waiting} waiting, ${data.waiting} of ${data.open} open tasks`:`${data.properties??'Unavailable'} properties, as of today`} onPress={waiting?onWaiting:onProperties} style={{flex:1,minWidth:0,padding:vertical?24:16,justifyContent:'space-between',borderRadius:26,borderWidth:1,borderColor:waiting?tone.waitingBorder:tone.propertyBorder,backgroundColor:waiting?tone.waitingBg:tone.propertyBg,gap:vertical?20:12,overflow:'hidden'}}>
+      <View style={ui.between}>
+        <View style={{width:40,height:40,borderRadius:13,backgroundColor:icon+(p.isDark?'29':'14'),alignItems:'center',justifyContent:'center'}}><ReportSymbol kind={waiting?'waiting':'property'} color={icon} size={20}/></View>
+        <View style={{width:34,height:34,borderRadius:17,borderWidth:1,borderColor:icon+'40',alignItems:'center',justifyContent:'center'}}><Feather name="arrow-up-right" size={16} color={icon}/></View>
+      </View>
+      <View style={{gap:vertical?12:8}}>
+        <Text style={{fontSize:12,fontWeight:'600',letterSpacing:1.2,textTransform:'uppercase',color:p.muted}}>{waiting?'Waiting':'Properties'}</Text>
+        <View style={[ui.row,{gap:vertical?10:6,flexWrap:'wrap',alignItems:'flex-end'}]}><Text style={{fontSize:vertical?52:30,lineHeight:vertical?58:36,fontWeight:'700',letterSpacing:-1.6,color:p.text}}>{waiting?data.waiting:data.properties??'—'}</Text><Text style={{fontSize:vertical?15:13,color:p.muted,paddingBottom:vertical?8:4}}>{waiting?'need a response':'managed'}</Text></View>
+        {waiting?<><View accessible accessibilityLabel={`${data.waiting} of ${data.open} open tasks waiting`} style={{height:8,borderRadius:4,backgroundColor:tone.waitingFill+'33',overflow:'hidden'}}><Animated.View style={{height:8,borderRadius:4,width:fill.interpolate({inputRange:[0,1],outputRange:['0%',`${data.waitingShare*100}%`]}),backgroundColor:tone.waitingFill}}/></View><Text style={{fontSize:12,lineHeight:18,color:p.text}}>{data.waiting} of {data.open} open tasks</Text></>:<Text style={{fontSize:12,lineHeight:18,color:p.text}}>As of today</Text>}
+      </View>
     </MotionPress>;
   })}</View>;
 }

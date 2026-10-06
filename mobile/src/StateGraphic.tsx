@@ -112,7 +112,9 @@ export function StateGraphic({
         justifyContent: "center",
       }}
     >
-      <Animated.View style={{opacity:draw,transform:[{scale:draw.interpolate({inputRange:[0,1],outputRange:[0.97,1]})}]}}><Svg
+      {/* Fill the 108x90 box: an unsized wrapper anchored the drawing at the
+          centre, pushing it into neighbouring text. */}
+      <Animated.View style={{position:"absolute",left:0,top:0,width:108,height:90,opacity:draw,transform:[{scale:draw.interpolate({inputRange:[0,1],outputRange:[0.97,1]})}]}}><Svg
         width={108}
         height={90}
         viewBox="0 0 108 90"

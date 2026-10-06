@@ -202,6 +202,7 @@ export function ToolDirectory({
   const row = (entry: FinderEntry<Tool>) => (
     <View
       key={entry.key}
+      {...(desktop && Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})}
       style={[
         ui.row,
         {

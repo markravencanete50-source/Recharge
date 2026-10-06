@@ -10,17 +10,35 @@ import { NavSymbol, MotionPress, useReducedMotion } from './motion';
 import { Text } from './Typography';
 import { ui, type Palette } from './theme';
 import { CompanyLogo } from './CompanyLogo';
+
+const ROW=52, GAP=6;
+const hover=Platform.OS==='web'?{dataSet:{hover:'tint'}}:{};
+
 export function DesktopNavigation({role,section,palette:p,onNavigate,onDepartment,onProfile,onCollapse}:{role:WorkspaceRole;section:WorkspaceSection;palette:Palette;onNavigate:(section:WorkspaceSection)=>void;onDepartment:(department:string)=>void;onProfile:()=>void;onCollapse:()=>void}) {
   const [expanded,setExpanded]=useState(true); const tools=toolsFor(role);
-  const index=Math.max(0,navigationFor(role).findIndex(item=>item.value===section));
-  const [indicator]=useState(()=>new Animated.Value(index*60)); const reduced=useReducedMotion();
-  useEffect(()=>{if(reduced){indicator.setValue(index*60);return;}const animation=Animated.spring(indicator,{toValue:index*60,speed:24,bounciness:0,useNativeDriver:Platform.OS!=='web'});animation.start();return()=>animation.stop();},[indicator,index,reduced]);
-  return <View testID="workspace-sidebar" style={{width:240,backgroundColor:p.isDark?p.surface:p.background,borderRightWidth:1,borderColor:p.border,gap:24}}>
-    <View testID="sidebar-brand" style={[ui.between,{height:81,paddingHorizontal:16,gap:12,backgroundColor:p.header}]}><CompanyLogo palette={p} width={144}/><MotionPress accessibilityRole="button" accessibilityLabel="Hide left panel" accessibilityState={{expanded:true}} onPress={onCollapse} style={[ui.iconButton,{backgroundColor:p.headerControl,borderColor:p.headerBorder}]}><Feather name="chevrons-left" size={20} color={p.headerControlText}/></MotionPress></View>
-    <ScrollView contentContainerStyle={{gap:8,paddingHorizontal:16,paddingBottom:24}} showsVerticalScrollIndicator={false}><Animated.View pointerEvents="none" style={{position:'absolute',left:16,top:0,width:3,height:52,borderRadius:999,zIndex:1,backgroundColor:p.primary,transform:[{translateY:indicator}]}}/>{navigationFor(role).map(item=><MotionPress key={item.value} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{selected:section===item.value}} onPress={()=>onNavigate(item.value)} style={[ui.row,{height:52,gap:14,paddingHorizontal:14,borderRadius:14,backgroundColor:section===item.value?p.wash:'transparent'}]}><NavSymbol name={item.icon} active={section===item.value} color={section===item.value?p.primary:p.muted}/><Text style={{fontSize:14,fontWeight:'600',color:section===item.value?p.primary:p.text}}>{item.label}</Text></MotionPress>)}
-      <MotionPress accessibilityRole="button" accessibilityLabel="Toggle department shortcuts" accessibilityState={{expanded}} onPress={()=>setExpanded(!expanded)} style={[ui.between,{marginTop:24,minHeight:48}]}><Text style={[ui.small,{color:p.muted,fontWeight:'600'}]}>Departments</Text><Text style={{color:p.muted}}>{expanded?'Hide':'Show'}</Text></MotionPress>
-      {expanded&&DEPARTMENTS.map(d=>{const count=tools.filter(tool=>WORKSPACE_MAP[tool.id].tone===d.id).length;return count?<MotionPress key={d.id} accessibilityRole="button" accessibilityLabel={'Open '+d.name+' department, '+count+' tools'} onPress={()=>onDepartment(d.id)} style={[ui.row,{gap:10,minHeight:56}]}><DepartmentArtwork department={d.id} size={36} palette={p}/><Text style={[ui.small,{color:p.text,flex:1}]}>{d.name}</Text><Text style={[ui.small,{color:p.muted}]}>{count}</Text></MotionPress>:null;})}
+  const items=navigationFor(role);
+  const found=items.findIndex(item=>item.value===section);
+  const index=Math.max(0,found);
+  const [indicator]=useState(()=>new Animated.Value(index*(ROW+GAP))); const reduced=useReducedMotion();
+  useEffect(()=>{if(reduced){indicator.setValue(index*(ROW+GAP));return;}const animation=Animated.spring(indicator,{toValue:index*(ROW+GAP),speed:18,bounciness:6,useNativeDriver:Platform.OS!=='web'});animation.start();return()=>animation.stop();},[indicator,index,reduced]);
+  return <View testID="workspace-sidebar" style={{width:248,backgroundColor:p.isDark?p.surface:p.background,borderRightWidth:1,borderColor:p.border}}>
+    <View testID="sidebar-brand" style={[ui.between,{height:81,paddingHorizontal:16,gap:12,backgroundColor:p.header}]}><CompanyLogo palette={p} width={144}/><MotionPress accessibilityRole="button" accessibilityLabel="Hide left panel" accessibilityState={{expanded:true}} onPress={onCollapse} style={[ui.iconButton,{width:44,height:44,borderRadius:14,backgroundColor:p.headerControl,borderColor:p.headerBorder}]}><Feather name="chevrons-left" size={18} color={p.headerControlText}/></MotionPress></View>
+    <ScrollView contentContainerStyle={{paddingHorizontal:14,paddingTop:20,paddingBottom:24}} showsVerticalScrollIndicator={false}>
+      <Text style={{color:p.muted,fontSize:11,fontWeight:'600',letterSpacing:1.4,textTransform:'uppercase',paddingHorizontal:12,marginBottom:10}}>Workspace</Text>
+      <View style={{gap:GAP}}>
+        {/* One pill slides between items instead of each row repainting. */}
+        <Animated.View pointerEvents="none" style={{position:'absolute',left:0,right:0,top:0,height:ROW,borderRadius:16,backgroundColor:p.wash,opacity:found<0?0:1,transform:[{translateY:indicator}]}}>
+          <View style={{position:'absolute',left:-14,top:14,bottom:14,width:4,borderTopRightRadius:4,borderBottomRightRadius:4,backgroundColor:p.primary}}/>
+        </Animated.View>
+        {items.map(item=>{const selected=section===item.value;return <MotionPress key={item.value} {...hover} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{selected}} onPress={()=>onNavigate(item.value)} style={[ui.row,{height:ROW,gap:14,paddingHorizontal:14,borderRadius:16}]}><NavSymbol name={item.icon} active={selected} color={selected?p.primary:p.muted}/><Text style={{fontSize:14,fontWeight:selected?'700':'500',color:selected?p.primary:p.text}}>{item.label}</Text></MotionPress>;})}
+      </View>
+      <MotionPress accessibilityRole="button" accessibilityLabel="Toggle department shortcuts" accessibilityState={{expanded}} onPress={()=>setExpanded(!expanded)} style={[ui.between,{marginTop:26,minHeight:40,paddingHorizontal:12}]}><Text style={{color:p.muted,fontSize:11,fontWeight:'600',letterSpacing:1.4,textTransform:'uppercase'}}>Departments</Text><Feather name={expanded?'chevron-up':'chevron-down'} size={16} color={p.muted}/></MotionPress>
+      {expanded&&<View style={{gap:2,marginTop:4}}>{DEPARTMENTS.map(d=>{const count=tools.filter(tool=>WORKSPACE_MAP[tool.id].tone===d.id).length;return count?<MotionPress key={d.id} {...hover} accessibilityRole="button" accessibilityLabel={'Open '+d.name+' department, '+count+' tools'} onPress={()=>onDepartment(d.id)} style={[ui.row,{gap:12,minHeight:48,paddingHorizontal:8,borderRadius:14}]}><DepartmentArtwork department={d.id} size={32} palette={p}/><Text style={{fontSize:14,color:p.text,flex:1,fontWeight:'500'}}>{d.name}</Text><View style={{minWidth:26,paddingHorizontal:7,paddingVertical:2,borderRadius:999,backgroundColor:p.elevated,alignItems:'center'}}><Text style={{fontSize:11,fontWeight:'600',color:p.muted}}>{count}</Text></View></MotionPress>:null;})}</View>}
     </ScrollView>
-    <MotionPress accessibilityRole="button" accessibilityLabel="Open profile and preview roles" onPress={onProfile} style={[ui.button,{backgroundColor:p.elevated,marginHorizontal:16,marginBottom:16}]}><Text style={[ui.buttonText,{color:p.text}]}>Profile and preferences</Text></MotionPress>
+    <MotionPress {...hover} accessibilityRole="button" accessibilityLabel="Open profile and preview roles" onPress={onProfile} style={[ui.row,{gap:12,margin:14,padding:12,borderRadius:18,borderWidth:1,borderColor:p.border,backgroundColor:p.surface}]}>
+      <View style={{width:38,height:38,borderRadius:12,backgroundColor:p.header,alignItems:'center',justifyContent:'center'}}><Feather name="settings" size={17} color={p.headerText}/></View>
+      <View style={{flex:1,minWidth:0}}><Text numberOfLines={1} style={{fontSize:13,fontWeight:'600',color:p.text}}>Profile & preferences</Text><Text numberOfLines={1} style={{fontSize:12,color:p.muted}}>Theme, motion and roles</Text></View>
+      <Feather name="chevron-right" size={16} color={p.muted}/>
+    </MotionPress>
   </View>;
 }

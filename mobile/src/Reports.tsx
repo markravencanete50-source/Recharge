@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, View, useWindowDimensions } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { reportPresentation } from '../../lib/report-presentation';
 import { periodLabel, type AnalyticsPeriod, type AnalyticsSnapshot } from '../../lib/analytics';
@@ -27,7 +27,7 @@ export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporti
     {!!exportMessage&&isWorkspaceAdmin(role)&&<Text accessibilityLiveRegion="polite" style={[ui.small,{color:p.text}]}>{exportMessage}</Text>}
     <Entrance sessionKey={'reports:'+role+':summary'} delay={55}><View style={{gap:18}}>
       <View style={{gap:5}}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{report.headline}</Text><Text style={[ui.small,{color:p.muted}]}>Counts include the first and last day.</Text></View>
-      <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>{summary.map(item=><View key={item.label} style={[ui.card,card,{flexBasis:desktop?'22%':'45%',flexGrow:1,minWidth:0,minHeight:desktop?190:210,padding:desktop?18:14}]}>
+      <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>{summary.map(item=><View key={item.label} {...(Platform.OS==='web'?{dataSet:{hover:'lift'}}:{})} style={[ui.card,card,{flexBasis:desktop?'22%':'45%',flexGrow:1,minWidth:0,minHeight:desktop?190:210,padding:desktop?18:14}]}>
         <View style={[ui.row,{gap:6}]}><View style={{width:26,height:26,backgroundColor:p.wash,borderRadius:8,alignItems:'center',justifyContent:'center'}}><ReportSymbol kind={item.kind} color={item.color}/></View><Text style={[ui.small,{color:p.muted,fontWeight:'600',flexShrink:1}]}>{item.label}</Text></View>
         {item.value===null?<Text style={[ui.statValue,{color:p.text}]}>-</Text>:<CountUp value={item.value} sessionKey={'reports:'+role+':'+item.label} style={[ui.statValue,{color:p.text}]}/>}
         {item.metric==='property'?<Text style={[ui.small,{color:p.muted}]}>{report.propertyAvailable?'As of today':'Property data unavailable'}</Text>:<>

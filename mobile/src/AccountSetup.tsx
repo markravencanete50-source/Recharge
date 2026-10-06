@@ -18,13 +18,14 @@ export type Profile = {
   displayName: string;
   avatar: keyof typeof avatarColors;
 };
+// Earthy avatar choices that sit with the bone and forest palette.
 export const avatarColors = {
   forest: "#1C3934",
-  sage: "#137d73",
-  ocean: "#3457d5",
-  plum: "#6750a4",
-  clay: "#a14c31",
-  slate: "#526078",
+  sage: "#1F5F55",
+  ocean: "#3B5866",
+  plum: "#5B4A5E",
+  clay: "#8E3F38",
+  slate: "#4E6259",
 };
 export function initials(name: string) {
   return (

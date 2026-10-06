@@ -6,6 +6,9 @@ import { MotionPress, NavSymbol, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 
+// Floating forest dock: it echoes the green header so bone content sits
+// between two brand surfaces. The active tab is a bone pill that springs
+// between positions.
 export function NavigationBar({
   role,
   section,
@@ -23,7 +26,8 @@ export function NavigationBar({
   const reduced = useReducedMotion();
   const [width, setWidth] = useState(0);
   const [offset] = useState(() => new Animated.Value(0));
-  const slot = Math.max(0, (width - 18) / items.length);
+  const inset = 6;
+  const slot = Math.max(0, (width - inset * 2) / items.length);
   useEffect(() => {
     offset.stopAnimation();
     if (reduced) {
@@ -32,68 +36,70 @@ export function NavigationBar({
     }
     const animation = Animated.spring(offset, {
       toValue: slot * index,
-      speed: 24,
-      bounciness: 0,
+      speed: 16,
+      bounciness: 7,
       useNativeDriver: Platform.OS !== "web",
     });
     animation.start();
     return () => animation.stop();
   }, [offset, slot, index, reduced]);
   return (
-    <View style={{ backgroundColor: p.background, paddingTop: 4 }}>
+    <View style={{ backgroundColor: p.background, paddingTop: 6, paddingBottom: 6 }}>
       <View
+        testID="workspace-dock"
         onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-        style={[
-          ui.tabs,
-          {
-            backgroundColor: p.surface,
-            borderColor: p.border,
-            maxWidth: 736,
-            alignSelf: "center",
-            width: "94%",
-            marginHorizontal: 0,
-          },
-        ]}
+        style={{
+          flexDirection: "row",
+          padding: inset,
+          borderRadius: 28,
+          borderWidth: 1,
+          borderColor: p.headerBorder,
+          backgroundColor: p.header,
+          maxWidth: 736,
+          alignSelf: "center",
+          width: "94%",
+          ...(Platform.OS === "web"
+            ? { boxShadow: "0 18px 40px -16px rgba(8, 22, 18, 0.55)" }
+            : { elevation: 8 }),
+        }}
       >
         {width > 0 ? (
           <Animated.View
             pointerEvents="none"
             style={{
               position: "absolute",
-              left: 8,
-              top: 8,
-              bottom: 8,
+              left: inset,
+              top: inset,
+              bottom: inset,
               width: slot,
-              backgroundColor: p.wash,
-              borderRadius: 18,
+              backgroundColor: p.headerMuted,
+              borderRadius: 22,
               transform: [{ translateX: offset }],
             }}
           />
         ) : null}
-        {items.map((item, i) => (
-          <MotionPress
-            key={item.value}
-            accessibilityRole="tab"
-            accessibilityLabel={item.label}
-            accessibilityState={{ selected: index === i }}
-            onPress={() => onNavigate(item.value)}
-            style={ui.tab}
-          >
-            <NavSymbol
-              name={item.icon}
-              active={i===index}
-              color={i === index ? p.primary : p.muted}
-            />
-            <Text
-              style={[
-                ui.tabLabel,
-                { color: i === index ? p.primary : p.muted },
-              ]}
+        {items.map((item, i) => {
+          const selected = i === index;
+          const color = selected ? p.header : p.headerMuted;
+          return (
+            <MotionPress
+              key={item.value}
+              accessibilityRole="tab"
+              accessibilityLabel={item.label}
+              accessibilityState={{ selected }}
+              onPress={() => onNavigate(item.value)}
+              style={[ui.tab, { minHeight: 58, borderRadius: 22 }]}
             >
-              {item.label}
-            </Text>
-          </MotionPress>
-        ))}
+              <NavSymbol name={item.icon} active={selected} color={color} />
+              <Text
+                numberOfLines={1}
+                style={[ui.tabLabel, { color, fontWeight: selected ? "600" : "500" }]}
+              >
+                {item.label}
+              </Text>
+            </MotionPress>
+          );
+        })}
       </View>
     </View>
   );

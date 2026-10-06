@@ -20,12 +20,6 @@ import Feather from "@expo/vector-icons/Feather";
 import { Artwork } from "./Artwork";
 import { FilterBar } from "./FilterBar";
 import { StateGraphic } from "./StateGraphic";
-import Svg, {
-  Rect,
-  Defs,
-  LinearGradient,
-  Stop,
-} from "react-native-svg";
 import { Entrance, CountUp, SlidingPill, MotionPress as Pressable, useReducedMotion } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import {
@@ -49,7 +43,7 @@ import {
 } from "../../lib/workspace-map";
 import { presetPeriod, periodLabel } from "../../lib/analytics";
 import { scheduleWeek, scheduleWeekLabel, moveScheduleDay, fullScheduleDate } from "../../lib/schedule-presentation";
-import { TodayRing, TodayTiles, OpenTasksTrend } from "./TodayAnalytics";
+import { HeroGlow, TodayRing, TodayTiles, OpenTasksTrend } from "./TodayAnalytics";
 import { todayPresentation, todayColors } from "../../lib/today-presentation";
 import type { AnalyticsSnapshot, AnalyticsPeriod } from "../../lib/analytics";
 import { DepartmentGrid } from "./DepartmentGrid";
@@ -75,6 +69,9 @@ type Props = {
   analyticsPeriod: AnalyticsPeriod;
 };
 
+const hoverTint = Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {};
+const hoverLift = Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {};
+
 function displayDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "No date set";
   return new Date(`${value}T12:00:00Z`).toLocaleDateString("en-GB", {
@@ -92,15 +89,16 @@ function PropertyScene({
   palette: Palette;
   variant: number;
 }) {
-  const tone = departmentColor(variant % 2 ? "clients" : "stays", p);
   return (
     <View
       accessible={false}
       style={{
-        width: 76,
-        height: 88,
-        backgroundColor: tone.wash,
-        borderRadius: 18,
+        width: 92,
+        height: 100,
+        backgroundColor: p.surface,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: p.border,
         alignItems: "center",
         justifyContent: "center",
       }}
@@ -127,9 +125,10 @@ function LinkRow({
 }) {
   return (
     <Pressable
+      {...hoverTint}
       accessibilityRole="button"
       onPress={onPress}
-      style={[ui.row, { gap: 14, minHeight: 68, paddingVertical: 12 }]}
+      style={[ui.row, { gap: 14, minHeight: 68, paddingVertical: 12, paddingHorizontal: 12, marginHorizontal: -12, borderRadius: 18 }]}
     >
       <View
         style={{
@@ -169,83 +168,32 @@ export function WorkRow({
   onPress: () => void;
 }) {
   const tone = departmentColor(WORKSPACE_MAP[item.tool.id].tone, p);
+  const done = isComplete(item.record.status), waiting = isWaiting(item.record.status);
+  const status = done
+    ? { icon: "check-circle" as const, ink: p.success, wash: p.successWash }
+    : waiting
+      ? { icon: "clock" as const, ink: p.waiting, wash: p.cautionWash }
+      : { icon: "activity" as const, ink: p.primary, wash: p.wash };
   return (
     <Pressable
+      {...hoverTint}
       accessibilityRole="button"
       accessibilityLabel={`${item.record.title}, ${item.tool.name}, ${item.record.status.replaceAll("_", " ")}`}
       onPress={onPress}
-      style={[
-        ui.row,
-        {
-          gap: 12,
-          paddingVertical: 15,
-          borderBottomWidth: 1,
-          borderBottomColor: p.border,
-        },
-      ]}
+      style={[ui.row, { gap: 14, paddingVertical: 14, paddingHorizontal: 12, marginHorizontal: -12, borderRadius: 18 }]}
     >
-      <View
-        style={{
-          backgroundColor: tone.wash,
-          width: 44,
-          height: 44,
-          borderRadius: 14,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
+      <View style={{ backgroundColor: tone.wash, width: 48, height: 48, borderRadius: 16, justifyContent: "center", alignItems: "center" }}>
         <Artwork id={item.tool.id} size={44} palette={p} />
       </View>
-      <View style={{ flex: 1, gap: 5 }}>
-        <Text
-          style={{
-            color: p.text,
-            fontSize: 16,
-            lineHeight: 22,
-            fontWeight: "600",
-          }}
-        >
+      <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
+        <Text numberOfLines={2} style={{ color: p.text, fontSize: 15, lineHeight: 21, fontWeight: "600" }}>
           {item.record.title}
         </Text>
-        <Text style={[ui.small, { color: p.muted }]}>{item.tool.name}</Text>
-        <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-          <View
-            style={[
-              ui.row,
-              {
-                backgroundColor: p.elevated,
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                borderRadius: 7,
-                gap: 5,
-              },
-            ]}
-          >
-            <Feather
-              name={
-                isComplete(item.record.status)
-                  ? "check-circle"
-                  : isWaiting(item.record.status)
-                    ? "clock"
-                    : "activity"
-              }
-              size={13}
-              color={
-                isComplete(item.record.status)
-                  ? p.success
-                  : isWaiting(item.record.status)
-                    ? p.waiting
-                    : p.primary
-              }
-            />
-            <Text
-              style={{
-                fontSize: 12,
-                lineHeight: 18,
-                color: p.text,
-                fontWeight: "500",
-              }}
-            >
+        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{item.tool.name}</Text>
+        <View style={[ui.row, { gap: 8, flexWrap: "wrap", marginTop: 2 }]}>
+          <View style={[ui.row, { backgroundColor: status.wash, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, gap: 5 }]}>
+            <Feather name={status.icon} size={12} color={status.ink} />
+            <Text style={{ fontSize: 12, lineHeight: 18, color: p.text, fontWeight: "600", textTransform: "capitalize" }}>
               {item.record.status.replaceAll("_", " ")}
             </Text>
           </View>
@@ -254,7 +202,9 @@ export function WorkRow({
           </Text>
         </View>
       </View>
-      <Feather name="chevron-right" size={18} color={p.muted} />
+      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: p.elevated, alignItems: "center", justifyContent: "center" }}>
+        <Feather name="chevron-right" size={16} color={p.text} />
+      </View>
     </Pressable>
   );
 }
@@ -590,7 +540,7 @@ export function WorkspaceScreens({
       <View style={{padding:20,gap:20}}>
         {calendarView&&<><WeekStrip selected={date} onSelect={setDate} items={items} palette={p}/><Calendar selected={date} onSelect={setDate} items={items} palette={p}/><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{displayDate(date)}</Text><Pressable accessibilityRole="button" accessibilityLabel="Return to today" onPress={()=>setDate(presetPeriod(1).to)} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>Today</Text></Pressable></View></>}
         <Text accessibilityLiveRegion="polite" style={[ui.small,{color:p.muted}]}>{results.length} {results.length===1?'item':'items'} within your access</Text>
-        <Entrance trigger={calendarView?date:filter} style={{gap:12}}>{results.length?<View style={[ui.card,card,{paddingVertical:0}]}>{results.map(openRow)}</View>:<View style={{gap:12}}><Empty title="No work in this view" detail="Try another status, search or calendar date." palette={p}/><Pressable accessibilityRole="button" onPress={()=>{setQuery('');setFilter('All');setDate(presetPeriod(1).to);}} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.buttonText,{color:p.text}]}>Reset work filters</Text></Pressable></View>}</Entrance>
+        <Entrance trigger={calendarView?date:filter} style={{gap:12}}>{results.length?<View style={[ui.card,card,{paddingVertical:6,gap:0}]}>{results.map(openRow)}</View>:<View style={{gap:12}}><Empty title="No work in this view" detail="Try another status, search or calendar date." palette={p}/><Pressable accessibilityRole="button" onPress={()=>{setQuery('');setFilter('All');setDate(presetPeriod(1).to);}} style={[ui.button,{backgroundColor:p.wash}]}><Text style={[ui.buttonText,{color:p.text}]}>Reset work filters</Text></Pressable></View>}</Entrance>
       </View>
     </ScrollView>;
   }
@@ -598,152 +548,78 @@ export function WorkspaceScreens({
     <>
       {section === "home" ? (
         <>
-          <View style={{ gap: 7 }}>
-            <View style={ui.between}>
-              <Text style={[ui.small, { color: p.muted, flex: 1 }]}>
-                {new Date().getHours() < 12
-                  ? "Good morning"
-                  : new Date().getHours() < 18
-                    ? "Good afternoon"
-                    : "Good evening"}
-                , {profileName.split(" ")[0]}.
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open calendar"
-                onPress={() => onNavigate("calendar")}
-                style={[
-                  ui.row,
-                  {
-                    minHeight: 44,
-                    gap: 7,
-                    paddingHorizontal: 12,
-                    borderRadius: 999,
-                    backgroundColor: p.surface,
-                    borderWidth: 1,
-                    borderColor: p.border,
-                  },
-                ]}
-              >
-                <Feather name="calendar" size={15} color={p.primary} />
-                <Text
-                  style={{ color: p.primary, fontSize: 13, fontWeight: "500" }}
-                >
-                  {displayDate(presetPeriod(1).to).replace(/ \d{4}$/, "")}
-                </Text>
-              </Pressable>
-            </View>
-            <Text
-              accessibilityRole="header"
-              style={[ui.title, { color: p.text }]}
-            >
-              {role === "client"
-                ? "A clearer picture."
-                : "Let's make progress."}
-            </Text>
-            <Text style={[ui.body, { color: p.muted }]}>
-              {role === "cleans"
-                ? "Your jobs, schedule and updates in one place."
-                : role === "client"
-                  ? "Your properties, decisions and latest updates."
-                  : "Your people and properties, working together."}
-            </Text>
-          </View>
           <View testID="home-task-summary" style={{flexDirection:desktop?'row':'column',gap:20,alignItems:'stretch'}}>
           <Entrance sessionKey={"home:"+role+":hero"} style={desktop?{flex:2,minWidth:0}:undefined}>
             <View
               style={{
-                backgroundColor: homeTone.heroStart,
-                borderRadius: 28,
-                borderWidth: 1,
-                borderColor: homeTone.heroBorder,
-                padding: desktop?24:16,
-                gap: 20,
+                borderRadius: 30,
+                padding: desktop?28:20,
+                gap: desktop?22:18,
                 overflow: "hidden",
+                ...(Platform.OS==="web"?{boxShadow:"0 30px 60px -32px rgba(16, 39, 31, 0.6)"}:{elevation:6}),
               }}
             >
-              <Svg
-                pointerEvents="none"
-                accessible={false}
-                width="100%"
-                height="100%"
-                viewBox="0 0 600 300"
-                preserveAspectRatio="none"
-                style={{ position: "absolute", top: 0, left: 0 }}
-              >
-                <Defs>
-                  <LinearGradient
-                    id="today-gradient"
-                    x1="0"
-                    x2="1"
-                    y1="0"
-                    y2="1"
-                  >
-                    <Stop offset="0" stopColor={homeTone.heroStart} />
-                    <Stop offset="1" stopColor={homeTone.heroEnd} />
-                  </LinearGradient>
-                </Defs>
-                <Rect width="600" height="300" fill="url(#today-gradient)" />
-              </Svg>
-              <View style={[ui.row, { gap: 18 }]}>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text
-                    style={{
-                      color: homeTone.heroMuted,
-                      fontSize: 13,
-                      fontWeight: "500",
-                    }}
-                  >
-                    Open tasks
+              <HeroGlow palette={p}/>
+              <View style={[ui.between,{gap:12}]}>
+                <Text style={{color:homeTone.heroMuted,fontSize:13,fontWeight:"500",flex:1}}>
+                  {new Date().getHours() < 12
+                    ? "Good morning"
+                    : new Date().getHours() < 18
+                      ? "Good afternoon"
+                      : "Good evening"}
+                  , {profileName.split(" ")[0]}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open calendar"
+                  onPress={() => onNavigate("calendar")}
+                  style={[ui.row,{minHeight:40,gap:7,paddingHorizontal:12,borderRadius:999,backgroundColor:homeTone.chipBg,borderWidth:1,borderColor:homeTone.heroBorder}]}
+                >
+                  <Feather name="calendar" size={14} color={homeTone.heroText} />
+                  <Text style={{ color: homeTone.heroText, fontSize: 13, fontWeight: "600" }}>
+                    {displayDate(presetPeriod(1).to).replace(/ \d{4}$/, "")}
                   </Text>
-                  <CountUp value={today.open} sessionKey={"overview:"+role+":pending:"+analyticsPeriod.from+":"+analyticsPeriod.to}
-                    style={{
-                      color: homeTone.heroText,
-                      fontSize: 42,
-                      lineHeight: 50,
-                      fontWeight: "600",
-                      letterSpacing: -1.5,
-                    }}
-                  />
-                  <Text
-                    style={{ color: homeTone.heroMuted, fontSize: 14, lineHeight: 21 }}
-                  >
-                    tasks open
-                  </Text>
-                  <Text style={{color:homeTone.heroText,fontSize:12,lineHeight:18}}>{periodLabel(analyticsPeriod)}</Text>
+                </Pressable>
+              </View>
+              <View style={{gap:6,marginTop:-6}}>
+                <Text accessibilityRole="header" style={[ui.title,{color:homeTone.heroText,fontSize:desktop?38:30,lineHeight:desktop?44:36}]}>
+                  {role === "client" ? "A clearer picture." : "Let's make progress."}
+                </Text>
+                <Text style={[ui.body,{color:homeTone.heroMuted}]}>
+                  {role === "cleans"
+                    ? "Your jobs, schedule and updates in one place."
+                    : role === "client"
+                      ? "Your properties, decisions and latest updates."
+                      : "Your people and properties, working together."}
+                </Text>
+              </View>
+              <View style={[ui.row, { gap: 18, paddingTop: 4 }]}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{color:homeTone.heroMuted,fontSize:12,fontWeight:"600",letterSpacing:1.2,textTransform:"uppercase"}}>Open tasks</Text>
+                  <View style={[ui.row,{gap:10,alignItems:"flex-end"}]}>
+                    <CountUp value={today.open} sessionKey={"overview:"+role+":pending:"+analyticsPeriod.from+":"+analyticsPeriod.to}
+                      style={{color:homeTone.heroText,fontSize:desktop?60:48,lineHeight:desktop?66:54,fontWeight:"700",letterSpacing:-2.4}}
+                    />
+                    <Text style={{color:homeTone.heroMuted,fontSize:14,lineHeight:21,paddingBottom:desktop?10:8}}>tasks open</Text>
+                  </View>
+                  <Text style={{color:homeTone.heroMuted,fontSize:12,lineHeight:18}}>{periodLabel(analyticsPeriod)}</Text>
                 </View>
-                <View style={{ gap: 5, alignItems: "center" }}>
-                  <TodayRing palette={p} size={desktop?112:88} motionKey={"overview:"+role+":ring:"+analyticsPeriod.from+":"+analyticsPeriod.to}
-                    completed={today.current.complete} total={today.current.total}/>
-                </View>
+                <TodayRing palette={p} size={desktop?116:92} motionKey={"overview:"+role+":ring:"+analyticsPeriod.from+":"+analyticsPeriod.to}
+                  completed={today.current.complete} total={today.current.total}/>
               </View>
               <OpenTasksTrend palette={p} wide={desktop} data={today} motionKey={"overview:"+role+":trend:"+analyticsPeriod.to}/>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={
-                  role === "client"
-                    ? "Review your approvals"
-                    : "Open your work queue"
-                }
-                onPress={() =>
-                  role === "client" ? onNavigate("approvals") : openQueue()
-                }
-                style={[
-                  ui.between,
-                  {
-                    borderTopWidth: 1,
-                    borderColor: homeTone.heroBorder,
-                    paddingTop: 16,
-                    minHeight: 48,
-                  },
-                ]}
+                accessibilityLabel={role === "client" ? "Review your approvals" : "Open your work queue"}
+                onPress={() => role === "client" ? onNavigate("approvals") : openQueue()}
+                style={[ui.between,{minHeight:52,paddingHorizontal:18,borderRadius:18,backgroundColor:homeTone.heroText}]}
               >
-                <Text
-                  style={{ color: homeTone.heroText, fontSize: 14, fontWeight: "600" }}
-                >
-                  View all tasks
+                <Text style={{ color: homeTone.heroStart, fontSize: 14, fontWeight: "700" }}>
+                  {role === "client" ? "Review approvals" : "View all tasks"}
                 </Text>
-                <Feather name="arrow-right" size={20} color={homeTone.heroText} />
+                <View style={{width:32,height:32,borderRadius:16,alignItems:"center",justifyContent:"center",backgroundColor:homeTone.heroStart}}>
+                  <Feather name="arrow-right" size={17} color={homeTone.heroText} />
+                </View>
               </Pressable>
             </View>
           </Entrance>
@@ -870,7 +746,7 @@ export function WorkspaceScreens({
               </Pressable>
             </View>
             {pending.length ? (
-              <View>{pending.slice(0, 3).map(openRow)}</View>
+              <View style={[ui.card, card, { paddingVertical: 6, gap: 0 }]}>{pending.slice(0, 3).map(openRow)}</View>
             ) : (
               <Empty
                 title="You're up to date"
@@ -902,8 +778,8 @@ export function WorkspaceScreens({
 
           <View style={{flexDirection:desktop?'row':'column',flexWrap:'wrap',gap:20}}>
           {!fontsReady?[0,1].map(i=><View key={i} accessibilityLabel="Loading property card" style={[ui.card,card,{flexGrow:1,flexBasis:desktop?'45%':undefined,gap:16}]}><View style={{height:160,backgroundColor:p.elevated,borderRadius:16}}/><View style={{height:22,width:'70%',backgroundColor:p.elevated,borderRadius:8}}/><View style={{height:16,width:'45%',backgroundColor:p.elevated,borderRadius:8}}/></View>):properties.filter(property=>property.propertyName.toLowerCase().includes(propertyQuery.trim().toLowerCase())).map((property,index)=><Entrance key={property.id} sessionKey={'properties:'+role+':'+property.id} delay={index*55} style={{flexGrow:1,flexBasis:desktop?'45%':undefined,minWidth:0}}>
-            <Pressable accessibilityRole="button" accessibilityLabel={'Open '+property.propertyName} onPress={()=>setSelectedProperty(property)} style={[ui.card,card,{padding:0,overflow:'hidden'}]}>
-              <View style={{minHeight:160,alignItems:'center',justifyContent:'center',backgroundColor:p.elevated}}><PropertyScene palette={p} variant={index}/><View style={{position:'absolute',left:16,top:16,backgroundColor:p.surface,borderRadius:999,paddingHorizontal:10,paddingVertical:6,flexDirection:'row',alignItems:'center',gap:6}}><Feather name={property.status==='live'?'check-circle':'clock'} size={14} color={property.status==='live'?p.success:p.waiting}/><Text style={[ui.small,{color:p.text,fontWeight:'600'}]}>{property.status.replaceAll('_',' ')}</Text></View><Text style={{position:'absolute',right:16,bottom:12,fontSize:12,color:p.muted}}>Property illustration</Text></View>
+            <Pressable {...hoverLift} accessibilityRole="button" accessibilityLabel={'Open '+property.propertyName} onPress={()=>setSelectedProperty(property)} style={[ui.card,card,{padding:0,overflow:'hidden',borderRadius:26}]}>
+              <View style={{minHeight:168,alignItems:'center',justifyContent:'center',backgroundColor:departmentColor(index%2?'clients':'stays',p).wash}}><PropertyScene palette={p} variant={index}/><View style={{position:'absolute',left:16,top:16,backgroundColor:p.surface,borderRadius:999,paddingHorizontal:10,paddingVertical:6,flexDirection:'row',alignItems:'center',gap:6}}><Feather name={property.status==='live'?'check-circle':'clock'} size={14} color={property.status==='live'?p.success:p.waiting}/><Text style={[ui.small,{color:p.text,fontWeight:'600'}]}>{property.status.replaceAll('_',' ')}</Text></View></View>
               <View style={{padding:20,gap:12}}><View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text,flex:1}]}>{property.propertyName}</Text><Feather name="arrow-up-right" size={20} color={p.primary}/></View><View style={[ui.row,{gap:7}]}><Feather name="map-pin" size={15} color={p.muted}/><Text style={[ui.small,{color:p.muted,flex:1}]}>{property.region}</Text></View><View style={[ui.between,{borderTopWidth:1,borderColor:p.border,paddingTop:12}]}><Text style={[ui.small,{color:p.muted}]}>{property.bedrooms} bedrooms, {property.bathrooms} {Number(property.bathrooms)===1?'bathroom':'bathrooms'}</Text><Text style={[ui.small,{color:p.primary,fontWeight:'600'}]}>View property</Text></View></View>
             </Pressable>
           </Entrance>)}
@@ -930,7 +806,7 @@ export function WorkspaceScreens({
             "Review the decisions waiting for your attention.",
           )}
           {approvalItems(role).length ? (
-            <View style={[ui.card, card, { paddingVertical: 0 }]}>
+            <View style={[ui.card, card, { paddingVertical: 6, gap: 0 }]}>
               {approvalItems(role).map(openRow)}
             </View>
           ) : (
@@ -962,7 +838,7 @@ export function WorkspaceScreens({
             "Property mail and conversations within your access.",
           )}
           {inbox.length ? (
-            <View style={[ui.card, card, { paddingVertical: 0 }]}>
+            <View style={[ui.card, card, { paddingVertical: 6, gap: 0 }]}>
               {inbox.map(openRow)}
             </View>
           ) : (
@@ -994,7 +870,7 @@ export function WorkspaceScreens({
               <Feather name="bookmark" color={p.primary} size={18} />
             </View>
             {saved.length ? (
-              <View style={[ui.card, card, { paddingVertical: 0 }]}>
+              <View style={[ui.card, card, { paddingVertical: 6, gap: 0 }]}>
                 {saved.map((tool) => (
                   <LinkRow
                     key={tool.id}
@@ -1042,7 +918,7 @@ export function WorkspaceScreens({
             >
               Quick access
             </Text>
-            <View style={[ui.card, card, { paddingVertical: 0 }]}>
+            <View style={[ui.card, card, { paddingVertical: 6, gap: 0 }]}>
               <LinkRow
                 title="Reports and analytics"
                 subtitle="Date ranges, trends and reporting"
@@ -1142,7 +1018,7 @@ export function WorkspaceScreens({
                       Status: {selectedProperty.status}
                     </Text>
                   </View>
-                  <View style={[ui.card, card, { paddingVertical: 0 }]}>
+                  <View style={[ui.card, card, { paddingVertical: 6, gap: 0 }]}>
                     <LinkRow
                       title="Work for this property"
                       subtitle={`${items.filter((item) => item.record.propertyName === selectedProperty.propertyName).length} sample items`}
@@ -1163,7 +1039,7 @@ export function WorkspaceScreens({
                   >
                     Property tools
                   </Text>
-                  <View style={[ui.card, card, { paddingVertical: 0 }]}>
+                  <View style={[ui.card, card, { paddingVertical: 6, gap: 0 }]}>
                     {toolsFor(role)
                       .filter((tool) =>
                         [

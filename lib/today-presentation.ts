@@ -3,19 +3,21 @@ import { reportPresentation } from './report-presentation';
 
 // Scoped Home analytics palettes. All visual elements follow the selected theme.
 export const todayColors = {
+  // The Home hero is a deep forest panel in both themes, echoing the green
+  // header; tiles use the same earthy family as the departments.
   light:{
-    heroStart:'#FAF7F0',heroEnd:'#E0E7D9',heroText:'#152D28',heroMuted:'#4E6259',heroBorder:'#CCC8B8',
-    trendBg:'#EFE9DB',mint:'#177A41',spark:'#177A41',unfavourable:'#974200',
-    ringBg:'#FAF7F0',ringTrack:'#D4DDCF',grid:'#697A6D',gridOpacity:0.35,
-    selectionLine:'#4E6259',chipBg:'#E0E7D9',selectedBg:'#D4DDCF',dot:'#152D28',
-    waitingBg:'#FFF0D6',waitingBorder:'#F6DCA8',waitingIcon:'#B45309',waitingFill:'#B56800',propertyBg:'#E8EEFF',propertyBorder:'#CBD7FF',propertyIcon:'#3457D5',
+    heroStart:'#1F3D38',heroEnd:'#2B5448',heroText:'#FAF7F0',heroMuted:'#D3E0D8',heroBorder:'#3E6658',
+    trendBg:'#183530',mint:'#A7D9C1',spark:'#A7D9C1',unfavourable:'#F3C27A',
+    ringBg:'#183530',ringTrack:'#3B5C52',grid:'#79998C',gridOpacity:0.45,
+    selectionLine:'#D3E0D8',chipBg:'#25483F',selectedBg:'#335E52',dot:'#FAF7F0',
+    waitingBg:'#F3E7CF',waitingBorder:'#E3CFA6',waitingIcon:'#875A1C',waitingFill:'#9A6418',propertyBg:'#DCEAE4',propertyBorder:'#BFD6CC',propertyIcon:'#1F5F55',
   },
   dark:{
-    heroStart:'#182C26',heroEnd:'#213A32',heroText:'#FAF7F0',heroMuted:'#C7CBBE',heroBorder:'#345347',
-    trendBg:'#0F1E1A',mint:'#86EFAC',spark:'#A7D9C1',unfavourable:'#FFD08A',
-    ringBg:'#182C26',ringTrack:'#42564E',grid:'#79998C',gridOpacity:0.4,
-    selectionLine:'#C7CBBE',chipBg:'#213A32',selectedBg:'#254538',dot:'#FAF7F0',
-    waitingBg:'#3A2A12',waitingBorder:'#FFB54747',waitingIcon:'#FFB547',waitingFill:'#FFB547',propertyBg:'#1F2B55',propertyBorder:'#A9BAFF47',propertyIcon:'#A9BAFF',
+    heroStart:'#1B3E38',heroEnd:'#24503F',heroText:'#FAF7F0',heroMuted:'#D3E0D8',heroBorder:'#3E6658',
+    trendBg:'#132C27',mint:'#A7D9C1',spark:'#A7D9C1',unfavourable:'#FFD08A',
+    ringBg:'#132C27',ringTrack:'#3B5C52',grid:'#79998C',gridOpacity:0.45,
+    selectionLine:'#D3E0D8',chipBg:'#22463D',selectedBg:'#2E5A4E',dot:'#FAF7F0',
+    waitingBg:'#3A2C15',waitingBorder:'#E8C27D47',waitingIcon:'#E8C27D',waitingFill:'#E8C27D',propertyBg:'#173A33',propertyBorder:'#8FD3C247',propertyIcon:'#8FD3C2',
   },
 };
 
