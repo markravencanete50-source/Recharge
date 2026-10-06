@@ -1,5 +1,5 @@
 import { DimensionalIcon } from './DimensionalIcon';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import Svg, {Circle,Defs,Filter,FeGaussianBlur,Line,LinearGradient,Path,Polyline,RadialGradient,Rect,Stop,Text as SvgText} from 'react-native-svg';
 import Feather from '@expo/vector-icons/Feather';
@@ -112,23 +112,75 @@ export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today
   </View>;
 }
 
-export function TodayTiles({data,palette:p,onWaiting,onProperties,vertical=false}:{data:Today;palette:Palette;onWaiting:()=>void;onProperties:()=>void;vertical?:boolean}) {
+const AREA_COLOURS={light:['#1F5F55','#9A6418','#3B5866','#9A4426','#6B4768','#3F6A2A'],dark:['#8FD3C2','#E8C27D','#A9C6D2','#F2AE8C','#D9B5D5','#B7DA92']};
+const DAY_INITIALS=['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+function GrowBar({value,max,color,track,delay,highlight}:{value:number;max:number;color:string;track:string;delay:number;highlight:boolean}) {
+  const reduced=useReducedMotion();
+  const [grow]=useState(()=>new Animated.Value(reduced?1:0));
+  useEffect(()=>{if(reduced){grow.setValue(1);return;}grow.setValue(0);const a=Animated.timing(grow,{toValue:1,duration:700,delay,easing:Easing.bezier(0.16,1,0.3,1),useNativeDriver:false});a.start();return()=>a.stop();},[grow,reduced,value,delay]);
+  const pct=max?Math.max(value?8:3,value/max*100):3;
+  return <View style={{flex:1,height:'100%',justifyContent:'flex-end',borderRadius:8,backgroundColor:track,overflow:'hidden'}}>
+    <Animated.View style={{height:grow.interpolate({inputRange:[0,1],outputRange:['0%',pct+'%']}),borderRadius:8,backgroundColor:color,opacity:highlight?1:0.62}}/>
+  </View>;
+}
+
+// Desktop side cards: compact, each carrying its own small chart so the
+// numbers have context instead of sitting in empty space.
+export function TodayTiles({data,palette:p,onWaiting,onProperties,vertical=false,children}:{data:Today;palette:Palette;onWaiting:()=>void;onProperties:()=>void;vertical?:boolean;children?:ReactNode}) {
   const tone=todayColors[p.isDark?'dark':'light'];
   const reduced=useReducedMotion();
   const [fill]=useState(()=>new Animated.Value(reduced?1:0));
   useEffect(()=>{if(reduced){fill.setValue(1);return;}fill.setValue(0);const a=Animated.timing(fill,{toValue:1,duration:900,delay:250,easing:Easing.bezier(0.16,1,0.3,1),useNativeDriver:false});a.start();return()=>a.stop();},[fill,reduced,data.waitingShare]);
-  return <View style={{flexDirection:vertical?'column':'row',gap:vertical?16:12,alignItems:'stretch',...(vertical?{flex:1,minWidth:0}:{})}}>{(['waiting','properties'] as const).map(kind=>{
-    const waiting=kind==='waiting',icon=waiting?tone.waitingIcon:tone.propertyIcon;
-    return <MotionPress key={kind} {...(Platform.OS==='web'?{dataSet:{hover:'lift'}}:{})} accessibilityRole="button" accessibilityLabel={waiting?`${data.waiting} waiting, ${data.waiting} of ${data.open} open tasks`:`${data.properties??'Unavailable'} properties, as of today`} onPress={waiting?onWaiting:onProperties} style={{flex:1,minWidth:0,padding:vertical?24:16,justifyContent:'space-between',borderRadius:26,borderWidth:1,borderColor:waiting?tone.waitingBorder:tone.propertyBorder,backgroundColor:waiting?tone.waitingBg:tone.propertyBg,gap:vertical?20:12,overflow:'hidden'}}>
-      <View style={ui.between}>
-        <View style={{width:vertical?104:54,height:vertical?104:54,borderRadius:vertical?30:18,backgroundColor:p.isDark?'#FFFFFF0D':'#FFFFFF80',alignItems:'center',justifyContent:'center'}}><DimensionalIcon name={waiting?'hourglass':'house'} size={vertical?84:42}/></View>
-        <View style={{width:34,height:34,borderRadius:17,borderWidth:1,borderColor:icon+'40',alignItems:'center',justifyContent:'center'}}><Feather name="arrow-up-right" size={16} color={icon}/></View>
+  const week=data.current.trend.slice(-7);
+  const weekMax=Math.max(1,...week.map(day=>day.waiting));
+  const areas=data.current.queues.filter(queue=>queue.value>0);
+  const areaTotal=areas.reduce((total,queue)=>total+queue.value,0);
+  const colours=AREA_COLOURS[p.isDark?'dark':'light'];
+  const perProperty=data.properties?Math.round(data.open/data.properties*10)/10:null;
+  const card=(waiting:boolean)=>({minWidth:0,padding:vertical?22:16,borderRadius:26,borderWidth:1,borderColor:waiting?tone.waitingBorder:tone.propertyBorder,backgroundColor:waiting?tone.waitingBg:tone.propertyBg,gap:16,overflow:'hidden' as const});
+  const header=(waiting:boolean)=>{const icon=waiting?tone.waitingIcon:tone.propertyIcon;return <View style={[ui.row,{gap:12}]}>
+    <View style={{width:52,height:52,borderRadius:17,backgroundColor:p.isDark?'#FFFFFF0D':'#FFFFFF8C',alignItems:'center',justifyContent:'center'}}><DimensionalIcon name={waiting?'hourglass':'house'} size={42}/></View>
+    <View style={{flex:1,gap:2}}>
+      <Text style={{fontSize:12,fontWeight:'600',letterSpacing:1.2,textTransform:'uppercase',color:p.muted}}>{waiting?'Waiting':'Properties'}</Text>
+      <View style={[ui.row,{gap:8,alignItems:'flex-end'}]}><Text style={{fontSize:34,lineHeight:40,fontWeight:'700',letterSpacing:-1.2,color:p.text}}>{waiting?data.waiting:data.properties??'—'}</Text><Text style={{fontSize:13,color:p.muted,paddingBottom:6}}>{waiting?'need a response':'managed'}</Text></View>
+    </View>
+    <View style={{width:34,height:34,borderRadius:17,borderWidth:1,borderColor:icon+'40',alignItems:'center',justifyContent:'center'}}><Feather name="arrow-up-right" size={16} color={icon}/></View>
+  </View>;};
+  return <View style={{flexDirection:vertical?'column':'row',gap:vertical?16:12,alignItems:'stretch',...(vertical?{flex:1,minWidth:0}:{})}}>
+    <MotionPress {...(Platform.OS==='web'?{dataSet:{hover:'lift'}}:{})} accessibilityRole="button" accessibilityLabel={`${data.waiting} waiting, ${data.waiting} of ${data.open} open tasks`} onPress={onWaiting} style={card(true)}>
+      {header(true)}
+      <View accessible accessibilityLabel={'Waiting tasks by day: '+week.map(day=>day.waiting).join(', ')} style={{gap:8}}>
+        <Text style={{fontSize:12,fontWeight:'600',color:p.text}}>Last 7 days</Text>
+        <View style={{flexDirection:'row',gap:7,height:84}}>
+          {week.map((day,index)=><GrowBar key={day.key} value={day.waiting} max={weekMax} color={tone.waitingFill} track={tone.waitingFill+'1F'} delay={120+index*60} highlight={index===week.length-1}/>)}
+        </View>
+        <View style={{flexDirection:'row',gap:7}}>{week.map((day,index)=><Text key={day.key} style={{flex:1,textAlign:'center',fontSize:11,fontWeight:index===week.length-1?'700':'500',color:index===week.length-1?p.text:p.muted}}>{DAY_INITIALS[new Date(day.key+'T12:00:00Z').getUTCDay()]}</Text>)}</View>
       </View>
-      <View style={{gap:vertical?12:8}}>
-        <Text style={{fontSize:12,fontWeight:'600',letterSpacing:1.2,textTransform:'uppercase',color:p.muted}}>{waiting?'Waiting':'Properties'}</Text>
-        <View style={[ui.row,{gap:vertical?10:6,flexWrap:'wrap',alignItems:'flex-end'}]}><Text style={{fontSize:vertical?52:30,lineHeight:vertical?58:36,fontWeight:'700',letterSpacing:-1.6,color:p.text}}>{waiting?data.waiting:data.properties??'—'}</Text><Text style={{fontSize:vertical?15:13,color:p.muted,paddingBottom:vertical?8:4}}>{waiting?'need a response':'managed'}</Text></View>
-        {waiting?<><View accessible accessibilityLabel={`${data.waiting} of ${data.open} open tasks waiting`} style={{height:8,borderRadius:4,backgroundColor:tone.waitingFill+'33',overflow:'hidden'}}><Animated.View style={{height:8,borderRadius:4,width:fill.interpolate({inputRange:[0,1],outputRange:['0%',`${data.waitingShare*100}%`]}),backgroundColor:tone.waitingFill}}/></View><Text style={{fontSize:12,lineHeight:18,color:p.text}}>{data.waiting} of {data.open} open tasks</Text></>:<Text style={{fontSize:12,lineHeight:18,color:p.text}}>As of today</Text>}
+      <View style={{gap:8}}>
+        <View accessible accessibilityLabel={`${data.waiting} of ${data.open} open tasks waiting`} style={{height:8,borderRadius:4,backgroundColor:tone.waitingFill+'33',overflow:'hidden'}}><Animated.View style={{height:8,borderRadius:4,width:fill.interpolate({inputRange:[0,1],outputRange:['0%',`${data.waitingShare*100}%`]}),backgroundColor:tone.waitingFill}}/></View>
+        <View style={ui.between}><Text style={{fontSize:12,lineHeight:18,color:p.text}}>{data.waiting} of {data.open} open tasks</Text><Text style={{fontSize:12,lineHeight:18,fontWeight:'700',color:tone.waitingIcon}}>{Math.round(data.waitingShare*100)}%</Text></View>
       </View>
-    </MotionPress>;
-  })}</View>;
+    </MotionPress>
+    <MotionPress {...(Platform.OS==='web'?{dataSet:{hover:'lift'}}:{})} accessibilityRole="button" accessibilityLabel={`${data.properties??'Unavailable'} properties, as of today`} onPress={onProperties} style={card(false)}>
+      {header(false)}
+      {perProperty!==null&&<View style={[ui.row,{gap:10,padding:12,borderRadius:16,backgroundColor:p.isDark?'#FFFFFF0A':'#FFFFFF8C'}]}>
+        <Feather name="layers" size={16} color={tone.propertyIcon}/>
+        <Text style={{flex:1,fontSize:13,color:p.text}}><Text style={{fontWeight:'700'}}>{perProperty}</Text> open tasks per property</Text>
+      </View>}
+      <View style={{gap:10}}>
+        <Text style={{fontSize:12,fontWeight:'600',color:p.text}}>Work by area</Text>
+        {areaTotal>0?<>
+          <View style={{flexDirection:'row',height:10,borderRadius:5,overflow:'hidden',gap:2}}>{areas.map((queue,index)=><View key={queue.name} style={{flex:queue.value,backgroundColor:colours[index%colours.length]}}/>)}</View>
+          {areas.map((queue,index)=><View key={queue.name} style={[ui.row,{gap:8}]}>
+            <View style={{width:9,height:9,borderRadius:3,backgroundColor:colours[index%colours.length]}}/>
+            <Text style={{flex:1,fontSize:12,color:p.text}}>{queue.name}</Text>
+            <Text style={{fontSize:12,fontWeight:'700',color:p.text}}>{queue.value}</Text>
+            <Text style={{width:38,textAlign:'right',fontSize:12,color:p.muted}}>{Math.round(queue.value/areaTotal*100)}%</Text>
+          </View>)}
+        </>:<Text style={{fontSize:12,color:p.muted}}>No recorded work in this period.</Text>}
+      </View>
+    </MotionPress>
+    {children}
+  </View>;
 }

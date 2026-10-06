@@ -8,7 +8,7 @@ const worker = {
     const mobileRoutes = ["/home", "/work", "/properties", "/inbox", "/more", "/workspace", "/analytics", "/calendar", "/approvals", "/help", "/activity"];
     // Pages redirects .html requests to extensionless URLs, even through ASSETS.
     // Request the canonical asset to preserve the user's route inside the frame.
-    if (url.pathname === "/studio.html" || (url.pathname === "/" && url.searchParams.get("view") === "phone")) url.pathname = "/studio";
+    if (url.pathname === "/studio.html" || url.pathname === "/mobile" || (url.pathname === "/" && url.searchParams.get("view") === "phone")) url.pathname = "/studio";
     // Desktop and phone previews render the same responsive Expo screens.
     // Keep the original detailed portal available during backend integration.
     else if (url.pathname === "/legacy-preview") url.pathname = "/desktop";

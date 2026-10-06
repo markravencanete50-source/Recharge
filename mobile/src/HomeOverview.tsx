@@ -168,3 +168,25 @@ export function QuickOverview({
     </Entrance>
   );
 }
+
+// Desktop: a small shortcut card under the side tiles, so the column ends on
+// something useful instead of empty space.
+export function JumpBackIn({ palette: p, links }: { palette: Palette; links: { key: string; icon: DimensionalName; title: string; detail: string; onPress: () => void }[] }) {
+  return (
+    <View style={{ flex: 1, minHeight: 0, padding: 22, gap: 6, borderRadius: 26, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
+      <Text style={{ fontSize: 12, fontWeight: "600", letterSpacing: 1.2, textTransform: "uppercase", color: p.muted, marginBottom: 4 }}>Jump back in</Text>
+      <View style={{ flex: 1, justifyContent: "space-around", gap: 4 }}>
+        {links.map(link => (
+          <MotionPress key={link.key} {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={link.title + ". " + link.detail} onPress={link.onPress} style={[ui.row, { gap: 12, minHeight: 56, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 16 }]}>
+            <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={link.icon} size={36} /></View>
+            <View style={{ flex: 1, gap: 1 }}>
+              <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{link.title}</Text>
+              <Text numberOfLines={1} style={{ color: p.muted, fontSize: 12 }}>{link.detail}</Text>
+            </View>
+            <Feather name="chevron-right" size={17} color={p.muted} />
+          </MotionPress>
+        ))}
+      </View>
+    </View>
+  );
+}

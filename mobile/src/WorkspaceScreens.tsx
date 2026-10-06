@@ -18,7 +18,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Artwork, FeatureTile } from "./Artwork";
-import { QuickOverview, WelcomeHeader } from "./HomeOverview";
+import { JumpBackIn, QuickOverview, WelcomeHeader } from "./HomeOverview";
 import { FilterBar } from "./FilterBar";
 import { StateGraphic } from "./StateGraphic";
 import { Entrance, CountUp, SlidingPill, MotionPress as Pressable, useReducedMotion } from "./motion";
@@ -643,7 +643,13 @@ export function WorkspaceScreens({
               </Pressable>
             </View>
           </Entrance>
-          {desktop&&<TodayTiles vertical={desktop} data={today} palette={p} onWaiting={()=>openQueue("Waiting")} onProperties={()=>onNavigate("properties")}/>}
+          {desktop&&<TodayTiles vertical={desktop} data={today} palette={p} onWaiting={()=>openQueue("Waiting")} onProperties={()=>onNavigate("properties")}>
+            <JumpBackIn palette={p} links={[
+              { key: "calendar", icon: "calendar", title: "Calendar", detail: "Your schedule and due dates", onPress: () => onNavigate("calendar") },
+              { key: "inbox", icon: "chat", title: "Inbox", detail: "Messages and updates", onPress: () => onNavigate("inbox") },
+              { key: "tools", icon: "toolbox", title: "All tools", detail: "Every centre within your access", onPress: () => onNavigate("more") },
+            ]}/>
+          </TodayTiles>}
           </View>
           <Entrance sessionKey={"home:"+role+":schedule"} delay={55} style={{ gap: 10 }}>
             <View style={ui.between}>
