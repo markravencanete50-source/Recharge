@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
@@ -26,7 +27,7 @@ async function requireAdmin() {
   const user = await getChatGPTUser();
   if (!user) return null;
   const profile = await getAccessProfile(user.email, user.displayName);
-  return profile?.role === "admin" ? profile : null;
+  return isWorkspaceAdmin(profile?.role) ? profile : null;
 }
 
 export async function POST(request: Request) {

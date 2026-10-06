@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCheck, Clock3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -84,30 +85,30 @@ export function NotificationCentre({
   return (
     <Sheet open={open} onOpenChange={(value) => { setOpen(value); if (value) markRead(); }}>
       <SheetTrigger asChild>
-        <button className="relative grid size-10 place-items-center rounded-xl border border-[#d9e2df] bg-white text-[#1c3934] hover:bg-[#f3f7f5]" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}>
+        <button className="relative grid size-10 place-items-center rounded-xl border border-[var(--border)] bg-white text-[var(--foreground)] hover:bg-[var(--muted)]" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}>
           <Bell className="size-4" />
           {unread > 0 && <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-[#1c3934] px-1 text-[0.65rem] font-bold text-white">{Math.min(unread, 99)}</span>}
         </button>
       </SheetTrigger>
-      <SheetContent className="w-full overflow-y-auto border-[#d9e2df] bg-[#f6f8f7] p-0 sm:max-w-md">
-        <SheetHeader className="border-b border-[#d9e2df] bg-white px-6 py-6 text-left">
+      <SheetContent className="w-full overflow-y-auto border-[var(--border)] bg-[var(--card)] p-0 sm:max-w-md">
+        <SheetHeader className="border-b border-[var(--border)] bg-white px-6 py-6 text-left">
           <div className="flex items-start justify-between gap-4 pr-8">
             <div><SheetTitle className="text-2xl">Notification Centre</SheetTitle><SheetDescription className="mt-1">Every onboarding action and due follow-up in one place.</SheetDescription></div>
-            <Badge className="border-0 bg-[#e4ece8] text-[#1c3934]">{unread} new</Badge>
+            <Badge className="border-0 bg-[var(--muted)] text-[var(--foreground)]">{unread} new</Badge>
           </div>
         </SheetHeader>
         <div className="space-y-3 p-4">
           {items.map((item) => (
-            <button key={item.id} onClick={() => { setOpen(false); onOpenOnboarding(); }} className={`w-full rounded-2xl border p-4 text-left transition hover:border-[#789087] ${item.due ? "border-amber-300 bg-amber-50" : item.createdAt > seenAt ? "border-[#6d8d83] bg-white" : "border-[#dce5e2] bg-white/70"}`}>
+            <button key={item.id} onClick={() => { setOpen(false); onOpenOnboarding(); }} className={`w-full rounded-2xl border p-4 text-left transition hover:border-[var(--border)] ${item.due ? "border-amber-300 bg-amber-50" : item.createdAt > seenAt ? "border-[var(--border)] bg-white" : "border-[var(--border)] bg-white/70"}`}>
               <div className="flex items-start gap-3">
-                <span className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl ${item.due ? "bg-amber-100 text-amber-800" : "bg-[#e4ece8] text-[#315f50]"}`}>{item.due ? <Clock3 className="size-4" /> : <CheckCheck className="size-4" />}</span>
-                <span className="min-w-0"><span className="block text-xs font-semibold uppercase tracking-[0.1em] text-[#6f817d]">{item.property}</span><span className="mt-1 block font-semibold">{item.title}</span><span className="mt-1 block text-sm leading-5 text-[#647577]">{item.detail}</span><span className="mt-2 block text-xs text-[#81908d]">{dateTime(item.createdAt)}</span></span>
+                <span className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl ${item.due ? "bg-amber-100 text-amber-800" : "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>{item.due ? <Clock3 className="size-4" /> : <CheckCheck className="size-4" />}</span>
+                <span className="min-w-0"><span className="block text-xs font-semibold uppercase tracking-[0.1em] text-[var(--muted-foreground)]">{item.property}</span><span className="mt-1 block font-semibold">{item.title}</span><span className="mt-1 block text-sm leading-5 text-[var(--muted-foreground)]">{item.detail}</span><span className="mt-2 block text-xs text-[var(--muted-foreground)]">{dateTime(item.createdAt)}</span></span>
               </div>
             </button>
           ))}
-          {!items.length && <div className="rounded-2xl border border-dashed border-[#c8d5d1] bg-white px-6 py-12 text-center"><Bell className="mx-auto size-6 text-[#718184]" /><p className="mt-3 font-semibold">No notifications yet</p><p className="mt-1 text-sm text-[#718184]">New actions will appear here automatically.</p></div>}
+          {!items.length && <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white px-6 py-12 text-center"><Bell className="mx-auto size-6 text-[var(--muted-foreground)]" /><p className="mt-3 font-semibold">No notifications yet</p><p className="mt-1 text-sm text-[var(--muted-foreground)]">New actions will appear here automatically.</p></div>}
         </div>
-        {items.length > 0 && <div className="sticky bottom-0 border-t border-[#d9e2df] bg-white p-4"><Button variant="outline" className="w-full" onClick={markRead}><CheckCheck /> Mark all as read</Button></div>}
+        {items.length > 0 && <div className="sticky bottom-0 border-t border-[var(--border)] bg-white p-4"><Button variant="outline" className="w-full" onClick={markRead}><CheckCheck /> Mark all as read</Button></div>}
       </SheetContent>
     </Sheet>
   );

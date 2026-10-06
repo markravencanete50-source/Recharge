@@ -83,3 +83,45 @@ test("renders sidebar skeletons deterministically", async () => {
   assert.equal(first, second);
   assert.match(first, /--skeleton-width:70%/);
 });
+
+test("every Recharge tool renders its assigned accessible 2D glyph", async () => {
+  const { MODULES } = await vite.ssrLoadModule("/lib/modules.ts");
+  const { featureGlyphs, iconNodes } = await vite.ssrLoadModule("/lib/artwork.ts");
+  const { ToolIllustration } = await vite.ssrLoadModule("/components/tool-illustration.tsx");
+  for (const module of MODULES) {
+    const html = renderToStaticMarkup(React.createElement(ToolIllustration, {id: module.id}));
+    assert.ok(iconNodes[featureGlyphs[module.id]]?.length, `${module.id} must have an assigned glyph`);
+    assert.match(html, /aria-hidden="true"/);
+    assert.match(html, /<svg[^>]+stroke="currentColor"/);
+    assert.doesNotMatch(html, /<img/);
+  }
+});
+
+test("analytics excludes old and future records and preserves exact status totals", async () => {
+  const { buildWorkspaceAnalytics } = await vite.ssrLoadModule("/lib/analytics.ts");
+  const now = new Date("2026-10-03T12:00:00").getTime();
+  const timestamp = now / 1000;
+  const data = { workflows: { available: true, tickets: [
+    {createdAt: timestamp, status: "new"}, {createdAt: timestamp - 86400, status: "complete"},
+    {createdAt: timestamp - 45 * 86400, status: "new"}, {createdAt: timestamp + 2 * 86400, status: "new"},
+  ] }, maintenance: {available: true, tickets: [{createdAt: timestamp, status: "in_progress"}]}, cleans: {available: true, tickets: [{cleanDate: "2026-10-03", status: "approved"}]} };
+  const result = buildWorkspaceAnalytics(data, 7, now);
+  assert.equal(result.total, 4);
+  assert.equal(result.complete, 2);
+  assert.equal(result.waiting, 1);
+  assert.equal(result.status.reduce((sum,s)=>sum+s.value,0),result.total);
+  assert.equal(result.trend.length,7);
+  assert.equal(result.trend.reduce((sum,s)=>sum+s.workflows+s.repairs,0),3);
+  const empty = buildWorkspaceAnalytics({},7,now);
+  assert.equal(empty.total,0);
+  assert.ok(empty.sources.every(s=>!s.available));
+});
+
+test("API role hierarchy cannot assign elevated access through ordinary admin requests", async () => {
+  const { canManageAccess } = await vite.ssrLoadModule("/lib/access-policy.ts");
+  assert.equal(canManageAccess("admin","stays","super_admin"), false);
+  assert.equal(canManageAccess("admin","admin","stays"), false);
+  assert.equal(canManageAccess("admin","stays","ready"), true);
+  assert.equal(canManageAccess("client","client","stays"), false);
+  assert.equal(canManageAccess("super_admin","admin","super_admin"), true);
+});

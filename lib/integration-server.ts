@@ -1,0 +1,71 @@
+import { env } from 'cloudflare:workers';
+import { businessContext,businessResponse,databaseFailure } from './business-server';
+import { authSecurityConfiguration,requestQuota,securityRpc } from './auth-security';
+import { boundedJson,isSameOrigin } from './auth-security-policy';
+import { isNativeRequest } from './native-request-policy';
+import { integrationActionSchema,integrationConfiguration,IntegrationSettings,DeliveryJob,ProviderFailure,normalizeHostawayReservation } from './integration-policy';
+import { deliverNotification } from './integration-providers';
+import { listHostawayReservations } from './hostaway';
+
+export function integrationSettings():IntegrationSettings {
+  return {...process.env,...env as unknown as IntegrationSettings};
+}
+export async function dispatchNotifications(settings=integrationSettings()) {
+  const config=integrationConfiguration(settings);
+  // Missing services do not claim jobs or consume attempts.
+  if(!config.email&&!config.push)return {mode:'unconfigured',processed:0};
+  const jobs=await securityRpc<DeliveryJob[]>('integration_claim_notifications',{email_enabled:config.email,push_enabled:config.push});
+  const summary={mode:'configured',processed:0,accepted:0,delivered:0,pending:0,failed:0};
+  for(const job of jobs) {
+    if(!await securityRpc<boolean>('integration_check_notification',{target:job.id,claim:job.lease}))continue;
+    let outcome:string,provider:string|null=null;
+    try {const result=await deliverNotification(settings,job);outcome=result.state;provider=result.providerId||null;}
+    catch(error){outcome=error instanceof ProviderFailure?error.code:'uncertain';}
+    // Lease fencing prevents a late worker from overwriting a subsequent receipt check.
+    const saved=await securityRpc<boolean>('integration_finish_notification',{target:job.id,claim:job.lease,outcome,provider});
+    if(saved){summary.processed++;if(outcome==='accepted'||outcome==='delivered'||outcome==='pending')summary[outcome]++;else summary.failed++;}
+  }
+  return summary;
+}
+export async function integrationRoute(request:Request,native=false) {
+  if(request.method==='POST'&&(native?!isNativeRequest(request):!isSameOrigin(request,authSecurityConfiguration()?.origin)))return businessResponse({error:'Invalid request origin'},403);
+  try {
+    const session=await businessContext(request,native);
+    if(!session)return businessResponse({error:'Sign in required'},401);
+    if(session.account.status!=='active')return businessResponse({error:'Active workspace access required'},403);
+    const settings=integrationSettings(),configuration=integrationConfiguration(settings);
+    if(request.method==='GET') {
+      const result=await session.client.rpc('workspace_integration_status');
+      return result.error?databaseFailure(result.error):businessResponse({configuration,data:result.data});
+    }
+    const quota=await requestQuota(request,'integrations-user',6,60,session.account.userId);
+    if(!quota.allowed){const response=businessResponse({error:'Too many integration requests'},429);response.headers.set('Retry-After',String(quota.retryAfter||60));return response;}
+    const parsed=integrationActionSchema.safeParse(await boundedJson(request));
+    if(!parsed.success)return businessResponse({error:'Check the integration request'},400);
+    if(parsed.data.action==='dispatchNotifications') {
+      if(!['admin','super_admin'].includes(session.account.role))return businessResponse({error:'Admin access required'},403);
+      return businessResponse(await dispatchNotifications(settings));
+    }
+    if(!['admin','super_admin','stays'].includes(session.account.role)||!session.account.modules.includes('direct-bookings'))return businessResponse({error:'Reservation import access required'},403);
+    if(!configuration.reservations)return businessResponse({error:'Hostaway import is awaiting configuration',mode:'unconfigured'},503);
+    const scoped=await session.client.rpc('workspace_portfolio_read',{section:'portfolio',target_property:null,start_on:null,end_on:null});
+    if(scoped.error)return databaseFailure(scoped.error);
+    const propertyId=parsed.data.propertyId;
+    const property=scoped.data?.properties?.find((p:{id:string})=>p.id===propertyId);
+    if(!property)return businessResponse({error:'Property access denied'},403);
+    if(!property.hostawayListingId)return businessResponse({error:'Map this property to its Hostaway listing first'},409);
+    const rows=await listHostawayReservations(property.hostawayListingId);
+    const summary={imported:0,unchanged:0,failed:0,nextOffset:null as number|null,bounded:true};
+    // Ten records per run keep database quotas and Worker duration bounded. Never infer cancellation from an absent row.
+    const offset=parsed.data.offset;
+    for(const row of rows.slice(offset,offset+10)) {
+      try {
+        const value=normalizeHostawayReservation(row,property.hostawayListingId);
+        const result=await session.client.rpc('workspace_import_reservation',{input:{propertyId:property.id,listingId:property.hostawayListingId,...value}});
+        if(result.error)summary.failed++;else if(result.data.changed)summary.imported++;else summary.unchanged++;
+      } catch {summary.failed++;}
+    }
+    if(rows.length>offset+10)summary.nextOffset=offset+10;
+    return businessResponse(summary);
+  } catch {return businessResponse({error:'The integration connection is temporarily unavailable'},503);}
+}

@@ -585,7 +585,7 @@ function normalizeMessages(
   values: unknown[],
 ): NormalizedMessage[] {
   const messages = values
-    .map((value, index) => {
+    .map((value, index): NormalizedMessage => {
       const message = asObject(value);
       const sentAt =
         parseTimestamp(message.insertedOn ?? message.date ?? message.createdOn) ||
@@ -713,6 +713,8 @@ async function hostawayRequest<T>(
   const response = await fetch(`${HOSTAWAY_API}${path}`, {
     ...init,
     headers,
+    redirect: 'error',
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (response.status === 403 && retry) {
@@ -755,6 +757,8 @@ async function issueAccessToken() {
 
   const response = await fetch(`${HOSTAWAY_API}/accessTokens`, {
     method: "POST",
+    redirect: 'error',
+    signal: AbortSignal.timeout(10_000),
     headers: {
       "content-type": "application/x-www-form-urlencoded",
       "cache-control": "no-cache",

@@ -40,7 +40,10 @@ export const MODULE_IDS = [
 
 export type ModuleId = (typeof MODULE_IDS)[number];
 
-export type WorkspaceRole = "admin" | "stays" | "cleans" | "ready" | "client";
+export type WorkspaceRole = "super_admin" | "admin" | "stays" | "cleans" | "cleaning_manager" | "ready" | "client";
+export function isWorkspaceAdmin(role: string | undefined): boolean {
+  return role === "super_admin" || role === "admin";
+}
 export type AccessStatus = "active" | "pending" | "revoked";
 
 const CLIENT_MODULES = [
@@ -89,7 +92,8 @@ const STAYS_ONLY_MODULES = [
 
 export const DEFAULT_ROLE_MODULES: Record<WorkspaceRole, readonly ModuleId[]> = {
   client: CLIENT_MODULES,
-  cleans: CLEANS_MODULES,
+  cleans: ["cleaning-schedule", "cleaner-performance", "cleans-invoices"],
+  cleaning_manager: [...CLEANS_MODULES, "clean-reporting"],
   ready: READY_MODULES,
   stays: Array.from(
     new Set<ModuleId>([
@@ -99,6 +103,7 @@ export const DEFAULT_ROLE_MODULES: Record<WorkspaceRole, readonly ModuleId[]> = 
     ]),
   ),
   admin: MODULE_IDS,
+  super_admin: MODULE_IDS,
 };
 
 export function defaultModulesForRole(role: WorkspaceRole): ModuleId[] {
@@ -200,7 +205,7 @@ export const MODULES = [
   {
     id: "property-database",
     stage: "01",
-    name: "Management Property Database",
+    name: "Property Management Database",
     shortName: "Management properties",
     description:
       "Keep every managed property record, key detail and operational reference in one place.",

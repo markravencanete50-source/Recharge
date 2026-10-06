@@ -1,5 +1,6 @@
 "use client";
 
+
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -109,7 +110,7 @@ export function WorkflowPanels({
     return null;
   if (!data.available) {
     return (
-      <div className="surface mt-8 rounded-2xl border border-[#d9e2df] bg-white p-5 text-sm text-[#647577]">
+      <div className="mt-8 rounded-2xl border border-[var(--border)] bg-white p-5 text-sm text-[var(--muted-foreground)]">
         Department workflows are temporarily unavailable. Please try again shortly.
       </div>
     );
@@ -129,10 +130,10 @@ function StaysWorkflow({ data }: { data: WorkflowData }) {
   return (
     <section className="mt-8 space-y-4">
       <div className="grid gap-4">
-        <article className="forest-panel rounded-[1.5rem] bg-[#1c3934] p-6 text-white sm:p-7">
+        <article className="rounded-[1.5rem] bg-[#1c3934] p-6 text-white sm:p-7">
         <div className="flex items-start justify-between gap-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8fb3a2]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
               Stays → Ready
             </p>
             <h2 className="mt-3 text-2xl font-semibold tracking-[-0.035em]">
@@ -143,7 +144,7 @@ function StaysWorkflow({ data }: { data: WorkflowData }) {
               correct Ready board.
             </p>
           </div>
-          <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/10 text-[#8fb3a2]">
+          <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/10 text-[var(--muted-foreground)]">
             <Send className="size-5" />
           </div>
         </div>
@@ -208,13 +209,13 @@ function ReferralDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="mt-6 h-11 rounded-xl bg-[#c9e7a4] px-5 font-semibold text-[#1c3934] hover:bg-[#d8efb9]">
+        <Button className="mt-6 h-11 rounded-xl bg-[#315f50] px-5 font-semibold text-[var(--foreground)] hover:bg-[var(--muted)]">
           <Plus /> New Ready referral
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[#d9e2df] p-0 sm:max-w-2xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[var(--border)] p-0 sm:max-w-2xl">
         <form onSubmit={submit}>
-          <DialogHeader className="border-b border-[#e2e9e7] px-6 py-6 text-left">
+          <DialogHeader className="border-b border-[var(--border)] px-6 py-6 text-left">
             <DialogTitle className="text-2xl tracking-[-0.035em]">
               Refer work to Recharge Ready
             </DialogTitle>
@@ -257,7 +258,7 @@ function ReferralDialog() {
             </Field>
             {error && <p className="text-sm font-medium text-red-700">{error}</p>}
           </div>
-          <DialogFooter className="border-t border-[#e2e9e7] px-6 py-5">
+          <DialogFooter className="border-t border-[var(--border)] px-6 py-5">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button disabled={saving} className="bg-[#1c3934] text-white hover:bg-[#10271f]">
               {saving ? "Sending…" : "Send to Ready"} <ArrowRight />
@@ -277,7 +278,7 @@ function ReadyWorkflow({ data }: { data: WorkflowData }) {
           <p className="eyebrow">Live referrals</p>
           <h2 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">Ready work boards</h2>
         </div>
-        <Badge variant="outline" className="border-[#cddbd6] bg-white text-[#40585b]">
+        <Badge variant="outline" className="border-[var(--border)] bg-white text-[var(--muted-foreground)]">
           {data.tickets.filter((ticket) => ticket.targetBusiness === "Ready" && ticket.status !== "complete").length} open
         </Badge>
       </div>
@@ -308,7 +309,7 @@ function CleansWorkflow({ data }: { data: WorkflowData }) {
         <h2 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">
           Clean Property Onboarding Tracker
         </h2>
-        <p className="mt-2 text-sm leading-6 text-[#647577]">
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
           Properties appear under New Enquiry as soon as Stays marks onboarding 100% complete.
         </p>
       </div>
@@ -385,18 +386,18 @@ function TicketBoard({
   tickets: WorkflowTicket[];
 }) {
   return (
-    <article className="surface rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
+    <article className="rounded-[1.5rem] border border-[var(--border)] bg-white p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#edf5f0] text-[#315f4d]">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--muted)] text-[var(--muted-foreground)]">
             <Icon className="size-4.5" />
           </div>
           <div>
             <h3 className="font-semibold">{title}</h3>
-            <p className="mt-1 text-xs leading-5 text-[#718184]">{description}</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{description}</p>
           </div>
         </div>
-        <Badge className="border-0 bg-[#f1f5f3] text-[#526a64]">
+        <Badge className="border-0 bg-[var(--muted)] text-[var(--muted-foreground)]">
           {tickets.filter((ticket) => ticket.status !== "complete").length} open
         </Badge>
       </div>
@@ -405,7 +406,7 @@ function TicketBoard({
           <TicketRow key={ticket.id} ticket={ticket} />
         ))}
         {tickets.length === 0 && (
-          <div className="rounded-xl border border-dashed border-[#d5e0dc] bg-[#f8faf9] px-4 py-5 text-center text-sm text-[#718184]">
+          <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] px-4 py-5 text-center text-sm text-[var(--muted-foreground)]">
             No tickets on this board yet.
           </div>
         )}
@@ -431,24 +432,24 @@ function TicketRow({ ticket }: { ticket: WorkflowTicket }) {
   }
 
   return (
-    <div className="rounded-xl border border-[#e3e9e7] p-4">
+    <div className="rounded-xl border border-[var(--border)] p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-semibold">{ticket.propertyName}</p>
             {ticket.priority === "urgent" && (
-              <Badge className="border-0 bg-[#fff0f0] text-[#9a3e3e]">Urgent</Badge>
+              <Badge className="border-0 bg-[var(--muted)] text-[var(--rc-danger-text)]">Urgent</Badge>
             )}
           </div>
-          <p className="mt-1 text-sm text-[#526568]">{ticket.title}</p>
+          <p className="mt-1 text-sm text-[var(--muted-foreground)]">{ticket.title}</p>
           {ticket.details && (
-            <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#718184]">{ticket.details}</p>
+            <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--muted-foreground)]">{ticket.details}</p>
           )}
         </div>
-          {ticket.status === "complete" && <CheckCircle2 className="size-5 shrink-0 text-[#5f8c38]" />}
+          {ticket.status === "complete" && <CheckCircle2 className="size-5 shrink-0 text-[var(--muted-foreground)]" />}
       </div>
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#edf1f0] pt-3">
-        <span className="text-[0.68rem] font-medium text-[#819093]">
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--border)] pt-3">
+        <span className="text-[0.68rem] font-medium text-[var(--muted-foreground)]">
           {onboardingInvoice ? ticket.status === "new" ? "New invoice" : ticket.status === "in_progress" ? "Invoice sent" : "Invoice settled" : ticket.lane === "new_enquiry" ? "New Enquiry" : ticket.lane === "to_schedule" ? "To schedule" : formatDate(ticket.createdAt)}
         </span>
         <Select value={ticket.status} disabled={saving} onValueChange={(value) => update(value as WorkflowStatus)}>

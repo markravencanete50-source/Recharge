@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
 import type { ModuleId } from "@/lib/modules";
@@ -81,7 +82,7 @@ function database() {
 
 export function canUseStaysWorkflow(profile: AccessProfile) {
   return (
-    profile.role === "admin" ||
+    isWorkspaceAdmin(profile.role) ||
     profile.modules.some((moduleId) =>
       [
         "property-onboarding",
@@ -97,7 +98,7 @@ export function canManageBoard(
   board: WorkflowBoard,
 ) {
   return (
-    profile.role === "admin" || profile.modules.includes(BOARD_MODULES[board])
+    isWorkspaceAdmin(profile.role) || profile.modules.includes(BOARD_MODULES[board])
   );
 }
 

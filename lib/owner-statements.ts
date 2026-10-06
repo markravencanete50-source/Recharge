@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
 import { isHostawayConfigured, listHostawayReservations } from "@/lib/hostaway";
@@ -8,7 +9,7 @@ export type OwnerStatement = { id: string; propertyId: string; propertyName: str
 export type OwnerStatementsData = { available: boolean; connections: { hostaway: boolean; xero: boolean; airbnb: boolean; booking: boolean; vrbo: boolean; direct: boolean }; properties: Array<{ id: string; name: string; ownerName: string; ownerEmail: string }>; bookings: OwnerBooking[]; receipts: OwnerReceipt[]; statements: OwnerStatement[]; lastSyncedAt: number | null };
 
 function db() { if (!env.DB) throw new Error("Accounts database is unavailable"); return env.DB; }
-export function canUseOwnerStatements(profile: AccessProfile) { return profile.role === "admin" || profile.role === "stays"; }
+export function canUseOwnerStatements(profile: AccessProfile) { return isWorkspaceAdmin(profile.role) || profile.role === "stays"; }
 function channel(value: string) { const name = value.toLowerCase(); if (name.includes("airbnb")) return "Airbnb"; if (name.includes("booking")) return "Booking.com"; if (name.includes("vrbo") || name.includes("homeaway")) return "Vrbo"; return "Direct"; }
 function feeBps(value: string) { return value === "Airbnb" ? 1850 : value === "Booking.com" ? 1800 : value === "Vrbo" ? 1500 : 300; }
 function status(expected: number, actual: number) { if (!actual) return "awaiting"; const difference = actual - expected; if (Math.abs(difference) <= 100) return "matched"; if (actual < expected) return actual < expected * 0.98 ? "underpaid" : "partial"; return "overpaid"; }

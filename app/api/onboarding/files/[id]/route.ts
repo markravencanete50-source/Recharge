@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { getAccessProfile } from "@/lib/access";
 import { canUseOnboarding, getOnboardingFile } from "@/lib/onboarding";
+import { privateFileHeaders } from "@/lib/file-response";
 
 export async function GET(
   _request: Request,
@@ -17,13 +18,8 @@ export async function GET(
     const { id } = await context.params;
     const result = await getOnboardingFile(profile, id);
     if (!result) return NextResponse.json({ error: "File not found" }, { status: 404 });
-    const safeName = result.file.file_name.replace(/["\r\n]/g, "");
     return new Response(result.object.body, {
-      headers: {
-        "content-type": result.file.content_type,
-      "content-disposition": `${result.file.content_type.startsWith("image/") || result.file.content_type.startsWith("video/") || result.file.content_type.startsWith("text/html") ? "inline" : "attachment"}; filename="${safeName}"`,
-        "cache-control": "private, no-store",
-      },
+      headers: privateFileHeaders(result.file.content_type, result.file.file_name),
     });
   } catch (error) {
     console.error("Onboarding file download failed", error);

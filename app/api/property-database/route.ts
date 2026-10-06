@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
@@ -108,7 +107,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const access = migrationProfile(request) || await authorisedProfile();
+  const access = await authorisedProfile();
   if (access instanceof NextResponse) return access;
   if (access.role === "client") {
     return NextResponse.json({ error: "Property database editing access required" }, { status: 403 });
@@ -137,18 +136,6 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-}
-
-function migrationProfile(request: Request) {
-  const supplied = request.headers.get("x-recharge-migration-key");
-  if (!env.CLICKUP_MIGRATION_KEY || supplied !== env.CLICKUP_MIGRATION_KEY) return null;
-  return {
-    email: "enquiries@rechargestays.co.uk",
-    fullName: "Recharge migration",
-    role: "admin" as const,
-    modules: [],
-    status: "active" as const,
-  };
 }
 
 async function authorisedProfile() {

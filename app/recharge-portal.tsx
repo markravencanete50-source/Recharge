@@ -1,6 +1,20 @@
 "use client";
+import { isWorkspaceAdmin } from "@/lib/modules";
+import { WorkspaceHelp } from '@/components/workspace-help';
+import { CompanyLogo } from '@/components/company-logo';
+import { usePersonalActivity } from '@/hooks/use-personal-activity';
 
-import { FormEvent, useEffect, useMemo, useState, type MouseEvent } from "react";
+
+import { FormEvent, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ToolIllustration } from "@/components/tool-illustration";
+import { useWorkspaceMotion, MotionPreferenceSync, ReduceMotionToggle } from "@/components/workspace-motion";
+import { OfflineBanner } from "@/components/offline-banner";
+import { WorkspaceCommand } from "@/components/workspace-command";
+import { WORKSPACE_MAP } from "@/lib/workspace-map";
+import { DepartmentIllustration } from "@/components/department-illustration";
+import { ThemeToggle } from "@/components/workspace-theme";
+import { AnalyticsBoard } from "@/app/analytics-board";
+import { scopeAnalytics, type AnalyticsSnapshot } from "@/lib/analytics";
 import {
   Activity,
   ArrowUpRight,
@@ -16,7 +30,6 @@ import {
   Landmark,
   Leaf,
   ListChecks,
-  LogOut,
   Menu,
   MessageSquare,
   PackageCheck,
@@ -95,11 +108,13 @@ import {
   type PurchaseOrderWorkspace,
 } from "@/app/purchase-order-centre";
 import { OperationsCentre, type OperationsMode } from "@/app/operations-centre";
-import { WorkflowToolBoard } from "@/app/workflow-tool-board";
+import { WorkflowToolBoard, type WorkflowToolMode } from "@/app/workflow-tool-board";
 import { TeamClient } from "@/app/team/team-client";
 import { OwnerStatementsCentre } from "@/app/owner-statements-centre";
 
 type Role = WorkspaceRole;
+const PreviewContext = createContext(false);
+const ActorRoleContext = createContext<Role>("client");
 type OperationsView =
   | "cleans"
   | "ready"
@@ -109,6 +124,7 @@ type OperationsView =
   | "marketing";
 type View =
   | "overview"
+  | "analytics"
   | "tools"
   | "my-recharge"
   | OperationsView
@@ -124,6 +140,7 @@ type View =
   | "owner-statements"
   | "onboarding-invoices-board"
   | "new-property-inspections-board"
+  | "workflow-board"
   | "team"
   | "access";
 type Module = (typeof MODULES)[number];
@@ -220,9 +237,11 @@ const liveInternalModules = new Set<ModuleId>([
 ]);
 
 const roleLabels: Record<Role, string> = {
+  super_admin: "Super admin",
   admin: "Admin",
   stays: "Stays employee",
-  cleans: "Cleans employee",
+  cleans: "Cleaner",
+  cleaning_manager: "Cleaning manager",
   ready: "Ready employee",
   client: "Client",
 };
@@ -318,6 +337,8 @@ export function RechargePortal({
   onboardingData,
   cleansData,
   signOutPath,
+  analyticsData,
+  preview = false,
 }: {
   currentUser: CurrentUser;
   accessUsers: AccessUser[];
@@ -329,8 +350,11 @@ export function RechargePortal({
   onboardingData?: OnboardingData;
   cleansData?: CleansData;
   signOutPath: string;
+  analyticsData?: AnalyticsSnapshot;
+  preview?: boolean;
 }) {
-  const [view, setView] = useState<View>(defaultDepartment(currentUser.role));
+  const [view, setView] = useState<View>(currentUser.role === "super_admin" ? "analytics" : defaultDepartment(currentUser.role));
+  const activity=usePersonalActivity(currentUser.email,currentUser.role,currentUser.modules);
   const [cleansMode, setCleansMode] = useState<CleansMode>("cleaning-schedule");
   const [onboardingMode, setOnboardingMode] = useState<"client" | "staff">(
     currentUser.role === "client" ? "client" : "staff",
@@ -341,7 +365,62 @@ export function RechargePortal({
     useState<PurchaseOrderWorkspace>("ready");
   const [operationsMode, setOperationsMode] = useState<OperationsMode>("ready-calendar");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [commandOpen,setCommandOpen]=useState(false);
+  const [commandTool,setCommandTool]=useState<ModuleId|null>(null);
+  const [workflowBoardMode, setWorkflowBoardMode] = useState<WorkflowToolMode>("new-property-inspections");
+  const navigationRef = useRef<HTMLElement>(null);
+  const [departmentsOpen,setDepartmentsOpen]=useState(true);
+  const [scrolled,setScrolled]=useState(false);
+  const reducedMotion=useWorkspaceMotion();
+  const [indicator,setIndicator]=useState({y:0,height:44,visible:false});
+  useEffect(()=>{const update=()=>setScrolled(window.scrollY>12);update();window.addEventListener("scroll",update,{passive:true});return()=>window.removeEventListener("scroll",update);},[]);
+  useEffect(()=>{const nav=navigationRef.current?.querySelector<HTMLElement>("nav");if(!nav)return;const update=()=>{const active=nav.querySelector<HTMLElement>("[aria-current=page]");if(!active){setIndicator(current=>({...current,visible:false}));return;}setIndicator({y:active.getBoundingClientRect().top-nav.getBoundingClientRect().top+nav.scrollTop,height:active.offsetHeight,visible:true});};update();const observer=new ResizeObserver(update);observer.observe(nav);return()=>observer.disconnect();},[view,departmentsOpen,currentUser.role]);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  useEffect(()=>{
+    const listener=(event:KeyboardEvent)=>{
+      if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'&&!event.altKey){
+        if(!commandOpen&&document.querySelector('[role="dialog"]'))return;
+        event.preventDefault();setCommandOpen(value=>!value);
+      }
+    };
+    document.addEventListener('keydown',listener);return()=>document.removeEventListener('keydown',listener);
+  },[commandOpen]);
+  useEffect(()=>{
+    if(!commandTool)return;
+    const frame=requestAnimationFrame(()=>{
+      // Activate the existing permitted card action, preserving its destination and workflow.
+      const action=document.querySelector<HTMLButtonElement|HTMLAnchorElement>('[data-module-id="'+commandTool+'"] .tool-card-hitarea');
+      action?.click();setCommandTool(null);
+    });return()=>cancelAnimationFrame(frame);
+  },[commandTool,view]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const returnFocus = menuTriggerRef.current;
+    document.body.style.overflow = "hidden";
+    const items = () => Array.from(navigationRef.current?.querySelectorAll<HTMLElement>("button, a[href], input, select, [tabindex='0']") || []).filter(item => item.getClientRects().length > 0);
+    items()[0]?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Tab") {
+        const controls = items();
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const resized = () => { if (desktop.matches) setMenuOpen(false); };
+    document.addEventListener("keydown", keydown);
+    desktop.addEventListener("change", resized);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", keydown);
+      desktop.removeEventListener("change", resized);
+      returnFocus?.focus();
+    };
+  }, [menuOpen]);
   const visibleModules = useMemo(
     () => MODULES.filter((module) => currentUser.modules.includes(module.id)),
     [currentUser.modules],
@@ -351,40 +430,8 @@ export function RechargePortal({
       operationsSections.filter((section) =>
         section.modules.some((moduleId) => currentUser.modules.includes(moduleId)),
       ),
-    [currentUser.modules, currentUser.role],
+    [currentUser.modules],
   );
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
-    };
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = previous;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [menuOpen]);
-
-  const currentDepartment = departmentForView(view, {
-    maintenanceWorkspace,
-    cleansMode,
-    purchaseOrderWorkspace,
-    operationsMode,
-    onboardingMode,
-  });
-  const firstName = currentUser.name.includes("@")
-    ? ""
-    : currentUser.name.split(" ")[0];
 
   function changeView(next: View) {
     setView(next);
@@ -423,202 +470,178 @@ export function RechargePortal({
   }
 
   return (
-    <div className="min-h-dvh bg-[#f0f4f1] text-[#1c3934]">
+    <PreviewContext.Provider value={preview}><ActorRoleContext.Provider value={currentUser.role}>
+    <div className="recharge-workspace min-h-screen text-[var(--foreground)]" onClickCapture={event=>{
+      const target=event.target as HTMLElement;
+      const action=target.closest('button.tool-card-hitarea,a.tool-card-hitarea');
+      const id=action?.closest('[data-module-id]')?.getAttribute('data-module-id') as ModuleId|undefined;
+      if(id&&currentUser.modules.includes(id))activity.record('open_tool',id);
+    }}>
       <GuestMessageNotifier
-        enabled={currentUser.modules.includes("guest-communication") && currentUser.role !== "client"}
+        enabled={!preview && currentUser.modules.includes("guest-communication") && currentUser.role !== "client"}
         paused={view === "communications"}
         initialData={communicationData}
         onOpen={() => changeView("communications")}
       />
-      <div
-        className={"sidebar-backdrop lg:hidden " + (menuOpen ? "sidebar-backdrop-open" : "")}
-        onClick={() => setMenuOpen(false)}
-        aria-hidden="true"
-      />
-      <aside
-        className={"sidebar " + (menuOpen ? "sidebar-open" : "")}
-        aria-label="Workspace navigation"
-      >
-        <div className="flex items-center justify-between px-6 pb-4 pt-7">
+      <MotionPreferenceSync/><OfflineBanner/>
+      {commandOpen&&<WorkspaceCommand open={commandOpen} onOpenChange={setCommandOpen} tools={visibleModules} onReports={()=>changeView('analytics')} onSelect={tool=>{
+        if(!currentUser.modules.includes(tool.id))return;
+        const department=visibleOperationsSections.find(section=>section.id===WORKSPACE_MAP[tool.id].tone&&section.modules.includes(tool.id as never))||visibleOperationsSections.find(section=>section.modules.includes(tool.id as never));
+        if(department){changeView(department.id);setCommandTool(tool.id);}
+        else if(tool.id==='aircover-reporting'||tool.id==='property-furnishing-board'||tool.id==='routine-bin-garden-board'){
+          const mode=tool.id==='aircover-reporting'?'aircover-reporting':tool.id==='property-furnishing-board'?'property-furnishing':'routine-bin-garden';
+          setWorkflowBoardMode(mode);changeView('workflow-board');
+        }
+      }}/>}
+      {menuOpen && <button className="navigation-backdrop lg:hidden" aria-label="Dismiss navigation" onClick={() => setMenuOpen(false)} tabIndex={-1} />}
+      <aside ref={navigationRef} id="workspace-navigation" role={menuOpen ? "dialog" : undefined} aria-modal={menuOpen ? true : undefined} aria-label="Workspace navigation" className={"sidebar " + (menuOpen ? "sidebar-open" : "")}>
+        <div className="sidebar-brand flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-5 lg:border-0">
           <button
-            className="press group flex items-center gap-3 text-left"
+            className="flex items-center gap-3 text-left"
             onClick={() =>
               changeView(defaultDepartment(currentUser.role))
             }
           >
             <span>
-              <img
-                src="/recharge-wordmark.svg"
-                alt="Recharge"
-                className="h-auto w-[9.4rem] transition-opacity duration-300 group-hover:opacity-85"
-              />
-              <span className="mt-2.5 flex items-center gap-2 text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-white/40">
-                <span className="live-dot" aria-hidden="true" />
+              <CompanyLogo width={157}/>
+              <span className="mt-2 block text-[0.62rem] font-semibold uppercase tracking-[0.28em] text-white/45">
                 Workspace
               </span>
             </span>
           </button>
           <button
-            className="press grid size-9 place-items-center rounded-xl border border-white/10 text-white/70 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
+            className="grid size-11 place-items-center rounded-lg text-white/70 lg:hidden"
             onClick={() => setMenuOpen(false)}
             aria-label="Close navigation"
           >
-            <X className="size-4" />
+            <X className="size-5" />
           </button>
         </div>
 
-        <div className="mx-6 h-px bg-gradient-to-r from-white/0 via-white/15 to-white/0" />
-
         <nav
-          key={menuOpen ? "open" : "closed"}
-          className="scrollbar-thin mt-5 flex-1 overflow-y-auto px-4 pb-6"
+          className="sidebar-navigation min-h-0 flex-1 overflow-y-auto px-4 pb-3"
           aria-label="Workspace"
         >
-          {currentUser.role === "stays" && (
-          <div className="mb-7 space-y-1">
-            <NavHeading>Personal</NavHeading>
+          <span className="sidebar-active-indicator" aria-hidden="true" style={{height:indicator.height,transform:"translateY("+indicator.y+"px)",opacity:indicator.visible?1:0,transition:reducedMotion?"none":undefined}}/>
+          {currentUser.role === "stays" && myRecharge && (
+          <div className="space-y-2">
+            <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/30">Personal</p>
               <NavButton
                 active={view === "my-recharge"}
                 icon={UserRoundCheck}
                 index="01"
                 label="My Recharge"
-                order={1}
                 onClick={() => changeView("my-recharge")}
               />
           </div>
           )}
 
-          <div className="space-y-1">
-            <NavHeading>Departments</NavHeading>
+          <div className={`${currentUser.role === "stays" ? "mt-7" : ""} space-y-2`}>
+            <button className="department-collapse" type="button" aria-expanded={departmentsOpen} aria-controls="desktop-departments" onClick={()=>setDepartmentsOpen(!departmentsOpen)}>Departments<span>{departmentsOpen?"Hide":"Show"}</span></button>
+            <div id="desktop-departments" hidden={!departmentsOpen}>
             {visibleOperationsSections.map((section, index) => (
               <NavButton
                 active={view === section.id}
-                inside={view !== section.id && currentDepartment === section.id}
                 icon={section.icon}
                 index={String(index + 1 + (currentUser.role === "stays" ? 1 : 0)).padStart(2, "0")}
                 key={section.id}
                 label={section.label}
-                order={index + 2}
                 onClick={() => changeView(section.id)}
               />
             ))}
+            </div>
           </div>
 
           {currentUser.role !== "client" && (
-            <div className="mt-7 space-y-1">
-              <NavHeading>Company</NavHeading>
+            <div className="mt-7 space-y-2">
+              <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/30">Company</p>
               <NavButton
                 active={view === "team"}
                 icon={Users}
-                index="09"
+                index="06"
                 label="Team"
-                order={8}
                 onClick={() => changeView("team")}
               />
             </div>
           )}
 
-          {currentUser.role === "admin" && (
-            <div className="mt-7 space-y-1">
-              <NavHeading>Administration</NavHeading>
+          <div className="mt-4 space-y-1"><NavButton active={view === "analytics"} icon={BarChart3} index="07" label="Analytics" onClick={() => changeView("analytics")} /></div>
+          <WorkspaceHelp key={currentUser.email+':'+currentUser.role} role={currentUser.role} modules={currentUser.modules} items={activity.items} error={activity.error}/>
+
+          {isWorkspaceAdmin(currentUser.role) && (
+            <div className="mt-7 space-y-2">
+              <p className="px-3 pb-1 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/30">
+                Administration
+              </p>
               <NavButton
                 active={view === "access"}
                 icon={UserRoundCog}
-                index="10"
+                index="08"
                 label="Access"
-                order={10}
                 onClick={() => changeView("access")}
               />
             </div>
           )}
         </nav>
 
-        <div className="p-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-3 backdrop-blur">
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#8fb3a2] to-[#315f50] text-sm font-bold text-white shadow-inner">
-              {initials(currentUser.name)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-white">
-                {currentUser.name}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-white/45">
-                {roleLabels[currentUser.role]}
-              </p>
-            </div>
-            <a
-              className="press grid size-9 shrink-0 place-items-center rounded-xl text-white/55 transition-colors hover:bg-white/10 hover:text-white"
-              href={signOutPath}
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <LogOut className="size-4" />
-            </a>
-          </div>
+        <div className="sidebar-footer shrink-0 border-t border-white/10 px-6 py-4">
+          <p className="truncate text-sm font-semibold text-white">
+            {currentUser.name}
+          </p>
+          <p className="mt-1 truncate text-xs text-white/45">
+            {roleLabels[currentUser.role]}
+          </p>
+          <ReduceMotionToggle/>
+          <a
+            className="mt-4 inline-flex text-sm font-medium text-[var(--muted-foreground)] hover:text-white"
+            href={signOutPath}
+          >
+            Sign out
+          </a>
         </div>
       </aside>
 
-      <main className="pb-28 lg:pb-0 lg:pl-[17rem]">
-        <header
-          className="app-header flex h-16 items-center justify-between px-4 sm:h-[4.5rem] sm:px-8 lg:px-10"
-          data-scrolled={scrolled}
-        >
-          <div className="flex min-w-0 items-center gap-3">
+      <main className="workspace-main">
+        <header className={(scrolled?"workspace-header workspace-header-scrolled ":"workspace-header ")+"flex h-[4.75rem] items-center justify-between border-b border-[var(--border)] bg-white/85 px-5 backdrop-blur sm:px-8 lg:px-10"}>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
             <button
-              className="press grid size-10 shrink-0 place-items-center rounded-xl border border-[#d9e2df] bg-white shadow-[var(--shadow-soft)] lg:hidden"
+              className="grid size-10 place-items-center rounded-xl border border-[var(--border)] bg-white lg:hidden"
               onClick={() => setMenuOpen(true)}
               aria-label="Open navigation"
               aria-expanded={menuOpen}
+              aria-controls="workspace-navigation"
+              ref={menuTriggerRef}
             >
-              <Menu className="size-[1.1rem]" />
+              <Menu className="size-5" />
             </button>
-            <div className="min-w-0">
-              <p className="hidden items-center gap-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[#83958f] sm:flex">
-                Workspace
-                {currentDepartment && currentDepartment !== view && (
-                  <>
-                    <ChevronRight className="size-3" />
-                    <button
-                      className="uppercase transition-colors hover:text-[#1c3934]"
-                      onClick={() => changeView(currentDepartment)}
-                    >
-                      {operationsSections.find((item) => item.id === currentDepartment)?.label}
-                    </button>
-                  </>
-                )}
-              </p>
-              <p
-                key={view + maintenanceWorkspace}
-                className="animate-rise truncate text-[0.95rem] font-semibold tracking-[-0.01em] sm:mt-0.5"
-              >
-                {viewTitle(view, maintenanceWorkspace)}
+            <div>
+              <p className="text-sm font-semibold">{view === "analytics" ? analyticsData?.title || "My analytics" : viewTitle(view, maintenanceWorkspace)}</p>
+              <p className="hidden text-xs text-[var(--muted-foreground)] sm:block">
+                Perfection at every stage.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
-            {(currentUser.role === "client" || currentUser.role === "stays" || currentUser.role === "admin") && (
+          <div className="flex items-center gap-3">
+            <button className="command-trigger" type="button" aria-label="Open quick search" onClick={()=>setCommandOpen(true)}><Search size={20}/><span>Quick search</span><kbd>Ctrl K</kbd></button>
+            {(currentUser.role === "client" || currentUser.role === "stays" || isWorkspaceAdmin(currentUser.role)) && (
               <NotificationCentre
                 initialData={onboardingData}
                 role={currentUser.role}
                 onOpenOnboarding={() => openOnboarding(currentUser.role === "client" ? "client" : "staff")}
               />
             )}
-            <Badge className="hidden border border-[#cfe0d8] bg-[#e4eee9] px-3 py-1 text-[#264d42] sm:inline-flex">
+            <Badge className="border-0 bg-[var(--muted)] px-3 py-1 text-[var(--muted-foreground)]">
               {roleLabels[currentUser.role]}
             </Badge>
-            <div
-              className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-[#315f50] to-[#1c3934] text-sm font-bold text-white shadow-[0_6px_16px_-8px_rgba(16,39,31,0.6)]"
-              title={currentUser.name}
-            >
+            <div className="grid size-9 place-items-center rounded-full workspace-avatar text-sm font-bold">
               {initials(currentUser.name)}
             </div>
           </div>
         </header>
 
-        <div
-          key={view}
-          className="view-enter mx-auto max-w-[92rem] px-4 pb-8 pt-5 sm:p-8 lg:p-10"
-        >
+        <div key={view} className="workspace-view mx-auto max-w-[92rem] p-5 sm:p-8 lg:p-10">
+          {view === "analytics" && <AnalyticsBoard initialData={analyticsData || scopeAnalytics(currentUser, {})} preview={preview} role={currentUser.role} onExported={()=>activity.record('export_report')} />}
           {view === "my-recharge" &&
             currentUser.role === "stays" &&
             myRecharge && <MyRecharge initialData={myRecharge} />}
@@ -628,8 +651,6 @@ export function RechargePortal({
                 <OperationsSection
                   key={section.id}
                   section={section}
-                  firstName={firstName}
-                  index={visibleOperationsSections.findIndex((item) => item.id === section.id)}
                   modules={section.modules.flatMap((moduleId) =>
                     visibleModules.filter((module) => module.id === moduleId),
                   )}
@@ -644,7 +665,7 @@ export function RechargePortal({
                   onOpenClientCalendar={() => setView("client-calendar")}
                   onOpenOperations={openOperations}
                   onOpenOwnerStatements={() => setView("owner-statements")}
-                  onOpenWorkflowBoard={(mode) => setView(mode === "onboarding-invoices" ? "onboarding-invoices-board" : "new-property-inspections-board")}
+                  onOpenWorkflowBoard={(mode) => { setWorkflowBoardMode(mode); setView("workflow-board"); }}
                 />
             ) : null,
           )}
@@ -751,82 +772,23 @@ export function RechargePortal({
           )}
           {view === "onboarding-invoices-board" && <WorkflowToolBoard mode="onboarding-invoices" initialData={workflowData} onBack={() => setView("accounts")} />}
           {view === "new-property-inspections-board" && <WorkflowToolBoard mode="new-property-inspections" initialData={workflowData} onBack={() => setView("ready")} />}
+          {view === "workflow-board" && <WorkflowToolBoard mode={workflowBoardMode} initialData={workflowData} onBack={() => setView(workflowBoardMode === "onboarding-invoices" ? "accounts" : workflowBoardMode === "aircover-reporting" ? "stays" : "ready")} />}
           {view === "team" && currentUser.role !== "client" && (
             <TeamClient
               users={accessUsers}
-              isAdmin={currentUser.role === "admin"}
+              isAdmin={isWorkspaceAdmin(currentUser.role)}
               currentUserName={currentUser.name}
               signOutPath={signOutPath}
               embedded
             />
           )}
-          {view === "access" && currentUser.role === "admin" && (
+          {view === "access" && isWorkspaceAdmin(currentUser.role) && (
             <Access accessUsers={accessUsers} />
           )}
         </div>
       </main>
-
-      {visibleOperationsSections.length > 1 && (
-        <MobileDock
-          sections={visibleOperationsSections}
-          active={currentDepartment}
-          onSelect={(id) => changeView(id)}
-        />
-      )}
     </div>
-  );
-}
-
-function MobileDock({
-  sections,
-  active,
-  onSelect,
-}: {
-  sections: readonly (typeof operationsSections)[number][];
-  active: OperationsView | null;
-  onSelect: (id: OperationsView) => void;
-}) {
-  const activeIndex = sections.findIndex((section) => section.id === active);
-  return (
-    <nav className="mobile-dock lg:hidden" aria-label="Departments">
-      <div className="relative grid" style={{ gridTemplateColumns: `repeat(${sections.length}, minmax(0, 1fr))` }}>
-        <span
-          aria-hidden="true"
-          className="mobile-dock-indicator"
-          style={{
-            width: `calc(${100 / sections.length}% - 0px)`,
-            transform: `translateX(${Math.max(activeIndex, 0) * 100}%)`,
-            opacity: activeIndex < 0 ? 0 : 1,
-            top: 0,
-            bottom: 0,
-            left: 0,
-          }}
-        />
-        {sections.map((section) => {
-          const Icon = section.icon;
-          const isActive = section.id === active;
-          return (
-            <button
-              key={section.id}
-              className={
-                "press relative flex flex-col items-center gap-1 rounded-[1.05rem] px-1 py-2 text-[0.64rem] font-semibold tracking-[0.02em] transition-colors duration-300 " +
-                (isActive ? "text-white" : "text-white/50")
-              }
-              aria-current={isActive ? "page" : undefined}
-              onClick={() => onSelect(section.id)}
-            >
-              <Icon
-                className={
-                  "size-[1.15rem] transition-all duration-500 " +
-                  (isActive ? "-translate-y-px text-[#c9e7a4]" : "")
-                }
-              />
-              {section.label}
-            </button>
-          );
-        })}
-      </div>
-    </nav>
+    </ActorRoleContext.Provider></PreviewContext.Provider>
   );
 }
 
@@ -856,7 +818,7 @@ function Overview({
           <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
             Good {dayPart()}, {firstName}.
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
             One standard, one workspace, every stage connected.
           </p>
         </div>
@@ -868,7 +830,7 @@ function Overview({
         </Button>
       </section>
 
-      <section className="forest-panel overflow-hidden rounded-[1.65rem] bg-[#1c3934] text-white shadow-[0_20px_60px_rgba(24,58,46,0.14)]">
+      <section className="overflow-hidden rounded-[1.65rem] bg-[#1c3934] text-white shadow-[0_20px_60px_rgba(24,58,46,0.14)]">
         <div className="grid gap-7 px-6 py-7 sm:px-8 lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="flex items-start gap-4">
             <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#315f50] text-white">
@@ -900,7 +862,7 @@ function Overview({
                 className="flex items-center gap-3 border-b border-white/10 px-5 py-4 last:border-0 sm:border-r sm:border-b-0 sm:last:border-r-0"
                 key={stage}
               >
-                <span className="text-xs font-semibold text-[#8fb3a2]">
+                <span className="text-xs font-semibold text-[var(--muted-foreground)]">
                   0{index + 1}
                 </span>
                 <span className="text-sm font-medium text-white/75">
@@ -943,7 +905,7 @@ function Overview({
             </h2>
           </div>
           <button
-            className="text-sm font-semibold text-[#3d6857] hover:text-[#1c3934]"
+            className="text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             onClick={onViewTools}
           >
             View all <span aria-hidden="true">→</span>
@@ -980,13 +942,13 @@ function Tools({
           <h1 className="text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
             Every tool. One standard.
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
             Only the tools assigned to your role appear here.
           </p>
         </div>
         <Badge
           variant="outline"
-          className="h-fit border-[#cddbd6] bg-white px-3 py-1.5 text-[#40585b]"
+          className="h-fit border-[var(--border)] bg-white px-3 py-1.5 text-[var(--muted-foreground)]"
         >
           {modules.length} available
         </Badge>
@@ -1016,7 +978,7 @@ function Tools({
         ))}
       </div>
       {modules.length === 0 && (
-        <div className="mt-8 rounded-3xl border border-dashed border-[#bdcbc7] bg-white p-10 text-center text-[#647577]">
+        <div className="mt-8 rounded-3xl border border-dashed border-[var(--border)] bg-white p-10 text-center text-[var(--muted-foreground)]">
           No tools have been assigned to this account.
         </div>
       )}
@@ -1057,12 +1019,12 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
 
   if (!data.available) {
     return (
-      <section className="surface rounded-[1.5rem] border border-[#d9e2df] bg-white p-8">
+      <section className="rounded-[1.5rem] border border-[var(--border)] bg-white p-8">
         <p className="eyebrow">Personal workspace</p>
         <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em]">
           My Recharge
         </h1>
-        <p className="mt-4 text-base text-[#647577]">
+        <p className="mt-4 text-base text-[var(--muted-foreground)]">
           My Recharge is temporarily unavailable. Please try again shortly.
         </p>
       </section>
@@ -1075,12 +1037,12 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
       <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
         My Recharge
       </h1>
-      <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
+      <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
         Clock in, check your schedule and review your performance.
       </p>
 
       <Tabs defaultValue="clock" className="mt-8">
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[#e6eeea] p-1 sm:w-fit">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[var(--muted)] p-1 sm:w-fit">
           <TabsTrigger value="clock" className="min-h-10 px-4">
             Clock in
           </TabsTrigger>
@@ -1093,7 +1055,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
         </TabsList>
 
         <TabsContent value="clock" className="mt-6">
-          <section className="forest-panel overflow-hidden rounded-[1.65rem] bg-[#1c3934] text-white shadow-[0_20px_60px_rgba(24,58,46,0.14)]">
+          <section className="overflow-hidden rounded-[1.65rem] bg-[#1c3934] text-white shadow-[0_20px_60px_rgba(24,58,46,0.14)]">
             <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold text-white/65">
@@ -1118,7 +1080,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
                 className={
                   "h-12 min-w-36 rounded-xl px-6 font-semibold " +
                   (data.openEntry
-                    ? "bg-white text-[#1c3934] hover:bg-white/90"
+                    ? "bg-white text-[var(--foreground)] hover:bg-white/90"
                     : "bg-[#315f50] text-white hover:bg-[#274e42]")
                 }
                 disabled={saving}
@@ -1138,10 +1100,10 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
               {error}
             </p>
           )}
-          <section className="surface mt-5 rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
+          <section className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-white p-5 sm:p-6">
             <h2 className="text-lg font-semibold">Recent time</h2>
             {data.recentEntries.length ? (
-              <div className="mt-4 divide-y divide-[#e7ecea]">
+              <div className="mt-4 divide-y divide-[var(--border)]">
                 {data.recentEntries.map((entry) => (
                   <div
                     className="flex flex-col justify-between gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center"
@@ -1150,7 +1112,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
                     <span className="text-sm font-medium">
                       {formatDateTime(entry.clockIn)}
                     </span>
-                    <span className="text-sm text-[#718184]">
+                    <span className="text-sm text-[var(--muted-foreground)]">
                       {entry.clockOut
                         ? `${formatTime(entry.clockIn)}–${formatTime(entry.clockOut)}`
                         : "In progress"}
@@ -1159,7 +1121,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-[#718184]">
+              <p className="mt-3 text-sm text-[var(--muted-foreground)]">
                 Your first clock-in will appear here.
               </p>
             )}
@@ -1167,13 +1129,13 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
         </TabsContent>
 
         <TabsContent value="schedule" className="mt-6">
-          <section className="surface rounded-[1.5rem] border border-[#d9e2df] bg-white p-5 sm:p-6">
+          <section className="rounded-[1.5rem] border border-[var(--border)] bg-white p-5 sm:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="eyebrow">Next seven days</p>
                 <h2 className="mt-2 text-2xl font-semibold">Your schedule</h2>
               </div>
-              <Badge className="border-0 bg-[#dfe9e4] text-[#36561d]">
+              <Badge className="border-0 bg-[var(--muted)] text-[var(--muted-foreground)]">
                 {data.schedule.length} shifts
               </Badge>
             </div>
@@ -1181,25 +1143,25 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
               <div className="mt-5 space-y-3">
                 {data.schedule.map((shift) => (
                   <div
-                    className="flex flex-col justify-between gap-3 rounded-xl border border-[#e1e8e5] p-4 sm:flex-row sm:items-center"
+                    className="flex flex-col justify-between gap-3 rounded-xl border border-[var(--border)] p-4 sm:flex-row sm:items-center"
                     key={shift.id}
                   >
                     <div>
                       <p className="text-sm font-semibold">
                         {formatShiftDate(shift.shiftDate)}
                       </p>
-                      <p className="mt-1 text-sm text-[#718184]">{shift.label}</p>
+                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">{shift.label}</p>
                     </div>
-                    <p className="text-sm font-semibold text-[#315f4d]">
+                    <p className="text-sm font-semibold text-[var(--muted-foreground)]">
                       {shift.startTime}–{shift.endTime}
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="mt-6 rounded-xl bg-[#f3f6f4] px-5 py-8 text-center">
+              <div className="mt-6 rounded-xl bg-[var(--muted)] px-5 py-8 text-center">
                 <p className="text-sm font-medium">No shifts assigned</p>
-                <p className="mt-1 text-sm text-[#718184]">
+                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                   Your next scheduled shift will appear here.
                 </p>
               </div>
@@ -1222,7 +1184,7 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
               value={String(data.performance.completedShifts)}
             />
           </section>
-          <p className="mt-4 text-sm text-[#718184]">
+          <p className="mt-4 text-sm text-[var(--muted-foreground)]">
             Performance updates automatically from your recorded time.
           </p>
         </TabsContent>
@@ -1233,8 +1195,8 @@ function MyRecharge({ initialData }: { initialData: MyRechargeData }) {
 
 function PerformanceStat({ label, value }: { label: string; value: string }) {
   return (
-    <article className="surface rounded-[1.4rem] border border-[#d9e2df] bg-white p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#718184]">
+    <article className="rounded-[1.4rem] border border-[var(--border)] bg-white p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[var(--muted-foreground)]">
         {label}
       </p>
       <p className="mt-7 text-4xl font-semibold tracking-[-0.05em]">{value}</p>
@@ -1244,8 +1206,6 @@ function PerformanceStat({ label, value }: { label: string; value: string }) {
 
 function OperationsSection({
   section,
-  firstName,
-  index,
   modules,
   workflowData,
   onOpenCommunications,
@@ -1261,8 +1221,6 @@ function OperationsSection({
   onOpenWorkflowBoard,
 }: {
   section: (typeof operationsSections)[number];
-  firstName: string;
-  index: number;
   modules: readonly Module[];
   workflowData?: WorkflowData;
   onOpenCommunications: () => void;
@@ -1275,113 +1233,61 @@ function OperationsSection({
   onOpenClientCalendar: () => void;
   onOpenOperations: (mode: OperationsMode) => void;
   onOpenOwnerStatements: () => void;
-  onOpenWorkflowBoard: (mode: "onboarding-invoices" | "new-property-inspections") => void;
+  onOpenWorkflowBoard: (mode: WorkflowToolMode) => void;
 }) {
   const Icon = section.icon;
   const [toolSearch, setToolSearch] = useState("");
   const filteredModules = modules.filter((module) =>
-    `${module.name} ${module.description} ${module.category}`
+    module.name
       .toLowerCase()
       .includes(toolSearch.trim().toLowerCase()),
   );
 
-  const openable = modules.filter(
-    (module) => module.url || liveInternalModules.has(module.id),
-  ).length;
-  const planned = modules.length - openable;
-
   return (
-    <>
-      <section className="forest-panel overflow-hidden rounded-[1.75rem] px-5 pb-5 pt-6 shadow-[0_30px_70px_-30px_rgba(16,39,31,0.55)] sm:rounded-[2rem] sm:px-9 sm:pb-8 sm:pt-9">
-        <span className="orb -right-16 -top-20 size-72 bg-[#8fb3a2]/35" aria-hidden="true" />
-        <span
-          className="orb -bottom-24 left-1/3 size-64 bg-[#c9e7a4]/15"
-          style={{ animationDelay: "-7s", animationDuration: "24s" }}
-          aria-hidden="true"
-        />
-        <svg
-          className="ring-spin pointer-events-none absolute -right-24 top-1/2 hidden size-[26rem] -translate-y-1/2 text-white/[0.07] md:block"
-          viewBox="0 0 200 200"
-          aria-hidden="true"
-        >
-          <circle cx="100" cy="100" r="98" fill="none" stroke="currentColor" strokeWidth="0.6" strokeDasharray="2 5" />
-          <circle cx="100" cy="100" r="74" fill="none" stroke="currentColor" strokeWidth="0.6" />
-          <circle cx="100" cy="100" r="50" fill="none" stroke="currentColor" strokeWidth="0.6" strokeDasharray="1 3" />
-        </svg>
-
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-3">
-              <div className="grid size-11 place-items-center rounded-2xl border border-white/10 bg-white/10 text-[#c9e7a4] backdrop-blur">
-                <Icon className="size-5" aria-hidden="true" />
-              </div>
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-[#8fb3a2]">
-                Department {String(index + 1).padStart(2, "0")}
-              </p>
-            </div>
-            {firstName && (
-              <p className="mt-6 text-sm sm:mt-7 font-medium text-white/55">
-                Good {dayPart()}, {firstName}
-              </p>
-            )}
-            <h1 className={(firstName ? "mt-1.5" : "mt-6 sm:mt-7") + " text-[2.6rem] font-semibold leading-[0.95] tracking-[-0.05em] sm:text-6xl"}>
-              Recharge{" "}
-              <span className="font-display text-[#c9e7a4]">{section.label}</span>
-            </h1>
-            <p className="mt-4 max-w-xl text-sm leading-6 text-white/60 sm:text-[0.95rem] sm:leading-7">
-              {section.description}
-            </p>
+    <div>
+      <div className="department-heading flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+        <div className="department-heading-content">
+          <DepartmentIllustration department={section.id} />
+          <div>
+          <p className="eyebrow">Recharge department</p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.045em] sm:text-[2.75rem]">
+            {section.label}
+          </h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
+            {section.description}
+          </p>
           </div>
-
-          <dl className="grid grid-cols-3 gap-2 sm:gap-3 lg:min-w-[22rem]">
-            <HeroStat label="Tools" value={modules.length} />
-            <HeroStat label="Ready" value={openable} live />
-            <HeroStat label="Planned" value={planned} />
-          </dl>
         </div>
+        <Badge
+          variant="outline"
+          className="h-fit border-[var(--border)] bg-white px-3 py-1.5 text-[var(--muted-foreground)]"
+        >
+          {modules.length} {modules.length === 1 ? "tool" : "tools"}
+        </Badge>
+      </div>
 
-        <div className="relative mt-7 sm:mt-9">
-          <Search className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-white/55" />
-          <input
-            className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.07] pl-11 pr-24 text-sm text-white outline-none backdrop-blur transition-all duration-300 placeholder:text-white/40 hover:bg-white/[0.1] focus:border-[#c9e7a4]/50 focus:bg-white/[0.12] focus:shadow-[0_0_0_4px_rgba(201,231,164,0.12)] lg:max-w-xl"
-            value={toolSearch}
-            onChange={(event) => setToolSearch(event.target.value)}
-            placeholder={`Search ${section.label} tools`}
-            aria-label={`Search ${section.label} tools`}
-          />
-          {toolSearch && (
-            <button
-              className="press absolute right-2 top-1/2 -translate-y-1/2 rounded-xl px-3 py-1.5 text-xs font-semibold text-white/70 transition-colors hover:bg-white/10 hover:text-white lg:left-[calc(36rem-4.5rem)] lg:right-auto"
-              onClick={() => setToolSearch("")}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      </section>
+      <div className="tool-search relative mt-7 max-w-2xl">
+        <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+        <Input
+          className="h-12 rounded-2xl border-[var(--border)] bg-white pl-11 pr-12"
+          value={toolSearch}
+          onChange={(event) => setToolSearch(event.target.value)}
+          placeholder={`Search ${section.label} tools`}
+          aria-label={`Search ${section.label} tools`}
+        />
+        {toolSearch && <button className="absolute right-1 top-1 grid size-10 place-items-center rounded-xl text-[var(--muted-foreground)] hover:bg-[var(--muted)]" aria-label="Clear tool search" onClick={() => setToolSearch("")}><X className="size-4" /></button>}
+      </div>
+      {toolSearch && <p className="mt-3 text-xs text-[var(--muted-foreground)]" role="status">{filteredModules.length} of {modules.length} tools match your search</p>}
 
       {section.id !== "cleans" && (
         <WorkflowPanels section={section.id} data={workflowData} />
       )}
 
       {filteredModules.length > 0 ? (
-        <section className="mt-8 sm:mt-10">
-        <div className="mb-4 flex items-end justify-between gap-4 px-1">
-          <div>
-            <p className="eyebrow">Toolkit</p>
-            <h2 className="mt-1.5 text-xl font-semibold tracking-[-0.03em] sm:text-2xl">
-              {toolSearch ? "Matching tools" : "Your tools"}
-            </h2>
-          </div>
-          <span className="rounded-full border border-[#d6e1dc] bg-white/70 px-3 py-1 text-xs font-semibold text-[#527261]">
-            {filteredModules.length} of {modules.length}
-          </span>
-        </div>
-        <div key={toolSearch ? "search" : "all"} className="stagger grid gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3">
-          {filteredModules.map((module, moduleIndex) => (
+        <div className="tool-grid mt-8 grid gap-5 xl:grid-cols-2">
+          {filteredModules.map((module) => (
             <ToolCard
               key={module.id}
-              order={moduleIndex}
               module={clientModulePresentation(module, section.id)}
               large
               onOpen={
@@ -1414,6 +1320,12 @@ function OperationsSection({
                     ? () => onOpenWorkflowBoard("new-property-inspections")
                   : module.id === "onboarding-invoices"
                     ? () => onOpenWorkflowBoard("onboarding-invoices")
+                  : module.id === "property-furnishing-board"
+                    ? () => onOpenWorkflowBoard("property-furnishing")
+                  : module.id === "routine-bin-garden-board"
+                    ? () => onOpenWorkflowBoard("routine-bin-garden")
+                  : module.id === "aircover-reporting"
+                    ? () => onOpenWorkflowBoard("aircover-reporting")
                   : module.id === "owner-statements"
                     ? onOpenOwnerStatements
                   : module.id === "listing-health"
@@ -1434,148 +1346,80 @@ function OperationsSection({
             />
           ))}
         </div>
-        </section>
       ) : modules.length === 0 ? (
-        <section className="mt-8 rounded-[1.5rem] border border-dashed border-[#bdcbc7] bg-white/70 px-6 py-14 text-center backdrop-blur sm:px-10">
-          <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-[#eef4f0] text-[#4a705f]">
+        <section className="mt-8 rounded-[1.5rem] border border-dashed border-[var(--border)] bg-white px-6 py-12 text-center sm:px-10">
+          <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-[var(--muted)] text-[var(--muted-foreground)]">
             <Icon className="size-5" aria-hidden="true" />
           </div>
           <h2 className="mt-5 text-xl font-semibold">No tools connected yet</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#647577]">
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
             This section is ready for the {section.label.toLowerCase()} tools we
             add next.
           </p>
         </section>
       ) : (
-        <section className="mt-8 rounded-[1.5rem] border border-dashed border-[#bdcbc7] bg-white/70 px-6 py-14 text-center backdrop-blur sm:px-10">
-          <Search className="mx-auto size-6 text-[#6f827b]" />
+        <section className="mt-8 rounded-[1.5rem] border border-dashed border-[var(--border)] bg-white px-6 py-12 text-center sm:px-10">
+          <Search className="mx-auto size-6 text-[var(--muted-foreground)]" />
           <h2 className="mt-4 text-xl font-semibold">No matching tools</h2>
-          <p className="mt-2 text-sm text-[#647577]">Try a different name or keyword.</p>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">Try a different name or keyword.</p>
+          <Button className="mt-5" variant="outline" onClick={() => setToolSearch("")}>Clear search</Button>
         </section>
       )}
-    </>
-  );
-}
-
-function HeroStat({ label, value, live = false }: { label: string; value: number; live?: boolean }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-3 backdrop-blur sm:px-4 sm:py-4">
-      <dt className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/45">
-        {live && <span className="live-dot" aria-hidden="true" />}
-        {label}
-      </dt>
-      <dd className="mt-2 text-2xl font-semibold tabular-nums tracking-[-0.04em] sm:text-3xl">
-        <CountUp value={value} />
-      </dd>
     </div>
   );
-}
-
-function CountUp({ value }: { value: number }) {
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let frame = 0;
-    const start = performance.now();
-    const duration = reduced ? 1 : 900;
-    const tick = (now: number) => {
-      const progress = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 4);
-      setDisplay(Math.round(value * eased));
-      if (progress < 1) frame = window.requestAnimationFrame(tick);
-    };
-    frame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frame);
-  }, [value]);
-  return <>{display}</>;
 }
 
 function ToolCard({
   module,
   large = false,
-  order = 0,
   onOpen,
 }: {
   module: ModuleCard;
   large?: boolean;
-  order?: number;
   onOpen?: () => void;
 }) {
-  const Icon = icons[module.id];
-
-  function trackPointer(event: MouseEvent<HTMLElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    event.currentTarget.style.setProperty("--mx", `${event.clientX - rect.left}px`);
-    event.currentTarget.style.setProperty("--my", `${event.clientY - rect.top}px`);
-  }
-
-  // The whole card is one target; the action link stretches over it.
-  const stretch = "after:absolute after:inset-0 after:rounded-[inherit] after:content-['']";
-
+  const preview = useContext(PreviewContext);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const action = onOpen ? "Open centre" : module.url && !preview ? "Open tool" : "View details";
   return (
-    <article
-      className={"tool-card group " + (large ? "sm:min-h-56" : "")}
-      style={{ "--i": order } as React.CSSProperties}
-      onMouseMove={trackPointer}
-    >
+    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+    <article data-module-id={module.id} className={"tool-card group " + (large ? "tool-card-large" : "")}>
       <div className="flex items-start justify-between gap-4">
-        <div className="tool-icon grid size-11 shrink-0 place-items-center rounded-2xl">
-          <Icon className="size-[1.15rem]" />
-        </div>
-        <span className="rounded-full border border-[#e3eae7] bg-[#f6f8f7] px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[#6a7d79]">
+        <span className="tool-art-stage"><ToolIllustration id={module.id} fallback={icons[module.id]} /></span>
+        <Badge className="tool-audience border-0 bg-[var(--muted)] text-[0.6rem] uppercase tracking-[0.12em] text-[var(--muted-foreground)]">
           {module.audience}
-        </span>
+        </Badge>
       </div>
-      <div className="mt-4 sm:mt-7">
-        <h3 className="text-[1.05rem] font-semibold tracking-[-0.025em] sm:text-lg">
+      <div className="tool-card-copy">
+        <h3 className="text-[1.35rem] leading-7 font-semibold tracking-[-0.025em]">
           {module.name}
         </h3>
-        <p className="mt-1.5 line-clamp-2 max-w-xl text-sm leading-6 text-[#6b7b7d] sm:line-clamp-3">
+        <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted-foreground)]">
           {module.description}
         </p>
       </div>
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#e8eeeb] pt-3.5 sm:mt-5 sm:pt-4">
-        <span className="truncate text-xs font-medium text-[#849294]">
+      <div className="tool-card-footer flex items-center justify-between gap-3 border-t border-[var(--border)] pt-4">
+        <span className="tool-category text-xs font-medium text-[var(--muted-foreground)]">
           {module.category}
         </span>
-        {onOpen ? (
-          <button
-            className={"tool-cta inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-[#1c3934] focus-visible:outline-none " + stretch + " focus-visible:after:ring-2 focus-visible:after:ring-[#315f50]"}
-            onClick={onOpen}
-          >
-            <span className="tool-cta-pill inline-flex items-center gap-1.5 rounded-full bg-[#eef3f0] py-1.5 pl-3.5 pr-2.5">
-              Open centre
-              <ArrowUpRight className="size-3.5" />
-            </span>
-          </button>
-        ) : module.url ? (
-          <a
-            className={"tool-cta inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-[#1c3934] focus-visible:outline-none " + stretch + " focus-visible:after:ring-2 focus-visible:after:ring-[#315f50]"}
-            href={"/tool/" + module.id}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span className="tool-cta-pill inline-flex items-center gap-1.5 rounded-full bg-[#eef3f0] py-1.5 pl-3.5 pr-2.5">
-              Open tool
-              <ArrowUpRight className="size-3.5" />
-            </span>
-          </a>
-        ) : liveInternalModules.has(module.id) ? (
-          <span className="inline-flex shrink-0 items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#436352]">
-            <span className="live-dot" />
-            Live workflow
-          </span>
-        ) : (
-          <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-dashed border-[#c9d6d1] px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-[#7a8c86]">
-            Planned
-          </span>
-        )}
+        <span className="tool-card-action" aria-hidden="true">{action}<span className="tool-card-arrow"><ChevronRight className="size-4" /></span></span>
       </div>
+      {module.url && !preview && !onOpen ? <a className="tool-card-hitarea" href={"/tool/" + module.id} target="_blank" rel="noreferrer" aria-label={`Open ${module.name} in a new tab`} /> : onOpen ? <button className="tool-card-hitarea" onClick={onOpen} aria-label={`Open ${module.name}`} /> : <DialogTrigger asChild><button className="tool-card-hitarea" aria-label={`View details for ${module.name}`} /></DialogTrigger>}
     </article>
+      <DialogContent>
+        <ToolIllustration id={module.id} className="tool-modal-art" />
+        <DialogHeader><DialogTitle className="text-2xl leading-8">{module.name}</DialogTitle><DialogDescription className="leading-6">{module.description}</DialogDescription></DialogHeader>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)] p-4 text-sm leading-6 text-[var(--muted-foreground)]">
+          {module.url && preview ? "This external tool is not connected in this read-only preview. It will open from the authenticated application when its integration is ready." : liveInternalModules.has(module.id) ? "This workflow is available in the department work boards. Use those boards to review and manage its tickets." : "This tool is planned. Its dedicated workflow will become available once the integration is complete."}
+        </div>
+        <DialogFooter><Button onClick={() => setDetailsOpen(false)}>Back to tools</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
+  const actorRole = useContext(ActorRoleContext);
   const pending = accessUsers.filter((user) => user.status === "pending").length;
   const active = accessUsers.filter((user) => user.status === "active").length;
 
@@ -1587,7 +1431,7 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
           <h1 className="text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
             Accounts & access
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
             Approve account requests, assign roles and control every user’s tool access.
           </p>
         </div>
@@ -1595,16 +1439,16 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
       </div>
 
       <div className="mt-7 flex flex-wrap gap-3">
-        <span className="rounded-full border border-[#d6e2de] bg-white px-4 py-2 text-sm font-semibold text-[#47645e]">
+        <span className="rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted-foreground)]">
           {active} active
         </span>
-        <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${pending ? "border-amber-200 bg-amber-50 text-amber-800" : "border-[#d6e2de] bg-white text-[#73827f]"}`}>
+        <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${pending ? "border-amber-200 bg-amber-50 text-amber-800" : "border-[var(--border)] bg-white text-[var(--muted-foreground)]"}`}>
           {pending} pending approval
         </span>
       </div>
 
-      <section className="surface mt-8 overflow-hidden rounded-[1.5rem] border border-[#d9e2df] bg-white">
-        <div className="hidden grid-cols-[1.2fr_0.75fr_0.65fr_1.45fr_auto] gap-5 border-b border-[#e2e9e7] bg-[#f6f8f7] px-6 py-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#718184] lg:grid">
+      <section className="mt-8 overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-white">
+        <div className="hidden grid-cols-[1.2fr_0.75fr_0.65fr_1.45fr_auto] gap-5 border-b border-[var(--border)] bg-[var(--card)] px-6 py-4 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted-foreground)] lg:grid">
           <span>User</span>
           <span>Account type</span>
           <span>Status</span>
@@ -1613,24 +1457,24 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
         </div>
         {accessUsers.map((user) => (
           <div
-            className={`grid gap-4 border-b border-[#e6ecea] px-5 py-5 last:border-0 lg:grid-cols-[1.2fr_0.75fr_0.65fr_1.45fr_auto] lg:items-center lg:px-6 ${user.status === "pending" ? "bg-amber-50/45" : ""}`}
+            className={`grid gap-4 border-b border-[var(--border)] px-5 py-5 last:border-0 lg:grid-cols-[1.2fr_0.75fr_0.65fr_1.45fr_auto] lg:items-center lg:px-6 ${user.status === "pending" ? "bg-amber-50/45" : ""}`}
             key={user.email}
           >
             <div className="flex items-center gap-3">
-              <div className="grid size-10 place-items-center rounded-full bg-[#edf5f0] text-sm font-bold text-[#315c61]">
+              <div className="grid size-10 place-items-center rounded-full bg-[var(--muted)] text-sm font-bold text-[var(--rc-info-text)]">
                 {initials(user.fullName || user.email)}
               </div>
               <div>
                 <p className="text-sm font-semibold">
                   {user.fullName || "Unnamed user"}
                 </p>
-                <p className="mt-0.5 text-xs text-[#7c8b8d]">{user.email}</p>
+                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{user.email}</p>
               </div>
             </div>
             <div>
               <Badge
                 variant="outline"
-                className="border-[#d6e0dd] bg-[#fbfcfc] text-[#476064]"
+                className="border-[var(--border)] bg-[var(--card)] text-[var(--rc-info-text)]"
               >
                 {roleLabels[user.role]}
               </Badge>
@@ -1641,24 +1485,24 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
             <div className="flex flex-wrap gap-1.5">
               {user.modules.slice(0, 5).map((moduleId) => (
                 <span
-                  className="rounded-md bg-[#eef3f1] px-2 py-1 text-[0.68rem] font-medium text-[#4c6669]"
+                  className="rounded-md bg-[var(--muted)] px-2 py-1 text-[0.68rem] font-medium text-[var(--muted-foreground)]"
                   key={moduleId}
                 >
                   {MODULES.find((module) => module.id === moduleId)?.shortName}
                 </span>
               ))}
               {user.modules.length > 5 && (
-                <span className="rounded-md bg-[#f5f7f6] px-2 py-1 text-[0.68rem] font-semibold text-[#687976]">
+                <span className="rounded-md bg-[var(--muted)] px-2 py-1 text-[0.68rem] font-semibold text-[var(--muted-foreground)]">
                   +{user.modules.length - 5} more
                 </span>
               )}
               {user.modules.length === 0 && (
-                <span className="text-xs text-[#879491]">No tools selected</span>
+                <span className="text-xs text-[var(--muted-foreground)]">No tools selected</span>
               )}
             </div>
             <div>
-              {user.email === "enquiries@rechargestays.co.uk" ? (
-                <span className="text-xs font-medium text-[#879491]">Primary owner</span>
+              {actorRole !== "super_admin" && (user.role === "super_admin" || isWorkspaceAdmin(user.role)) ? (
+                <span className="text-xs font-medium text-[var(--muted-foreground)]">Super-admin managed</span>
               ) : (
                 <AccessDialog user={user} />
               )}
@@ -1671,6 +1515,8 @@ function Access({ accessUsers }: { accessUsers: AccessUser[] }) {
 }
 
 function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?: boolean }) {
+  const preview = useContext(PreviewContext);
+  const actorRole = useContext(ActorRoleContext);
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<Role>(user?.role || "stays");
   const [status, setStatus] = useState<AccessStatus>(user?.status || "active");
@@ -1690,6 +1536,7 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
     setSaving(true);
     setError("");
     const form = new FormData(event.currentTarget);
+    try {
     const response = await fetch("/api/access", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1712,13 +1559,15 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
     }
     setOpen(false);
     window.location.reload();
+    } catch { setError("Could not save access. Check your connection and try again."); }
+    finally { setSaving(false); }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {user ? (
-          <Button variant="outline" className="rounded-xl border-[#cad8d4] bg-white">
+          <Button variant="outline" className="rounded-xl border-[var(--border)] bg-white">
             Manage
           </Button>
         ) : (
@@ -1727,19 +1576,20 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-[#d9e2df] p-0 sm:max-w-xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-[var(--border)] p-0 sm:max-w-xl">
         <form onSubmit={submit}>
-          <DialogHeader className="border-b border-[#e2e9e7] px-6 py-6 text-left">
+          <DialogHeader className="border-b border-[var(--border)] px-6 py-6 text-left">
             <DialogTitle className="text-2xl tracking-[-0.035em]">
               {user ? "Manage account" : teamOnly ? "Add a team member" : "Add an account"}
             </DialogTitle>
             <DialogDescription>
               {user
                 ? "Change this person’s role, status and individual tool access."
-                : teamOnly ? "Add the person, choose their department and record what they are responsible for." : "Create active access using the email this person uses to sign in."}
+                : teamOnly ? "Add the person, choose their department and record what they are responsible for." : "Assign access to an existing verified sign-in account using their email."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 px-6 py-6">
+            {preview && <p className="rounded-xl bg-[var(--muted)] p-3 text-sm text-[var(--muted-foreground)]">Preview only. Account changes will be available in the authenticated workspace.</p>}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="fullName">Name</Label>
@@ -1765,20 +1615,21 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Role</Label>
+                <Label>Role</Label>
               <Select
                 value={role}
                 onValueChange={(value) => changeRole(value as Role)}
               >
-                <SelectTrigger className="h-11 w-full">
+                <SelectTrigger className="h-11 w-full" aria-label="Account role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {!teamOnly && <SelectItem value="client">Client</SelectItem>}
                   <SelectItem value="stays">Stays employee</SelectItem>
-                  <SelectItem value="cleans">Cleans employee</SelectItem>
+                  <SelectItem value="cleans">Cleaner</SelectItem>
+                  <SelectItem value="cleaning_manager">Cleaning manager</SelectItem>
                   <SelectItem value="ready">Ready employee</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {actorRole === "super_admin" && <><SelectItem value="admin">Admin</SelectItem><SelectItem value="super_admin">Super admin</SelectItem></>}
                 </SelectContent>
               </Select>
             </div>
@@ -1799,13 +1650,13 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
                   value={status}
                   onValueChange={(value) => setStatus(value as AccessStatus)}
                 >
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger className="h-11 w-full" aria-label="Account status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="pending">Pending approval</SelectItem>
-                    <SelectItem value="revoked">Disabled</SelectItem>
+                    <SelectItem value="revoked">Revoked</SelectItem>
                   </SelectContent>
                 </Select>
                 {user.status === "pending" && status !== "active" && (
@@ -1818,27 +1669,28 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
             <div>
               <div className="flex items-center justify-between gap-4">
                 <Label>Tool access</Label>
-                {role !== "admin" && (
+                {!isWorkspaceAdmin(role) && (
                   <button
                     type="button"
-                    className="text-xs font-semibold text-[#45675f] hover:text-[#1c3934]"
+                    className="text-xs font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                     onClick={() => setSelected(defaultModulesForRole(role))}
                   >
                     Reset to role defaults
                   </button>
                 )}
               </div>
+              {role === "super_admin" && <p className="mt-3 rounded-xl bg-[var(--muted)] p-3 text-sm">Full access to every department, analytics and administration. Can manage admin accounts and individual permissions.</p>}
               <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
                 {MODULES.map((module) => {
                   const checked = selected.includes(module.id);
                   return (
                     <label
-                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#dce5e2] p-3.5 hover:bg-[#f5f8f7]"
+                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--border)] p-3.5 hover:bg-[var(--muted)]"
                       key={module.id}
                     >
                       <Checkbox
                         checked={checked}
-                        disabled={role === "admin"}
+                        disabled={isWorkspaceAdmin(role)}
                         onCheckedChange={(value) =>
                           setSelected((items) =>
                             value === true
@@ -1851,7 +1703,7 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
                         <span className="block text-sm font-semibold">
                           {module.name}
                         </span>
-                        <span className="mt-0.5 block text-xs text-[#78888a]">
+                        <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
                           {module.audience}
                         </span>
                       </span>
@@ -1861,12 +1713,12 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
               </div>
             </div>
             {error && (
-              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
               </p>
             )}
           </div>
-          <DialogFooter className="border-t border-[#e2e9e7] px-6 py-5">
+          <DialogFooter className="border-t border-[var(--border)] px-6 py-5">
             <Button
               type="button"
               variant="outline"
@@ -1878,8 +1730,8 @@ function AccessDialog({ user, teamOnly = false }: { user?: AccessUser; teamOnly?
             <Button
               type="submit"
               disabled={
-                saving ||
-                (status === "active" && role !== "admin" && selected.length === 0)
+                preview || saving ||
+                (status === "active" && !isWorkspaceAdmin(role) && selected.length === 0)
               }
               className="rounded-xl bg-[#1c3934] text-white hover:bg-[#10271f]"
             >
@@ -1905,7 +1757,7 @@ function StatusBadge({ status }: { status: AccessStatus }) {
   const label = {
     active: "Active",
     pending: "Pending",
-    revoked: "Disabled",
+    revoked: "Revoked",
   }[status];
 
   return (
@@ -1933,60 +1785,46 @@ function Stat({
       className={
         "rounded-[1.4rem] border p-5 " +
         (accent
-          ? "border-[#315f50] bg-[#e5eeea]"
-          : "border-[#d9e2df] bg-white")
+          ? "border-[var(--border)] bg-[var(--muted)]"
+          : "border-[var(--border)] bg-white")
       }
     >
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#718184]">
+        <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[var(--muted-foreground)]">
           {label}
         </p>
-        <Icon className="size-4 text-[#739195]" />
+        <Icon className="size-4 text-[var(--muted-foreground)]" />
       </div>
       <p className="mt-8 text-3xl font-semibold tracking-[-0.04em]">{value}</p>
-      <p className="mt-2 text-xs text-[#829092]">{note}</p>
+      <p className="mt-2 text-xs text-[var(--muted-foreground)]">{note}</p>
     </article>
-  );
-}
-
-function NavHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="px-3 pb-1.5 text-[0.6rem] font-semibold uppercase tracking-[0.24em] text-white/30">
-      {children}
-    </p>
   );
 }
 
 function NavButton({
   active,
-  inside = false,
   icon: Icon,
   index,
   label,
-  order = 0,
   onClick,
 }: {
   active: boolean;
-  inside?: boolean;
   icon: typeof Home;
   index: string;
   label: string;
-  order?: number;
   onClick: () => void;
 }) {
   return (
     <button
-      className={"nav-button " + (active ? "nav-button-active" : inside ? "text-white/85" : "")}
-      style={{ "--i": order } as React.CSSProperties}
-      aria-current={active ? "page" : undefined}
+      className={"nav-button " + (active ? "nav-button-active" : "")}
       onClick={onClick}
+      aria-current={active ? "page" : undefined}
     >
-      <span className="text-[0.62rem] font-semibold tabular-nums tracking-[0.08em] text-white/30">
+      <span className="text-[0.65rem] font-semibold tracking-[0.08em] text-white/35">
         {index}
       </span>
       <Icon className="size-[1.05rem]" />
       <span>{label}</span>
-      {inside && <span className="size-1.5 rounded-full bg-[#c9e7a4]/80" aria-hidden="true" />}
     </button>
   );
 }
@@ -2004,6 +1842,8 @@ function initials(value: string) {
 }
 
 function viewTitle(view: View, maintenanceWorkspace: MaintenanceWorkspace) {
+  if (view === "analytics") return "Workspace analytics";
+  if (view === "workflow-board") return "Workflow centre";
   if (view === "overview") return "Overview";
   if (view === "tools") return "Business tools";
   if (view === "my-recharge") return "My Recharge";
@@ -2014,7 +1854,7 @@ function viewTitle(view: View, maintenanceWorkspace: MaintenanceWorkspace) {
     if (maintenanceWorkspace === "client") return "Property Maintenance";
     return "Maintenance Reporting";
   }
-  if (view === "property-database") return "Management Property Database";
+  if (view === "property-database") return "Property Management Database";
   if (view === "onboarding") return "Property Onboarding";
   if (view === "onboarding-invoices-board") return "Property Onboarding Invoices";
   if (view === "new-property-inspections-board") return "New Property Inspections";
@@ -2026,69 +1866,6 @@ function viewTitle(view: View, maintenanceWorkspace: MaintenanceWorkspace) {
   if (view === "team") return "Team";
   if (view === "access") return "Users & access";
   return operationsSections.find((section) => section.id === view)?.label || "Recharge";
-}
-
-function departmentForView(
-  view: View,
-  context: {
-    maintenanceWorkspace: MaintenanceWorkspace;
-    cleansMode: CleansMode;
-    purchaseOrderWorkspace: PurchaseOrderWorkspace;
-    operationsMode: OperationsMode;
-    onboardingMode: "client" | "staff";
-  },
-): OperationsView | null {
-  if (operationsSections.some((section) => section.id === view)) {
-    return view as OperationsView;
-  }
-  switch (view) {
-    case "communications":
-    case "property-database":
-      return "stays";
-    case "client-properties":
-    case "client-calendar":
-      return "clients";
-    case "owner-statements":
-    case "onboarding-invoices-board":
-      return "accounts";
-    case "new-property-inspections-board":
-      return "ready";
-    case "onboarding":
-      return context.onboardingMode === "client" ? "clients" : "stays";
-    case "maintenance":
-      return context.maintenanceWorkspace === "ready"
-        ? "ready"
-        : context.maintenanceWorkspace === "accounts"
-          ? "accounts"
-          : context.maintenanceWorkspace === "client"
-            ? "clients"
-            : "stays";
-    case "cleans-centre":
-      return context.cleansMode === "client-mailbox"
-        ? "clients"
-        : context.cleansMode === "replenishment-requests"
-          ? "accounts"
-          : context.cleansMode === "clean-reporting"
-            ? "stays"
-            : "cleans";
-    case "purchase-orders":
-      return context.purchaseOrderWorkspace === "client"
-        ? "clients"
-        : context.purchaseOrderWorkspace === "accounts"
-          ? "accounts"
-          : context.purchaseOrderWorkspace === "stays"
-            ? "stays"
-            : "ready";
-    case "operations-centre":
-      return context.operationsMode === "ready-calendar" ||
-        context.operationsMode === "routine-maintenance"
-        ? "ready"
-        : context.operationsMode === "direct-booking-accounts"
-          ? "accounts"
-          : "stays";
-    default:
-      return null;
-  }
 }
 
 function defaultDepartment(role: WorkspaceRole): OperationsView {

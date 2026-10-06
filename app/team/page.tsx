@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { redirect } from "next/navigation";
 import { chatGPTSignOutPath, requireChatGPTUser } from "@/app/chatgpt-auth";
 import { getAccessAccount, listAccessUsers } from "@/lib/access";
@@ -17,7 +18,7 @@ export default async function TeamPage() {
   return (
     <TeamClient
       users={users}
-      isAdmin={profile.role === "admin"}
+      isAdmin={isWorkspaceAdmin(profile.role)}
       currentUserName={profile.fullName || signedInUser.displayName}
       signOutPath={chatGPTSignOutPath("/")}
     />

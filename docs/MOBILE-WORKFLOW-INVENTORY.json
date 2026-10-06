@@ -1,0 +1,973 @@
+{
+  "generatedAt": "2026-10-04T07:57:44.464Z",
+  "scope": "Source inventory only. Routes and declarations do not certify live integration or granular authorization.",
+  "modules": [
+    {
+      "id": "daily-pricing",
+      "title": "Daily Pricing Report",
+      "destination": "Stays reporting",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "operations",
+      "routes": [
+        "/api/operations"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "listing-health",
+      "title": "Listing Health Reporting",
+      "destination": "Stays reporting",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "operations",
+      "routes": [
+        "/api/operations"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "client-furnishing",
+      "title": "Client Self-Furnishing Calculator",
+      "destination": "Property setup",
+      "defaultRoles": [
+        "client",
+        "admin",
+        "super_admin"
+      ],
+      "service": "external-calculator",
+      "routes": [],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": "https://recharge-client-furnishing.enquiries422321.chatgpt.site"
+    },
+    {
+      "id": "safety-maintenance",
+      "title": "Routine Maintenance",
+      "destination": "Ready operations",
+      "defaultRoles": [
+        "ready",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "operations",
+      "routes": [
+        "/api/operations"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "purchase-order",
+      "title": "Recharge Purchase Orders",
+      "destination": "Ready operations",
+      "defaultRoles": [
+        "ready",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "purchase-order",
+      "routes": [
+        "/api/purchase-orders",
+        "/api/purchase-orders/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "purchase-order-requests",
+      "title": "Purchase Order Requests",
+      "destination": "Stays operations",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "purchase-order",
+      "routes": [
+        "/api/purchase-orders",
+        "/api/purchase-orders/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "client-purchase-order-quotes",
+      "title": "Purchase Order Quotes",
+      "destination": "Client approvals",
+      "defaultRoles": [
+        "client",
+        "admin",
+        "super_admin"
+      ],
+      "service": "onboarding",
+      "routes": [
+        "/api/onboarding",
+        "/api/onboarding/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "property-database",
+      "title": "Management Property Database",
+      "destination": "Properties",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "properties",
+      "routes": [
+        "/api/property-database"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "property-onboarding",
+      "title": "Property Onboarding",
+      "destination": "Property setup",
+      "defaultRoles": [
+        "client",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "onboarding",
+      "routes": [
+        "/api/onboarding",
+        "/api/onboarding/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "client-dashboard",
+      "title": "Recharge Client Dashboard",
+      "destination": "Properties",
+      "defaultRoles": [
+        "client",
+        "admin",
+        "super_admin"
+      ],
+      "service": "properties",
+      "routes": [
+        "/api/property-database"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "client-property-maintenance",
+      "title": "Property Maintenance",
+      "destination": "Client properties",
+      "defaultRoles": [
+        "client",
+        "admin",
+        "super_admin"
+      ],
+      "service": "maintenance",
+      "routes": [
+        "/api/maintenance",
+        "/api/maintenance/evidence"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "weekly-performance",
+      "title": "Weekly Performance Report",
+      "destination": "Stays reporting",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "operations",
+      "routes": [
+        "/api/operations"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "maintenance-reporting",
+      "title": "Ready Maintenance",
+      "destination": "Ready operations",
+      "defaultRoles": [
+        "ready",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "maintenance",
+      "routes": [
+        "/api/maintenance",
+        "/api/maintenance/evidence"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "stays-maintenance-reporting",
+      "title": "Maintenance Reporting",
+      "destination": "Stays reporting",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "maintenance",
+      "routes": [
+        "/api/maintenance",
+        "/api/maintenance/evidence"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "clean-reporting",
+      "title": "Clean Reporting",
+      "destination": "Stays reporting",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "cleans",
+      "routes": [
+        "/api/cleans",
+        "/api/cleans/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "aircover-reporting",
+      "title": "AirCover Reporting",
+      "destination": "Stays operations",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "workflows",
+      "routes": [
+        "/api/workflows/tickets",
+        "/api/workflows/referrals",
+        "/api/workflows/onboarding"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "cleaning-schedule",
+      "title": "Clean Calendar",
+      "destination": "Cleaning operations",
+      "defaultRoles": [
+        "cleans",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "cleans",
+      "routes": [
+        "/api/cleans",
+        "/api/cleans/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "cleaner-performance",
+      "title": "Cleaner Performance Reporting",
+      "destination": "Cleaning reporting",
+      "defaultRoles": [
+        "cleans",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "cleans",
+      "routes": [
+        "/api/cleans",
+        "/api/cleans/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "clean-client-database",
+      "title": "Clean Client Database",
+      "destination": "Cleaning workspace",
+      "defaultRoles": [
+        "cleans",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "cleans",
+      "routes": [
+        "/api/cleans",
+        "/api/cleans/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "cleaner-database",
+      "title": "Cleaner Database",
+      "destination": "Cleaning workspace",
+      "defaultRoles": [
+        "cleans",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "cleans",
+      "routes": [
+        "/api/cleans",
+        "/api/cleans/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "cleans-invoices",
+      "title": "Cleaner Invoices",
+      "destination": "Cleaning finance",
+      "defaultRoles": [
+        "cleans",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "cleans",
+      "routes": [
+        "/api/cleans",
+        "/api/cleans/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "client-mailbox",
+      "title": "Mailbox",
+      "destination": "Client inbox",
+      "defaultRoles": [
+        "client",
+        "admin",
+        "super_admin"
+      ],
+      "service": "cleans",
+      "routes": [
+        "/api/cleans",
+        "/api/cleans/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "replenishment-requests",
+      "title": "Replenishment Requests",
+      "destination": "Finance workspace",
+      "defaultRoles": [
+        "admin",
+        "super_admin"
+      ],
+      "service": "cleans",
+      "routes": [
+        "/api/cleans",
+        "/api/cleans/files"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "ready-schedule",
+      "title": "Ready Calendar",
+      "destination": "Ready operations",
+      "defaultRoles": [
+        "ready",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "operations",
+      "routes": [
+        "/api/operations"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "licensing",
+      "title": "Licensing",
+      "destination": "Properties",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "licensing",
+      "routes": [],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "direct-bookings",
+      "title": "Direct Booking Reporting",
+      "destination": "Stays reporting",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "operations",
+      "routes": [
+        "/api/operations"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "ota-logins",
+      "title": "OTA Logins",
+      "destination": "Properties",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "properties",
+      "routes": [
+        "/api/property-database"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "guest-communication",
+      "title": "Stays Communication Centre",
+      "destination": "Stays inbox",
+      "defaultRoles": [
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "communications",
+      "routes": [
+        "/api/communications/threads",
+        "/api/communications/hostaway/reply",
+        "/api/communications/workflows"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "property-furnishing-board",
+      "title": "Property Furnishing Board",
+      "destination": "Ready operations",
+      "defaultRoles": [
+        "ready",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "workflows",
+      "routes": [
+        "/api/workflows/tickets",
+        "/api/workflows/referrals",
+        "/api/workflows/onboarding"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "new-property-inspection-board",
+      "title": "New Property Inspection",
+      "destination": "Ready operations",
+      "defaultRoles": [
+        "ready",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "workflows",
+      "routes": [
+        "/api/workflows/tickets",
+        "/api/workflows/referrals",
+        "/api/workflows/onboarding"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "routine-bin-garden-board",
+      "title": "Routine Bin Collection & Garden Maintenance",
+      "destination": "Ready operations",
+      "defaultRoles": [
+        "ready",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "workflows",
+      "routes": [
+        "/api/workflows/tickets",
+        "/api/workflows/referrals",
+        "/api/workflows/onboarding"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "clean-property-onboarding",
+      "title": "Clean Property Onboarding Tracker",
+      "destination": "Cleaning workspace",
+      "defaultRoles": [
+        "cleans",
+        "stays",
+        "admin",
+        "super_admin"
+      ],
+      "service": "workflows",
+      "routes": [
+        "/api/workflows/tickets",
+        "/api/workflows/referrals",
+        "/api/workflows/onboarding"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "owner-statements",
+      "title": "Owner Statements",
+      "destination": "Finance workspace",
+      "defaultRoles": [
+        "admin",
+        "super_admin"
+      ],
+      "service": "owner-statements",
+      "routes": [
+        "/api/owner-statements"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "maintenance-reconciliation",
+      "title": "Approved Maintenance",
+      "destination": "Finance workspace",
+      "defaultRoles": [
+        "admin",
+        "super_admin"
+      ],
+      "service": "maintenance",
+      "routes": [
+        "/api/maintenance",
+        "/api/maintenance/evidence"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "onboarding-invoices",
+      "title": "Onboarding Invoices",
+      "destination": "Finance workspace",
+      "defaultRoles": [
+        "admin",
+        "super_admin"
+      ],
+      "service": "workflows",
+      "routes": [
+        "/api/workflows/tickets",
+        "/api/workflows/referrals",
+        "/api/workflows/onboarding"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "purchase-order-invoices",
+      "title": "Purchase Order Invoices",
+      "destination": "Finance workspace",
+      "defaultRoles": [
+        "admin",
+        "super_admin"
+      ],
+      "service": "workflows",
+      "routes": [
+        "/api/workflows/tickets",
+        "/api/workflows/referrals",
+        "/api/workflows/onboarding"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    },
+    {
+      "id": "purchase-order-accounts",
+      "title": "Purchase Order Accounts",
+      "destination": "Finance workspace",
+      "defaultRoles": [
+        "admin",
+        "super_admin"
+      ],
+      "service": "workflows",
+      "routes": [
+        "/api/workflows/tickets",
+        "/api/workflows/referrals",
+        "/api/workflows/onboarding"
+      ],
+      "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
+      "externalReference": null
+    }
+  ],
+  "routes": {
+    "/api/access/register": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/access": {
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "declaredActions": []
+    },
+    "/api/analytics": {
+      "methods": [
+        "GET"
+      ],
+      "declaredActions": []
+    },
+    "/api/cleans/files": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/cleans/files/[id]": {
+      "methods": [
+        "GET"
+      ],
+      "declaredActions": []
+    },
+    "/api/cleans": {
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "declaredActions": [
+        "save_cleaner",
+        "save_property",
+        "assign_property_cleaner",
+        "assign_cleaner",
+        "start_clean",
+        "submit_clean",
+        "approve_clean",
+        "mark_unsuccessful",
+        "add_to_invoice",
+        "mail_status",
+        "replenishment_status",
+        "close_review",
+        "complete_onboarding"
+      ]
+    },
+    "/api/cleans/sync": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/client-reservations": {
+      "methods": [
+        "GET"
+      ],
+      "declaredActions": []
+    },
+    "/api/communications/escalate": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/communications/hostaway/reply": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/communications/hostaway/sync": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/communications/threads": {
+      "methods": [
+        "PATCH"
+      ],
+      "declaredActions": []
+    },
+    "/api/communications/workflows": {
+      "methods": [
+        "POST",
+        "PATCH"
+      ],
+      "declaredActions": []
+    },
+    "/api/hostaway/properties": {
+      "methods": [
+        "GET"
+      ],
+      "declaredActions": []
+    },
+    "/api/hostaway/reservations": {
+      "methods": [
+        "GET"
+      ],
+      "declaredActions": []
+    },
+    "/api/maintenance/evidence": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/maintenance/evidence/[id]": {
+      "methods": [
+        "GET"
+      ],
+      "declaredActions": []
+    },
+    "/api/maintenance": {
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "PUT"
+      ],
+      "declaredActions": [
+        "refer_to_ready",
+        "troubleshoot",
+        "quote",
+        "approval",
+        "schedule",
+        "start",
+        "complete",
+        "final_approval",
+        "mark_paid",
+        "reconcile",
+        "close",
+        "note"
+      ]
+    },
+    "/api/maintenance/[id]/proposal": {
+      "methods": [
+        "GET"
+      ],
+      "declaredActions": []
+    },
+    "/api/mobile/account": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/my-recharge": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/onboarding/files": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/onboarding/files/[id]": {
+      "methods": [
+        "GET"
+      ],
+      "declaredActions": []
+    },
+    "/api/onboarding": {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "declaredActions": [
+        "create_enquiry",
+        "publish_estimate",
+        "mark_estimate_viewed",
+        "client_decision",
+        "staff_update",
+        "sign_agreement",
+        "post_chat_message",
+        "submit_onboarding_form",
+        "book_inspection",
+        "set_self_inspection_date",
+        "publish_reports",
+        "purchase_order_decision",
+        "quote_decision",
+        "invoice_status",
+        "set_guest_ready_date",
+        "confirm_guest_ready",
+        "publish_live"
+      ]
+    },
+    "/api/operations": {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "declaredActions": [
+        "sync_listing_health",
+        "sync_pricing_gaps",
+        "sync_long_stays",
+        "create_weekly_reports",
+        "complete_listing_ticket",
+        "complete_relisting",
+        "submit_listing_daily_report",
+        "decide_gap",
+        "decide_pricing_night",
+        "add_opportunity",
+        "complete_weekly_scan",
+        "save_direct_offer",
+        "add_direct_touch",
+        "record_direct_response",
+        "update_direct_invoice",
+        "complete_direct_booking",
+        "create_routine_maintenance",
+        "update_routine_maintenance_status",
+        "submit_routine_inspection"
+      ]
+    },
+    "/api/owner-statements": {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "declaredActions": [
+        "sync_hostaway",
+        "auto_match",
+        "import_receipts",
+        "allocate",
+        "create_statement",
+        "issue_statement"
+      ]
+    },
+    "/api/property-database": {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "declaredActions": [
+        "save",
+        "sync",
+        "import-clickup"
+      ]
+    },
+    "/api/purchase-orders/files": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/purchase-orders/files/[id]": {
+      "methods": [
+        "GET"
+      ],
+      "declaredActions": []
+    },
+    "/api/purchase-orders": {
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "declaredActions": [
+        "save_ready_quote",
+        "submit_management",
+        "management_decision",
+        "client_decision",
+        "accounts_update",
+        "start_purchasing",
+        "save_actuals",
+        "submit_evidence"
+      ]
+    },
+    "/api/session/logout": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/session/password": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/session/recovery": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/session": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/team": {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "declaredActions": [
+        "save_role",
+        "remove_role",
+        "save_assignments",
+        "save_person",
+        "remove_person",
+        "save_schedule",
+        "remove_schedule"
+      ]
+    },
+    "/api/workflows/onboarding": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/workflows/referrals": {
+      "methods": [
+        "POST"
+      ],
+      "declaredActions": []
+    },
+    "/api/workflows/tickets": {
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "declaredActions": []
+    }
+  }
+}

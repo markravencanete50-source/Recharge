@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
@@ -49,7 +50,7 @@ export type PurchaseOrderAction =
 
 export function canUsePurchaseOrders(profile: AccessProfile) {
   return (
-    profile.role === "admin" ||
+    isWorkspaceAdmin(profile.role) ||
     profile.modules.some((id) =>
       [
         "purchase-order",
@@ -251,7 +252,7 @@ export async function applyPurchaseOrderAction(
   }
 
   if (input.action === "client_decision") {
-    if (profile.role !== "admin" && profile.role !== "client") {
+    if (!isWorkspaceAdmin(profile.role) && profile.role !== "client") {
       throw new Error("Client approval is required");
     }
     if (order.status !== "client_review") {
@@ -612,7 +613,7 @@ function ensureOrderVisible(profile: AccessProfile, order: any) {
 }
 
 function requireRole(profile: AccessProfile, roles: AccessProfile["role"][], message: string) {
-  if (!roles.includes(profile.role)) throw new Error(message);
+  if (profile.role !== "super_admin" && !roles.includes(profile.role)) throw new Error(message);
 }
 
 function database() {

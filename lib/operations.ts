@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
@@ -162,7 +163,7 @@ function database() {
 }
 
 export function canUseOperations(profile: AccessProfile) {
-  return profile.role === "admin" || profile.role === "stays" || profile.role === "ready" || profile.role === "client";
+  return isWorkspaceAdmin(profile.role) || profile.role === "stays" || profile.role === "ready" || profile.role === "client";
 }
 
 export async function getOperationsData(profile: AccessProfile): Promise<OperationsData> {
@@ -296,9 +297,9 @@ export async function syncListingHealth() {
   for (const property of properties) {
     const links = [...property.listingLinks, ...(savedLinks.get(property.id) || [])];
     const visible = {
-      airbnb: links.some((link) => link.label.toLowerCase().includes("airbnb")),
-      booking: links.some((link) => link.label.toLowerCase().includes("booking")),
-      comfy: links.some((link) => link.label.toLowerCase().includes("comfy")),
+      airbnb: links.some((link) => (link.label || "").toLowerCase().includes("airbnb")),
+      booking: links.some((link) => (link.label || "").toLowerCase().includes("booking")),
+      comfy: links.some((link) => (link.label || "").toLowerCase().includes("comfy")),
     };
     statements.push(db.prepare("INSERT INTO listing_health_checks (id, check_date, property_id, property_name, airbnb_visible, booking_visible, comfy_visible, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(property_id, check_date) DO UPDATE SET property_name = excluded.property_name, airbnb_visible = excluded.airbnb_visible, booking_visible = excluded.booking_visible, comfy_visible = excluded.comfy_visible").bind(crypto.randomUUID(), date, property.id, property.name, Number(visible.airbnb), Number(visible.booking), Number(visible.comfy), now));
     for (const [channel, isVisible] of Object.entries(visible)) {

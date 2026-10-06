@@ -12,6 +12,7 @@ import { getMaintenanceData } from "@/lib/maintenance";
 import { getPropertyDatabaseData } from "@/lib/property-database";
 import { getOnboardingData } from "@/lib/onboarding";
 import { getCleansData } from "@/lib/cleans";
+import { scopeAnalytics } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,7 @@ export default async function Home() {
       propertyDatabaseData={propertyDatabaseData}
       onboardingData={onboardingData}
       cleansData={cleansData}
+      analyticsData={scopeAnalytics(profile, { workflows: workflowData, maintenance: maintenanceData, cleans: cleansData, onboarding: onboardingData, properties: propertyDatabaseData })}
       signOutPath={chatGPTSignOutPath("/")}
     />
   );

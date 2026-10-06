@@ -1,5 +1,6 @@
 "use client";
 
+
 import { FormEvent, useState } from "react";
 import {
   ArrowRight,
@@ -8,13 +9,13 @@ import {
   Clock3,
   Home,
   LockKeyhole,
-  ShieldCheck,
   SprayCan,
   Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CompanyLogo } from '@/components/company-logo';
 import type { AccessStatus, WorkspaceRole } from "@/lib/modules";
 
 const ROLE_OPTIONS = [
@@ -42,12 +43,6 @@ const ROLE_OPTIONS = [
     description: "Recharge Ready tools only.",
     icon: Wrench,
   },
-  {
-    id: "admin",
-    label: "Admin",
-    description: "All tools and account-access controls.",
-    icon: ShieldCheck,
-  },
 ] as const satisfies ReadonlyArray<{
   id: WorkspaceRole;
   label: string;
@@ -56,9 +51,11 @@ const ROLE_OPTIONS = [
 }>;
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
+  super_admin: "Super admin",
   client: "Client",
   stays: "Stays employee",
-  cleans: "Cleans employee",
+  cleans: "Cleaner",
+  cleaning_manager: "Cleaning manager",
   ready: "Ready employee",
   admin: "Admin",
 };
@@ -129,11 +126,11 @@ export function AccountRegistration({
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[#eef3f0] px-5 py-10 text-[#1c3934]">
-      <section className="surface grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-[#d8e2df] bg-white shadow-[0_28px_90px_rgba(18,47,51,0.12)] lg:grid-cols-[0.72fr_1.28fr]">
-        <div className="forest-panel bg-[#1c3934] p-8 text-white sm:p-11">
-          <img src="/recharge-wordmark.svg" alt="Recharge" className="h-auto w-48" />
-          <p className="mt-16 text-xs font-semibold uppercase tracking-[0.18em] text-[#8fb3a2]">
+    <main className="grid min-h-screen place-items-center bg-[var(--muted)] px-5 py-10 text-[var(--foreground)]">
+      <section className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-[var(--border)] bg-white shadow-[0_28px_90px_rgba(18,47,51,0.12)] lg:grid-cols-[0.72fr_1.28fr]">
+        <div className="bg-[#1c3934] p-8 text-white sm:p-11">
+          <CompanyLogo width={192}/>
+          <p className="mt-16 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
             Secure workspace
           </p>
           <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em]">
@@ -143,20 +140,20 @@ export function AccountRegistration({
             Every Recharge account has its own access. Employee and admin requests are checked before they are activated.
           </p>
           <div className="mt-10 space-y-3 text-sm text-white/75">
-            <p className="flex items-center gap-3"><Check className="size-4 text-[#8fb3a2]" /> Secure ChatGPT sign-in</p>
-            <p className="flex items-center gap-3"><Check className="size-4 text-[#8fb3a2]" /> Role-based department access</p>
-            <p className="flex items-center gap-3"><Check className="size-4 text-[#8fb3a2]" /> Individual admin controls</p>
+            <p className="flex items-center gap-3"><Check className="size-4 text-[var(--muted-foreground)]" /> Secure ChatGPT sign-in</p>
+            <p className="flex items-center gap-3"><Check className="size-4 text-[var(--muted-foreground)]" /> Role-based department access</p>
+            <p className="flex items-center gap-3"><Check className="size-4 text-[var(--muted-foreground)]" /> Individual admin controls</p>
           </div>
         </div>
 
         <form className="p-7 sm:p-10" onSubmit={submit}>
-          <div className="grid size-12 place-items-center rounded-2xl bg-[#edf5f0] text-[#315f4d]">
+          <div className="grid size-12 place-items-center rounded-2xl bg-[var(--muted)] text-[var(--muted-foreground)]">
             <LockKeyhole className="size-5" />
           </div>
           <h2 className="mt-5 text-3xl font-semibold tracking-[-0.04em]">
             Create your Recharge account
           </h2>
-          <p className="mt-3 text-sm leading-6 text-[#647577]">
+          <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">
             Your password and sign-in are handled securely by ChatGPT. Recharge stores your profile and access permissions.
           </p>
 
@@ -179,7 +176,7 @@ export function AccountRegistration({
                 const selected = role === option.id;
                 return (
                   <label
-                    className={`cursor-pointer rounded-2xl border p-4 transition ${selected ? "border-[#315f4d] bg-[#edf5f0] ring-1 ring-[#315f4d]" : "border-[#dce5e2] hover:border-[#9eb4ad] hover:bg-[#f8faf9]"}`}
+                    className={`cursor-pointer rounded-2xl border p-4 transition ${selected ? "border-[var(--border)] bg-[var(--muted)] ring-1 ring-[var(--border)]" : "border-[var(--border)] hover:border-[var(--border)] hover:bg-[var(--card)]"}`}
                     key={option.id}
                   >
                     <input
@@ -191,12 +188,12 @@ export function AccountRegistration({
                       onChange={() => setRole(option.id)}
                     />
                     <span className="flex items-start gap-3">
-                      <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${selected ? "bg-[#1c3934] text-white" : "bg-[#edf3f1] text-[#4e6a65]"}`}>
+                      <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${selected ? "bg-[#1c3934] text-white" : "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>
                         <Icon className="size-4" />
                       </span>
                       <span>
                         <span className="block text-sm font-semibold">{option.label}</span>
-                        <span className="mt-1 block text-xs leading-5 text-[#708083]">{option.description}</span>
+                        <span className="mt-1 block text-xs leading-5 text-[var(--muted-foreground)]">{option.description}</span>
                       </span>
                     </span>
                   </label>
@@ -214,7 +211,7 @@ export function AccountRegistration({
           <Button disabled={saving} className="mt-7 h-12 w-full rounded-xl bg-[#1c3934] text-white hover:bg-[#10271f]">
             {saving ? "Creating account…" : role === "client" ? "Create account" : "Request access"} <ArrowRight />
           </Button>
-          <a href={signOutPath} className="mt-5 block text-center text-sm font-medium text-[#58706c] hover:text-[#1c3934]">
+          <a href={signOutPath} className="mt-5 block text-center text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
             Sign in with a different email
           </a>
         </form>
@@ -239,19 +236,19 @@ function AccountState({
   message: string;
 }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#eef3f0] px-5 py-12 text-[#1c3934]">
-      <section className="surface w-full max-w-xl rounded-[2rem] border border-[#d8e2df] bg-white p-8 text-center shadow-[0_28px_90px_rgba(18,47,51,0.12)] sm:p-11">
+    <main className="grid min-h-screen place-items-center bg-[var(--muted)] px-5 py-12 text-[var(--foreground)]">
+      <section className="w-full max-w-xl rounded-[2rem] border border-[var(--border)] bg-white p-8 text-center shadow-[0_28px_90px_rgba(18,47,51,0.12)] sm:p-11">
         <div className="mx-auto w-56 rounded-2xl bg-[#1c3934] px-5 py-3">
-          <img src="/recharge-wordmark.svg" alt="Recharge" className="h-auto w-full" />
+          <CompanyLogo width="100%"/>
         </div>
-        <div className="mx-auto mt-10 grid size-14 place-items-center rounded-2xl bg-[#edf5f0] text-[#315f4d]">
+        <div className="mx-auto mt-10 grid size-14 place-items-center rounded-2xl bg-[var(--muted)] text-[var(--muted-foreground)]">
           <Icon className="size-6" />
         </div>
-        <p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-[#55756e]">{eyebrow}</p>
+        <p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">{eyebrow}</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">{title}</h1>
-        <p className="mx-auto mt-4 max-w-md text-base leading-7 text-[#647577]">{message}</p>
-        <p className="mt-6 text-sm font-medium text-[#1c3934]">{email}</p>
-        <a href={signOutPath} className="mt-7 inline-flex text-sm font-semibold text-[#45665e] hover:text-[#1c3934]">
+        <p className="mx-auto mt-4 max-w-md text-base leading-7 text-[var(--muted-foreground)]">{message}</p>
+        <p className="mt-6 text-sm font-medium text-[var(--foreground)]">{email}</p>
+        <a href={signOutPath} className="mt-7 inline-flex text-sm font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
           Sign in with a different email
         </a>
       </section>

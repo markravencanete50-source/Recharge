@@ -1,5 +1,6 @@
 "use client";
 
+
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -200,14 +201,14 @@ export function OnboardingCentre({
     <div className="space-y-7">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <Button variant="ghost" className="-ml-3 mb-4 text-[#516c67]" onClick={onBack}>
+          <Button variant="ghost" className="-ml-3 mb-4 text-[var(--muted-foreground)]" onClick={onBack}>
             <ArrowLeft /> Back
           </Button>
           <p className="eyebrow">{mode === "client" ? "Recharge Dashboard" : "Stays operations"}</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
             {mode === "client" ? "Your properties" : "Property Onboarding"}
           </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-[#647577]">
+          <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--muted-foreground)]">
             {mode === "client"
               ? "Request a performance estimate and follow each property from enquiry to live listings."
               : "Manage every client estimate, agreement, inspection, invoice and launch from one shared record."}
@@ -275,7 +276,7 @@ function ClientDashboard({
   const live = cases.filter((item) => item.status === "live").length;
   return (
     <Tabs defaultValue="dashboard">
-      <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[#e4ece8] p-1 sm:w-fit">
+      <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[var(--muted)] p-1 sm:w-fit">
         <TabsTrigger value="dashboard" className="min-h-10 px-4">Dashboard</TabsTrigger>
         <TabsTrigger value="onboarding" className="min-h-10 px-4">Property onboarding</TabsTrigger>
       </TabsList>
@@ -285,20 +286,20 @@ function ClientDashboard({
           <DashboardCard icon={BarChart3} title="Property performance" value={`${live} live`} note="Performance reporting for your active properties." />
           <DashboardCard icon={ClipboardCheck} title="Property onboarding" value={`${cases.filter((item) => item.status !== "live" && item.status !== "not_proceeding").length} active`} note="Follow every onboarding milestone." />
         </div>
-        <section className="surface rounded-[1.5rem] border border-[#d9e2df] bg-white p-6">
+        <section className="rounded-[1.5rem] border border-[var(--border)] bg-white p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="eyebrow">Portfolio</p>
               <h2 className="mt-2 text-2xl font-semibold">Welcome, {firstName(currentUser.name)}</h2>
             </div>
-            <Badge className="border-0 bg-[#dfe9e4] text-[#36561d]">Client</Badge>
+            <Badge className="border-0 bg-[var(--muted)] text-[var(--muted-foreground)]">Client</Badge>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {managedProperties.map((property) => (
-              <div key={property} className="rounded-xl bg-[#f3f7f5] px-4 py-4 text-sm font-semibold">{property}</div>
+              <div key={property} className="rounded-xl bg-[var(--muted)] px-4 py-4 text-sm font-semibold">{property}</div>
             ))}
             {!managedProperties.length && (
-              <p className="rounded-xl bg-[#f3f7f5] px-4 py-5 text-sm text-[#647577]">
+              <p className="rounded-xl bg-[var(--muted)] px-4 py-5 text-sm text-[var(--muted-foreground)]">
                 Your first property will appear here when it goes live.
               </p>
             )}
@@ -355,7 +356,7 @@ function StaffWorkspace({
         const first = cases.find((item) => onboardingGroup(item.status) === next);
         if (first) setSelectedId(first.id);
       }}>
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[#e4ece8] p-1">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[var(--muted)] p-1">
           <TabsTrigger value="new_enquiry" className="min-h-10 px-4">New enquiry</TabsTrigger>
           <TabsTrigger value="sign_them_up" className="min-h-10 px-4">Sign them up</TabsTrigger>
           <TabsTrigger value="onboarding" className="min-h-10 px-4">Onboarding</TabsTrigger>
@@ -366,7 +367,7 @@ function StaffWorkspace({
       <div className="grid gap-5 xl:grid-cols-[22rem_minmax(0,1fr)]">
         <div>
           <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#80908d]" />
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search property or client" className="h-11 bg-white pl-10" />
           </div>
           <CaseList cases={groupedCases} selectedId={groupedSelected?.id || ""} onSelect={setSelectedId} />
@@ -403,15 +404,15 @@ function CaseList({ cases, selectedId, onSelect }: { cases: OnboardingCase[]; se
         <button
           key={item.id}
           onClick={() => onSelect(item.id)}
-          className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === item.id ? "border-[#1c3934] bg-[#1c3934] text-white" : hasUnansweredClientQuestion(item) ? "border-amber-400 bg-amber-50 hover:border-amber-500" : "border-[#d9e2df] bg-white hover:border-[#a9bcb6]"}`}
+          className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === item.id ? "border-[var(--border)] bg-[#1c3934] text-white" : hasUnansweredClientQuestion(item) ? "border-amber-400 bg-amber-50 hover:border-amber-500" : "border-[var(--border)] bg-white hover:border-[var(--border)]"}`}
         >
           <div className="flex items-start justify-between gap-3">
             <p className="truncate text-sm font-semibold">{item.propertyName || item.propertyAddress}</p>
-            <span className={`text-[0.65rem] font-semibold ${selectedId === item.id ? "text-[#8fb3a2]" : "text-[#6f817d]"}`}>{STATUS_PROGRESS[item.status]}%</span>
+            <span className={`text-[0.65rem] font-semibold ${selectedId === item.id ? "text-[var(--muted-foreground)]" : "text-[var(--muted-foreground)]"}`}>{STATUS_PROGRESS[item.status]}%</span>
           </div>
-          <p className={`mt-1 truncate text-xs ${selectedId === item.id ? "text-white/55" : "text-[#718184]"}`}>{item.clientName}</p>
-          <p className={`mt-2 text-xs ${selectedId === item.id ? "text-white/55" : "text-[#718184]"}`}>Received {dateTime(item.createdAt)}</p>
-          <p className={`mt-3 text-xs font-semibold ${selectedId === item.id ? "text-white/80" : "text-[#45625c]"}`}>{STATUS_LABELS[item.status]}</p>
+          <p className={`mt-1 truncate text-xs ${selectedId === item.id ? "text-white/55" : "text-[var(--muted-foreground)]"}`}>{item.clientName}</p>
+          <p className={`mt-2 text-xs ${selectedId === item.id ? "text-white/55" : "text-[var(--muted-foreground)]"}`}>Received {dateTime(item.createdAt)}</p>
+          <p className={`mt-3 text-xs font-semibold ${selectedId === item.id ? "text-white/80" : "text-[var(--muted-foreground)]"}`}>{STATUS_LABELS[item.status]}</p>
           {hasUnansweredClientQuestion(item) && <p className={`mt-2 text-xs font-semibold ${selectedId === item.id ? "text-amber-200" : "text-amber-800"}`}>Client question waiting</p>}
         </button>
       ))}
@@ -523,7 +524,7 @@ function StaffCase({ caseItem, act, upload, saving }: CaseActionProps) {
   return (
     <CaseShell caseItem={caseItem}>
       <Tabs defaultValue="next-action">
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[#edf2ef] p-1 sm:w-fit">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-[var(--muted)] p-1 sm:w-fit">
           <TabsTrigger value="next-action" className="min-h-10 px-4">Next action</TabsTrigger>
           <TabsTrigger value="documents" className="min-h-10 px-4">Documents</TabsTrigger>
           <TabsTrigger value="accounts" className="min-h-10 px-4">Accounts</TabsTrigger>
@@ -561,11 +562,11 @@ type CaseActionProps = {
 
 function CaseShell({ caseItem, children }: { caseItem: OnboardingCase; children: React.ReactNode }) {
   return (
-    <section className="surface overflow-hidden rounded-[1.6rem] border border-[#d9e2df] bg-white">
-      <div className="forest-panel bg-[#1c3934] px-6 py-6 text-white sm:px-7">
+    <section className="overflow-hidden rounded-[1.6rem] border border-[var(--border)] bg-white">
+      <div className="bg-[#1c3934] px-6 py-6 text-white sm:px-7">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8fb3a2]">Enquiry received {dateTime(caseItem.createdAt)}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted-foreground)]">Enquiry received {dateTime(caseItem.createdAt)}</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">{caseItem.propertyName || caseItem.propertyAddress}</h2>
             <p className="mt-2 text-sm text-white/60">{caseItem.propertyAddress} · {caseItem.propertyType} · {caseItem.bedrooms} bed · {caseItem.bathrooms} bath</p>
           </div>
@@ -583,14 +584,14 @@ export function OnboardingJourneyButton({ caseItem, inverse = false }: { caseIte
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button className={`mt-6 flex w-full items-center gap-3 rounded-xl p-2 text-left transition ${inverse ? "hover:bg-white/5" : "hover:bg-[#f3f7f5]"}`}>
-          <Progress value={STATUS_PROGRESS[caseItem.status]} className={`h-2 ${inverse ? "bg-white/15 [&_[data-slot=progress-indicator]]:bg-[#315f50]" : "bg-[#e6ede9] [&_[data-slot=progress-indicator]]:bg-[#315f50]"}`} />
-          <span className={`shrink-0 text-xs font-semibold ${inverse ? "text-[#8fb3a2]" : "text-[#315f50]"}`}>{STATUS_PROGRESS[caseItem.status]}%</span>
-          <span className={`shrink-0 text-xs underline-offset-4 hover:underline ${inverse ? "text-white/70" : "text-[#526b67]"}`}>View journey</span>
+        <button className={`mt-6 flex w-full items-center gap-3 rounded-xl p-2 text-left transition ${inverse ? "hover:bg-white/5" : "hover:bg-[var(--muted)]"}`}>
+          <Progress value={STATUS_PROGRESS[caseItem.status]} className={`h-2 ${inverse ? "bg-white/15 [&_[data-slot=progress-indicator]]:bg-[#315f50]" : "bg-[var(--muted)] [&_[data-slot=progress-indicator]]:bg-[#315f50]"}`} />
+          <span className={`shrink-0 text-xs font-semibold ${inverse ? "text-[var(--muted-foreground)]" : "text-[var(--muted-foreground)]"}`}>{STATUS_PROGRESS[caseItem.status]}%</span>
+          <span className={`shrink-0 text-xs underline-offset-4 hover:underline ${inverse ? "text-white/70" : "text-[var(--muted-foreground)]"}`}>View journey</span>
         </button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-[#d9e2df] p-0 sm:max-w-3xl">
-        <DialogHeader className="border-b border-[#e0e7e5] px-6 py-6 text-left">
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border-[var(--border)] p-0 sm:max-w-3xl">
+        <DialogHeader className="border-b border-[var(--border)] px-6 py-6 text-left">
           <DialogTitle className="text-2xl">Property onboarding journey</DialogTitle>
           <DialogDescription>{caseItem.propertyName || caseItem.propertyAddress} · every step from enquiry to live.</DialogDescription>
         </DialogHeader>
@@ -598,7 +599,7 @@ export function OnboardingJourneyButton({ caseItem, inverse = false }: { caseIte
           {JOURNEY_STAGES.map((stage, index) => {
             const complete = index < current || caseItem.status === "live";
             const active = index === current && caseItem.status !== "live";
-            return <div key={stage.title} className={`flex gap-4 rounded-2xl border p-4 ${active ? "border-[#315f50] bg-[#eef5f1]" : complete ? "border-[#d7e7d0] bg-[#f4faef]" : "border-[#e1e7e5] bg-white"}`}><span className={`grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold ${complete ? "bg-[#315f50] text-white" : active ? "bg-[#1c3934] text-white" : "bg-[#edf1ef] text-[#718184]"}`}>{complete ? <CheckCircle2 className="size-4" /> : String(index + 1).padStart(2, "0")}</span><div><p className="font-semibold">{stage.title}</p><p className="mt-1 text-sm leading-5 text-[#647577]">{stage.description}</p>{active && <Badge className="mt-2 border-0 bg-[#1c3934] text-white">Current stage</Badge>}</div></div>;
+            return <div key={stage.title} className={`flex gap-4 rounded-2xl border p-4 ${active ? "border-[var(--border)] bg-[var(--muted)]" : complete ? "border-[var(--border)] bg-[var(--card)]" : "border-[var(--border)] bg-white"}`}><span className={`grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold ${complete ? "bg-[#315f50] text-white" : active ? "bg-[#1c3934] text-white" : "bg-[var(--muted)] text-[var(--muted-foreground)]"}`}>{complete ? <CheckCircle2 className="size-4" /> : String(index + 1).padStart(2, "0")}</span><div><p className="font-semibold">{stage.title}</p><p className="mt-1 text-sm leading-5 text-[var(--muted-foreground)]">{stage.description}</p>{active && <Badge className="mt-2 border-0 bg-[#1c3934] text-white">Current stage</Badge>}</div></div>;
           })}
         </div>
       </DialogContent>
@@ -665,7 +666,7 @@ function EstimateBuilder({ caseItem, act, saving }: Omit<CaseActionProps, "uploa
           <Label>Comparable properties</Label>
           <div className="mt-2 space-y-3">
             {[0, 1, 2].map((index) => (
-              <div key={index} className="grid gap-2 rounded-xl bg-[#f4f7f5] p-3 sm:grid-cols-[1fr_1.25fr_8rem]">
+              <div key={index} className="grid gap-2 rounded-xl bg-[var(--muted)] p-3 sm:grid-cols-[1fr_1.25fr_8rem]">
                 <Input name={`compName${index}`} placeholder={`Comparable ${index + 1}`} />
                 <Input name={`compUrl${index}`} type="url" placeholder="Listing URL" />
                 <Input name={`compAdr${index}`} type="number" min="0" step="0.01" placeholder="ADR £" />
@@ -691,26 +692,26 @@ function EstimatePresentation({ caseItem, compact = false }: { caseItem: Onboard
     <div className="space-y-5">
       {!compact && <ServicesAndProcess />}
       <ActionCard icon={BarChart3} eyebrow="Performance estimate" title="See how occupancy changes your revenue" description="Adjust the occupancy level to compare projected gross revenue by month and year.">
-        <div className="forest-panel mt-5 rounded-2xl bg-[#1c3934] p-5 text-white sm:p-6">
+        <div className="mt-5 rounded-2xl bg-[#1c3934] p-5 text-white sm:p-6">
           <div className="flex items-end justify-between gap-4">
             <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Projected occupancy</p><p className="mt-1 text-sm text-white/70">Move the slider to model different booking levels.</p></div>
-            <span className="text-3xl font-semibold text-[#8fb3a2]">{occupancy}%</span>
+            <span className="text-3xl font-semibold text-[var(--muted-foreground)]">{occupancy}%</span>
           </div>
-          <Slider aria-label="Projected occupancy percentage" value={[occupancy]} onValueChange={(value) => setOccupancy(value[0])} min={10} max={100} step={5} className="mt-6 [&_[data-slot=slider-range]]:bg-[#315f50] [&_[data-slot=slider-thumb]]:border-[#315f50]" />
+          <Slider aria-label="Projected occupancy percentage" value={[occupancy]} onValueChange={(value) => setOccupancy(value[0])} min={10} max={100} step={5} className="mt-6 [&_[data-slot=slider-range]]:bg-[#315f50] [&_[data-slot=slider-thumb]]:border-[var(--border)]" />
           <div className="mt-3 flex justify-between text-xs text-white/50"><span>10%</span><span>100%</span></div>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           {rates.map(([label, value]) => (
-            <div key={label} className="rounded-xl bg-[#f2f6f4] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#718184]">{label}</p>
-              <p className="mt-2 text-sm text-[#718184]">{money(value)} average nightly rate</p>
-              <div className="mt-4 border-t border-[#dce6e2] pt-4"><p className="text-xs text-[#718184]">Per month</p><p className="mt-1 text-2xl font-semibold">{money(value ? Math.round(value * 30 * occupancy / 100) : null)}</p></div>
-              <div className="mt-3"><p className="text-xs text-[#718184]">Per year</p><p className="mt-1 text-lg font-semibold text-[#315f4d]">{money(value ? Math.round(value * 365 * occupancy / 100) : null)}</p></div>
+            <div key={label} className="rounded-xl bg-[var(--muted)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted-foreground)]">{label}</p>
+              <p className="mt-2 text-sm text-[var(--muted-foreground)]">{money(value)} average nightly rate</p>
+              <div className="mt-4 border-t border-[var(--border)] pt-4"><p className="text-xs text-[var(--muted-foreground)]">Per month</p><p className="mt-1 text-2xl font-semibold">{money(value ? Math.round(value * 30 * occupancy / 100) : null)}</p></div>
+              <div className="mt-3"><p className="text-xs text-[var(--muted-foreground)]">Per year</p><p className="mt-1 text-lg font-semibold text-[var(--muted-foreground)]">{money(value ? Math.round(value * 365 * occupancy / 100) : null)}</p></div>
             </div>
           ))}
         </div>
         {caseItem.comparables.length > 0 && (
-          <div className="mt-5 divide-y divide-[#e3eae7] rounded-xl border border-[#e0e8e5]">
+          <div className="mt-5 divide-y divide-[var(--border)] rounded-xl border border-[var(--border)]">
             {caseItem.comparables.map((item) => (
               <div key={`${item.name}-${item.url}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
                 <a href={item.url || undefined} target="_blank" rel="noreferrer" className="font-semibold hover:underline">{item.name}</a>
@@ -719,7 +720,7 @@ function EstimatePresentation({ caseItem, compact = false }: { caseItem: Onboard
             ))}
           </div>
         )}
-        {caseItem.estimateComments && <p className="mt-5 text-sm leading-6 text-[#5f7270]">{caseItem.estimateComments}</p>}
+        {caseItem.estimateComments && <p className="mt-5 text-sm leading-6 text-[var(--muted-foreground)]">{caseItem.estimateComments}</p>}
       </ActionCard>
     </div>
   );
@@ -739,7 +740,7 @@ function ServicesAndProcess() {
   return (
     <div className="space-y-5">
       <ActionCard icon={Sparkles} eyebrow="What Recharge delivers" title="More than management: a complete route to stronger bookings" description="Open each service to see the work that goes into launching, protecting and growing your property.">
-        <Accordion type="single" collapsible defaultValue="management" className="mt-5 overflow-hidden rounded-2xl border border-[#dfe7e4]">
+        <Accordion type="single" collapsible defaultValue="management" className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)]">
           <ServiceAccordion value="management" number="01" title="Full-service property management">
             <p>We take responsibility for the entire guest journey and the day-to-day performance of your property—not simply putting a listing online.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -750,7 +751,7 @@ function ServicesAndProcess() {
                 ["Reliable operations", "Cleaning coordination, linen, replenishments, four commercial waste collections each week and monthly garden care where required."],
                 ["Property protection", "Monthly health and safety inspections, maintenance reporting, repair coordination and a clear record of property condition."],
                 ["Clear owner reporting", "Transparent income, deductions and payout records, with one team coordinating Stays, Cleans and Recharge Ready."],
-              ].map(([title, text]) => <div key={title} className="rounded-xl bg-white p-4"><p className="font-semibold text-[#1c3934]">{title}</p><p className="mt-1 text-sm leading-6 text-[#647577]">{text}</p></div>)}
+              ].map(([title, text]) => <div key={title} className="rounded-xl bg-white p-4"><p className="font-semibold text-[var(--foreground)]">{title}</p><p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">{text}</p></div>)}
             </div>
           </ServiceAccordion>
           <ServiceAccordion value="furnishing" number="02" title="Furnishing by Recharge Ready">
@@ -763,7 +764,7 @@ function ServicesAndProcess() {
       </ActionCard>
       <ActionCard icon={ClipboardCheck} eyebrow="Onboarding process" title="Your route from enquiry to booked-out property" description="Every stage is tracked in your dashboard, with the next action and responsible team made clear.">
         <div className="relative mt-6 grid gap-3 md:grid-cols-2">
-          {stages.map(([number, title, text]) => <div key={number} className="group relative rounded-2xl border border-[#dfe7e4] bg-[#f7f9f8] p-5 transition hover:border-[#9fbe75] hover:bg-[#f3f9ea]"><div className="flex gap-4"><span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#1c3934] text-xs font-bold text-[#8fb3a2]">{number}</span><div><p className="font-semibold text-[#1c3934]">{title}</p><p className="mt-1 text-sm leading-6 text-[#647577]">{text}</p></div></div></div>)}
+          {stages.map(([number, title, text]) => <div key={number} className="group relative rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 transition hover:border-[var(--border)] hover:bg-[var(--muted)]"><div className="flex gap-4"><span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#1c3934] text-xs font-bold text-[var(--muted-foreground)]">{number}</span><div><p className="font-semibold text-[var(--foreground)]">{title}</p><p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">{text}</p></div></div></div>)}
         </div>
       </ActionCard>
     </div>
@@ -784,7 +785,7 @@ function ClientDecisionForm({ caseItem, act, saving }: Omit<CaseActionProps, "up
       reviewFollowUpDate: decision === "reviewing" ? form.get("reviewDate") || null : null,
     }); setSubmitted(true); } catch { setSubmitted(false); }
   }
-  if (submitted) return <ActionCard icon={CheckCircle2} eyebrow="Submitted" title="Your response has been submitted" description={decision === "reviewing" ? "The Recharge team has received your questions and follow-up date. You do not need to click again." : decision === "proceed" ? "Your approval has been recorded. The management agreement is now ready." : "Your decision and feedback have been recorded."}><div className="mt-5 rounded-xl bg-[#eef7e4] px-4 py-4 text-sm font-semibold text-[#405f2a]">Submitted successfully</div></ActionCard>;
+  if (submitted) return <ActionCard icon={CheckCircle2} eyebrow="Submitted" title="Your response has been submitted" description={decision === "reviewing" ? "The Recharge team has received your questions and follow-up date. You do not need to click again." : decision === "proceed" ? "Your approval has been recorded. The management agreement is now ready." : "Your decision and feedback have been recorded."}><div className="mt-5 rounded-xl bg-[var(--muted)] px-4 py-4 text-sm font-semibold text-[var(--muted-foreground)]">Submitted successfully</div></ActionCard>;
   return (
     <div className="space-y-5">
     <ActionCard icon={CheckCircle2} eyebrow="Your decision" title="How would you like to proceed?" description="You can return and change a reviewing decision to proceed at any time.">
@@ -815,11 +816,11 @@ function AgreementForm({ caseItem, act, saving }: Omit<CaseActionProps, "upload"
       <form onSubmit={submit} className="mt-5 space-y-4">
         <Field label="Person or business legally responsible for operating the property"><Input name="responsiblePartyName" required defaultValue={caseItem.businessName || caseItem.clientName} /></Field>
         <AgreementPreview caseItem={caseItem} />
-        <div className="rounded-xl bg-[#f2f6f4] p-4 text-sm leading-6 text-[#526a66]">
+        <div className="rounded-xl bg-[var(--muted)] p-4 text-sm leading-6 text-[var(--muted-foreground)]">
           Management fee: 15% + VAT. Onboarding fee: £475 including VAT per property. Payouts are calculated after applicable OTA, cleaning, repair and maintenance deductions and are normally paid between the 5th and 10th of the following month.
         </div>
         <Field label="Your full legal name"><Input name="signedName" required defaultValue={caseItem.clientName} /></Field>
-        <label className="flex items-start gap-3 rounded-xl border border-[#dce5e2] p-4 text-sm leading-6">
+        <label className="flex items-start gap-3 rounded-xl border border-[var(--border)] p-4 text-sm leading-6">
           <Checkbox required />
           <span>I have reviewed the management agreement and agree to sign electronically.</span>
         </label>
@@ -829,7 +830,7 @@ function AgreementForm({ caseItem, act, saving }: Omit<CaseActionProps, "upload"
   );
 }
 
-function OnboardingChecklist({ caseItem }: { caseItem: OnboardingCase }) { const settled=caseItem.onboardingInvoiceStatus==="settled"; return <ActionCard icon={CheckCircle2} eyebrow="Your onboarding progress" title={settled?"Onboarding invoice settled":"Agreement signed"} description={settled?"Your agreement and onboarding invoice are complete.":"Your signed agreement is stored in Documents. Complete the onboarding form while Accounts prepares your £475 VAT-inclusive invoice."}><div className="mt-4 space-y-2"><div className="flex items-center gap-3 rounded-xl bg-[#eef8e5] px-4 py-3 text-sm font-semibold text-[#426329]"><CheckCircle2 className="size-4" /><span className="line-through">Sign management agreement</span></div><div className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold ${settled?"bg-[#eef8e5] text-[#426329]":"border border-[#dfe7e4]"}`}>{settled?<CheckCircle2 className="size-4" />:<span className="size-4 rounded-full border border-[#789087]" />}<span className={settled?"line-through":""}>Settle onboarding invoice</span></div></div></ActionCard>; }
+function OnboardingChecklist({ caseItem }: { caseItem: OnboardingCase }) { const settled=caseItem.onboardingInvoiceStatus==="settled"; return <ActionCard icon={CheckCircle2} eyebrow="Your onboarding progress" title={settled?"Onboarding invoice settled":"Agreement signed"} description={settled?"Your agreement and onboarding invoice are complete.":"Your signed agreement is stored in Documents. Complete the onboarding form while Accounts prepares your £475 VAT-inclusive invoice."}><div className="mt-4 space-y-2"><div className="flex items-center gap-3 rounded-xl bg-[var(--muted)] px-4 py-3 text-sm font-semibold text-[var(--muted-foreground)]"><CheckCircle2 className="size-4" /><span className="line-through">Sign management agreement</span></div><div className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold ${settled?"bg-[var(--muted)] text-[var(--muted-foreground)]":"border border-[var(--border)]"}`}>{settled?<CheckCircle2 className="size-4" />:<span className="size-4 rounded-full border border-[var(--border)]" />}<span className={settled?"line-through":""}>Settle onboarding invoice</span></div></div></ActionCard>; }
 
 function AgreementPreview({ caseItem }: { caseItem: OnboardingCase }) {
   const sections = [
@@ -842,10 +843,10 @@ function AgreementPreview({ caseItem }: { caseItem: OnboardingCase }) {
     ["7. Term and termination", "The agreement continues until either party gives 90 days’ written notice, with immediate termination available for serious breach, illegality or unsafe conditions."],
     ["8–11. Data, confidentiality and law", "Both parties will protect confidential and personal information. Written variations, severability, Scots law and exclusive Scottish court jurisdiction apply."],
   ];
-  return <div className="surface max-h-96 overflow-y-auto rounded-2xl border border-[#dce5e2] bg-white p-5 text-sm leading-6"><h4 className="text-base font-semibold">Short-Term Let Management Agreement</h4><p className="mt-2 text-[#61736f]">Recharge Group Ltd (SC799955), trading as Recharge, 14 Newton Place, Glasgow, G3 7PY. Property: {caseItem.propertyAddress}.</p><div className="mt-4 rounded-xl bg-[#f2f6f4] p-4 font-semibold">15% + VAT management fee · £475 onboarding fee including VAT per property</div>{sections.map(([title,text])=><div key={title} className="mt-4"><p className="font-semibold">{title}</p><p className="mt-1 text-[#61736f]">{text}</p></div>)}<div className="mt-6 border-t border-[#dce5e2] pt-4"><p className="font-['Brush_Script_MT',cursive] text-3xl">Alexander Coghill</p><p className="font-semibold">Alexander Coghill</p><p className="text-[#61736f]">Director, Recharge Group Ltd · signed for the Manager</p></div></div>;
+  return <div className="max-h-96 overflow-y-auto rounded-2xl border border-[var(--border)] bg-white p-5 text-sm leading-6"><h4 className="text-base font-semibold">Short-Term Let Management Agreement</h4><p className="mt-2 text-[var(--muted-foreground)]">Recharge Group Ltd (SC799955), trading as Recharge, 14 Newton Place, Glasgow, G3 7PY. Property: {caseItem.propertyAddress}.</p><div className="mt-4 rounded-xl bg-[var(--muted)] p-4 font-semibold">15% + VAT management fee · £475 onboarding fee including VAT per property</div>{sections.map(([title,text])=><div key={title} className="mt-4"><p className="font-semibold">{title}</p><p className="mt-1 text-[var(--muted-foreground)]">{text}</p></div>)}<div className="mt-6 border-t border-[var(--border)] pt-4"><p className="font-['Brush_Script_MT',cursive] text-3xl">Alexander Coghill</p><p className="font-semibold">Alexander Coghill</p><p className="text-[var(--muted-foreground)]">Director, Recharge Group Ltd · signed for the Manager</p></div></div>;
 }
 
-function EstimatePhotos({ caseItem }: { caseItem: OnboardingCase }) { const photos=caseItem.files.filter((file)=>file.kind==="enquiry_media" && file.contentType.startsWith("image/")); return <ActionCard icon={Sparkles} eyebrow="Photos" title="Estimate photos" description="Property images supplied with the enquiry are displayed here for estimate preparation.">{photos.length?<div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3">{photos.map((file)=><a key={file.id} href={`/api/onboarding/files/${file.id}`} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-xl border border-[#dfe7e4]"><img src={`/api/onboarding/files/${file.id}`} alt={file.fileName} className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]" /><p className="truncate px-3 py-2 text-xs font-semibold">{file.fileName}</p></a>)}</div>:<p className="mt-4 rounded-xl bg-[#f4f7f5] px-4 py-4 text-sm text-[#718184]">No estimate photos were supplied.</p>}</ActionCard>; }
+function EstimatePhotos({ caseItem }: { caseItem: OnboardingCase }) { const photos=caseItem.files.filter((file)=>file.kind==="enquiry_media" && file.contentType.startsWith("image/")); return <ActionCard icon={Sparkles} eyebrow="Photos" title="Estimate photos" description="Property images supplied with the enquiry are displayed here for estimate preparation.">{photos.length?<div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3">{photos.map((file)=><a key={file.id} href={`/api/onboarding/files/${file.id}`} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-xl border border-[var(--border)]"><img src={`/api/onboarding/files/${file.id}`} alt={file.fileName} className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]" /><p className="truncate px-3 py-2 text-xs font-semibold">{file.fileName}</p></a>)}</div>:<p className="mt-4 rounded-xl bg-[var(--muted)] px-4 py-4 text-sm text-[var(--muted-foreground)]">No estimate photos were supplied.</p>}</ActionCard>; }
 
 function ClientOnboardingForm({ caseItem, act, saving }: Omit<CaseActionProps, "upload">) {
   const [utilities, setUtilities] = useState(true);
@@ -904,27 +905,27 @@ function ClientOnboardingForm({ caseItem, act, saving }: Omit<CaseActionProps, "
   return (
     <ActionCard icon={Building2} eyebrow="Property onboarding" title="Complete your onboarding form" description="Follow each section and provide the confirmed information Recharge needs to set up, operate and pay out your property correctly.">
       <form onSubmit={submit} className="mt-5 space-y-6">
-        <div className="rounded-2xl border border-[#dfe7e4] p-5">
+        <div className="rounded-2xl border border-[var(--border)] p-5">
           <h4 className="font-semibold">Property operation</h4>
-          <p className="mt-1 text-sm text-[#647577]">Confirm access and the person or business responsible for this property.</p>
+          <p className="mt-1 text-sm text-[var(--muted-foreground)]">Confirm access and the person or business responsible for this property.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Responsible person or business"><Input name="businessName" required defaultValue={caseItem.businessName || caseItem.clientName} /></Field>
           <Field label="Property access date"><Input name="accessDate" type="date" required /></Field>
           </div>
           <div className="mt-4"><Field label="Access information"><Textarea name="accessInfo" required rows={3} placeholder="Keys, codes, parking and access instructions." /></Field></div>
         </div>
-        <div className="rounded-2xl border border-[#dfe7e4] p-5">
+        <div className="rounded-2xl border border-[var(--border)] p-5">
           <h4 className="font-semibold">Payout information</h4>
-          <p className="mt-1 text-sm text-[#647577]">Enter the bank account Recharge should use for property payouts.</p>
+          <p className="mt-1 text-sm text-[var(--muted-foreground)]">Enter the bank account Recharge should use for property payouts.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Account name"><Input name="bankAccountName" required /></Field>
           <Field label="Account number"><Input name="bankAccountNumber" inputMode="numeric" pattern="\d{8}" required /></Field>
           <Field label="Sort code"><Input name="bankSortCode" placeholder="00-00-00" pattern="\d{2}-?\d{2}-?\d{2}" required /></Field>
           </div>
         </div>
-        <div className="rounded-2xl border border-[#dfe7e4] p-5">
+        <div className="rounded-2xl border border-[var(--border)] p-5">
           <h4 className="font-semibold">Recharge Mailbox</h4>
-          <p className="mt-1 text-sm leading-6 text-[#647577]">All property mail will be photographed and added to your Recharge Mailbox. Choose whether envelopes may be opened for photographing or kept unopened for collection.</p>
+          <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">All property mail will be photographed and added to your Recharge Mailbox. Choose whether envelopes may be opened for photographing or kept unopened for collection.</p>
           <div className="mt-4"><Field label="Mail handling preference"><Select name="mailPreference" required defaultValue="Open, photograph and upload to my Recharge Mailbox"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Open, photograph and upload to my Recharge Mailbox">Open, photograph and upload</SelectItem><SelectItem value="Photograph envelope only and keep unopened for collection">Keep unopened for collection</SelectItem></SelectContent></Select></Field></div>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
@@ -937,19 +938,19 @@ function ClientOnboardingForm({ caseItem, act, saving }: Omit<CaseActionProps, "
           {prepayment && !prepaymentSwitch && <Field label="Credit meter switch date"><Input name="creditSwitchDate" type="date" required /></Field>}
           {!broadband && !broadbandSetup && <Field label="Wi-Fi installation date"><Input name="broadbandInstallDate" type="date" required /></Field>}
         </div>
-        {prepayment && <div className="rounded-xl border border-[#dfe7e4] p-4"><YesNo title="Would you like Recharge to switch the prepayment meter to credit?" value={prepaymentSwitch} onChange={setPrepaymentSwitch} />{prepaymentSwitch && <p className="mt-3 text-sm leading-6 text-[#647577]">A £50 labour charge applies for staff time to arrange the switch.</p>}</div>}
-        {!broadband && <div className="space-y-4 rounded-xl border border-[#dfe7e4] p-4"><YesNo title="Would you like Recharge to arrange Wi-Fi installation?" value={broadbandSetup} onChange={setBroadbandSetup} />{broadbandSetup ? <><p className="text-sm leading-6 text-[#647577]">A £50 labour charge applies for staff time. Complete each field below so the provider account and credit check can be arranged correctly.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Full legal name"><Input name="wifiCreditName" required /></Field><Field label="Date of birth"><Input name="wifiDob" type="date" required /></Field><Field label="Name on bank account"><Input name="wifiBankName" required /></Field><Field label="Sort code"><Input name="wifiSortCode" required placeholder="00-00-00" /></Field><Field label="Account number"><Input name="wifiAccountNumber" required inputMode="numeric" /></Field></div><Field label="Last three years of address history"><Textarea name="wifiAddressHistory" rows={4} required /></Field><label className="flex items-start gap-3 rounded-xl bg-[#f2f6f4] p-4 text-sm leading-6"><Checkbox name="wifiConsent" required /><span>I consent to Recharge arranging the provider credit check on my behalf.</span></label></> : <p className="text-sm text-[#647577]">You will need to provide the confirmed Wi-Fi installation date before onboarding can be completed.</p>}</div>}
+        {prepayment && <div className="rounded-xl border border-[var(--border)] p-4"><YesNo title="Would you like Recharge to switch the prepayment meter to credit?" value={prepaymentSwitch} onChange={setPrepaymentSwitch} />{prepaymentSwitch && <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">A £50 labour charge applies for staff time to arrange the switch.</p>}</div>}
+        {!broadband && <div className="space-y-4 rounded-xl border border-[var(--border)] p-4"><YesNo title="Would you like Recharge to arrange Wi-Fi installation?" value={broadbandSetup} onChange={setBroadbandSetup} />{broadbandSetup ? <><p className="text-sm leading-6 text-[var(--muted-foreground)]">A £50 labour charge applies for staff time. Complete each field below so the provider account and credit check can be arranged correctly.</p><div className="grid gap-4 sm:grid-cols-2"><Field label="Full legal name"><Input name="wifiCreditName" required /></Field><Field label="Date of birth"><Input name="wifiDob" type="date" required /></Field><Field label="Name on bank account"><Input name="wifiBankName" required /></Field><Field label="Sort code"><Input name="wifiSortCode" required placeholder="00-00-00" /></Field><Field label="Account number"><Input name="wifiAccountNumber" required inputMode="numeric" /></Field></div><Field label="Last three years of address history"><Textarea name="wifiAddressHistory" rows={4} required /></Field><label className="flex items-start gap-3 rounded-xl bg-[var(--muted)] p-4 text-sm leading-6"><Checkbox name="wifiConsent" required /><span>I consent to Recharge arranging the provider credit check on my behalf.</span></label></> : <p className="text-sm text-[var(--muted-foreground)]">You will need to provide the confirmed Wi-Fi installation date before onboarding can be completed.</p>}</div>}
         <YesNo title="Do you require licensing and compliance support?" value={licensing} onChange={setLicensing} />
-        {licensing && <p className="rounded-xl bg-[#f2f6f4] px-4 py-3 text-sm text-[#526a66]">A member of the Recharge licensing team will be in touch with you soon.</p>}
+        {licensing && <p className="rounded-xl bg-[var(--muted)] px-4 py-3 text-sm text-[var(--muted-foreground)]">A member of the Recharge licensing team will be in touch with you soon.</p>}
         <YesNo title="Does the property need routine garden maintenance?" value={garden} onChange={setGarden} />
-        {garden && <p className="rounded-xl bg-[#eef7e4] px-4 py-3 text-sm text-[#405f2a]">Our maintenance team will be in touch with a quote.</p>}
+        {garden && <p className="rounded-xl bg-[var(--muted)] px-4 py-3 text-sm text-[var(--muted-foreground)]">Our maintenance team will be in touch with a quote.</p>}
         <Field label="Warranty or repair contacts"><Textarea name="warrantyDetails" rows={3} placeholder="Optional warranty providers we should contact before arranging repairs." /></Field>
         <div>
           <Label>Repair auto-permission</Label>
-          <p className="mt-1 text-sm leading-6 text-[#647577]">Set the amount we can authorise without contacting you. We will seek the most cost-effective price. In an emergency, we may need to exceed a limit if a delayed response risks the property or guest.</p>
+          <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">Set the amount we can authorise without contacting you. We will seek the most cost-effective price. In an emergency, we may need to exceed a limit if a delayed response risks the property or guest.</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {categories.map((category, index) => (
-              <div key={category} className="rounded-xl border border-[#dfe7e4] p-4">
+              <div key={category} className="rounded-xl border border-[var(--border)] p-4">
                 <p className="text-sm font-semibold">{category}</p>
                 <div className="mt-3 flex items-center gap-3">
                   <Input name={`repair${index}`} type="number" min="0" step="1" placeholder="£ limit" disabled={fullPermission[category]} required={!fullPermission[category]} />
@@ -967,9 +968,9 @@ function ClientOnboardingForm({ caseItem, act, saving }: Omit<CaseActionProps, "
           </div>
         </div>
         {furnishing === "self" && (
-          <div className="rounded-xl bg-[#f2f6f4] p-4">
-            <a className="text-sm font-semibold text-[#1c3934] underline" href="/tool/client-furnishing" target="_blank">Open the self-furnishing calculator</a>
-            <p className="mt-3 text-sm leading-6 text-[#647577]">Enter the inspection date only when you are absolutely certain. There is no rush—Ready will use the date you provide to schedule the inspection team.</p>
+          <div className="rounded-xl bg-[var(--muted)] p-4">
+            <a className="text-sm font-semibold text-[var(--foreground)] underline" href="/tool/client-furnishing" target="_blank">Open the self-furnishing calculator</a>
+            <p className="mt-3 text-sm leading-6 text-[var(--muted-foreground)]">Enter the inspection date only when you are absolutely certain. There is no rush—Ready will use the date you provide to schedule the inspection team.</p>
             <div className="mt-4"><Field label="Confirmed inspection date (optional for now)"><Input name="inspectionDate" type="date" /></Field></div>
           </div>
         )}
@@ -996,7 +997,7 @@ function SelfFurnishInspectionDate({ caseItem, act, saving }: Omit<CaseActionPro
     const form = new FormData(event.currentTarget);
     await act({ action: "set_self_inspection_date", id: caseItem.id, inspectionDate: form.get("inspectionDate") }).catch(() => undefined);
   }
-  return <ActionCard icon={CalendarDays} eyebrow="Self-furnishing" title="Confirm your guest-readiness inspection date" description="Only enter this once you are absolutely certain. There is no rush—the inspection team will use this date when planning the visit."><form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"><Field label="Confirmed inspection date"><Input name="inspectionDate" type="date" required /></Field><Button disabled={saving} className="bg-[#1c3934] text-white">Confirm inspection date</Button></form><a className="mt-4 inline-flex text-sm font-semibold text-[#1c3934] underline" href="/tool/client-furnishing" target="_blank">Open the self-furnishing calculator</a></ActionCard>;
+  return <ActionCard icon={CalendarDays} eyebrow="Self-furnishing" title="Confirm your guest-readiness inspection date" description="Only enter this once you are absolutely certain. There is no rush—the inspection team will use this date when planning the visit."><form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"><Field label="Confirmed inspection date"><Input name="inspectionDate" type="date" required /></Field><Button disabled={saving} className="bg-[#1c3934] text-white">Confirm inspection date</Button></form><a className="mt-4 inline-flex text-sm font-semibold text-[var(--foreground)] underline" href="/tool/client-furnishing" target="_blank">Open the self-furnishing calculator</a></ActionCard>;
 }
 
 function InspectionBooking({ caseItem, act, saving }: Omit<CaseActionProps, "upload">) {
@@ -1025,8 +1026,8 @@ function ReportPublishing({ caseItem, act, upload, saving }: CaseActionProps) {
   return (
     <ActionCard icon={ShieldCheck} eyebrow="Ready inspection" title="Publish the guest-readiness report and quote" description="Record guest safety, amenities, working Wi-Fi, meter type, how-to videos for the guest guidebook, and three labelled photos of every room.">
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <a className="rounded-xl border border-[#dce5e2] p-4 text-sm font-semibold hover:bg-[#f5f8f7]" href="/tool/purchase-order" target="_blank">Open Purchase Order Quotes →</a>
-        <a className="rounded-xl border border-[#dce5e2] p-4 text-sm font-semibold hover:bg-[#f5f8f7]" href="/tool/safety-maintenance" target="_blank">Open Health & Safety Report →</a>
+        <a className="rounded-xl border border-[var(--border)] p-4 text-sm font-semibold hover:bg-[var(--muted)]" href="/tool/purchase-order" target="_blank">Open Purchase Order Quotes →</a>
+        <a className="rounded-xl border border-[var(--border)] p-4 text-sm font-semibold hover:bg-[var(--muted)]" href="/tool/safety-maintenance" target="_blank">Open Health & Safety Report →</a>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <QuickUpload label="Upload purchase order" caseItem={caseItem} kind="purchase_order" upload={upload} />
@@ -1079,8 +1080,8 @@ function AccountsControls({ caseItem, act, saving }: Omit<CaseActionProps, "uplo
     <ActionCard icon={CircleDollarSign} eyebrow="Accounts workflow" title="Invoice settlement" description="The downstream Accounts boards mirror these states on the same onboarding record.">
       <div className="mt-5 space-y-3">
         {invoices.map(([invoice, label, status]) => (
-          <div key={invoice} className="flex flex-col justify-between gap-3 rounded-xl border border-[#dfe7e4] p-4 sm:flex-row sm:items-center">
-            <div><p className="text-sm font-semibold">{label}</p><p className="mt-1 text-xs text-[#718184]">Status: {humanise(status)}</p></div>
+          <div key={invoice} className="flex flex-col justify-between gap-3 rounded-xl border border-[var(--border)] p-4 sm:flex-row sm:items-center">
+            <div><p className="text-sm font-semibold">{label}</p><p className="mt-1 text-xs text-[var(--muted-foreground)]">Status: {humanise(status)}</p></div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={saving || status === "pending"} onClick={() => act({ action: "invoice_status", id: caseItem.id, invoice, status: "pending" }).catch(() => undefined)}>Invoice sent</Button>
               <Button size="sm" disabled={saving || status === "settled"} className="bg-[#1c3934] text-white" onClick={() => act({ action: "invoice_status", id: caseItem.id, invoice, status: "settled" }).catch(() => undefined)}>Settled</Button>
@@ -1116,12 +1117,12 @@ function LaunchChecklist({ caseItem, act, saving }: Omit<CaseActionProps, "uploa
   return (
     <ActionCard icon={Home} eyebrow="Stays launch" title="Prepare listings for management approval" description="Complete every launch control, then submit the property for the manager to make live.">
       <form onSubmit={submit} className="mt-5 space-y-4">
-        <div className="rounded-2xl border border-[#dfe7e4] p-4"><div className="flex items-center justify-between gap-3"><Label>AI listing copy</Label><Button type="button" variant="outline" size="sm" onClick={() => { setTitle(`${caseItem.bedrooms}-bed stay in ${caseItem.propertyAddress.split(",").at(-2)?.trim() || "Scotland"}`); setDescription(`A comfortable ${caseItem.propertyType.toLowerCase()} prepared for reliable short and extended stays, with ${caseItem.bedrooms} bedrooms and convenient access to the surrounding area.`); }}>Generate with AI</Button></div><div className="mt-3 grid gap-3"><Input value={title} onChange={(event) => setTitle(event.target.value)} required placeholder="Listing title" /><Textarea value={description} onChange={(event) => setDescription(event.target.value)} required rows={4} placeholder="Listing description" /></div></div>
+        <div className="rounded-2xl border border-[var(--border)] p-4"><div className="flex items-center justify-between gap-3"><Label>AI listing copy</Label><Button type="button" variant="outline" size="sm" onClick={() => { setTitle(`${caseItem.bedrooms}-bed stay in ${caseItem.propertyAddress.split(",").at(-2)?.trim() || "Scotland"}`); setDescription(`A comfortable ${caseItem.propertyType.toLowerCase()} prepared for reliable short and extended stays, with ${caseItem.bedrooms} bedrooms and convenient access to the surrounding area.`); }}>Generate with AI</Button></div><div className="mt-3 grid gap-3"><Input value={title} onChange={(event) => setTitle(event.target.value)} required placeholder="Listing title" /><Textarea value={description} onChange={(event) => setDescription(event.target.value)} required rows={4} placeholder="Listing description" /></div></div>
         <div className="grid gap-3 sm:grid-cols-2">
           {["Airbnb", "Booking.com", "Comfy Workers", "Direct"].map((platform, index) => <Field key={platform} label={`${platform} link`}><Input name={`link${index}`} type="url" required /></Field>)}
         </div>
         <Field label="Guest guidebook URL"><Input name="guidebookUrl" type="url" required /></Field>
-        <div className="grid gap-3 sm:grid-cols-2">{[[messages,setMessages,"Automated guest messages added"],[photos,setPhotos,"All Ready photos improved with AI"],[pricing,setPricing,"Minimum stay and PriceLabs pricing set"],[amenities,setAmenities,"AI amenity check completed"],[secondary,setSecondary,"Secondary 14-night enquiry listing created"],[approval,setApproval,"Management approval received"]].map(([checked,setChecked,label]) => <label key={String(label)} className="flex items-center gap-3 rounded-xl border border-[#dfe7e4] p-3 text-sm"><Checkbox checked={checked as boolean} onCheckedChange={(value) => (setChecked as (value:boolean)=>void)(value === true)} />{String(label)}</label>)}</div>
+        <div className="grid gap-3 sm:grid-cols-2">{[[messages,setMessages,"Automated guest messages added"],[photos,setPhotos,"All Ready photos improved with AI"],[pricing,setPricing,"Minimum stay and PriceLabs pricing set"],[amenities,setAmenities,"AI amenity check completed"],[secondary,setSecondary,"Secondary 14-night enquiry listing created"],[approval,setApproval,"Management approval received"]].map(([checked,setChecked,label]) => <label key={String(label)} className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-3 text-sm"><Checkbox checked={checked as boolean} onCheckedChange={(value) => (setChecked as (value:boolean)=>void)(value === true)} />{String(label)}</label>)}</div>
         <Button disabled={saving || !messages || !photos || !pricing || !amenities || !secondary || !approval} className="bg-[#1c3934] text-white">Publish property live <Sparkles /></Button>
       </form>
     </ActionCard>
@@ -1133,12 +1134,12 @@ function Documents({ caseItem, upload, client = false }: { caseItem: OnboardingC
     <ActionCard icon={FileText} eyebrow="Shared documents" title="Files on this onboarding" description="Documents stay attached to the same record for the client and every Recharge team.">
       <div className="mt-5 space-y-2">
         {caseItem.files.map((file) => (
-          <a key={file.id} href={`/api/onboarding/files/${file.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-[#e0e7e5] px-4 py-3 text-sm hover:bg-[#f6f8f7]">
+          <a key={file.id} href={`/api/onboarding/files/${file.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-4 py-3 text-sm hover:bg-[var(--card)]">
             <span className="min-w-0 truncate font-semibold">{file.fileName}{file.roomLabel ? ` · ${file.roomLabel}` : ""}</span>
-            <span className="shrink-0 text-xs text-[#718184]">{humanise(file.kind)}</span>
+            <span className="shrink-0 text-xs text-[var(--muted-foreground)]">{humanise(file.kind)}</span>
           </a>
         ))}
-        {!caseItem.files.length && <p className="rounded-xl bg-[#f4f7f5] px-4 py-4 text-sm text-[#718184]">No files uploaded yet.</p>}
+        {!caseItem.files.length && <p className="rounded-xl bg-[var(--muted)] px-4 py-4 text-sm text-[var(--muted-foreground)]">No files uploaded yet.</p>}
       </div>
       {client && caseItem.status === "enquiry_received" && <QuickUpload label="Add another property photo or video" caseItem={caseItem} kind="enquiry_media" upload={upload} />}
       {!client && (
@@ -1168,11 +1169,11 @@ function PropertyGroupChat({ caseItem, act, saving, client = false }: { caseItem
     } catch { setSent(false); }
   }
   return <ActionCard icon={MessageSquare} eyebrow="Property group chat" title={caseItem.propertyName || caseItem.propertyAddress} description="Keep questions, decisions and property updates in one shared conversation for the client and Recharge teams.">
-    <div className="mt-5 max-h-80 space-y-3 overflow-y-auto rounded-2xl bg-[#f4f7f5] p-4">
-      {messages.map((message) => { const mine = client ? message.actorName === caseItem.clientName : message.actorName !== caseItem.clientName; return <div key={message.id} className={`max-w-[88%] rounded-2xl px-4 py-3 ${mine ? "ml-auto bg-[#1c3934] text-white" : "bg-white"}`}><p className="text-sm leading-6">{message.note}</p><p className={`mt-2 text-xs ${mine ? "text-white/55" : "text-[#788783]"}`}>{message.actorName} · {dateTime(message.createdAt)}</p></div>; })}
-      {!messages.length && <p className="text-sm text-[#718184]">No messages yet. Start the property conversation below.</p>}
+    <div className="mt-5 max-h-80 space-y-3 overflow-y-auto rounded-2xl bg-[var(--muted)] p-4">
+      {messages.map((message) => { const mine = client ? message.actorName === caseItem.clientName : message.actorName !== caseItem.clientName; return <div key={message.id} className={`max-w-[88%] rounded-2xl px-4 py-3 ${mine ? "ml-auto bg-[#1c3934] text-white" : "bg-white"}`}><p className="text-sm leading-6">{message.note}</p><p className={`mt-2 text-xs ${mine ? "text-white/55" : "text-[var(--muted-foreground)]"}`}>{message.actorName} · {dateTime(message.createdAt)}</p></div>; })}
+      {!messages.length && <p className="text-sm text-[var(--muted-foreground)]">No messages yet. Start the property conversation below.</p>}
     </div>
-    <form onSubmit={submit} className="mt-4 space-y-3"><Field label="Message"><Textarea name="message" rows={3} required placeholder="Ask a question or post an update for this property…" /></Field><div className="flex items-center gap-3"><Button disabled={saving} className="bg-[#1c3934] text-white">Send message</Button>{sent && <span className="text-sm font-semibold text-[#4f772e]">Message submitted</span>}</div></form>
+    <form onSubmit={submit} className="mt-4 space-y-3"><Field label="Message"><Textarea name="message" rows={3} required placeholder="Ask a question or post an update for this property…" /></Field><div className="flex items-center gap-3"><Button disabled={saving} className="bg-[#1c3934] text-white">Send message</Button>{sent && <span className="text-sm font-semibold text-[var(--muted-foreground)]">Message submitted</span>}</div></form>
   </ActionCard>;
 }
 
@@ -1183,7 +1184,7 @@ function ActivityTimeline({ caseItem }: { caseItem: OnboardingCase }) {
         {caseItem.updates.map((item) => (
           <div key={item.id} className="flex gap-3">
             <span className="mt-1.5 size-2 shrink-0 rounded-full bg-[#76ad49]" />
-            <div><p className="text-sm font-medium">{item.note}</p><p className="mt-1 text-xs text-[#7b8987]">{item.actorName} · {dateTime(item.createdAt)}</p></div>
+            <div><p className="text-sm font-medium">{item.note}</p><p className="mt-1 text-xs text-[var(--muted-foreground)]">{item.actorName} · {dateTime(item.createdAt)}</p></div>
           </div>
         ))}
       </div>
@@ -1222,9 +1223,9 @@ function NewEnquiryDialog({ currentUser, act, upload, saving }: { currentUser: U
   return (
     <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setSubmitted(false); }}>
       <DialogTrigger asChild><Button className="h-11 rounded-xl bg-[#1c3934] px-5 text-white hover:bg-[#10271f]"><Plus /> New property enquiry</Button></DialogTrigger>
-      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[#d9e2df] p-0 sm:max-w-2xl">
-        {submitted ? <div className="p-8 text-center"><div className="mx-auto grid size-14 place-items-center rounded-full bg-[#eef8e5] text-[#4f772e]"><CheckCircle2 /></div><DialogTitle className="mt-5 text-2xl">Estimate request submitted</DialogTitle><DialogDescription className="mx-auto mt-3 max-w-md text-sm leading-6">Your performance estimate request has been submitted. A member of the Recharge team will send your estimate within 48 hours.</DialogDescription><Button className="mt-6 bg-[#1c3934] text-white" onClick={() => setOpen(false)}>Done</Button></div> : <form onSubmit={submit}>
-          <DialogHeader className="border-b border-[#e2e9e7] px-6 py-6 text-left">
+      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-3xl border-[var(--border)] p-0 sm:max-w-2xl">
+        {submitted ? <div className="p-8 text-center"><div className="mx-auto grid size-14 place-items-center rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]"><CheckCircle2 /></div><DialogTitle className="mt-5 text-2xl">Estimate request submitted</DialogTitle><DialogDescription className="mx-auto mt-3 max-w-md text-sm leading-6">Your performance estimate request has been submitted. A member of the Recharge team will send your estimate within 48 hours.</DialogDescription><Button className="mt-6 bg-[#1c3934] text-white" onClick={() => setOpen(false)}>Done</Button></div> : <form onSubmit={submit}>
+          <DialogHeader className="border-b border-[var(--border)] px-6 py-6 text-left">
             <DialogTitle className="text-2xl tracking-[-0.035em]">Request a performance estimate</DialogTitle>
             <DialogDescription>Tell us about the property and add any useful photos or videos. We aim to deliver your estimate within 48 hours.</DialogDescription>
           </DialogHeader>
@@ -1237,9 +1238,9 @@ function NewEnquiryDialog({ currentUser, act, upload, saving }: { currentUser: U
               <Field label="Bathrooms"><Input name="bathrooms" type="number" min="0" max="40" required /></Field>
             </div>
             <Field label="Photos and videos (optional)"><Input name="media" type="file" accept="image/*,video/*" multiple /></Field>
-            <div className="rounded-xl bg-[#eef7e4] px-4 py-3 text-sm leading-6 text-[#405f2a]">Thank you for filling out the form. Recharge aims to deliver performance estimates within 48 hours of your request.</div>
+            <div className="rounded-xl bg-[var(--muted)] px-4 py-3 text-sm leading-6 text-[var(--muted-foreground)]">Thank you for filling out the form. Recharge aims to deliver performance estimates within 48 hours of your request.</div>
           </div>
-          <DialogFooter className="border-t border-[#e2e9e7] px-6 py-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={saving || uploading} className="bg-[#1c3934] text-white">{uploading ? "Uploading…" : saving ? "Submitting…" : "Submit enquiry"}</Button></DialogFooter>
+          <DialogFooter className="border-t border-[var(--border)] px-6 py-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={saving || uploading} className="bg-[#1c3934] text-white">{uploading ? "Uploading…" : saving ? "Submitting…" : "Submit enquiry"}</Button></DialogFooter>
         </form>}
       </DialogContent>
     </Dialog>
@@ -1248,42 +1249,42 @@ function NewEnquiryDialog({ currentUser, act, upload, saving }: { currentUser: U
 
 function QuickUpload({ label, caseItem, kind, upload }: { label: string; caseItem: OnboardingCase; kind: OnboardingFileKind; upload: CaseActionProps["upload"] }) {
   const [busy, setBusy] = useState(false);
-  return <label className="mt-4 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-[#b8c9c3] bg-[#f7f9f8] px-4 py-4 text-sm font-semibold hover:bg-[#f1f5f3]"><span>{busy ? "Uploading…" : label}</span><Upload className="size-4" /><input className="sr-only" type="file" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setBusy(true); await upload(caseItem.id, kind, file).catch(() => undefined); setBusy(false); }} /></label>;
+  return <label className="mt-4 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] px-4 py-4 text-sm font-semibold hover:bg-[var(--muted)]"><span>{busy ? "Uploading…" : label}</span><Upload className="size-4" /><input className="sr-only" type="file" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setBusy(true); await upload(caseItem.id, kind, file).catch(() => undefined); setBusy(false); }} /></label>;
 }
 
 function RoomPhotoUpload({ caseItem, upload }: { caseItem: OnboardingCase; upload: CaseActionProps["upload"] }) {
   const [room, setRoom] = useState("");
   const [busy, setBusy] = useState(false);
-  return <div className="mt-4 rounded-xl border border-[#dfe7e4] p-4"><Label>Room inspection photos</Label><p className="mt-1 text-xs text-[#718184]">Enter the room name and upload three photos from different angles.</p><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr]"><Input value={room} onChange={(event) => setRoom(event.target.value)} placeholder="e.g. Main bedroom" /><Input type="file" accept="image/*" multiple onChange={async (event) => { const files = Array.from(event.target.files || []); if (!room.trim() || !files.length) return; setBusy(true); for (const file of files) await upload(caseItem.id, "room_photo", file, room).catch(() => undefined); setBusy(false); }} /></div>{busy && <p className="mt-2 text-xs text-[#315f4d]">Uploading room photos…</p>}</div>;
+  return <div className="mt-4 rounded-xl border border-[var(--border)] p-4"><Label>Room inspection photos</Label><p className="mt-1 text-xs text-[var(--muted-foreground)]">Enter the room name and upload three photos from different angles.</p><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr]"><Input value={room} onChange={(event) => setRoom(event.target.value)} placeholder="e.g. Main bedroom" /><Input type="file" accept="image/*" multiple onChange={async (event) => { const files = Array.from(event.target.files || []); if (!room.trim() || !files.length) return; setBusy(true); for (const file of files) await upload(caseItem.id, "room_photo", file, room).catch(() => undefined); setBusy(false); }} /></div>{busy && <p className="mt-2 text-xs text-[var(--muted-foreground)]">Uploading room photos…</p>}</div>;
 }
 
 function ActionCard({ icon: Icon, eyebrow, title, description, children }: { icon: typeof Home; eyebrow: string; title: string; description: string; children?: React.ReactNode }) {
-  return <section className="surface rounded-[1.35rem] border border-[#dfe7e4] bg-white p-5"><div className="flex items-start gap-4"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#edf5f0] text-[#315f4d]"><Icon className="size-4" /></div><div><p className="text-[0.66rem] font-semibold uppercase tracking-[0.15em] text-[#6e8580]">{eyebrow}</p><h3 className="mt-1.5 text-xl font-semibold tracking-[-0.025em]">{title}</h3><p className="mt-1 text-sm leading-6 text-[#647577]">{description}</p></div></div>{children}</section>;
+  return <section className="rounded-[1.35rem] border border-[var(--border)] bg-white p-5"><div className="flex items-start gap-4"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--muted)] text-[var(--muted-foreground)]"><Icon className="size-4" /></div><div><p className="text-[0.66rem] font-semibold uppercase tracking-[0.15em] text-[var(--muted-foreground)]">{eyebrow}</p><h3 className="mt-1.5 text-xl font-semibold tracking-[-0.025em]">{title}</h3><p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">{description}</p></div></div>{children}</section>;
 }
 
 function DashboardCard({ icon: Icon, title, value, note }: { icon: typeof Home; title: string; value: string; note: string }) {
-  return <article className="surface rounded-[1.35rem] border border-[#d9e2df] bg-white p-5"><div className="flex items-center justify-between"><Icon className="size-5 text-[#5c7b73]" /><span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#718184]">{title}</span></div><p className="mt-8 text-3xl font-semibold tracking-[-0.04em]">{value}</p><p className="mt-2 text-sm text-[#718184]">{note}</p></article>;
+  return <article className="rounded-[1.35rem] border border-[var(--border)] bg-white p-5"><div className="flex items-center justify-between"><Icon className="size-5 text-[var(--muted-foreground)]" /><span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted-foreground)]">{title}</span></div><p className="mt-8 text-3xl font-semibold tracking-[-0.04em]">{value}</p><p className="mt-2 text-sm text-[var(--muted-foreground)]">{note}</p></article>;
 }
 
 function MiniStat({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) {
-  return <article className={`rounded-[1.25rem] border p-4 ${accent ? "border-[#315f50] bg-[#e5eeea]" : "border-[#d9e2df] bg-white"}`}><p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#718184]">{label}</p><p className="mt-5 text-3xl font-semibold">{value}</p></article>;
+  return <article className={`rounded-[1.25rem] border p-4 ${accent ? "border-[var(--border)] bg-[var(--muted)]" : "border-[var(--border)] bg-white"}`}><p className="text-xs font-semibold uppercase tracking-[0.11em] text-[var(--muted-foreground)]">{label}</p><p className="mt-5 text-3xl font-semibold">{value}</p></article>;
 }
 
 function DecisionButton({ active, tone, title, onClick }: { active: boolean; tone: "green" | "amber" | "red"; title: string; onClick: () => void }) {
   const tones = { green: "border-green-300 bg-green-50 text-green-900", amber: "border-amber-300 bg-amber-50 text-amber-900", red: "border-red-300 bg-red-50 text-red-900" };
-  return <button type="button" onClick={onClick} className={`rounded-xl border p-4 text-left text-sm font-semibold transition ${active ? tones[tone] : "border-[#dfe7e4] bg-white text-[#526864]"}`}>{title}</button>;
+  return <button type="button" onClick={onClick} className={`rounded-xl border p-4 text-left text-sm font-semibold transition ${active ? tones[tone] : "border-[var(--border)] bg-white text-[var(--muted-foreground)]"}`}>{title}</button>;
 }
 
 function ChoiceCard({ active, title, text, onClick }: { active: boolean; title: string; text: string; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={`rounded-xl border p-4 text-left ${active ? "border-[#1c3934] bg-[#edf5f0]" : "border-[#dfe7e4]"}`}><span className="block text-sm font-semibold">{title}</span><span className="mt-1 block text-xs leading-5 text-[#647577]">{text}</span></button>;
+  return <button type="button" onClick={onClick} className={`rounded-xl border p-4 text-left ${active ? "border-[var(--border)] bg-[var(--muted)]" : "border-[var(--border)]"}`}><span className="block text-sm font-semibold">{title}</span><span className="mt-1 block text-xs leading-5 text-[var(--muted-foreground)]">{text}</span></button>;
 }
 
 function YesNo({ title, value, onChange }: { title: string; value: boolean; onChange: (value: boolean) => void }) {
-  return <div className="rounded-xl border border-[#dfe7e4] p-4"><p className="text-sm font-semibold">{title}</p><div className="mt-3 flex gap-2"><Button type="button" size="sm" variant={value ? "default" : "outline"} className={value ? "bg-[#1c3934] text-white" : ""} onClick={() => onChange(true)}>Yes</Button><Button type="button" size="sm" variant={!value ? "default" : "outline"} className={!value ? "bg-[#1c3934] text-white" : ""} onClick={() => onChange(false)}>No</Button></div></div>;
+  return <div className="rounded-xl border border-[var(--border)] p-4"><p className="text-sm font-semibold">{title}</p><div className="mt-3 flex gap-2"><Button type="button" size="sm" variant={value ? "default" : "outline"} className={value ? "bg-[#1c3934] text-white" : ""} onClick={() => onChange(true)}>Yes</Button><Button type="button" size="sm" variant={!value ? "default" : "outline"} className={!value ? "bg-[#1c3934] text-white" : ""} onClick={() => onChange(false)}>No</Button></div></div>;
 }
 
 function ServiceAccordion({ value, number, title, children }: { value: string; number: string; title: string; children: React.ReactNode }) {
-  return <AccordionItem value={value} className="border-[#dfe7e4] bg-[#f2f6f4] px-5"><AccordionTrigger className="py-5 text-base font-semibold text-[#1c3934] hover:no-underline"><span className="flex items-center gap-3"><span className="text-xs font-bold tracking-[0.12em] text-[#5f7d74]">{number}</span>{title}</span></AccordionTrigger><AccordionContent className="pb-5 text-sm leading-6 text-[#536b67]">{children}</AccordionContent></AccordionItem>;
+  return <AccordionItem value={value} className="border-[var(--border)] bg-[var(--muted)] px-5"><AccordionTrigger className="py-5 text-base font-semibold text-[var(--foreground)] hover:no-underline"><span className="flex items-center gap-3"><span className="text-xs font-bold tracking-[0.12em] text-[var(--muted-foreground)]">{number}</span>{title}</span></AccordionTrigger><AccordionContent className="pb-5 text-sm leading-6 text-[var(--muted-foreground)]">{children}</AccordionContent></AccordionItem>;
 }
 
 function FrequentlyAskedQuestions() {
@@ -1294,11 +1295,11 @@ function FrequentlyAskedQuestions() {
     ["How do you maintain properties?", <p>We complete monthly health and safety inspection reports, record any concerns and coordinate required maintenance through Recharge Ready. This creates a consistent record of standards and helps us deal with issues before they affect guests.</p>],
     ["Where do you list properties?", <p>We list across Airbnb, Booking.com and Comfy Workers, as well as other contractor networks. We manage the calendars and positioning together so the property can reach leisure, business and longer-stay guests.</p>],
   ];
-  return <ActionCard icon={FileText} eyebrow="Frequently asked questions" title="What property owners usually ask us" description="Clear answers about fees, operations and how we look after your property."><Accordion type="single" collapsible className="mt-5 rounded-2xl border border-[#dfe7e4] px-5">{questions.map(([question, answer]) => <AccordionItem key={String(question)} value={String(question)} className="border-[#dfe7e4]"><AccordionTrigger className="py-5 text-base font-semibold text-[#1c3934] hover:no-underline">{question}</AccordionTrigger><AccordionContent className="pb-5 text-sm leading-6 text-[#647577]">{answer}</AccordionContent></AccordionItem>)}</Accordion></ActionCard>;
+  return <ActionCard icon={FileText} eyebrow="Frequently asked questions" title="What property owners usually ask us" description="Clear answers about fees, operations and how we look after your property."><Accordion type="single" collapsible className="mt-5 rounded-2xl border border-[var(--border)] px-5">{questions.map(([question, answer]) => <AccordionItem key={String(question)} value={String(question)} className="border-[var(--border)]"><AccordionTrigger className="py-5 text-base font-semibold text-[var(--foreground)] hover:no-underline">{question}</AccordionTrigger><AccordionContent className="pb-5 text-sm leading-6 text-[var(--muted-foreground)]">{answer}</AccordionContent></AccordionItem>)}</Accordion></ActionCard>;
 }
 
 function MoneyField({ name, label }: { name: string; label: string }) {
-  return <Field label={label}><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#718184]">£</span><Input name={name} type="number" min="1" step="0.01" required className="pl-7" /></div></Field>;
+  return <Field label={label}><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--muted-foreground)]">£</span><Input name={name} type="number" min="1" step="0.01" required className="pl-7" /></div></Field>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -1306,11 +1307,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function EmptyCases() {
-  return <div className="rounded-[1.5rem] border border-dashed border-[#b9c9c4] bg-white px-6 py-12 text-center"><Building2 className="mx-auto size-7 text-[#668179]" /><h2 className="mt-4 text-xl font-semibold">No property enquiries yet</h2><p className="mt-2 text-sm text-[#718184]">Create a new property enquiry to begin the onboarding journey.</p></div>;
+  return <div className="rounded-[1.5rem] border border-dashed border-[var(--border)] bg-white px-6 py-12 text-center"><Building2 className="mx-auto size-7 text-[var(--muted-foreground)]" /><h2 className="mt-4 text-xl font-semibold">No property enquiries yet</h2><p className="mt-2 text-sm text-[var(--muted-foreground)]">Create a new property enquiry to begin the onboarding journey.</p></div>;
 }
 
 function Unavailable({ onBack }: { onBack: () => void }) {
-  return <section className="surface rounded-[1.5rem] border border-[#d9e2df] bg-white p-8"><Button variant="ghost" onClick={onBack}><ArrowLeft /> Back</Button><h1 className="mt-5 text-3xl font-semibold">Property onboarding is temporarily unavailable</h1><p className="mt-3 text-[#647577]">Please try again shortly.</p></section>;
+  return <section className="rounded-[1.5rem] border border-[var(--border)] bg-white p-8"><Button variant="ghost" onClick={onBack}><ArrowLeft /> Back</Button><h1 className="mt-5 text-3xl font-semibold">Property onboarding is temporarily unavailable</h1><p className="mt-3 text-[var(--muted-foreground)]">Please try again shortly.</p></section>;
 }
 
 function NextStepSummary({ caseItem }: { caseItem: OnboardingCase }) {

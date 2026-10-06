@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
 import { isHostawayConfigured, listHostawayProperties } from "@/lib/hostaway";
@@ -224,7 +225,7 @@ type PropertySourceRow = {
 
 export function canUsePropertyDatabase(profile: AccessProfile) {
   if (profile.role === "client") return profile.modules.includes("client-dashboard");
-  return profile.role === "admin" || profile.modules.includes("property-database");
+  return isWorkspaceAdmin(profile.role) || profile.modules.includes("property-database");
 }
 
 export async function getPropertyDatabaseData(profile: AccessProfile): Promise<PropertyDatabaseData | undefined> {
@@ -316,7 +317,7 @@ export async function syncPropertiesFromHostaway(profile: AccessProfile) {
 }
 
 export async function importClickUpProperties(profile: AccessProfile, records: ClickUpImportRecord[]) {
-  if (profile.role !== "admin") throw new Error("Admin access required");
+  if (!isWorkspaceAdmin(profile.role)) throw new Error("Admin access required");
   const db = database();
   const now = Math.floor(Date.now() / 1000);
   const existing = await db.prepare(
@@ -949,8 +950,8 @@ function mergePropertyValues(keeper: DeduplicationRow, duplicates: Deduplication
   };
 }
 
-function findHostawayDatabaseMatch(
-  rows: Array<{ id: string; hostaway_listing_id: string | null; hostaway_listing_ids: string; clickup_task_id: string | null; property_name: string; property_address: string }>,
+function findHostawayDatabaseMatch<T extends { id: string; hostaway_listing_id: string | null; hostaway_listing_ids: string; clickup_task_id: string | null; property_name: string; property_address: string }>(
+  rows: T[],
   property: GroupedHostawayProperty,
 ) {
   const ids = new Set(property.ids);

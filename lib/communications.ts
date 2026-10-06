@@ -1,3 +1,4 @@
+import { isWorkspaceAdmin } from "@/lib/modules";
 import { env } from "cloudflare:workers";
 import type { AccessProfile } from "@/lib/access";
 import { createMaintenanceTicket } from "@/lib/maintenance";
@@ -132,7 +133,7 @@ type ManagedPropertyRow = {
 
 export function canUseCommunicationCentre(profile: AccessProfile) {
   return (
-    profile.role === "admin" || profile.modules.includes("guest-communication")
+    isWorkspaceAdmin(profile.role) || profile.modules.includes("guest-communication")
   );
 }
 
