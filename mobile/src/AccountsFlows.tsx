@@ -330,7 +330,7 @@ export function ManagementOverview({ palette: p, desktop, onOpenWork }: { palett
     { name: "Stays", icon: "key", lines: [[String(portfolio.inHouse.length), "guests staying"], [String(portfolio.upcoming.length), "upcoming arrivals"]] },
     { name: "Cleans", icon: "spray", lines: [["6", "cleans today"], ["2", "awaiting approval"]] },
     { name: "Ready", icon: "hardhat", lines: [["4", "open repairs"], ["1", "quote waiting"]] },
-    { name: "Accounts", icon: "coins", lines: [[String(waiting.length), "invoices to approve"], [formatMoney(waiting.reduce((sum, expense) => sum + expense.amountMinor, 0)), "waiting value"]] },
+    { name: "Accounts", icon: "coins", lines: [[String(waiting.length), "to approve"], [formatMoney(waiting.reduce((sum, expense) => sum + expense.amountMinor, 0)), "waiting"]] },
   ];
   const remaining = DECISIONS.filter(item => !decided[item.id]).length;
   return (
