@@ -2,27 +2,14 @@ import { Player, type PlayerRef } from "@remotion/player";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { staticFile } from "remotion";
-import { DURATION, FPS, INTRO_END, Intro } from "./Intro";
-import TL from "./timeline.json";
+import { BONE, DURATION, FPS, GREEN, INTRO_END, Intro } from "./Intro";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const touch = window.matchMedia("(hover: none)").matches;
 // ?frame=120 holds a single frame, for checking the animation.
 const pinned = Number(new URLSearchParams(window.location.search).get("frame") ?? NaN);
 const hold = Number.isFinite(pinned) ? pinned : reduceMotion ? INTRO_END : null;
 const viewport = () => ({ width: Math.round(window.innerWidth), height: Math.round(window.innerHeight) });
-
-// The soundtrack is always on (there is no sound control). sound/soundtrack.py writes the
-// intro, then the idle loop repeated: one loop period sits between LOOP_FROM and LOOP_TO,
-// and Web Audio repeats that span with no gap. Browsers only allow sound once the visitor
-// has interacted with the page, so if autoplay is blocked the first tap, click or key press
-// starts it, and the intro replays from the beginning with its sound.
-const LOOP = (2 * TL.cycle) / FPS;
-const LOOP_FROM = TL.introEnd / FPS + LOOP;
-const LOOP_TO = LOOP_FROM + LOOP;
-const fileTime = (frame: number) => {
-  const t = frame / FPS;
-  return t < LOOP_FROM ? t : LOOP_FROM + ((t - LOOP_FROM) % LOOP);
-};
 
 // A tenth of a second of silence, as a WAV data URL.
 function silentWav() {
@@ -38,7 +25,13 @@ function silentWav() {
   return "data:audio/wav;base64," + btoa(String.fromCharCode(...bytes));
 }
 
+// The intro's soundtrack (sound/soundtrack.py), played once in step with the animation;
+// the logo then idles in silence. There is no sound control. Browsers only allow sound
+// after the visitor interacts with the page, so where autoplay is blocked the first tap,
+// click or key press starts it and the intro replays from the beginning with its sound.
+// Returns true while the browser is waiting for that interaction (to show the hint).
 function useSoundtrack(player: React.RefObject<PlayerRef | null>, enabled: boolean) {
+  const [waiting, setWaiting] = useState(false);
   useEffect(() => {
     const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!enabled || !Context) return;
@@ -54,6 +47,7 @@ function useSoundtrack(player: React.RefObject<PlayerRef | null>, enabled: boole
     let settle = 0; // after a restart, give the picture a moment to jump to frame 0 before checking drift
     let unlocked = false;
     let disposed = false;
+    const frameNow = () => player.current?.getCurrentFrame() ?? 0;
 
     const stop = () => {
       if (!source) return;
@@ -65,54 +59,59 @@ function useSoundtrack(player: React.RefObject<PlayerRef | null>, enabled: boole
     const startAt = (frame: number) => {
       if (!buffer || ctx.state !== "running") return;
       stop();
+      const lead = 0.06 * FPS;
+      const offset = (frame + lead) / FPS;
+      if (offset >= buffer.duration - 0.05) return; // the intro is over: stay silent
       const s = ctx.createBufferSource();
       s.buffer = buffer;
-      s.loop = true;
-      s.loopStart = LOOP_FROM;
-      s.loopEnd = LOOP_TO;
       s.connect(out);
+      s.onended = () => { if (source === s) source = null; };
       const at = ctx.currentTime + 0.06;
       out.gain.setTargetAtTime(1, at, 0.008);
-      s.start(at, fileTime(frame + 0.06 * FPS));
+      s.start(at, offset);
       source = s;
-      anchor = { at, frame: frame + 0.06 * FPS };
+      anchor = { at, frame: frame + lead };
     };
+    const begin = (fromStart: boolean) => {
+      unlocked = true;
+      setWaiting(false);
+      if (fromStart) {
+        player.current?.seekTo(0);
+        player.current?.play();
+        settle = ctx.currentTime + 0.4;
+      }
+      startAt(fromStart ? 0 : frameNow());
+    };
+
     // Keep the sound on the animation's clock: if it drifts by more than about 3 frames, re-cue it.
     const onFrame = ({ detail }: { detail: { frame: number } }) => {
       if (!source || ctx.state !== "running" || ctx.currentTime < settle) return;
       const heard = anchor.frame + (ctx.currentTime - anchor.at) * FPS;
-      const drift = Math.abs(fileTime(detail.frame) - fileTime(heard)) * FPS;
-      if (drift > 3 && drift < LOOP * FPS - 3) startAt(detail.frame);
+      if (Math.abs(detail.frame - heard) > 3) startAt(detail.frame);
     };
     const p = player.current;
     p?.addEventListener("frameupdate", onFrame);
 
-    // A gesture unlocks the sound; replay the intro so it is heard from the start.
-    const unlock = () => {
-      if (unlocked || disposed) return;
-      // Older iPhones: a media element playing inside the same tap moves the page's audio onto
-      // the media channel, which the silent switch doesn't mute. It plays silence, on a loop.
-      if (!session && media) void media.play().catch(() => undefined);
-      void ctx.resume().then(() => {
-        if (unlocked || disposed || ctx.state !== "running") return;
-        unlocked = true;
-        gestures.forEach(type => window.removeEventListener(type, unlock, true));
-        const pl = player.current;
-        pl?.seekTo(0);
-        pl?.play();
-        settle = ctx.currentTime + 0.4;
-        startAt(0);
-      });
-    };
+    // Older iPhones: a media element playing inside the same tap moves the page's audio onto
+    // the media channel, which the silent switch doesn't mute. It plays silence, on a loop.
     const media = session || typeof Audio === "undefined" ? null : new Audio(silentWav());
     if (media) media.loop = true;
     const gestures = ["touchstart", "touchend", "pointerdown", "pointerup", "mousedown", "keydown", "click"] as const;
+    const unlock = () => {
+      if (unlocked || disposed) return;
+      if (media) void media.play().catch(() => undefined);
+      void ctx.resume().then(() => {
+        if (unlocked || disposed || ctx.state !== "running") return;
+        gestures.forEach(type => window.removeEventListener(type, unlock, true));
+        begin(true);
+      });
+    };
     gestures.forEach(type => window.addEventListener(type, unlock, true));
 
-    // Pause with the tab; pick up again in step when it comes back.
+    // Pause with the tab; pick up again in step when it comes back (if the intro is still on).
     const onVisibility = () => {
       if (document.hidden) { stop(); void ctx.suspend(); return; }
-      void ctx.resume().then(() => { if (unlocked) startAt(player.current?.getCurrentFrame() ?? 0); });
+      void ctx.resume().then(() => { if (unlocked) startAt(frameNow()); });
     };
     document.addEventListener("visibilitychange", onVisibility);
 
@@ -123,14 +122,14 @@ function useSoundtrack(player: React.RefObject<PlayerRef | null>, enabled: boole
         if (disposed) return;
         buffer = decoded;
         // Where autoplay is allowed the sound simply joins in, in step with the picture.
-        if (ctx.state === "running") { unlocked = true; startAt(player.current?.getCurrentFrame() ?? 0); }
-        else if (unlocked) startAt(0);
+        if (ctx.state === "running") begin(false);
+        else if (!unlocked) setWaiting(true);
       })
       .catch(() => undefined);
     void ctx.resume().catch(() => undefined);
     // Some browsers report "running" a moment after resume() without a gesture.
     ctx.onstatechange = () => {
-      if (ctx.state === "running" && buffer && !source && !document.hidden) { unlocked = true; startAt(player.current?.getCurrentFrame() ?? 0); }
+      if (ctx.state === "running" && buffer && !unlocked && !document.hidden) begin(false);
     };
 
     return () => {
@@ -139,9 +138,34 @@ function useSoundtrack(player: React.RefObject<PlayerRef | null>, enabled: boole
       gestures.forEach(type => window.removeEventListener(type, unlock, true));
       document.removeEventListener("visibilitychange", onVisibility);
       stop();
+      media?.pause();
       void ctx.close();
     };
   }, [player, enabled]);
+  return waiting;
+}
+
+// A quiet hint while the browser holds the sound back. It is not a control: tapping
+// anywhere on the page starts the sound, and the hint then goes away.
+function SoundHint({ show }: { show: boolean }) {
+  return (<>
+    <style>{"@keyframes recharge-hint { 0%, 100% { opacity: .55 } 50% { opacity: .9 } }"}</style>
+    <div role="status" aria-live="polite" style={{
+      position: "fixed", left: 0, right: 0, bottom: 52, display: "flex", justifyContent: "center", pointerEvents: "none",
+      opacity: show ? 1 : 0, transform: `translateY(${show ? 0 : 6}px)`, transition: "opacity 600ms ease, transform 600ms ease",
+    }}>
+      {show && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 999, background: `${BONE}d9`,
+          border: `1px solid ${GREEN}26`, color: GREEN, font: "600 11px Montserrat, system-ui, sans-serif", letterSpacing: "0.16em",
+          textTransform: "uppercase", animation: "recharge-hint 2.4s ease-in-out infinite" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M11 5 6 9H2v6h4l5 4V5z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" />
+          </svg>
+          {touch ? "Tap for sound" : "Click for sound"}
+        </div>
+      )}
+    </div>
+  </>);
 }
 
 function App() {
@@ -152,25 +176,28 @@ function App() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  useSoundtrack(player, hold === null);
+  const waiting = useSoundtrack(player, hold === null);
   return (
-    <Player
-      ref={player}
-      component={Intro}
-      inputProps={{ still: reduceMotion }}
-      durationInFrames={DURATION}
-      fps={FPS}
-      compositionWidth={size.width}
-      compositionHeight={size.height}
-      style={{ width: "100%", height: "100%" }}
-      autoPlay={hold === null}
-      initialFrame={hold ?? 0}
-      controls={false}
-      clickToPlay={false}
-      doubleClickToFullscreen={false}
-      spaceKeyToPlayOrPause={false}
-      acknowledgeRemotionLicense
-    />
+    <>
+      <Player
+        ref={player}
+        component={Intro}
+        inputProps={{ still: reduceMotion }}
+        durationInFrames={DURATION}
+        fps={FPS}
+        compositionWidth={size.width}
+        compositionHeight={size.height}
+        style={{ width: "100%", height: "100%" }}
+        autoPlay={hold === null}
+        initialFrame={hold ?? 0}
+        controls={false}
+        clickToPlay={false}
+        doubleClickToFullscreen={false}
+        spaceKeyToPlayOrPause={false}
+        acknowledgeRemotionLicense
+      />
+      <SoundHint show={waiting} />
+    </>
   );
 }
 

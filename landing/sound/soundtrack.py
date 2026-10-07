@@ -13,12 +13,10 @@ is 15 frames, a footstep 7.5. So every sound lands on the motion it belongs to:
   6 s      Fully charged  the tonic: bell, low boom and the full chord with the flash
   6.5-7.6 s               a harp run that travels round with the ring as it draws
   7.5-8.5 s RECHARGE.     one pluck per letter, left to right, and a pop for the full stop
-  9 s ->   The logo idles an 8-second loop: the bolt's pulse chimes, the z's hum, and
-                          the letters' wave plays back as a run of plucks
+  9-12 s                  the last chord rings out, and then the sound stops: the logo
+                          idles in silence
 
-Output: one 26-second file. 0-9 s is the intro; from 9 s the loop repeats, and
-17-25 s is one exact period, so the website can loop it with no gap or seam
-(see src/main.tsx). The Instagram videos use the first 12 seconds.
+Output: one 12-second file, used by the website (src/main.tsx) and the Instagram videos.
 
 Needs numpy and scipy.  Run: npm run soundtrack
 """
@@ -34,9 +32,8 @@ SR = 48_000
 TL = json.load(open(os.path.join(os.path.dirname(__file__), "..", "src", "timeline.json")))
 FPS = TL["fps"]
 BEAT = TL["beat"] / FPS  # 0.5 s
-LOOP_START = TL["introEnd"] / FPS  # 9 s
-LOOP = 2 * TL["cycle"] / FPS  # 8 s: two idle cycles (the letters wave every other one)
-LENGTH = LOOP_START + 2 * LOOP + 1.0  # 26 s
+INTRO = TL["introEnd"] / FPS  # 9 s
+LENGTH = INTRO + 3.0  # room for the last chord to ring out
 N = int(SR * LENGTH)
 rng = np.random.default_rng(7)
 
@@ -377,39 +374,6 @@ for i, c in enumerate(text):
     chimes.place(musicbox(hz(["D7", "E7", "F#7", "A7", "B7"][i % 5]), 0.8), start, pan=-0.4 + 0.8 * i / len(text), gain=0.012)
 
 # =======================================================================================
-# The idle loop (8 s from 9 s): Dmaj9 | Bm9 | Gmaj9 | A6sus4, quiet enough to sit under the page.
-def idle_loop(at):
-    seed = 1000
-    for k, (start, notes, root) in enumerate([(0, ["D3", "A3", "C#4", "E4", "F#4"], "D2"), (2, ["B3", "D4", "F#4", "A4", "C#5"], "B1"),
-                                              (4, ["G3", "B3", "D4", "F#4", "A4"], "G1"), (6, ["A3", "D4", "E4", "F#4", "B4"], "A1")]):
-        pad_chord(notes, at + start, 2.0, idle_pads, 0.038, seed + k)
-        for hit, dur, vel in ((0, 0.7, 0.5), (0.75, 0.35, 0.35), (1.5, 0.4, 0.3)):
-            for i, note in enumerate(notes[1:]):
-                keys.place(epiano(hz(note), dur, vel), at + start + hit + i * 0.006, pan=-0.25 + 0.5 * i / 4, gain=0.05)
-        bass_note(root, at + start, 1.3, 0.11)
-        bass_note(root, at + start + 1.5, 0.4, 0.07)
-        drums.place(kick(seed=seed + k), at + start, gain=0.16)
-        drums.place(rim(seed + k), at + start + 1.0, pan=0.1, gain=0.05)
-        for h in range(4):
-            drums.place(hat(seed=seed + 10 * k + h), at + start + 0.25 + h * 0.5, pan=0.3, gain=0.03)
-    # The bolt's pulse at the start of each cycle.
-    for c, note in ((0, "D6"), (4, "B5")):
-        chimes.place(bell(hz(note), 2.5, index=1.4, ratio=2.0, decay=1.5), at + c, pan=0.15, gain=0.045)
-        for zgroup in TL["idleZs"]:
-            for i, zn in enumerate(["B4", "D5", "F#5"]):
-                chimes.place(hum(zn), at + c + f(zgroup + i * TL["stride"]), pan=-0.3 + 0.1 * i, gain=0.016)
-    # The letters' wave (second cycle): a pluck as each letter peaks.
-    for i, note in enumerate(["B4", "D5", "F#5", "A5", "B5", "A5", "F#5", "D5"]):
-        l = letters[i]
-        keys.place(string(hz(note), 1.8, 0.5), at + 4 + f(TL["beat"] + i * TL["letterStep"]), pan=((l["x"] + l["w"] / 2) / 1818 - 0.5) * 1.2, gain=0.045)
-
-idle_pads = Bus(0)
-for k in range(3):
-    idle_loop(LOOP_START + k * LOOP)
-for side in ("L", "R"):
-    getattr(pads, side)[:] += stft_filter(getattr(idle_pads, side), lambda t, fq: lowpass(fq, 2300, 0.4))
-
-# =======================================================================================
 # Mix: a soft room reverb on the sends, gentle movement on the keys, then the master.
 def reverb_ir(seconds, seed):
     g = np.random.default_rng(seed)
@@ -441,12 +405,16 @@ def write(path, stereo):
         w.setframerate(SR)
         w.writeframes((np.clip(stereo, -1, 1) * 32767).astype("<i2").tobytes())
 
-# Loudness: measure the intro, set it to -16 LUFS with one fixed gain, then a gentle peak
-# limiter (local, so the loop stays an exact repeat).
+# Let the tail die away to silence by the end of the file.
+tail = np.ones(N)
+tail[int((LENGTH - 1.2) * SR):] = np.cos(np.linspace(0, np.pi / 2, N - int((LENGTH - 1.2) * SR))) ** 2
+outL, outR = outL * tail, outR * tail
+
+# Loudness: set it to -16 LUFS with one fixed gain, then a gentle peak limiter.
 stereo = np.stack([outL, outR], axis=1)
 stereo /= np.abs(stereo).max()
 probe = "public/sound/.probe.wav"
-write(probe, stereo[: int(12 * SR)] * 0.5)
+write(probe, stereo * 0.5)
 report = subprocess.run(["ffmpeg", "-hide_banner", "-i", probe, "-af", "loudnorm=I=-16:TP=-1.5:print_format=json", "-f", "null", "-"],
                         capture_output=True, text=True).stderr
 os.remove(probe)
@@ -460,7 +428,5 @@ stereo *= np.minimum(1.0, ceiling / np.maximum(peak, 1e-9))[:, None]
 write("public/sound/recharge.wav", stereo)
 subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", "public/sound/recharge.wav", "-c:a", "libmp3lame", "-b:a", "160k",
                 "public/sound/recharge.mp3"], check=True)
-a, b = int((LOOP_START + LOOP) * SR), int((LOOP_START + 2 * LOOP) * SR)
-seam = np.abs(stereo[a:a + SR // 2] - stereo[b:b + SR // 2]).max()
-print(f"public/sound/recharge.wav and .mp3 written: {LENGTH:.0f} s, intro {LOOP_START:.0f} s, loop {LOOP:.0f} s "
-      f"(seam check {seam:.5f}, measured {measured:.1f} LUFS before gain)")
+print(f"public/sound/recharge.wav and .mp3 written: {LENGTH:.0f} s, the intro is {INTRO:.0f} s "
+      f"(measured {measured:.1f} LUFS before gain)")
