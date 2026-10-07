@@ -42,7 +42,8 @@ Stays and Training. The table below shows what each old centre still has that th
   photos and documents stay as text notes for now.
 - **Cleaner pay varies with every task, and there is no fixed payday.** Pay is set per clean, and
   Accounts pays whenever it chooses (see item 7).
-- Clock in/out and AirCover were not confirmed, so they stay optional.
+- **Clock in/out is for the team only**, not owners. It is item 8 in Phase 2.
+- AirCover was not confirmed, so it stays optional.
 
 ## The plan
 
@@ -73,8 +74,8 @@ requests through the schemas and the database) and its own push.
      to pay, they select the cleans and record one payment with its bank reference.
    - Supply requests can be raised from a clean.
    - Both need a small database addition.
-8. **AirCover claims and clock in/out** (S each). Only if the client still wants them (see the
-   questions at the end).
+8. **Clock in/out for the team** (S). Staff roles only, never owners. Management sees hours by
+   person and week. The **AirCover claims** tracker stays optional.
 
 ### Phase 3: files and photos (needs Cloudinary, which comes later)
 9. Switch on uploads (the backend is already built) for cleans, expenses, repair evidence,
@@ -105,7 +106,8 @@ The keys go in as Worker secrets with `wrangler secret put HOSTAWAY_ACCOUNT_ID` 
 
 ## Order of work after the client's answers
 
-1. Phase 1: people admin, property records, the owners' view.
+1. Phase 1: people admin, property records, the owners' view. **Done on 7 October 2026**: see
+   `BACKEND-FINANCE-AND-TEAMS-2026-10-07.md`, People, Properties and owner view.
 2. Retire the old portal (item 13).
 3. Phase 4: Hostaway reservations and listings sync, then guest communication.
 4. Phase 2: purchase orders, onboarding pipeline, direct bookings, cleaner pay.
@@ -113,4 +115,4 @@ The keys go in as Worker secrets with `wrangler secret put HOSTAWAY_ACCOUNT_ID` 
 
 ## Still open
 
-- Clock in/out for Stays, and the AirCover claims tracker: are they wanted?
+- The AirCover claims tracker: is it wanted?

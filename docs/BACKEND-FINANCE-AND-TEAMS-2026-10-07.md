@@ -305,3 +305,43 @@ The Work tab now opens on the main view for each role. The switch at the top mov
 - publishing, editing and completing a course.
 
 No database changes were needed. The same backend redeploy noted for Cleans applies.
+
+## People, Properties and the owner view (phone app)
+
+**People** (Management → People, admins only):
+- New people sign up in the app and ask for access. Their requests are listed first, under *Waiting*.
+- **Approve:** choose the role and its tools. The tools pre-fill with the role's usual set.
+- **Edit:** change name, role, tools and responsibilities.
+- **Revoke and restore** access.
+- **Properties:** add or remove the properties each person works on. A person only sees the properties they are assigned to.
+- **Rules**, enforced in the database:
+  - Only a super admin manages admins.
+  - Cleaners are limited to their own jobs, performance and invoices.
+  - At least one super admin must stay active.
+  - An email must be verified before access is approved.
+
+**Properties** (Management → Properties):
+- Create, edit and archive properties: name, address, region, bedrooms, and status (onboarding, live, archived).
+- Edit the private details: access instructions, platform logins, owner payment notes. These never appear in activity, exports or reports.
+- Assign the owner and the team to each property.
+- The management fee and cleaning cost stay in Accounts → Statements.
+
+**Owner view** (owners: Work → *Stays and statements*):
+- Upcoming and recent stays.
+- Next arrival and the nights booked ahead.
+- Issued and paid statements: income, cleaning, repairs, fee and payout, with each stay and cost listed.
+- Owners now get the statements tool by default.
+
+### New database change
+
+`20261007093344_workspace_admin.sql` adds two functions:
+- `workspace_admin_read`: people with their properties, and properties with their people.
+- `workspace_admin_action`: `saveAccess` by account. It reuses the checked `workspace_save_access`.
+
+Both are installed in the Supabase project. They are served at `/api/mobile/admin` and `/api/workspace/admin`, which are on the deployed backend's allow-list.
+
+`tests/live-admin-contract.test.mjs` covers:
+- a sign-up approved, given a property, then revoked;
+- a property created, edited, given private details, then unassigned;
+- the role hierarchy, tool limits and last super admin rules;
+- an owner seeing only issued statements and their stays.

@@ -53,6 +53,8 @@ const CLIENT_MODULES = [
   "client-furnishing",
   "client-mailbox",
   "client-purchase-order-quotes",
+  // Owners read their issued and paid statements.
+  "owner-statements",
 ] as const satisfies readonly ModuleId[];
 
 const CLEANS_MODULES = [

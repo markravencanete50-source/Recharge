@@ -19,6 +19,7 @@ import { LiveAccounts } from './LiveAccounts';
 import { LiveManagement } from './LiveManagement';
 import { LiveStays } from './LiveStays';
 import { LiveTraining } from './LiveTraining';
+import { LiveOwner } from './LiveOwner';
 import { exportReport } from './exportReport';
 import { liveApiOrigin,restoreAccount,signIn,signOut,workspaceRequest,WorkspaceApiError } from './backend/client';
 import type { WorkspaceAccount } from '../../lib/workspace-account-policy';
@@ -32,8 +33,8 @@ async function api(path:string,body?:Record<string,unknown>){
  const response=await workspaceRequest('/api/mobile'+path,body);
  return z.object({data:z.unknown().optional()}).passthrough().parse(await response.json());
 }
-type WorkView='management'|'stays'|'repairs'|'accounts'|'all';
-const WORK_VIEW_LABEL:Record<WorkView,string>={management:'Management',stays:'Stays',repairs:'Repairs',accounts:'Accounts',all:'All work'};
+type WorkView='management'|'stays'|'owner'|'repairs'|'accounts'|'all';
+const WORK_VIEW_LABEL:Record<WorkView,string>={management:'Management',stays:'Stays',owner:'Stays and statements',repairs:'Repairs',accounts:'Accounts',all:'All work'};
 const message=(error:unknown)=>error instanceof Error?error.message:'The request could not be completed.';
 const money=(n:unknown)=>'GBP '+(Number(n)/100).toFixed(2);
 function Button({label,onPress,p,disabled=false,primary=false}:{label:string;onPress:()=>void;p:Palette;disabled?:boolean;primary?:boolean}){
@@ -102,12 +103,12 @@ function Screen(){
  const cleansRole=account?.role==='cleans'||account?.role==='cleaning_manager';
  const repairsOnly=account?.role==='ready';
  // The work views each role can switch between; the first one opens by default.
- const workViews:WorkView[]=!account?[]:isWorkspaceAdmin(account.role)?['management','repairs','accounts','all']:account.role==='stays'?['stays','repairs','all']:account.role==='client'?['repairs','all']:[];
+ const workViews:WorkView[]=!account?[]:isWorkspaceAdmin(account.role)?['management','repairs','accounts','all']:account.role==='stays'?['stays','repairs','all']:account.role==='client'?['owner','repairs','all']:[];
  const currentView:WorkView|''=workViews.includes(workView as WorkView)?workView:(workViews[0]??''),repairsToggle=workViews.length>1;
  // Accounts staff work only in Accounts; management can switch to it from the work tab.
  const accountsOnly=account?.role==='accounts';
- const showAccounts=accountsOnly||currentView==='accounts',showManagement=currentView==='management',showStays=currentView==='stays';
- const showRepairs=repairsOnly||currentView==='repairs',showGeneric=!cleansRole&&!showRepairs&&!showAccounts&&!showManagement&&!showStays;
+ const showAccounts=accountsOnly||currentView==='accounts',showManagement=currentView==='management',showStays=currentView==='stays',showOwner=currentView==='owner';
+ const showRepairs=repairsOnly||currentView==='repairs',showGeneric=!cleansRole&&!showRepairs&&!showAccounts&&!showManagement&&!showStays&&!showOwner;
  const chosenJourney=journeys.find(j=>j.propertyId===propertyId),chosenWork=work.filter(w=>!propertyId||w.propertyId===propertyId),faq=account?faqsForAccess(account.role,account.modules):[];
  return <SafeAreaView style={{flex:1,backgroundColor:p.background}} edges={['top','bottom']}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={{flex:1}}>
   <View style={[s.header,{backgroundColor:header.background}]}><CompanyLogo palette={header}/><MotionPress accessibilityRole="button" accessibilityLabel={dark?'Use light theme':'Use dark theme'} onPress={()=>setTheme(dark?'light':'dark')} style={[s.button,{backgroundColor:header.surface,borderColor:header.border,paddingHorizontal:12}]}><Feather name={dark?'sun':'moon'} color={header.text} size={20}/></MotionPress></View>
@@ -125,6 +126,7 @@ function Screen(){
     {tab==='work'&&cleansRole&&account&&<LiveCleans palette={p} account={account} properties={properties}/>}
     {tab==='work'&&repairsToggle&&<View style={[ui.row,{gap:8,flexWrap:'wrap'}]}>{workViews.map(v=><Button key={v} label={WORK_VIEW_LABEL[v]+(currentView===v?' · showing':'')} p={p} primary={currentView===v} onPress={()=>setWorkView(v)}/>)}</View>}
     {tab==='work'&&showManagement&&account&&<LiveManagement palette={p} account={account}/>}
+    {tab==='work'&&showOwner&&<LiveOwner palette={p} properties={properties}/>}
     {tab==='work'&&showStays&&account&&<LiveStays palette={p} account={account} properties={properties} onOpenRepairs={()=>setWorkView('repairs')}/>}
     {tab==='work'&&showAccounts&&account&&<LiveAccounts palette={p} account={account} properties={properties}/>}
     {tab==='work'&&showRepairs&&account&&<LiveRepairs palette={p} account={account} properties={properties}/>}

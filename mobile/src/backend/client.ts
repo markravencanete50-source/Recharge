@@ -10,6 +10,7 @@ import type { PortfolioAction } from "../../../lib/portfolio-policy";
 import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import type { FinanceAction } from '../../../lib/workspace-finance-policy';
 import type { TeamsAction } from '../../../lib/workspace-teams-policy';
+import type { AdminAction } from '../../../lib/workspace-admin-policy';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -83,7 +84,7 @@ async function refresh() {
   return refreshInFlight;
 }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
 }
@@ -109,6 +110,9 @@ export const readFinance = async (query: Record<string,string>) => (await worksp
 export const writeFinance = async (action: FinanceAction) => (await workspaceRequest('/api/mobile/finance',action)).json();
 export const readTeams = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/teams?'+new URLSearchParams(query))).json();
 export const writeTeams = async (action: TeamsAction) => (await workspaceRequest('/api/mobile/teams',action)).json();
+// Administration: people and properties (admins only).
+export const readAdmin = async (section: 'people' | 'properties') => (await workspaceRequest('/api/mobile/admin?section='+section)).json();
+export const writeAdmin = async (action: AdminAction) => (await workspaceRequest('/api/mobile/admin',action)).json();
 export const requestPhoneReset = async (phone: string) => (await call('/api/mobile/recovery',{action:'request',phone})).json();
 export const completePhoneReset = async (phone: string, code: string, password: string) => (await call('/api/mobile/recovery',{action:'verify',phone,code,password})).json();
 export async function uploadWorkPhoto(input: {requestId: string;workId: string;purpose: 'cleaning'|'mailbox'|'delivery'|'licence'|'maintenance'}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
