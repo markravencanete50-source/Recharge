@@ -42,9 +42,11 @@ export function liveApiOrigin(): string | null {
 async function call(path: string, body?: unknown, accessToken?: string) {
   const origin = liveApiOrigin();
   if (!origin) throw new WorkspaceApiError("The live mobile backend is awaiting configuration.", 503);
-  const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 15000);
+  const multipart = body instanceof FormData;
+  // Photo uploads and a manual Hostaway sync (which pages through every listing and stay) take longer.
+  const slow = multipart || (body !== undefined && /\/integrations(?:[?]|$)/.test(path));
+  const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), slow ? 120000 : 15000);
   try {
-    const multipart = body instanceof FormData;
     const response = await fetch(sameOriginWeb ? path : origin + path, {
       method: body === undefined ? "GET" : "POST", credentials: sameOriginWeb ? "same-origin" : "omit", redirect: sameOriginWeb ? "manual" : "error", signal: controller.signal,
       headers: { ...(sameOriginWeb ? {} : { "X-Recharge-Client": "native" }), ...(body === undefined || multipart ? {} : { "Content-Type": "application/json" }), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
@@ -138,7 +140,9 @@ export const completePhoneReset = async (phone: string, code: string, password: 
 export async function uploadWorkPhoto(input: {requestId: string;workId: string;purpose: 'cleaning'|'mailbox'|'delivery'|'licence'|'maintenance'}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
   const form = new FormData();
   form.append('requestId', input.requestId); form.append('workId', input.workId); form.append('purpose', input.purpose);
-  // React Native's multipart transport accepts a local file descriptor. The server verifies bytes, size and permission.
-  form.append('photo', photo as unknown as Blob);
+  // React Native's multipart transport accepts a local file descriptor; a browser needs the file's bytes.
+  // The server verifies bytes, size and permission either way.
+  if (Platform.OS === 'web') form.append('photo', new File([await (await fetch(photo.uri)).blob()], photo.name, { type: photo.type }));
+  else form.append('photo', photo as unknown as Blob);
   return (await workspaceRequest('/api/mobile/media', form)).json();
 }

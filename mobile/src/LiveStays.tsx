@@ -49,7 +49,10 @@ function StaySheet({ p, visible, properties, onClose, onDone }: { p: Palette; vi
   const [payout, setPayout] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const stayRequest = useRequestId(visible ? ["stay", propertyId, reference.trim(), checkIn, checkOut, status].join(":") : null);
+  const stayKey = ["stay", propertyId, reference.trim(), checkIn, checkOut, status].join(":");
+  const stayRequest = useRequestId(visible ? stayKey : null);
+  // If the stay saved but its platform details didn't, a retry only resends the details.
+  const [savedStay, setSavedStay] = useState<{ key: string; id: string; version: number } | null>(null);
   const detailsRequest = useRequestId(visible ? ["details", propertyId, reference.trim(), checkIn, channel, code, guests, payout].join(":") : null);
   const platform = channel === "airbnb" || channel === "booking_com";
   async function save() {
@@ -61,8 +64,14 @@ function StaySheet({ p, visible, properties, onClose, onDone }: { p: Palette; vi
     if (guestCount !== null && (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > 50)) { setError("Guests must be a number from 1 to 50."); return; }
     setBusy(true); setError("");
     try {
-      const saved = recordedReservationSchema.parse((await writeOperation({ action: "recordReservation", requestId: stayRequest.get(), propertyId, reference: reference.trim(), checkIn, checkOut, status })).data);
-      stayRequest.done();
+      let stay = savedStay?.key === stayKey ? savedStay : null;
+      if (!stay) {
+        const recorded = recordedReservationSchema.parse((await writeOperation({ action: "recordReservation", requestId: stayRequest.get(), propertyId, reference: reference.trim(), checkIn, checkOut, status })).data);
+        stayRequest.done();
+        stay = { key: stayKey, id: recorded.reservation.id, version: recorded.reservation.version };
+        setSavedStay(stay);
+      }
+      const saved = { reservation: { id: stay.id, version: stay.version } };
       try {
         await writeFinance({ action: "setReservationFinancials", requestId: detailsRequest.get(), propertyId, reservationId: saved.reservation.id, version: saved.reservation.version, channel, ...(code.trim() ? { channelReference: code.trim() } : {}), guests: guestCount, payoutMinor });
         detailsRequest.done();
@@ -70,7 +79,7 @@ function StaySheet({ p, visible, properties, onClose, onDone }: { p: Palette; vi
         setError(`The stay is saved, but its platform details were not: ${message(e)} Accounts will see it under stays missing details.`);
         await onDone(); return;
       }
-      setReference(""); setCode(""); setGuests(""); setPayout(""); onClose(); await onDone();
+      setSavedStay(null); setReference(""); setCode(""); setGuests(""); setPayout(""); onClose(); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (

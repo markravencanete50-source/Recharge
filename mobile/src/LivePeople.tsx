@@ -63,11 +63,17 @@ function PersonSheet({ p, actorRole, person, properties, onClose, onDone }: { p:
       await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
+  async function assignEverything() {
+    if (!person || busy) return;
+    setBusy(true); setError("");
+    try { await writeAdmin({ action: "assignAllProperties", userId: person.userId }); await onDone(); }
+    catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
   const assigned = new Set(person.assignments.map(a => a.propertyId));
   const available = properties.filter(x => x.status !== "archived" && !assigned.has(x.id));
 
   return (
-    <Sheet palette={p} visible onClose={onClose} title={person.fullName || person.email} subtitle={person.email} icon="people">
+    <Sheet palette={p} visible onClose={onClose} title={person.fullName || person.email || "New account"} subtitle={person.email ?? "Signed up by phone"} icon="people">
       <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
         <Tag label={STATUS_TAG[person.status][0]} tone={STATUS_TAG[person.status][1]} p={p} />
         {!person.emailVerified && <Tag label="Email not verified" tone="wait" p={p} />}
@@ -99,7 +105,7 @@ function PersonSheet({ p, actorRole, person, properties, onClose, onDone }: { p:
         <Field label="Responsibilities (optional)" value={responsibilities} onChange={setResponsibilities} p={p} multiline />
         {!!error && <Notice text={error} p={p} tone="bad" />}
         {person.status === "pending" && <Button label={busy ? "Saving…" : "Approve access"} icon="check" primary p={p} disabled={busy || !person.emailVerified} onPress={() => void saveAccess("active")} />}
-        {person.status === "pending" && !person.emailVerified && <Text style={[ui.small, { color: p.muted }]}>They need to verify their email before access can be approved.</Text>}
+        {person.status === "pending" && !person.emailVerified && <Text style={[ui.small, { color: p.muted }]}>{person.email ? "They need to verify their email before access can be approved." : "They signed up by phone, and access can only be approved for a verified email. Ask them to sign up with their email."}</Text>}
         {person.status === "active" && <Button label={busy ? "Saving…" : "Save changes"} primary p={p} disabled={busy} onPress={() => void saveAccess("active")} />}
         {person.status === "revoked" && <Button label={busy ? "Saving…" : "Restore access"} primary p={p} disabled={busy} onPress={() => void saveAccess("active")} />}
         {person.status !== "revoked" && <Button label="Revoke access" icon="slash" p={p} disabled={busy} onPress={() => void saveAccess("revoked")} />}
@@ -114,6 +120,7 @@ function PersonSheet({ p, actorRole, person, properties, onClose, onDone }: { p:
         ))}
         {!person.assignments.length && <Text style={[ui.small, { color: p.muted }]}>No properties yet. People only see the properties they are assigned to.</Text>}
         {editable && person.status === "active" && available.length > 0 && <>
+          {person.role !== "client" && <Button label={busy ? "Saving…" : `Give every property (${available.length} more)`} icon="plus" p={p} disabled={busy} onPress={() => void assignEverything()} />}
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Add a property</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {available.map(x => <MotionPress key={x.id} accessibilityRole="button" onPress={() => void assignment(x.id, true)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, flexDirection: "row", alignItems: "center", gap: 6 }}><Feather name="plus" size={14} color={p.primary} /><Text style={{ color: p.text, fontSize: 13, fontWeight: "600" }}>{x.name}</Text></MotionPress>)}
@@ -252,7 +259,7 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
   const pending = people.filter(x => x.status === "pending").length;
   const shownFilter = personFilter === "pending" && !pending && !loading ? "all" : personFilter;
   const q = query.trim().toLowerCase();
-  const shownPeople = useMemo(() => people.filter(x => (shownFilter === "all" || x.status === shownFilter) && (!q || (x.fullName + " " + x.email).toLowerCase().includes(q))), [people, shownFilter, q]);
+  const shownPeople = useMemo(() => people.filter(x => (shownFilter === "all" || x.status === shownFilter) && (!q || (x.fullName + " " + (x.email ?? "")).toLowerCase().includes(q))), [people, shownFilter, q]);
   const shownProperties = properties.filter(x => (propertyFilter === "all" ? x.status !== "archived" : x.status === propertyFilter) && (!q || (x.name + " " + x.region + " " + x.address).toLowerCase().includes(q)));
   const person = people.find(x => x.userId === openPerson) ?? null;
   const property = properties.find(x => x.id === openProperty) ?? null;
@@ -266,7 +273,7 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
         <Pills p={p} values={["pending", "active", "revoked", "all"] as const} value={shownFilter} onChange={setPersonFilter} label={v => ({ pending: `Waiting (${pending})`, active: "Active", revoked: "Revoked", all: "Everyone" })[v]} />
         <List p={p} empty={shownFilter === "pending" ? "Nobody is waiting for approval." : "No people match."}>
           {shownPeople.map((x, i) => (
-            <Row key={x.userId} p={p} first={i === 0} title={x.fullName || x.email} detail={`${roleLabel(x.role)} · ${x.email}${!isWorkspaceAdmin(x.role) ? ` · ${x.assignments.length} propert${x.assignments.length === 1 ? "y" : "ies"}` : ""}`}
+            <Row key={x.userId} p={p} first={i === 0} title={x.fullName || x.email || "New account"} detail={`${roleLabel(x.role)} · ${x.email ?? "phone sign-up"}${!isWorkspaceAdmin(x.role) ? ` · ${x.assignments.length} propert${x.assignments.length === 1 ? "y" : "ies"}` : ""}`}
               tags={[STATUS_TAG[x.status], ...(!x.emailVerified ? [["Email not verified", "wait"] as [string, "wait"]] : [])]} onPress={() => setOpenPerson(x.userId)} />
           ))}
         </List>

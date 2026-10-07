@@ -41,9 +41,25 @@ import { operationForms, type JourneyView, type OperationView, type WorkflowForm
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
-type WorkView = "management" | "stays" | "owner" | "repairs" | "accounts" | "all";
-const WORK_VIEW_LABEL: Record<WorkView, string> = { management: "Management", stays: "Stays", owner: "Stays and statements", repairs: "Repairs", accounts: "Accounts", all: "All work" };
+type WorkView = "management" | "stays" | "owner" | "cleans" | "repairs" | "accounts" | "all";
+const WORK_VIEW_LABEL: Record<WorkView, string> = { management: "Management", stays: "Stays", owner: "Stays and statements", cleans: "Cleans", repairs: "Repairs", accounts: "Accounts", all: "All work" };
 const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help"];
+const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
+type BookingPolicy = z.infer<typeof bookingPolicySchema>;
+// Direct-booking offers use this discount policy; only a super admin can set and confirm it.
+function bookingPolicyForm(policy: BookingPolicy): WorkflowForm {
+  return {
+    key: "booking-policy-" + policy.version, title: "Direct-booking discount policy", endpoint: "operations",
+    description: "Offers to returning guests use these limits. Direct-booking offers stay switched off until the policy is confirmed.",
+    fields: [
+      { name: "minimumNights", label: "Minimum nights for an offer", type: "number", required: true, defaultValue: String(policy.minimum_nights) },
+      { name: "discountPercent", label: "Discount, per cent", type: "number", required: true, defaultValue: String(Math.round(policy.discount_bps / 100)) },
+      { name: "discountCapMinor", label: "Largest discount, GBP", type: "money", required: true, defaultValue: (policy.discount_cap_minor / 100).toFixed(2) },
+      { name: "confirmed", label: "I confirm this policy for direct-booking offers", type: "checkbox", required: true },
+    ],
+    build: (values, requestId) => ({ action: "configureBookingPolicy", requestId, version: policy.version, minimumNights: values.minimumNights, discountBps: Number(values.discountPercent) * 100, discountCapMinor: values.discountCapMinor, confirmed: values.confirmed === true }),
+  };
+}
 
 // The live workspace's destinations for each role. Five items, so the middle one
 // is the raised action on phones, as in the redesign.
@@ -82,9 +98,9 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
   const [properties, setProperties] = useState<PropertyView[]>([]), [journeys, setJourneys] = useState<JourneyView[]>([]), [work, setWork] = useState<OperationView[]>([]);
-  const [invoices, setInvoices] = useState<InvoiceView[]>([]), [notices, setNotices] = useState<NoticeView[]>([]), [policyConfirmed, setPolicyConfirmed] = useState(false);
+  const [invoices, setInvoices] = useState<InvoiceView[]>([]), [notices, setNotices] = useState<NoticeView[]>([]), [policyConfirmed, setPolicyConfirmed] = useState(false), [policy, setPolicy] = useState<BookingPolicy | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const [period, setPeriod] = useState<AnalyticsPeriod>(() => presetPeriod(30)), [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null), [dates, setDates] = useState(false);
+  const [period, setPeriod] = useState<AnalyticsPeriod>(() => presetPeriod(30)), [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null), [reportError, setReportError] = useState(""), [dates, setDates] = useState(false);
   const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
   const [form, setForm] = useState<WorkflowForm | null>(null), [openWork, setOpenWork] = useState<OperationView | null>(null);
   const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active");
@@ -102,8 +118,20 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
 
   const refresh = useCallback(async () => {
     setLoading(true); setError("");
-    const jobs = [["properties", "/workspace?entity=properties&limit=100"], ["journeys", "/journeys"], ["work", "/operations"], ["invoices", "/workspace?entity=invoices&limit=100"], ["notices", "/portfolio?section=notifications"]] as const;
-    const results = await Promise.allSettled(jobs.map(async ([, path]) => liveApi(path)));
+    // Properties and invoices come a page of 100 at a time; read every page.
+    const readAll = async (entity: "properties" | "invoices") => {
+      const rows: unknown[] = [];
+      let cursor = "";
+      for (let page = 0; page < 30; page++) {
+        const result = await liveApi("/workspace?" + new URLSearchParams({ entity, limit: "100", ...(cursor ? { cursor } : {}) }));
+        rows.push(...z.array(z.unknown()).parse(result.data));
+        cursor = typeof result.nextCursor === "string" ? result.nextCursor : "";
+        if (!cursor) break;
+      }
+      return { data: rows };
+    };
+    const jobs = [["properties", ""], ["journeys", "/journeys"], ["work", "/operations"], ["invoices", ""], ["notices", "/portfolio?section=notifications"]] as const;
+    const results = await Promise.allSettled(jobs.map(async ([key, path]) => key === "properties" || key === "invoices" ? readAll(key) : liveApi(path)));
     results.forEach((result, i) => {
       const key = jobs[i][0];
       // A failed collection is cleared, including after an assignment is revoked.
@@ -114,7 +142,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       }
       try {
         const data = result.value.data;
-        if (key === "properties") setProperties(z.array(propertyViewSchema).parse(data));
+        if (key === "properties") setProperties(z.array(propertyViewSchema).parse(data).sort((x, y) => x.name.localeCompare(y.name)));
         if (key === "journeys") setJourneys(z.array(journeyViewSchema).parse(data));
         if (key === "work") setWork(z.array(operationViewSchema).parse(data));
         if (key === "invoices") setInvoices(z.array(invoiceViewSchema).parse(data));
@@ -122,13 +150,18 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       } catch { setError("Unexpected response. Refresh to try again."); }
     });
     if (isWorkspaceAdmin(account.role) || account.role === "stays") {
-      try { setPolicyConfirmed(z.object({ confirmed: z.boolean() }).parse((await liveApi("/portfolio?section=bookingPolicy")).data).confirmed); } catch { setPolicyConfirmed(false); }
+      try {
+        const value = bookingPolicySchema.parse((await liveApi("/portfolio?section=bookingPolicy")).data);
+        setPolicy(value); setPolicyConfirmed(value.confirmed);
+      } catch { setPolicy(null); setPolicyConfirmed(false); }
     }
     setLoading(false);
   }, [account.role, onSignedOut]);
   const loadReport = useCallback(async (range: AnalyticsPeriod) => {
     if (periodError(range)) return;
-    try { setSnapshot(reportViewSchema.parse((await liveApi("/reports?" + new URLSearchParams(range))).data) as AnalyticsSnapshot); } catch { setSnapshot(null); }
+    setReportError("");
+    try { setSnapshot(reportViewSchema.parse((await liveApi("/reports?" + new URLSearchParams(range))).data) as AnalyticsSnapshot); }
+    catch (e) { setSnapshot(null); setReportError(message(e)); }
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void refresh(); }); return () => { active = false; }; }, [refresh]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void loadReport(period); }); return () => { active = false; }; }, [loadReport, period]);
@@ -161,7 +194,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const finishWelcome = () => { setWelcome(null); try { globalThis.sessionStorage?.setItem("rc-welcomed", "1"); } catch { /* storage unavailable */ } };
 
   // Work: each role's views, the first opening by default.
-  const workViews: WorkView[] = isWorkspaceAdmin(account.role) ? ["management", "repairs", "accounts", "all"] : account.role === "stays" ? ["stays", "repairs", "all"] : account.role === "client" ? ["owner", "repairs", "all"] : [];
+  const workViews: WorkView[] = isWorkspaceAdmin(account.role) ? ["management", "cleans", "repairs", "accounts", "all"] : account.role === "stays" ? ["stays", "cleans", "repairs", "all"] : account.role === "client" ? ["owner", "repairs", "all"] : [];
   const currentView: WorkView | "" = workViews.includes(workView as WorkView) ? workView as WorkView : (workViews[0] ?? "");
   const names = new Map(properties.map(property => [property.id, property.name]));
   const filtered = work.filter(item => workFilter === "All" || (workFilter === "Completed" ? isDone(item.status) : workFilter === "Waiting" ? isWaitingWork(item.status) : !isDone(item.status)));
@@ -175,10 +208,18 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       {currentView === "management" && <LiveManagement palette={p} account={account} />}
       {currentView === "stays" && <LiveStays palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} />}
       {currentView === "owner" && <LiveOwner palette={p} properties={properties} />}
+      {currentView === "cleans" && <LiveCleans palette={p} account={account} properties={properties} />}
       {currentView === "repairs" && <LiveRepairs palette={p} account={account} properties={properties} />}
       {currentView === "accounts" && <LiveAccounts palette={p} account={account} properties={properties} />}
       {currentView === "all" && <>
         <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
+        {policy && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch" }]}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Direct-booking discount policy</Text>
+            <Text style={[ui.small, { color: p.muted }]}>{policy.confirmed ? `Confirmed: ${policy.discount_bps / 100}% off, up to £${(policy.discount_cap_minor / 100).toFixed(2)}, for stays of ${policy.minimum_nights} nights or more.` : "Not confirmed yet, so direct-booking offers can't be prepared."}</Text>
+          </View>
+          {account.role === "super_admin" && <SoftButton label={policy.confirmed ? "Change policy" : "Review and confirm"} icon="check" primary={!policy.confirmed} palette={p} onPress={() => setForm(bookingPolicyForm(policy))} />}
+        </View>}
         <FilterBar values={["Active", "Waiting", "Completed", "All"]} selected={workFilter} onSelect={setWorkFilter} palette={p} />
         <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>{filtered.length} {filtered.length === 1 ? "item" : "items"} within your access</Text>
         {filtered.length ? (() => {
@@ -195,7 +236,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const reportsPage = (
     <>
       {snapshot ? <Reports snapshot={snapshot} period={period} role={account.role} palette={p} onDates={() => setDates(true)} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} /> : (
-        <><PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." /><View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View></>
+        <><PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." />{reportError ? <View style={{ gap: 12 }}><EmptyState palette={p} icon="activity" title="Reports could not be loaded" detail={reportError} /><SoftButton label="Try again" icon="refresh-cw" palette={p} onPress={() => void loadReport(period)} /></View> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View>}</>
       )}
       {isWorkspaceAdmin(account.role) && !!invoices.length && <View style={{ gap: 10 }}>
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Invoices</Text>

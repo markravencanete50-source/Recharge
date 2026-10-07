@@ -12,7 +12,8 @@ import type { OperationView } from "../../lib/workflow-forms";
 const hoverTint = Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {};
 export const isDone = (status: string) => ["completed", "cancelled", "declined"].includes(status);
 export const isWaitingWork = (status: string) => ["waiting", "in_review"].includes(status);
-export const workDate = (item: OperationView) => typeof item.data.dueOn === "string" ? item.data.dueOn : "";
+// Repairs and visits carry their date on the work item; cleans also keep it in their details.
+export const workDate = (item: OperationView) => item.dueOn ?? (typeof item.data.dueOn === "string" ? item.data.dueOn : "");
 
 function kindLook(kind: string): { icon: DimensionalName; tone: DepartmentTone } {
   if (/clean/.test(kind)) return { icon: "spray", tone: "cleans" };

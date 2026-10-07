@@ -58,7 +58,8 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
   const dayCleans = cleans.filter(w => w.dueOn === day);
   const dayStays = schedule.stays.filter(s => s.checkIn === day || s.checkOut === day);
   const toReview = operations.filter(op => op.data.phase === "review");
-  const unassigned = operations.filter(op => op.data.phase === "assigned" && !op.assigneeId);
+  // A clean cancelled with its stay keeps its phase, so the status decides what is still open.
+  const unassigned = operations.filter(op => op.data.phase === "assigned" && !op.assigneeId && !["completed", "cancelled"].includes(op.status));
   const cleaners = Array.from(new Map(schedule.work.filter(w => w.kind === "cleaning" && w.assigneeId).map(w => [w.assigneeId!, w.assigneeName || "Cleaner"])).entries());
   const mine = performance.find(row => row.cleanerId === account.userId);
   const days = Array.from({ length: 14 }, (_, i) => addDays(today, i - 2));
@@ -213,7 +214,7 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
   const request = useRequestId(op ? op.workId + ":" + op.version : null);
   const canSubmit = !manager && op?.assigneeId === account.userId && phase === "assigned";
   const canReview = manager && phase === "review" && op?.assigneeId !== account.userId;
-  const canAssign = manager && phase === "assigned";
+  const canAssign = manager && phase === "assigned" && !!op && !["completed", "cancelled"].includes(op.status);
 
   useEffect(() => {
     let active = true;
@@ -310,7 +311,7 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
           {candidates.length ? candidates.map(c => (
             <Button key={c.userId} label={c.fullName + (c.userId === op.assigneeId ? " · assigned" : "")} icon="user" p={p} disabled={busy || c.userId === op.assigneeId}
               onPress={() => void run(() => writeWorkspace({ action: "assignWork", workId: op.workId, version: op.version, userId: c.userId }))} />
-          )) : <Notice text="No cleaners are assigned to this property yet. Add one in the property's team first." p={p} />}
+          )) : <Notice text="No cleaner can take this clean yet. In Work, Management, People, open a cleaner and give them this property, or every property." p={p} />}
         </>}
 
         {!canSubmit && !canReview && !canAssign && <Notice text={phase === "accepted" ? "This clean has been accepted." : phase === "review" ? "Submitted. Waiting for the cleaning manager's review." : "Nothing to do on this clean right now."} p={p} />}

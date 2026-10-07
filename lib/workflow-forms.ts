@@ -2,7 +2,7 @@ import type { WorkspaceAccount } from './workspace-account-policy';
 export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'date'|'checkbox'|'select';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string};
 export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string};
 export type JourneyView={propertyId:string;clientId:string;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null};
-export type OperationView={workId:string;propertyId:string;moduleId:string;title:string;kind:string;status:string;version:number;assigneeId:string|null;data:Record<string,unknown>};
+export type OperationView={workId:string;propertyId:string;moduleId:string;title:string;kind:string;status:string;version:number;assigneeId:string|null;dueOn?:string|null;data:Record<string,unknown>};
 const field=(name:string,label:string,type:WorkflowField['type']='text',required=true):WorkflowField=>({name,label,type,required});
 const select=(name:string,label:string,values:string[]):WorkflowField=>({...field(name,label,'select'),options:values.map(value=>({value,label:value.replaceAll('_',' ')}))});
 const actorIs=(a:WorkspaceAccount,...roles:string[])=>roles.includes(a.role);
@@ -55,6 +55,8 @@ export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[
  if(w.kind==='daily_pricing'&&stays&&w.data.phase==='proposed')add('recordApplied','Record the applied pricing decision',[field('evidence','Where and when the price was held or changed','textarea')]);
  if(w.kind==='licensing'&&stays)add('recordGranted','Record an authority licence grant',[field('reference','Licence reference'),field('grantedOn','Grant date','date'),field('application','Application is complete','checkbox'),field('safetyChecks','Required safety checks are complete','checkbox'),field('authorityGrant','Authority has granted the licence','checkbox'),field('evidence','Actual grant evidence','textarea')],v=>({reference:v.reference,grantedOn:v.grantedOn,evidence:v.evidence,checklist:{application:v.application,safetyChecks:v.safetyChecks,authorityGrant:v.authorityGrant}}));
  if(['cleaning_setup','garden_setup','furnishing_quote','relisting'].includes(w.kind)&&!actorIs(a,'client','cleans'))add('completeHandover','Complete this handover',[field('evidence','What was completed and supporting evidence','textarea')]);
+ // Accounts' invoice handovers close once the invoice is issued or recorded.
+ if(['onboarding_invoice','direct_booking_invoice','maintenance_invoice','cleaning_invoice'].includes(w.kind)&&!actorIs(a,'client','cleans'))add('completeHandover','Mark this invoice as done',[field('evidence','Invoice reference and how it was issued or recorded','textarea')]);
  if(w.kind==='direct_booking'&&stays){
   if(w.data.phase==='follow_up')add('prepareQuote','Prepare a direct-booking offer',[field('checkIn','Arrival','date'),field('checkOut','Departure','date'),field('baseAmountMinor','Original price, GBP','money')]);
   if(w.data.phase==='quoted')add('recordGuestAcceptance','Record guest acceptance',[field('guestEvidence','Guest agreement reference and notes','textarea')]);

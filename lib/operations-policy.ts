@@ -32,3 +32,14 @@ export const operationsActionSchema=z.union([
  step('reconcilePurchase',{invoiceId:id,reconciliation:text(3000).min(10)}),
 ]);
 export type OperationsAction=z.infer<typeof operationsActionSchema>;
+
+// Both schemas are unions, which report only "Invalid input". Give the reason from the variant
+// that matches the request's action (and step), naming the field.
+export function validationReason(error:z.ZodError):string{
+ let issue:z.ZodIssue|undefined=error.issues[0];
+ if(issue?.code==='invalid_union')issue=issue.unionErrors.find(e=>!e.issues.some(i=>i.code==='invalid_literal'&&['action','step','kind'].includes(String(i.path[0]))))?.issues[0]??issue;
+ if(!issue)return 'Check the details and try again';
+ const field=[...issue.path].reverse().find(part=>typeof part==='string');
+ return (field&&issue.code!=='invalid_union'?readableField(String(field))+': ':'')+issue.message;
+}
+const readableField=(name:string)=>name.replace(/Minor$/,'').replace(/([a-z])([A-Z])/g,'$1 $2').toLowerCase().replace(/^./,c=>c.toUpperCase());

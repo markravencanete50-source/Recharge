@@ -339,13 +339,19 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
       readFinance({ section: "overview", period }), readFinance({ section: "policy" }), readFinance({ section: "expenses", status }),
       readFinance({ section: "reconciliation", period }), readFinance({ section: "statements", period }),
     ]);
-    try {
-      if (o.status === "fulfilled") setOverview(overviewSchema.parse(o.value.data)); else throw o.reason;
-      if (pol.status === "fulfilled") { const v = policySchema.parse(pol.value.data); setLimit({ minor: v.expenseApprovalLimitMinor, version: v.version }); }
-      if (ex.status === "fulfilled") setExpenses(expensesSchema.parse(ex.value.data)); else throw ex.reason;
-      if (r.status === "fulfilled") setRec(reconciliationSchema.parse(r.value.data)); else throw r.reason;
-      if (st.status === "fulfilled") setStatements(statementsSchema.parse(st.value.data)); else throw st.reason;
-    } catch (e) { setError(e instanceof WorkspaceApiError ? e.message : "Accounts could not be loaded. Refresh to try again."); }
+    // Each part loads on its own, so one that fails (for example, a tool this person doesn't have)
+    // doesn't blank the others.
+    const problems: string[] = [];
+    const take = (result: PromiseSettledResult<{ data?: unknown }>, apply: (data: unknown) => void) => {
+      try { if (result.status === "fulfilled") apply(result.value.data); else throw result.reason; }
+      catch (e) { problems.push(e instanceof WorkspaceApiError ? e.message : "Part of Accounts could not be loaded. Refresh to try again."); }
+    };
+    take(o, data => setOverview(overviewSchema.parse(data)));
+    take(pol, data => { const v = policySchema.parse(data); setLimit({ minor: v.expenseApprovalLimitMinor, version: v.version }); });
+    take(ex, data => setExpenses(expensesSchema.parse(data)));
+    take(r, data => setRec(reconciliationSchema.parse(data)));
+    take(st, data => setStatements(statementsSchema.parse(data)));
+    if (problems.length) setError([...new Set(problems)].join(" "));
     setLoading(false);
   }, [period, status]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);

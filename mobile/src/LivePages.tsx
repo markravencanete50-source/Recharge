@@ -239,7 +239,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
             <Text style={{ color: p.text, fontWeight: "700" }}>Work at this property</Text>
             {propertyWork.slice(0, 8).map(item => <View key={item.workId} style={{ gap: 6 }}><LiveWorkRow item={item} palette={p} onPress={() => { const form = operationForms(account, item)[0]; if (form) { setSelected(null); onForm(form); } }} /></View>)}
           </View>}
-          {["client", "stays", "admin", "super_admin"].includes(account.role) && <View style={{ gap: 8 }}>
+          {account.modules.includes(account.role === "client" ? "client-dashboard" : "weekly-performance") && ["client", "stays", "admin", "super_admin"].includes(account.role) && <View style={{ gap: 8 }}>
             <SoftButton label={exporting ? "Preparing report…" : "Download property report"} icon="download" palette={p} disabled={exporting} onPress={() => void downloadProperty()} />
             <Text style={[ui.small, { color: p.muted }]}>Pricing, listing checks and opportunities for {periodLabel(period)}. Choose up to 31 days in Reports.</Text>
             {!!exportMessage && <Text style={[ui.small, { color: p.text }]}>{exportMessage}</Text>}

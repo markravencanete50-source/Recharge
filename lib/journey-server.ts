@@ -3,7 +3,7 @@ import { boundedJson,isSameOrigin } from './auth-security-policy';
 import { isNativeRequest } from './native-request-policy';
 import { businessContext,businessResponse,databaseFailure } from './business-server';
 import { journeyReadSchema,journeyActionSchema } from './journey-policy';
-import { operationsActionSchema } from './operations-policy';
+import { operationsActionSchema, validationReason } from './operations-policy';
 export const journeyRoute=(request:Request,native=false)=>workflowRoute(request,native,'journey');
 export const operationsRoute=(request:Request,native=false)=>workflowRoute(request,native,'operations');
 async function workflowRoute(request:Request,native:boolean,kind:'journey'|'operations'){
@@ -22,7 +22,7 @@ async function workflowRoute(request:Request,native:boolean,kind:'journey'|'oper
   const quota=await requestQuota(request,'business-user',60,60,session.account.userId);
   if(!quota.allowed){const response=businessResponse({error:'Too many updates. Please wait.'},429);response.headers.set('Retry-After',String(quota.retryAfter));return response;}
   const parsed=(kind==='journey'?journeyActionSchema:operationsActionSchema).safeParse(await boundedJson(request));
-  if(!parsed.success)return businessResponse({error:parsed.error.issues[0]?.message||'Check the journey details'},400);
+  if(!parsed.success)return businessResponse({error:validationReason(parsed.error)},400);
   const result=await session.client.rpc(kind==='journey'?'workspace_journey_action':'workspace_operations_action',{input:parsed.data});
   return result.error?databaseFailure(result.error):businessResponse({data:result.data,ok:true});
  }catch{return businessResponse({error:'The property journey is temporarily unavailable'},503);}

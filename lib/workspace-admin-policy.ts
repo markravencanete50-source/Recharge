@@ -10,7 +10,10 @@ export const adminActionSchema = z.discriminatedUnion('action', [
     action: z.literal('saveAccess'), userId: z.string().uuid(), fullName: z.string().trim().min(2).max(200), role: z.enum(ROLES),
     status: z.enum(['active', 'pending', 'revoked']), modules: z.array(z.enum(MODULE_IDS)).max(60), responsibilities: z.string().trim().max(5000).default(''),
   }).strict(),
+  // Every property at once, for team members (Hostaway imports properties with nobody assigned).
+  z.object({ action: z.literal('assignAllProperties'), userId: z.string().uuid() }).strict(),
 ]).superRefine((value, context) => {
+  if (value.action !== 'saveAccess') return;
   if (value.status === 'active' && !isWorkspaceAdmin(value.role) && !value.modules.length) context.addIssue({ code: 'custom', message: 'Select at least one tool for an active account' });
   if (value.role === 'cleans' && value.modules.some(m => !defaultModulesForRole('cleans').includes(m))) context.addIssue({ code: 'custom', message: 'Cleaners can only have their jobs, performance and invoices' });
 });

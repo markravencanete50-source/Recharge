@@ -48,9 +48,11 @@ in the repository.
    - URL: `https://recharge-backend.markravencanete50.workers.dev/api/hostaway/webhook`
    - Login: `recharge`
    - Password: the webhook password from step 2
-6. **Run the first sync.** In the app, open Management → Properties and press **Sync now** on the
-   Hostaway card. Check the new properties, then assign each one's owner, cleaning manager and
-   cleaners.
+6. **Run the first sync.** In the app, open Properties and press **Sync now** on the Hostaway card.
+   Imported properties start with nobody assigned, and team members only see assigned properties:
+   in Work → Management → People, open each cleaning manager, cleaner or Stays member and press
+   **Give every property** (or add properties one by one). Owners are given their own properties.
+   The checkout cleans then appear under Work → Cleans for assignment.
 7. **Check one payout.** Compare the expected payout of one Airbnb stay and one Booking.com stay
    with the platform's payout report. If they differ, tell the developer which figure is right.
 

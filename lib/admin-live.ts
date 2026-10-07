@@ -5,7 +5,7 @@ import { defaultModulesForRole, isWorkspaceAdmin, MODULE_IDS, MODULES, type Modu
 // shared with the tests that check them against the database.
 const assignment = z.enum(["client", "cleaner", "cleaning_manager", "staff"]);
 export const personSchema = z.object({
-  userId: z.string().uuid(), email: z.string(), fullName: z.string(), role: z.string(), status: z.enum(["active", "pending", "revoked"]),
+  userId: z.string().uuid(), email: z.string().nullable(), fullName: z.string(), role: z.string(), status: z.enum(["active", "pending", "revoked"]),
   responsibilities: z.string().nullable(), modules: z.array(z.string()), emailVerified: z.boolean(),
   assignments: z.array(z.object({ propertyId: z.string().uuid(), propertyName: z.string(), propertyStatus: z.string(), assignment })),
 });

@@ -20,9 +20,13 @@ export async function businessContext(request: Request, native: boolean) {
   const account = workspaceAccountSchema.safeParse(result.data);
   return result.error || !account.success ? null : { client, account: account.data };
 }
-export function databaseFailure(error: { code?: string }) {
+// The workspace functions raise plain-English reasons ("Choose a month", "Another reviewer must
+// approve this work"); show those. Built-in database errors keep a generic message.
+const readable = (message?: string) => message && message.length <= 200 && !/permission denied|violates|syntax|relation|column|function|null value/i.test(message) ? message : "";
+export function databaseFailure(error: { code?: string; message?: string }) {
   if (error.code === "P0429") { const response = businessResponse({ error: "Too many changes. Wait a minute before trying again." }, 429); response.headers.set("Retry-After", "60"); return response; }
-  if (error.code === "42501") return businessResponse({ error: "You do not have permission for this action" }, 403);
+  if (error.code === "42501") return businessResponse({ error: readable(error.message) || "You do not have permission for this action" }, 403);
+  if (error.code === "22023" || error.code === "P0001") return businessResponse({ error: readable(error.message) || "Check the record details and assigned access" }, 400);
   if (error.code === "40001" || error.code === "23505") return businessResponse({ error: "This record changed or already exists. Refresh and try again." }, 409);
   if (error.code === "P0002") return businessResponse({ error: "Record not found" }, 404);
   if (error.code?.startsWith("22") || error.code?.startsWith("23")) return businessResponse({ error: "Check the record details and assigned access" }, 400);
