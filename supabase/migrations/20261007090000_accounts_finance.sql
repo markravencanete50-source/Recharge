@@ -22,8 +22,7 @@ create or replace function private.workspace_can_property(target uuid, feature t
     )
   );
 $$;
-drop policy properties_assigned on public.workspace_properties;
-create policy properties_assigned on public.workspace_properties for select to authenticated using (
+alter policy properties_assigned on public.workspace_properties using (
  (select private.workspace_actor_role()) is not null and ((select private.workspace_actor_role()) in ('admin','super_admin','accounts') or exists(select 1 from public.workspace_property_assignments a where a.property_id=id and a.user_id=(select auth.uid())))
 );
 -- Finance handovers also reach the accounts team, who are not assigned per property.

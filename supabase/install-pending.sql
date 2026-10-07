@@ -1,5 +1,5 @@
 -- Paste this whole file into Supabase > SQL Editor > New query, then Run.
--- Installs three migrations in order and records them so future tooling stays in sync.
+-- Installs the remaining migrations in one transaction and records them. Safe to run once.
 begin;
 
 -- ===== 20261006022727_verified_phone_sessions =====
@@ -98,8 +98,7 @@ create or replace function private.workspace_can_property(target uuid, feature t
     )
   );
 $$;
-drop policy properties_assigned on public.workspace_properties;
-create policy properties_assigned on public.workspace_properties for select to authenticated using (
+alter policy properties_assigned on public.workspace_properties using (
  (select private.workspace_actor_role()) is not null and ((select private.workspace_actor_role()) in ('admin','super_admin','accounts') or exists(select 1 from public.workspace_property_assignments a where a.property_id=id and a.user_id=(select auth.uid())))
 );
 -- Finance handovers also reach the accounts team, who are not assigned per property.
@@ -824,5 +823,5 @@ create function public.workspace_teams_action(input jsonb) returns jsonb languag
 revoke all on function public.workspace_teams_read(text,date,date,uuid,uuid),public.workspace_teams_action(jsonb) from public,anon,authenticated;
 grant execute on function public.workspace_teams_read(text,date,date,uuid,uuid),public.workspace_teams_action(jsonb) to authenticated;
 
-insert into supabase_migrations.schema_migrations(version,name) values ('20261006022727','verified_phone_sessions'),('20261007090000','accounts_finance'),('20261007091000','team_operations') on conflict do nothing;
+insert into supabase_migrations.schema_migrations(version,name) values ('20261007090000','accounts_finance'),('20261007091000','team_operations') on conflict do nothing;
 commit;
