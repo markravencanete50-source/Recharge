@@ -260,3 +260,48 @@ schemas, the server-side CSV parser and the database. It covers:
 - preparing, issuing and paying a statement.
 
 The same backend redeploy noted for Cleans applies.
+
+## Live Management, Stays and Training screens (phone app)
+
+The Work tab now opens on the main view for each role. The switch at the top moves between views:
+
+| Role | Views (first one opens by default) |
+| --- | --- |
+| Admin, super admin | Management, Repairs, Accounts, All work |
+| Stays | Stays, Repairs, All work |
+| Owner | Repairs, All work |
+| Accounts | Accounts only |
+| Ready | Repairs only |
+| Cleaners, cleaning managers | Cleans only |
+
+**Management**
+- **Waiting on you:** one queue with four lists.
+  - **Cleaning decisions.** For a rejected clean, read the cleaner's response, then uphold or overturn it. Overturning clears it from the cleaner's record, and if the clean wasn't redone it is accepted and sent for invoicing. After repeated rejections, a cleaner review lets you choose no action, supervise the next cleans, or remove the cleaner from the rota.
+  - **Costs above the approval limit.** These open the same expense sheet Accounts uses, so management can approve them.
+  - **Owner approvals stuck for more than 48 hours.**
+  - **Owners who owe a balance.**
+- **Cleaning team:** each cleaner's accepted, rejected and overturned cleans this month, with warnings.
+- **Training:** write, edit and publish courses for chosen roles, and see how many people have completed each one.
+
+**Stays**
+- **Today:** tiles for arrivals, departures and listings still to check.
+- **Repairs to refer:** a banner when repairs are waiting for Stays to pass to Ready; it opens the Repairs view.
+- **Day by day:** a two-week strip showing arrivals, departures and cleans, including cleans with no cleaner yet.
+- **Record a stay:**
+  - Enter the property, the guest or booking reference, the dates, and whether it is confirmed or an enquiry.
+  - Then add the platform and its reservation code, the guests and the payout. These are saved straight after the stay, so Accounts can match the payout.
+  - If that second save fails, the stay is still kept. It then shows in Accounts under stays missing details.
+- **Daily checks**, for each property:
+  - The listing check: the platform, whether the listing is live or suspended, any new review (which must be acknowledged) and what was checked.
+  - A pricing decision for each empty night in the next seven days: hold or change the rate, with the reason.
+
+**Training for everyone:** the Help tab lists the published courses for each person's role. Staff can open a course, watch its video and mark it complete.
+
+`tests/live-management-stays-contract.test.mjs` sends the screens' exact requests through the HTTP schemas and the database:
+- recording a stay with its platform details, and the overlap refusal;
+- the stays schedule and empty nights;
+- listing and pricing checks;
+- two rejected cleans that open complaints and a cleaner review, each decided from the queue, with the warning clearing after an overturn;
+- publishing, editing and completing a course.
+
+No database changes were needed. The same backend redeploy noted for Cleans applies.

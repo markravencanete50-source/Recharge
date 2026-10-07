@@ -1,0 +1,124 @@
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
+import Feather from "@expo/vector-icons/Feather";
+import * as Linking from "expo-linking";
+import { Text } from "./Typography";
+import { MotionPress } from "./motion";
+import { Sheet } from "./TeamFlows";
+import { ui, type Palette } from "./theme";
+import { Button, Field, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
+import { List, Row } from "./LiveAccounts";
+import { readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
+import { AUDIENCES, coursesSchema, type Course } from "../../lib/management-live";
+import { readableStage } from "../../lib/workspace-view";
+
+// Live Training: everyone sees the courses meant for their role and marks them
+// done; management writes, edits and publishes courses and sees completions.
+const AUDIENCE_LABEL: Record<string, string> = { all: "Everyone", stays: "Stays", cleans: "Cleaners", cleaning_manager: "Cleaning managers", ready: "Ready", accounts: "Accounts", admin: "Admins", client: "Owners" };
+
+function CourseEditor({ p, course, visible, onClose, onDone }: { p: Palette; course: Course | null; visible: boolean; onClose: () => void; onDone: () => Promise<void> }) {
+  const [title, setTitle] = useState("");
+  const [audience, setAudience] = useState<string[]>(["all"]);
+  const [summary, setSummary] = useState("");
+  const [body, setBody] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [minutes, setMinutes] = useState("10");
+  const [published, setPublished] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const request = useRequestId(visible ? ["course", course?.id ?? "new", course?.version ?? 0, title, audience.join(","), summary, body, videoUrl, minutes, published].join(":") : null);
+  useEffect(() => {
+    queueMicrotask(() => {
+      if (!visible) return;
+      setTitle(course?.title ?? ""); setAudience(course?.audience ?? ["all"]); setSummary(course?.summary ?? ""); setBody(course?.body ?? "");
+      setVideoUrl(course?.videoUrl ?? ""); setMinutes(String(course?.minutes ?? 10)); setPublished(course?.published ?? false); setError("");
+    });
+  }, [course, visible]);
+  const toggle = (value: string) => setAudience(current => {
+    if (value === "all") return ["all"];
+    const next = current.filter(x => x !== "all");
+    return next.includes(value) ? next.filter(x => x !== value) : [...next, value];
+  });
+  async function save() {
+    const mins = Number(minutes);
+    if (title.trim().length < 2 || body.trim().length < 10 || !audience.length || !Number.isInteger(mins) || mins < 1 || mins > 600) { setError("Add a title, who it is for, the course text (at least 10 characters) and the minutes it takes."); return; }
+    if (videoUrl.trim() && !/^https:\/\//.test(videoUrl.trim())) { setError("Video links must start with https://"); return; }
+    setBusy(true); setError("");
+    try {
+      await writeTeams({
+        action: "saveCourse", requestId: request.get(), ...(course ? { courseId: course.id, version: course.version } : {}), title: title.trim(),
+        audience: audience as never, ...(summary.trim() ? { summary: summary.trim() } : {}), body: body.trim(), ...(videoUrl.trim() ? { videoUrl: videoUrl.trim() } : {}), minutes: mins, published,
+      });
+      request.done(); onClose(); await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  return (
+    <Sheet palette={p} visible={visible} onClose={onClose} title={course ? "Edit course" : "New course"} subtitle="Staff see published courses for their role" icon="medal">
+      <Field label="Title" value={title} onChange={setTitle} p={p} />
+      <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Who it is for</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {AUDIENCES.map(value => {
+          const on = audience.includes(value);
+          return <MotionPress key={value} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => toggle(value)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}><Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{AUDIENCE_LABEL[value]}</Text></MotionPress>;
+        })}
+      </View>
+      <Field label="Summary (optional)" value={summary} onChange={setSummary} p={p} />
+      <Field label="Course text" value={body} onChange={setBody} p={p} multiline placeholder="The steps, rules and examples staff need" />
+      <Field label="Video link (optional)" value={videoUrl} onChange={setVideoUrl} p={p} placeholder="https://" />
+      <Field label="Minutes to complete" value={minutes} onChange={setMinutes} p={p} />
+      <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: published }} onPress={() => setPublished(v => !v)} style={[ui.row, { gap: 12, minHeight: 48 }]}>
+        <Feather name={published ? "check-square" : "square"} size={20} color={p.primary} /><Text style={{ color: p.text, flex: 1 }}>Published: staff can see and complete it</Text>
+      </MotionPress>
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <Button label={busy ? "Saving…" : "Save course"} primary p={p} disabled={busy} onPress={() => void save()} />
+    </Sheet>
+  );
+}
+
+export function LiveTraining({ palette: p, manage = false }: { palette: Palette; manage?: boolean }) {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [open, setOpen] = useState<Course | null>(null);
+  const [editing, setEditing] = useState<Course | null | "new">(null);
+  const [busy, setBusy] = useState(false);
+  const request = useRequestId(open ? "complete:" + open.id : null);
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try { setCourses(coursesSchema.parse((await readTeams({ section: "training" })).data)); }
+    catch (e) { setError(e instanceof WorkspaceApiError ? e.message : "Training could not be loaded."); }
+    setLoading(false);
+  }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  async function complete() {
+    if (!open || busy) return;
+    setBusy(true); setError("");
+    try { await writeTeams({ action: "completeCourse", requestId: request.get(), courseId: open.id }); request.done(); setOpen(null); await load(); }
+    catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  const todo = courses.filter(c => c.published && !c.completedAt).length;
+  return (
+    <Section title="Training" count={manage ? undefined : todo} p={p}>
+      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading training" />}
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      {manage && <Button label="New course" icon="plus" p={p} onPress={() => setEditing("new")} />}
+      <List p={p} empty={manage ? "No courses yet. Add the first one." : "No training has been assigned to you yet."}>
+        {courses.map((c, i) => (
+          <Row key={c.id} p={p} first={i === 0} title={c.title} detail={`${c.minutes} min · ${c.audience.map(a => AUDIENCE_LABEL[a] ?? readableStage(a)).join(", ")}`}
+            tags={[c.completedAt ? ["Completed", "good"] : manage && !c.published ? ["Draft", "plain"] : ["To do", "wait"], ...(manage && c.completions != null ? [[`${c.completions} completed`, "plain"] as [string, "plain"]] : [])]}
+            onPress={() => manage ? setEditing(c) : setOpen(c)} />
+        ))}
+      </List>
+      <Sheet palette={p} visible={!!open} onClose={() => setOpen(null)} title={open?.title ?? ""} subtitle={open ? `${open.minutes} minutes` : undefined} icon="medal">
+        {open && <>
+          {!!open.summary && <Text style={[ui.body, { color: p.muted }]}>{open.summary}</Text>}
+          <Text selectable style={[ui.body, { color: p.text }]}>{open.body}</Text>
+          {!!open.videoUrl && <Button label="Watch the video" icon="play-circle" p={p} onPress={() => void Linking.openURL(open.videoUrl!).catch(() => setError("The video link could not be opened."))} />}
+          {open.completedAt ? <Tag label={`Completed ${new Date(open.completedAt).toLocaleDateString("en-GB")}`} tone="good" p={p} /> : <Button label={busy ? "Saving…" : "Mark as complete"} icon="check" primary p={p} disabled={busy} onPress={() => void complete()} />}
+          {!!error && <Notice text={error} p={p} tone="bad" />}
+        </>}
+      </Sheet>
+      {manage && <CourseEditor p={p} course={editing === "new" ? null : editing} visible={editing !== null} onClose={() => setEditing(null)} onDone={load} />}
+    </Section>
+  );
+}

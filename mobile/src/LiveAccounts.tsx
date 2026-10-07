@@ -32,7 +32,7 @@ const STATEMENT_LABEL: Record<string, [string, "good" | "wait" | "bad" | "plain"
 const CHANNEL_LABEL: Record<string, string> = { airbnb: "Airbnb", booking_com: "Booking.com", vrbo: "Vrbo", direct: "Direct", other: "Other" };
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v + "T12:00:00Z"));
 
-function Pills<T extends string>({ p, values, value, onChange, label }: { p: Palette; values: readonly T[]; value: T; onChange: (v: T) => void; label?: (v: T) => string }) {
+export function Pills<T extends string>({ p, values, value, onChange, label }: { p: Palette; values: readonly T[]; value: T; onChange: (v: T) => void; label?: (v: T) => string }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
       {values.map(v => {
@@ -47,7 +47,7 @@ function Pills<T extends string>({ p, values, value, onChange, label }: { p: Pal
   );
 }
 
-function Row({ p, title, detail, amount, tags, onPress, first }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean }) {
+export function Row({ p, title, detail, amount, tags, onPress, first }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean }) {
   return (
     <MotionPress accessibilityRole={onPress ? "button" : undefined} disabled={!onPress} accessibilityLabel={[title, amount, ...(tags ?? []).map(t => t[0])].filter(Boolean).join(", ")} onPress={onPress} style={[ui.row, { gap: 12, paddingVertical: 14, borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
       <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
@@ -61,17 +61,17 @@ function Row({ p, title, detail, amount, tags, onPress, first }: { p: Palette; t
   );
 }
 
-function List({ p, empty, children }: { p: Palette; empty: string; children: ReactNode[] }) {
+export function List({ p, empty, children }: { p: Palette; empty: string; children: ReactNode[] }) {
   return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>{children.length ? children : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{empty}</Text>}</View>;
 }
 
-function Line({ p, label, value }: { p: Palette; label: string; value: string }) {
+export function Line({ p, label, value }: { p: Palette; label: string; value: string }) {
   return <View style={[ui.between, { gap: 12 }]}><Text style={[ui.small, { color: p.muted, flex: 1 }]}>{label}</Text><Text style={{ color: p.text, fontWeight: "600" }}>{value}</Text></View>;
 }
 
 // One sheet for every action that only needs a short note or reference.
-type NoteAsk = { title: string; subtitle?: string; label?: string; min: number; confirm: string; amount?: { label: string; initial: string }; build: (note: string, amountMinor: number | null) => FinanceAction | null };
-function NoteSheet({ p, ask, onClose, onDone }: { p: Palette; ask: NoteAsk | null; onClose: () => void; onDone: () => Promise<void> }) {
+export type NoteAsk = { title: string; subtitle?: string; label?: string; min: number; confirm: string; amount?: { label: string; initial: string }; build: (note: string, amountMinor: number | null) => FinanceAction | null };
+export function NoteSheet({ p, ask, onClose, onDone }: { p: Palette; ask: NoteAsk | null; onClose: () => void; onDone: () => Promise<void> }) {
   const [note, setNote] = useState("");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -99,7 +99,7 @@ function NoteSheet({ p, ask, onClose, onDone }: { p: Palette; ask: NoteAsk | nul
   );
 }
 
-function ExpenseSheet({ p, role, id, limit, onClose, onAsk, onDone }: { p: Palette; role: string; id: string | null; limit: number | null; onClose: () => void; onAsk: (ask: NoteAsk) => void; onDone: () => Promise<void> }) {
+export function ExpenseSheet({ p, role, id, limit, onClose, onAsk, onDone }: { p: Palette; role: string; id: string | null; limit: number | null; onClose: () => void; onAsk: (ask: NoteAsk) => void; onDone: () => Promise<void> }) {
   const [expense, setExpense] = useState<Expense | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
