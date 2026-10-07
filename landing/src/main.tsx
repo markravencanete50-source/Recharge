@@ -4,6 +4,9 @@ import { createRoot } from "react-dom/client";
 import { DURATION, FPS, INTRO_END, Intro } from "./Intro";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// ?frame=120 holds a single frame, for checking the animation.
+const pinned = Number(new URLSearchParams(window.location.search).get("frame") ?? NaN);
+const hold = Number.isFinite(pinned) ? pinned : reduceMotion ? INTRO_END : null;
 const viewport = () => ({ width: Math.round(window.innerWidth), height: Math.round(window.innerHeight) });
 
 function App() {
@@ -22,8 +25,8 @@ function App() {
       compositionWidth={size.width}
       compositionHeight={size.height}
       style={{ width: "100%", height: "100%" }}
-      autoPlay={!reduceMotion}
-      initialFrame={reduceMotion ? INTRO_END : 0}
+      autoPlay={hold === null}
+      initialFrame={hold ?? 0}
       controls={false}
       clickToPlay={false}
       doubleClickToFullscreen={false}
