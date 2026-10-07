@@ -144,3 +144,37 @@ Reads:
 - Stripe Connect for automatic payouts.
 - Hostaway for reservation codes and payouts.
 - Resend or Expo push for notification delivery.
+
+## Live Cleans screens (phone app)
+
+The phone app's live mode (`/live`, used when `EXPO_PUBLIC_WORKSPACE_API_ORIGIN` is set) now opens a
+**Cleans** tab for cleaners and cleaning managers, backed only by the live endpoints above. The public
+web preview still shows sample data, because the native API refuses browser requests by design.
+
+**Cleaners** see:
+- **Schedule:** their own jobs on a two-week strip, with guest arrivals and departures for that day.
+- **Job sheet:** a tick-box checklist, camera or library photos that upload and verify one by one with
+  retry, and a short report. Submit stays disabled until every check is ticked, at least one photo is
+  verified and the report is written.
+- **Complaints:** guest complaints they can answer once, a monthly warning, and their accepted and
+  rejected counts.
+
+**Cleaning managers** see:
+- **Schedule:** the team schedule, filterable by cleaner.
+- **New clean:** pick a property, date and checklist.
+- **Reviews:** accept or reject with guest feedback and a note. A rejection opens the complaint flow.
+- **Assigning:** cleans with no cleaner yet, and assigning or reassigning from the property's cleaners.
+- **Performance:** each cleaner's results this month.
+
+Each action keeps its request identifier until it succeeds, so a retry after a dropped response
+does not create a duplicate. `tests/live-cleans-contract.test.mjs` runs the exact requests the
+screens send through the HTTP schemas and the real database functions, and parses every response
+with the schemas the screens use (`lib/cleans-live.ts`).
+
+Before a cleaner can submit, two things must happen:
+
+1. **Redeploy the backend Worker** so it serves `/api/mobile/teams` and `/api/mobile/finance`:
+   `npm run build && npm run backend:deploy`, after `wrangler login`.
+2. **Switch on photo uploads** with the Cloudinary keys and `MEDIA_UPLOADS_ENABLED=true`. Until then,
+   uploads show "Photo uploads are not switched on yet". Scheduling, reviews, assignments and
+   complaints work without it.
