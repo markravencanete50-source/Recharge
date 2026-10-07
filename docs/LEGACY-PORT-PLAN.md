@@ -34,6 +34,16 @@ Stays and Training. The table below shows what each old centre still has that th
 | Notification bell (119) | Activity tab | Push and email delivery | Expo push, Resend |
 | Account registration (258) | Already live on Supabase | — | — |
 
+## Client answers (7 October 2026)
+
+- **No real records in the old portal.** No data move is needed, so the old portal can be retired
+  as soon as people admin and property records work in the new app.
+- **Hostaway: access is available**, so the Hostaway work moves up. **Cloudinary comes later**, so
+  photos and documents stay as text notes for now.
+- **Cleaner pay varies with every task, and there is no fixed payday.** Pay is set per clean, and
+  Accounts pays whenever it chooses (see item 7).
+- Clock in/out and AirCover were not confirmed, so they stay optional.
+
 ## The plan
 
 Bold items are the ones that unblock day-to-day use. Each phase ends with contract tests (exact
@@ -55,29 +65,35 @@ requests through the schemas and the database) and its own push.
    onboarding invoices handed to Accounts. Documents stay as text notes until Phase 3.
 6. **Direct bookings for Stays** (S–M). Follow-up, quote with the discount policy, guest
    acceptance, then confirmation once the Accounts invoice exists.
-7. **Cleaner invoices and replenishment** (M). Weekly invoice per cleaner built from accepted
-   cleans and approved by Accounts; supply requests raised from a clean. Both need a small
-   database addition.
+7. **Cleaner pay and replenishment** (M).
+   - Each clean carries its own pay amount. The cleaning manager sets it when creating or
+     assigning the clean and can adjust it when accepting.
+   - Only accepted (or overturned) cleans count towards what a cleaner is owed.
+   - Accounts sees each cleaner's unpaid balance, broken down clean by clean. Whenever they choose
+     to pay, they select the cleans and record one payment with its bank reference.
+   - Supply requests can be raised from a clean.
+   - Both need a small database addition.
 8. **AirCover claims and clock in/out** (S each). Only if the client still wants them (see the
    questions at the end).
 
-### Phase 3: files and photos (needs Cloudinary)
+### Phase 3: files and photos (needs Cloudinary, which comes later)
 9. Switch on uploads (the backend is already built) for cleans, expenses, repair evidence,
    purchase-order deliveries, onboarding documents and training videos. Add the owner's repair
    proposal PDF.
 
-### Phase 4: Hostaway (needs the client's Hostaway account and API key)
+### Phase 4: Hostaway (access is available; moved ahead of Phase 3)
+The keys go in as Worker secrets with `wrangler secret put HOSTAWAY_ACCOUNT_ID` and
+`wrangler secret put HOSTAWAY_API_KEY`. They are never pasted into chat or committed.
 10. Sync reservations and listings: stays arrive automatically, checkouts create cleans, and the
     platform codes and expected payouts fill in, so Accounts stops typing them.
 11. **Guest communication**: an inbox per property, replies through Hostaway, reply templates,
     escalation to Repairs, and new-message push alerts. This is the largest single piece (L), and
     it can only be tested against a real Hostaway account.
 
-### Phase 5: move the old data, then switch the old portal off
-12. **Data move.** If the D1 database holds real records, run a one-off checked import into
-    Supabase: properties, open repairs and cleans, cleaners, onboarding cases and owner details.
-    Then optionally the ClickUp history.
-13. **Retire the old portal.** Point `/` to the new workspace, remove the D1 handlers,
+### Phase 5: switch the old portal off (no data to move)
+12. **Data move: not needed.** There are no real records in the old portal. A ClickUp history
+    import stays optional.
+13. **Retire the old portal**, straight after Phase 1. Point `/` to the new workspace, remove the D1 handlers,
     `drizzle/`, the R2 binding and the old centres (about 11,000 lines), and drop the unused
     variables (`CLICKUP_MIGRATION_KEY`, and the WhatsApp, BOnline and email-bridge
     placeholders).
@@ -87,11 +103,14 @@ requests through the schemas and the database) and its own push.
 - The PriceLabs tick-box is replaced by recorded pricing decisions.
 - The furnishing calculator stays an external link in Tools.
 
-## Questions for the client before Phase 2
+## Order of work after the client's answers
 
-1. Does the old portal's database hold **real records they use today**? If so, Phase 5's data move
-   should happen before anyone works in both places.
-2. Do they still want **clock in/out** for Stays, and the **AirCover claims** tracker?
-3. When will they have **Hostaway API access** and a **Cloudinary** account? Phases 3 and 4
-   depend on these.
-4. Should **cleaner invoices** be weekly or per clean, and at a fixed rate per property?
+1. Phase 1: people admin, property records, the owners' view.
+2. Retire the old portal (item 13).
+3. Phase 4: Hostaway reservations and listings sync, then guest communication.
+4. Phase 2: purchase orders, onboarding pipeline, direct bookings, cleaner pay.
+5. Phase 3: uploads, once Cloudinary is set up.
+
+## Still open
+
+- Clock in/out for Stays, and the AirCover claims tracker: are they wanted?
