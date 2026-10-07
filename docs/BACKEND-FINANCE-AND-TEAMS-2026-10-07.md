@@ -178,3 +178,28 @@ Before a cleaner can submit, two things must happen:
 2. **Switch on photo uploads** with the Cloudinary keys and `MEDIA_UPLOADS_ENABLED=true`. Until then,
    uploads show "Photo uploads are not switched on yet". Scheduling, reviews, assignments and
    complaints work without it.
+
+## Live Repairs screens (phone app)
+
+Ready opens on a **Repairs** tab. Stays, management and owners get a Repairs / All work switch on
+the Work tab. The stage rules live in `lib/repairs-live.ts` and match the database checks, so each
+person is offered only the step they can actually take.
+
+**The repair pipeline:**
+1. **Report:** an owner, Stays or management reports a repair with a cost estimate and a safety flag.
+2. **Owner approval:** if the estimate is above the owner's agreed limit, the owner ticks to approve
+   it first.
+3. **Refer:** Stays records the checks already made and the update given to the guest, plus the
+   warranty contact if the property's agreement requires one.
+4. **Book:** Ready or Stays sets the repair date and the contractor.
+5. **Complete:** Ready or Stays files the report and the actual cost. The cost can't exceed the
+   approved estimate. Completing sends the repair to Accounts to reconcile the invoice.
+
+**Routine visits:**
+- Ready or Stays sets up a monthly or quarterly plan with a checklist and a day of the month.
+- "Create this month's visits" builds the visits from the plans.
+- Ready starts a visit and marks it done; Stays or management then sign it off and close it.
+
+`tests/live-repairs-contract.test.mjs` runs the full pipeline and a visit sign-off through the HTTP
+schemas and the database, including the refusal when the cost exceeds the approved estimate. The
+same backend redeploy noted for Cleans applies.
