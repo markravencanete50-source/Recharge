@@ -203,3 +203,60 @@ person is offered only the step they can actually take.
 `tests/live-repairs-contract.test.mjs` runs the full pipeline and a visit sign-off through the HTTP
 schemas and the database, including the refusal when the cost exceeds the approved estimate. The
 same backend redeploy noted for Cleans applies.
+
+## Live Accounts screens (phone app)
+
+Accounts opens straight on an **Accounts** tab. Admins and super admins get an Accounts option
+next to Repairs and All work. A month switcher at the top drives the payouts and statements.
+The tiles show what is waiting for approval, the stays still to reconcile, and how many
+statements are paid. The rules live in `lib/accounts-live.ts` and match the database checks.
+
+**Expenses:**
+- Filter by To approve, Queried, Approved or Rejected.
+- Add a new expense: property, supplier, invoice number, category, what it was for, amount and
+  date received.
+- Add evidence. Until Cloudinary is connected, record what was checked as a written note. If the
+  expense is linked to a job, the finished job can count as proof.
+- Approve only once there is an invoice and proof of the work. Accounts can approve up to the
+  limit; anything larger is shown as needing management. Approved costs are queued for Xero.
+- Query, resolve a query, or reject, each with a note.
+- The super admin can change the approval limit.
+
+**Payouts:**
+- Upload an Airbnb or Booking.com payout CSV from the phone. The server reads it and reports how
+  many payouts matched a stay.
+- **Stays missing details:** new stays are saved as direct with no payout, so they are listed here
+  until Accounts adds the platform and reservation code, or the payout for a direct stay. They
+  block the owner statement until then.
+- **Platform stays** show matched, agreed, different, not received, or needing a code.
+  - Tap one to agree the payout with a note, or to add its missing code or expected amount.
+- **Unmatched payouts** can be set aside with a reason.
+
+**Statements:**
+- One card per property for the month, showing payouts, cleaning, approved expenses, the
+  management fee and the amount due to the owner, plus a full breakdown.
+- Prepare a statement once every stay is reconciled and the fee and cleaning cost are set.
+  Management sets those terms from the agreement.
+- Issue it to the owner.
+- Record the bank transfer with its reference.
+- A draft can be voided by Accounts; only management can void an issued one. If the owner owes
+  the balance, no payout is offered.
+
+### New database change: stays missing details
+
+`20261007093000_accounts_stay_details.sql` adds three things to `workspace_finance_read`:
+- the `needsDetails` list in reconciliation;
+- a `missingDetails` count in the overview;
+- a `missingDetails` count on each statement row.
+
+It is in `supabase/install-pending.sql`, ready to paste into the SQL editor.
+
+`tests/live-accounts-contract.test.mjs` runs the exact requests the screens send through the HTTP
+schemas, the server-side CSV parser and the database. It covers:
+- evidence and approval, including the approval limit;
+- query, resolve and reject;
+- stay details and payout upload;
+- agreeing a payout and setting a line aside;
+- preparing, issuing and paying a statement.
+
+The same backend redeploy noted for Cleans applies.
