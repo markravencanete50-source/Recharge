@@ -42,6 +42,14 @@ export function hostawayErrorMessage(error: unknown) {
   return "Hostaway could not be reached. Recharge will keep the existing inbox and retry automatically.";
 }
 
+export function hostawaySyncErrorMessage(error: unknown) {
+  if (error instanceof HostawayApiError) {
+    if (error.status === 401 || error.status === 403) return "Hostaway rejected the saved credentials. Add a fresh Hostaway API key.";
+    if (error.status === 429) return "Hostaway is limiting requests. The next sync will try again.";
+  }
+  return "Hostaway could not be reached. The next sync will try again.";
+}
+
 export function hostawayPropertyErrorMessage(error: unknown) {
   if (error instanceof HostawayApiError) {
     if (error.status === 401 || error.status === 403) {
@@ -262,6 +270,42 @@ export async function listHostawayReservations(
       `${a.arrivalDate}${a.departureDate}`,
     ),
   );
+}
+
+// Raw records for the sync (mapped in lib/hostaway-sync-policy.ts).
+export async function fetchHostawayListings(): Promise<unknown[]> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  const rows: unknown[] = [];
+  for (let offset = 0; offset < 1000; offset += 100) {
+    const page = await hostawayRequest<unknown[]>(`/listings?limit=100&offset=${offset}`);
+    if (!Array.isArray(page)) throw new HostawayApiError("Hostaway returned an invalid property list", 502);
+    rows.push(...page);
+    if (page.length < 100) break;
+  }
+  return rows;
+}
+
+// Every reservation that checks out on or after `departureFrom` (YYYY-MM-DD), across all listings.
+export async function fetchHostawayReservations(departureFrom: string): Promise<unknown[]> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  const rows: unknown[] = [];
+  for (let offset = 0; offset < 5000; offset += 100) {
+    const page = await hostawayRequest<unknown[]>(`/reservations?limit=100&offset=${offset}&departureStartDate=${encodeURIComponent(departureFrom)}&sortOrder=arrivalDate`);
+    if (!Array.isArray(page)) throw new HostawayApiError("Hostaway returned an invalid reservation list", 502);
+    rows.push(...page);
+    if (page.length < 100) break;
+  }
+  return rows;
+}
+
+export async function fetchHostawayReservation(id: string): Promise<unknown> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  return hostawayRequest<unknown>(`/reservations/${encodeURIComponent(id)}`);
+}
+
+export async function fetchHostawayListing(id: string): Promise<unknown> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  return hostawayRequest<unknown>(`/listings/${encodeURIComponent(id)}`);
 }
 
 export async function listHostawayCalendarRates(listingId: string, startDate: string, endDate: string): Promise<HostawayCalendarRate[]> {

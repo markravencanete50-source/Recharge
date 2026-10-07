@@ -109,7 +109,8 @@ The keys go in as Worker secrets with `wrangler secret put HOSTAWAY_ACCOUNT_ID` 
 1. Phase 1: people admin, property records, the owners' view. **Done on 7 October 2026**: see
    `BACKEND-FINANCE-AND-TEAMS-2026-10-07.md`, People, Properties and owner view.
 2. Retire the old portal (item 13). **Done on 7 October 2026**: see `DEVELOPER-HANDOVER.md`.
-3. Phase 4: Hostaway reservations and listings sync, then guest communication.
+3. Phase 4: Hostaway reservations and listings sync (**built on 7 October 2026**: see
+   `HOSTAWAY-SYNC.md`; switched on once the keys are added), then guest communication.
 4. Phase 2: purchase orders, onboarding pipeline, direct bookings, cleaner pay.
 5. Phase 3: uploads, once Cloudinary is set up.
 

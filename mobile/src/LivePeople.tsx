@@ -8,6 +8,7 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
+import { HostawaySyncCard } from "./HostawaySyncCard";
 import { readAdmin, workspaceRequest, writeAdmin, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { adminPropertiesSchema, assignmentFor, canEdit, detailSchemas, peopleSchema, ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange, type AdminProperty, type Person } from "../../lib/admin-live";
 import { isWorkspaceAdmin, type ModuleId, type WorkspaceRole } from "../../lib/modules";
@@ -272,6 +273,7 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
         <Text style={[ui.small, { color: p.muted }]}>New people sign up in the app and ask for access. Their request appears here for approval.</Text>
       </>}
       {view === "properties" && <>
+        <HostawaySyncCard p={p} onSynced={() => void load()} />
         <Button label="New property" icon="plus" primary p={p} onPress={() => setCreating(true)} />
         <Pills p={p} values={["all", "active", "onboarding", "archived"] as const} value={propertyFilter} onChange={setPropertyFilter} label={v => ({ all: "Current", active: "Live", onboarding: "Onboarding", archived: "Archived" })[v]} />
         <List p={p} empty="No properties match.">

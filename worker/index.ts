@@ -6,6 +6,9 @@ import { backendRouteAllowed } from "./backend-route-policy";
 interface Env {
   BACKEND_ONLY?: string;
   INTEGRATION_SCHEDULE_ENABLED?: string;
+  HOSTAWAY_ACCOUNT_ID?: string;
+  HOSTAWAY_API_KEY?: string;
+  HOSTAWAY_SYNC_ENABLED?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
@@ -34,9 +37,14 @@ interface ExecutionContext {
 
 const worker = {
   async scheduled(_controller: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
-    // Scheduling and provider flags are separately enabled after client configuration.
-    // The deployment config intentionally installs no cron trigger yet.
-    if (env.BACKEND_ONLY !== 'true' || env.INTEGRATION_SCHEDULE_ENABLED !== 'true') return;
+    // Every 15 minutes (scripts/build-backend-config.mjs). Each job only runs once configured.
+    if (env.BACKEND_ONLY !== 'true') return;
+    if (env.HOSTAWAY_ACCOUNT_ID && env.HOSTAWAY_API_KEY && env.HOSTAWAY_SYNC_ENABLED !== 'false') {
+      ctx.waitUntil(import('../lib/hostaway-sync').then(module => module.runHostawaySync('schedule')).catch(() => {
+        console.error('Hostaway sync failed; the error is recorded and the next run retries.');
+      }));
+    }
+    if (env.INTEGRATION_SCHEDULE_ENABLED !== 'true') return;
     ctx.waitUntil(import('../lib/integration-server').then(module => module.dispatchNotifications()).catch(() => {
       console.error('Recharge integration batch failed; durable job state retained.');
     }));

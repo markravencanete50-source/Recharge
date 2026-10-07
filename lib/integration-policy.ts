@@ -19,6 +19,7 @@ export function photoFormat(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
 export const mediaInputSchema = z.object({ requestId:z.string().uuid(),workId:z.string().uuid(),purpose:z.enum(['cleaning','mailbox','delivery','licence','maintenance']) }).strict();
 export const integrationActionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('dispatchNotifications')}).strict(),
+  z.object({action:z.literal('syncHostaway')}).strict(),
   z.object({action:z.literal('importReservations'),propertyId:z.string().uuid(),offset:z.number().int().min(0).max(490).default(0)}).strict(),
 ]);
 export class ProviderFailure extends Error {

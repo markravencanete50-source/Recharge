@@ -17,6 +17,7 @@ const endpoints = new Set([
   "/api/workspace/finance", "/api/mobile/finance",
   "/api/workspace/teams", "/api/mobile/teams",
   "/api/workspace/admin", "/api/mobile/admin",
+  "/api/hostaway/webhook",
   "/workspace", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);
 export function backendRouteAllowed(path: string) {

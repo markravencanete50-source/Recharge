@@ -6,6 +6,7 @@ import { isNativeRequest } from './native-request-policy';
 import { integrationActionSchema,integrationConfiguration,IntegrationSettings,DeliveryJob,ProviderFailure,normalizeHostawayReservation } from './integration-policy';
 import { deliverNotification } from './integration-providers';
 import { listHostawayReservations } from './hostaway';
+import { hostawaySyncConfigured,runHostawaySync } from './hostaway-sync';
 
 export function integrationSettings():IntegrationSettings {
   return {...process.env,...env as unknown as IntegrationSettings};
@@ -36,7 +37,10 @@ export async function integrationRoute(request:Request,native=false) {
     const settings=integrationSettings(),configuration=integrationConfiguration(settings);
     if(request.method==='GET') {
       const result=await session.client.rpc('workspace_integration_status');
-      return result.error?databaseFailure(result.error):businessResponse({configuration,data:result.data});
+      if(result.error)return databaseFailure(result.error);
+      // Admins and the Stays team also see the Hostaway sync.
+      const hostaway=['admin','super_admin','stays'].includes(session.account.role)?await session.client.rpc('workspace_hostaway_status'):null;
+      return businessResponse({configuration,data:result.data,hostaway:hostaway&&!hostaway.error?{configured:hostawaySyncConfigured(),...hostaway.data}:null});
     }
     const quota=await requestQuota(request,'integrations-user',6,60,session.account.userId);
     if(!quota.allowed){const response=businessResponse({error:'Too many integration requests'},429);response.headers.set('Retry-After',String(quota.retryAfter||60));return response;}
@@ -45,6 +49,12 @@ export async function integrationRoute(request:Request,native=false) {
     if(parsed.data.action==='dispatchNotifications') {
       if(!['admin','super_admin'].includes(session.account.role))return businessResponse({error:'Admin access required'},403);
       return businessResponse(await dispatchNotifications(settings));
+    }
+    if(parsed.data.action==='syncHostaway') {
+      if(!['admin','super_admin'].includes(session.account.role))return businessResponse({error:'Admin access required'},403);
+      if(!hostawaySyncConfigured())return businessResponse({error:'Add the Hostaway keys to the backend first',mode:'unconfigured'},503);
+      try {return businessResponse(await runHostawaySync('manual'));}
+      catch {return businessResponse({error:'Hostaway could not be synced just now. The error is shown on the sync card.'},502);}
     }
     if(!['admin','super_admin','stays'].includes(session.account.role)||!session.account.modules.includes('direct-bookings'))return businessResponse({error:'Reservation import access required'},403);
     if(!configuration.reservations)return businessResponse({error:'Hostaway import is awaiting configuration',mode:'unconfigured'},503);
