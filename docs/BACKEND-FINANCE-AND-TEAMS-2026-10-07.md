@@ -244,12 +244,12 @@ statements are paid. The rules live in `lib/accounts-live.ts` and match the data
 
 ### New database change: stays missing details
 
-`20261007093000_accounts_stay_details.sql` adds three things to `workspace_finance_read`:
+`20261007090016_accounts_stay_details.sql` adds three things to `workspace_finance_read`:
 - the `needsDetails` list in reconciliation;
 - a `missingDetails` count in the overview;
 - a `missingDetails` count on each statement row.
 
-It is in `supabase/install-pending.sql`, ready to paste into the SQL editor.
+It is already installed in the Supabase project.
 
 `tests/live-accounts-contract.test.mjs` runs the exact requests the screens send through the HTTP
 schemas, the server-side CSV parser and the database. It covers:
