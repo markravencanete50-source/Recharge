@@ -66,7 +66,17 @@ await request('/api/mobile/journeys', 403, {
 });
 console.log('PASS: web/native journey writes reject an untrusted origin before processing');
 
-assert.match(await (await request('/sign-in', 200)).text(), /Recharge/i, 'Sign-in page unavailable');
+const signIn = await (await request('/sign-in', 200)).text();
+assert.match(signIn, /Recharge/i, 'Sign-in page unavailable');
+// Without its scripts the sign-in button does nothing, so every built file it references must load.
+const builtFiles = [...new Set(signIn.match(/\/assets\/[\w.-]+\.(?:js|css)/g) ?? [])];
+assert.ok(builtFiles.some(path => path.endsWith('.js')), 'Sign-in page references no scripts');
+await Promise.all(builtFiles.map(async path => {
+  const response = await request(path, 200);
+  assert.match(response.headers.get('content-type') ?? '', path.endsWith('.css') ? /text\/css/i : /javascript/i, `${path}: wrong content type`);
+  await response.body?.cancel();
+}));
+console.log(`PASS: the sign-in page's ${builtFiles.length} scripts and styles load`);
 for (const name of ['recharge-company-logo.png', 'recharge-company-logo-dark.png']) {
   const response = await request(`/${name}`, 200);
   assert.match(response.headers.get('content-type') ?? '', /image\/png/i);

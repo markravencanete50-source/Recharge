@@ -59,6 +59,9 @@ const worker = {
         return new Response(JSON.stringify({ service: "Recharge backend", configured }), { status: configured ? 200 : 503, headers });
       }
       if (!backendRouteAllowed(url.pathname)) return new Response(JSON.stringify({ error: "This endpoint is not available on the live backend" }), { status: 404, headers });
+      // The pages' built scripts, styles and fonts live in the static asset store. The app
+      // router only serves public files it knows about, so hand these over directly.
+      if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/fonts/")) return env.ASSETS.fetch(request);
     }
 
     if (url.pathname === "/_vinext/image") {
