@@ -1,147 +1,334 @@
-import { useCallback,useEffect,useState,type ReactNode } from 'react';
-import { ActivityIndicator,KeyboardAvoidingView,Platform,ScrollView,StyleSheet,TextInput,View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Feather from '@expo/vector-icons/Feather';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Crypto from 'expo-crypto';
-import * as Linking from 'expo-linking';
-import { z } from 'zod';
-import { Text } from './Typography';
-import { CompanyLogo } from './CompanyLogo';
-import { FaqShortcut,useFaqShortcut } from './FaqShortcut';
-import { MotionProvider,MotionPress } from './motion';
-import { headerPalette,themes,ui,type Palette } from './theme';
-import { useThemePreference } from './usePreviewPreferences';
-import { Reports } from './Reports';
-import { LiveCleans } from './LiveCleans';
-import { LiveRepairs } from './LiveRepairs';
-import { LiveAccounts } from './LiveAccounts';
-import { LiveManagement } from './LiveManagement';
-import { LiveStays } from './LiveStays';
-import { LiveTraining } from './LiveTraining';
-import { LiveOwner } from './LiveOwner';
-import { exportReport } from './exportReport';
-import { liveApiOrigin,restoreAccount,signIn,signOut,workspaceRequest,WorkspaceApiError } from './backend/client';
-import type { WorkspaceAccount } from '../../lib/workspace-account-policy';
-import { isWorkspaceAdmin } from '../../lib/modules';
-import { faqsForAccess } from '../../lib/access-faq';
-import { presetPeriod,periodError,type AnalyticsSnapshot } from '../../lib/analytics';
-import { propertyViewSchema,journeyViewSchema,operationViewSchema,invoiceViewSchema,noticeViewSchema,reportViewSchema,onboardingProgress,readableStage,estimateComparables,type PropertyView,type InvoiceView,type NoticeView } from '../../lib/workspace-view';
-import { newEnquiryForm,journeyForms,createOperationForms,operationForms,workflowValues,type WorkflowField,type WorkflowForm,type JourneyView,type OperationView } from '../../lib/workflow-forms';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { ActivityIndicator, Animated, KeyboardAvoidingView, Platform, ScrollView, Switch, View, useWindowDimensions } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import Feather from "@expo/vector-icons/Feather";
+import { router, useLocalSearchParams } from "expo-router";
+import { z } from "zod";
+import { Text } from "./Typography";
+import { CompanyLogo } from "./CompanyLogo";
+import { Avatar, type Profile } from "./AccountSetup";
+import { FeatureTile } from "./Artwork";
+import { DesktopNavigation } from "./DesktopNavigation";
+import { NavigationBar, type NavigationItem } from "./NavigationBar";
+import { FaqShortcut, useFaqShortcut } from "./FaqShortcut";
+import { FilterBar } from "./FilterBar";
+import { RechargeSplash } from "./RechargeSplash";
+import { GreetingCard } from "./WelcomeMoment";
+import { Reports } from "./Reports";
+import { Sheet } from "./TeamFlows";
+import { MotionPress, MotionProvider, useMotionPreference, useReducedMotion } from "./motion";
+import { headerPalette, themes, ui, type Palette } from "./theme";
+import { useThemePreference } from "./usePreviewPreferences";
+import { exportReport } from "./exportReport";
+import { LiveSignIn } from "./LiveSignIn";
+import { LiveHome } from "./LiveHome";
+import { LiveWorkRow, isDone, isWaitingWork, workDate } from "./LiveRows";
+import { DateRangeSheet, EmptyState, LiveActivity, LiveHelp, LiveProperties, PageHeading, SoftButton, WorkflowSheet, liveApi, message } from "./LivePages";
+import { LiveCleans } from "./LiveCleans";
+import { LiveRepairs } from "./LiveRepairs";
+import { LiveAccounts } from "./LiveAccounts";
+import { LiveManagement } from "./LiveManagement";
+import { LiveStays } from "./LiveStays";
+import { LiveOwner } from "./LiveOwner";
+import { liveApiOrigin, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
+import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import type { WorkspaceSection } from "../../lib/workspace-map";
+import { isWorkspaceAdmin } from "../../lib/modules";
+import { periodError, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot } from "../../lib/analytics";
+import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSchema, propertyViewSchema, readableStage, reportViewSchema, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
+import { operationForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 
-async function api(path:string,body?:Record<string,unknown>){
- const response=await workspaceRequest('/api/mobile'+path,body);
- return z.object({data:z.unknown().optional()}).passthrough().parse(await response.json());
+type Role = WorkspaceAccount["role"];
+type IconName = ComponentProps<typeof Feather>["name"];
+type WorkView = "management" | "stays" | "owner" | "repairs" | "accounts" | "all";
+const WORK_VIEW_LABEL: Record<WorkView, string> = { management: "Management", stays: "Stays", owner: "Stays and statements", repairs: "Repairs", accounts: "Accounts", all: "All work" };
+const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help"];
+
+// The live workspace's destinations for each role. Five items, so the middle one
+// is the raised action on phones, as in the redesign.
+function liveNavigation(role: Role): NavigationItem[] {
+  const item = (value: WorkspaceSection, label: string, icon: NavigationItem["icon"]): NavigationItem => ({ value, label, icon });
+  const home = item("home", "Home", "home"), properties = item("properties", "Properties", "key"), reports = item("analytics", "Reports", "bar-chart-2"), activity = item("activity", "Activity", "activity"), help = item("help", "Help", "help-circle");
+  if (role === "cleans" || role === "cleaning_manager") return [home, item("work", "Cleans", "check-square"), properties, activity, help];
+  if (role === "ready") return [home, item("work", "Repairs", "tool"), properties, activity, help];
+  if (role === "accounts") return [home, item("work", "Accounts", "file-text"), properties, reports, activity];
+  if (role === "client") return [home, item("work", "Stays", "calendar"), properties, reports, activity];
+  return [home, item("work", "Work", "check-square"), properties, reports, activity];
 }
-type WorkView='management'|'stays'|'owner'|'repairs'|'accounts'|'all';
-const WORK_VIEW_LABEL:Record<WorkView,string>={management:'Management',stays:'Stays',owner:'Stays and statements',repairs:'Repairs',accounts:'Accounts',all:'All work'};
-const message=(error:unknown)=>error instanceof Error?error.message:'The request could not be completed.';
-const money=(n:unknown)=>'GBP '+(Number(n)/100).toFixed(2);
-function Button({label,onPress,p,disabled=false,primary=false}:{label:string;onPress:()=>void;p:Palette;disabled?:boolean;primary?:boolean}){
- return <MotionPress onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityState={{disabled}} style={[s.button,{backgroundColor:primary?p.primary:p.surface,borderColor:p.controlBorder,opacity:disabled?.6:1}]}><Text style={{color:primary?p.onPrimary:p.primary,fontWeight:'600',fontSize:14}}>{label}</Text></MotionPress>;
+const WORK_TITLE: Record<Role, [string, string]> = {
+  super_admin: ["Work", "Management, repairs and accounts in one place."], admin: ["Work", "Management, repairs and accounts in one place."],
+  stays: ["Your work", "Stays, guests and repairs for your properties."], client: ["Stays and repairs", "Upcoming stays, statements and repairs at your properties."],
+  cleans: ["Your cleans", "Today's cleans, checklists and photos."], cleaning_manager: ["Cleans", "Your team's cleans, reviews and schedule."],
+  ready: ["Repairs", "Reports, quotes, bookings and routine visits."], accounts: ["Accounts", "Expenses, payouts and owner statements."],
+};
+
+function IconButton({ label, icon, onPress, palette: p }: { label: string; icon: IconName; onPress: () => void; palette: Palette }) {
+  return (
+    <MotionPress accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [ui.iconButton, { borderColor: p.border, backgroundColor: p.surface, opacity: pressed ? 0.65 : 1 }]}>
+      <Feather name={icon} size={19} color={p.text} />
+    </MotionPress>
+  );
 }
-function Card({children,p}:{children:ReactNode;p:Palette}){return <View style={[s.card,{backgroundColor:p.surface,borderColor:p.border}]}>{children}</View>;}
-function Field({field:f,value,onChange,p,disabled}:{field:WorkflowField;value:unknown;onChange:(value:unknown)=>void;p:Palette;disabled?:boolean}){
- const [calendar,setCalendar]=useState(false);
- if(f.type==='checkbox')return <MotionPress disabled={disabled} accessibilityRole="checkbox" accessibilityState={{checked:value===true,disabled}} onPress={()=>onChange(value!==true)} style={[s.check,{borderColor:p.border}]}><Feather name={value===true?'check-square':'square'} size={22} color={p.primary}/><View style={{flex:1}}><Text style={[ui.body,{color:p.text}]}>{f.label}</Text>{f.help&&<Text style={[ui.small,{color:p.muted}]}>{f.help}</Text>}</View></MotionPress>;
- if(f.type==='date'&&Platform.OS!=='web'){const parsed=value?new Date(String(value)+'T12:00:00'):new Date(),selected=Number.isNaN(parsed.getTime())?new Date():parsed;return <View style={{gap:8}}><Text style={[ui.body,{color:p.text,fontWeight:'500'}]}>{f.label}{!f.required?' (optional)':''}</Text><Button label={value?String(value):'Choose a date'} p={p} disabled={disabled} onPress={()=>setCalendar(!calendar)}/>{calendar&&<><DateTimePicker value={selected} mode="date" display={Platform.OS==='ios'?'inline':'default'} themeVariant={p.isDark?'dark':'light'} onDismiss={()=>setCalendar(false)} onValueChange={(_event,date)=>{if(Platform.OS==='android')setCalendar(false);onChange(date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0'));}}/>{Platform.OS==='ios'&&<Button label="Done choosing date" p={p} onPress={()=>setCalendar(false)}/>}</>}{!f.required&&!!value&&<Button label="Clear optional date" p={p} onPress={()=>{onChange('');setCalendar(false);}}/>}{f.help&&<Text style={[ui.small,{color:p.muted}]}>{f.help}</Text>}</View>;}
- return <View style={{gap:8}}><Text style={[ui.body,{color:p.text,fontWeight:'500'}]}>{f.label}{!f.required?' (optional)':''}</Text>
-  {f.type==='select'?<View style={{gap:8}}>{f.options?.map(o=><MotionPress key={o.value} disabled={disabled} accessibilityRole="radio" accessibilityState={{selected:value===o.value,disabled}} onPress={()=>onChange(o.value)} style={[s.button,{borderColor:value===o.value?p.primary:p.controlBorder,backgroundColor:value===o.value?p.wash:p.background,justifyContent:'flex-start',gap:10}]}><Feather name={value===o.value?'check-circle':'circle'} size={18} color={p.primary}/><Text style={{color:p.text,flexShrink:1}}>{o.label}</Text></MotionPress>)}</View>:
-  <TextInput accessibilityLabel={f.label} editable={!disabled} value={String(value??'')} onChangeText={onChange} placeholder={f.type==='date'?'YYYY-MM-DD':undefined} placeholderTextColor={p.muted} multiline={f.type==='textarea'} keyboardType={f.type==='money'?'decimal-pad':f.type==='number'?'number-pad':'default'} autoCapitalize={f.type==='date'?'none':'sentences'} maxLength={f.type==='textarea'?10000:1000} style={[s.input,{backgroundColor:p.background,color:p.text,borderColor:p.controlBorder,minHeight:f.type==='textarea'?110:48,textAlignVertical:'top'}]}/>}
-  {f.help&&<Text style={[ui.small,{color:p.muted}]}>{f.help}</Text>}
- </View>;
-}
-function Editor({spec,invoices,p,onClose,onSaved}:{spec:WorkflowForm;invoices:InvoiceView[];p:Palette;onClose:()=>void;onSaved:()=>Promise<void>}){
- const [values,setValues]=useState<Record<string,unknown>>(()=>Object.fromEntries(spec.fields.map(f=>[f.name,f.defaultValue??(f.type==='checkbox'?false:'')]))),[busy,setBusy]=useState(false),[error,setError]=useState(''),[attempt,setAttempt]=useState<{id:string;key:string}|null>(null);
- async function save(){if(busy)return;setBusy(true);setError('');try{
-  const normalized=workflowValues(spec.fields,values),key=JSON.stringify(normalized),requestId=attempt?.key===key?attempt.id:Crypto.randomUUID();setAttempt({key,id:requestId});
-  await api(spec.endpoint==='workspace'?'/workspace':'/'+spec.endpoint,{...(spec.endpoint==='workspace'?{}:{requestId}),...spec.build(normalized,requestId)});
-  // A successful mutation is never repeated merely because the subsequent read fails.
-  onClose();await onSaved();
- }catch(e){setError(message(e));}finally{setBusy(false);}}
- return <Card p={p}><Button label="Back to workspace" p={p} onPress={onClose} disabled={busy}/><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{spec.title}</Text>{spec.description&&<Text style={[ui.body,{color:p.muted}]}>{spec.description}</Text>}
- {spec.unavailable?<Text style={[ui.body,{color:p.muted}]}>{spec.unavailable}</Text>:<>{spec.fields.map(f=><Field key={f.name} field={f.name==='invoiceId'?{...f,options:invoices.map(i=>({value:i.id,label:i.reference+', '+money(i.amount_minor)+', '+i.status}))}:f} value={values[f.name]} onChange={v=>setValues({...values,[f.name]:v})} p={p} disabled={busy}/>)}{error&&<Text accessibilityRole="alert" style={{color:p.danger}}>{error}</Text>}<Button label={busy?'Saving...':'Save and continue'} p={p} primary disabled={busy} onPress={()=>void save()}/></>}
- </Card>;
-}
-function JourneyCard({j,p,account,onForm,work}:{j:JourneyView;p:Palette;account:WorkspaceAccount;onForm:(f:WorkflowForm)=>void;work:OperationView[]}){
- const comparables=estimateComparables(j.estimate),[linkError,setLinkError]=useState('');
- const progress=onboardingProgress(j.stage),linked=work.filter(w=>w.propertyId===j.propertyId&&w.workId!==j.workId);
- return <Card p={p}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>Property onboarding</Text><View style={{gap:8}}>{progress.steps.map(step=><View key={step.label} style={[ui.row,{gap:10}]}><Feather name={step.state==='complete'?'check-circle':step.state==='current'?'arrow-right-circle':'circle'} size={18} color={step.state==='complete'?p.success:step.state==='current'?p.primary:p.muted}/><Text style={{color:step.state==='pending'?p.muted:p.text,fontWeight:step.state==='current'?'600':'400'}}>{step.label}{step.state==='current'?' · '+readableStage(j.stage):''}</Text></View>)}</View><Text style={[ui.body,{color:p.muted}]}>{progress.next}</Text>
- {j.estimate&&<View style={{gap:8}}><Text style={[ui.sectionTitle,{color:p.text}]}>Your estimate</Text>{[['Low nightly rate','lowRateMinor'],['Expected nightly rate','mediumRateMinor'],['High nightly rate','highRateMinor']].map(([label,key])=><Text key={key} style={{color:p.text}}>{label}: {money(j.estimate?.[key])}</Text>)}{typeof j.estimate.comments==='string'&&<Text style={[ui.body,{color:p.muted}]}>{j.estimate.comments}</Text>}</View>}
- {!!comparables.length&&<View style={{gap:8}}><Text style={[ui.sectionTitle,{color:p.text}]}>Comparable properties</Text>{comparables.map(c=><View key={c.url} style={{gap:6}}><Text style={{color:p.text}}>{c.name}: {money(c.adrMinor)} per night</Text><Button label={'View '+c.name} p={p} onPress={()=>void Linking.openURL(c.url).catch(()=>setLinkError('The comparable link could not be opened.'))}/></View>)}{linkError&&<Text accessibilityRole="alert" style={{color:p.danger}}>{linkError}</Text>}</View>}
- {!!j.agreement&&<View style={{gap:10}}><Text style={[ui.sectionTitle,{color:p.text}]}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body,{color:p.text}]}>{j.agreement}</Text>{j.signedName&&<Text style={{color:p.success}}>Accepted by {j.signedName}.</Text>}</View>}
- {j.inspectionReport&&<><Text style={[ui.sectionTitle,{color:p.text}]}>Inspection findings</Text><Text selectable style={[ui.body,{color:p.text}]}>{j.inspectionReport}</Text></>}
- {journeyForms(account,j).map(f=><Button key={f.key} label={f.title} p={p} onPress={()=>onForm(f)}/>)}
- {!!linked.length&&<><Text style={[ui.sectionTitle,{color:p.text}]}>Connected team handovers</Text>{linked.map(w=><Text key={w.workId} style={[ui.body,{color:p.text}]}>{w.title}: {readableStage(w.status)}</Text>)}</>}
- </Card>;
-}
-function Screen(){
- const faqShortcut=useFaqShortcut();
- const {theme,setTheme}=useThemePreference(),dark=theme==='dark',p=themes[theme],header=headerPalette(p);
- const [account,setAccount]=useState<WorkspaceAccount|null>(null),[checking,setChecking]=useState(true),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const [tab,setTab]=useState('properties'),[properties,setProperties]=useState<PropertyView[]>([]),[journeys,setJourneys]=useState<JourneyView[]>([]),[work,setWork]=useState<OperationView[]>([]),[invoices,setInvoices]=useState<InvoiceView[]>([]),[notices,setNotices]=useState<NoticeView[]>([]),[propertyId,setPropertyId]=useState(''),[loading,setLoading]=useState(false),[form,setForm]=useState<WorkflowForm|null>(null);
- const [workView,setWorkView]=useState<WorkView|''>(''),[period,setPeriod]=useState(()=>presetPeriod(7)),[report,setReport]=useState<AnalyticsSnapshot|null>(null),[exporting,setExporting]=useState(false),[exportMessage,setExportMessage]=useState(''),[policyConfirmed,setPolicyConfirmed]=useState(false);
- useEffect(()=>{let active=true;if(!liveApiOrigin()){setTimeout(()=>{if(active)setChecking(false);},0);return()=>{active=false;};}restoreAccount().then(value=>{if(active){setAccount(value);if(['cleans','cleaning_manager','ready','accounts'].includes(value.role))setTab('work');}}).catch(e=>{if(active&&!(e instanceof WorkspaceApiError&&e.status===401))setError(message(e));}).finally(()=>{if(active)setChecking(false);});return()=>{active=false;};},[]);
- const refresh=useCallback(async()=>{
-  if(account?.status!=='active')return;setLoading(true);setError('');setProperties([]);setJourneys([]);setWork([]);setInvoices([]);setNotices([]);setReport(null);setPolicyConfirmed(false);
-  const jobs=[['properties','/workspace?entity=properties&limit=100'],['journeys','/journeys'],['work','/operations'],['invoices','/workspace?entity=invoices&limit=100'],['notices','/portfolio?section=notifications']] as const;
-  const results=await Promise.allSettled(jobs.map(async([key,path])=>({key,result:await api(path)})));
-  for(let i=0;i<results.length;i++){const result=results[i],key=jobs[i][0];
-   // Clear a failed collection, including after an assignment is revoked.
-   if(result.status==='rejected'){if(key==='properties')setProperties([]);if(key==='journeys')setJourneys([]);if(key==='work')setWork([]);if(key==='invoices')setInvoices([]);if(key==='notices')setNotices([]);if(result.reason instanceof WorkspaceApiError&&result.reason.status===401)setAccount(null);setError(message(result.reason));continue;}
-   try{const data=result.value.result.data;if(key==='properties')setProperties(z.array(propertyViewSchema).parse(data));if(key==='journeys')setJourneys(z.array(journeyViewSchema).parse(data));if(key==='work')setWork(z.array(operationViewSchema).parse(data));if(key==='invoices')setInvoices(z.array(invoiceViewSchema).parse(data));if(key==='notices')setNotices(z.array(noticeViewSchema).parse(data));}catch{setError('Unexpected response. Refresh to try again.');}
+
+function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeOnOpen }: { account: WorkspaceAccount; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; welcomeOnOpen: boolean }) {
+  const { width } = useWindowDimensions();
+  const desktop = width >= 1024;
+  const reduced = useReducedMotion(), motionPreference = useMotionPreference(), faqShortcut = useFaqShortcut();
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const tab: WorkspaceSection = SECTIONS.includes(section as WorkspaceSection) ? section as WorkspaceSection : "home";
+  const setTab = (value: WorkspaceSection) => router.setParams({ section: value });
+  const nav = useMemo(() => liveNavigation(account.role), [account.role]);
+  const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false);
+  const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
+  const [properties, setProperties] = useState<PropertyView[]>([]), [journeys, setJourneys] = useState<JourneyView[]>([]), [work, setWork] = useState<OperationView[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceView[]>([]), [notices, setNotices] = useState<NoticeView[]>([]), [policyConfirmed, setPolicyConfirmed] = useState(false);
+  const [loading, setLoading] = useState(true), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [period, setPeriod] = useState<AnalyticsPeriod>(() => presetPeriod(30)), [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null), [dates, setDates] = useState(false);
+  const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
+  const [form, setForm] = useState<WorkflowForm | null>(null), [openWork, setOpenWork] = useState<OperationView | null>(null);
+  const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active");
+  const [fade] = useState(() => new Animated.Value(1));
+  const scroll = useRef<ScrollView>(null);
+  const profile: Profile = { displayName: account.fullName || account.email || "Your profile", avatar: "forest" };
+  const roleLabel = readableStage(account.role);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const update = () => setOffline(!navigator.onLine); update();
+    window.addEventListener("online", update); window.addEventListener("offline", update);
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setLoading(true); setError("");
+    const jobs = [["properties", "/workspace?entity=properties&limit=100"], ["journeys", "/journeys"], ["work", "/operations"], ["invoices", "/workspace?entity=invoices&limit=100"], ["notices", "/portfolio?section=notifications"]] as const;
+    const results = await Promise.allSettled(jobs.map(async ([, path]) => liveApi(path)));
+    results.forEach((result, i) => {
+      const key = jobs[i][0];
+      // A failed collection is cleared, including after an assignment is revoked.
+      if (result.status === "rejected") {
+        if (key === "properties") setProperties([]); if (key === "journeys") setJourneys([]); if (key === "work") setWork([]); if (key === "invoices") setInvoices([]); if (key === "notices") setNotices([]);
+        if (result.reason instanceof WorkspaceApiError && result.reason.status === 401) onSignedOut();
+        setError(message(result.reason)); return;
+      }
+      try {
+        const data = result.value.data;
+        if (key === "properties") setProperties(z.array(propertyViewSchema).parse(data));
+        if (key === "journeys") setJourneys(z.array(journeyViewSchema).parse(data));
+        if (key === "work") setWork(z.array(operationViewSchema).parse(data));
+        if (key === "invoices") setInvoices(z.array(invoiceViewSchema).parse(data));
+        if (key === "notices") setNotices(z.array(noticeViewSchema).parse(data));
+      } catch { setError("Unexpected response. Refresh to try again."); }
+    });
+    if (isWorkspaceAdmin(account.role) || account.role === "stays") {
+      try { setPolicyConfirmed(z.object({ confirmed: z.boolean() }).parse((await liveApi("/portfolio?section=bookingPolicy")).data).confirmed); } catch { setPolicyConfirmed(false); }
+    }
+    setLoading(false);
+  }, [account.role, onSignedOut]);
+  const loadReport = useCallback(async (range: AnalyticsPeriod) => {
+    if (periodError(range)) return;
+    try { setSnapshot(reportViewSchema.parse((await liveApi("/reports?" + new URLSearchParams(range))).data) as AnalyticsSnapshot); } catch { setSnapshot(null); }
+  }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void refresh(); }); return () => { active = false; }; }, [refresh]);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void loadReport(period); }); return () => { active = false; }; }, [loadReport, period]);
+
+  useEffect(() => {
+    scroll.current?.scrollTo({ y: 0, animated: false });
+    queueMicrotask(() => setScrolled(false));
+    if (reduced) { fade.setValue(1); return; }
+    fade.setValue(0);
+    const animation = Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: Platform.OS !== "web" });
+    animation.start();
+    return () => animation.stop();
+  }, [tab, fade, reduced]);
+
+  async function logout() {
+    setBusy(true);
+    try { await signOut(); } catch { /* signed out on this device either way */ }
+    try { globalThis.sessionStorage?.removeItem("rc-welcomed"); } catch { /* storage unavailable */ }
+    setBusy(false); setSettings(false); onSignedOut();
   }
-  if(isWorkspaceAdmin(account.role)||account.role==='stays'){try{const data=await api('/portfolio?section=bookingPolicy');setPolicyConfirmed(z.object({confirmed:z.boolean()}).parse(data.data).confirmed);}catch{setPolicyConfirmed(false);}}
-  setReport(null);setLoading(false);
- },[account]);
- useEffect(()=>{let active=true;queueMicrotask(()=>{if(active)void refresh();});return()=>{active=false;};},[refresh]);
- async function login(){if(busy)return;setBusy(true);setError('');try{const value=await signIn(email.trim(),password);setPassword('');if(!value)throw new Error('Please sign in again.');setAccount(value);if(['cleans','cleaning_manager','ready','accounts'].includes(value.role))setTab('work');}catch(e){setPassword('');setError(message(e));}finally{setBusy(false);}}
- async function logout(){setBusy(true);try{await signOut();setError('');}catch{setError('Signed out on this device. Server revocation could not be confirmed.');}finally{setAccount(null);setProperties([]);setJourneys([]);setWork([]);setInvoices([]);setNotices([]);setReport(null);setForm(null);setPropertyId('');setBusy(false);}}
- async function loadReport(){setError('');const invalid=periodError(period);if(invalid){setError(invalid);return;}try{const value=await api('/reports?'+new URLSearchParams(period));setReport(reportViewSchema.parse(value.data));}catch(e){setReport(null);setError(message(e));}}
- async function download(){if(!account||!isWorkspaceAdmin(account.role)||exporting)return;setExporting(true);setExportMessage('');try{const csv=await(await workspaceRequest('/api/mobile/reports/export?'+new URLSearchParams(period))).text();await exportReport(csv,'Recharge-report-'+period.from+'-'+period.to+'.csv');setExportMessage('Report prepared for saving or sharing.');}catch(e){setExportMessage(message(e));}finally{setExporting(false);}}
- async function downloadProperty(){if(!propertyId||exporting)return;setExporting(true);setExportMessage('');try{const csv=await(await workspaceRequest('/api/mobile/portfolio?'+new URLSearchParams({section:'weekly',propertyId,...period,download:'csv'}))).text();await exportReport(csv,'Recharge-property-report-'+period.from+'-'+period.to+'.csv');setExportMessage('Property report prepared for saving or sharing.');}catch(e){setExportMessage(message(e));}finally{setExporting(false);}}
- const cleansRole=account?.role==='cleans'||account?.role==='cleaning_manager';
- const repairsOnly=account?.role==='ready';
- // The work views each role can switch between; the first one opens by default.
- const workViews:WorkView[]=!account?[]:isWorkspaceAdmin(account.role)?['management','repairs','accounts','all']:account.role==='stays'?['stays','repairs','all']:account.role==='client'?['owner','repairs','all']:[];
- const currentView:WorkView|''=workViews.includes(workView as WorkView)?workView:(workViews[0]??''),repairsToggle=workViews.length>1;
- // Accounts staff work only in Accounts; management can switch to it from the work tab.
- const accountsOnly=account?.role==='accounts';
- const showAccounts=accountsOnly||currentView==='accounts',showManagement=currentView==='management',showStays=currentView==='stays',showOwner=currentView==='owner';
- const showRepairs=repairsOnly||currentView==='repairs',showGeneric=!cleansRole&&!showRepairs&&!showAccounts&&!showManagement&&!showStays&&!showOwner;
- const chosenJourney=journeys.find(j=>j.propertyId===propertyId),chosenWork=work.filter(w=>!propertyId||w.propertyId===propertyId),faq=account?faqsForAccess(account.role,account.modules):[];
- return <SafeAreaView style={{flex:1,backgroundColor:p.background}} edges={['top','bottom']}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={{flex:1}}>
-  <View style={[s.header,{backgroundColor:header.background}]}><CompanyLogo palette={header}/><MotionPress accessibilityRole="button" accessibilityLabel={dark?'Use light theme':'Use dark theme'} onPress={()=>setTheme(dark?'light':'dark')} style={[s.button,{backgroundColor:header.surface,borderColor:header.border,paddingHorizontal:12}]}><Feather name={dark?'sun':'moon'} color={header.text} size={20}/></MotionPress></View>
-  <ScrollView style={{flex:1}} contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
-   {checking?<ActivityIndicator accessibilityLabel="Restoring your session" color={p.primary}/>:!liveApiOrigin()?<Card p={p}><Text style={[ui.sectionTitle,{color:p.text}]}>Live connection is awaiting configuration</Text><Text style={[ui.body,{color:p.muted}]}>The backend address will be added to the native app when deployment is ready. This view does not use preview records.</Text></Card>:!account?<Card p={p}><Text style={[ui.title,{color:p.text}]}>Welcome to Recharge</Text><Text style={[ui.body,{color:p.muted}]}>Sign in with your verified email. Your workspace access is granted by an administrator.</Text><TextInput accessibilityLabel="Email" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} style={[s.input,{color:p.text,backgroundColor:p.background,borderColor:p.controlBorder}]}/><TextInput accessibilityLabel="Password" autoComplete="current-password" secureTextEntry value={password} onChangeText={setPassword} style={[s.input,{color:p.text,backgroundColor:p.background,borderColor:p.controlBorder}]}/><Button label={busy?'Signing in...':'Sign in'} p={p} primary disabled={busy||!email.trim()||!password} onPress={()=>void login()}/><Button label="Reset your password" p={p} onPress={()=>void Linking.openURL(liveApiOrigin()+'/reset-password').catch(e=>setError(message(e)))}/><Text style={[ui.small,{color:p.muted}]}>Five incorrect passwords block sign-in for 24 hours. Password reset remains available. Registration and phone verification await provider configuration.</Text></Card>:account.status!=='active'?<Card p={p}><Text style={[ui.sectionTitle,{color:p.text}]}>{account.status==='revoked'?'Access revoked':'Access awaiting approval'}</Text><Text style={[ui.body,{color:p.muted}]}>Contact Recharge to confirm your role and property access.</Text><Button label="Check access again" p={p} onPress={()=>void restoreAccount().then(setAccount).catch(e=>setError(message(e)))}/><Button label="Sign out" p={p} onPress={()=>void logout()} disabled={busy}/></Card>:<>
-   <View style={[ui.between,{gap:12}]}><Text style={[ui.title,{color:p.text}]}>{tab==='work'&&cleansRole?'Cleans':tab==='work'&&repairsOnly?'Repairs':tab==='work'&&accountsOnly?'Accounts':readableStage(tab)}</Text><Button label={loading?'Refreshing...':'Refresh'} p={p} disabled={loading} onPress={()=>void refresh()}/></View>
-   {loading&&<ActivityIndicator color={p.primary} accessibilityLabel="Loading your permitted records"/>}
-   {form?<Editor key={form.key+(chosenJourney?.version||'')} spec={form} invoices={invoices.filter(i=>!propertyId||i.property_id===propertyId)} p={p} onClose={()=>setForm(null)} onSaved={refresh}/>:<>
-    {(tab==='properties'||(tab==='work'&&showGeneric)||tab==='reports')&&<View style={{gap:10}}><Text style={[ui.small,{color:p.muted}]}>Select a permitted property</Text><Button label="All permitted properties" p={p} onPress={()=>setPropertyId('')}/>{properties.map(property=><Button key={property.id} label={property.name+(property.id===propertyId?' · selected':'')} p={p} onPress={()=>setPropertyId(property.id)}/>)}</View>}
-    {tab==='properties'&&<>
-     {account.role==='client'&&account.modules.includes('property-onboarding')&&<Button label="New property enquiry" p={p} primary onPress={()=>setForm(newEnquiryForm())}/>}
-     {!loading&&!error&&!properties.length&&<Card p={p}><Text style={[ui.sectionTitle,{color:p.text}]}>Your workspace starts here</Text><Text style={[ui.body,{color:p.muted}]}>{account.role==='client'?'Submit an enquiry to start your shared property journey.':'Client enquiries and assigned properties will appear here.'}</Text></Card>}
-     {chosenJourney&&<JourneyCard j={chosenJourney} p={p} account={account} onForm={setForm} work={work}/>}
-    </>}
-    {tab==='work'&&cleansRole&&account&&<LiveCleans palette={p} account={account} properties={properties}/>}
-    {tab==='work'&&repairsToggle&&<View style={[ui.row,{gap:8,flexWrap:'wrap'}]}>{workViews.map(v=><Button key={v} label={WORK_VIEW_LABEL[v]+(currentView===v?' · showing':'')} p={p} primary={currentView===v} onPress={()=>setWorkView(v)}/>)}</View>}
-    {tab==='work'&&showManagement&&account&&<LiveManagement palette={p} account={account}/>}
-    {tab==='work'&&showOwner&&<LiveOwner palette={p} properties={properties}/>}
-    {tab==='work'&&showStays&&account&&<LiveStays palette={p} account={account} properties={properties} onOpenRepairs={()=>setWorkView('repairs')}/>}
-    {tab==='work'&&showAccounts&&account&&<LiveAccounts palette={p} account={account} properties={properties}/>}
-    {tab==='work'&&showRepairs&&account&&<LiveRepairs palette={p} account={account} properties={properties}/>}
-    {tab==='work'&&showGeneric&&<>{propertyId&&createOperationForms(account,propertyId).map(f=><Button key={f.key} label={f.title} p={p} onPress={()=>setForm(f)}/>)}{!loading&&!error&&!chosenWork.length&&<Card p={p}><Text style={[ui.body,{color:p.muted}]}>No assigned work yet. Onboarding handovers will appear here.</Text></Card>}{chosenWork.map(w=><Card key={w.workId} p={p}><Text style={[ui.sectionTitle,{color:p.text}]}>{w.title}</Text><Text style={[ui.small,{color:p.muted}]}>{readableStage(w.status)} · {readableStage(String(w.data.phase||w.kind))}</Text>{['issue','report','requirements','guestUpdate','reason'].filter(k=>typeof w.data[k]==='string').map(k=><Text key={k} style={[ui.body,{color:p.text}]}>{readableStage(k)}: {String(w.data[k])}</Text>)}{w.data.estimatedCostMinor!==undefined&&<Text style={{color:p.text}}>Estimated repair cost: {money(w.data.estimatedCostMinor)}</Text>}{operationForms(account,w).map(f=><Button key={f.key} label={f.title} p={p} disabled={f.key==='prepareQuote'&&!policyConfirmed} onPress={()=>setForm(f)}/>)}{w.kind==='direct_booking'&&!policyConfirmed&&<Text style={[ui.small,{color:p.muted}]}>Discount policy awaits Alex’s confirmation.</Text>}</Card>)}</>}
-    {tab==='reports'&&<><Card p={p}><Text style={[ui.sectionTitle,{color:p.text}]}>Choose your reporting dates</Text>{(['from','to'] as const).map(key=><Field key={key} field={{name:key,label:key==='from'?'From date':'To date',type:'date',required:true}} value={period[key]} onChange={v=>{setPeriod({...period,[key]:String(v)});setReport(null);}} p={p}/>)}<Button label="View reports" p={p} primary onPress={()=>void loadReport()}/></Card>{report&&<Reports snapshot={report} period={period} role={account.role} palette={p} onDates={()=>{setReport(null);}} onExport={()=>void download()} exporting={exporting} exportMessage={exportMessage}/>}{isWorkspaceAdmin(account.role)&&invoices.map(i=><Card key={i.id} p={p}><Text style={[ui.sectionTitle,{color:p.text}]}>{i.reference}</Text><Text style={{color:p.text}}>{i.currency} {(i.amount_minor/100).toFixed(2)} · {i.status}</Text>{i.status==='issued'&&<Button label="Record verified payment" p={p} onPress={()=>setForm({key:'settle-'+i.id,title:'Confirm verified invoice payment',description:'Only confirm after checking the payment has actually settled.',endpoint:'workspace',fields:[{name:'verified',label:'I have verified this invoice payment has settled',type:'checkbox',required:true}],build:()=>({action:'setInvoiceStatus',invoiceId:i.id,version:i.version,status:'paid'})})}/>}</Card>)}</>}
-    {tab==='reports'&&propertyId&&['client','stays','admin','super_admin'].includes(account.role)&&<Card p={p}><Text style={[ui.sectionTitle,{color:p.text}]}>Property performance report</Text><Text style={[ui.body,{color:p.muted}]}>Recorded pricing, listing checks and sourced opportunities for {properties.find(property=>property.id===propertyId)?.name}. Choose up to 31 days.</Text><Button label={exporting?'Preparing report...':'Download property report'} p={p} disabled={exporting} onPress={()=>void downloadProperty()}/>{!!exportMessage&&<Text style={[ui.small,{color:p.text}]}>{exportMessage}</Text>}</Card>}
-    {tab==='activity'&&<Card p={p}><Text style={[ui.sectionTitle,{color:p.text}]}>Recent updates</Text>{!notices.length&&<Text style={[ui.body,{color:p.muted}]}>No permitted workflow updates yet.</Text>}{notices.map(n=><View key={n.id} style={{gap:5}}><Text style={{color:p.text}}>{readableStage(n.event_type.replaceAll('.',' '))}</Text><Text style={[ui.small,{color:p.muted}]}>{new Date(n.created_at).toLocaleString('en-GB',{timeZone:'Europe/London'})}</Text></View>)}<Text style={[ui.small,{color:p.muted}]}>These updates are available in the app. Email and push delivery await provider configuration.</Text></Card>}
-    {tab==='help'&&<><Card p={p}><Text style={[ui.small,{color:p.muted}]}>Workspace role</Text><Text style={[ui.sectionTitle,{color:p.text}]}>{readableStage(account.role)}</Text></Card>{faq.filter(f=>f.id!=='communication-centre').map(f=><Card key={f.id} p={p}><Text style={[ui.sectionTitle,{color:p.text}]}>{f.question}</Text><Text style={[ui.body,{color:p.muted}]}>{f.answer}</Text></Card>)}<LiveTraining palette={p}/>{faqShortcut.hidden&&<Button label="Show the sticky FAQ shortcut" p={p} onPress={()=>faqShortcut.setHidden(false)}/>}<Button label="Sign out" p={p} disabled={busy} onPress={()=>void logout()}/></>}
-   </>}
-   </>}
-   {!!error&&<Text accessibilityRole="alert" style={[ui.body,{color:p.danger}]}>{error}</Text>}
-  </ScrollView>
-  {account?.status==='active'&&!faqShortcut.hidden&&!form&&tab!=='help'&&<FaqShortcut palette={p} onOpen={()=>setTab('help')} onHide={()=>faqShortcut.setHidden(true)}/>}
-  {account?.status==='active'&&<View style={[s.nav,{backgroundColor:p.surface,borderColor:p.border}]}>{(['properties','work','reports','activity','help'] as const).map((key,i)=><MotionPress key={key} accessibilityRole="tab" accessibilityState={{selected:tab===key}} onPress={()=>{setTab(key);setForm(null);setError('');}} style={[s.tab,{backgroundColor:tab===key?p.wash:p.surface}]}><Feather name={(['home','check-square','bar-chart-2','activity','help-circle'] as const)[i]} size={20} color={tab===key?p.primary:p.muted}/><Text style={{fontSize:11,color:tab===key?p.primary:p.muted}}>{key==='work'&&cleansRole?'Cleans':key==='work'&&repairsOnly?'Repairs':key==='work'&&accountsOnly?'Accounts':readableStage(key)}</Text></MotionPress>)}</View>}
- </KeyboardAvoidingView></SafeAreaView>;
+  async function exportCsv() {
+    if (!isWorkspaceAdmin(account.role) || exporting) return;
+    setExporting(true); setExportMessage("");
+    try {
+      const csv = await (await workspaceRequest("/api/mobile/reports/export?" + new URLSearchParams(period))).text();
+      await exportReport(csv, "Recharge-report-" + period.from + "-" + period.to + ".csv");
+      setExportMessage(Platform.OS === "web" ? "Report download started." : "Report ready to save or share.");
+    } catch (e) { setExportMessage(message(e)); } finally { setExporting(false); }
+  }
+  const finishWelcome = () => { setWelcome(null); try { globalThis.sessionStorage?.setItem("rc-welcomed", "1"); } catch { /* storage unavailable */ } };
+
+  // Work: each role's views, the first opening by default.
+  const workViews: WorkView[] = isWorkspaceAdmin(account.role) ? ["management", "repairs", "accounts", "all"] : account.role === "stays" ? ["stays", "repairs", "all"] : account.role === "client" ? ["owner", "repairs", "all"] : [];
+  const currentView: WorkView | "" = workViews.includes(workView as WorkView) ? workView as WorkView : (workViews[0] ?? "");
+  const names = new Map(properties.map(property => [property.id, property.name]));
+  const filtered = work.filter(item => workFilter === "All" || (workFilter === "Completed" ? isDone(item.status) : workFilter === "Waiting" ? isWaitingWork(item.status) : !isDone(item.status)));
+  const todayKey = presetPeriod(1).to;
+  const workPage = (
+    <>
+      {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
+      {(account.role === "cleans" || account.role === "cleaning_manager") && <LiveCleans palette={p} account={account} properties={properties} />}
+      {account.role === "ready" && <LiveRepairs palette={p} account={account} properties={properties} />}
+      {account.role === "accounts" && <LiveAccounts palette={p} account={account} properties={properties} />}
+      {currentView === "management" && <LiveManagement palette={p} account={account} />}
+      {currentView === "stays" && <LiveStays palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} />}
+      {currentView === "owner" && <LiveOwner palette={p} properties={properties} />}
+      {currentView === "repairs" && <LiveRepairs palette={p} account={account} properties={properties} />}
+      {currentView === "accounts" && <LiveAccounts palette={p} account={account} properties={properties} />}
+      {currentView === "all" && <>
+        <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
+        <FilterBar values={["Active", "Waiting", "Completed", "All"]} selected={workFilter} onSelect={setWorkFilter} palette={p} />
+        <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>{filtered.length} {filtered.length === 1 ? "item" : "items"} within your access</Text>
+        {filtered.length ? (() => {
+          const due = workFilter === "Active" ? filtered.filter(item => (workDate(item) || "9999") <= todayKey) : [], rest = workFilter === "Active" ? filtered.filter(item => (workDate(item) || "9999") > todayKey) : filtered;
+          const list = (items: OperationView[]) => <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 6, gap: 0 }]}>{items.slice(0, 200).map(item => <LiveWorkRow key={item.workId} item={item} property={names.get(item.propertyId)} palette={p} onPress={() => setOpenWork(item)} />)}</View>;
+          return <>
+            {!!due.length && <View style={{ gap: 8 }}><Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Due today or overdue · {due.length}</Text>{list(due)}</View>}
+            {!!rest.length && <View style={{ gap: 8 }}>{workFilter === "Active" && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Ongoing · {rest.length}</Text>}{list(rest)}</View>}
+          </>;
+        })() : <EmptyState palette={p} title={loading ? "Loading your work…" : "No work in this view"} detail="Try another status, or create work from a property." />}
+      </>}
+    </>
+  );
+  const reportsPage = (
+    <>
+      {snapshot ? <Reports snapshot={snapshot} period={period} role={account.role} palette={p} onDates={() => setDates(true)} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} /> : (
+        <><PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." /><View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View></>
+      )}
+      {isWorkspaceAdmin(account.role) && !!invoices.length && <View style={{ gap: 10 }}>
+        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Invoices</Text>
+        <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
+          {invoices.map((invoice, i) => (
+            <View key={invoice.id} style={[ui.between, { gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
+              <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text><Text style={[ui.small, { color: p.muted }]}>{names.get(invoice.property_id) ?? "Property"} · {invoice.currency} {(invoice.amount_minor / 100).toFixed(2)} · {readableStage(invoice.status)}</Text></View>
+              {invoice.status === "issued" && <MotionPress accessibilityRole="button" onPress={() => setForm({ key: "settle-" + invoice.id, title: "Confirm verified invoice payment", description: "Only confirm after checking the payment has actually settled.", endpoint: "workspace", fields: [{ name: "verified", label: "I have verified this invoice payment has settled", type: "checkbox", required: true }], build: () => ({ action: "setInvoiceStatus", invoiceId: invoice.id, version: invoice.version, status: "paid" }) })} style={[ui.button, { backgroundColor: p.wash, minHeight: 40 }]}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Record payment</Text></MotionPress>}
+            </View>
+          ))}
+        </View>
+      </View>}
+    </>
+  );
+  const page = tab === "home"
+    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} work={work} notices={notices} loading={loading} onNavigate={setTab} />
+    : tab === "work" ? workPage
+    : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onRefresh={() => void refresh()} />
+    : tab === "analytics" ? reportsPage
+    : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} />
+    : <LiveHelp palette={p} account={account} busy={busy} onSignOut={() => void logout()} />;
+  const header = headerPalette(p);
+  const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : "Home");
+  return (
+    <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
+      <StatusBar style={theme === "dark" ? "light" : "dark"} />
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
+        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={nav} section={tab} palette={p} onNavigate={setTab} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme, motion and sign out" />}
+        {desktop && sidebarHidden && <View style={{ width: 64, backgroundColor: p.isDark ? p.surface : p.background, borderRightWidth: 1, borderColor: p.border }}><View style={{ height: 81, alignItems: "center", justifyContent: "center", backgroundColor: p.header }}><IconButton label="Show left panel" icon="chevrons-right" palette={header} onPress={() => setSidebarHidden(false)} /></View></View>}
+        <View style={[ui.fill, { minWidth: 0 }]}>
+          {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Changes will fail until you reconnect.</Text></View>}
+          <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth: 1, borderColor: scrolled ? p.headerBorder : p.isDark && desktop ? p.border : "transparent" }}>
+            <View style={[ui.between, { width: "100%", maxWidth: desktop ? undefined : 760, alignSelf: "center", paddingHorizontal: 20, paddingVertical: 16, gap: 12 }]}>
+              <View style={[ui.row, { flex: 1, minWidth: 0, gap: 16 }]}>
+                {desktop && sidebarHidden && <CompanyLogo palette={header} width={144} />}
+                {desktop ? <Text style={{ color: p.headerText, fontSize: 16, fontWeight: "600", flexShrink: 1 }}>{title}</Text> : <CompanyLogo palette={header} width={width < 360 ? 104 : 144} />}
+              </View>
+              <View style={[ui.row, { gap: 8 }]}>
+                <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={() => { void refresh(); void loadReport(period); }} />
+                <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />
+                <MotionPress accessibilityRole="button" accessibilityLabel={`Open profile and preferences, ${roleLabel}`} onPress={() => setSettings(true)} style={{ minHeight: 48, minWidth: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: desktop ? 14 : 0, borderRadius: 999, backgroundColor: desktop ? p.headerControl : "transparent", borderWidth: desktop ? 1 : 0, borderColor: p.headerBorder }}>
+                  {desktop && <View style={{ maxWidth: 180 }}><Text numberOfLines={1} style={{ color: p.headerText, fontSize: 14, fontWeight: "600" }}>{profile.displayName}</Text><Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 11 }}>{roleLabel}</Text></View>}
+                  <Avatar profile={profile} backgroundColor={desktop ? undefined : p.headerControl} textColor={desktop ? "#FFFFFF" : p.headerControlText} />
+                </MotionPress>
+              </View>
+            </View>
+          </View>
+          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => setScrolled(event.nativeEvent.contentOffset.y > 12)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
+            <Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
+              {page}
+              {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
+            </Animated.View>
+          </ScrollView>
+          {!faqShortcut.hidden && tab !== "help" && <FaqShortcut palette={p} onOpen={() => setTab("help")} onHide={() => faqShortcut.setHidden(true)} />}
+          {!desktop && <NavigationBar role={account.role} items={nav} section={tab} onNavigate={setTab} palette={p} />}
+        </View>
+      </KeyboardAvoidingView>
+      <Sheet palette={p} visible={settings} onClose={() => setSettings(false)} title="Profile & preferences" subtitle="Your account and comfort settings" icon="people">
+        <View style={{ borderRadius: 22, padding: 18, gap: 6, backgroundColor: p.header, overflow: "hidden" }}>
+          <View style={[ui.row, { gap: 14 }]}>
+            <Avatar profile={profile} size={56} backgroundColor={p.headerControl} textColor={p.headerControlText} />
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <Text numberOfLines={1} style={{ color: p.headerText, fontSize: 18, fontWeight: "700", letterSpacing: -0.4 }}>{profile.displayName}</Text>
+              <Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 13 }}>{roleLabel}{account.email ? " · " + account.email : ""}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: p.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>Comfort</Text>
+          <View style={{ borderRadius: 20, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
+            <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>
+              <FeatureTile icon={theme === "dark" ? "moon" : "sun"} size={36} palette={p} />
+              <View style={{ flex: 1, gap: 2 }}><Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Dark mode</Text><Text style={[ui.small, { color: p.muted }]}>Easier on the eyes at night.</Text></View>
+              <Switch accessibilityLabel="Dark mode" value={theme === "dark"} onValueChange={value => setTheme(value ? "dark" : "light", reduced)} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
+            </View>
+            <View style={{ height: 1, backgroundColor: p.border, marginLeft: 68 }} />
+            <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>
+              <FeatureTile icon="wind" size={36} palette={p} />
+              <View style={{ flex: 1, gap: 2 }}><Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Reduce motion</Text><Text style={[ui.small, { color: p.muted }]}>{motionPreference.system ? "Your device setting is respected." : "Use instant changes instead of decorative animation."}</Text></View>
+              <Switch accessibilityLabel="Reduce motion" value={reduced} disabled={motionPreference.system} onValueChange={motionPreference.setPreference} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
+            </View>
+            <View style={{ height: 1, backgroundColor: p.border, marginLeft: 68 }} />
+            <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>
+              <FeatureTile icon="help-circle" size={36} palette={p} />
+              <View style={{ flex: 1, gap: 2 }}><Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Show FAQ shortcut</Text><Text style={[ui.small, { color: p.muted }]}>A Help button in the corner of every page.</Text></View>
+              <Switch accessibilityLabel="Show FAQ shortcut" value={!faqShortcut.hidden} onValueChange={value => faqShortcut.setHidden(!value)} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
+            </View>
+          </View>
+        </View>
+        <SoftButton label="Help and training" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("help"); }} />
+        <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={() => void logout()} />
+      </Sheet>
+      <WorkflowSheet spec={form} invoices={invoices} palette={p} onClose={() => setForm(null)} onSaved={refresh} />
+      <Sheet palette={p} visible={!!openWork} onClose={() => setOpenWork(null)} title={openWork?.title ?? ""} subtitle={openWork ? [names.get(openWork.propertyId), readableStage(openWork.status)].filter(Boolean).join(" · ") : undefined} icon="clipboard">
+        {openWork && <>
+          {["issue", "report", "requirements", "guestUpdate", "reason"].filter(key => typeof openWork.data[key] === "string").map(key => <View key={key} style={{ gap: 4 }}><Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>{readableStage(key)}</Text><Text style={[ui.body, { color: p.text }]}>{String(openWork.data[key])}</Text></View>)}
+          {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
+          {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: £{(Number(openWork.data.estimatedCostMinor) / 100).toFixed(2)}</Text>}
+          {operationForms(account, openWork).map(f => <SoftButton key={f.key} label={f.title} icon="arrow-right" palette={p} disabled={f.key === "prepareQuote" && !policyConfirmed} onPress={() => { setOpenWork(null); setForm(f); }} />)}
+          {openWork.kind === "direct_booking" && !policyConfirmed && <Text style={[ui.small, { color: p.muted }]}>The discount policy awaits confirmation.</Text>}
+          {!operationForms(account, openWork).length && <Text style={[ui.small, { color: p.muted }]}>Nothing needs your action on this item.</Text>}
+        </>}
+      </Sheet>
+      <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
+      {welcome === "splash" && <RechargeSplash palette={p} onDone={() => setWelcome("greeting")} />}
+      {welcome === "greeting" && <GreetingCard palette={p} profile={profile} openTasks={work.filter(item => !isDone(item.status)).length} waiting={work.filter(item => isWaitingWork(item.status)).length} onClose={finishWelcome} onWork={() => { finishWelcome(); setTab("work"); }} />}
+    </SafeAreaView>
+  );
 }
-export default function LiveWorkspace(){return <MotionProvider><Screen/></MotionProvider>;}
-const s=StyleSheet.create({header:{paddingHorizontal:20,paddingVertical:14,flexDirection:'row',justifyContent:'space-between',alignItems:'center'},page:{padding:20,gap:20,paddingBottom:36,maxWidth:760,width:'100%',alignSelf:'center'},card:{padding:20,borderWidth:1,borderRadius:22,gap:18},button:{minHeight:48,borderWidth:1,borderRadius:13,paddingHorizontal:16,paddingVertical:12,alignItems:'center',justifyContent:'center',flexDirection:'row'},input:{borderWidth:1,borderRadius:12,padding:13,minHeight:48,fontSize:15},check:{flexDirection:'row',alignItems:'flex-start',gap:12,minHeight:48,paddingVertical:10,borderBottomWidth:1},nav:{flexDirection:'row',borderTopWidth:1,padding:8,gap:4},tab:{flex:1,minHeight:54,borderRadius:13,alignItems:'center',justifyContent:'center',gap:5}});
+
+function Screen() {
+  const { theme, setTheme } = useThemePreference();
+  const p = themes[theme];
+  const [account, setAccount] = useState<WorkspaceAccount | null>(null), [checking, setChecking] = useState(true), [error, setError] = useState(""), [welcome, setWelcome] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (!liveApiOrigin()) { queueMicrotask(() => { if (active) setChecking(false); }); return () => { active = false; }; }
+    restoreAccount().then(value => {
+      if (!active) return;
+      let welcomed = false;
+      try { welcomed = Boolean(globalThis.sessionStorage?.getItem("rc-welcomed")); } catch { welcomed = false; }
+      setWelcome(!welcomed); setAccount(value);
+    }).catch(e => { if (active && !(e instanceof WorkspaceApiError && e.status === 401)) setError(message(e)); }).finally(() => { if (active) setChecking(false); });
+    return () => { active = false; };
+  }, []);
+  const signedOut = useCallback(() => setAccount(null), []);
+  if (checking) return <View style={[ui.fill, { backgroundColor: p.header, alignItems: "center", justifyContent: "center", gap: 20 }]}><CompanyLogo palette={headerPalette(p)} width={180} /><ActivityIndicator accessibilityLabel="Restoring your session" color={p.headerText} /></View>;
+  if (!liveApiOrigin()) return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center" }]}><EmptyState palette={p} icon="inbox" title="Live connection is awaiting configuration" detail="The backend address will be added to the app when deployment is ready." /></View>;
+  if (!account) return <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}><StatusBar style="light" /><LiveSignIn palette={p} onTheme={() => setTheme(theme === "dark" ? "light" : "dark")} onSignedIn={value => { setWelcome(true); setAccount(value); }} />{!!error && <Text accessibilityRole="alert" style={[ui.small, { color: p.danger, textAlign: "center", padding: 12 }]}>{error}</Text>}</SafeAreaView>;
+  if (account.status !== "active") return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center", gap: 16 }]}><EmptyState palette={p} icon="inbox" title={account.status === "pending" ? "Your access is being reviewed" : "Your access has been removed"} detail={account.status === "pending" ? "An administrator will approve your account and choose your tools. You'll then see your workspace here." : "Ask an administrator if you think this is a mistake."} /><SoftButton label="Sign out" icon="log-out" palette={p} onPress={() => { void signOut().finally(() => setAccount(null)); }} /></View>;
+  return <Workspace key={account.userId} account={account} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} welcomeOnOpen={welcome} />;
+}
+
+export default function LiveWorkspace() {
+  return <SafeAreaProvider><MotionProvider><Screen /></MotionProvider></SafeAreaProvider>;
+}

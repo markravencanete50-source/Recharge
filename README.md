@@ -9,7 +9,7 @@ Worker, a phone app (Expo), and the public site at rechargegroup.co.uk.
 | --- | --- | --- |
 | Database | `supabase/migrations/` | Every record and every permission check. Each action runs as a checked database function. |
 | Backend | `app/api/{mobile,workspace,session,access}/`, `worker/` | Signs people in, checks request shape and quotas, and calls the database. Deployed as the `recharge-backend` Worker. `worker/backend-route-policy.ts` lists every allowed path. |
-| Phone app | `mobile/` | One app for every role. Live mode (`/live`) uses the backend; preview mode uses sample data. |
+| Phone app | `mobile/` | One app for every role. Live mode (`/live`, `src/LiveWorkspace.tsx`) uses the backend in the same design as the sample-data preview: sidebar on desktop, bottom bar on phones, Home, Work, Properties, Reports, Activity and Help. |
 | Web workspace | `mobile/` (built by `scripts/build-workspace-web.mjs`) | `/workspace` is the phone app's own browser build, so web and app are the same screens. In the browser it uses the web sign-in cookies and the `/api/workspace/…` routes. `/` sends people here. The older `app/workspace/` page is no longer served; it is kept only for its request-access form, which the app does not have yet. |
 | Public site | `landing/` | The coming-soon page on Vercel. |
 | Preview | `preview/`, `scripts/build-preview.mjs` | A read-only build of the phone app's sample mode for design review. |

@@ -24,8 +24,10 @@ export function HostawaySyncCard({ p, onSynced }: { p: Palette; onSynced?: () =>
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
   const load = useCallback(async () => {
-    try { setStatus(responseSchema.parse(await (await workspaceRequest("/api/mobile/integrations")).json()).hostaway); }
-    catch (e) { setError(message(e)); }
+    try {
+      const parsed = responseSchema.safeParse(await (await workspaceRequest("/api/mobile/integrations")).json());
+      if (parsed.success) setStatus(parsed.data.hostaway); else setError("The Hostaway status could not be loaded. Refresh to try again.");
+    } catch (e) { setError(message(e)); }
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
 

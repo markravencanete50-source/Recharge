@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { Animated, Platform, View } from "react-native";
 import { navigationFor, type WorkspaceSection } from "../../lib/workspace-map";
 import type { WorkspaceRole } from "./model";
@@ -20,20 +20,25 @@ function ActivePill({ color }: { color: string }) {
   return <Animated.View pointerEvents="none" style={{ position: "absolute", width: 58, height: 34, borderRadius: 17, backgroundColor: color, transform: [{ scaleX: scale }] }} />;
 }
 
+export type NavigationItem = { value: WorkspaceSection; label: string; icon: ComponentProps<typeof NavSymbol>["name"] };
 export function NavigationBar({
   role,
   section,
   onNavigate,
   palette: p,
+  items: custom,
 }: {
   role: WorkspaceRole;
   section: WorkspaceSection;
   onNavigate: (section: WorkspaceSection) => void;
   palette: Palette;
+  // The live workspace passes its own destinations; the preview uses the role's.
+  items?: readonly NavigationItem[];
 }) {
-  const items = navigationFor(role);
+  const items = custom ?? navigationFor(role);
   const active = items.findIndex((item) => item.value === section);
-  const index = active < 0 ? items.length - 1 : active;
+  // A page outside the bar (such as Help in the live workspace) highlights nothing.
+  const index = active < 0 ? (custom ? -1 : items.length - 1) : active;
   const centre = items.length % 2 ? Math.floor(items.length / 2) : -1;
   return (
     <View
