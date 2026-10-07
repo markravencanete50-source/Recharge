@@ -58,7 +58,8 @@ To pause the sync, set the Worker variable `HOSTAWAY_SYNC_ENABLED` to `false`.
 
 ## Where it lives
 
-- Database: `supabase/migrations/20261007120000_hostaway_sync.sql`
+- Database: `supabase/migrations/20261007113020_hostaway_sync_tables.sql` and
+  `20261007113021_hostaway_sync_functions.sql`
   (`workspace_hostaway_sync`, service role only; `workspace_hostaway_status` for admins and Stays).
 - Mapping: `lib/hostaway-sync-policy.ts`. Runner and webhook: `lib/hostaway-sync.ts`.
   Schedule: `worker/index.ts` and `scripts/build-backend-config.mjs`.
