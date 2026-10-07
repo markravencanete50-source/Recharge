@@ -11,6 +11,7 @@ import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import type { FinanceAction } from '../../../lib/workspace-finance-policy';
 import type { TeamsAction } from '../../../lib/workspace-teams-policy';
 import type { AdminAction } from '../../../lib/workspace-admin-policy';
+import { webWorkspacePath } from '../../../lib/workspace-web-path';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -29,7 +30,6 @@ export class WorkspaceApiError extends Error {
 // set by the sign-in page, sent only to its own origin, and the /api/workspace twin of
 // each /api/mobile route. The app itself stores nothing in the browser.
 const sameOriginWeb = Platform.OS === "web" && process.env.EXPO_PUBLIC_WORKSPACE_WEB === "same-origin";
-const webPath = (path: string) => path.replace(/^\/api\/mobile\//, "/api/workspace/");
 export function liveApiOrigin(): string | null {
   if (sameOriginWeb) return globalThis.location?.origin ?? null;
   const value = process.env.EXPO_PUBLIC_WORKSPACE_API_ORIGIN;
@@ -102,7 +102,7 @@ async function refresh() {
 }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
   if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
-  if (sameOriginWeb) return call(webPath(path), body);
+  if (sameOriginWeb) return call(webWorkspacePath(path), body);
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
 }
