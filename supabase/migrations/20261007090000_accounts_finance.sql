@@ -281,7 +281,7 @@ begin
   select * into policy from private.workspace_finance_policy where singleton for update;
   if policy.version is distinct from (input->>'version')::integer then raise exception 'Policy changed' using errcode='40001';end if;
   if input->'expenseApprovalLimitMinor' is not null and jsonb_typeof(input->'expenseApprovalLimitMinor')<>'null' then amount:=private.workspace_money(input,'expenseApprovalLimitMinor');else amount:=null;end if;
-  update private.workspace_finance_policy set expense_approval_limit_minor=amount,version=version+1,updated_by=auth.uid(),updated_at=now() returning * into policy;
+  update private.workspace_finance_policy set expense_approval_limit_minor=amount,version=version+1,updated_by=auth.uid(),updated_at=now() where singleton returning * into policy;
   result:=jsonb_build_object('expenseApprovalLimitMinor',policy.expense_approval_limit_minor,'version',policy.version);
   insert into public.workspace_activity(actor_id,event_type) values(auth.uid(),'finance.policy_updated');
 

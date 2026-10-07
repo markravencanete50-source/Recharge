@@ -134,7 +134,7 @@ begin
  summary:=jsonb_build_object('createdProperties',created_properties,'linkedProperties',linked_properties,'newReservations',new_reservations,
   'changedReservations',changed_reservations,'newCleans',new_cleans,'movedCleans',moved_cleans,'cancelledCleans',cancelled_cleans,'problems',issues);
  update private.workspace_hostaway_sync_state set last_run_at=now(),last_success_at=now(),last_trigger=trigger_name,last_error=null,
-  problems=(select coalesce(jsonb_agg(p),'[]') from (select p from jsonb_array_elements(issues) p limit 25) x),last_summary=summary-'problems';
+  problems=(select coalesce(jsonb_agg(p),'[]') from (select p from jsonb_array_elements(issues) p limit 25) x),last_summary=summary-'problems' where singleton;
  return summary;
 end $$;
 
@@ -142,7 +142,7 @@ end $$;
 create function private.workspace_hostaway_sync_failed(input jsonb) returns void language plpgsql security definer set search_path='' as $$
 begin
  if jsonb_typeof(input)<>'object' or coalesce(input->>'trigger','') not in ('schedule','webhook','manual') then raise exception 'Invalid sync trigger' using errcode='22023';end if;
- update private.workspace_hostaway_sync_state set last_run_at=now(),last_trigger=input->>'trigger',last_error=left(coalesce(input->>'error','Hostaway sync failed'),500);
+ update private.workspace_hostaway_sync_state set last_run_at=now(),last_trigger=input->>'trigger',last_error=left(coalesce(input->>'error','Hostaway sync failed'),500) where singleton;
 end $$;
 
 -- What admins and the Stays team see: when it last ran, what it found, and anything to check.

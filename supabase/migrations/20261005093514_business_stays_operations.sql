@@ -92,7 +92,7 @@ begin
   select * into policy from private.workspace_booking_policy where singleton for update;
   if policy.version is distinct from (input->>'version')::int then raise exception 'Policy changed' using errcode='40001';end if;
   if coalesce(input->>'minimumNights','')!~'^\d+$' or (input->>'minimumNights')::int not between 1 and 365 or coalesce(input->>'discountBps','')!~'^\d+$' or (input->>'discountBps')::int>10000 or jsonb_typeof(input->'confirmed') is distinct from 'boolean' then raise exception 'Invalid policy' using errcode='22023';end if;
-  update private.workspace_booking_policy set minimum_nights=(input->>'minimumNights')::int,discount_bps=(input->>'discountBps')::int,discount_cap_minor=private.workspace_money(input,'discountCapMinor'),confirmed=(input->>'confirmed')::boolean,version=version+1 returning * into policy;
+  update private.workspace_booking_policy set minimum_nights=(input->>'minimumNights')::int,discount_bps=(input->>'discountBps')::int,discount_cap_minor=private.workspace_money(input,'discountCapMinor'),confirmed=(input->>'confirmed')::boolean,version=version+1 where singleton returning * into policy;
   result:=to_jsonb(policy)-'singleton';
   insert into public.workspace_activity(actor_id,event_type) values(auth.uid(),'policy.direct_booking_updated');
  elsif a='recordReservation' then
