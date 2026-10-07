@@ -1,7 +1,8 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
-import { backendRouteAllowed } from "./backend-route-policy";
+import { backendRouteAllowed, isWorkspaceApp } from "./backend-route-policy";
+import { securityHeaders } from "../lib/auth-security-policy";
 
 interface Env {
   BACKEND_ONLY?: string;
@@ -62,6 +63,17 @@ const worker = {
       // The pages' built scripts, styles and fonts live in the static asset store. The app
       // router only serves public files it knows about, so hand these over directly.
       if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/fonts/")) return env.ASSETS.fetch(request);
+      // The workspace is the phone app's own browser build, so web and app are the same screens.
+      // /workspace opens its live workspace; any other app page loads the single page.
+      if (isWorkspaceApp(url.pathname)) {
+        if (url.pathname === "/workspace" || url.pathname === "/workspace/") return Response.redirect(new URL("/workspace/live", url), 302);
+        const file = /\.[a-z0-9]+$/i.test(url.pathname);
+        const response = await env.ASSETS.fetch(file ? request : new Request(new URL("/workspace/", url), request));
+        if (file) return response;
+        const page = new Response(response.body, response);
+        for (const [name, value] of Object.entries(securityHeaders)) page.headers.set(name, value);
+        return page;
+      }
     }
 
     if (url.pathname === "/_vinext/image") {

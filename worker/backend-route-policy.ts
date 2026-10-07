@@ -17,9 +17,11 @@ const endpoints = new Set([
   "/api/workspace/finance", "/api/mobile/finance",
   "/api/workspace/teams", "/api/mobile/teams",
   "/api/workspace/admin", "/api/mobile/admin",
-  "/api/hostaway/webhook",
+  "/api/hostaway/webhook", "/api/workspace/account",
   "/workspace", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);
+// The app's browser build is served from /workspace/ (scripts/build-workspace-web.mjs).
+export const isWorkspaceApp = (path: string) => path === "/workspace" || path.startsWith("/workspace/");
 export function backendRouteAllowed(path: string) {
-  return endpoints.has(path) || path.startsWith("/assets/") || /^\/fonts\/(inter|montserrat)-(400|500|600|700)\.ttf$/.test(path);
+  return endpoints.has(path) || isWorkspaceApp(path) || path.startsWith("/assets/") || /^\/fonts\/(inter|montserrat)-(400|500|600|700)\.ttf$/.test(path);
 }

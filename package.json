@@ -10,7 +10,7 @@
     "preview:deploy": "wrangler deploy --config preview/wrangler.jsonc",
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
-    "build": "bash scripts/build-verified.sh && node scripts/build-backend-config.mjs",
+    "build": "bash scripts/build-verified.sh && node scripts/build-workspace-web.mjs && node scripts/build-backend-config.mjs",
     "backend:config": "node scripts/build-backend-config.mjs",
     "backend:deploy": "wrangler deploy --config dist/server/wrangler.backend.json --keep-vars && npm run backend:verify",
     "backend:verify": "node scripts/verify-backend-deployment.mjs",

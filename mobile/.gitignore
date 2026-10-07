@@ -8,6 +8,7 @@ node_modules/
 .claude/
 dist/
 dist-web/
+dist-workspace/
 dist-ios/
 dist-android/
 web-build/

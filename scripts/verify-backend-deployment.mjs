@@ -14,7 +14,7 @@ async function request(path, expectedStatus, options = {}) {
   // Immediately after deployment an edge can still serve the prior version. Retry only a
   // missing protected route or built file; never tolerate an exposed 200 response or relax
   // the final authentication, cache or CORS assertions.
-  const settling = expectedStatus === 401 || (expectedStatus === 200 && path.startsWith('/assets/'));
+  const settling = expectedStatus === 401 || (expectedStatus === 200 && /^\/(assets|workspace)\//.test(path));
   for (let attempt = 0; response.status === 404 && settling && attempt < 9; attempt++) {
     await response.body?.cancel();
     await delay(5000);
@@ -78,6 +78,18 @@ await Promise.all(builtFiles.map(async path => {
   await response.body?.cancel();
 }));
 console.log(`PASS: the sign-in page's ${builtFiles.length} scripts and styles load`);
+
+// The workspace is the phone app's browser build: /workspace opens its live screen, which must load its bundle.
+const workspace = await fetch(new URL('/workspace', origin), { redirect: 'manual', signal: AbortSignal.timeout(15000) });
+assert.equal(workspace.status, 302, '/workspace: expected a redirect to the app');
+assert.equal(new URL(workspace.headers.get('location') ?? '', origin).pathname, '/workspace/live', '/workspace: wrong destination');
+const appPage = await (await request('/workspace/live', 200)).text();
+const bundles = [...new Set(appPage.match(/\/workspace\/_expo\/static\/js\/web\/[\w.-]+\.js/g) ?? [])];
+assert.ok(bundles.length, 'Workspace app references no bundle');
+await Promise.all(bundles.map(async path => { const response = await request(path, 200); await response.body?.cancel(); }));
+const signedOut = await request('/api/workspace/account', 401);
+assert.equal(typeof (await signedOut.json()).error, 'string', '/api/workspace/account: anonymous account exposure');
+console.log('PASS: the workspace app loads, and its account check refuses anonymous visitors');
 for (const name of ['recharge-company-logo.png', 'recharge-company-logo-dark.png']) {
   const response = await request(`/${name}`, 200);
   assert.match(response.headers.get('content-type') ?? '', /image\/png/i);

@@ -19,9 +19,11 @@ test("the built Cloudflare server redirects unauthenticated users to a usable si
     const home = await worker.fetch(origin + "/", { redirect: "manual" });
     assert.equal(home.status, 307);
     assert.equal(new URL(home.headers.get("location")).pathname, "/workspace");
-    const workspace = await worker.fetch(origin + "/workspace", { redirect: "manual" });
-    assert.equal(workspace.status, 307);
-    assert.equal(new URL(workspace.headers.get("location")).pathname, "/sign-in");
+    // The workspace is the phone app's browser build (scripts/build-workspace-web.mjs); the app
+    // itself opens the live workspace, which offers sign-in to signed-out visitors.
+    const workspace = await worker.fetch(origin + "/workspace/", { redirect: "manual", headers: { accept: "text/html" } });
+    assert.equal(workspace.status, 200);
+    assert.match(await workspace.text(), /\/workspace\/_expo\/static\/js\/web\/[\w.-]+\.js/);
     const response = await worker.fetch(origin + "/sign-in", { redirect: "manual", headers: { accept: "text/html" } });
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);

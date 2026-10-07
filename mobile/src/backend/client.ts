@@ -24,7 +24,14 @@ let refreshInFlight: Promise<void> | null = null;
 export class WorkspaceApiError extends Error {
   constructor(message: string, readonly status: number, readonly retryAfter = 0) { super(message); this.name = "WorkspaceApiError"; }
 }
+// The same app also runs in the browser, served by the backend at /workspace
+// (scripts/build-workspace-web.mjs). There it uses the web session instead: the cookies
+// set by the sign-in page, sent only to its own origin, and the /api/workspace twin of
+// each /api/mobile route. The app itself stores nothing in the browser.
+const sameOriginWeb = Platform.OS === "web" && process.env.EXPO_PUBLIC_WORKSPACE_WEB === "same-origin";
+const webPath = (path: string) => path.replace(/^\/api\/mobile\//, "/api/workspace/");
 export function liveApiOrigin(): string | null {
+  if (sameOriginWeb) return globalThis.location?.origin ?? null;
   const value = process.env.EXPO_PUBLIC_WORKSPACE_API_ORIGIN;
   if (!value || Platform.OS === "web") return null;
   try {
@@ -38,9 +45,9 @@ async function call(path: string, body?: unknown, accessToken?: string) {
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 15000);
   try {
     const multipart = body instanceof FormData;
-    const response = await fetch(origin + path, {
-      method: body === undefined ? "GET" : "POST", credentials: "omit", redirect: "error", signal: controller.signal,
-      headers: { "X-Recharge-Client": "native", ...(body === undefined || multipart ? {} : { "Content-Type": "application/json" }), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+    const response = await fetch(sameOriginWeb ? path : origin + path, {
+      method: body === undefined ? "GET" : "POST", credentials: sameOriginWeb ? "same-origin" : "omit", redirect: sameOriginWeb ? "manual" : "error", signal: controller.signal,
+      headers: { ...(sameOriginWeb ? {} : { "X-Recharge-Client": "native" }), ...(body === undefined || multipart ? {} : { "Content-Type": "application/json" }), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
       ...(body === undefined ? {} : { body: multipart ? body : JSON.stringify(body) }),
     });
     if (!response.ok) {
@@ -63,8 +70,18 @@ async function saveSession(value: unknown) {
   account = parsed.account || null;
   return parsed.account;
 }
+// Browser: the account comes from the signed-in web session.
+async function webAccount() {
+  const response = await call("/api/workspace/account");
+  account = workspaceAccountSchema.parse(z.object({ account: z.unknown() }).parse(await response.json()).account);
+  return account;
+}
 export async function signIn(email: string, password: string) {
   const contact = email.trim();
+  if (sameOriginWeb) {
+    await call("/api/session", contact.startsWith('+') ? { phone: contact, password } : { email: contact, password });
+    return webAccount();
+  }
   const response = await call("/api/mobile/session", contact.startsWith('+') ? { action: "loginPhone", phone: contact, password } : { action: "login", email: contact, password });
   return saveSession(await response.json());
 }
@@ -85,14 +102,17 @@ async function refresh() {
 }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
   if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (sameOriginWeb) return call(webPath(path), body);
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
 }
 export async function signOut() {
+  // The web sign-out answers with a redirect to the sign-in page, which manual mode reports as status 0.
+  if (sameOriginWeb) { account = null; await call("/api/session/logout", {}).catch(error => { if (!(error instanceof WorkspaceApiError && error.status === 0)) throw error; }); return; }
   try { if (!session) await refresh(); await call("/api/mobile/session", { action: "logout" }, session!.accessToken); }
   finally { session = null; account = null; await SecureStore.deleteItemAsync(storedRefreshKey, storageOptions); }
 }
-export async function restoreAccount() { await refresh(); if (!account) throw new WorkspaceApiError('Please sign in again.',401); return account; }
+export async function restoreAccount() { if (sameOriginWeb) return webAccount(); await refresh(); if (!account) throw new WorkspaceApiError('Please sign in again.',401); return account; }
 export const readWorkspace = async (query: Record<string, string>) => (await workspaceRequest("/api/mobile/workspace?" + new URLSearchParams(query))).json();
 export const writeWorkspace = async (action: BusinessAction) => (await workspaceRequest("/api/mobile/workspace", action)).json();
 export const readReports = async (period: AnalyticsPeriod) => (await workspaceRequest("/api/mobile/reports?" + new URLSearchParams(period))).json();
