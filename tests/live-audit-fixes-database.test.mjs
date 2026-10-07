@@ -20,6 +20,8 @@ create table auth.sessions(id uuid primary key,user_id uuid references auth.user
 create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+// The live sync is paused for the new business; these tests exercise it switched back on.
+await db.exec('update private.workspace_hostaway_sync_state set paused=false where singleton');
 after(async () => { await db.close(); await vite.close(); });
 
 const roles = ['super_admin', 'cleaning_manager', 'client'];

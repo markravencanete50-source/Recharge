@@ -33,7 +33,7 @@ after(async () => { delete globalThis.__hostawaySync; await vite.close(); });
 
 const airbnb = { id: 7001, listingMapId: 501, channelName: 'airbnbOfficial', channelReservationId: 'HMABC123', status: 'new', arrivalDate: '2026-11-02', departureDate: '2026-11-05',
   numberOfGuests: 3, currency: 'GBP', totalPrice: 480, airbnbExpectedPayoutAmount: 412.5, channelCommissionAmount: 67.5 };
-function reset(env = { HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k', HOSTAWAY_WEBHOOK_SECRET: 'a'.repeat(32) }) {
+function reset(env = { HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k', HOSTAWAY_SYNC_ENABLED: 'true', HOSTAWAY_WEBHOOK_SECRET: 'a'.repeat(32) }) {
   for (const k of Object.keys(state.env)) delete state.env[k];
   Object.assign(state.env, env);
   Object.assign(state, { calls: [], fetched: [], fail: null, reservation: { ...airbnb } });
@@ -68,8 +68,12 @@ test('listings map to a name, address, bedrooms and access notes', () => {
 });
 
 test('the webhook needs its password, ignores other events, and re-fetches the reservation', async () => {
-  reset({ HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k' });
+  reset({ HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k', HOSTAWAY_SYNC_ENABLED: 'true' });
   assert.equal((await hostawayWebhookRoute(hook({ object: 'reservation', data: { id: 7001 } }))).status, 503, 'not set up yet');
+  // Switched off (the default): acknowledged so Hostaway stops retrying, and nothing changes.
+  reset({ HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k', HOSTAWAY_WEBHOOK_SECRET: 'a'.repeat(32) });
+  assert.deepEqual(await (await hostawayWebhookRoute(hook({ object: 'reservation', data: { id: 7001 } }))).json(), { ok: true, ignored: true });
+  assert.deepEqual([state.fetched, state.calls], [[], []]);
   reset();
   for (const auth of [null, 'recharge:wrong', 'someone:' + 'a'.repeat(32)]) assert.equal((await hostawayWebhookRoute(hook({ object: 'reservation', data: { id: 7001 } }, auth))).status, 401);
   assert.deepEqual(state.fetched, []);

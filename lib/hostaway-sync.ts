@@ -20,7 +20,8 @@ const londonDay = (offsetDays: number) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date(Date.now() + offsetDays * 86_400_000));
 const present = <T,>(value: T | null): value is T => value !== null;
 
-export const hostawaySyncConfigured = isHostawayConfigured;
+// The sync runs only when its keys are set and it is switched on (HOSTAWAY_SYNC_ENABLED=true).
+export const hostawaySyncConfigured = () => isHostawayConfigured() && String((env as unknown as Record<string, string | undefined>).HOSTAWAY_SYNC_ENABLED || '') === 'true';
 
 async function recordFailure(trigger: SyncTrigger, error: unknown) {
   try { await securityRpc('workspace_hostaway_sync_failed', { input: { trigger, error: hostawaySyncErrorMessage(error) } }); } catch { /* the next run retries */ }
@@ -63,7 +64,9 @@ async function sameSecret(a: string, b: string) {
 }
 export async function hostawayWebhookRoute(request: Request) {
   const secret = String((env as unknown as Record<string, string | undefined>).HOSTAWAY_WEBHOOK_SECRET || '');
-  if (secret.length < 24 || !isHostawayConfigured()) return businessResponse({ error: 'The Hostaway webhook is not set up yet' }, 503);
+  // Switched off: acknowledge so Hostaway stops retrying, and change nothing.
+  if (!hostawaySyncConfigured()) return businessResponse({ ok: true, ignored: true });
+  if (secret.length < 24) return businessResponse({ error: 'The Hostaway webhook is not set up yet' }, 503);
   const header = request.headers.get('authorization') || '';
   let credentials = '';
   try { credentials = header.startsWith('Basic ') ? atob(header.slice(6).trim()) : ''; } catch { credentials = ''; }

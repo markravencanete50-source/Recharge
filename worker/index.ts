@@ -40,7 +40,8 @@ const worker = {
   async scheduled(_controller: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
     // Every 15 minutes (scripts/build-backend-config.mjs). Each job only runs once configured.
     if (env.BACKEND_ONLY !== 'true') return;
-    if (env.HOSTAWAY_ACCOUNT_ID && env.HOSTAWAY_API_KEY && env.HOSTAWAY_SYNC_ENABLED !== 'false') {
+    // Off unless switched on: Recharge starts as a new business and Hostaway is being replaced.
+    if (env.HOSTAWAY_ACCOUNT_ID && env.HOSTAWAY_API_KEY && env.HOSTAWAY_SYNC_ENABLED === 'true') {
       ctx.waitUntil(import('../lib/hostaway-sync').then(module => module.runHostawaySync('schedule')).catch(() => {
         console.error('Hostaway sync failed; the error is recorded and the next run retries.');
       }));

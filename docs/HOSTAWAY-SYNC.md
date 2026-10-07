@@ -1,5 +1,14 @@
 # Hostaway sync (7 October 2026)
 
+> **Paused since 7 October 2026.** Recharge is starting as a new business: properties, owners
+> and staff are onboarded afresh in the app, and Hostaway is being replaced by a cheaper channel
+> manager. The Recharge Stays data imported from Hostaway (99 properties, 1,120 reservations,
+> 419 cleans) was copied to the private `archive` schema and cleared from the live tables. The
+> sync is off in two places: the database refuses it (`paused` on the sync state) and the
+> Worker only runs it when `HOSTAWAY_SYNC_ENABLED` is `true`. While off, the Hostaway webhook is
+> acknowledged and ignored, and the sync card is hidden. The replacement channel manager will
+> reuse the same database functions.
+
 Recharge reads Hostaway and keeps itself up to date. Nothing is written back to Hostaway.
 
 ## What it does
@@ -56,7 +65,8 @@ in the repository.
 7. **Check one payout.** Compare the expected payout of one Airbnb stay and one Booking.com stay
    with the platform's payout report. If they differ, tell the developer which figure is right.
 
-To pause the sync, set the Worker variable `HOSTAWAY_SYNC_ENABLED` to `false`.
+The sync is off unless the Worker variable `HOSTAWAY_SYNC_ENABLED` is `true` **and** the database
+sync state is unpaused (`update private.workspace_hostaway_sync_state set paused=false where singleton`).
 
 ## Where it lives
 

@@ -40,7 +40,7 @@ export async function integrationRoute(request:Request,native=false) {
       const admin=['admin','super_admin'].includes(session.account.role);
       const result=admin?await session.client.rpc('workspace_integration_status'):{data:null,error:null};
       if(result.error)return databaseFailure(result.error);
-      const hostaway=admin||session.account.role==='stays'?await session.client.rpc('workspace_hostaway_status'):null;
+      const hostaway=hostawaySyncConfigured()&&(admin||session.account.role==='stays')?await session.client.rpc('workspace_hostaway_status'):null;
       return businessResponse({configuration,data:result.data,hostaway:hostaway&&!hostaway.error?{configured:hostawaySyncConfigured(),...hostaway.data}:null});
     }
     const quota=await requestQuota(request,'integrations-user',6,60,session.account.userId);
@@ -53,7 +53,7 @@ export async function integrationRoute(request:Request,native=false) {
     }
     if(parsed.data.action==='syncHostaway') {
       if(!['admin','super_admin'].includes(session.account.role))return businessResponse({error:'Admin access required'},403);
-      if(!hostawaySyncConfigured())return businessResponse({error:'Add the Hostaway keys to the backend first',mode:'unconfigured'},503);
+      if(!hostawaySyncConfigured())return businessResponse({error:'The Hostaway sync is switched off',mode:'unconfigured'},503);
       try {return businessResponse(await runHostawaySync('manual'));}
       catch {return businessResponse({error:'Hostaway could not be synced just now. The error is shown on the sync card.'},502);}
     }

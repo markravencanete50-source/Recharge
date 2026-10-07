@@ -18,6 +18,8 @@ create table auth.sessions(id uuid primary key,user_id uuid references auth.user
 create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+// The live sync is paused for the new business; these tests exercise it switched back on.
+await db.exec('update private.workspace_hostaway_sync_state set paused=false where singleton');
 after(async () => { await db.close(); await vite.close(); });
 
 const roles = ['super_admin', 'cleaning_manager', 'cleans', 'stays'];
@@ -182,4 +184,17 @@ test('admins and Stays see the sync status; failures are recorded without changi
   await assert.rejects(rpc('workspace_hostaway_status'), /Admin access required/);
   await asBackend();
   await assert.rejects(rpc('workspace_hostaway_status'), /permission denied/);
+});
+
+test('while paused, a sync is refused and a failed run records nothing', async () => {
+  const before = (await sql('select last_run_at::text, last_error from private.workspace_hostaway_sync_state where singleton'))[0];
+  await sql('update private.workspace_hostaway_sync_state set paused=true where singleton');
+  try {
+    await assert.rejects(sync({ listings: [], reservations: [] }), /Hostaway sync is paused/);
+    await asBackend();
+    await rpc('workspace_hostaway_sync_failed', [{ trigger: 'schedule', error: 'unreachable' }]);
+    assert.deepEqual((await sql('select last_run_at::text, last_error from private.workspace_hostaway_sync_state where singleton'))[0], before);
+  } finally {
+    await sql('update private.workspace_hostaway_sync_state set paused=false where singleton');
+  }
 });

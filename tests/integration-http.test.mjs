@@ -7,7 +7,7 @@ const mocks={
  'auth-security':`const s=globalThis.__integrationHttp;export const authSecurityConfiguration=()=>({origin:'https://recharge.example'});export const requestQuota=async()=>s.quota;export const securityRpc=async(name,args)=>{s.calls.push({name,args});return 'verified-evidence';};`,
  'hostaway':`export const listHostawayReservations=async()=>{globalThis.__integrationHttp.providerCalls++;return [];};`,
  'integration-providers':`export const uploadPrivatePhoto=async(settings,publicId,bytes,format)=>{globalThis.__integrationHttp.providerCalls++;return {assetId:'verified',publicId,version:1,bytes:bytes.length,format};};export const deliverNotification=async()=>{throw Error('Unexpected delivery');};export const downloadPrivatePhoto=async()=>new Uint8Array([255,216,255,...Array(13).fill(0)]);`,
- 'hostaway-sync':`const s=globalThis.__integrationHttp;export const hostawaySyncConfigured=()=>Boolean(s.env.HOSTAWAY_ACCOUNT_ID&&s.env.HOSTAWAY_API_KEY);export const runHostawaySync=async(trigger)=>{s.providerCalls++;s.calls.push({name:'runHostawaySync',args:{trigger}});return {newReservations:0};};`,
+ 'hostaway-sync':`const s=globalThis.__integrationHttp;export const hostawaySyncConfigured=()=>Boolean(s.env.HOSTAWAY_ACCOUNT_ID&&s.env.HOSTAWAY_API_KEY&&s.env.HOSTAWAY_SYNC_ENABLED==='true');export const runHostawaySync=async(trigger)=>{s.providerCalls++;s.calls.push({name:'runHostawaySync',args:{trigger}});return {newReservations:0};};`,
  'cloudflare:workers':`export const env=globalThis.__integrationHttp.env;`,
 };
 const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false},plugins:[{
@@ -63,7 +63,8 @@ test('photo commit follows database permission approval and returns only verifie
 test('Sync now is admin-only and waits for the Hostaway keys',async()=>{
  reset('stays');assert.equal((await integrationRoute(post({action:'syncHostaway'}))).status,403);
  reset();assert.equal((await integrationRoute(post({action:'syncHostaway'}))).status,503);assert.equal(state.providerCalls,0);
- Object.assign(state.env,{HOSTAWAY_ACCOUNT_ID:'1',HOSTAWAY_API_KEY:'k'});
+ Object.assign(state.env,{HOSTAWAY_ACCOUNT_ID:'1',HOSTAWAY_API_KEY:'k'});assert.equal((await integrationRoute(post({action:'syncHostaway'}))).status,503,'switched off by default');
+ state.env.HOSTAWAY_SYNC_ENABLED='true';
  const response=await integrationRoute(post({action:'syncHostaway'}));
  assert.equal(response.status,200);assert.deepEqual(state.calls,[{name:'runHostawaySync',args:{trigger:'manual'}}]);
 });
