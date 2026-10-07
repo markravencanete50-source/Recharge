@@ -20,6 +20,8 @@ class HostawayApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    // "sign-in" when Hostaway refused to issue an access token for the Account ID and API key.
+    readonly step: "sign-in" | "request" = "request",
   ) {
     super(message);
     this.name = "HostawayApiError";
@@ -42,12 +44,26 @@ export function hostawayErrorMessage(error: unknown) {
   return "Hostaway could not be reached. Recharge will keep the existing inbox and retry automatically.";
 }
 
+// Shown to admins on the Hostaway card, so it says what actually went wrong. Never includes
+// the Account ID or API key.
+function withoutCredentials(text: string) {
+  let clean = text;
+  for (const value of [env.HOSTAWAY_API_KEY, env.HOSTAWAY_ACCOUNT_ID]) if (value) clean = clean.split(String(value)).join("…");
+  return clean.replace(/\s+/g, " ").trim().slice(0, 160);
+}
 export function hostawaySyncErrorMessage(error: unknown) {
   if (error instanceof HostawayApiError) {
+    const detail = withoutCredentials(error.message);
+    if (error.step === "sign-in") return `Hostaway did not accept the Account ID and API key (HTTP ${error.status}: ${detail}). Check both values in the backend's Hostaway settings.`;
     if (error.status === 401 || error.status === 403) return "Hostaway rejected the saved credentials. Add a fresh Hostaway API key.";
     if (error.status === 429) return "Hostaway is limiting requests. The next sync will try again.";
+    return `Hostaway answered with an error (HTTP ${error.status}: ${detail}). The next sync will try again.`;
   }
-  return "Hostaway could not be reached. The next sync will try again.";
+  const name = error instanceof Error ? error.name : "";
+  if (name === "TimeoutError" || name === "AbortError") return "Hostaway took too long to answer. The next sync will try again.";
+  if (error instanceof TypeError && /fetch|network/i.test(error.message)) return "Hostaway could not be reached. The next sync will try again.";
+  const detail = withoutCredentials(error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+  return `The sync stopped on an unexpected error (${detail}). The next sync will try again.`;
 }
 
 export function hostawayPropertyErrorMessage(error: unknown) {
@@ -428,8 +444,9 @@ async function issueAccessToken() {
   const expiresIn = numberValue(payload.expires_in) || 3600;
   if (!response.ok || !value) {
     throw new HostawayApiError(
-      firstString(payload.message, payload.error) || "Hostaway token request failed",
+      firstString(payload.message, payload.error_description, payload.error) || "Hostaway token request failed",
       response.status,
+      "sign-in",
     );
   }
 
