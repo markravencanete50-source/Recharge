@@ -33,9 +33,12 @@ test('Cloudinary request uses a fixed private asset, verifies signed metadata an
  result.signature=await cloudinarySignature({public_id:result.public_id,version:'1'},settings.CLOUDINARY_API_SECRET,'SHA-1');
  globalThis.fetch=async(url,init)=>{calls.push({url,init});return init.method==='POST'?Response.json(result):new Response('',{status:404});};
  const first=await uploadPrivatePhoto(settings,result.public_id,bytes,'jpg');assert.equal(first.assetId,'asset-test');
- const post=calls.find(c=>c.init.method==='POST');assert.equal(post.init.body.get('type'),'authenticated');assert.equal(post.init.body.get('overwrite'),'false');assert.equal(post.init.body.has('api_secret'),false);assert.equal(post.init.redirect,'error');
+ const post=calls.find(c=>c.init.method==='POST');assert.equal(post.init.body.get('type'),'authenticated');assert.equal(post.init.body.get('overwrite'),'false');assert.equal(post.init.body.has('api_secret'),false);assert.equal(post.init.redirect,'manual');
  globalThis.fetch=async()=>Response.json(result);assert.deepEqual(await uploadPrivatePhoto(settings,result.public_id,bytes,'jpg'),first);
  globalThis.fetch=async(url,init)=>init.method==='POST'?Response.json({...result,signature:'forged'}):new Response('',{status:404});
+ await assert.rejects(uploadPrivatePhoto(settings,result.public_id,bytes,'jpg'),/rejected/);
+ // A redirect is never followed: it fails like any other unexpected answer.
+ globalThis.fetch=async()=>new Response('',{status:302,headers:{location:'https://example.invalid/'}});
  await assert.rejects(uploadPrivatePhoto(settings,result.public_id,bytes,'jpg'),/rejected/);
 });
 test('email uses a stable idempotency key and acceptance does not imply delivery',async()=>{

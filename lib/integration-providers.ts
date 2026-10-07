@@ -2,7 +2,7 @@ import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_P
 
 async function jsonRequest(url:string,init:RequestInit,readOnly=false):Promise<Record<string,unknown>> {
   let response:Response;
-  try { response=await fetch(url,{...init,redirect:'error',signal:AbortSignal.timeout(15_000)}); }
+  try { response=await fetch(url,{...init,redirect:'manual',signal:AbortSignal.timeout(15_000)}); }
   catch { throw new ProviderFailure(init.method==='POST'&&!readOnly?'uncertain':'retryable'); }
   if (!response.ok) throw new ProviderFailure(response.status===429?'retryable':response.status>=500?(init.method==='POST'&&!readOnly?'uncertain':'retryable'):'rejected');
   try { return await response.json(); } catch { throw new ProviderFailure(init.method==='POST'&&!readOnly?'uncertain':'rejected'); }
@@ -16,7 +16,7 @@ export async function uploadPrivatePhoto(settings:IntegrationSettings,publicId:s
   // Resolve a previous upload if the provider succeeded but the database commit/response failed.
   // This fixed-host authenticated lookup makes retrying the same intent safe with overwrite=false.
   let existing:Response;
-  try {existing=await fetch(`https://api.cloudinary.com/v1_1/${settings.CLOUDINARY_CLOUD_NAME}/resources/image/authenticated/${encodeURIComponent(publicId)}`,{headers:{Authorization:`Basic ${btoa(`${settings.CLOUDINARY_API_KEY}:${settings.CLOUDINARY_API_SECRET}`)}`},redirect:'error',signal:AbortSignal.timeout(15_000)});}
+  try {existing=await fetch(`https://api.cloudinary.com/v1_1/${settings.CLOUDINARY_CLOUD_NAME}/resources/image/authenticated/${encodeURIComponent(publicId)}`,{headers:{Authorization:`Basic ${btoa(`${settings.CLOUDINARY_API_KEY}:${settings.CLOUDINARY_API_SECRET}`)}`},redirect:'manual',signal:AbortSignal.timeout(15_000)});}
   catch {throw new ProviderFailure('retryable');}
   if(existing.ok) {
     const result=await existing.json() as Record<string,unknown>;
@@ -68,7 +68,7 @@ export async function downloadPrivatePhoto(settings:IntegrationSettings,asset:{p
   const now=Math.floor(Date.now()/1000);
   const parameters={asset_id:asset.providerAssetId,timestamp:String(now),expires_at:String(now+60)};
   const form=new URLSearchParams({...parameters,api_key:settings.CLOUDINARY_API_KEY!,signature:await cloudinarySignature(parameters,settings.CLOUDINARY_API_SECRET!)});
-  const response=await fetch(`https://api.cloudinary.com/v1_1/${settings.CLOUDINARY_CLOUD_NAME}/asset/download`,{method:'POST',body:form,redirect:'error',signal:AbortSignal.timeout(15_000)});
+  const response=await fetch(`https://api.cloudinary.com/v1_1/${settings.CLOUDINARY_CLOUD_NAME}/asset/download`,{method:'POST',body:form,redirect:'manual',signal:AbortSignal.timeout(15_000)});
   if(!response.ok||!response.body)throw new ProviderFailure('rejected');
   const reader=response.body.getReader();let total=0;const chunks:Uint8Array[]=[];
   while(true){const next=await reader.read();if(next.done)break;total+=next.value.length;if(total>MAX_PHOTO_BYTES){await reader.cancel();throw new ProviderFailure('rejected');}chunks.push(next.value);}

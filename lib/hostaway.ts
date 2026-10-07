@@ -382,7 +382,7 @@ async function hostawayRequest<T>(
   const response = await fetch(`${HOSTAWAY_API}${path}`, {
     ...init,
     headers,
-    redirect: 'error',
+    redirect: 'manual',
     signal: AbortSignal.timeout(10_000),
   });
 
@@ -426,7 +426,7 @@ async function issueAccessToken() {
 
   const response = await fetch(`${HOSTAWAY_API}/accessTokens`, {
     method: "POST",
-    redirect: 'error',
+    redirect: 'manual',
     signal: AbortSignal.timeout(10_000),
     headers: {
       "content-type": "application/x-www-form-urlencoded",
