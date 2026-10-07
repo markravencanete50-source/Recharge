@@ -1,4 +1,4 @@
-import { AbsoluteFill, Composition, continueRender, delayRender, Html5Audio, staticFile } from "remotion";
+import { AbsoluteFill, Composition, continueRender, delayRender, Html5Audio, interpolate, staticFile } from "remotion";
 import { FPS, Intro } from "../src/Intro";
 
 // Instagram versions of the landing animation, with its soundtrack.
@@ -20,7 +20,7 @@ function WithSound() {
   return (
     <AbsoluteFill>
       <Intro />
-      <Html5Audio src={staticFile("sound/recharge-intro.wav")} />
+      <Html5Audio src={staticFile("sound/recharge.wav")} volume={f => interpolate(f, [FPS * (SECONDS - 0.6), FPS * SECONDS - 1], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })} />
     </AbsoluteFill>
   );
 }
