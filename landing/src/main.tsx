@@ -24,16 +24,34 @@ const fileTime = (frame: number) => {
   return t < LOOP_FROM ? t : LOOP_FROM + ((t - LOOP_FROM) % LOOP);
 };
 
+// A tenth of a second of silence, as a WAV data URL.
+function silentWav() {
+  const bytes = new Uint8Array(44 + 800).fill(128);
+  const view = new DataView(bytes.buffer);
+  [..."RIFF"].forEach((c, i) => view.setUint8(i, c.charCodeAt(0)));
+  view.setUint32(4, 36 + 800, true);
+  [..."WAVEfmt "].forEach((c, i) => view.setUint8(8 + i, c.charCodeAt(0)));
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, 8000, true); view.setUint32(28, 8000, true); view.setUint16(32, 1, true); view.setUint16(34, 8, true);
+  [..."data"].forEach((c, i) => view.setUint8(36 + i, c.charCodeAt(0)));
+  view.setUint32(40, 800, true);
+  return "data:audio/wav;base64," + btoa(String.fromCharCode(...bytes));
+}
+
 function useSoundtrack(player: React.RefObject<PlayerRef | null>, enabled: boolean) {
   useEffect(() => {
     const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!enabled || !Context) return;
+    // On iPhone, play as media (like a video) so the ring/silent switch doesn't mute it.
+    const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = "playback";
     const ctx = new Context({ latencyHint: "playback" });
     const out = ctx.createGain();
     out.connect(ctx.destination);
     let buffer: AudioBuffer | null = null;
     let source: AudioBufferSourceNode | null = null;
     let anchor = { at: 0, frame: 0 }; // ctx.currentTime when the source started, and the frame it started at
+    let settle = 0; // after a restart, give the picture a moment to jump to frame 0 before checking drift
     let unlocked = false;
     let disposed = false;
 
@@ -61,7 +79,7 @@ function useSoundtrack(player: React.RefObject<PlayerRef | null>, enabled: boole
     };
     // Keep the sound on the animation's clock: if it drifts by more than about 3 frames, re-cue it.
     const onFrame = ({ detail }: { detail: { frame: number } }) => {
-      if (!source || ctx.state !== "running") return;
+      if (!source || ctx.state !== "running" || ctx.currentTime < settle) return;
       const heard = anchor.frame + (ctx.currentTime - anchor.at) * FPS;
       const drift = Math.abs(fileTime(detail.frame) - fileTime(heard)) * FPS;
       if (drift > 3 && drift < LOOP * FPS - 3) startAt(detail.frame);
@@ -72,6 +90,9 @@ function useSoundtrack(player: React.RefObject<PlayerRef | null>, enabled: boole
     // A gesture unlocks the sound; replay the intro so it is heard from the start.
     const unlock = () => {
       if (unlocked || disposed) return;
+      // Older iPhones: a media element playing inside the same tap moves the page's audio onto
+      // the media channel, which the silent switch doesn't mute. It plays silence, on a loop.
+      if (!session && media) void media.play().catch(() => undefined);
       void ctx.resume().then(() => {
         if (unlocked || disposed || ctx.state !== "running") return;
         unlocked = true;
@@ -79,10 +100,13 @@ function useSoundtrack(player: React.RefObject<PlayerRef | null>, enabled: boole
         const pl = player.current;
         pl?.seekTo(0);
         pl?.play();
+        settle = ctx.currentTime + 0.4;
         startAt(0);
       });
     };
-    const gestures = ["pointerdown", "pointerup", "touchend", "keydown", "click"] as const;
+    const media = session || typeof Audio === "undefined" ? null : new Audio(silentWav());
+    if (media) media.loop = true;
+    const gestures = ["touchstart", "touchend", "pointerdown", "pointerup", "mousedown", "keydown", "click"] as const;
     gestures.forEach(type => window.addEventListener(type, unlock, true));
 
     // Pause with the tab; pick up again in step when it comes back.
