@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recharge | Coming soon</title>
+  <meta name="description" content="Recharge Group. Coming soon.">
+  <meta name="theme-color" content="#1C3E39">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta property="og:title" content="Recharge">
+  <meta property="og:description" content="Coming soon.">
+  <meta property="og:image" content="https://rechargegroup.co.uk/og.png">
+  <meta property="og:url" content="https://rechargegroup.co.uk">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --green: #1C3E39; --bone: #EEE8DA; }
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; }
+    body {
+      min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: radial-gradient(120% 90% at 50% 40%, #234B45 0%, var(--green) 60%, #163330 100%);
+      color: var(--bone); font-family: Montserrat, system-ui, sans-serif; padding: 32px 20px; text-align: center;
+    }
+    main { display: flex; flex-direction: column; align-items: center; gap: clamp(24px, 4vw, 40px); width: 100%; }
+    h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    img { width: min(640px, 86vw); height: auto; animation: rise 900ms cubic-bezier(.2,.7,.2,1) both; }
+    p { font-size: clamp(13px, 1.6vw, 16px); font-weight: 600; letter-spacing: .42em; text-transform: uppercase; opacity: .85; padding-left: .42em; animation: rise 900ms 180ms cubic-bezier(.2,.7,.2,1) both; }
+    footer { position: absolute; bottom: 24px; font-size: 12px; font-weight: 500; opacity: .55; letter-spacing: .04em; }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { img, p { animation: none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Recharge</h1>
+    <img src="/logo.png" width="1818" height="346" alt="Recharge">
+    <p>Coming soon</p>
+  </main>
+  <footer>&copy; <span id="y">2026</span> Recharge Group</footer>
+  <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
+</body>
+</html>
