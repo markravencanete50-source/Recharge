@@ -11,10 +11,11 @@ async function request(path, expectedStatus, options = {}) {
     ...options, redirect: 'manual', signal: AbortSignal.timeout(15000),
   });
   let response = await fetchResponse();
-  // Immediately after deployment an edge can still serve the prior route table.
-  // Retry only a missing protected route; never tolerate an exposed 200 response
-  // or relax the final authentication, cache or CORS assertions.
-  for (let attempt = 0; response.status === 404 && expectedStatus === 401 && attempt < 9; attempt++) {
+  // Immediately after deployment an edge can still serve the prior version. Retry only a
+  // missing protected route or built file; never tolerate an exposed 200 response or relax
+  // the final authentication, cache or CORS assertions.
+  const settling = expectedStatus === 401 || (expectedStatus === 200 && path.startsWith('/assets/'));
+  for (let attempt = 0; response.status === 404 && settling && attempt < 9; attempt++) {
     await response.body?.cancel();
     await delay(5000);
     response = await fetchResponse();
