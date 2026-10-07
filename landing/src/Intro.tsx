@@ -1,4 +1,4 @@
-import { AbsoluteFill, Easing, Img, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Easing, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import letters from "./letters.json";
 import { FLOOR, HEAD, LOGO, MARK, PATHS, RING } from "./mark";
 
@@ -219,7 +219,7 @@ function Wordmark({ frame, k, left, top, still }: { frame: number; k: number; le
         const p = spring({ frame: frame - (dot ? T.dot : T.letters + i * 4), fps, config: dot ? { damping: 9, mass: 0.6 } : { damping: 16 } });
         const lift = wave >= 0 ? -Math.sin(Math.max(0, Math.min(Math.PI, (wave - i * 4) / 10))) * l.h * k * 0.06 : 0;
         return (
-          <Img key={i} src={`/letters/${i}.png`} alt="" style={{
+          <Img key={i} src={staticFile(`letters/${i}.png`)} alt="" style={{
             position: "absolute", left: left + l.x * k, top: top + l.y * k, width: l.w * k, height: l.h * k,
             opacity: Math.min(1, p * 1.4),
             transform: dot ? `scale(${p})` : `translateY(${(1 - p) * l.h * k * 0.45 + lift}px)`,

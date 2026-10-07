@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "soundtrack": "python3 sound/soundtrack.py",
+    "instagram": "npm run soundtrack && node scripts/render-instagram.mjs"
   },
   "dependencies": {
     "@remotion/player": "^4.0.533",
@@ -14,6 +16,8 @@
     "remotion": "^4.0.533"
   },
   "devDependencies": {
+    "@remotion/bundler": "^4.0.533",
+    "@remotion/renderer": "^4.0.533",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
