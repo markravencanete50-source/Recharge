@@ -1,1 +1,0 @@
-ALTER TABLE `access_users` ADD `responsibilities` text DEFAULT '' NOT NULL;

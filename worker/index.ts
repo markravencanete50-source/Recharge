@@ -12,7 +12,6 @@ interface Env {
   AUTH_RATE_LIMIT_SECRET?: string;
   APP_ORIGIN?: string;
   ASSETS: Fetcher;
-  DB: D1Database;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {

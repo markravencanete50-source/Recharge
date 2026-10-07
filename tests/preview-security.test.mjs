@@ -16,7 +16,7 @@ before(async()=>{
 });
 after(async()=>{await worker?.stop();});
 
-test("preview serves the application and synthetic property data", async () => {
+test("preview serves the application, and the retired portal address returns to it", async () => {
   const home = await fetch(base);
   assert.equal(home.status, 200);
   const html=await home.text();
@@ -24,18 +24,14 @@ test("preview serves the application and synthetic property data", async () => {
   const mobileHtml=await (await fetch(`${base}/home`)).text();
   assert.equal(html,mobileHtml,'desktop and mobile must serve the same responsive screens');
   assert.match(home.headers.get("x-robots-tag"), /noindex/);
-  const response = await fetch(`${base}/api/property-database`, {headers: {"oai-authenticated-user-email": "enquiries@rechargestays.co.uk"}});
-  const result = await response.json();
-  assert.equal(response.status, 200);
-  assert.equal(result.data.properties.length, 2);
-  assert.ok(result.data.properties.every(property => property.ownerEmail === "preview@example.com" && property.accessCode === ""));
-  assert.equal(result.data.hostawayConnected, false);
-});
-
-test('the original detailed portal remains available during backend integration',async()=>{
-  const response=await fetch(`${base}/legacy-preview`,{redirect:'manual'});
-  assert.equal(response.status,200);
-  assert.match(await response.text(),/Recharge \| Product preview/);
+  // The old portal is retired: its preview address sends visitors to the app.
+  const legacy=await fetch(`${base}/legacy-preview`,{redirect:'manual'});
+  assert.equal(legacy.status,301);
+  assert.equal(new URL(legacy.headers.get('location')).pathname,'/');
+  // No sample API data is served any more.
+  const api = await fetch(`${base}/api/property-database`);
+  assert.equal(api.status, 404);
+  assert.match(api.headers.get("content-type"), /application\/json/);
 });
 
 test("hosted phone links serve the new mobile studio and reloadable mobile routes", async () => {

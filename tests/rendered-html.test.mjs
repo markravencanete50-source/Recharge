@@ -14,9 +14,14 @@ test("the built Cloudflare server redirects unauthenticated users to a usable si
   });
   try {
     const origin = `http://${worker.address}:${worker.port}`;
+    // The old portal is retired: the front page goes to the live workspace,
+    // which sends signed-out visitors to sign in.
     const home = await worker.fetch(origin + "/", { redirect: "manual" });
     assert.equal(home.status, 307);
-    assert.equal(new URL(home.headers.get("location")).pathname, "/sign-in");
+    assert.equal(new URL(home.headers.get("location")).pathname, "/workspace");
+    const workspace = await worker.fetch(origin + "/workspace", { redirect: "manual" });
+    assert.equal(workspace.status, 307);
+    assert.equal(new URL(workspace.headers.get("location")).pathname, "/sign-in");
     const response = await worker.fetch(origin + "/sign-in", { redirect: "manual", headers: { accept: "text/html" } });
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);

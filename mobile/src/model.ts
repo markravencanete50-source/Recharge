@@ -22,7 +22,7 @@ import {
   properties,
   operations,
   communications,
-} from "../../preview/fixtures";
+} from "./sampleFixtures";
 import { searchFeatureTitles, WORKSPACE_MAP } from "../../lib/workspace-map";
 
 export {

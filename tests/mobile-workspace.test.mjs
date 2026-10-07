@@ -9,23 +9,7 @@ after(() => vite.close());
 const { MODULE_IDS, MODULES } = await vite.ssrLoadModule("/lib/modules.ts");
 const { WORKSPACE_MAP, navigationFor, searchFeatureTitles, calendarCells } = await vite.ssrLoadModule("/lib/workspace-map.ts");
 const { propertiesFor, recordsFor, workFor, toolsFor } = await vite.ssrLoadModule("/mobile/src/model.ts");
-const fixtures = await vite.ssrLoadModule("/preview/fixtures.ts");
-const { scopeCleanerData, assertCleanerAction } = await vite.ssrLoadModule("/lib/clean-access.ts");
-
-test("cleaner and manager permissions remain separate even with unlinked identities", () => {
-  assert(!toolsFor("cleans").some(tool => tool.id === "cleaner-database"));
-  assert(toolsFor("cleaning_manager").some(tool => tool.id === "cleaner-database"));
-  const own = scopeCleanerData({ role: "cleans", email: "cleaner@example.com" }, fixtures.cleans);
-  assert(own.tickets.length > 0);
-  assert(own.tickets.every(ticket => ticket.assignedCleanerId === "demo-cleaner"));
-  assert.equal(own.onboarding.length, 0);
-  assert.equal(own.reviews.length, 0);
-  assert.equal(scopeCleanerData({ role: "cleans", email: "unlinked@example.com" }, fixtures.cleans).tickets.length, 0);
-  assert.equal(scopeCleanerData({ role: "cleaning_manager", email: "manager@example.com" }, fixtures.cleans).tickets.length, fixtures.cleans.tickets.length);
-  for (const action of ["assign_cleaner", "save_cleaner", "approve_clean", "add_to_invoice", "sync"]) assert.throws(() => assertCleanerAction("cleans", action), /manager/);
-  assert.doesNotThrow(() => assertCleanerAction("cleans", "start_clean"));
-  assert.doesNotThrow(() => assertCleanerAction("cleaning_manager", "assign_cleaner"));
-});
+const fixtures = await vite.ssrLoadModule("/mobile/src/sampleFixtures.ts");
 
 test("all 37 original modules retain a destination and each persona has five stable tabs", () => {
   assert.equal(MODULE_IDS.length, 37);

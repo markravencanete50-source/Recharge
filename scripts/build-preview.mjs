@@ -1,5 +1,5 @@
 import { build } from "vite";
-import { writeFile, readFile, readdir, cp, rm } from "node:fs/promises";
+import { writeFile, readFile, readdir, cp, rm, mkdir } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -11,10 +11,9 @@ if (!existsSync(expoCli)) {
   if (!process.env.npm_execpath) throw new Error("Install mobile dependencies with npm ci --prefix mobile before building.");
   execFileSync(process.execPath, [process.env.npm_execpath, "ci", "--prefix", "mobile"], { cwd: root, stdio: "inherit" });
 }
-await build({ configFile: `${root}/preview/vite.config.ts` });
-await cp(`${root}/preview-dist/index.html`,`${root}/preview-dist/desktop.html`);
+await rm(`${root}/preview-dist`, { recursive: true, force: true });
+await mkdir(`${root}/preview-dist`, { recursive: true });
 // One responsive component bundle powers desktop, mobile web and the studio.
-// Retain the original detailed portal at /legacy-preview during integration.
 execFileSync(process.execPath, [expoCli, "export", "--platform", "web", "--output-dir", "dist-web"], { cwd: `${root}/mobile`, stdio: "inherit" });
 await cp(`${root}/mobile/dist-web/index.html`, `${root}/preview-dist/native.html`);
 await cp(`${root}/mobile/dist-web/studio.html`, `${root}/preview-dist/studio.html`);

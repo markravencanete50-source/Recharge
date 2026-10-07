@@ -1,15 +1,11 @@
-import type { ManagementProperty, PropertyDatabaseData } from "@/lib/property-database";
-import type { WorkflowData } from "@/lib/workflows";
-import type { CommunicationCentreData } from "@/lib/communications";
-import { MAINTENANCE_CATEGORIES, type MaintenanceData } from "@/lib/maintenance-types";
-import type { OnboardingData } from "@/lib/onboarding-types";
-import type { CleansData } from "@/lib/cleans-types";
-import type { OperationsData } from "@/lib/operations";
-import type { OwnerStatementsData } from "@/lib/owner-statements";
-import type { TeamStructureData } from "@/lib/team";
-import { defaultModulesForRole, type WorkspaceRole } from "@/lib/modules";
+import type { ManagementProperty, PropertyDatabaseData } from "../../lib/property-database-types";
+import type { WorkflowData } from "../../lib/workflow-types";
+import { MAINTENANCE_CATEGORIES, type MaintenanceData } from "../../lib/maintenance-types";
+import type { OnboardingData } from "../../lib/onboarding-types";
+import type { CleansData } from "../../lib/cleans-types";
+import { defaultModulesForRole, type WorkspaceRole } from "../../lib/modules";
 
-// Fictional fixtures only. No exported client records, credentials or integrations.
+// Fictional sample data for the app's preview mode. No client records, credentials or integrations.
 const now = 1791028800;
 const date = "2026-10-03";
 function property(id: string, name: string, region: string): ManagementProperty {
@@ -49,7 +45,7 @@ workflows.tickets.push(...Array.from({ length: 24 }, (_, i) => ({
   status: (["new", "in_progress", "complete"] as const)[i % 3],
   createdAt: now - ((i * 7) % 29) * 86400,
 })));
-export const communications: CommunicationCentreData = {
+export const communications = {
   available: true, integrations: {hostaway: false, email: false, whatsapp: false, bonline: false}, workflows: [], calls: [], schedule: [],
   threads: [{id: "demo-conversation", source: "guests", propertyName: "Example Edinburgh Apartment", guestName: "Example guest", senderAddress: "guest@example.com", subject: "Sample check-in question", hostawayListingId: "", hostawayReservationId: "", openedAt: null, unread: true, unreadCount: 1, status: "open", assignedToEmail: null, assignedToName: null, lastInboundAt: now, lastOutboundAt: null,
     messages: [{id: "demo-message", source: "guests", direction: "inbound", body: "Hello, what time can we check in? This is a sample message.", attachments: [], sentAt: now, respondedAt: null, respondedByEmail: null, respondedByName: null, isAutomated: false}]}],
@@ -83,17 +79,9 @@ cleans.mail.push(...Array.from({ length: 4 }, (_, i) => ({
   note: "Fictional mail item for design review", photoFileId: null,
   status: i === 1 ? "reviewed" as const : "new" as const, createdAt: now - i * 86400,
 })));
-export const operations: OperationsData = {
+export const operations = {
   available: true, properties: demoProperties.map(p => ({id: p.id, name: p.propertyName, address: p.propertyAddress, region: p.region, status: p.status, clientEmail: p.ownerEmail})),
   routineMaintenanceBookings: [], routineInspectionSubmissions: [],
   readyEvents: [{id: "demo-ready-event", date, endDate: date, type: "inspection", title: "Sample property inspection", propertyName: "Example Glasgow Apartment", status: "new", valuePence: 0}],
   listingTickets: [], listingDailyReport: null, listingChecksToday: 0, listingReporting: {airbnb: {}, booking: {}, suspensions: 0, relistings: 0}, pricingGaps: [], opportunities: [], weeklyScanCompletedPropertyIds: [], directBookingLeads: [], directBookingTickets: [], directBookingTouches: [], reports: [], lastSyncedAt: null,
-};
-export const ownerStatements: OwnerStatementsData = {
-  available: true, connections: {hostaway: false, xero: false, airbnb: false, booking: false, vrbo: false, direct: false},
-  properties: demoProperties.map(p => ({id: p.id, name: p.propertyName, ownerName: p.ownerName, ownerEmail: p.ownerEmail})), bookings: [], receipts: [], statements: [], lastSyncedAt: null,
-};
-export const team: TeamStructureData = {
-  roles: [], coverage: [], regions: ["General", "Edinburgh & Lothians", "Glasgow & Clyde"], schedules: [],
-  people: accessUsers.filter(user => user.role !== "client").map(user => ({id: user.role, fullName: user.fullName, email: user.email, department: user.role === "admin" || user.role === "super_admin" ? "leadership" : user.role, responsibilities: user.responsibilities, status: "active", roleIds: [], regions: ["General"]})),
 };

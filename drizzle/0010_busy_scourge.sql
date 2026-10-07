@@ -1,1 +1,0 @@
-ALTER TABLE `clean_tickets` ADD `guest_count` integer DEFAULT 0 NOT NULL;

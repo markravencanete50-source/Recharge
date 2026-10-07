@@ -1,32 +1,24 @@
 # Recharge developer handover
 
-Source snapshot: Site version 79, commit ba5ca178db3a55e7e887cb5eeb7592dae4d7cbd9.
+Start with `README.md`. It describes the parts of the platform and the commands.
 
-This ZIP contains the complete tracked source for the central Recharge platform: UI, API routes, shared components, database schema, all 28 Drizzle migrations, assets, scripts, tests and dependency lockfile. It includes Routine Maintenance, regional property planning and scheduled inspection forms.
+## The old portal has been retired (7 October 2026)
 
-## Setup
+The original portal ran on a separate Cloudflare D1 database and R2 file storage. It held no real
+records and was never served by the deployed backend, so it has been removed:
+- `/` now sends people to the live workspace (`/workspace`);
+- the preview's `/legacy-preview` address redirects to the preview home;
+- its screens, its APIs, the D1 schema and Drizzle migrations, and the D1 and R2 bindings are gone.
 
-Use Node.js >=22.13.0. The supplied shell scripts target Linux (or WSL) and require curl, flock and GNU timeout.
-
-1. Extract the recharge-source folder.
-2. Run npm ci.
-3. Configure the required runtime bindings and secrets.
-4. Run npm run dev for development and npm run build for a production build.
+`docs/LEGACY-PORT-PLAN.md` records what each old centre did, and where that work now lives or is
+planned.
 
 ## Runtime requirements
 
-- Cloudflare D1 binding: DB
-- Cloudflare R2 binding: BUCKET
-- Hostaway: HOSTAWAY_ACCOUNT_ID and HOSTAWAY_API_KEY
-- Communication integrations, where enabled: BONLINE_API_KEY, COMMUNICATION_EMAIL_BRIDGE_TOKEN, WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID
-- Migration endpoint, where used: CLICKUP_MIGRATION_KEY
+- **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never
+  rewrite applied history.
+- **Backend Worker secrets:** see `README.md`, under Configuration.
+- **Hostaway:** `HOSTAWAY_ACCOUNT_ID` and `HOSTAWAY_API_KEY`, set as Worker secrets when the sync
+  is switched on. `lib/hostaway.ts` is the API client.
 
-Secrets, live database records and stored uploads are not included. Apply existing migrations in order to a new database; do not regenerate or rewrite applied migration history. Database migration and live-data transfer are separate tasks.
-
-## External hosting
-
-The current application uses Sites-managed Cloudflare bindings and ChatGPT sign-in. Moving it to external hosting requires configuring Cloudflare resources and replacing or securely adapting the authentication layer. Never accept user-supplied identity headers without a trusted authentication proxy.
-
-Some tools in the portal link to separate websites. This archive contains this Recharge project only; it does not contain the source of those separate sites.
-
-No source changes or production deployments were made for this export.
+Secrets and live records are never stored in this repository.

@@ -1,9 +1,9 @@
 import type { AccessProfile } from "./access";
-import type { WorkflowData, WorkflowBoard } from "./workflows";
+import type { WorkflowData, WorkflowBoard } from "./workflow-types";
 import type { MaintenanceData } from "./maintenance-types";
 import type { CleansData } from "./cleans-types";
 import type { OnboardingData } from "./onboarding-types";
-import type { PropertyDatabaseData } from "./property-database";
+import type { PropertyDatabaseData } from "./property-database-types";
 import { isWorkspaceAdmin, type ModuleId } from "./modules";
 
 export type AnalyticsInput = { workflows?: WorkflowData; maintenance?: MaintenanceData; cleans?: CleansData; onboarding?: OnboardingData; properties?: PropertyDatabaseData };
