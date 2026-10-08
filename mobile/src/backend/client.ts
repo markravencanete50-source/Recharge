@@ -110,7 +110,7 @@ export async function accountStep(body: Record<string, unknown>, accessToken?: s
   return z.record(z.unknown()).parse(await (await call("/api/mobile/account", body, accessToken)).json());
 }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (sameOriginWeb) return call(webWorkspacePath(path), body);
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
@@ -177,4 +177,6 @@ export async function uploadCourseFile(courseId: string, file: { uri: string; na
 export const removeCourseFile = async (fileId: string) => (await workspaceRequest('/api/mobile/training-files', { action: 'remove', fileId })).json();
 export const courseFileLink = async (fileId: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) }).parse(await (await workspaceRequest('/api/mobile/training-files?fileId=' + encodeURIComponent(fileId))).json()).data;
 export const readInbox = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/guest-inbox?' + new URLSearchParams(query))).json();
+// Owner reports: confirmed bookings, nights and payouts at the owner's properties (read only).
+export const readOwner = async (query: { section: 'bookings'; from: string; to: string }) => (await workspaceRequest('/api/mobile/owner?' + new URLSearchParams(query))).json();
 export const writeInbox = async (action: InboxAction) => (await workspaceRequest('/api/mobile/guest-inbox', action)).json();

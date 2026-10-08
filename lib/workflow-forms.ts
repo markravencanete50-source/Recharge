@@ -91,6 +91,12 @@ export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[
  }
  if(w.kind==='maintenance'){
   if(a.role==='client'&&w.data.phase==='owner_approval')add('approveBudget','Approve the quoted repair budget',[field('consent','I approve the estimated repair cost shown above','checkbox')]);
+  if(a.role==='client'&&w.data.phase==='owner_approval')add('declineBudget','Decline the repair cost',[{...field('reason','Why you are declining','textarea'),help:'Shared with Recharge, who can get a new quote or close the repair.'}]);
+  if(admin(a)&&w.data.phase==='management_approval'){
+   add('approveManagement','Approve the repair cost (management)',[field('note','Note for the team','textarea',false)],v=>typeof v.note==='string'&&v.note?{note:v.note}:{});
+   add('declineManagement','Decline the repair cost (management)',[{...field('reason','Why it is declined','textarea'),help:'Shared with Stays, who can re-quote or close the repair.'}]);
+  }
+  if(stays&&['owner_declined','management_declined'].includes(String(w.data.phase)))add('closeRepair','Close the declined repair',[field('note','Why it is closed without the work','textarea')]);
   if(stays&&w.data.phase==='triage')add('referReady','Refer the unresolved repair to Ready',[{...field('troubleshooting','Basic checks and outcome','textarea'),help:'Record safe user-facing checks only. For a suspected hazard, stop troubleshooting and escalate.'},field('warrantyContactEvidence','Warranty or preferred contact outcome','textarea',Boolean(w.data.warrantyRequired)),field('guestUpdate','Update for the guest','textarea'),{...field('urgent','Urgent: the guest cannot use the property properly until it is fixed','checkbox',false),defaultValue:w.data.urgent===true}]);
   if(ready&&w.data.phase==='referred')add('bookRepair','Book the repair',[field('repairOn','Repair date','date'),field('contractor','Repair contractor'),field('guestUpdate','Guest booking update','textarea')]);
   if(ready&&w.data.phase==='booked')add('completeRepair','Record the completed repair',[field('report','Repair completion report','textarea'),field('actualCostMinor','Actual repair cost, GBP','money'),field('guestUpdate','Guest completion update','textarea')]);

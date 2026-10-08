@@ -52,10 +52,15 @@ import { workItemForms, type JourneyView, type OperationView, type WorkflowForm 
 import { WorkPhotos } from "./Photos";
 import { NotificationsSetting, refreshNotificationLink } from "./Notifications";
 import { LiveChat } from "./LiveChat";
+import { LiveApprovals } from "./LiveApprovals";
+import { LiveClientReports } from "./LiveClientReports";
+import { OwnerActions } from "./LiveOwnerHome";
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
-const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help", "inbox"];
+const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help", "inbox", "approvals", "statements"];
+// Pages only some roles have.
+const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"] };
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
 type BookingPolicy = z.infer<typeof bookingPolicySchema>;
 // Direct-booking offers use this discount policy; only a super admin can set and confirm it.
@@ -80,8 +85,10 @@ function liveNavigation(role: Role): NavigationItem[] {
   const home = item("home", "Home", "home"), properties = item("properties", "Properties", "key"), reports = item("analytics", "Reports", "bar-chart-2"), activity = item("activity", "Activity", "activity"), help = item("help", "Help", "help-circle");
   if (role === "cleans" || role === "cleaning_manager") return [home, item("work", "Cleans", "check-square"), properties, activity, help];
   if (role === "ready") return [home, item("work", "Repairs", "tool"), properties, activity, help];
-  if (role === "accounts") return [home, item("work", "Accounts", "file-text"), properties, reports, activity];
-  if (role === "client") return [home, item("work", "Stays", "calendar"), properties, reports, activity];
+  // Accounts: invoices and owner statements are the daily work (both in Work → Accounts).
+  if (role === "accounts") return [home, item("work", "Invoices", "file-text"), item("statements", "Statements", "pie-chart"), item("inbox", "Inbox", "message-circle"), item("help", "Tools", "grid")];
+  // Owners: messages in the centre; stays, earnings and statements are in Reports.
+  if (role === "client") return [home, properties, item("inbox", "Inbox", "message-circle"), item("approvals", "Approvals", "check-circle"), reports];
   return [home, item("work", "Work", "check-square"), properties, reports, activity];
 }
 const WORK_TITLE: Record<Role, [string, string]> = {
@@ -107,11 +114,11 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
   const desktop = width >= 1024;
   const reduced = useReducedMotion(), motionPreference = useMotionPreference(), faqShortcut = useFaqShortcut();
   const { section } = useLocalSearchParams<{ section?: string }>();
-  const tab: WorkspaceSection = SECTIONS.includes(section as WorkspaceSection) ? section as WorkspaceSection : "home";
+  const tab: WorkspaceSection = SECTIONS.includes(section as WorkspaceSection) && (ROLE_SECTIONS[section as WorkspaceSection]?.includes(account.role) ?? true) ? section as WorkspaceSection : "home";
   const setTab = (value: WorkspaceSection) => router.setParams({ section: value });
-  // The bottom bar and sidebar open each page at its start, not where a Home tool last pointed.
-  const navigate = (value: WorkspaceSection) => { setFocus(null); setTab(value); };
   const nav = useMemo(() => liveNavigation(account.role), [account.role]);
+  // Owners on a wide screen also get Tools (Help and the tools directory) in the sidebar.
+  const sideNav = useMemo(() => account.role === "client" ? [...nav, { value: "help" as const, label: "Tools", icon: "grid" as const }] : nav, [account.role, nav]);
   const [focus, setFocus] = useState<WorkFocus | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
@@ -123,6 +130,12 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
   const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
   const [form, setForm] = useState<WorkflowForm | null>(null), [openWork, setOpenWork] = useState<OperationView | null>(null);
   const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active");
+  // The bottom bar and sidebar open each page at its start, not where a Home tool last pointed.
+  // Accounts' Invoices opens Work → Accounts on its expenses.
+  const navigate = (value: WorkspaceSection) => {
+    if (account.role === "accounts" && value === "work") { setWorkView("accounts"); setFocus(f => ({ sub: "expenses", nonce: (f?.nonce ?? 0) + 1 })); } else setFocus(null);
+    setTab(value);
+  };
   const [fade] = useState(() => new Animated.Value(1));
   const scroll = useRef<ScrollView>(null), content = useRef<View>(null);
   const [anchors] = useState(() => new Map<string, View>());
@@ -361,20 +374,23 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
     ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} onTool={openTool} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} />
-    : tab === "analytics" ? reportsPage
+    : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} /> : reportsPage)
+    : tab === "approvals" ? <LiveApprovals palette={p} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onForm={setForm} onRefresh={() => refresh()} onInbox={() => navigate("inbox")} onProperties={() => navigate("properties")} />
+    : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} />
     : tab === "inbox" ? <LiveChat palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => void loadUnread()} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view) => { setTab(next); if (view) setWorkView(view); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;
   const header = headerPalette(p);
+  const ownerActions = { unread: chatUnread, openForm: setForm };
   const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
   return (
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
       <CelebrateProvider palette={p} bottom={desktop ? 40 : 112}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
-        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={nav} section={tab} palette={p} onNavigate={navigate} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme, motion and sign out" />}
+        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={sideNav} section={tab} palette={p} onNavigate={navigate} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme, motion and sign out" />}
         {desktop && sidebarHidden && <View style={{ width: 64, backgroundColor: p.isDark ? p.surface : p.background, borderRightWidth: 1, borderColor: p.border }}><View style={{ height: 81, alignItems: "center", justifyContent: "center", backgroundColor: p.header }}><IconButton label="Show left panel" icon="chevrons-right" palette={header} onPress={() => setSidebarHidden(false)} /></View></View>}
         <View style={[ui.fill, { minWidth: 0 }]}>
           {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Changes will fail until you reconnect.</Text></View>}
@@ -401,7 +417,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
           <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
               {!!accessNote && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.wash }]}><Feather name="shield" size={16} color={p.primary} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{accessNote}</Text><MotionPress accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setAccessNote("")} style={{ minHeight: 36, minWidth: 36, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={p.muted} /></MotionPress></View>}
-              <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}>{animatedPage}</WorkFocusContext.Provider></AnchorRegistry.Provider>
+              <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}><OwnerActions.Provider value={ownerActions}>{animatedPage}</OwnerActions.Provider></WorkFocusContext.Provider></AnchorRegistry.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
             </Animated.View></View>
           </ScrollView>

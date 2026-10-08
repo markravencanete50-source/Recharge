@@ -4,17 +4,25 @@ import { z } from "zod";
 // workspace_operations_action so the app only offers actions that can succeed.
 export const REPAIR_STAGES = [
   { phase: "owner_approval", label: "Owner approval", detail: "Waiting for the owner to approve the cost" },
+  { phase: "management_approval", label: "Management approval", detail: "Above the management limit: an admin approves the cost" },
+  { phase: "owner_declined", label: "Owner declined", detail: "The owner said no to the cost: re-quote or close it" },
+  { phase: "management_declined", label: "Management declined", detail: "Management said no to the cost: re-quote or close it" },
   { phase: "triage", label: "Reported", detail: "Stays checks the issue and refers it" },
   { phase: "referred", label: "With Ready", detail: "Ready books the repair" },
   { phase: "booked", label: "Booked", detail: "Repair date and contractor set" },
   { phase: "completed", label: "Completed", detail: "Report filed, invoice raised for Accounts" },
+  { phase: "closed", label: "Closed", detail: "Closed after the cost was declined" },
 ] as const;
 export type RepairPhase = (typeof REPAIR_STAGES)[number]["phase"];
-export type RepairStep = "approveBudget" | "referReady" | "bookRepair" | "completeRepair";
+export type RepairStep = "approveBudget" | "approveManagement" | "referReady" | "bookRepair" | "completeRepair";
 
 const STAFF = ["stays", "admin", "super_admin"];
+const DECLINED = ["owner_declined", "management_declined"];
+// Finished repairs: done, or closed without the work going ahead.
+export const repairClosed = (phase: string) => phase === "completed" || phase === "closed";
 export function repairStep(role: string, phase: string): RepairStep | null {
   if (phase === "owner_approval") return role === "client" ? "approveBudget" : null;
+  if (phase === "management_approval") return role === "admin" || role === "super_admin" ? "approveManagement" : null;
   if (phase === "triage") return STAFF.includes(role) ? "referReady" : null;
   if (phase === "referred") return role === "ready" || STAFF.includes(role) ? "bookRepair" : null;
   if (phase === "booked") return role === "ready" || STAFF.includes(role) ? "completeRepair" : null;
@@ -23,7 +31,15 @@ export function repairStep(role: string, phase: string): RepairStep | null {
 export const canReportRepair = (role: string) => role === "client" || STAFF.includes(role);
 // While a repair is open, Ready or Stays can update its quote. A higher quote above the owner's
 // approval limit goes back to the owner; once approved the repair carries on where it was.
-export const canReviseQuote = (role: string, phase: string) => (role === "ready" || STAFF.includes(role)) && ["triage", "referred", "booked"].includes(phase);
+export const canReviseQuote = (role: string, phase: string) => (role === "ready" || STAFF.includes(role)) && ["triage", "referred", "booked"].includes(phase) || STAFF.includes(role) && DECLINED.includes(phase);
+// After the owner (or management) declines the cost, Stays or an admin re-quote it or close it.
+export const canCloseRepair = (role: string, phase: string) => STAFF.includes(role) && DECLINED.includes(phase);
+// Why a repair is waiting, in the words shown on it: "Owner declined: <their reason>".
+export function declineNote(data: Record<string, unknown>): string | null {
+  if (data.phase === "owner_declined") return "Owner declined: " + (typeof data.ownerDeclinedReason === "string" ? data.ownerDeclinedReason : "no reason given");
+  if (data.phase === "management_declined") return "Management declined: " + (typeof data.managementDeclinedReason === "string" ? data.managementDeclinedReason : "no reason given");
+  return null;
+}
 
 // Routine visit sign-off follows the generic work graph: Ready starts and submits,
 // Stays or management approve and close.

@@ -324,7 +324,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
   const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements"] as const).find(v => v === focus?.sub) ?? "expenses");
   const [status, setStatus] = useState<Expense["status"]>("to_approve");
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [limit, setLimit] = useState<{ minor: number | null; version: number } | null>(null);
+  const [limit, setLimit] = useState<{ minor: number | null; version: number; repairMinor: number | null } | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [rec, setRec] = useState<Reconciliation | null>(null);
   const [statements, setStatements] = useState<StatementRow[]>([]);
@@ -358,7 +358,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
       catch (e) { problems.push(e instanceof WorkspaceApiError ? e.message : "Part of Accounts could not be loaded. Refresh to try again."); }
     };
     take(o, data => setOverview(overviewSchema.parse(data)));
-    take(pol, data => { const v = policySchema.parse(data); setLimit({ minor: v.expenseApprovalLimitMinor, version: v.version }); });
+    take(pol, data => { const v = policySchema.parse(data); setLimit({ minor: v.expenseApprovalLimitMinor, version: v.version, repairMinor: v.managementRepairLimitMinor }); });
     take(ex, data => setExpenses(expensesSchema.parse(data)));
     take(r, data => setRec(reconciliationSchema.parse(data)));
     take(st, data => setStatements(statementsSchema.parse(data)));
@@ -436,6 +436,12 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
           <Text style={{ color: p.text, fontWeight: "700" }}>Approval limit for Accounts</Text>
           <Text style={[ui.small, { color: p.muted }]}>{limit?.minor == null ? "No limit set. Accounts can approve any evidenced expense." : `Accounts approves up to ${pounds(limit.minor)}. Larger costs need management.`}</Text>
           {role === "super_admin" && limit && <Button label="Change the limit" p={p} onPress={() => setAsk({ title: "Approval limit", subtitle: "Accounts can approve evidenced costs up to this amount", min: 0, confirm: "Save limit", amount: { label: "Limit (leave 0 for no limit)", initial: limit.minor == null ? "0" : (limit.minor / 100).toFixed(2) }, build: (_note, minor) => ({ action: "setFinancePolicy", requestId: "", version: limit.version, expenseApprovalLimitMinor: minor ? minor : null }) })} />}
+        </View>
+        {/* The second spend limit: repairs above it also need an admin's approval, after the owner's. */}
+        <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 10 }]}>
+          <Text style={{ color: p.text, fontWeight: "700" }}>Management approval for repairs</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{limit?.repairMinor == null ? "Off. Repairs need only the owner’s approval, above their own limit." : `Repairs above ${pounds(limit.repairMinor)} also need an admin’s approval, after the owner’s.`}</Text>
+          {management && limit && <Button label="Change the repair limit" p={p} onPress={() => setAsk({ title: "Management approval for repairs", subtitle: "Repairs costing more than this also need an admin’s approval", min: 0, confirm: "Save limit", amount: { label: "Limit (leave 0 to switch it off)", initial: limit.repairMinor == null ? "0" : (limit.repairMinor / 100).toFixed(2) }, build: (_note, minor) => ({ action: "setRepairApprovalLimit", requestId: "", version: limit.version, managementRepairLimitMinor: minor ? minor : null }) })} />}
         </View>
         <Notice text="Xero is not connected yet. Approved costs are queued and will post as bills, tracked to each property, once it is." p={p} />
       </>}

@@ -18,6 +18,7 @@ const {operationsActionSchema}=await load('/lib/operations-policy.ts');
 const {journeyActionSchema}=await load('/lib/journey-policy.ts');
 const {businessWriteSchema}=await load('/lib/business-policy.ts');
 const {inboxReadSchema,inboxActionSchema}=await load('/lib/guest-inbox-policy.ts');
+const {ownerReadSchema}=await load('/lib/owner-policy.ts');
 
 const sources=readdirSync('mobile/src').filter(f=>/\.tsx?$/.test(f)).map(f=>[f,readFileSync('mobile/src/'+f,'utf8')]);
 const found=re=>sources.flatMap(([f,s])=>[...s.matchAll(re)].map(m=>[f,m[1]]));
@@ -29,7 +30,7 @@ test('every section the screens read is one the backend accepts',()=>{
  const reads=[
   [/readTeams\(\{ ?section: ?"([A-Za-z]+)"/g,teamsReadSchema],[/readFinance\(\{ ?section: ?"([A-Za-z]+)"/g,financeReadSchema],
   [/readAdmin\("([A-Za-z]+)"\)/g,adminReadSchema],[/readChat\(\{ ?section: ?"([A-Za-z]+)"/g,chatReadSchema],[/readInbox\(\{ ?section: ?"([A-Za-z]+)"/g,inboxReadSchema],
-  [/readControls\(\{ ?section: ?"([A-Za-z]+)"/g,controlsReadSchema],[/portfolio\?(?:" \+ new URLSearchParams\(\{ ?)?section[=:] ?"?([A-Za-z]+)/g,portfolioReadSchema],
+  [/readControls\(\{ ?section: ?"([A-Za-z]+)"/g,controlsReadSchema],[/readOwner\(\{ ?section: ?"([A-Za-z]+)"/g,ownerReadSchema],[/portfolio\?(?:" \+ new URLSearchParams\(\{ ?)?section[=:] ?"?([A-Za-z]+)/g,portfolioReadSchema],
  ];
  let checked=0;
  for(const [re,schema] of reads)for(const [file,section] of found(re)){checked++;assert.ok(!rejectsKey(schema,{section},'section'),`${file} reads unknown section "${section}"`);}

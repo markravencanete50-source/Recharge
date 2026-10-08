@@ -8,6 +8,7 @@ import { CountUp, Entrance, MotionPress } from "./motion";
 import { StateGraphic } from "./StateGraphic";
 import { followUpsDue } from "../../lib/portfolio-overview";
 import { ShiftCard } from "./LiveShifts";
+import { OwnerHome } from "./LiveOwnerHome";
 import { HomeTools } from "./HomeTools";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { ui, type Palette } from "./theme";
@@ -99,6 +100,7 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
       {/* The tools for this person's role come first, so nobody has to look for them. */}
       <HomeTools palette={p} account={account} properties={properties} desktop={desktop} onOpen={onTool} onAll={() => onNavigate("help")} />
       {account.role !== "client" && <ShiftCard palette={p} account={account} />}
+      {account.role === "client" && <OwnerHome palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onNavigate={onNavigate} />}
       {!!followUps.length && <Entrance sessionKey={"live:home:followups"} style={{ gap: 8 }}>
         <View style={ui.between}>
           <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Client check-ins due</Text>
