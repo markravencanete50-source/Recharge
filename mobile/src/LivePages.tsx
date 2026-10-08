@@ -32,6 +32,7 @@ import { Entrance, GrowBar, MotionPress, Stagger } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import { workspaceRequest } from "./backend/client";
 import { exportReport } from "./exportReport";
+import { weeklyReportDocument, weeklyReportFileName } from "../../lib/weekly-report";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import { faqsForAccess } from "../../lib/access-faq";
 import { dateKey, parseAnalyticsDate, periodError, periodLabel, presetPeriod, type AnalyticsPeriod } from "../../lib/analytics";
@@ -176,6 +177,22 @@ function JourneyPhotos({ j, p, account }: { j: JourneyView; p: Palette; account:
   );
 }
 
+// A local event near a property (a festival, a match, a conference) that could bring bookings.
+// It appears in the owner's weekly report until an automatic events feed is connected.
+function localEventForm(propertyId: string): WorkflowForm {
+  return {
+    key: "recordLocalEvent", title: "Add a local event", endpoint: "portfolio",
+    description: "Events near the property that could bring bookings. They appear in the owner's weekly report.",
+    fields: [
+      { name: "name", label: "Event", type: "text", required: true },
+      { name: "eventOn", label: "Date", type: "date", required: true },
+      { name: "sourceUrl", label: "Link to the event (https://…)", type: "text", required: true },
+      { name: "opportunity", label: "Why it matters for this property", type: "textarea", required: true, help: "For example: big crowds the same weekend, so raise prices and keep a 2-night minimum." },
+    ],
+    build: (values, requestId) => ({ action: "recordLocalEvent", requestId, propertyId, ...values }),
+  };
+}
+
 // The signed agreement, kept as a page the owner and the team can open, print or save.
 function AgreementCopy({ j, p, propertyName }: { j: JourneyView; p: Palette; propertyName: string }) {
   const [note, setNote] = useState("");
@@ -281,13 +298,20 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   const staff = isWorkspaceAdmin(account.role) || account.role === "stays";
   const journey = selected ? journeys.find(j => j.propertyId === selected.id) : undefined;
   const propertyWork = selected ? work.filter(w => w.propertyId === selected.id) : [];
-  async function downloadProperty() {
+  async function downloadProperty(kind: "page" | "csv") {
     if (!selected || exporting) return;
     setExporting(true); setExportMessage("");
     try {
-      const csv = await (await workspaceRequest("/api/mobile/portfolio?" + new URLSearchParams({ section: "weekly", propertyId: selected.id, ...period, download: "csv" }))).text();
-      await exportReport(csv, "Recharge-property-report-" + period.from + "-" + period.to + ".csv");
-      setExportMessage("Property report prepared for saving or sharing.");
+      if (kind === "page") {
+        // The weekly report as a page to read, print or save as a PDF.
+        const report = await (await workspaceRequest("/api/mobile/portfolio?" + new URLSearchParams({ section: "weekly", propertyId: selected.id, ...period }))).json();
+        await exportReport(weeklyReportDocument(report.data), weeklyReportFileName(selected.name, period.from, period.to), { mime: "text/html", uti: "public.html" });
+        setExportMessage(Platform.OS === "web" ? "Saved. Open it to read, print or save as a PDF." : "Ready to open, save or share.");
+      } else {
+        const csv = await (await workspaceRequest("/api/mobile/portfolio?" + new URLSearchParams({ section: "weekly", propertyId: selected.id, ...period, download: "csv" }))).text();
+        await exportReport(csv, "Recharge-property-report-" + period.from + "-" + period.to + ".csv");
+        setExportMessage("Spreadsheet prepared for saving or sharing.");
+      }
     } catch (e) { setExportMessage(message(e)); } finally { setExporting(false); }
   }
   const columns = desktop ? 3 : 1;
@@ -337,8 +361,10 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
             {propertyWork.length > 30 && <Text style={[ui.small, { color: p.muted }]}>The rest are in Work → All work.</Text>}
           </View>}
           {account.modules.includes(account.role === "client" ? "client-dashboard" : "weekly-performance") && ["client", "stays", "admin", "super_admin"].includes(account.role) && <View style={{ gap: 8 }}>
-            <SoftButton label={exporting ? "Preparing report…" : "Download property report"} icon="download" palette={p} disabled={exporting} onPress={() => void downloadProperty()} />
-            <Text style={[ui.small, { color: p.muted }]}>Pricing, listing checks and opportunities for {periodLabel(period)}. Choose up to 31 days in Reports.</Text>
+            <SoftButton label={exporting ? "Preparing report…" : "Weekly report to read or print"} icon="external-link" palette={p} disabled={exporting} onPress={() => void downloadProperty("page")} />
+            <SoftButton label="Spreadsheet (CSV)" icon="download" palette={p} disabled={exporting} onPress={() => void downloadProperty("csv")} />
+            <Text style={[ui.small, { color: p.muted }]}>Pricing, listing checks and local events for {periodLabel(period)}. Choose up to 31 days in Reports.</Text>
+            {account.role !== "client" && <SoftButton label="Add a local event" icon="calendar" palette={p} onPress={() => onForm(localEventForm(selected.id))} />}
             {!!exportMessage && <Text style={[ui.small, { color: p.text }]}>{exportMessage}</Text>}
           </View>}
           {invoices.some(invoice => invoice.property_id === selected.id) && <View style={{ gap: 8 }}>
