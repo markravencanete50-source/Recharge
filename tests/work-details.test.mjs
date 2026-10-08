@@ -57,3 +57,9 @@ test('Stays can log a guest review from the property', () => {
   const body = form.build(workflowValues(form.fields, { platform: 'Booking.com', reviewedOn: '2026-10-08', rating: '9', outOf: '10', sentiment: 'positive', summary: 'Spotless and warm', response: '', relist: false }), 'r');
   assert.deepEqual(body.data, { platform: 'Booking.com', reviewedOn: '2026-10-08', rating: 9, outOf: 10, sentiment: 'positive', summary: 'Spotless and warm', relist: false });
 });
+
+test('a pricing-gap ticket lists the empty nights and what to do', () => {
+  const d = workDetails(item('pricing_gap', { nights: ['2026-10-09', '2026-10-10'] }));
+  assert.match(value(d, 'Empty nights this week'), /9 Oct.*10 Oct/);
+  assert.match(value(d, 'What to do'), /Stays screen/);
+});

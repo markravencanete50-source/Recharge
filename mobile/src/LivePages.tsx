@@ -12,6 +12,7 @@ import { HostawaySyncCard } from "./HostawaySyncCard";
 import { LiveTraining } from "./LiveTraining";
 import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import { PropertyProfile } from "./LivePropertyProfile";
+import { PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
 import { EstimateExplorer } from "./LiveEstimate";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
 import { readEstimate } from "../../lib/estimate-projection";
@@ -230,8 +231,9 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   period: AnalyticsPeriod; loading: boolean; onForm: (form: WorkflowForm) => void; onOpenWork?: (item: OperationView) => void; onRefresh: () => void;
 }) {
   const [query, setQuery] = useState(""), [shown, setShown] = useState(24), [selected, setSelected] = useState<PropertyView | null>(null);
+  const [filter, setFilter] = useState<PropertyFilter>(null), [ownerCount, setOwnerCount] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
-  const visible = properties.filter(property => (property.name + " " + property.region + " " + property.address).toLowerCase().includes(query.trim().toLowerCase()));
+  const visible = properties.filter(property => (!filter || filter.ids.includes(property.id)) && (property.name + " " + property.region + " " + property.address).toLowerCase().includes(query.trim().toLowerCase()));
   const staff = isWorkspaceAdmin(account.role) || account.role === "stays";
   const journey = selected ? journeys.find(j => j.propertyId === selected.id) : undefined;
   const propertyWork = selected ? work.filter(w => w.propertyId === selected.id) : [];
@@ -250,7 +252,11 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Property Management Database"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
       {account.role === "client" && account.modules.includes("property-onboarding") && <EnquiryCard palette={p} onStart={() => onForm(newEnquiryForm())} />}
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
-      {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} summary={portfolioSummary(properties, journeys)} />}
+      {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
+      {staff && !loading && properties.length > 0 && account.modules.includes("property-database") && <PortfolioInsights palette={p} properties={properties} journeys={journeys} filter={filter} onFilter={f => { setFilter(f); setShown(24); }} onOwners={setOwnerCount} />}
+      {!!filter && <MotionPress accessibilityRole="button" onPress={() => setFilter(null)} style={[ui.row, { gap: 8, alignSelf: "flex-start", minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.wash }]}>
+        <Text style={{ color: p.text, fontWeight: "600" }}>Showing: {filter.label} · {filter.ids.length}</Text><Feather name="x" size={16} color={p.text} />
+      </MotionPress>}
       <View {...(Platform.OS === "web" ? { dataSet: { searchShell: "true" } } : {})} style={[ui.row, { borderRadius: 14, minHeight: 50, borderWidth: 1, borderColor: p.controlBorder, paddingHorizontal: 14, backgroundColor: p.surface, gap: 10 }]}>
         <Feather name="search" size={18} color={p.muted} />
         <TextInput accessibilityLabel="Search properties" placeholder="Search by name or area" placeholderTextColor={p.muted} value={query} onChangeText={value => { setQuery(value); setShown(24); }} autoCorrect={false} style={{ flex: 1, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular", minHeight: 48 }} />

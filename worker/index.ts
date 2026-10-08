@@ -46,6 +46,10 @@ const worker = {
         console.error('Hostaway sync failed; the error is recorded and the next run retries.');
       }));
     }
+    // Empty nights in the coming week become "price the empty nights" tickets for Stays.
+    ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_open_pricing_gaps', {})).catch(() => {
+      console.error('Pricing gap check failed; the next run retries.');
+    }));
     if (env.INTEGRATION_SCHEDULE_ENABLED !== 'true') return;
     ctx.waitUntil(import('../lib/integration-server').then(module => module.dispatchNotifications()).catch(() => {
       console.error('Recharge integration batch failed; durable job state retained.');

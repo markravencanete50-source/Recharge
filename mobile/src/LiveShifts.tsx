@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
+import { z } from "zod";
 import { Text } from "./Typography";
 import { GrowBar, MotionPress, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -8,7 +9,7 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readTeams, writeTeams } from "./backend/client";
-import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
+import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, rotaListSchema, SHIFTS, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
 import { DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { formatCount, formatDay, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -30,7 +31,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
   // response was lost.
   const request = useRequestId(shift ? (shift.open ? "out:" + shift.open.id : ["in", department, shift.today.at(-1)?.id ?? "first"].join(":")) : null);
   const load = useCallback(async () => {
-    try { setShift(myShiftSchema.parse((await readTeams({ section: "shift" })).data)); setError(""); }
+    try { const mine = myShiftSchema.parse((await readTeams({ section: "shift" })).data); setShift(mine); if (mine.rota) setDepartment(mine.rota.department); setError(""); }
     catch { setUnavailable(true); }
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
@@ -54,6 +55,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
             {!shift ? "Checking…" : open ? `${DEPARTMENT_LABEL[open.department] ?? open.department} · since ${time(open.clockedInAt)}` : "You’re clocked out"}
           </Text>
           {!!open && <Text style={{ color: p.headerMuted, fontSize: 13 }}>{shiftName(open.clockedInAt)} · {hoursLabel(sinceMinutes(open.clockedInAt))} so far</Text>}
+          {!open && shift?.rota && <Text style={{ color: p.muted, fontSize: 13 }}>{DEPARTMENT_LABEL[shift.rota.department] ?? shift.rota.department} · usually {SHIFTS[shift.rota.usualShift]}</Text>}
           {score !== null && <Text style={{ color: open ? p.headerMuted : p.muted, fontSize: 13 }}>Guest replies, last 30 days: {score}% on time ({shift!.passPercent}% is on track)</Text>}
           {score !== null && <View style={{ marginTop: 4, maxWidth: 260 }}><GrowBar share={score / 100} height={6} color={score >= shift!.passPercent ? p.success : p.waiting} track={open ? p.headerBorder : p.wash} /></View>}
         </SwapIn>
@@ -98,6 +100,42 @@ function TargetsSheet({ p, targets, visible, onClose, onDone }: { p: Palette; ta
 }
 
 // Management: who's on shift, and each person's reply times, hours and daily checks.
+// Each person's department and usual shift, set by management.
+function RotaSection({ p }: { p: Palette }) {
+  const [rota, setRota] = useState<z.infer<typeof rotaListSchema>>([]);
+  const [editing, setEditing] = useState<z.infer<typeof rotaListSchema>[number] | null>(null);
+  const [department, setDept] = useState<(typeof DEPARTMENTS)[number]>("guest_relations"), [usual, setUsual] = useState<"early" | "late" | "both">("early");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const request = useRequestId(editing ? ["rota", editing.userId, department, usual].join(":") : null);
+  const load = useCallback(async () => { try { setRota(rotaListSchema.parse((await readTeams({ section: "rota" })).data)); } catch { setRota([]); } }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  async function save() {
+    if (!editing || busy) return;
+    setBusy(true); setError("");
+    try { await writeTeams({ action: "saveRota", requestId: request.get(), userId: editing.userId, department, usualShift: usual }); request.done(); setEditing(null); await load(); }
+    catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  if (!rota.length) return null;
+  return (
+    <Section title="Departments and shifts" count={rota.length} p={p}>
+      <Text style={[ui.small, { color: p.muted }]}>Who works in which team, and their usual shift (early 8am–4pm, late 3pm–11pm). Clock-in starts from their department.</Text>
+      <List p={p} empty="">
+        {rota.map((r, i) => <Row key={r.userId} p={p} first={i === 0} icon="user" tone="stays" title={r.fullName || "Team member"}
+          detail={r.department ? `${DEPARTMENT_LABEL[r.department] ?? r.department} · ${r.usualShift ? SHIFTS[r.usualShift] : "No usual shift"}` : "No department set yet"}
+          tags={r.department ? [] : [["Set up", "wait"]]} onPress={() => { setEditing(r); setDept((r.department ?? departmentFor(r.role)) as (typeof DEPARTMENTS)[number]); setUsual(r.usualShift ?? "early"); setError(""); }} />)}
+      </List>
+      <Sheet palette={p} visible={!!editing} onClose={() => setEditing(null)} title={editing?.fullName ?? ""} subtitle="Department and usual shift" icon="people">
+        <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Department</Text>
+        <Pills p={p} values={DEPARTMENTS} value={department} onChange={setDept} label={d => DEPARTMENT_LABEL[d]} />
+        <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Usual shift</Text>
+        <Pills p={p} values={["early", "late", "both"] as const} value={usual} onChange={setUsual} label={v => SHIFTS[v]} />
+        {!!error && <Notice text={error} p={p} tone="bad" />}
+        <Button label={busy ? "Saving…" : "Save"} icon="check" primary p={p} disabled={busy} onPress={() => void save()} />
+      </Sheet>
+    </Section>
+  );
+}
+
 export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
   const [range, setRange] = useState<"today" | "week" | "month">("week");
   const [data, setData] = useState<TeamPerformance | null>(null);
@@ -129,6 +167,7 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
   return (
     <View style={{ gap: 20 }}>
       <Pills p={p} values={["today", "week", "month"] as const} value={range} onChange={setRange} label={v => ({ today: "Today", week: "Last 7 days", month: "Last 30 days" })[v]} />
+      <RotaSection p={p} />
       {loading && <Loading p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {data && t && <>

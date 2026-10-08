@@ -6,7 +6,7 @@ Property Onboarding, Remainder of Stays), checked against the live app code and 
 
 Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outside service · ❌ not built
 
-**Totals (76 asks):** ✅ 41 · 🟡 18 · ⏸ 10 · ❌ 7
+**Totals (76 asks):** ✅ 47 · 🟡 12 · ⏸ 10 · ❌ 7
 
 ## 1. Communication Centre
 
@@ -16,8 +16,8 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | C2 | AI-assisted guest replies | ❌ | No AI in the live app. Needs an AI key and building. |
 | C3 | Reply timing: green under 5 min, amber 5–10, red over 10 | ⏸ | Grading built (targets editable). No messages arrive yet, so reports are empty. Needs the channel manager. |
 | C4 | Every team member has their own login | ✅ | Sign-up, admin approval, roles. |
-| C5 | Guest relations and client relations teams | 🟡 | Both exist as clock-in departments. Client relations isn't measured, and people pick a department at clock-in rather than belonging to one. |
-| C6 | Two shifts: 8am–3/4pm and 3pm–11pm | 🟡 | Shifts are labelled early/late by clock-in time. No rota or fixed shift windows. |
+| C5 | Guest relations and client relations teams | 🟡 | Admins set each person's department (guest relations, client relations, cleaning, Ready, Accounts, management) and clock-in starts from it. Client relations has no score yet: it needs client messages from the mailboxes. |
+| C6 | Two shifts: 8am–3/4pm and 3pm–11pm | ✅ | Each person has a usual shift (early 8am–4pm, late 3pm–11pm, or both), shown on their shift card and in Team performance. |
 | C7 | Clock in and out on the site | ✅ | Shift card on Home; admins can close forgotten shifts. |
 | C8 | Each reply credited to whoever is clocked in | ⏸ | Built. Waiting on message data. Open question for the client: in the 3–4pm overlap both people get credit. |
 | C9 | Per-person green/amber/red with a 90% pass mark (on/off track) | ⏸ | Built in Team performance. Waiting on message data. |
@@ -34,11 +34,11 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | D1 | Call it "Property Management Database" | ✅ | The page and the tool carry the name. The bottom-bar tab stays "Properties" to fit. |
 | D2 | Clear the old properties; re-onboard everything through the new process | ✅ | Old Hostaway properties archived and cleared. Admins can still add a property directly, bypassing onboarding. |
 | D3 | All of a property's information in one place | ✅ | One page: owner (name, email), listings, stays (now, upcoming, recent), the owner's set-up answers, payout details (on request, account number masked), access and logins, onboarding, work and invoices. Each part only shows to people allowed to see it. Guest names aren't stored yet; they come with the channel manager. |
-| D4 | See what stage every property is at | 🟡 | Each property has a stage tracker. No list or pipeline of all properties by stage. |
-| D5 | Client portfolio: number of clients, properties per client, portfolio size | 🟡 | Totals shown (properties, live, onboarding, owners). No per-client breakdown, although the database already works it out. |
+| D4 | See what stage every property is at | ✅ | "Where every property is": properties counted by stage (enquiry, estimate, agreement, set-up, invoice, inspection, live); tap a stage to filter the list. |
+| D5 | Client portfolio: number of clients, properties per client, portfolio size | ✅ | Every owner with their number of properties; tap an owner to see only theirs. The Owners total counts every owner, onboarded or added by an admin. |
 | D6 | Take the enquiry/onboarding strike rate out of this report | ✅ | Removed. (It isn't shown anywhere else yet.) |
-| D7 | Map, or properties per region of Scotland | 🟡 | "By region" bars. No map; region is free text, so spellings can split the counts. |
-| D8 | General portfolio statistics | 🟡 | Headline counts only. No trends over time, revenue or occupancy across the portfolio. |
+| D7 | Map, or properties per region of Scotland | ✅ | Properties counted by Scottish area, with spellings and towns grouped (Leith and Portobello count as Edinburgh). New enquiries choose from a fixed list of areas. No map: that would need each property's coordinates. |
+| D8 | General portfolio statistics | ✅ | Last 12 months: properties added, properties gone live, nights booked each month, and live properties now. Revenue across the portfolio will follow once payouts come in from the channel manager. |
 | D9 | Each property linked to its channel-manager listing so messages sync | ⏸ | Needs the Uplisting connection; no screen yet to link a listing by hand. |
 
 ## 3. Property Onboarding
@@ -82,7 +82,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | S4 | Suspension found → automatic re-list ticket | 🟡 | Hidden or suspended listings go on the re-listing list automatically when a check records it. No automatic scan of the platforms (needs the channel manager). |
 | S5 | Daily check: all visible, no unhandled bad reviews, suspensions dealt with, re-listings done | ✅ | "Today's sign-off" on the Stays screen: all listings visible, bad reviews answered, suspensions dealt with, re-listings done or under way, with a note if any are still open. Admins see the last 14 days in Team performance. |
 | S6 | Report of that daily work per person feeding performance and bonuses | 🟡 | Team performance shows each person's listing checks, reviews, pricing decisions and daily sign-offs. Bonus tiers still use reply times only. |
-| S7 | Gap nights in the next 7 days → ticket; staff change or hold the price with a reason | 🟡 | Gaps highlighted, decision and reason recorded. The ticket only appears once staff save a decision, and stays are entered by hand while there's no channel manager. |
+| S7 | Gap nights in the next 7 days → ticket; staff change or hold the price with a reason | ✅ | Every live property with an empty night in the coming week gets a "Price the empty nights" ticket automatically, kept up to date and closed once every night is priced or booked. Staff hold or change each price with a reason. Stays are entered by hand until the channel manager is connected. |
 | S8 | Pricing changes feed the weekly client report | ✅ | |
 | S9 | Weekly scan for local events near each property | ❌ | Needs an events data provider and building. The report says no scan is connected. |
 | S10 | Weekly report downloaded and sent to the client; client report section | 🟡 | Download (CSV) works for clients and staff. Not sent automatically each week (needs Resend). |
@@ -104,11 +104,12 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | S26 | Accounts check against a budget chart and place the order | ✅ | Accounts are told about each purchase request, approve it against the budget chart (the most each item should cost, kept by Accounts), and record the order. |
 | S27 | Ready proves the items arrived before Accounts close it | ⏸ | Ready's delivery ticket offers "Record delivery" and closes itself; Accounts reconcile against the paid invoice. Delivery photos need Cloudinary. |
 
-## Can be built now, no keys needed
+## Built without keys: done
 
-- C5/C6: departments and fixed shift windows per person.
-- D4, D5, D7, D8: stage pipeline, per-client view, Scottish region list and map, portfolio stats. (D1 and D3 done.)
-- Bug fixes: done (OTA logins panel, client invoices, inspection ticket steps, Ready's purchase delivery ticket).
+Everything that could be built without an outside service is built. Two items need a decision from Alex rather than more building:
+
+- S6: how listing checks, reviews and daily sign-offs should count towards the bonus tiers (today the tiers use reply times only).
+- S15: OTA logins are one notes box per property. Storing platform passwords in the app is not recommended; a shared password manager is safer, with the app noting which account each listing uses.
 
 ## Waiting on an outside service
 

@@ -43,6 +43,11 @@ export function workDetails(w: OperationView): Detail[] {
     add('What the guest said', text(d.summary));
     add('How it was handled', text(d.response));
   }
+  if (w.kind === 'pricing_gap') {
+    const nights = Array.isArray(d.nights) ? d.nights.filter((n): n is string => typeof n === 'string') : [];
+    add('Empty nights this week', nights.map(n => formatDay(n)).join(', '));
+    add('What to do', nights.length ? 'Price each night from the Stays screen (hold or change, with a reason). This closes by itself once every night is priced or booked.' : 'Every night is priced or booked.');
+  }
   for (const [key, label] of [['issue', 'Issue'], ['report', 'Report'], ['requirements', 'Requirements'], ['guestUpdate', 'Guest update'], ['reason', 'Reason']] as const) add(label, text(d[key]));
   return out;
 }

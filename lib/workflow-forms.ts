@@ -1,6 +1,7 @@
 import type { WorkspaceAccount } from './workspace-account-policy';
 import { REPAIR_GUIDES } from './repair-guides';
 import { INSPECTION_CHECKS } from './onboarding-content';
+import { SCOTTISH_REGIONS } from './regions';
 export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string};
 export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string};
 export type JourneyView={propertyId:string;clientId:string;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string}};
@@ -30,7 +31,7 @@ export function workflowValues(fields:WorkflowField[],raw:Record<string,unknown>
  }
  return values;
 }
-export function newEnquiryForm():WorkflowForm{return {key:'enquiry',title:'Add a property enquiry',endpoint:'journeys',fields:[field('name','Property name'),field('address','Full property address','textarea'),field('region','Region'),field('propertyType','Property type'),field('bedrooms','Bedrooms','number'),field('bathrooms','Bathrooms','number')],build:v=>({action:'createEnquiry',...v})};}
+export function newEnquiryForm():WorkflowForm{return {key:'enquiry',title:'Add a property enquiry',endpoint:'journeys',fields:[field('name','Property name'),field('address','Full property address','textarea'),{...field('region','Area','select'),options:SCOTTISH_REGIONS.map(value=>({value,label:value}))},field('propertyType','Property type'),field('bedrooms','Bedrooms','number'),field('bathrooms','Bathrooms','number')],build:v=>({action:'createEnquiry',...v})};}
 export function journeyForms(a:WorkspaceAccount,j:JourneyView):WorkflowForm[]{
  if(!admin(a)&&!a.modules.includes('property-onboarding')&&!(a.role==='ready'&&a.modules.includes('new-property-inspection-board')))return [];
  const forms:WorkflowForm[]=[],team=admin(a)||a.role==='stays',owner=a.role==='client'&&a.userId===j.clientId;

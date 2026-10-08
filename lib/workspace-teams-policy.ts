@@ -14,7 +14,7 @@ const https = z.string().url().max(1000).refine(value => {
 }, 'Use a public HTTPS link');
 
 export const teamsReadSchema = z.object({
-  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart']),
+  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -46,6 +46,7 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('setCourseRequired'), requestId: id, courseId: id, required: z.boolean() }).strict(),
   // Shifts and team performance targets.
   z.object({ action: z.literal('clockIn'), requestId: id, department: z.enum(DEPARTMENTS) }).strict(),
+  z.object({ action: z.literal('saveRota'), requestId: id, userId: id, department: z.enum(DEPARTMENTS), usualShift: z.enum(['early', 'late', 'both']) }).strict(),
   z.object({ action: z.literal('saveBudgetItem'), requestId: id, id: id.optional(), version: version.optional(), item: z.string().trim().min(2).max(120), maxUnitMinor: z.number().int().min(1).max(10000000), note: z.string().trim().max(500).default('') }).strict(),
   z.object({ action: z.literal('removeBudgetItem'), requestId: id, id, version }).strict(),
   z.object({ action: z.literal('signOffDay'), requestId: id, allVisible: z.literal(true), reviewsHandled: z.literal(true), suspensionsHandled: z.literal(true), relistingsDone: z.literal(true), note: z.string().trim().max(2000).default('') }).strict(),

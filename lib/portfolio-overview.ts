@@ -1,4 +1,5 @@
 import type { PropertyView } from './workspace-view';
+import { normaliseRegion } from './regions';
 import type { JourneyView } from './workflow-forms';
 
 // Clients who asked for more time on their estimate, whose check-in date has arrived.
@@ -14,10 +15,10 @@ export function followUpsDue(journeys: JourneyView[], properties: Pick<PropertyV
 
 // The whole portfolio at a glance: live, onboarding, owners and properties per region.
 export type PortfolioSummary = { total: number; live: number; onboarding: number; archived: number; owners: number; regions: { region: string; count: number }[] };
-export function portfolioSummary(properties: Pick<PropertyView, 'id' | 'region' | 'status'>[], journeys: Pick<JourneyView, 'propertyId' | 'clientId'>[]): PortfolioSummary {
+export function portfolioSummary(properties: (Pick<PropertyView, 'id' | 'region' | 'status'> & { address?: string })[], journeys: Pick<JourneyView, 'propertyId' | 'clientId'>[]): PortfolioSummary {
   const current = properties.filter(p => p.status !== 'archived');
   const regions = new Map<string, number>();
-  for (const p of current) { const region = p.region.trim() || 'Region not set'; regions.set(region, (regions.get(region) ?? 0) + 1); }
+  for (const p of current) { const region = normaliseRegion(p.region, 'address' in p ? String(p.address) : '') || 'Region not set'; regions.set(region, (regions.get(region) ?? 0) + 1); }
   const ids = new Set(current.map(p => p.id));
   return {
     total: current.length, live: current.filter(p => p.status === 'active').length, onboarding: current.filter(p => p.status === 'onboarding').length,

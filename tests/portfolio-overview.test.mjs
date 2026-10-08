@@ -26,3 +26,13 @@ test('the portfolio summary counts live and onboarding properties, owners and re
   assert.deepEqual(summary, { total: 4, live: 3, onboarding: 1, archived: 1, owners: 2,
     regions: [{ region: 'Edinburgh', count: 2 }, { region: 'Glasgow', count: 1 }, { region: 'Region not set', count: 1 }] });
 });
+
+test('regions are grouped into Scottish areas, whatever the spelling', async () => {
+  const { normaliseRegion } = await vite.ssrLoadModule('/lib/regions.ts');
+  assert.equal(normaliseRegion('edinburgh'), 'Edinburgh');
+  assert.equal(normaliseRegion('Leith'), 'Edinburgh');
+  assert.equal(normaliseRegion('', '12 High Street, Portobello, EH15'), 'Edinburgh');
+  assert.equal(normaliseRegion('Isle of Skye'), 'Inverness and Highlands');
+  assert.equal(normaliseRegion('Aberdeenshire'), 'Aberdeenshire and Moray');
+  assert.equal(normaliseRegion('Somewhere else'), 'Somewhere else');
+});
