@@ -46,6 +46,14 @@ test('tools that need a module only show to people who hold it', () => {
   assert.deepEqual(homeToolsFor('accounts', DEFAULT_ROLE_MODULES.accounts).find(t => t.key === 'payouts').target, { kind: 'work', view: 'accounts', sub: 'payouts' });
 });
 
+test('every team role can open training from Home; admins land where courses are added', () => {
+  for (const role of ['stays', 'cleans', 'cleaning_manager', 'ready', 'accounts'])
+    assert.deepEqual(homeToolsFor(role, DEFAULT_ROLE_MODULES[role]).find(t => t.key === 'training')?.target, { kind: 'tab', tab: 'help', anchor: 'section-training' }, role);
+  for (const role of ['admin', 'super_admin'])
+    assert.deepEqual(homeToolsFor(role, MODULE_IDS).find(t => t.key === 'training')?.target, { kind: 'work', view: 'management', sub: 'training' }, role);
+  assert.ok(!homeToolsFor('client', DEFAULT_ROLE_MODULES.client).some(t => t.key === 'training'), 'owners have Help instead');
+});
+
 test('every tool in the full list has an illustrated icon', () => {
   for (const id of MODULE_IDS) assert.ok(drawn.has(MODULE_ART[id]), id);
   assert.equal(sectionAnchor("Today's sign-off & more"), 'section-today-s-sign-off-and-more');

@@ -59,6 +59,14 @@ const worker = {
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_routine_auto', {})).catch(() => {
       console.error('Routine visit schedule failed; the next run retries.');
     }));
+    // Owners are reminded once an approval has waited 48 hours; client relations are told at 96.
+    ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_chase_owner_approvals', {})).catch(() => {
+      console.error('Owner approval reminders failed; the next run retries.');
+    }));
+    // Each morning after 08:00: yesterday's missed Stays sign-offs and listing checks roll over to management (once a day).
+    ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_roll_over_signoffs', {})).catch(() => {
+      console.error('Sign-off rollover failed; the next run retries.');
+    }));
     // Monday mornings: owners are told in the app that their weekly report is ready (once a week).
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_weekly_report_notices', {})).catch(() => {
       console.error('Weekly report notices failed; the next run retries.');

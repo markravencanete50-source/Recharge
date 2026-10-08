@@ -10,6 +10,7 @@ import type { TeamsAction } from '../../../lib/workspace-teams-policy';
 import type { AdminAction } from '../../../lib/workspace-admin-policy';
 import type { ChatAction } from '../../../lib/workspace-chat-policy';
 import type { InboxAction } from '../../../lib/guest-inbox-policy';
+import type { OversightAction } from '../../../lib/oversight-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
@@ -110,7 +111,7 @@ export async function accountStep(body: Record<string, unknown>, accessToken?: s
   return z.record(z.unknown()).parse(await (await call("/api/mobile/account", body, accessToken)).json());
 }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (sameOriginWeb) return call(webWorkspacePath(path), body);
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
@@ -181,3 +182,6 @@ export const readInbox = async (query: Record<string, string>) => (await workspa
 // Owner reports: confirmed bookings, nights and payouts at the owner's properties (read only).
 export const readOwner = async (query: { section: 'bookings'; from: string; to: string }) => (await workspaceRequest('/api/mobile/owner?' + new URLSearchParams(query))).json();
 export const writeInbox = async (action: InboxAction) => (await workspaceRequest('/api/mobile/guest-inbox', action)).json();
+// Management oversight: the business overview, an item's history, the decisions report and management's reminders.
+export const readOversight = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/oversight?' + new URLSearchParams(query))).json();
+export const writeOversight = async (action: OversightAction) => (await workspaceRequest('/api/mobile/oversight', action)).json();

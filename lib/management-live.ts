@@ -22,10 +22,17 @@ export type RepairApproval = z.infer<typeof repairApprovalSchema>;
 export const managementSchema = z.object({
   cleaningDecisions: z.array(decisionSchema),
   expensesOverLimit: z.array(expenseSchema),
-  stalledOwnerApprovals: z.array(z.object({ workId: z.string().uuid(), title: z.string(), propertyId: z.string().uuid(), propertyName: z.string(), estimatedCostMinor: z.number().nullable(), waitingSince: z.string() })),
+  // Repairs and estimates waiting on an owner for over 48 hours, from when they started waiting.
+  stalledOwnerApprovals: z.array(z.object({ workId: z.string().uuid(), kind: z.enum(["repair", "estimate"]).default("repair"), title: z.string(), propertyId: z.string().uuid(), propertyName: z.string(), estimatedCostMinor: z.number().nullable(), waitingSince: z.string(),
+    remindedAt: z.string().nullable().default(null), escalatedAt: z.string().nullable().default(null), canRemindAt: z.string().nullable().default(null) })),
   repairApprovals: z.array(repairApprovalSchema).default([]),
   cleanerWarnings: performanceSchema,
   ownerBalancesDue: z.array(statementSchema),
+  // Owner payouts that are negative or more than half off the property's recent average.
+  unusualPayouts: z.array(statementSchema.extend({ averageMinor: z.number().nullable(), previousStatements: z.number(), reason: z.enum(["negative", "low", "high"]) })).default([]),
+  // Stays team members whose sign-off or listing checks were missed yesterday, until seen.
+  missedYesterday: z.array(z.object({ userId: z.string().uuid(), fullName: z.string(), day: z.string(), signedOff: z.boolean(), listingsDue: z.number(),
+    missedListings: z.array(z.object({ propertyId: z.string().uuid(), propertyName: z.string() })), createdAt: z.string() })).default([]),
 });
 export type Management = z.infer<typeof managementSchema>;
 
@@ -34,7 +41,7 @@ export const DECISION_OUTCOMES = {
   cleaner_management_review: [["no_action", "No action"], ["supervised", "Supervise the next cleans"], ["removed_from_rota", "Remove from the rota"]],
 } as const;
 export const decisionAction = (d: Pick<Decision, "kind">) => d.kind === "cleaning_complaint" ? "decideComplaint" as const : "decideCleanerReview" as const;
-export const queueCount = (m: Management) => m.cleaningDecisions.length + m.expensesOverLimit.length + m.stalledOwnerApprovals.length + m.repairApprovals.length + m.ownerBalancesDue.length;
+export const queueCount = (m: Management) => m.cleaningDecisions.length + m.expensesOverLimit.length + m.stalledOwnerApprovals.length + m.repairApprovals.length + m.ownerBalancesDue.length + m.unusualPayouts.length + m.missedYesterday.length;
 
 export const AUDIENCES = ["all", "stays", "cleans", "cleaning_manager", "ready", "accounts", "admin", "client"] as const;
 export const courseSchema = z.object({

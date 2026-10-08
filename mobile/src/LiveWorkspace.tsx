@@ -58,6 +58,8 @@ import { OpenMessagesContext } from "./PropertyTeamChat";
 import { LiveApprovals } from "./LiveApprovals";
 import { LiveClientReports } from "./LiveClientReports";
 import { OwnerActions } from "./LiveOwnerHome";
+import { PriceNightsLink, WorkHistory } from "./WorkHistory";
+import { WorkJumpContext } from "./WorkJump";
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
@@ -325,6 +327,14 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
   // Every team role also has All work, where each task's steps (onboarding, inspections, invoices, purchases) live.
   const workViews: WorkView[] = workViewsFor(account.role);
   const currentView: WorkView | "" = workViews.includes(workView as WorkView) ? workView as WorkView : (workViews[0] ?? "");
+  // Cards inside a page (Stays' routine) open another place, or scroll to a section on the same page.
+  const jump = (target: HomeToolTarget) => {
+    const here = target.kind === "work" && tab === "work" && target.view === currentView && !target.sub && !target.open ? target.anchor : undefined;
+    if (!here) return openTool(target);
+    if (Platform.OS === "web") { if (typeof document !== "undefined") document.getElementById(here)?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" }); return; }
+    const node = anchors.get(here);
+    if (node && content.current) node.measureLayout(content.current, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: !reduced }), () => undefined);
+  };
   const names = new Map(properties.map(property => [property.id, property.name]));
   const filtered = work.filter(item => workFilter === "All" || (workFilter === "Completed" ? isDone(item.status) : workFilter === "Waiting" ? isWaitingWork(item.status) : !isDone(item.status)));
   const todayKey = presetPeriod(1).to;
@@ -427,7 +437,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
           <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
               {!!accessNote && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.wash }]}><Feather name="shield" size={16} color={p.primary} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{accessNote}</Text><MotionPress accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setAccessNote("")} style={{ minHeight: 36, minWidth: 36, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={p.muted} /></MotionPress></View>}
-              <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}><OwnerActions.Provider value={ownerActions}>{animatedPage}</OwnerActions.Provider></WorkFocusContext.Provider></AnchorRegistry.Provider>
+              <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}><WorkJumpContext.Provider value={jump}><OwnerActions.Provider value={ownerActions}>{animatedPage}</OwnerActions.Provider></WorkJumpContext.Provider></WorkFocusContext.Provider></AnchorRegistry.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
             </Animated.View></View>
           </ScrollView>
@@ -484,9 +494,11 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
           {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: {formatMoney(Number(openWork.data.estimatedCostMinor))}</Text>}
           <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
           {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}
+          <PriceNightsLink p={p} account={account} item={openWork} onOpen={target => { setOpenWork(null); openTool(target); }} />
           {workItemForms(account, openWork, journeys, work).map(f => <SoftButton key={f.key} label={f.title} icon="arrow-right" palette={p} disabled={f.key === "prepareQuote" && !policyConfirmed} onPress={() => { setOpenWork(null); setForm(f); }} />)}
           {openWork.kind === "direct_booking" && !policyConfirmed && <Text style={[ui.small, { color: p.muted }]}>The discount policy awaits confirmation.</Text>}
-          {!workItemForms(account, openWork, journeys, work).length && <Text style={[ui.small, { color: p.muted }]}>Nothing needs your action on this item.</Text>}
+          {!workItemForms(account, openWork, journeys, work).length && openWork.kind !== "pricing_gap" && <Text style={[ui.small, { color: p.muted }]}>Nothing needs your action on this item.</Text>}
+          <WorkHistory key={openWork.workId} p={p} workId={openWork.workId} version={openWork.version} />
         </>}
       </Sheet>
       <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
