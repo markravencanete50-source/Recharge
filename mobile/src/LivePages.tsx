@@ -14,6 +14,7 @@ import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import { PropertyProfile } from "./LivePropertyProfile";
 import { EstimateExplorer } from "./LiveEstimate";
 import { readEstimate } from "../../lib/estimate-projection";
+import type { BudgetItem } from "../../lib/accounts-work";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
 import { formatCount, formatMoney } from "../../lib/format";
@@ -118,14 +119,14 @@ function Field({ field: f, value, onChange, p, disabled }: { field: WorkflowFiel
 
 // A workflow form in a sheet. Each attempt keeps its request id until it succeeds,
 // so a retry after a lost response replays it rather than creating a duplicate.
-export function WorkflowSheet({ spec, invoices, palette: p, onClose, onSaved }: { spec: WorkflowForm | null; invoices: InvoiceView[]; palette: Palette; onClose: () => void; onSaved: () => Promise<void> }) {
+export function WorkflowSheet({ spec, invoices, budget = [], palette: p, onClose, onSaved }: { spec: WorkflowForm | null; invoices: InvoiceView[]; budget?: BudgetItem[]; palette: Palette; onClose: () => void; onSaved: () => Promise<void> }) {
   return (
     <Sheet palette={p} visible={!!spec} onClose={onClose} title={spec?.title ?? ""} subtitle={spec?.description} icon="clipboard">
-      {spec && <WorkflowEditor key={spec.key} spec={spec} invoices={invoices} p={p} onClose={onClose} onSaved={onSaved} />}
+      {spec && <WorkflowEditor key={spec.key} spec={spec} invoices={invoices} budget={budget} p={p} onClose={onClose} onSaved={onSaved} />}
     </Sheet>
   );
 }
-function WorkflowEditor({ spec, invoices, p, onClose, onSaved }: { spec: WorkflowForm; invoices: InvoiceView[]; p: Palette; onClose: () => void; onSaved: () => Promise<void> }) {
+function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec: WorkflowForm; invoices: InvoiceView[]; budget: BudgetItem[]; p: Palette; onClose: () => void; onSaved: () => Promise<void> }) {
   const [values, setValues] = useState<Record<string, unknown>>(() => Object.fromEntries(spec.fields.map(f => [f.name, f.defaultValue ?? (f.type === "checkbox" ? false : "")])));
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [attempt, setAttempt] = useState<{ id: string; key: string } | null>(null);
   async function save() {
@@ -142,7 +143,7 @@ function WorkflowEditor({ spec, invoices, p, onClose, onSaved }: { spec: Workflo
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;
   return (
     <>
-      {spec.fields.map((f, n) => <Stagger key={f.name} index={n}><Field field={f.name === "invoiceId" ? { ...f, options: invoices.map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues({ ...values, [f.name]: v })} p={p} disabled={busy} /></Stagger>)}
+      {spec.fields.map((f, n) => <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues({ ...values, [f.name]: v })} p={p} disabled={busy} /></Stagger>)}
       {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}><Text style={[ui.small, { color: p.text }]}>{error}</Text></View>}
       <SoftButton label={busy ? "Saving…" : "Save and continue"} icon="check" primary disabled={busy} onPress={() => void save()} palette={p} />
     </>

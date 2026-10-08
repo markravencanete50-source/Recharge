@@ -6,7 +6,7 @@ Property Onboarding, Remainder of Stays), checked against the live app code and 
 
 Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outside service · ❌ not built
 
-**Totals (76 asks):** ✅ 35 · 🟡 26 · ⏸ 8 · ❌ 7
+**Totals (76 asks):** ✅ 36 · 🟡 23 · ⏸ 10 · ❌ 7
 
 ## 1. Communication Centre
 
@@ -97,19 +97,18 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | S19 | Ready books the repair → Stays told so they can tell the guest | ✅ | Ready on the property is notified when a repair is referred (admins if no Ready is assigned); the Stays person who referred it, and Stays on the property, are notified when it is booked and when it is done. |
 | S20 | Expensive work goes to the client for approval first | ✅ | Uses the estimate given when reporting; a later quote needs a new request. |
 | S21 | Cleaner's end-of-clean report (broadband etc., photos) | ⏸ | Built; needs Cloudinary for photos before it can be submitted. |
-| S22 | Guest happy → clean complete → added to the cleaner's invoice | 🟡 | Creates an invoice task per clean, not a running cleaner invoice. Depends on S21. |
+| S22 | Guest happy → clean complete → added to the cleaner's invoice | ⏸ | Accepted cleans are grouped by cleaner in Accounts, so several go on one invoice. Waiting on clean photos (S21) before cleans can be accepted. |
 | S23 | Guest unhappy → management review ticket; cleaner not paid | ⏸ | Built; depends on S21. |
-| S24 | Two or more complaints → warning / replace section; management decides | ⏸ | Built; depends on S21. "Remove from rota" is recorded but not enforced. |
+| S24 | Two or more complaints → warning / replace section; management decides | ⏸ | "Remove from the rota" now takes the cleaner off every property and frees their open cleans for reassignment. Complaints need submitted cleans, which wait on photos (S21). |
 | S25 | Purchase request with what's needed and why | ✅ | |
-| S26 | Accounts check against a budget chart and place the order | 🟡 | Admin only (Accounts can't); no per-item budget chart. |
-| S27 | Ready proves the items arrived before Accounts close it | 🟡 | Ready's delivery ticket now offers "Record delivery" and closes itself once delivery is recorded. Delivery photos still need Cloudinary and a photo step; reconcile is admin only. |
+| S26 | Accounts check against a budget chart and place the order | ✅ | Accounts are told about each purchase request, approve it against the budget chart (the most each item should cost, kept by Accounts), and record the order. |
+| S27 | Ready proves the items arrived before Accounts close it | ⏸ | Ready's delivery ticket offers "Record delivery" and closes itself; Accounts reconcile against the paid invoice. Delivery photos need Cloudinary. |
 
 ## Can be built now, no keys needed
 
 - C5/C6: departments and fixed shift windows per person.
 - D4, D5, D7, D8: stage pipeline, per-client view, Scottish region list and map, portfolio stats. (D1 and D3 done.)
 - O5, O9, O10, O17, O24, O25: explainer and FAQ, questions, repair contacts on repair screens, inspection checklist, auto-assignment.
-- S22, S24, S26, S27: running cleaner invoice, removal from the rota, purchase fixes. (Stays and repairs done.)
 - Bug fixes: done (OTA logins panel, client invoices, inspection ticket steps, Ready's purchase delivery ticket).
 
 ## Waiting on an outside service
@@ -120,6 +119,6 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 - Google Workspace / Microsoft 365: C12, C13.
 - Resend (email): O4, O26, S10.
 - Phone push (Expo, plus an app release): O4, O25.
-- Cloudinary (photos): O13, O20, S21–S24, S27.
+- Cloudinary (photos): O13, O20, S21–S24, S27 (the rest of those flows is built).
 - Events data provider: S9.
 - Xero: O21 sending.

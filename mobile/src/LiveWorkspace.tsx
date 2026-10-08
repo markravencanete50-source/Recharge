@@ -35,13 +35,15 @@ import { OnboardingGate } from "./LiveOnboarding";
 import { FurnishingCard, MailboxSection } from "./LiveTools";
 import { workViewsFor, type WorkView } from "../../lib/tool-directory";
 import { formatBps, formatMoney } from "../../lib/format";
-import { liveApiOrigin, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
+import { liveApiOrigin, readTeams, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { WorkspaceSection } from "../../lib/workspace-map";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import { periodError, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot } from "../../lib/analytics";
 import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSchema, propertyViewSchema, readableStage, reportViewSchema, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
 import { workDetails } from "../../lib/work-details";
+import { AccountsWork } from "./LiveAccountsWork";
+import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 
 type Role = WorkspaceAccount["role"];
@@ -102,6 +104,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
   const [properties, setProperties] = useState<PropertyView[]>([]), [journeys, setJourneys] = useState<JourneyView[]>([]), [work, setWork] = useState<OperationView[]>([]);
+  const [budget, setBudget] = useState<BudgetItem[]>([]);
   const [invoices, setInvoices] = useState<InvoiceView[]>([]), [notices, setNotices] = useState<NoticeView[]>([]), [policyConfirmed, setPolicyConfirmed] = useState(false), [policy, setPolicy] = useState<BookingPolicy | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [period, setPeriod] = useState<AnalyticsPeriod>(() => presetPeriod(30)), [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null), [reportError, setReportError] = useState(""), [dates, setDates] = useState(false);
@@ -153,6 +156,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
         if (key === "notices") setNotices(z.array(noticeViewSchema).parse(data));
       } catch { setError("Unexpected response. Refresh to try again."); }
     });
+    // The budget chart, for approving purchases against it.
+    if (isWorkspaceAdmin(account.role) || account.role === "accounts") {
+      try { setBudget(budgetChartSchema.parse((await readTeams({ section: "budgetChart" })).data)); } catch { setBudget([]); }
+    }
     if (isWorkspaceAdmin(account.role) || account.role === "stays") {
       try {
         const value = bookingPolicySchema.parse((await liveApi("/portfolio?section=bookingPolicy")).data);
@@ -214,7 +221,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       {currentView === "owner" && account.modules.includes("client-furnishing") && <FurnishingCard palette={p} />}
       {currentView === "cleans" && <LiveCleans palette={p} account={account} properties={properties} />}
       {currentView === "repairs" && <LiveRepairs palette={p} account={account} properties={properties} />}
-      {currentView === "accounts" && <LiveAccounts palette={p} account={account} properties={properties} />}
+      {currentView === "accounts" && <><LiveAccounts palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} /></>}
       {currentView === "all" && <>
         <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
         {policy && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch" }]}>
@@ -335,7 +342,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
         <SoftButton label="Your tools, help and training" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("help"); }} />
         <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={() => void logout()} />
       </Sheet>
-      <WorkflowSheet spec={form} invoices={invoices} palette={p} onClose={() => setForm(null)} onSaved={refresh} />
+      <WorkflowSheet spec={form} invoices={invoices} budget={budget} palette={p} onClose={() => setForm(null)} onSaved={refresh} />
       <Sheet palette={p} visible={!!openWork} onClose={() => setOpenWork(null)} title={openWork?.title ?? ""} subtitle={openWork ? [names.get(openWork.propertyId), readableStage(openWork.status)].filter(Boolean).join(" · ") : undefined} icon="clipboard">
         {openWork && <>
           {workDetails(openWork).map(d => <View key={d.label} style={{ gap: 4 }}><Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>{d.label}</Text><Text selectable style={[ui.body, { color: d.tone === "bad" ? p.danger : d.tone === "good" ? p.success : p.text, fontWeight: d.tone ? "700" : "400" }]}>{d.value}</Text></View>)}

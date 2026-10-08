@@ -94,10 +94,11 @@ export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[
   if((admin(a)||actorIs(a,'stays','cleaning_manager'))&&w.data.phase==='review')add('reviewCleaning','Review the clean and guest feedback',[field('accepted','Accept the completed clean','checkbox',false),field('guestFeedback','Guest feedback','textarea'),field('reviewNote','Management review','textarea')]);
  }
  if(w.kind==='purchase'){
-  if(admin(a)&&w.data.phase==='requested')add('approvePurchase','Approve the purchase budget',[field('approvedAmountMinor','Approved amount, GBP','money'),field('approvalNote','Budget decision and reason','textarea')]);
-  if(admin(a)&&w.data.phase==='approved')add('recordOrder','Record the order',[field('orderReference','Order reference'),field('supplier','Supplier')]);
+  const purchasing=admin(a)||(a.role==='accounts'&&a.modules.includes('purchase-order-accounts'));
+  if(purchasing&&w.data.phase==='requested')add('approvePurchase','Approve the purchase budget',[{...field('budgetItemId','Budget chart item (optional)','select',false),help:'Approving against the chart checks the amount is within the most each item should cost.'},{...field('quantity','How many','number',false),defaultValue:'1'},field('approvedAmountMinor','Approved amount, GBP','money'),field('approvalNote','Budget decision and reason','textarea')],v=>({approvedAmountMinor:v.approvedAmountMinor,approvalNote:v.approvalNote,...(typeof v.budgetItemId==='string'&&v.budgetItemId?{budgetItemId:v.budgetItemId,quantity:typeof v.quantity==='number'?v.quantity:1}:{})}));
+  if(purchasing&&w.data.phase==='approved')add('recordOrder','Record the order',[field('orderReference','Order reference'),field('supplier','Supplier')]);
   if((admin(a)||a.role==='ready')&&w.data.phase==='ordered')add('recordDelivery','Record delivery',[field('receivedOn','Date received','date'),field('evidence','Delivery evidence','textarea')],v=>v,'Verified delivery photos require the media connection.');
-  if(admin(a)&&w.data.phase==='delivered')add('reconcilePurchase','Reconcile the delivered purchase',[field('invoiceId','Paid purchase invoice','select'),field('reconciliation','Invoice and delivery checks','textarea')]);
+  if(purchasing&&w.data.phase==='delivered')add('reconcilePurchase','Reconcile the delivered purchase',[field('invoiceId','Paid purchase invoice','select'),field('reconciliation','Invoice and delivery checks','textarea')]);
  }
  return forms;
 }
