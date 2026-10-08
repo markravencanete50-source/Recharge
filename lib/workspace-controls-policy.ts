@@ -33,7 +33,7 @@ export const controlsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('archiveEvent'), ...base, eventId: id, version }).strict(),
   z.object({ action: z.literal('markNotificationRead'), requestId: id, eventId: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict(),
   z.object({ action: z.literal('saveEstimate'), ...base, version: z.number().int().min(0), assumptions: estimateAssumptionsSchema }).strict(),
-  z.object({ action: z.literal('issueOperationInvoice'), ...base, workId: id, version, recipientId: id, reference: text(120).min(1), amountMinor: z.number().int().positive().max(10000000) }).strict(),
+  z.object({ action: z.literal('issueOperationInvoice'), ...base, workId: id, version: version.optional(), recipientId: id.optional(), reference: text(120).min(1), amountMinor: z.number().int().positive().max(10000000) }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'updateReservation' && (value.checkOut <= value.checkIn || Date.parse(value.checkOut) - Date.parse(value.checkIn) > 365 * 86400000)) context.addIssue({ code: 'custom', message: 'Choose a stay of 1 to 365 nights' });
 });

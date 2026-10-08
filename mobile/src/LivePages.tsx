@@ -10,8 +10,10 @@ import { BuildingGlyph } from "./BuildingGlyph";
 import { EnquiryCard } from "./HomeOverview";
 import { HostawaySyncCard } from "./HostawaySyncCard";
 import { LiveTraining } from "./LiveTraining";
+import { PropertyAccess, ToolDirectory } from "./LiveTools";
+import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
-import { LiveNoticeRow, LiveWorkRow } from "./LiveRows";
+import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
 import { Calendar } from "./WorkspaceScreens";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
@@ -217,9 +219,9 @@ function PortfolioCard({ palette: p, summary }: { palette: Palette; summary: Por
   );
 }
 
-export function LiveProperties({ palette: p, desktop, account, properties, journeys, work, invoices, period, loading, onForm, onRefresh }: {
+export function LiveProperties({ palette: p, desktop, account, properties, journeys, work, invoices, period, loading, onForm, onOpenWork, onRefresh }: {
   palette: Palette; desktop: boolean; account: WorkspaceAccount; properties: PropertyView[]; journeys: JourneyView[]; work: OperationView[]; invoices: InvoiceView[];
-  period: AnalyticsPeriod; loading: boolean; onForm: (form: WorkflowForm) => void; onRefresh: () => void;
+  period: AnalyticsPeriod; loading: boolean; onForm: (form: WorkflowForm) => void; onOpenWork?: (item: OperationView) => void; onRefresh: () => void;
 }) {
   const [query, setQuery] = useState(""), [shown, setShown] = useState(24), [selected, setSelected] = useState<PropertyView | null>(null);
   const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
@@ -266,9 +268,15 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
           </View>
           {journey && <JourneyDetails j={journey} p={p} account={account} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
           {createOperationForms(account, selected.id).map(f => <SoftButton key={f.key} label={f.title} icon="plus" palette={p} onPress={() => { setSelected(null); onForm(f); }} />)}
+          <PropertyAccess palette={p} account={account} propertyId={selected.id} />
           {!!propertyWork.length && <View style={{ gap: 4 }}>
-            <Text style={{ color: p.text, fontWeight: "700" }}>Work at this property</Text>
-            {propertyWork.slice(0, 8).map(item => <View key={item.workId} style={{ gap: 6 }}><LiveWorkRow item={item} palette={p} onPress={() => { const form = operationForms(account, item)[0]; if (form) { setSelected(null); onForm(form); } }} /></View>)}
+            <Text style={{ color: p.text, fontWeight: "700" }}>Work at this property · {propertyWork.length}</Text>
+            {/* Open items first; each opens with every step available to you. */}
+            {[...propertyWork].sort((a, b) => Number(isDone(a.status)) - Number(isDone(b.status))).slice(0, 30).map(item => <View key={item.workId} style={{ gap: 6 }}><LiveWorkRow item={item} palette={p} onPress={() => {
+              if (onOpenWork) { setSelected(null); onOpenWork(item); return; }
+              const form = operationForms(account, item)[0]; if (form) { setSelected(null); onForm(form); }
+            }} /></View>)}
+            {propertyWork.length > 30 && <Text style={[ui.small, { color: p.muted }]}>The rest are in Work → All work.</Text>}
           </View>}
           {account.modules.includes(account.role === "client" ? "client-dashboard" : "weekly-performance") && ["client", "stays", "admin", "super_admin"].includes(account.role) && <View style={{ gap: 8 }}>
             <SoftButton label={exporting ? "Preparing report…" : "Download property report"} icon="download" palette={p} disabled={exporting} onPress={() => void downloadProperty()} />
@@ -294,12 +302,13 @@ export function LiveActivity({ palette: p, notices, loading }: { palette: Palett
   );
 }
 
-export function LiveHelp({ palette: p, account, onSignOut, busy }: { palette: Palette; account: WorkspaceAccount; onSignOut: () => void; busy: boolean }) {
+export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy, onOpen }: { palette: Palette; account: WorkspaceAccount; properties?: PropertyView[]; onSignOut: () => void; busy: boolean; onOpen?: (tab: "home" | "work" | "properties" | "analytics", view?: WorkView) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const faq = faqsForAccess(account.role, account.modules).filter(f => f.id !== "communication-centre");
   return (
     <>
-      <PageHeading palette={p} title="Help" subtitle={"Answers for your role: " + readableStage(account.role) + "."} />
+      <PageHeading palette={p} title="Help" subtitle={"Your tools and answers for your role: " + readableStage(account.role) + "."} />
+      {onOpen && <ToolDirectory palette={p} account={account} properties={properties} onOpen={onOpen} />}
       <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
         {faq.map((f, i) => (
           <View key={f.id} style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}>

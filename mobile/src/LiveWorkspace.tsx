@@ -32,6 +32,8 @@ import { LiveManagement } from "./LiveManagement";
 import { LiveStays } from "./LiveStays";
 import { LiveOwner } from "./LiveOwner";
 import { OnboardingGate } from "./LiveOnboarding";
+import { MailboxSection } from "./LiveTools";
+import { workViewsFor, type WorkView } from "../../lib/tool-directory";
 import { liveApiOrigin, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { WorkspaceSection } from "../../lib/workspace-map";
@@ -42,7 +44,6 @@ import { operationForms, type JourneyView, type OperationView, type WorkflowForm
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
-type WorkView = "management" | "stays" | "owner" | "cleans" | "repairs" | "accounts" | "all";
 const WORK_VIEW_LABEL: Record<WorkView, string> = { management: "Management", stays: "Stays", owner: "Stays and statements", cleans: "Cleans", repairs: "Repairs", accounts: "Accounts", all: "All work" };
 const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help"];
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
@@ -195,7 +196,8 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const finishWelcome = () => { setWelcome(null); try { globalThis.sessionStorage?.setItem("rc-welcomed", "1"); } catch { /* storage unavailable */ } };
 
   // Work: each role's views, the first opening by default.
-  const workViews: WorkView[] = isWorkspaceAdmin(account.role) ? ["management", "cleans", "repairs", "accounts", "all"] : account.role === "stays" ? ["stays", "cleans", "repairs", "all"] : account.role === "client" ? ["owner", "repairs", "all"] : [];
+  // Every team role also has All work, where each task's steps (onboarding, inspections, invoices, purchases) live.
+  const workViews: WorkView[] = workViewsFor(account.role);
   const currentView: WorkView | "" = workViews.includes(workView as WorkView) ? workView as WorkView : (workViews[0] ?? "");
   const names = new Map(properties.map(property => [property.id, property.name]));
   const filtered = work.filter(item => workFilter === "All" || (workFilter === "Completed" ? isDone(item.status) : workFilter === "Waiting" ? isWaitingWork(item.status) : !isDone(item.status)));
@@ -203,12 +205,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const workPage = (
     <>
       {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
-      {(account.role === "cleans" || account.role === "cleaning_manager") && <LiveCleans palette={p} account={account} properties={properties} />}
-      {account.role === "ready" && <LiveRepairs palette={p} account={account} properties={properties} />}
-      {account.role === "accounts" && <LiveAccounts palette={p} account={account} properties={properties} />}
       {currentView === "management" && <LiveManagement palette={p} account={account} />}
       {currentView === "stays" && <LiveStays palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} />}
       {currentView === "owner" && <LiveOwner palette={p} properties={properties} />}
+      {currentView === "owner" && account.modules.includes("client-mailbox") && <MailboxSection palette={p} />}
       {currentView === "cleans" && <LiveCleans palette={p} account={account} properties={properties} />}
       {currentView === "repairs" && <LiveRepairs palette={p} account={account} properties={properties} />}
       {currentView === "accounts" && <LiveAccounts palette={p} account={account} properties={properties} />}
@@ -239,7 +239,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       {snapshot ? <Reports snapshot={snapshot} period={period} role={account.role} palette={p} onDates={() => setDates(true)} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} /> : (
         <><PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." />{reportError ? <View style={{ gap: 12 }}><EmptyState palette={p} icon="activity" title="Reports could not be loaded" detail={reportError} /><SoftButton label="Try again" icon="refresh-cw" palette={p} onPress={() => void loadReport(period)} /></View> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View>}</>
       )}
-      {isWorkspaceAdmin(account.role) && !!invoices.length && <View style={{ gap: 10 }}>
+      {(isWorkspaceAdmin(account.role) || account.role === "accounts") && !!invoices.length && <View style={{ gap: 10 }}>
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Invoices</Text>
         <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
           {invoices.map((invoice, i) => (
@@ -255,10 +255,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const page = tab === "home"
     ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} />
     : tab === "work" ? workPage
-    : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onRefresh={() => void refresh()} />
+    : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} />
     : tab === "analytics" ? reportsPage
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} />
-    : <LiveHelp palette={p} account={account} busy={busy} onSignOut={() => void logout()} />;
+    : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view) => { setTab(next); if (view) setWorkView(view); }} />;
   const header = headerPalette(p);
   const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : "Home");
   return (
@@ -327,7 +327,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
             </View>
           </View>
         </View>
-        <SoftButton label="Help and training" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("help"); }} />
+        <SoftButton label="Your tools, help and training" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("help"); }} />
         <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={() => void logout()} />
       </Sheet>
       <WorkflowSheet spec={form} invoices={invoices} palette={p} onClose={() => setForm(null)} onSaved={refresh} />

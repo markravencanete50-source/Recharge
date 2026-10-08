@@ -200,10 +200,15 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
   );
 }
 
+const MAIL_DONE = { photograph: "photographed it", open_and_photograph: "opened and photographed it", leave_safely: "left it somewhere safe" } as const;
+
 function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { p: Palette; account: WorkspaceAccount; manager: boolean; op?: Operation; propertyName: string; onClose: () => void; onDone: () => Promise<void> }) {
   const checklist = checklistOf(op), phase = String(op?.data.phase ?? "");
   const [ticked, setTicked] = useState<string[]>([]);
   const [report, setReport] = useState("");
+  const [mailDone, setMailDone] = useState(false);
+  const [mailNote, setMailNote] = useState("");
+  const mailPreference = typeof op?.data.mailPreference === "string" && op.data.mailPreference in MAIL_DONE ? op.data.mailPreference as keyof typeof MAIL_DONE : null;
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -287,8 +292,17 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
             <Button label="Choose photos" icon="image" p={p} onPress={() => void addPhoto(false)} />
           </View>
           <Field label="Report" value={report} onChange={setReport} p={p} multiline placeholder="What you cleaned, anything broken or missing, Wi-Fi checked" />
+          {/* The owner's mailbox permission from onboarding: the cleaner records doing exactly that. */}
+          {mailPreference && <View style={{ gap: 8 }}>
+            <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Post</Text>
+            <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: mailDone }} onPress={() => setMailDone(v => !v)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: mailDone ? p.successWash : p.elevated }]}>
+              <Feather name={mailDone ? "check-square" : "square"} size={20} color={mailDone ? p.success : p.muted} />
+              <Text style={{ color: p.text, flex: 1 }}>There was post, and I {MAIL_DONE[mailPreference]} as the owner asked</Text>
+            </MotionPress>
+            {mailDone && <Field label="Note for the owner (optional)" value={mailNote} onChange={setMailNote} p={p} placeholder="For example, two letters left on the kitchen table" />}
+          </View>}
           <Button label={busy ? "Sending…" : "Submit clean"} icon="send" primary p={p} disabled={!ready || busy}
-            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: verified, mailAction: "none" } }))} />
+            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: verified, mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}) } }))} />
           {!ready && <Text style={[ui.small, { color: p.muted }]}>Tick every check, add at least one saved photo and a short report to submit.</Text>}
         </>}
 

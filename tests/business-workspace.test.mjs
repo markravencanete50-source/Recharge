@@ -96,7 +96,7 @@ test('invoice amounts use integer minor units, own recipients are scoped, and pa
  await assert.rejects(rpc('workspace_create_invoice',{...input,amountMinor:1}),/identifier already used/);
  await assert.rejects(rpc('workspace_create_invoice',{...input,requestId:crypto.randomUUID(),reference:'TEST-002',recipientId:otherClient}),/active property access/);
  await as(client);assert.equal((await db.query('select amount_minor from public.workspace_invoices where id=$1',[invoice])).rows[0].amount_minor,47500);
- await assert.rejects(db.query('select public.workspace_set_invoice_status($1,$2,$3)',[invoice,1,'paid']),/Admin payment/);
+ await assert.rejects(db.query('select public.workspace_set_invoice_status($1,$2,$3)',[invoice,1,'paid']),/payment confirmation required/);
  await as(otherClient);assert.equal((await db.query('select count(*)::int n from public.workspace_invoices')).rows[0].n,0);
  await as(admin);await db.query('select public.workspace_set_invoice_status($1,$2,$3)',[invoice,1,'paid']);
  await assert.rejects(db.query('select public.workspace_set_invoice_status($1,$2,$3)',[invoice,1,'void']),/Record changed/);

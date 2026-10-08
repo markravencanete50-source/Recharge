@@ -1,6 +1,6 @@
 import type { WorkspaceAccount } from './workspace-account-policy';
 export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'date'|'checkbox'|'select';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string};
-export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string};
+export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string};
 export type JourneyView={propertyId:string;clientId:string;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string};
 export type OperationView={workId:string;propertyId:string;moduleId:string;title:string;kind:string;status:string;version:number;assigneeId:string|null;dueOn?:string|null;data:Record<string,unknown>};
 const field=(name:string,label:string,type:WorkflowField['type']='text',required=true):WorkflowField=>({name,label,type,required});
@@ -55,7 +55,20 @@ export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[
  if(w.kind==='daily_pricing'&&stays&&w.data.phase==='proposed')add('recordApplied','Record the applied pricing decision',[field('evidence','Where and when the price was held or changed','textarea')]);
  if(w.kind==='licensing'&&stays)add('recordGranted','Record an authority licence grant',[field('reference','Licence reference'),field('grantedOn','Grant date','date'),field('application','Application is complete','checkbox'),field('safetyChecks','Required safety checks are complete','checkbox'),field('authorityGrant','Authority has granted the licence','checkbox'),field('evidence','Actual grant evidence','textarea')],v=>({reference:v.reference,grantedOn:v.grantedOn,evidence:v.evidence,checklist:{application:v.application,safetyChecks:v.safetyChecks,authorityGrant:v.authorityGrant}}));
  if(['cleaning_setup','garden_setup','furnishing_quote','relisting'].includes(w.kind)&&!actorIs(a,'client','cleans'))add('completeHandover','Complete this handover',[field('evidence','What was completed and supporting evidence','textarea')]);
- // Accounts' invoice handovers close once the invoice is issued or recorded.
+ // Accounts raise the invoice from their task (the recipient is picked for them), then mark it done.
+ const finance=admin(a)||a.role==='accounts';
+ const minor=(k:string)=>typeof w.data[k]==='number'?((w.data[k] as number)/100).toFixed(2):undefined;
+ if(finance&&['direct_booking_invoice','maintenance_invoice','cleaning_invoice'].includes(w.kind)&&typeof w.data.sourceWorkId==='string'){
+  const amount=minor(w.kind==='maintenance_invoice'?'actualCostMinor':w.kind==='direct_booking_invoice'?'quoteAmountMinor':'');
+  forms.push({key:'issueInvoice',title:'Issue the invoice',endpoint:'controls',
+   description:w.kind==='cleaning_invoice'?'Addressed to the cleaner for this accepted clean.':w.kind==='maintenance_invoice'?'Addressed to the owner, for the actual repair cost.':'Addressed to the owner, for the agreed direct-booking amount.',
+   fields:[field('reference','Invoice reference'),{...field('amountMinor','Invoice amount, GBP','money'),defaultValue:amount}],
+   build:(v,requestId)=>({action:'issueOperationInvoice',requestId,propertyId:w.propertyId,workId:w.data.sourceWorkId,reference:v.reference,amountMinor:v.amountMinor})});
+ }
+ if(finance&&w.kind==='onboarding_invoice'&&typeof w.data.recipientId==='string')forms.push({key:'createOnboardingInvoice',title:'Record the onboarding invoice',endpoint:'workspace',
+  description:'Addressed to the owner. It links to their onboarding, which moves on to the inspection once you record the payment in Reports.',
+  fields:[field('reference','Invoice reference'),field('amountMinor','Invoice amount, GBP','money')],
+  build:(v,requestId)=>({action:'createInvoice',input:{reference:v.reference,amountMinor:v.amountMinor,requestId,propertyId:w.propertyId,moduleId:'onboarding-invoices',recipientId:w.data.recipientId,currency:'GBP'}})});
  if(['onboarding_invoice','direct_booking_invoice','maintenance_invoice','cleaning_invoice'].includes(w.kind)&&!actorIs(a,'client','cleans'))add('completeHandover','Mark this invoice as done',[field('evidence','Invoice reference and how it was issued or recorded','textarea')]);
  if(w.kind==='direct_booking'&&stays){
   if(w.data.phase==='follow_up')add('prepareQuote','Prepare a direct-booking offer',[field('checkIn','Arrival','date'),field('checkOut','Departure','date'),field('baseAmountMinor','Original price, GBP','money')]);
