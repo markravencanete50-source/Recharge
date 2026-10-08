@@ -1,35 +1,51 @@
-# Staff onboarding (8 October 2026)
+# Staff onboarding (updated 9 October 2026)
 
-Recharge onboards its team afresh. Before a new team member (Stays, cleaner, cleaning manager,
-Ready or Accounts) can use any tool, they:
+Before a new team member (Stays, cleaner, cleaning manager, Ready or Accounts) can use any tool,
+they sign the contract for their role and finish the required training. Admins, super admins and
+owners never go through it. The database enforces it, so it can't be skipped from another screen.
 
-1. **Sign the staff contract for their role.** They read the full wording in the app, type their
-   full name and tick "I have read this contract and agree to it". Their typed name, the date and
-   the exact wording they signed are kept on record.
-2. **Complete the required training** for their role: every published course marked
-   "Required before they start".
+## How it works, start to finish
 
-Until both are done they see only a "Let's get you started" checklist and the sign-out button.
-The database enforces this (every tool check requires a finished onboarding), so it cannot be
-skipped from another screen. Admins and owners are never gated.
+1. **Write the contracts** (Work → Management → Onboarding & training → Staff contracts → New
+   contract). Choose who signs it: every team member, or specific roles. Only contracts marked
+   "In use" are asked for.
+2. **Choose the training** (same page, Training). Publish courses and tick "Required before they
+   start" on the ones new people must finish. Each course can have text, a video link and up to 10
+   files: PDFs, Word documents, pictures and short videos (up to 25 MB each; longer videos as a
+   YouTube, Vimeo or Loom link).
+3. **Add the person** (Access control → Add a person), or approve someone who signed up. The sheet
+   says what their role will be asked to sign and complete.
+4. **They complete it.** When they sign in they see only "Let's get you started": read and sign
+   the contract (typed name and a tick), then open each course and mark it complete. The moment the
+   last step is done they see "You're all set" and their tools open. Admins are notified.
 
-## For admins: Work → Management → Onboarding & training
+## What the admin page shows
 
-- **Staff contracts → New contract.** Give it a title, choose who signs it (every team member, or
-  specific roles such as Cleaners) and paste the full wording. Nothing is gated until a contract is
-  saved "In use" or a course is marked required.
-- **Editing a contract** keeps every earlier wording with its signatures. A small fix doesn't need
-  new signatures; tick "Ask everyone who signed to sign this new wording again" for a real change,
-  and their tools close until they sign the new wording.
-- **Switching a contract off** ("In use" unticked) stops asking for it.
-- **Courses:** tick "Required before they start" on any published course.
-- **Team onboarding** shows each active team member's progress (for example
-  "Contract 0/1 · Training 1/2"). Open a contract to see who signed, when, and which wording.
+- **How staff onboarding works**: the four steps above.
+- **What each role is asked for**: each role's contracts and required courses, with "Not set up"
+  where a role has nothing (its people go straight to their tools). Tap a role to preview exactly
+  what a new person in it sees.
+- **Staff contracts**: who has signed the current wording and who still has to.
+- **Team onboarding**: "Still to finish", "Done" or everyone. Tap a person to see each contract
+  (signed, which version, when) and each course (required and optional, done or not), and when they
+  finished onboarding.
+- **Training**: open a course to edit it, add or remove files, and see who has done it.
 
-## Suggested order for a new hire
+## When things change
 
-1. They sign up in the app; you approve them in People and choose their tools and properties.
-2. They sign in and complete the checklist; their tools open the moment the last step is done.
+- **New wording**: tick "Ask everyone who signed to sign this new wording again". Their tools
+  close until they sign it, and they are notified.
+- **Course changes**: tick "Ask everyone who completed it to do it again" to clear completions.
+  For a required course, their tools close until they redo it.
+- **A new contract or newly required course** closes the tools of people it now applies to, and
+  tells them.
+- **Changing someone's role** asks for the new role's contract and courses. Contracts for every
+  team member carry over. Promoting someone to admin removes the checklist.
+
+## For team members
+
+- Their signed contracts are in Help → Your contracts, with the exact wording they signed.
+- Training (required and optional) is in Help → Training, with the course files.
 
 # Shifts and team performance (8 October 2026)
 

@@ -2,6 +2,7 @@ import { createElement, useCallback, useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Linking from "expo-linking";
+import * as DocumentPicker from "expo-document-picker";
 import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
@@ -9,8 +10,9 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
-import { readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
-import { AUDIENCES, coursesSchema, type Course } from "../../lib/management-live";
+import { courseFileLink, readTeams, removeCourseFile, uploadCourseFile, writeTeams, WorkspaceApiError } from "./backend/client";
+import { AUDIENCES, contractsSchema, coursesSchema, type Course, type StaffOnboarding } from "../../lib/management-live";
+import { fileKind, fileSize, MAX_TRAINING_FILE_BYTES } from "../../lib/training-files";
 import { readableStage } from "../../lib/workspace-view";
 import { videoEmbed } from "../../lib/video-embed";
 import { StaffContracts } from "./LiveOnboarding";
@@ -18,6 +20,61 @@ import { StaffContracts } from "./LiveOnboarding";
 // Live Training: everyone sees the courses meant for their role and marks them
 // done; management writes, edits and publishes courses and sees completions.
 const AUDIENCE_LABEL: Record<string, string> = { all: "Everyone", stays: "Stays", cleans: "Cleaners", cleaning_manager: "Cleaning managers", ready: "Ready", accounts: "Accounts", admin: "Admins", client: "Owners" };
+
+const FILE_ICON = { video: "film", picture: "image", PDF: "file-text", document: "file" } as const;
+// A course's files. Everyone the course is for can open them; managers add and remove them.
+function CourseFiles({ p, course, manage, onChanged }: { p: Palette; course: Course; manage?: boolean; onChanged?: () => Promise<void> | void }) {
+  const [busy, setBusy] = useState(""), [error, setError] = useState(""), [playing, setPlaying] = useState<{ id: string; url: string } | null>(null);
+  // Kept here so an upload or removal shows at once while the editor stays open.
+  const [files, setFiles] = useState(course.files);
+  async function open(file: Course["files"][number]) {
+    setBusy(file.id); setError("");
+    try {
+      const link = await courseFileLink(file.id);
+      // Videos play inside the app on the web; everything else opens in the browser or viewer.
+      if (Platform.OS === "web" && link.mime.startsWith("video/")) setPlaying({ id: file.id, url: link.url });
+      else await Linking.openURL(link.url);
+    } catch (e) { setError(message(e)); } finally { setBusy(""); }
+  }
+  async function add() {
+    setError("");
+    const picked = await DocumentPicker.getDocumentAsync({ type: ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/*", "video/*"], copyToCacheDirectory: true, multiple: false });
+    if (picked.canceled || !picked.assets?.length) return;
+    const asset = picked.assets[0];
+    if (asset.size && asset.size > MAX_TRAINING_FILE_BYTES) { setError("Files can be up to 25 MB. For a longer video, put it on YouTube, Vimeo or Loom and add the link instead."); return; }
+    setBusy("upload");
+    try {
+      const result = await uploadCourseFile(course.id, { uri: asset.uri, name: asset.name, mimeType: asset.mimeType ?? undefined, file: (asset as { file?: File }).file });
+      const added = (result as { data?: Course["files"][number] }).data;
+      if (added?.id) setFiles(current => [...current, added]);
+      await onChanged?.();
+    }
+    catch (e) { setError(message(e)); } finally { setBusy(""); }
+  }
+  async function remove(id: string) {
+    setBusy(id); setError("");
+    try { await removeCourseFile(id); setFiles(current => current.filter(f => f.id !== id)); await onChanged?.(); } catch (e) { setError(message(e)); } finally { setBusy(""); }
+  }
+  if (!manage && !files.length) return null;
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{manage ? "Files (documents, pictures, short videos)" : "Course files"}</Text>
+      {files.map(f => (
+        <View key={f.id} style={{ gap: 8 }}>
+          <View style={[ui.row, { gap: 10, padding: 10, borderRadius: 14, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
+            <Feather name={FILE_ICON[fileKind(f.mime)]} size={18} color={p.primary} />
+            <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: p.text, fontWeight: "600" }}>{f.name}</Text><Text style={[ui.small, { color: p.muted }]}>{fileKind(f.mime)} · {fileSize(f.bytes)}</Text></View>
+            <Button label={busy === f.id ? "Opening…" : fileKind(f.mime) === "video" ? "Play" : "Open"} p={p} disabled={!!busy} onPress={() => void open(f)} />
+            {manage && <MotionPress accessibilityRole="button" accessibilityLabel={`Remove ${f.name}`} onPress={() => void remove(f.id)} style={{ padding: 8 }}><Feather name="trash-2" size={18} color={p.danger} /></MotionPress>}
+          </View>
+          {playing?.id === f.id && Platform.OS === "web" && createElement("video", { src: playing.url, controls: true, autoPlay: true, playsInline: true, style: { width: "100%", borderRadius: 14, background: "#000" } })}
+        </View>
+      ))}
+      {manage && files.length < 10 && <Button label={busy === "upload" ? "Uploading…" : "Add a file"} icon="upload" p={p} disabled={!!busy} onPress={() => void add()} />}
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+    </View>
+  );
+}
 
 function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }: { p: Palette; course: Course | null; visible: boolean; onClose: () => void; onDone: () => Promise<void>; onRequiredFailed?: (text: string) => void }) {
   const [title, setTitle] = useState("");
@@ -28,15 +85,25 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
   const [minutes, setMinutes] = useState("10");
   const [published, setPublished] = useState(false);
   const [required, setRequired] = useState(false);
+  const [redo, setRedo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const request = useRequestId(visible ? ["course", course?.id ?? "new", course?.version ?? 0, title, audience.join(","), summary, body, videoUrl, minutes, published].join(":") : null);
+  const [people, setPeople] = useState<StaffOnboarding[]>([]);
+  const request = useRequestId(visible ? ["course", course?.id ?? "new", course?.version ?? 0, title, audience.join(","), summary, body, videoUrl, minutes, published, redo].join(":") : null);
+  // Who the course is for and who has done it (from each team member's training list).
+  useEffect(() => {
+    if (!visible || !course) return;
+    let active = true;
+    void readTeams({ section: "contracts" }).then(r => { if (active) setPeople(contractsSchema.parse(r.data).people); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [visible, course]);
+  const assigned = course ? people.flatMap(x => x.training.filter(t => t.id === course.id).map(t => ({ ...x, completedAt: t.completedAt }))) : [];
   const requiredRequest = useRequestId(visible ? ["required", course?.id ?? "new", required].join(":") : null);
   useEffect(() => {
     queueMicrotask(() => {
       if (!visible) return;
       setTitle(course?.title ?? ""); setAudience(course?.audience ?? ["all"]); setSummary(course?.summary ?? ""); setBody(course?.body ?? "");
-      setVideoUrl(course?.videoUrl ?? ""); setMinutes(String(course?.minutes ?? 10)); setPublished(course?.published ?? false); setRequired(course?.required ?? false); setError("");
+      setVideoUrl(course?.videoUrl ?? ""); setMinutes(String(course?.minutes ?? 10)); setPublished(course?.published ?? false); setRequired(course?.required ?? false); setRedo(false); setError("");
     });
   }, [course, visible]);
   const toggle = (value: string) => setAudience(current => {
@@ -53,7 +120,7 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
     try {
       saved = await writeTeams({
         action: "saveCourse", requestId: request.get(), ...(course ? { courseId: course.id, version: course.version } : {}), title: title.trim(),
-        audience: audience as never, ...(summary.trim() ? { summary: summary.trim() } : {}), body: body.trim(), ...(videoUrl.trim() ? { videoUrl: videoUrl.trim() } : {}), minutes: mins, published,
+        audience: audience as never, ...(summary.trim() ? { summary: summary.trim() } : {}), body: body.trim(), ...(videoUrl.trim() ? { videoUrl: videoUrl.trim() } : {}), minutes: mins, published, ...(course && redo ? { redoRequired: true } : {}),
       });
       request.done();
     } catch (e) { setError(message(e)); setBusy(false); return; }
@@ -90,6 +157,16 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
       <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: required }} onPress={() => setRequired(v => !v)} style={[ui.row, { gap: 12, minHeight: 48 }]}>
         <Feather name={required ? "check-square" : "square"} size={20} color={p.primary} /><Text style={{ color: p.text, flex: 1 }}>Required before they start: new team members finish it before their tools open</Text>
       </MotionPress>
+      {!!course && !!course.completions && <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: redo }} onPress={() => setRedo(v => !v)} style={[ui.row, { gap: 12, minHeight: 48 }]}>
+        <Feather name={redo ? "check-square" : "square"} size={20} color={p.primary} /><Text style={{ color: p.text, flex: 1 }}>Ask everyone who completed it to do it again{required ? " (their tools close until they have)" : ""}</Text>
+      </MotionPress>}
+      {!required && <Text style={[ui.small, { color: p.muted }]}>Only published courses that are required close a new person’s tools. Other courses are optional training they can do any time in Help.</Text>}
+      {course ? <CourseFiles key={course.id} p={p} course={course} manage onChanged={onDone} /> : <Text style={[ui.small, { color: p.muted }]}>Save the course first, then open it again to add documents, pictures or short videos.</Text>}
+      {!!course && course.published && <Section title="Who has done it" count={assigned.filter(x => x.completedAt).length} p={p}>
+        <List p={p} empty="Nobody in this course’s roles yet.">
+          {assigned.map((x, i) => <Row key={x.userId} p={p} first={i === 0} icon={x.completedAt ? "check-circle" : "user"} title={x.fullName || "Team member"} detail={x.completedAt ? `Completed ${new Date(x.completedAt).toLocaleDateString("en-GB")}` : "Not done yet"} tags={[x.completedAt ? ["Done", "good"] : ["To do", "wait"]]} />)}
+        </List>
+      </Section>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : "Save course"} primary p={p} disabled={busy} onPress={() => void save()} />
     </Sheet>
@@ -130,6 +207,7 @@ export function CourseSheet({ p, course, onClose, onCompleted }: { p: Palette; c
         {!!course.summary && <Text style={[ui.body, { color: p.muted }]}>{course.summary}</Text>}
         <Text selectable style={[ui.body, { color: p.text }]}>{course.body}</Text>
         {!!course.videoUrl && <CourseVideo p={p} url={course.videoUrl} onError={setError} />}
+        <CourseFiles key={course.id} p={p} course={course} />
         {course.completedAt ? <Tag label={`Completed ${new Date(course.completedAt).toLocaleDateString("en-GB")}`} tone="good" p={p} /> : <Button label={busy ? "Saving…" : "Mark as complete"} icon="check" primary p={p} disabled={busy} onPress={() => void complete()} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
       </>}
@@ -160,8 +238,8 @@ export function LiveTraining({ palette: p, manage = false }: { palette: Palette;
       <List p={p} empty={manage ? "No courses yet. Add the first one." : "No training has been assigned to you yet."}>
         {/* Drafts are for the people writing them; everyone else sees published courses only. */}
         {courses.filter(c => manage || c.published).map((c, i) => (
-          <Row key={c.id} p={p} first={i === 0} icon={c.completedAt ? "check-circle" : c.videoUrl ? "play-circle" : "book-open"} title={c.title} detail={`${c.minutes} min · ${c.audience.map(a => AUDIENCE_LABEL[a] ?? readableStage(a)).join(", ")}`}
-            tags={[c.completedAt ? ["Completed", "good"] : manage && !c.published ? ["Draft", "plain"] : ["To do", "wait"], ...(c.required ? [["Required", "plain"] as [string, "plain"]] : []), ...(manage && c.completions != null ? [[`${c.completions} completed`, "plain"] as [string, "plain"]] : [])]}
+          <Row key={c.id} p={p} first={i === 0} icon={c.completedAt ? "check-circle" : c.videoUrl ? "play-circle" : "book-open"} title={c.title} detail={`${c.minutes} min · ${c.audience.map(a => AUDIENCE_LABEL[a] ?? readableStage(a)).join(", ")}${c.files.length ? ` · ${c.files.length} file${c.files.length === 1 ? "" : "s"}` : ""}`}
+            tags={[manage ? (c.published ? ["Published", "good"] : ["Draft", "plain"]) : c.completedAt ? ["Completed", "good"] : ["To do", "wait"], ...(c.required ? [["Required", "plain"] as [string, "plain"]] : []), ...(manage && c.completions != null ? [[`${c.completions} completed`, "plain"] as [string, "plain"]] : [])]}
             onPress={() => manage ? setEditing(c) : setOpen(c)} />
         ))}
       </List>

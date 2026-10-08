@@ -64,6 +64,9 @@ const EXACT: Record<string, NoticeCopy> = {
   'routine.plan_saved': copy('Routine visits updated', 'A routine visit plan has been saved.'),
   'training.course_saved': copy('Training updated', 'A training course has been updated.'),
   'onboarding.contract_signed': copy('Staff contract signed', 'A staff contract has been signed.'),
+  'onboarding.completed': copy('Onboarding finished', 'A new team member has signed their contract and finished their training. Their tools are open.'),
+  'onboarding.action_needed': copy('Something to do before you carry on', 'There is a contract to sign or training to finish before your tools open again. Open Recharge to see what it is.'),
+  'training.file_added': copy('Training updated', 'A file has been added to a training course.'),
   'message.sent': copy('New message', 'You have a new message.'),
 };
 const BY_AREA: [string, NoticeCopy][] = [

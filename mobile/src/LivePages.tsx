@@ -11,6 +11,7 @@ import { BuildingGlyph } from "./BuildingGlyph";
 import { EnquiryCard } from "./HomeOverview";
 import { HostawaySyncCard } from "./HostawaySyncCard";
 import { LiveTraining } from "./LiveTraining";
+import { MyContracts } from "./LiveOnboarding";
 import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import { PropertyProfile } from "./LivePropertyProfile";
 import { PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
@@ -416,6 +417,7 @@ export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy
         ))}
       </View>
       <LiveTraining palette={p} />
+      <MyContracts palette={p} account={account} />
       <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={onSignOut} />
     </>
   );

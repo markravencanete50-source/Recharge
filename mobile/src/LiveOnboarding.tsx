@@ -8,10 +8,10 @@ import { GrowBar, MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
-import { List, Row } from "./LiveAccounts";
+import { List, Pills, Row } from "./LiveAccounts";
 import { CourseSheet } from "./LiveTraining";
 import { readTeams, writeTeams } from "./backend/client";
-import { contractsSchema, coursesSchema, onboardingProgress, onboardingSchema, type Contract, type Course, type Onboarding, type StaffOnboarding } from "../../lib/management-live";
+import { contractsSchema, coursesSchema, myContractsSchema, onboardingFor, onboardingProgress, onboardingSchema, ONBOARDED_ROLES, type Contract, type Course, type MyContract, type Onboarding, type StaffOnboarding } from "../../lib/management-live";
 import { CONTRACT_AUDIENCES } from "../../lib/workspace-teams-policy";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
@@ -85,6 +85,9 @@ export function OnboardingGate({ account, palette: p, onSignOut, children }: { a
   const [error, setError] = useState("");
   const [signing, setSigning] = useState<Onboarding["contracts"][number] | null>(null);
   const [reading, setReading] = useState<Course | null>(null);
+  // Whether the checklist was shown this time, so finishing it shows "You're all set" once.
+  const [sawChecklist, setSawChecklist] = useState(false), [welcomed, setWelcomed] = useState(false);
+  useEffect(() => { if (status && status.required && !status.complete && !sawChecklist) queueMicrotask(() => setSawChecklist(true)); }, [status, sawChecklist]);
   const load = useCallback(async () => {
     if (!staff) return;
     setError("");
@@ -111,6 +114,28 @@ export function OnboardingGate({ account, palette: p, onSignOut, children }: { a
   }, [staff, load]);
 
   if (!checked) return <View style={[ui.fill, { backgroundColor: p.background, alignItems: "center", justifyContent: "center" }]}><Loading p={p} /></View>;
+  // The checklist couldn't be read: say so and offer to try again, rather than opening a workspace
+  // whose tools the database still keeps closed.
+  if (staff && !status && error) return (
+    <SafeAreaView style={[ui.fill, { backgroundColor: p.background, alignItems: "center", justifyContent: "center", padding: 24 }]} edges={["top", "bottom"]}>
+      <View style={{ width: "100%", maxWidth: 480, gap: 14 }}>
+        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>We couldn’t load your start-up checklist</Text>
+        <Notice text={error} p={p} tone="bad" />
+        <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}><Button label="Try again" icon="refresh-cw" primary p={p} onPress={() => void load()} /><Button label="Sign out" icon="log-out" p={p} onPress={onSignOut} /></View>
+      </View>
+    </SafeAreaView>
+  );
+  // Just finished: a moment to say so before the tools open.
+  if (staff && status?.complete && sawChecklist && !welcomed) return (
+    <SafeAreaView style={[ui.fill, { backgroundColor: p.background, alignItems: "center", justifyContent: "center", padding: 24 }]} edges={["top", "bottom"]}>
+      <View style={[ui.card, { width: "100%", maxWidth: 520, backgroundColor: p.header, borderColor: p.header, gap: 12, padding: 28, alignItems: "flex-start" }]}>
+        <View style={{ width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: p.success }}><Feather name="check" size={26} color={p.onPrimary} /></View>
+        <Text accessibilityRole="header" style={{ color: p.headerText, fontSize: 26, lineHeight: 32, fontWeight: "700" }}>You’re all set, {account.fullName.split(" ")[0] || "there"}.</Text>
+        <Text style={{ color: p.headerMuted, fontSize: 15, lineHeight: 22 }}>Your contract is signed and your training is done, so your tools are open. Your manager has been told. You can read your contract again any time in Help.</Text>
+        <Button label="Open my tools" icon="arrow-right" primary p={p} onPress={() => setWelcomed(true)} />
+      </View>
+    </SafeAreaView>
+  );
   if (!staff || !status || !status.required || status.complete) return <>{children}</>;
 
   const contractsDone = status.contractsSigned === status.contractsNeeded, coursesDone = status.coursesDone === status.coursesNeeded;
@@ -209,46 +234,155 @@ function ContractEditor({ p, contract, visible, onClose, onDone }: { p: Palette;
   );
 }
 
-// Admins: the staff contracts, who has signed, and how far each team member has got.
+const ROLE_LABEL: Record<string, string> = { stays: "Stays", cleans: "Cleaners", cleaning_manager: "Cleaning managers", ready: "Ready", accounts: "Accounts" };
+
+// How the whole process works, in four steps, for whoever sets it up.
+function HowItWorks({ p }: { p: Palette }) {
+  const steps: [string, string, string][] = [
+    ["file-text", "Write the contracts", "Add the contract each role signs (or one for every team member). Only contracts marked “In use” are asked for."],
+    ["book-open", "Choose the training", "In Training below, publish courses and tick “Required before they start” on the ones new people must finish. Attach documents, pictures or short videos."],
+    ["user-plus", "Add the person", "Access control → Add a person, or approve someone who signed up. Send them their set-password link."],
+    ["unlock", "They complete it, tools open", "When they sign in they see only their checklist: sign, then finish the courses. Their tools open the moment the last step is done, and you’re notified."],
+  ];
+  return (
+    <View style={[ui.card, { backgroundColor: p.wash, borderColor: p.border, gap: 12 }]}>
+      <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>How staff onboarding works</Text>
+      {steps.map(([icon, title, text], i) => (
+        <View key={title} style={[ui.row, { gap: 12, alignItems: "flex-start" }]}>
+          <View style={{ width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: p.primary }}><Text style={{ color: p.onPrimary, fontWeight: "700" }}>{i + 1}</Text></View>
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <View style={[ui.row, { gap: 6 }]}><Feather name={icon as "file-text"} size={14} color={p.primary} /><Text style={{ color: p.text, fontWeight: "700" }}>{title}</Text></View>
+            <Text style={[ui.small, { color: p.muted }]}>{text}</Text>
+          </View>
+        </View>
+      ))}
+      <Text style={[ui.small, { color: p.muted }]}>Admins, super admins and owners never go through this. Moving someone to another role asks for that role’s contract and courses. Editing a contract or course can ask everyone to sign or do it again.</Text>
+    </View>
+  );
+}
+
+// The checklist a new person in a role would see, without signing anything.
+function PreviewSheet({ p, role, contracts, courses, onClose }: { p: Palette; role: string | null; contracts: Contract[]; courses: Course[]; onClose: () => void }) {
+  const [reading, setReading] = useState<Contract | null>(null);
+  const plan = role ? onboardingFor(role, contracts, courses) : null;
+  return (
+    <Sheet palette={p} visible={!!role} onClose={onClose} title={role ? `What a new ${ROLE_LABEL[role] ?? role} sees` : ""} subtitle="A preview: nothing is signed or completed" icon="clipboard">
+      {plan && (plan.nothing ? <Notice text={`Nothing to sign or complete: a new ${ROLE_LABEL[role!] ?? role} goes straight to their tools. Add a contract for this role, or mark a course required, if they should.`} p={p} /> : <>
+        <View style={[ui.card, { backgroundColor: p.header, borderColor: p.header, gap: 6 }]}>
+          <Text style={{ color: p.headerMuted, fontSize: 12, fontWeight: "600", letterSpacing: 0.5 }}>WELCOME TO RECHARGE</Text>
+          <Text style={{ color: p.headerText, fontSize: 20, fontWeight: "700" }}>Hi there, let’s get you started.</Text>
+          <Text style={{ color: p.headerMuted }}>Sign your contract and finish your training, and your tools open straight away.{plan.minutes ? ` The training takes about ${plan.minutes} minutes.` : ""}</Text>
+        </View>
+        {!!plan.contracts.length && <Step p={p} number={1} title="Sign your contract" done={false}>
+          <List p={p} empty="">{plan.contracts.map((c, i) => <Row key={c.id} p={p} first={i === 0} icon="edit-3" title={c.title} detail={`Version ${c.version} · tap to read`} tags={[["To sign", "wait"]]} onPress={() => setReading(c)} />)}</List>
+        </Step>}
+        {!!plan.courses.length && <Step p={p} number={plan.contracts.length ? 2 : 1} title="Complete your training" done={false}>
+          <List p={p} empty="">{plan.courses.map((c, i) => <Row key={c.id} p={p} first={i === 0} icon="play-circle" title={c.title} detail={`${c.minutes} min${c.files.length ? ` · ${c.files.length} file${c.files.length === 1 ? "" : "s"}` : ""}`} tags={[["To do", "wait"]]} />)}</List>
+        </Step>}
+      </>)}
+      {reading && <View style={[ui.card, { backgroundColor: p.background, borderColor: p.border, gap: 8 }]}>
+        <Text style={{ color: p.text, fontWeight: "700" }}>{reading.title}</Text>
+        <Text selectable style={[ui.body, { color: p.text }]}>{reading.body}</Text>
+        <Button label="Close the contract" p={p} onPress={() => setReading(null)} />
+      </View>}
+    </Sheet>
+  );
+}
+
+// One team member's progress: each contract and course, and when they finished.
+function PersonSheet({ p, person, onClose }: { p: Palette; person: StaffOnboarding | null; onClose: () => void }) {
+  const optional = person?.training.filter(c => !c.required) ?? [];
+  return (
+    <Sheet palette={p} visible={!!person} onClose={onClose} title={person?.fullName || "Team member"} subtitle={person ? `${ROLE_LABEL[person.role] ?? person.role} · ${onboardingProgress(person)}` : undefined} icon="people">
+      {person && <>
+        {person.onboardedAt && person.required ? <Notice text={`Finished onboarding on ${when(person.onboardedAt)}. Their tools are open.`} p={p} />
+          : !person.required ? <Notice text="Nothing to sign or complete for their role, so their tools are open." p={p} />
+          : <Notice text="Their tools stay closed until everything below is done. They see this checklist when they sign in." p={p} tone="bad" />}
+        {!!person.contracts.length && <Section title="Contracts" p={p}>
+          <List p={p} empty="">{person.contracts.map((c, i) => <Row key={c.id} p={p} first={i === 0} icon={c.current ? "check-circle" : "edit-3"} title={c.title}
+            detail={c.current ? `Signed ${c.signedAt ? when(c.signedAt) : ""} (version ${c.signedVersion})` : c.signedVersion ? `Signed version ${c.signedVersion}; needs to sign the new wording (version ${c.version})` : "Not signed yet"}
+            tags={[c.current ? ["Signed", "good"] : ["To sign", "wait"]]} />)}</List>
+        </Section>}
+        {!!person.courses.length && <Section title="Required training" p={p}>
+          <List p={p} empty="">{person.courses.map((c, i) => <Row key={c.id} p={p} first={i === 0} icon={c.completedAt ? "check-circle" : "play-circle"} title={c.title}
+            detail={c.completedAt ? `Completed ${when(c.completedAt)}` : "Not completed yet"} tags={[c.completedAt ? ["Done", "good"] : ["To do", "wait"]]} />)}</List>
+        </Section>}
+        {!!optional.length && <Section title="Other training for their role" p={p}>
+          <List p={p} empty="">{optional.map((c, i) => <Row key={c.id} p={p} first={i === 0} icon={c.completedAt ? "check-circle" : "book-open"} title={c.title}
+            detail={c.completedAt ? `Completed ${when(c.completedAt)}` : "Not done (optional)"} tags={[c.completedAt ? ["Done", "good"] : ["Optional", "plain"]]} />)}</List>
+        </Section>}
+      </>}
+    </Sheet>
+  );
+}
+
+// Admins: how it works, what each role is asked for, the contracts, and each person's progress.
 export function StaffContracts({ p }: { p: Palette }) {
   const saved = useSaved();
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [people, setPeople] = useState<StaffOnboarding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Contract | null | "new">(null);
   const [viewing, setViewing] = useState<Contract | null>(null);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const [person, setPerson] = useState<StaffOnboarding | null>(null);
+  const [filter, setFilter] = useState<"todo" | "done" | "all">("todo");
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    try { const data = contractsSchema.parse((await readTeams({ section: "contracts" })).data); setContracts(data.contracts); setPeople(data.people); }
-    catch (e) { setError(message(e)); }
+    try {
+      const [data, training] = await Promise.all([readTeams({ section: "contracts" }), readTeams({ section: "training" })]);
+      const parsed = contractsSchema.parse(data.data); setContracts(parsed.contracts); setPeople(parsed.people); setCourses(coursesSchema.parse(training.data));
+    } catch (e) { setError(message(e)); }
     setLoading(false);
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
-  const waiting = people.filter(x => x.required && !x.complete).length;
+  const waiting = people.filter(x => x.required && !x.complete);
+  const shown = filter === "all" ? people : filter === "todo" ? waiting : people.filter(x => !x.required || x.complete);
+  // Who in the contract's audience hasn't signed its current wording.
+  const unsigned = (c: Contract) => people.filter(x => x.contracts.some(k => k.id === c.id && !k.current));
   return (
     <View style={{ gap: 18 }}>
-      <Section title="Staff contracts" p={p}>
-        <Text style={[ui.small, { color: p.muted }]}>New team members sign these, and finish any course marked “Required”, before their tools open.</Text>
-        {loading && <Loading p={p} />}
-        {!!error && <Notice text={error} p={p} tone="bad" />}
-        <Button label="New contract" icon="plus" p={p} onPress={() => setEditing("new")} />
-        <List p={p} empty="No contracts yet. Add the one new staff sign.">
-          {contracts.map((c, i) => (
-            <Row key={c.id} p={p} first={i === 0} icon="file-text" title={c.title} detail={`${c.audience.map(a => AUDIENCE_LABEL[a] ?? a).join(", ")} · version ${c.version}`}
-              tags={[c.active ? ["In use", "good"] : ["Not in use", "plain"], [`${new Set((c.signatures ?? []).map(s => s.userId)).size} signed`, "plain"]]} onPress={() => setViewing(c)} />
-          ))}
+      <HowItWorks p={p} />
+      {loading && <Loading p={p} />}
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <Section title="What each role is asked for" p={p}>
+        <Text style={[ui.small, { color: p.muted }]}>Tap a role to preview exactly what a new person in it sees.</Text>
+        <List p={p} empty="">
+          {ONBOARDED_ROLES.map((role, i) => {
+            const plan = onboardingFor(role, contracts, courses)!;
+            const detail = plan.nothing ? "Nothing to sign or complete: tools open straight away" : [plan.contracts.map(c => c.title).join(", "), plan.courses.length ? `${plan.courses.length} required course${plan.courses.length === 1 ? "" : "s"} (${plan.minutes} min)` : ""].filter(Boolean).join(" · ");
+            return <Row key={role} p={p} first={i === 0} icon={plan.nothing ? "alert-circle" : "clipboard"} title={ROLE_LABEL[role]} detail={detail}
+              tags={[plan.nothing ? ["Not set up", "wait"] : [`${plan.contracts.length} contract${plan.contracts.length === 1 ? "" : "s"} · ${plan.courses.length} course${plan.courses.length === 1 ? "" : "s"}`, "good"]]} onPress={() => setPreviewing(role)} />;
+          })}
         </List>
       </Section>
-      <Section title="Team onboarding" count={waiting} p={p}>
-        <List p={p} empty="No active team members yet.">
-          {people.map((x, i) => <Row key={x.userId} p={p} first={i === 0} icon={!x.required || x.complete ? "user-check" : "user"} title={x.fullName || "Team member"} detail={AUDIENCE_LABEL[x.role] ?? x.role}
-            tags={[[onboardingProgress(x), !x.required || x.complete ? "good" : "wait"]]} />)}
+      <Section title="Staff contracts" p={p}>
+        <Text style={[ui.small, { color: p.muted }]}>Each one is signed in the app with a typed name; the exact wording and date are kept on record.</Text>
+        <Button label="New contract" icon="plus" p={p} onPress={() => setEditing("new")} />
+        <List p={p} empty="No contracts yet. Add the one new staff sign.">
+          {contracts.map((c, i) => {
+            const current = new Set((c.signatures ?? []).filter(s => s.version === c.version).map(s => s.userId)).size, still = unsigned(c).length;
+            return <Row key={c.id} p={p} first={i === 0} icon="file-text" title={c.title} detail={`${c.audience.map(a => AUDIENCE_LABEL[a] ?? a).join(", ")} · version ${c.version}`}
+              tags={[c.active ? ["In use", "good"] : ["Not in use", "plain"], [`${current} signed this wording`, "plain"], ...(c.active && still ? [[`${still} still to sign`, "wait"] as [string, "wait"]] : [])]} onPress={() => setViewing(c)} />;
+          })}
+        </List>
+      </Section>
+      <Section title="Team onboarding" count={waiting.length} p={p}>
+        <Pills p={p} values={["todo", "done", "all"] as const} value={filter} onChange={setFilter} label={v => ({ todo: `Still to finish${waiting.length ? ` (${waiting.length})` : ""}`, done: "Done", all: "Everyone" })[v]} />
+        <List p={p} empty={filter === "todo" ? "Nobody is waiting to finish onboarding." : "No team members here yet."}>
+          {shown.map((x, i) => <Row key={x.userId} p={p} first={i === 0} icon={!x.required || x.complete ? "user-check" : "user"} title={x.fullName || "Team member"}
+            detail={`${ROLE_LABEL[x.role] ?? x.role}${x.onboardedAt && x.required && x.complete ? ` · finished ${when(x.onboardedAt)}` : ""}`}
+            tags={[[onboardingProgress(x), !x.required || x.complete ? "good" : "wait"]]} onPress={() => setPerson(x)} />)}
         </List>
       </Section>
       <Sheet palette={p} visible={!!viewing} onClose={() => setViewing(null)} title={viewing?.title ?? ""} subtitle={viewing ? `Version ${viewing.version} · ${when(viewing.publishedAt)}` : undefined} icon="clipboard">
         {viewing && <>
           <Button label="Edit contract" icon="edit-3" primary p={p} onPress={() => { const c = viewing; setViewing(null); setEditing(c); }} />
+          {viewing.active && !!unsigned(viewing).length && <Section title="Still to sign this wording" count={unsigned(viewing).length} p={p}>
+            <List p={p} empty="">{unsigned(viewing).map((x, i) => <Row key={x.userId} p={p} first={i === 0} icon="user" title={x.fullName || "Team member"} detail={ROLE_LABEL[x.role] ?? x.role} tags={[["To sign", "wait"]]} />)}</List>
+          </Section>}
           <Section title="Signatures" count={undefined} p={p}>
             <List p={p} empty="Nobody has signed yet.">
               {(viewing.signatures ?? []).map((s, i) => <Row key={s.userId + s.version} p={p} first={i === 0} icon="edit-3" title={s.fullName} detail={`Signed “${s.signedName}” on ${when(s.signedAt)}`}
@@ -258,7 +392,34 @@ export function StaffContracts({ p }: { p: Palette }) {
           <Text selectable style={[ui.body, { color: p.text }]}>{viewing.body}</Text>
         </>}
       </Sheet>
+      <PreviewSheet p={p} role={previewing} contracts={contracts} courses={courses} onClose={() => setPreviewing(null)} />
+      <PersonSheet p={p} person={person} onClose={() => setPerson(null)} />
       <ContractEditor p={p} contract={editing === "new" ? null : editing} visible={editing !== null} onClose={() => setEditing(null)} onDone={saved(load)} />
     </View>
+  );
+}
+
+// Team members (Help): the contracts they have signed, with the exact wording.
+export function MyContracts({ palette: p, account }: { palette: Palette; account: WorkspaceAccount }) {
+  const [items, setItems] = useState<MyContract[] | null>(null);
+  const [open, setOpen] = useState<MyContract | null>(null);
+  const staff = STAFF_ROLES.includes(account.role);
+  useEffect(() => {
+    if (!staff) return;
+    let active = true;
+    void readTeams({ section: "myContracts" }).then(r => { if (active) setItems(myContractsSchema.parse(r.data)); }).catch(() => { if (active) setItems([]); });
+    return () => { active = false; };
+  }, [staff]);
+  if (!staff || !items?.length) return null;
+  return (
+    <Section title="Your contracts" count={items.length} p={p}>
+      <List p={p} empty="">
+        {items.map((c, i) => <Row key={c.contractId + c.version} p={p} first={i === 0} icon="file-text" title={c.title} detail={`Signed “${c.signedName}” on ${when(c.signedAt)} · version ${c.version}`}
+          tags={[c.latest ? ["Current", "good"] : ["Earlier wording", "plain"]]} onPress={() => setOpen(c)} />)}
+      </List>
+      <Sheet palette={p} visible={!!open} onClose={() => setOpen(null)} title={open?.title ?? ""} subtitle={open ? `You signed version ${open.version} on ${when(open.signedAt)}` : undefined} icon="clipboard">
+        {open && <Text selectable style={[ui.body, { color: p.text }]}>{open.body}</Text>}
+      </Sheet>
+    </Section>
   );
 }

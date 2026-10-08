@@ -8,7 +8,8 @@ import { Sheet } from "./TeamFlows";
 import { departmentColor, ui, type Palette } from "./theme";
 import { Anchor, Button, Field, Loading, message, Notice, Section, StatGrid, StatTile, Tag } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
-import { readAdmin, writeAdmin } from "./backend/client";
+import { readAdmin, readTeams, writeAdmin } from "./backend/client";
+import { contractsSchema, coursesSchema, onboardingFor, type Contract, type Course } from "../../lib/management-live";
 import { accessHistorySchema, accessPeopleSchema, accessState, accessSummary, eventLabel, lastSeen, matchesSearch, ROLE_SUMMARY, roleChange, STATE_LABEL, toolGroups, type AccessEvent, type AccessPerson, type AccessState } from "../../lib/access-control";
 import { ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange } from "../../lib/admin-live";
 import { isWorkspaceAdmin, type ModuleId, type WorkspaceRole } from "../../lib/modules";
@@ -222,6 +223,18 @@ function AddPersonSheet({ p, onClose, onDone }: { p: Palette; onClose: () => voi
   const [name, setName] = useState(""), [email, setEmail] = useState(""), [role, setRole] = useState<WorkspaceRole>("stays");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [made, setMade] = useState<{ link: string | null; minutes: number } | null>(null);
   const first = name.trim().split(/\s+/)[0] || "them";
+  // What the chosen role signs and completes before their tools open (Onboarding & training).
+  const [setup, setSetup] = useState<{ contracts: Contract[]; courses: Course[] } | null>(null);
+  useEffect(() => {
+    let active = true;
+    void Promise.all([readTeams({ section: "contracts" }), readTeams({ section: "training" })])
+      .then(([c, t]) => { if (active) setSetup({ contracts: contractsSchema.parse(c.data).contracts, courses: coursesSchema.parse(t.data) }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  const plan = setup ? onboardingFor(role, setup.contracts, setup.courses) : null;
+  const planText = !setup ? "" : !plan ? `${roleLabel(role)}s don’t go through staff onboarding: their tools open as soon as they sign in.`
+    : plan.nothing ? `Nothing is set up for ${roleLabel(role)} yet, so their tools open straight away. Add a contract or required course in Management → Onboarding & training if they should sign or train first.`
+    : `Before their tools open, ${first === "them" ? "they" : first} ${[plan.contracts.length ? `sign ${plan.contracts.map(c => `“${c.title}”`).join(" and ")}` : "", plan.courses.length ? `finish ${plan.courses.length} required course${plan.courses.length === 1 ? "" : "s"} (about ${plan.minutes} min)` : ""].filter(Boolean).join(" and ")}. They see this checklist when they first sign in.`;
   const ready = name.trim().length >= 2 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   async function add() {
     if (busy || !ready) return;
@@ -237,6 +250,7 @@ function AddPersonSheet({ p, onClose, onDone }: { p: Palette; onClose: () => voi
         {made.link ? <LinkCard p={p} name={first} link={made.link} minutes={made.minutes} />
           : <Notice text="The account is ready, but the link couldn’t be made just now. Open their account in the list and choose “Set-password link”." p={p} />}
         <Text style={[ui.small, { color: p.muted }]}>They sign in with {email.trim().toLowerCase()} and the password they choose. You can change their role and tools any time from the list.</Text>
+        {!!planText && <Notice text={planText} p={p} />}
         <Button label="Done" p={p} onPress={onClose} />
       </> : <>
         <Field label="Full name" value={name} onChange={setName} p={p} placeholder="First and last name" />
@@ -258,6 +272,7 @@ function AddPersonSheet({ p, onClose, onDone }: { p: Palette; onClose: () => voi
           })}
         </View>
         <Text style={[ui.small, { color: p.muted }]}>They get the usual tools for this role. You can change them afterwards. No email is sent: you get a link to send them yourself.</Text>
+        {!!planText && <Notice text={planText} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         <Button label={busy ? "Adding…" : "Add and make link"} icon="user-plus" primary p={p} disabled={busy || !ready} onPress={() => void add()} />
       </>}

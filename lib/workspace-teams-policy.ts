@@ -14,7 +14,7 @@ const https = z.string().url().max(1000).refine(value => {
 }, 'Use a public HTTPS link');
 
 export const teamsReadSchema = z.object({
-  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota']),
+  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -41,7 +41,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('generateRoutineVisits'), requestId: id, period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Choose a month') }).strict(),
   z.object({ action: z.literal('saveCourse'), requestId: id, courseId: id.optional(), version: version.optional(), title: text(2, 200),
     audience: z.array(z.enum(['all', 'super_admin', 'admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts', 'client'])).min(1).max(9),
-    summary: z.string().trim().max(1000).optional(), body: text(10, 50000), videoUrl: https.optional(), minutes: z.number().int().min(1).max(600), published: z.boolean() }).strict(),
+    summary: z.string().trim().max(1000).optional(), body: text(10, 50000), videoUrl: https.optional(), minutes: z.number().int().min(1).max(600), published: z.boolean(),
+    // Ask everyone who completed it to do it again (for a real change to the course).
+    redoRequired: z.boolean().optional() }).strict(),
   z.object({ action: z.literal('completeCourse'), requestId: id, courseId: id }).strict(),
   // Staff onboarding: admins write the contracts and choose required courses; team members sign.
   z.object({ action: z.literal('saveContract'), requestId: id, contractId: id.optional(), version: version.optional(), title: text(2, 200),

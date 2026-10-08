@@ -136,6 +136,27 @@ Migration `20261009140000_daily_work_logins_inbox` (applied live).
   `workspace_guest_messages_ingest` with `body`, `guestName`, `reservationRef`, `checkIn`, `checkOut`.
   Visibility: the guest communication tool, per property; unmatched conversations are shared.
 
+## Staff onboarding completed (9 October 2026)
+
+Migration `20261009150000_staff_onboarding_complete` (paste `docs/APPLY-2026-10-09-ONBOARDING.sql`
+in the SQL editor; the database tool refuses it because it contains deletes). See
+`docs/STAFF-ONBOARDING.md` for the process.
+- `private.workspace_onboarding_done` records who has full access. `workspace_onboarding_progress`
+  (after a signature or a completed course) and `workspace_onboarding_refresh` (after an admin
+  changes a contract or a required course) notify admins of `onboarding.completed` and the person of
+  `onboarding.action_needed`.
+- The admin `contracts` read now includes each person's contracts, required courses, all training
+  for their role (`workspace_person_training`) and `onboardedAt`. `myContracts` returns what the
+  person signed.
+- `saveCourse` takes `redoRequired`.
+- Course files: `private.workspace_course_files`, private bucket `training-files` (25 MB; PDF, Word,
+  JPG/PNG/WebP, MP4/MOV/WebM). `lib/training-files-server.ts` (`/api/{mobile,workspace}/training-files`)
+  stores and removes them with the server key. Files are opened through a 10-minute signed link
+  after `workspace_course_file` checks access. File types come from the bytes (`lib/training-files.ts`).
+- UI: `mobile/src/LiveOnboarding.tsx` (guide, role coverage and preview, person sheet, retry and
+  "You're all set" screens, `MyContracts`), `LiveTraining.tsx` (files, redo, who has done it),
+  `LiveAccessControl.tsx` (what the new person's role is asked for).
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

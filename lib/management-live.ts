@@ -31,6 +31,7 @@ export const AUDIENCES = ["all", "stays", "cleans", "cleaning_manager", "ready",
 export const courseSchema = z.object({
   id: z.string().uuid(), title: z.string(), audience: z.array(z.string()), summary: z.string().nullable(), body: z.string(), videoUrl: z.string().nullable(),
   minutes: z.number(), published: z.boolean(), required: z.boolean().default(false), version: z.number(), completedAt: z.string().nullable(), completions: z.number().nullable(),
+  files: z.array(z.object({ id: z.string().uuid(), name: z.string(), mime: z.string(), bytes: z.number() })).default([]),
 });
 export const coursesSchema = z.array(courseSchema);
 export type Course = z.infer<typeof courseSchema>;
@@ -48,13 +49,34 @@ export const contractSchema = z.object({
   signatures: z.array(z.object({ userId: z.string().uuid(), fullName: z.string(), signedName: z.string(), version: z.number(), signedAt: z.string() })).nullable(),
 });
 export type Contract = z.infer<typeof contractSchema>;
-export const staffOnboardingSchema = z.object({ userId: z.string().uuid(), fullName: z.string(), role: z.string(), ...onboardingCounts });
+export const staffOnboardingSchema = z.object({
+  userId: z.string().uuid(), fullName: z.string(), role: z.string(), ...onboardingCounts,
+  contracts: z.array(z.object({ id: z.string().uuid(), title: z.string(), version: z.number(), signedVersion: z.number().nullable(), signedAt: z.string().nullable(), current: z.boolean().nullable() })).default([]),
+  courses: z.array(z.object({ id: z.string().uuid(), title: z.string(), completedAt: z.string().nullable() })).default([]),
+  // Every published course for their role (required or not), and when they finished onboarding.
+  training: z.array(z.object({ id: z.string().uuid(), title: z.string(), required: z.boolean(), completedAt: z.string().nullable() })).default([]),
+  onboardedAt: z.string().nullable().default(null),
+});
 export type StaffOnboarding = z.infer<typeof staffOnboardingSchema>;
 export const contractsSchema = z.object({ contracts: z.array(contractSchema), people: z.array(staffOnboardingSchema) });
+// The contracts a team member has signed, with the exact wording they signed.
+export const myContractsSchema = z.array(z.object({ contractId: z.string().uuid(), title: z.string(), version: z.number(), signedName: z.string(), signedAt: z.string(), body: z.string(), latest: z.boolean() }));
+export type MyContract = z.infer<typeof myContractsSchema>[number];
 // Who still has something to do, in plain words.
 export const onboardingProgress = (s: Pick<Onboarding, "required" | "complete" | "contractsSigned" | "contractsNeeded" | "coursesDone" | "coursesNeeded">) =>
   !s.required ? "Nothing to complete" : s.complete ? "Onboarding complete" :
   [s.contractsNeeded ? `Contract ${s.contractsSigned}/${s.contractsNeeded}` : "", s.coursesNeeded ? `Training ${s.coursesDone}/${s.coursesNeeded}` : ""].filter(Boolean).join(" · ");
+
+// What a new team member in a role must do before their tools open: the contracts in use for
+// their role and the published courses marked required. Admins and owners are never asked.
+export const ONBOARDED_ROLES = ["stays", "cleans", "cleaning_manager", "ready", "accounts"] as const;
+export function onboardingFor<K extends Pick<Contract, "title" | "audience" | "active">, C extends Pick<Course, "id" | "title" | "audience" | "published" | "required" | "minutes">>(role: string, contracts: K[], courses: C[]) {
+  if (!(ONBOARDED_ROLES as readonly string[]).includes(role)) return null;
+  const forRole = (audience: string[]) => audience.includes("all") || audience.includes(role);
+  const sign = contracts.filter(c => c.active && forRole(c.audience));
+  const train = courses.filter(c => c.published && c.required && forRole(c.audience));
+  return { contracts: sign, courses: train, minutes: train.reduce((n, c) => n + c.minutes, 0), nothing: !sign.length && !train.length };
+}
 
 // The reservation as returned by recordReservation (a database row).
 export const recordedReservationSchema = z.object({
