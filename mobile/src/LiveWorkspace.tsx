@@ -50,6 +50,7 @@ import type { HomeToolTarget } from "../../lib/home-tools";
 import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 import { WorkPhotos } from "./Photos";
+import { NotificationsSetting, refreshNotificationLink } from "./Notifications";
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
@@ -143,6 +144,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
     return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
   }, []);
 
+  useEffect(() => { void refreshNotificationLink(); }, [account.userId]);
   const lastRefresh = useRef(0), editing = useRef(false);
   // A super admin can change someone's role or tools while they are signed in. Every read carries
   // the current account, so the app switches to the new role's Home, Work and tools on the next refresh.
@@ -403,6 +405,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
           </View>
         </View>
         <View style={{ gap: 8 }}>
+          {Platform.OS === "web" && <>
+            <Text style={{ color: p.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>Notifications</Text>
+            <View style={{ borderRadius: 20, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}><NotificationsSetting p={p} /></View>
+          </>}
           <Text style={{ color: p.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>Comfort</Text>
           <View style={{ borderRadius: 20, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
             <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>

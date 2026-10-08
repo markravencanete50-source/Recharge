@@ -17,7 +17,7 @@ const endpoints = new Set([
   "/api/workspace/finance", "/api/mobile/finance",
   "/api/workspace/teams", "/api/mobile/teams",
   "/api/workspace/admin", "/api/mobile/admin",
-  "/api/hostaway/webhook", "/api/workspace/account",
+  "/api/hostaway/webhook", "/api/workspace/account", "/api/workspace/notifications",
   "/workspace", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);
 // The app's browser build is served from /workspace/ (scripts/build-workspace-web.mjs).

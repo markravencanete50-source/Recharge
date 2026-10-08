@@ -148,3 +148,7 @@ export async function photoSource(assetId: string): Promise<{ uri: string; heade
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return { uri: liveApiOrigin() + path, headers: { Authorization: `Bearer ${session!.accessToken}`, 'X-Recharge-Client': 'native' } };
 }
+
+// Browser notifications (web push): Recharge's public key, and adding or removing this browser.
+export const readNotificationKey = async () => z.object({ publicKey: z.string().nullable() }).parse(await (await call('/api/workspace/notifications')).json()).publicKey;
+export const writeNotifications = async (body: { action: 'subscribe'; endpoint: string; p256dh: string; auth: string } | { action: 'unsubscribe'; endpoint: string }) => (await call('/api/workspace/notifications', body)).json();

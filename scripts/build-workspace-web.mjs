@@ -43,4 +43,10 @@ if (!existsSync(`${root}dist/client`)) throw new Error("Run the main build first
 await rm(target, { recursive: true, force: true });
 await cp(out, target, { recursive: true });
 if (!existsSync(`${target}/index.html`)) throw new Error("The app's web build has no index.html.");
+// Installable app and notifications: the manifest, home-screen icons and the service worker
+// (mobile/web-static), linked from the page so phones can add Recharge to the home screen.
+await cp(`${mobile}/web-static`, target, { recursive: true });
+const page = await readFile(`${target}/index.html`, "utf8");
+const install = '<link rel="manifest" href="/workspace/manifest.webmanifest"><link rel="apple-touch-icon" href="/workspace/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Recharge"><meta name="apple-mobile-web-app-status-bar-style" content="default">';
+if (!page.includes('rel="manifest"')) await writeFile(`${target}/index.html`, page.replace("</head>", install + "</head>"));
 console.log("Built the workspace app for the web: dist/client/workspace");

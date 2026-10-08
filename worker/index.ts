@@ -37,9 +37,14 @@ interface ExecutionContext {
 // const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
 
 const worker = {
-  async scheduled(_controller: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
-    // Every 15 minutes (scripts/build-backend-config.mjs). Each job only runs once configured.
+  async scheduled(controller: { cron?: string }, env: Env, ctx: ExecutionContext): Promise<void> {
     if (env.BACKEND_ONLY !== 'true') return;
+    // Every minute: notices go out to the browsers and phones that allowed notifications.
+    ctx.waitUntil(import('../lib/web-push-server').then(module => module.runWebPush()).catch(() => {
+      console.error('Web push batch failed; the next run retries.');
+    }));
+    // The rest runs every 15 minutes (scripts/build-backend-config.mjs). Each job only runs once configured.
+    if (controller.cron && controller.cron !== '*/15 * * * *') return;
     // Off unless switched on: Recharge starts as a new business and Hostaway is being replaced.
     if (env.HOSTAWAY_ACCOUNT_ID && env.HOSTAWAY_API_KEY && env.HOSTAWAY_SYNC_ENABLED === 'true') {
       ctx.waitUntil(import('../lib/hostaway-sync').then(module => module.runHostawaySync('schedule')).catch(() => {
