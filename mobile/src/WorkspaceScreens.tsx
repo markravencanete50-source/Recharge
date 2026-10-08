@@ -1139,7 +1139,7 @@ export function WorkspaceScreens({
                           "maintenance",
                           "purchase-order",
                           "licensing",
-                          "external-calculator",
+                          "calculator",
                         ].includes(WORKSPACE_MAP[tool.id].service),
                       )
                       .map((tool) => (

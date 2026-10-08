@@ -152,7 +152,7 @@ export const MODULES = [
     category: "Property onboarding",
     tone: "bg-[#f0ebff] text-[#65519c]",
     defaultRoles: ["admin", "team", "client"],
-    url: "https://recharge-client-furnishing.enquiries422321.chatgpt.site",
+    url: null,
   },
   {
     id: "safety-maintenance",

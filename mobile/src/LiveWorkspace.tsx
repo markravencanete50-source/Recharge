@@ -32,7 +32,7 @@ import { LiveManagement } from "./LiveManagement";
 import { LiveStays } from "./LiveStays";
 import { LiveOwner } from "./LiveOwner";
 import { OnboardingGate } from "./LiveOnboarding";
-import { MailboxSection } from "./LiveTools";
+import { FurnishingCard, MailboxSection } from "./LiveTools";
 import { workViewsFor, type WorkView } from "../../lib/tool-directory";
 import { liveApiOrigin, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -209,6 +209,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       {currentView === "stays" && <LiveStays palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} />}
       {currentView === "owner" && <LiveOwner palette={p} properties={properties} />}
       {currentView === "owner" && account.modules.includes("client-mailbox") && <MailboxSection palette={p} />}
+      {currentView === "owner" && account.modules.includes("client-furnishing") && <FurnishingCard palette={p} />}
       {currentView === "cleans" && <LiveCleans palette={p} account={account} properties={properties} />}
       {currentView === "repairs" && <LiveRepairs palette={p} account={account} properties={properties} />}
       {currentView === "accounts" && <LiveAccounts palette={p} account={account} properties={properties} />}

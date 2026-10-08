@@ -46,7 +46,7 @@
       "service": "external-calculator",
       "routes": [],
       "nativeStatus": "Preview navigation and read-only detail; live edit flow requires service validation",
-      "externalReference": "https://recharge-client-furnishing.enquiries422321.chatgpt.site"
+      "externalReference": null
     },
     {
       "id": "safety-maintenance",

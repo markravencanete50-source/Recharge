@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
-import * as Linking from "expo-linking";
 import { z } from "zod";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
+import { FurnishingSheet } from "./LiveFurnishing";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
@@ -20,21 +20,21 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 export function ToolDirectory({ palette: p, account, properties, onOpen }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpen: (tab: "home" | "work" | "properties" | "analytics", view?: WorkView) => void }) {
   const tools = toolsFor(account.role, account.modules);
   const [tracker, setTracker] = useState<Tool | null>(null);
-  const [error, setError] = useState("");
+  const [calculator, setCalculator] = useState(false);
   const open = (t: Tool) => {
     if (t.place.kind === "work") onOpen("work", t.place.view);
     else if (t.place.kind === "tab") onOpen(t.place.tab);
     else if (t.place.kind === "tracker") setTracker(t);
-    else void Linking.openURL(t.place.url).catch(() => setError("The link could not be opened."));
+    else setCalculator(true);
   };
   return (
     <Section title="Your tools" count={undefined} p={p}>
       <Text style={[ui.small, { color: p.muted }]}>Every tool on your account and where to find it.</Text>
-      {!!error && <Notice text={error} p={p} tone="bad" />}
       <List p={p} empty="No tools are on your account yet. Ask an administrator.">
         {tools.map((t, i) => <Row key={t.id} p={p} first={i === 0} title={t.name} detail={t.place.where} onPress={() => open(t)} />)}
       </List>
       <TrackerSheet palette={p} tool={tracker} properties={properties} onClose={() => setTracker(null)} />
+      <FurnishingSheet palette={p} visible={calculator} onClose={() => setCalculator(false)} />
     </Section>
   );
 }
@@ -105,6 +105,19 @@ function TrackerSheet({ palette: p, tool, properties, onClose }: { palette: Pale
         ))}
       </List>
     </Sheet>
+  );
+}
+
+// Owners: the furnishing calculator, one tap from their stays and statements.
+export function FurnishingCard({ palette: p }: { palette: Palette }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 10 }]}>
+      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Furnishing your property yourself?</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Enter the layout and get the full quantity list for every room, ready to copy or download.</Text>
+      <Button label="Open the furnishing calculator" icon="arrow-right" primary p={p} onPress={() => setOpen(true)} />
+      <FurnishingSheet palette={p} visible={open} onClose={() => setOpen(false)} />
+    </View>
   );
 }
 

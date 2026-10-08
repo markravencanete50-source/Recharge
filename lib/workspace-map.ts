@@ -8,7 +8,7 @@ type Destination = { area: string; tone: DepartmentTone; icon: string; service: 
 export const WORKSPACE_MAP: Record<ModuleId, Destination> = {
   "daily-pricing": { area: "Stays reporting", tone: "stays", icon: "trending-up", service: "operations" },
   "listing-health": { area: "Stays reporting", tone: "stays", icon: "check-square", service: "operations" },
-  "client-furnishing": { area: "Property setup", tone: "clients", icon: "layout", service: "external-calculator" },
+  "client-furnishing": { area: "Property setup", tone: "clients", icon: "layout", service: "calculator" },
   "safety-maintenance": { area: "Ready operations", tone: "ready", icon: "shield", service: "operations" },
   "purchase-order": { area: "Ready operations", tone: "ready", icon: "shopping-bag", service: "purchase-order" },
   "purchase-order-requests": { area: "Stays operations", tone: "stays", icon: "send", service: "purchase-order" },

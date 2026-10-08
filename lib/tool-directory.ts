@@ -6,7 +6,7 @@ export type ToolPlace =
   | { kind: 'work'; view: WorkView; where: string }
   | { kind: 'tab'; tab: 'home' | 'properties' | 'analytics'; where: string }
   | { kind: 'tracker'; where: string }
-  | { kind: 'link'; url: string; where: string };
+  | { kind: 'calculator'; where: string };
 
 // The Work views each role can open, the first being the default.
 export function workViewsFor(role: string): WorkView[] {
@@ -48,7 +48,7 @@ const PLACES: Record<ModuleId, ToolPlace> = {
   'purchase-order-requests': work('all', 'Properties → a property → Request a property purchase; progress in All work'),
   'client-purchase-order-quotes': work('all', 'Work → All work (purchase requests)'),
   'property-furnishing-board': work('all', 'Work → All work (furnishing quotes)'),
-  'client-furnishing': { kind: 'link', url: '', where: 'Opens the furnishing calculator' },
+  'client-furnishing': { kind: 'calculator', where: 'Opens the furnishing calculator in the app' },
   'owner-statements': work('accounts', 'Work → Accounts → Statements'),
   'maintenance-reconciliation': work('accounts', 'Work → Accounts → Expenses'),
   'onboarding-invoices': work('all', 'Work → All work (onboarding invoices); payments in Reports'),
@@ -67,9 +67,8 @@ export function toolsFor(role: string, modules: readonly string[]): Tool[] {
   const views = workViewsFor(role);
   return MODULES.filter(m => modules.includes(m.id)).map(m => {
     let place = PLACES[m.id as ModuleId];
-    if (m.id === 'client-furnishing') place = { kind: 'link', url: m.url ?? '', where: place.where };
     if (place.kind === 'work' && !views.includes(place.view)) place = role === 'client' && place.view !== 'all' ? work('owner', 'Work → Stays and statements') : work('all', 'Work → All work');
     if (m.id === 'guest-communication' && role !== 'admin' && role !== 'super_admin') place = { kind: 'tab', tab: 'home', where: 'Home → your shift card (guest reply times)' };
     return { id: m.id as ModuleId, name: m.name, description: m.description, place };
-  }).filter(t => t.place.kind !== 'link' || t.place.url);
+  });
 }

@@ -24,6 +24,6 @@ test('every default tool of every role has a place the role can open', () => {
 test('team roles all have All work, and admins can open the Stays screens', () => {
   for (const role of ['stays', 'cleans', 'cleaning_manager', 'ready', 'accounts', 'admin']) assert.ok(workViewsFor(role).includes('all'), role);
   assert.ok(workViewsFor('admin').includes('stays'));
-  assert.deepEqual(toolsFor('client', ['client-furnishing']).map(t => t.place.kind), ['link']);
+  assert.deepEqual(toolsFor('client', ['client-furnishing']).map(t => t.place.kind), ['calculator'], 'the calculator runs inside the app');
   assert.deepEqual(toolsFor('stays', ['aircover-reporting']).map(t => t.place.kind), ['tracker']);
 });
