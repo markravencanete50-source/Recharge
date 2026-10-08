@@ -13,6 +13,7 @@ import { LiveTraining } from "./LiveTraining";
 import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import { PropertyProfile } from "./LivePropertyProfile";
 import { EstimateExplorer } from "./LiveEstimate";
+import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
 import { readEstimate } from "../../lib/estimate-projection";
 import type { BudgetItem } from "../../lib/accounts-work";
 import type { WorkView } from "../../lib/tool-directory";
@@ -166,10 +167,12 @@ function JourneyDetails({ j, p, account, onForm, work }: { j: JourneyView; p: Pa
       {j.estimate && !readEstimate(j.estimate) && <View style={{ gap: 6 }}><Text style={{ color: p.text, fontWeight: "700" }}>Your estimate</Text>{[["Low nightly rate", "lowRateMinor"], ["Expected nightly rate", "mediumRateMinor"], ["High nightly rate", "highRateMinor"]].map(([label, key]) => <Text key={key} style={{ color: p.text }}>{label}: {money(j.estimate?.[key])}</Text>)}</View>}
       {j.estimate && typeof j.estimate.comments === "string" && !!j.estimate.comments.trim() && <View style={{ gap: 4 }}><Text style={{ color: p.text, fontWeight: "700" }}>{account.role === "client" ? "Notes from Recharge" : "Estimate notes"}</Text><Text style={[ui.body, { color: p.muted }]}>{j.estimate.comments}</Text></View>}
       {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
+      {j.estimate && account.role === "client" && ["estimate", "reviewing"].includes(j.stage) && <EstimateGuide palette={p} />}
       {!!comparables.length && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Comparable properties</Text>{comparables.map(c => <SoftButton key={c.url} label={c.name + " · " + money(c.adrMinor) + " a night"} icon="external-link" palette={p} onPress={() => void Linking.openURL(c.url).catch(() => setLinkError("The comparable link could not be opened."))} />)}{!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}</View>}
       {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{j.agreement}</Text>{j.signedName && <Text style={{ color: p.success }}>Accepted by {j.signedName}.</Text>}</View>}
-      {j.inspectionReport && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Inspection findings</Text><Text selectable style={[ui.body, { color: p.text }]}>{j.inspectionReport}</Text></View>}
-      {journeyForms(account, j).map(f => <SoftButton key={f.key} label={f.title} icon="arrow-right" palette={p} onPress={() => onForm(f)} />)}
+      {j.inspectionReport && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Inspection findings</Text><InspectionResult palette={p} j={j} /><Text selectable style={[ui.body, { color: p.text }]}>{j.inspectionReport}</Text></View>}
+      <JourneyQuestions palette={p} j={j} owner={account.role === "client"} />
+      {journeyForms(account, j).map(f => <SoftButton key={f.key} label={f.title} icon={f.key === "askQuestion" ? "plus" : "arrow-right"} palette={p} onPress={() => onForm(f)} />)}
       {!!linked.length && <Text style={[ui.small, { color: p.muted }]}>{linked.length} connected team {linked.length === 1 ? "handover" : "handovers"}</Text>}
     </View>
   );

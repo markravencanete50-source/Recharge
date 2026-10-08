@@ -6,7 +6,7 @@ Property Onboarding, Remainder of Stays), checked against the live app code and 
 
 Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outside service · ❌ not built
 
-**Totals (76 asks):** ✅ 36 · 🟡 23 · ⏸ 10 · ❌ 7
+**Totals (76 asks):** ✅ 41 · 🟡 18 · ⏸ 10 · ❌ 7
 
 ## 1. Communication Centre
 
@@ -49,12 +49,12 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | O2 | Shows in the client's properties with the full journey stage by stage | ✅ | Updates when the app refreshes. |
 | O3 | Team writes the estimate (e.g. 110 / 120 / 130 a night) with comparables and publishes it | ✅ | |
 | O4 | Email and app notification at every stage (WhatsApp a bonus) | 🟡 | In-app notices at every stage. Email ready but waiting on the Resend key (and the wording is generic). Phone push needs the app to register devices. No WhatsApp. |
-| O5 | Estimate page explains the service, extra services and the onboarding process | 🟡 | Shows rates, notes and next step. No service or add-on explainer. |
+| O5 | Estimate page explains the service, extra services and the onboarding process | ✅ | Alongside the estimate: "What Recharge does", "Extra services" and "How onboarding works". The wording lives in one file (lib/onboarding-content.ts) for Recharge to fine-tune. |
 | O6 | Client can change the occupancy level and see the estimate change | ✅ | "Explore your estimate" on the estimate: pick a quieter / expected / strong year and an occupancy, and earnings update as you go. Same sums as the team's estimate model. |
 | O7 | Client can toggle direct bookings vs Airbnb bookings | ✅ | "Booked direct" control: platform fees fall and the saving is spelled out. Shown once the team publishes the platform and management fees with the estimate. |
 | O8 | Links to the comparables | ✅ | |
-| O9 | Approve and proceed / need more time (team check-in) / won't proceed (archived both sides) / ask questions | 🟡 | All three decisions work; "need more time" puts a check-in on the team's Home. Questions can only be sent alongside a decision. |
-| O10 | FAQ section on the estimate | 🟡 | FAQs are on the Help page and written for staff. None on the estimate page. |
+| O9 | Approve and proceed / need more time (team check-in) / won't proceed (archived both sides) / ask questions | ✅ | Approve and proceed / I need more time (with a check-in date) / I won't proceed (archived both sides). "Ask Recharge a question" works at any stage; the team is told and answers on the same page. |
+| O10 | FAQ section on the estimate | ✅ | "Questions owners ask" on the estimate page, written for owners (estimate, more time, repairs, payouts, post). |
 | O11 | Sign the management agreement electronically, stored both sides | ✅ | Typed-name signature with consent and agreement version. No PDF copy. |
 | O12 | Onboarding form: access information | ✅ | Stored privately; staff see it under "Access and logins". |
 | O13 | Recharge mailbox choice (open and photograph post, or leave it safe); cleaners' post photos go to the client's mailbox | 🟡 | Choice saved; cleaners log post with a note and it shows in the owner's Mailbox. No post photos yet (needs Cloudinary and a mailbox photo step). |
@@ -68,8 +68,8 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | O21 | Once signed → Accounts ticket to send the onboarding invoice | ✅ | Sending itself is manual until Xero/email are connected. |
 | O22 | Invoice marked settled → ticked on client and team side | ✅ | The property page lists each invoice with a "Settled" tick for the client and the team. |
 | O23 | Access dates → Ready "new property inspection" ticket | ✅ | Ticket created automatically; the first access date shows on the property page. |
-| O24 | Ready books the inspection and fills in a detailed report | 🟡 | Booking and the report now open straight from the inspection ticket. The report is one free-text box (no checklist or photos). |
-| O25 | Ready notified straight away when something is needed | 🟡 | In-app only, and only staff assigned to that property. New enquiries aren't auto-assigned to Ready. |
+| O24 | Ready books the inspection and fills in a detailed report | ✅ | Ready book the inspection and file it with a checklist (keys, alarms, heating, appliances, Wi-Fi, damage, furnishing, safety items, guest-ready), issues found and the report. Inspection photos will need Cloudinary. |
+| O25 | Ready notified straight away when something is needed | ✅ | Stays with the onboarding tool are put on every new enquiry and Ready on every new inspection, so they are notified in the app straight away. Phone push needs Expo. |
 | O26 | Whole onboarding automated, client always updated | 🟡 | Stages, tickets and in-app notices are automatic. Emails and push not yet going out; some steps are manual. |
 
 ## 4. Remainder of Stays
@@ -108,7 +108,6 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 
 - C5/C6: departments and fixed shift windows per person.
 - D4, D5, D7, D8: stage pipeline, per-client view, Scottish region list and map, portfolio stats. (D1 and D3 done.)
-- O5, O9, O10, O17, O24, O25: explainer and FAQ, questions, repair contacts on repair screens, inspection checklist, auto-assignment.
 - Bug fixes: done (OTA logins panel, client invoices, inspection ticket steps, Ready's purchase delivery ticket).
 
 ## Waiting on an outside service

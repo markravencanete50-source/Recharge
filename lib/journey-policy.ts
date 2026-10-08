@@ -22,7 +22,9 @@ export const journeyActionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('submitForm'),...base,form:onboardingFormSchema}).strict(),
  z.object({action:z.literal('linkInvoice'),...base,invoiceId:id}).strict(),
  z.object({action:z.literal('bookInspection'),...base,inspectionOn:date}).strict(),
- z.object({action:z.literal('completeInspection'),...base,report:text(5000).min(10)}).strict(),
+ z.object({action:z.literal('completeInspection'),...base,report:text(5000).min(10),checks:z.record(z.enum(['keysAccess','alarms','heatingHotWater','appliances','wifi','damage','furnishing','safetyItems','guestReady']),z.boolean()).optional(),issues:text(3000).optional()}).strict(),
+ z.object({action:z.literal('askQuestion'),...base,question:text(2000).min(5)}).strict(),
+ z.object({action:z.literal('answerQuestion'),...base,questionId:id,answer:text(2000).min(2)}).strict(),
  z.object({action:z.literal('makeLive'),...base,listingLinks:z.array(z.object({platform:z.enum(['Airbnb','Booking.com','Direct','Comfy Workers']),url:https}).strict()).min(1).max(10)}).strict(),
 ]);
 export type JourneyAction=z.infer<typeof journeyActionSchema>;

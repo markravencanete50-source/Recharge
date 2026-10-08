@@ -84,7 +84,9 @@ test('unpaid invoice blocks inspection; real settlement advances both owner and 
  await assert.rejects(action({action:'completeInspection',propertyId:journey.propertyId,version:future.version,report:'Test future inspection report.'}),/date has not arrived/);await db.exec('rollback');
  journey=await action({action:'bookInspection',propertyId:journey.propertyId,version:journey.version,inspectionOn:(await db.query('select current_date::text d')).rows[0].d});assert.equal(journey.inspectionCompletedAt,null);
  await db.exec('reset role');const booked=await db.query("select w.id,d.data from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.property_id=$1 and d.kind='inspection'",[journey.propertyId]);assert.equal(booked.rows.length,1);assert.equal(booked.rows[0].id,inspection.rows[0].id);assert.equal(booked.rows[0].data.phase,'booked');await as(0);
- journey=await action({action:'completeInspection',propertyId:journey.propertyId,version:journey.version,report:'Actual test inspection report with required findings.'});assert.equal(journey.stage,'inspection_complete');
+ await assert.rejects(action({action:'completeInspection',propertyId:journey.propertyId,version:journey.version,report:'Checklist with an unknown item.',checks:{boilerRoom:true}}),/Invalid inspection checklist/);
+ journey=await action({action:'completeInspection',propertyId:journey.propertyId,version:journey.version,report:'Actual test inspection report with required findings.',checks:{keysAccess:true,alarms:true,wifi:false},issues:'Router missing'});assert.equal(journey.stage,'inspection_complete');
+ assert.deepEqual(journey.inspectionChecks,{checks:{keysAccess:true,alarms:true,wifi:false},issues:'Router missing'});
 });
 test('live listing requires completed connected handovers and never invents listing links',async()=>{
  await as(0);await assert.rejects(action({action:'makeLive',propertyId:journey.propertyId,version:journey.version,listingLinks:[{platform:'Airbnb',url:'https://www.airbnb.com/rooms/test-only'}]}),/handovers|licen/i);
