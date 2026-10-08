@@ -12,6 +12,8 @@ import { HostawaySyncCard } from "./HostawaySyncCard";
 import { LiveTraining } from "./LiveTraining";
 import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import { PropertyProfile } from "./LivePropertyProfile";
+import { EstimateExplorer } from "./LiveEstimate";
+import { readEstimate } from "../../lib/estimate-projection";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
 import { formatCount, formatMoney } from "../../lib/format";
@@ -106,7 +108,7 @@ function Field({ field: f, value, onChange, p, disabled }: { field: WorkflowFiel
           </MotionPress>
         ))}</View>
       ) : (
-        <TextInput accessibilityLabel={f.label} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
+        <TextInput accessibilityLabel={f.label} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
           style={{ borderWidth: 1, borderRadius: 14, padding: 13, minHeight: f.type === "textarea" ? 110 : 50, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: p.background, color: p.text, borderColor: p.controlBorder, textAlignVertical: "top" }} />
       )}
       {f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}
@@ -156,11 +158,13 @@ function JourneyDetails({ j, p, account, onForm, work }: { j: JourneyView; p: Pa
       <View style={{ gap: 8 }}>{progress.steps.map(step => (
         <View key={step.label} style={[ui.row, { gap: 10 }]}>
           <Feather name={step.state === "complete" ? "check-circle" : step.state === "current" ? "arrow-right-circle" : "circle"} size={18} color={step.state === "complete" ? p.success : step.state === "current" ? p.primary : p.muted} />
-          <Text style={{ color: step.state === "pending" ? p.muted : p.text, fontWeight: step.state === "current" ? "600" : "400" }}>{step.label}{step.state === "current" ? " · " + readableStage(j.stage) : ""}</Text>
+          <Text style={{ color: step.state === "pending" ? p.muted : p.text, fontWeight: step.state === "current" ? "600" : "400" }}>{step.label}{step.state === "current" && readableStage(j.stage) !== step.label ? " · " + readableStage(j.stage) : ""}</Text>
         </View>
       ))}</View>
       <Text style={[ui.body, { color: p.muted }]}>{progress.next}</Text>
-      {j.estimate && <View style={{ gap: 6 }}><Text style={{ color: p.text, fontWeight: "700" }}>Your estimate</Text>{[["Low nightly rate", "lowRateMinor"], ["Expected nightly rate", "mediumRateMinor"], ["High nightly rate", "highRateMinor"]].map(([label, key]) => <Text key={key} style={{ color: p.text }}>{label}: {money(j.estimate?.[key])}</Text>)}{typeof j.estimate.comments === "string" && <Text style={[ui.body, { color: p.muted }]}>{j.estimate.comments}</Text>}</View>}
+      {j.estimate && !readEstimate(j.estimate) && <View style={{ gap: 6 }}><Text style={{ color: p.text, fontWeight: "700" }}>Your estimate</Text>{[["Low nightly rate", "lowRateMinor"], ["Expected nightly rate", "mediumRateMinor"], ["High nightly rate", "highRateMinor"]].map(([label, key]) => <Text key={key} style={{ color: p.text }}>{label}: {money(j.estimate?.[key])}</Text>)}</View>}
+      {j.estimate && typeof j.estimate.comments === "string" && !!j.estimate.comments.trim() && <View style={{ gap: 4 }}><Text style={{ color: p.text, fontWeight: "700" }}>{account.role === "client" ? "Notes from Recharge" : "Estimate notes"}</Text><Text style={[ui.body, { color: p.muted }]}>{j.estimate.comments}</Text></View>}
+      {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
       {!!comparables.length && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Comparable properties</Text>{comparables.map(c => <SoftButton key={c.url} label={c.name + " · " + money(c.adrMinor) + " a night"} icon="external-link" palette={p} onPress={() => void Linking.openURL(c.url).catch(() => setLinkError("The comparable link could not be opened."))} />)}{!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}</View>}
       {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{j.agreement}</Text>{j.signedName && <Text style={{ color: p.success }}>Accepted by {j.signedName}.</Text>}</View>}
       {j.inspectionReport && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Inspection findings</Text><Text selectable style={[ui.body, { color: p.text }]}>{j.inspectionReport}</Text></View>}

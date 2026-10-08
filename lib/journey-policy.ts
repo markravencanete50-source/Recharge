@@ -15,7 +15,7 @@ export const onboardingFormSchema=z.object({
 });
 export const journeyActionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('createEnquiry'),requestId:id,clientId:id.optional(),name:text(200).min(2),address:text(1000).min(5),region:text(200).default(''),propertyType:text(120).min(2),bedrooms:z.number().int().min(0).max(40),bathrooms:z.number().int().min(0).max(40)}).strict(),
- z.object({action:z.literal('publishEstimate'),...base,lowRateMinor:money.min(100),mediumRateMinor:money.min(100),highRateMinor:money.min(100),comparables:z.array(z.object({name:text(160).min(1),url:https,adrMinor:money}).strict()).max(3),comments:text(5000).default('')}).strict(),
+ z.object({action:z.literal('publishEstimate'),...base,lowRateMinor:money.min(100),mediumRateMinor:money.min(100),highRateMinor:money.min(100),comparables:z.array(z.object({name:text(160).min(1),url:https,adrMinor:money}).strict()).max(3),comments:text(5000).default(''),occupancyBps:z.number().int().min(0).max(10000).optional(),directBookingBps:z.number().int().min(0).max(10000).optional(),otaFeeBps:z.number().int().min(0).max(10000).optional(),managementFeeBps:z.number().int().min(0).max(10000).optional()}).strict(),
  z.object({action:z.literal('decideEstimate'),...base,decision:z.enum(['proceed','review','decline']),feedback:text(5000).default(''),followUpOn:date.nullable().optional()}).strict(),
  z.object({action:z.literal('publishAgreement'),...base,agreement:text(10000).min(20)}).strict(),
  z.object({action:z.literal('signAgreement'),...base,agreementRevision:z.number().int().positive(),signedName:text(200).min(2),consent:z.literal(true)}).strict(),

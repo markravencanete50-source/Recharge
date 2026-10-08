@@ -41,6 +41,17 @@ test('estimate and owner decision require correct actor and version',async()=>{
  await assert.rejects(action({action:'decideEstimate',propertyId:journey.propertyId,version:1,decision:'proceed'}),/changed/);
  journey=await action({action:'decideEstimate',propertyId:journey.propertyId,version:journey.version,decision:'proceed'});assert.equal(journey.stage,'agreement');
 });
+test('a published estimate can carry the team assumptions the owner explores',async()=>{
+ await as(1);let explored=await action({action:'createEnquiry',name:'Explorer flat',address:'Example explorer address',propertyType:'Flat',bedrooms:2,bathrooms:1});
+ const base={action:'publishEstimate',propertyId:explored.propertyId,lowRateMinor:9000,mediumRateMinor:11000,highRateMinor:14000,comparables:[]};
+ await as(0);
+ for(const bad of [{occupancyBps:10001},{otaFeeBps:'15'},{managementFeeBps:12.5},{directBookingBps:-1}])await assert.rejects(action({...base,version:explored.version,...bad}),/Invalid estimate assumptions/,JSON.stringify(bad));
+ await assert.rejects(action({...base,version:explored.version,cleaningFeeMinor:5000}),/./,'unknown keys are refused');
+ explored=await action({...base,version:explored.version,occupancyBps:7000,directBookingBps:1000,otaFeeBps:1500,managementFeeBps:1800});
+ await as(1);const seen=(await read(explored.propertyId))[0].estimate;
+ assert.deepEqual([seen.occupancyBps,seen.directBookingBps,seen.otaFeeBps,seen.managementFeeBps],[7000,1000,1500,1800]);
+ assert.equal(seen.mediumRateMinor,11000);
+});
 test('owner decline archives the shared property and enquiry in both views',async()=>{
  await as(1);let archived=await action({action:'createEnquiry',name:'Declined property',address:'Example declined address',propertyType:'Flat',bedrooms:1,bathrooms:1});
  await as(0);archived=await action({action:'publishEstimate',propertyId:archived.propertyId,version:archived.version,lowRateMinor:10000,mediumRateMinor:12000,highRateMinor:15000,comparables:[]});

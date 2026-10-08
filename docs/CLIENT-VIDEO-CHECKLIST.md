@@ -6,7 +6,7 @@ Property Onboarding, Remainder of Stays), checked against the live app code and 
 
 Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outside service · ❌ not built
 
-**Totals (76 asks):** ✅ 23 · 🟡 35 · ⏸ 8 · ❌ 10
+**Totals (76 asks):** ✅ 25 · 🟡 35 · ⏸ 8 · ❌ 8
 
 ## 1. Communication Centre
 
@@ -50,8 +50,8 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | O3 | Team writes the estimate (e.g. 110 / 120 / 130 a night) with comparables and publishes it | ✅ | |
 | O4 | Email and app notification at every stage (WhatsApp a bonus) | 🟡 | In-app notices at every stage. Email ready but waiting on the Resend key (and the wording is generic). Phone push needs the app to register devices. No WhatsApp. |
 | O5 | Estimate page explains the service, extra services and the onboarding process | 🟡 | Shows rates, notes and next step. No service or add-on explainer. |
-| O6 | Client can change the occupancy level and see the estimate change | ❌ | The calculation exists in the database but no screen uses it, and clients aren't allowed to call it. |
-| O7 | Client can toggle direct bookings vs Airbnb bookings | ❌ | As O6. |
+| O6 | Client can change the occupancy level and see the estimate change | ✅ | "Explore your estimate" on the estimate: pick a quieter / expected / strong year and an occupancy, and earnings update as you go. Same sums as the team's estimate model. |
+| O7 | Client can toggle direct bookings vs Airbnb bookings | ✅ | "Booked direct" control: platform fees fall and the saving is spelled out. Shown once the team publishes the platform and management fees with the estimate. |
 | O8 | Links to the comparables | ✅ | |
 | O9 | Approve and proceed / need more time (team check-in) / won't proceed (archived both sides) / ask questions | 🟡 | All three decisions work; "need more time" puts a check-in on the team's Home. Questions can only be sent alongside a decision. |
 | O10 | FAQ section on the estimate | 🟡 | FAQs are on the Help page and written for staff. None on the estimate page. |
@@ -108,7 +108,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 
 - C5/C6: departments and fixed shift windows per person.
 - D4, D5, D7, D8: stage pipeline, per-client view, Scottish region list and map, portfolio stats. (D1 and D3 done.)
-- O5, O6, O7, O9, O10, O17, O24, O25: interactive estimate, explainer and FAQ, questions, repair contacts on repair screens, inspection checklist, auto-assignment.
+- O5, O9, O10, O17, O24, O25: explainer and FAQ, questions, repair contacts on repair screens, inspection checklist, auto-assignment.
 - S2–S7, S11, S13, S14, S16, S18, S19, S22, S24, S26, S27: per-review tagging, daily sign-off, licensing stages, direct-booking "no" outcome, repair types, urgent flag, notifications, running cleaner invoice, purchase fixes.
 - Bug fixes: done (OTA logins panel, client invoices, inspection ticket steps, Ready's purchase delivery ticket).
 
