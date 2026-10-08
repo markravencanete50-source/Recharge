@@ -42,9 +42,9 @@ const BY_ROLE: Record<string, Candidate[]> = {
     PROPERTIES,
   ],
   stays: [
+    tool('inbox', 'Guest inbox', 'Guests waiting for a reply', 'chat', work('stays', { sub: 'inbox' }), ['guest-communication']),
     tool('checks', 'Daily checks', 'Listings live and reviewed', 'clipboard', work('stays', { section: 'Daily checks' }), ['listing-health']),
     tool('pricing', 'Pricing', 'Empty nights this week', 'tag', work('stays', { section: 'Day by day' }), ['daily-pricing']),
-    tool('relistings', 'Re-listings', 'To start and under way', 'relist', work('stays', { section: 'Re-listings' }), ['listing-health']),
     tool('signoff', 'Today’s sign-off', 'Close the day', 'signature', work('stays', { anchor: 'stays-signoff' }), ['listing-health']),
     tool('repairs', 'Repairs', 'Report and chase repairs', 'toolbox', work('repairs'), ['stays-maintenance-reporting', 'maintenance-reporting']),
     tool('cleans', 'Cleans', 'Cleans at your properties', 'spray', work('cleans'), ['cleaning-schedule', 'clean-reporting']),

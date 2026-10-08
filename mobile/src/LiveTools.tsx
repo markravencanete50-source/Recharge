@@ -16,6 +16,7 @@ import { MODULE_ART } from "../../lib/home-tools";
 import type { ModuleId } from "../../lib/modules";
 import type { PropertyView } from "../../lib/workspace-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { HOLDER_LABEL, storedOtaAccountsSchema } from "../../lib/ota-accounts";
 import { PhotoStrip } from "./Photos";
 
 // Every tool a person holds, and where it lives in the live app.
@@ -150,6 +151,26 @@ export function MailboxSection({ palette: p }: { palette: Palette }) {
   );
 }
 
+// Each platform's login: the account, who holds it, where the password is kept, who gets the code.
+function OtaAccountsList({ p, value }: { p: Palette; value: unknown }) {
+  const accounts = storedOtaAccountsSchema.parse(value ?? []);
+  if (!accounts.length) return null;
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>Platform logins</Text>
+      {accounts.map((a, i) => (
+        <View key={i} style={{ gap: 3, padding: 10, borderRadius: 12, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
+          <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}><Text style={{ color: p.text, fontWeight: "700" }}>{a.platform}</Text><Tag label={HOLDER_LABEL[a.holder]} tone="plain" p={p} /></View>
+          {!!a.login && <Text selectable style={[ui.small, { color: p.text }]}>Login: {a.login}</Text>}
+          {!!a.passwordWhere && <Text style={[ui.small, { color: p.text }]}>Password kept in: {a.passwordWhere}</Text>}
+          {!!a.twoFactor && <Text style={[ui.small, { color: p.text }]}>Security code goes to: {a.twoFactor}</Text>}
+          {!!a.notes && <Text style={[ui.small, { color: p.muted }]}>{a.notes}</Text>}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // Staff with the property database or OTA logins tools: entry details and platform logins.
 export function PropertyAccess({ palette: p, account, propertyId }: { palette: Palette; account: WorkspaceAccount; propertyId: string }) {
   // Entry instructions, platform logins and finance are separate sections, each with its own permission.
@@ -179,10 +200,11 @@ export function PropertyAccess({ palette: p, account, propertyId }: { palette: P
       {!details && !error && <Loading p={p} />}
       {details && <>
         {line("Access instructions", details.accessInstructions)}
-        {line("Platform logins and notes", details.otaInstructions)}
+        <OtaAccountsList p={p} value={details.otaAccounts} />
+        {line(Array.isArray(details.otaAccounts) && details.otaAccounts.length ? "Other login notes" : "Platform logins and notes", details.otaInstructions)}
         {typeof details.managementFeeBps === "number" && <Tag label={`Management fee ${(details.managementFeeBps / 100).toFixed(1)}%`} tone="plain" p={p} />}
         {line("Payment notes", details.paymentNotes)}
-        {!["accessInstructions", "otaInstructions", "paymentNotes"].some(k => typeof details[k] === "string" && String(details[k]).trim()) && typeof details.managementFeeBps !== "number" && <Text style={[ui.small, { color: p.muted }]}>Nothing recorded yet. Admins add these in Management → Properties.</Text>}
+        {!(Array.isArray(details.otaAccounts) && details.otaAccounts.length) && !["accessInstructions", "otaInstructions", "paymentNotes"].some(k => typeof details[k] === "string" && String(details[k]).trim()) && typeof details.managementFeeBps !== "number" && <Text style={[ui.small, { color: p.muted }]}>Nothing recorded yet. Admins add these in Management → Properties.</Text>}
       </>}
     </View>
   );

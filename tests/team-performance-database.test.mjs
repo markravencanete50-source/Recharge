@@ -92,6 +92,8 @@ test('guest replies are graded and credited to whoever was on guest relations', 
   const report = teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today));
   const anna = report.people.find(x => x.fullName === 'Anna'), ben = report.people.find(x => x.fullName === 'Ben');
   assert.deepEqual([anna.green, anna.amber, anna.red, anna.percentGreen, anna.onTrack, anna.bonusTier], [2, 1, 0, 66, false, null]);
+  // By default daily work counts for 40%: Anna worked one Stays day and did none of it, so 66% × 0.6.
+  assert.deepEqual([report.targets.workWeight, anna.daysWorked, anna.workPercent, anna.score], [40, 1, 0, 40]);
   assert.deepEqual([ben.green, ben.amber, ben.red, ben.onTrack], [0, 0, 1, false]);
   assert.deepEqual(report.unassigned, { green: 1, amber: 0, red: 0 });
   assert.equal(anna.shifts, 2);
@@ -99,10 +101,35 @@ test('guest replies are graded and credited to whoever was on guest relations', 
   assert.deepEqual(report.onShift.map(s => s.fullName), ['Ben']);
   assert.equal(report.people.some(x => x.fullName === 'Owner'), false);
 
-  // Looser targets put Anna on track and into the first bonus tier.
-  await act({ action: 'saveTargets', version: report.targets.version, greenMinutes: 8, amberMinutes: 15, passPercent: 90, bonusPercents: [95, 100] });
+  // Looser targets, with reply times alone counting, put Anna on track and into the top bonus tier.
+  await act({ action: 'saveTargets', version: report.targets.version, greenMinutes: 8, amberMinutes: 15, passPercent: 90, bonusPercents: [95, 100], workWeight: 0 });
   const looser = teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today)).people.find(x => x.fullName === 'Anna');
-  assert.deepEqual([looser.green, looser.percentGreen, looser.onTrack, looser.bonusTier], [3, 100, true, 100]);
+  assert.deepEqual([looser.green, looser.percentGreen, looser.score, looser.onTrack, looser.bonusTier], [3, 100, 100, true, 100]);
+  // Daily work at half weight: a sign-off and 2 listing checks against 1 sign-off + 2 checks a day
+  // (pricing and reviews not expected) is 100% daily work, so Anna stays at the top tier.
+  await db.exec('reset role');
+  await db.query("insert into private.workspace_daily_signoffs(user_id,day,confirmations,snapshot) values($1,$2::date,'{}','{}')", [users[ANNA], (await db.query("select (($1::timestamptz) at time zone 'Europe/London')::date::text d", [ago(120)])).rows[0].d]);
+  const prop = (await db.query("insert into public.workspace_properties(name,created_by,request_id) values('Score House',$1,gen_random_uuid()) returning id", [users[ADMIN]])).rows[0].id;
+  for (let i = 0; i < 2; i++) {
+    const w = (await db.query("insert into public.workspace_work_items(request_id,property_id,module_id,title,created_by) values(gen_random_uuid(),$1,'listing-health','Check',$2) returning id", [prop, users[ANNA]])).rows[0].id;
+    await db.query("insert into private.workspace_domain_details(work_id,kind,data) values($1,'listing_health','{}')", [w]);
+  }
+  await as(ADMIN);
+  const v2 = teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today)).targets.version;
+  await act({ action: 'saveTargets', version: v2, greenMinutes: 8, amberMinutes: 15, passPercent: 90, bonusPercents: [95, 100], workWeight: 50,
+    dailyTargets: { signOffs: 1, listingChecks: 2, pricingDecisions: 0, reviewsLogged: 0 } });
+  let blended = teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today));
+  let a2 = blended.people.find(x => x.fullName === 'Anna');
+  assert.deepEqual([blended.targets.workWeight, blended.targets.dailyTargets.listingChecks, a2.daysWorked, a2.workPercent, a2.score, a2.bonusTier], [50, 2, 1, 100, 100, 100]);
+  // Expecting 4 listing checks a day halves that part: (100 + 50) ÷ 2 = 75% daily work, 87% overall: below the pass mark.
+  await act({ action: 'saveTargets', version: blended.targets.version, greenMinutes: 8, amberMinutes: 15, passPercent: 90, bonusPercents: [95, 100], workWeight: 50,
+    dailyTargets: { signOffs: 1, listingChecks: 4, pricingDecisions: 0, reviewsLogged: 0 } });
+  a2 = teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today)).people.find(x => x.fullName === 'Anna');
+  assert.deepEqual([a2.workPercent, a2.score, a2.onTrack, a2.bonusTier], [75, 87, false, null]);
+  assert.throws(() => teamsActionSchema.parse({ action: 'saveTargets', requestId: crypto.randomUUID(), version: 1, greenMinutes: 8, amberMinutes: 15, passPercent: 90, bonusPercents: [], workWeight: 101 }));
+  await assert.rejects(rpc('workspace_teams_action', [{ action: 'saveTargets', requestId: crypto.randomUUID(), version: 99, greenMinutes: 8, amberMinutes: 15, passPercent: 90, bonusPercents: [], dailyTargets: { coffee: 1 } }]), /Daily targets/);
+  const latest = teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today)).targets.version;
+  await act({ action: 'saveTargets', version: latest, greenMinutes: 8, amberMinutes: 15, passPercent: 90, bonusPercents: [95, 100], workWeight: 0 });
   await assert.rejects(act({ action: 'saveTargets', version: report.targets.version, greenMinutes: 5, amberMinutes: 10, passPercent: 90, bonusPercents: [95, 100] }), /Targets changed/);
 
   // Team members see only their own line; admins close a forgotten shift.

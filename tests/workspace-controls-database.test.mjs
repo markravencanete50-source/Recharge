@@ -44,7 +44,7 @@ test('OTA permission is independent of property access; entry updates preserve O
   await assert.rejects(rpc('workspace_property_details',[property,'ota']),/OTA access denied/);
   await as(2);assert.deepEqual(await rpc('workspace_property_details',[property,'access']),{accessInstructions:'Private entry notes'});
   await assert.rejects(rpc('workspace_property_details',[property,'ota']),/OTA access denied/);
-  await as(0);assert.deepEqual(await rpc('workspace_property_details',[property,'ota']),{otaInstructions:'Private OTA notes'});
+  await as(0);assert.deepEqual(await rpc('workspace_property_details',[property,'ota']),{otaInstructions:'Private OTA notes',otaAccounts:[]});
   await assert.rejects(rpc('workspace_save_property_details',[property,3,'access',{accessInstructions:'Entry',otaInstructions:'Injected'}]),/Unknown.*input/);
 });
 

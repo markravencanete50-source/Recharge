@@ -92,11 +92,13 @@ export const rotaSchema = z.object({ department: z.string(), usualShift: z.enum(
 export const rotaListSchema = z.array(z.object({ userId: z.string().uuid(), fullName: z.string(), role: z.string(), department: z.string().nullable(), usualShift: z.enum(["early", "late", "both"]).nullable() }));
 export const myShiftSchema = z.object({ open: shiftSchema.nullable(), today: z.array(shiftSchema), green: z.number(), responses: z.number(), passPercent: z.number(), rota: rotaSchema.nullable().optional() });
 export const teamPerformanceSchema = z.object({
-  targets: z.object({ greenMinutes: z.number(), amberMinutes: z.number(), passPercent: z.number(), bonusPercents: z.array(z.number()), version: z.number() }),
+  targets: z.object({ greenMinutes: z.number(), amberMinutes: z.number(), passPercent: z.number(), bonusPercents: z.array(z.number()), version: z.number(),
+    workWeight: z.number().default(0), dailyTargets: z.object({ signOffs: z.number(), listingChecks: z.number(), pricingDecisions: z.number(), reviewsLogged: z.number() }).default({ signOffs: 1, listingChecks: 1, pricingDecisions: 1, reviewsLogged: 0 }) }),
   onShift: z.array(shiftSchema), messages: z.number(),
   unassigned: z.object({ green: z.number(), amber: z.number(), red: z.number() }),
   people: z.array(z.object({ userId: z.string().uuid(), fullName: z.string(), role: z.string(), shifts: z.number(), minutes: z.number(), green: z.number(), amber: z.number(), red: z.number(),
-    percentGreen: z.number().nullable(), onTrack: z.boolean().nullable(), bonusTier: z.number().nullable(), listingChecks: z.number(), pricingDecisions: z.number(), signOffs: z.number().default(0), reviewsLogged: z.number().default(0), department: z.string().nullable().optional(), usualShift: z.enum(["early", "late", "both"]).nullable().optional() })),
+    percentGreen: z.number().nullable(), onTrack: z.boolean().nullable(), bonusTier: z.number().nullable(), listingChecks: z.number(), pricingDecisions: z.number(), signOffs: z.number().default(0), reviewsLogged: z.number().default(0),
+    daysWorked: z.number().nullable().default(null), workPercent: z.number().nullable().default(null), score: z.number().nullable().default(null), department: z.string().nullable().optional(), usualShift: z.enum(["early", "late", "both"]).nullable().optional() })),
 });
 export type TeamPerformance = z.infer<typeof teamPerformanceSchema>;
 // The Stays end-of-day sign-off: today's picture, the person's own sign-off, and (for admins) the

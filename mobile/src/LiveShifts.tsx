@@ -11,7 +11,7 @@ import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } f
 import { List, Pills, Row } from "./LiveAccounts";
 import { readChat, readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, rotaListSchema, SHIFTS, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
-import { DEPARTMENTS } from "../../lib/workspace-teams-policy";
+import { DAILY_WORK, DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { formatCount, formatDay, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
@@ -73,28 +73,44 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
   );
 }
 
+type DailyKey = keyof typeof DAILY_WORK;
+const DAILY_KEYS = Object.keys(DAILY_WORK) as DailyKey[];
 function TargetsSheet({ p, targets, visible, onClose, onDone }: { p: Palette; targets: TeamPerformance["targets"]; visible: boolean; onClose: () => void; onDone: () => Promise<void> }) {
   const [green, setGreen] = useState(String(targets.greenMinutes));
   const [amber, setAmber] = useState(String(targets.amberMinutes));
   const [pass, setPass] = useState(String(targets.passPercent));
   const [bonus, setBonus] = useState(targets.bonusPercents.join(", "));
+  const [weight, setWeight] = useState(String(targets.workWeight));
+  const [daily, setDaily] = useState<Record<DailyKey, string>>(() => Object.fromEntries(DAILY_KEYS.map(k => [k, String(targets.dailyTargets[k])])) as Record<DailyKey, string>);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const request = useRequestId(visible ? ["targets", targets.version, green, amber, pass, bonus].join(":") : null);
+  const request = useRequestId(visible ? ["targets", targets.version, green, amber, pass, bonus, weight, ...DAILY_KEYS.map(k => daily[k])].join(":") : null);
   async function save() {
     const tiers = bonus.split(",").map(x => x.trim()).filter(Boolean).map(Number);
-    const [g, a, s] = [Number(green), Number(amber), Number(pass)];
-    if (![g, a, s, ...tiers].every(Number.isInteger) || g < 1 || a <= g || s < 1 || s > 100 || tiers.some(t => t < 1 || t > 100) || tiers.length > 5) { setError("Use whole numbers: amber must be longer than green, and percentages between 1 and 100."); return; }
+    const [g, a, s, w] = [Number(green), Number(amber), Number(pass), Number(weight)];
+    const perDay = DAILY_KEYS.map(k => Number(daily[k]));
+    if (![g, a, s, w, ...tiers].every(Number.isInteger) || g < 1 || a <= g || s < 1 || s > 100 || w < 0 || w > 100 || tiers.some(t => t < 1 || t > 100) || tiers.length > 5) { setError("Use whole numbers: amber must be longer than green, and percentages between 0 and 100."); return; }
+    if (!perDay.every(n => Number.isInteger(n) && n >= 0 && n <= 99)) { setError("Daily targets are whole numbers from 0 to 99."); return; }
     setBusy(true); setError("");
-    try { await writeTeams({ action: "saveTargets", requestId: request.get(), version: targets.version, greenMinutes: g, amberMinutes: a, passPercent: s, bonusPercents: tiers }); request.done(); onClose(); await onDone(); }
-    catch (e) { setError(message(e)); } finally { setBusy(false); }
+    try {
+      await writeTeams({ action: "saveTargets", requestId: request.get(), version: targets.version, greenMinutes: g, amberMinutes: a, passPercent: s, bonusPercents: tiers,
+        workWeight: w, dailyTargets: Object.fromEntries(DAILY_KEYS.map((k, i) => [k, perDay[i]])) as Record<DailyKey, number> });
+      request.done(); onClose(); await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
-    <Sheet palette={p} visible={visible} onClose={onClose} title="Reply targets" subtitle="How guest relations replies are graded" icon="hourglass">
+    <Sheet palette={p} visible={visible} onClose={onClose} title="Targets and bonuses" subtitle="How replies and daily work are scored" icon="hourglass">
+      <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Guest replies</Text>
       <Field label="Green: reply within (minutes)" value={green} onChange={setGreen} p={p} />
       <Field label="Amber: reply within (minutes)" value={amber} onChange={setAmber} p={p} />
-      <Field label="On track: replies in green (%)" value={pass} onChange={setPass} p={p} />
-      <Field label="Bonus tiers (%, comma separated)" value={bonus} onChange={setBonus} p={p} placeholder="95, 100" />
+      <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Daily work, on each Stays shift day</Text>
+      <Text style={[ui.small, { color: p.muted }]}>What each person should do on a day they work guest or client relations. 0 means it isn’t expected. Doing more than the target still counts as 100%.</Text>
+      {DAILY_KEYS.map(k => <Field key={k} label={`${DAILY_WORK[k]} per day`} value={daily[k]} onChange={v => setDaily({ ...daily, [k]: v })} p={p} />)}
+      <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Score</Text>
+      <Field label="Daily work counts for (% of the score)" value={weight} onChange={setWeight} p={p} placeholder="40" />
+      <Text style={[ui.small, { color: p.muted }]}>The rest is replies in green. With {Number(weight) || 0}% daily work, someone with 90% green replies and 100% daily work scores {Math.floor(90 * (100 - (Number(weight) || 0)) / 100 + (Number(weight) || 0))}%.</Text>
+      <Field label="On track: score of at least (%)" value={pass} onChange={setPass} p={p} />
+      <Field label="Bonus tiers (score %, comma separated)" value={bonus} onChange={setBonus} p={p} placeholder="95, 100" />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : "Save targets"} primary p={p} disabled={busy} onPress={() => void save()} />
     </Sheet>
@@ -187,19 +203,26 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
               tags={[[shiftName(s.clockedInAt), "plain"]]} onPress={() => setClosing(s)} />)}
           </List>
         </Section>
-        <Section title="Guest reply times" p={p}>
+        <Section title="Scores and bonuses" p={p}>
           <Text style={[ui.small, { color: p.muted }]}>
-            Green within {t.greenMinutes} min, amber within {t.amberMinutes} min, red after that. {t.passPercent}% green is on track{t.bonusPercents.length ? `; ${t.bonusPercents.join("% and ")}% unlock the bonus tiers` : ""}. Each guest message counts for whoever was clocked in to guest relations.
+            Replies: green within {t.greenMinutes} min, amber within {t.amberMinutes} min, red after that, credited to whoever was clocked in to guest relations.
+            {t.workWeight > 0 ? ` Daily work counts for ${t.workWeight}% of the score: ${DAILY_KEYS.filter(k => t.dailyTargets[k] > 0).map(k => `${t.dailyTargets[k]} ${DAILY_WORK[k].toLowerCase()}`).join(", ") || "nothing yet"} on each Stays shift day.` : " Only reply times count."}
+            {` A score of ${t.passPercent}% is on track${t.bonusPercents.length ? `; ${t.bonusPercents.join("% and ")}% unlock the bonus tiers` : ""}.`}
           </Text>
-          {!data.messages && <Notice text="No guest messages yet. Reply times appear once guest messages arrive from the channel manager." p={p} />}
+          {!data.messages && <Notice text="No guest messages yet. Log them in Stays → Guest inbox, or they arrive by themselves once the channel manager is connected." p={p} />}
           <Button label="Change the targets" icon="sliders" p={p} onPress={() => setTargets(true)} />
           <List p={p} empty="No team members yet.">
             {data.people.map((x, i) => {
               const total = x.green + x.amber + x.red;
-              const tags: [string, "good" | "wait" | "bad" | "plain"][] = total ? [[`${x.percentGreen}% green`, x.onTrack ? "good" : "bad"], [x.onTrack ? "On track" : "Off track", x.onTrack ? "good" : "bad"]] : [["No replies yet", "plain"]];
+              const tags: [string, "good" | "wait" | "bad" | "plain"][] = x.score !== null ? [[`Score ${x.score}%`, x.onTrack ? "good" : "bad"], [x.onTrack ? "On track" : "Off track", x.onTrack ? "good" : "bad"]] : [["Nothing to score yet", "plain"]];
               if (x.bonusTier) tags.push([`Bonus tier ${x.bonusTier}%`, "good"]);
-              return <Row key={x.userId} p={p} first={i === 0} icon={x.onTrack ? "trending-up" : total ? "trending-down" : "user"} tone="stays" title={x.fullName || "Team member"}
-                detail={`${total ? `${formatCount(x.green)} green · ${formatCount(x.amber)} amber · ${formatCount(x.red)} red · ` : ""}${hoursLabel(x.minutes)} over ${plural(x.shifts, "shift")} · ${plural(x.listingChecks, "listing check")} · ${plural(x.reviewsLogged, "review")} · ${plural(x.pricingDecisions, "pricing decision")} · ${plural(x.signOffs, "daily sign-off")}`} tags={tags} />;
+              const parts = [
+                total ? `Replies ${x.percentGreen}% green (${formatCount(x.green)} green, ${formatCount(x.amber)} amber, ${formatCount(x.red)} red)` : "",
+                x.workPercent !== null ? `Daily work ${x.workPercent}% over ${plural(x.daysWorked ?? 0, "Stays day")}` : "",
+                `${hoursLabel(x.minutes)} over ${plural(x.shifts, "shift")}`,
+                `${plural(x.listingChecks, "listing check")}, ${plural(x.reviewsLogged, "review")}, ${plural(x.pricingDecisions, "pricing decision")}, ${plural(x.signOffs, "daily sign-off")}`,
+              ].filter(Boolean);
+              return <Row key={x.userId} p={p} first={i === 0} icon={x.onTrack ? "trending-up" : x.score !== null ? "trending-down" : "user"} tone="stays" title={x.fullName || "Team member"} detail={parts.join(" · ")} tags={tags} />;
             })}
           </List>
           {data.unassigned.green + data.unassigned.amber + data.unassigned.red > 0 && <Notice p={p} tone="bad"

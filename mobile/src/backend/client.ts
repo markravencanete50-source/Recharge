@@ -9,6 +9,7 @@ import type { FinanceAction } from '../../../lib/workspace-finance-policy';
 import type { TeamsAction } from '../../../lib/workspace-teams-policy';
 import type { AdminAction } from '../../../lib/workspace-admin-policy';
 import type { ChatAction } from '../../../lib/workspace-chat-policy';
+import type { InboxAction } from '../../../lib/guest-inbox-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
@@ -109,7 +110,7 @@ export async function accountStep(body: Record<string, unknown>, accessToken?: s
   return z.record(z.unknown()).parse(await (await call("/api/mobile/account", body, accessToken)).json());
 }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (sameOriginWeb) return call(webWorkspacePath(path), body);
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
@@ -165,3 +166,5 @@ export const writeNotifications = async (body: { action: 'subscribe'; endpoint: 
 // Messages: conversations, a conversation's messages, people to message, and sending.
 export const readChat = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/chat?' + new URLSearchParams(query))).json();
 export const writeChat = async (action: ChatAction) => (await workspaceRequest('/api/mobile/chat', action)).json();
+export const readInbox = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/guest-inbox?' + new URLSearchParams(query))).json();
+export const writeInbox = async (action: InboxAction) => (await workspaceRequest('/api/mobile/guest-inbox', action)).json();

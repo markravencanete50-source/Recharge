@@ -14,6 +14,7 @@ import { readAdmin, workspaceRequest, writeAdmin, writeWorkspace, WorkspaceApiEr
 import { adminPropertiesSchema, assignmentFor, canEdit, detailSchemas, peopleSchema, ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange, type AdminProperty, type Person } from "../../lib/admin-live";
 import { isWorkspaceAdmin, type ModuleId, type WorkspaceRole } from "../../lib/modules";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { blankOtaAccount, HOLDER_LABEL, looksLikePassword, OTA_PLATFORMS, type OtaAccount } from "../../lib/ota-accounts";
 
 // Live administration: approve and manage people, and create, edit and staff
 // properties. Admins only; the database enforces the role hierarchy.
@@ -134,7 +135,32 @@ function PersonSheet({ p, actorRole, person, properties, onClose, onDone }: { p:
   );
 }
 
-type Details = { access: string; ota: string; paymentNotes: string; feeBps: number | null };
+type Details = { access: string; ota: string; accounts: OtaAccount[]; paymentNotes: string; feeBps: number | null };
+
+// One row per platform: which account, who holds it, where the password is kept, who gets the code.
+function OtaAccountsEditor({ p, accounts, onChange }: { p: Palette; accounts: OtaAccount[]; onChange: (next: OtaAccount[]) => void }) {
+  const set = (i: number, patch: Partial<OtaAccount>) => onChange(accounts.map((a, j) => j === i ? { ...a, ...patch } : a));
+  const unused = OTA_PLATFORMS.find(x => !accounts.some(a => a.platform === x)) ?? "Other";
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Platform logins</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Never type a password here. Say where it’s kept (for example “1Password, Stays vault”) and who gets the security code.</Text>
+      {accounts.map((a, i) => (
+        <View key={i} style={{ gap: 8, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
+          <Pills p={p} values={OTA_PLATFORMS} value={(OTA_PLATFORMS as readonly string[]).includes(a.platform) ? a.platform as (typeof OTA_PLATFORMS)[number] : "Other"} onChange={v => set(i, { platform: v })} label={v => v} />
+          <Pills p={p} values={["recharge", "owner"] as const} value={a.holder} onChange={v => set(i, { holder: v })} label={v => HOLDER_LABEL[v]} />
+          <Field label="Login (email or username)" value={a.login} onChange={v => set(i, { login: v })} p={p} email />
+          <Field label="Password kept in" value={a.passwordWhere} onChange={v => set(i, { passwordWhere: v })} p={p} placeholder="1Password, Stays vault" />
+          <Field label="Security code goes to" value={a.twoFactor} onChange={v => set(i, { twoFactor: v })} p={p} placeholder="Owner’s mobile ending 4821" />
+          <Field label="Notes" value={a.notes} onChange={v => set(i, { notes: v })} p={p} multiline />
+          {[a.login, a.passwordWhere, a.twoFactor, a.notes].some(looksLikePassword) && <Notice text="That looks like a password. Remove it and say where it’s kept instead." p={p} tone="bad" />}
+          <Button label="Remove this login" icon="trash-2" p={p} onPress={() => onChange(accounts.filter((_, j) => j !== i))} />
+        </View>
+      ))}
+      {accounts.length < 20 && <Button label="Add a platform login" icon="plus" p={p} onPress={() => onChange([...accounts, blankOtaAccount(unused)])} />}
+    </View>
+  );
+}
 function PropertySheet({ p, property, creating, people, onClose, onDone }: { p: Palette; property: AdminProperty | null; creating: boolean; people: Person[]; onClose: () => void; onDone: () => Promise<void> }) {
   // The parent remounts this sheet per property, so edits survive list reloads.
   const [name, setName] = useState(property?.name ?? "");
@@ -157,7 +183,7 @@ function PropertySheet({ p, property, creating, people, onClose, onDone }: { p: 
       .then(([access, ota, finance]) => {
         if (!active) return;
         const a = detailSchemas.access.parse(access), o = detailSchemas.ota.parse(ota), f = detailSchemas.finance.parse(finance);
-        const loaded = { access: a.accessInstructions ?? "", ota: o.otaInstructions ?? "", paymentNotes: f.paymentNotes ?? "", feeBps: f.managementFeeBps ?? null };
+        const loaded = { access: a.accessInstructions ?? "", ota: o.otaInstructions ?? "", accounts: o.otaAccounts ?? [], paymentNotes: f.paymentNotes ?? "", feeBps: f.managementFeeBps ?? null };
         setDetails(loaded); setDraft(loaded);
       }).catch(e => { if (active) setError(e instanceof WorkspaceApiError ? e.message : "Private details could not be loaded."); });
     return () => { active = false; };
@@ -177,6 +203,8 @@ function PropertySheet({ p, property, creating, people, onClose, onDone }: { p: 
         const changes: [string, Record<string, unknown>][] = [];
         if (draft.access !== details.access) changes.push(["access", { accessInstructions: draft.access }]);
         if (draft.ota !== details.ota) changes.push(["ota", { otaInstructions: draft.ota }]);
+        const accounts = draft.accounts.map(x => ({ ...x, platform: x.platform.trim(), login: x.login.trim(), passwordWhere: x.passwordWhere.trim(), twoFactor: x.twoFactor.trim(), notes: x.notes.trim() }));
+        if (JSON.stringify(accounts) !== JSON.stringify(details.accounts)) changes.push(["otaAccounts", { accounts }]);
         if (draft.paymentNotes !== details.paymentNotes) changes.push(["finance", { managementFeeBps: details.feeBps, paymentNotes: draft.paymentNotes }]);
         for (const [section, input] of changes) { await workspaceRequest("/api/mobile/property-details", { propertyId: property.id, version, section, input }); version += 1; }
       }
@@ -207,7 +235,8 @@ function PropertySheet({ p, property, creating, people, onClose, onDone }: { p: 
         {!draft && !error && <Loading p={p} />}
         {draft && <>
           <Field label="Access instructions (key safe, door codes)" value={draft.access} onChange={v => setDraft({ ...draft, access: v })} p={p} multiline />
-          <Field label="Platform logins and notes" value={draft.ota} onChange={v => setDraft({ ...draft, ota: v })} p={p} multiline />
+          <OtaAccountsEditor p={p} accounts={draft.accounts} onChange={accounts => setDraft({ ...draft, accounts })} />
+          <Field label="Other login notes" value={draft.ota} onChange={v => setDraft({ ...draft, ota: v })} p={p} multiline />
           <Field label="Owner payment notes" value={draft.paymentNotes} onChange={v => setDraft({ ...draft, paymentNotes: v })} p={p} multiline />
           <Text style={[ui.small, { color: p.muted }]}>These never appear in activity, exports or reports. The management fee and cleaning cost are set in Accounts, under Statements.</Text>
         </>}

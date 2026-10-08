@@ -6,22 +6,22 @@ Property Onboarding, Remainder of Stays), checked against the live app code and 
 
 Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outside service · ❌ not built
 
-**Totals (76 asks):** ✅ 55 · 🟡 11 · ⏸ 4 · ❌ 6
+**Totals (76 asks):** ✅ 61 · 🟡 10 · ⏸ 0 · ❌ 5
 
 ## 1. Communication Centre
 
 | # | Ask | Status | What's there / what's missing |
 |---|---|---|---|
-| C1 | Guest inbox with new messages from Airbnb, Booking.com and direct (Recharge logo on direct) | ❌ | No inbox screen and no message text stored. Needs the channel manager (Uplisting) and the inbox building. |
+| C1 | Guest inbox with new messages from Airbnb, Booking.com and direct (Recharge logo on direct) | 🟡 | Stays → Guest inbox: every guest conversation, longest wait first, coloured green/amber/red, with the Recharge mark on direct. Staff log guest messages and save replies by hand for now; messages arrive by themselves and replies send once the channel manager is connected. |
 | C2 | AI-assisted guest replies | ❌ | No AI in the live app. Needs an AI key and building. |
-| C3 | Reply timing: green under 5 min, amber 5–10, red over 10 | ⏸ | Grading built (targets editable). No messages arrive yet, so reports are empty. Needs the channel manager. |
+| C3 | Reply timing: green under 5 min, amber 5–10, red over 10 | ✅ | Works from guest messages logged in the Guest inbox (targets editable). Automatic once the channel manager is connected. |
 | C4 | Every team member has their own login | ✅ | Sign-up, admin approval, roles. |
 | C5 | Guest relations and client relations teams | ✅ | Admins set each person's department and clock-in starts from it. Client relations is scored from owners' messages in the app's Messages: each owner message is timed green/amber/red and credited to whoever was on a client relations shift (Team performance → Owner reply times). |
 | C6 | Two shifts: 8am–3/4pm and 3pm–11pm | ✅ | Each person has a usual shift (early 8am–4pm, late 3pm–11pm, or both), shown on their shift card and in Team performance. |
 | C7 | Clock in and out on the site | ✅ | Shift card on Home; admins can close forgotten shifts. |
-| C8 | Each reply credited to whoever is clocked in | ⏸ | Built. Waiting on message data. Open question for the client: in the 3–4pm overlap both people get credit. |
-| C9 | Per-person green/amber/red with a 90% pass mark (on/off track) | ⏸ | Built in Team performance. Waiting on message data. |
-| C10 | Bonus tiers at 95% and 100% | ⏸ | Built (tiers editable). Shows the tier reached; no bonus amounts. |
+| C8 | Each reply credited to whoever is clocked in | ✅ | Works from the Guest inbox. Open question for the client: in the 3–4pm overlap both people get credit. |
+| C9 | Per-person green/amber/red with a 90% pass mark (on/off track) | ✅ | Team performance → Scores and bonuses. The pass mark applies to the score (replies plus daily work). |
+| C10 | Bonus tiers at 95% and 100% | ✅ | Tiers editable, applied to the score. Shows the tier reached; no bonus amounts. |
 | C11 | Team WhatsApp via Meta | ❌ | Needs Meta WhatsApp Business set up, then building. |
 | C12 | Shared mailboxes: onboarding, enquiries, guest relations, client relations | ❌ | Needs Google Workspace or Microsoft 365 access, then building. |
 | C13 | Each person sees their own email | ❌ | As C12. |
@@ -81,7 +81,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | S3 | Tag a really bad review "re-list" → re-listing ticket → complete | ✅ | Staff choose to re-list after a bad review (from the review or the listing check). Re-listings show on the Stays screen: to start → under way → re-listed. |
 | S4 | Suspension found → automatic re-list ticket | 🟡 | Hidden or suspended listings go on the re-listing list automatically when a check records it. No automatic scan of the platforms (needs the channel manager). |
 | S5 | Daily check: all visible, no unhandled bad reviews, suspensions dealt with, re-listings done | ✅ | "Today's sign-off" on the Stays screen: all listings visible, bad reviews answered, suspensions dealt with, re-listings done or under way, with a note if any are still open. Admins see the last 14 days in Team performance. |
-| S6 | Report of that daily work per person feeding performance and bonuses | 🟡 | Team performance shows each person's listing checks, reviews, pricing decisions and daily sign-offs. Bonus tiers still use reply times only. |
+| S6 | Report of that daily work per person feeding performance and bonuses | ✅ | Daily work (sign-offs, listing checks, pricing decisions, reviews, against targets per Stays shift day) counts towards the score and bonus tiers; admins set how much it counts (40% to start). |
 | S7 | Gap nights in the next 7 days → ticket; staff change or hold the price with a reason | ✅ | Every live property with an empty night in the coming week gets a "Price the empty nights" ticket automatically, kept up to date and closed once every night is priced or booked. Staff hold or change each price with a reason. Stays are entered by hand until the channel manager is connected. |
 | S8 | Pricing changes feed the weekly client report | ✅ | |
 | S9 | Weekly scan for local events near each property | 🟡 | Stays and admins add local events by hand (name, date, link, why it matters); they appear in the weekly report. No automatic scan (needs an events data provider). |
@@ -90,7 +90,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | S12 | Any booking of 7+ nights → direct-booking ticket | 🟡 | Works for stays entered or edited in the app. Bookings from the channel manager don't create it yet. |
 | S13 | Recommended rate about 10% below, max £100 off | ✅ | The offer price is shown on the booking once prepared, alongside the original price, and the policy (e.g. 10% off, up to £100) is shown before preparing it. A super admin confirms the policy once. |
 | S14 | Track until yes/no → Accounts invoice → settled → booking confirmed → complete | ✅ | Yes route works end to end, and "The guest said no" closes the offer. |
-| S15 | OTA logins database | 🟡 | Staff with the OTA logins tool now see them under "Access and logins". Still one logins box per property, admin-edited. |
+| S15 | OTA logins database | ✅ | Each property lists its platform logins one row per platform: login, Recharge's or the owner's account, where the password is kept, who gets the security code. Passwords themselves are refused; they stay in a password manager. |
 | S16 | Maintenance ticket: choose property, link a reservation, choose repair type | ✅ | Repair type (heating, hot water, leak, toilet, electrics, appliance, Wi-Fi, locks, pests, damage, other), urgent flag, and the guest's stay can be linked. |
 | S17 | Repair type → AI troubleshooting steps before passing on | 🟡 | Each repair type has a guided checklist of safe checks to go through with the guest, ticked off and sent with the referral. No AI yet (needs an AI key). |
 | S18 | Refer (urgently) to Ready; ticket stays visible to Stays to chase | ✅ | "Urgent" can be set when reporting or referring; Stays keep seeing the repair to chase it. |
@@ -119,7 +119,7 @@ Everything that could be built without an outside service is built. Two items ne
 
 ## Waiting on an outside service
 
-- Channel manager (Uplisting or similar): C1, C3, C8–C10, D9, S1, S7, S12.
+- Channel manager (Uplisting or similar): C1 (messages arriving and replies sending by themselves; C3 and C8–C10 then need no logging), D9, S1, S7, S12.
 - AI key: C2, C14, S17.
 - Meta WhatsApp: C11, O4.
 - Google Workspace / Microsoft 365: C12, C13.

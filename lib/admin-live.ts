@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { storedOtaAccountsSchema } from "./ota-accounts";
 import { defaultModulesForRole, isWorkspaceAdmin, MODULE_IDS, MODULES, type ModuleId, type WorkspaceRole } from "./modules";
 
 // Response shapes and rules for the live People, Properties and owner screens,
@@ -19,7 +20,7 @@ export const adminPropertiesSchema = z.array(adminPropertySchema);
 export type AdminProperty = z.infer<typeof adminPropertySchema>;
 export const detailSchemas = {
   access: z.object({ accessInstructions: z.string().optional() }),
-  ota: z.object({ otaInstructions: z.string().optional() }),
+  ota: z.object({ otaInstructions: z.string().optional(), otaAccounts: storedOtaAccountsSchema.optional() }),
   finance: z.object({ managementFeeBps: z.number().nullable().optional(), paymentNotes: z.string().nullable().optional() }),
 };
 

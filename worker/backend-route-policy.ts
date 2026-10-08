@@ -17,7 +17,7 @@ const endpoints = new Set([
   "/api/workspace/finance", "/api/mobile/finance",
   "/api/workspace/teams", "/api/mobile/teams",
   "/api/workspace/admin", "/api/mobile/admin",
-  "/api/workspace/chat", "/api/mobile/chat",
+  "/api/workspace/chat", "/api/mobile/chat", "/api/workspace/guest-inbox", "/api/mobile/guest-inbox",
   "/api/hostaway/webhook", "/api/workspace/account", "/api/workspace/notifications",
   "/workspace", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);

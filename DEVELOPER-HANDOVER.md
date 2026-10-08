@@ -117,6 +117,25 @@ planned.
   must show the code (`{{ .Token }}`). New accounts wait for approval in People or Access control.
   When it's off, the sign-in screen tells new people to ask their administrator.
 
+## Daily work in bonuses, platform logins, guest inbox (9 October 2026)
+
+Migration `20261009140000_daily_work_logins_inbox` (applied live).
+- **Score.** Team performance blends reply times with daily work (`workspace_daily_work`,
+  `workspace_blend_score`). Daily work is done ÷ (target × days on a guest or client relations
+  shift), per item, capped at 100% and averaged. Targets per day and the weight (`work_weight`,
+  40% to start) are on `workspace_performance_targets`. The pass mark and bonus tiers apply to the
+  score. Edited in Team performance → Change the targets.
+- **Platform logins** (`ota_accounts` on `workspace_property_secrets`, section `otaAccounts`):
+  one row per platform with login, holder, where the password is kept, who gets the security code.
+  There is no password field, and text that looks like a typed password is refused
+  (`lib/ota-accounts.ts`).
+- **Guest inbox** (Stays → Guest inbox, `mobile/src/LiveGuestInbox.tsx`, `lib/guest-inbox-*`,
+  `/api/{mobile,workspace}/guest-inbox`): `private.workspace_guest_threads` groups
+  `workspace_guest_messages` (now with `body` and `delivery`). Staff log guest messages and save
+  replies (`delivery = 'logged'`) until the channel manager is connected; its feed calls
+  `workspace_guest_messages_ingest` with `body`, `guestName`, `reservationRef`, `checkIn`, `checkOut`.
+  Visibility: the guest communication tool, per property; unmatched conversations are shared.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

@@ -27,6 +27,9 @@ export const teamsReadSchema = z.object({
   }
 });
 
+export const DAILY_WORK = { signOffs: 'Daily sign-off', listingChecks: 'Listing checks', pricingDecisions: 'Pricing decisions', reviewsLogged: 'Reviews logged' } as const;
+const perDay = z.number().int().min(0).max(99);
+export const dailyTargetsSchema = z.object({ signOffs: perDay, listingChecks: perDay, pricingDecisions: perDay, reviewsLogged: perDay }).strict();
 export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('decideComplaint'), requestId: id, workId: id, version, outcome: z.enum(['upheld', 'overturned']), note }).strict(),
   z.object({ action: z.literal('decideCleanerReview'), requestId: id, workId: id, version, outcome: z.enum(['no_action', 'supervised', 'removed_from_rota']), note }).strict(),
@@ -53,7 +56,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('clockOut'), requestId: id }).strict(),
   z.object({ action: z.literal('closeShift'), requestId: id, shiftId: id, endedAt: z.string().datetime({ offset: true }) }).strict(),
   z.object({ action: z.literal('saveTargets'), requestId: id, version, greenMinutes: z.number().int().min(1).max(120), amberMinutes: z.number().int().min(2).max(240),
-    passPercent: z.number().int().min(1).max(100), bonusPercents: z.array(z.number().int().min(1).max(100)).max(5) }).strict(),
+    passPercent: z.number().int().min(1).max(100), bonusPercents: z.array(z.number().int().min(1).max(100)).max(5),
+    // How much daily work counts in the score (0-100%), and what's expected on each Stays shift day.
+    workWeight: z.number().int().min(0).max(100).optional(), dailyTargets: dailyTargetsSchema.optional() }).strict(),
   z.object({ action: z.literal('signContract'), requestId: id, contractId: id, version, signedName: text(2, 200), agree: z.literal(true, { errorMap: () => ({ message: 'Tick the box to agree to the contract' }) }) }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'saveRoutinePlan' && Boolean(value.planId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a plan needs its current version' });

@@ -1,4 +1,5 @@
 import { ownerContacts } from "./property-profile";
+import { storedOtaAccountsSchema } from './ota-accounts';
 import { NextResponse } from "next/server";
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { verifiedWorkspaceUser, workspaceSupabase } from "./supabase-server";
@@ -94,7 +95,7 @@ export async function scopedPropertyDetails(client: SupabaseClient, input: unkno
   const data = result.data || {};
   // Keep the HTTP projection safe while a database migration is awaiting installation.
   const exposed = parsed.data.section === 'access' ? { accessInstructions: data.accessInstructions || '' }
-    : parsed.data.section === 'ota' ? { otaInstructions: data.otaInstructions || '' }
+    : parsed.data.section === 'ota' ? { otaInstructions: data.otaInstructions || '', otaAccounts: storedOtaAccountsSchema.parse(data.otaAccounts ?? []) }
     : parsed.data.section === 'owner' ? { owners: ownerContacts(data.owners) }
     : { managementFeeBps: data.managementFeeBps ?? null, paymentNotes: data.paymentNotes || '' };
   return businessResponse({ data: exposed });

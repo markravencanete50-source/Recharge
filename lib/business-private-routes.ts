@@ -3,6 +3,7 @@ import { authSecurityConfiguration, requestQuota } from "./auth-security";
 import { boundedJson, isSameOrigin } from "./auth-security-policy";
 import { businessContext, businessResponse, databaseFailure, scopedPropertyDetails } from "./business-server";
 import { isNativeRequest } from "./native-request-policy";
+import { otaAccountsSchema } from "./ota-accounts";
 
 const deviceSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("register"), deviceId: z.string().uuid(), token: z.string().min(20).max(200).regex(/^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$/), platform: z.enum(["ios", "android"]) }).strict(),
@@ -11,6 +12,7 @@ const deviceSchema = z.discriminatedUnion("action", [
 const propertyDetailsSchema = z.discriminatedUnion("section", [
   z.object({ propertyId: z.string().uuid(), version: z.number().int().positive(), section: z.literal("access"), input: z.object({ accessInstructions: z.string().max(5000) }).strict() }).strict(),
   z.object({ propertyId: z.string().uuid(), version: z.number().int().positive(), section: z.literal("ota"), input: z.object({ otaInstructions: z.string().max(5000) }).strict() }).strict(),
+  z.object({ propertyId: z.string().uuid(), version: z.number().int().positive(), section: z.literal("otaAccounts"), input: z.object({ accounts: otaAccountsSchema }).strict() }).strict(),
   z.object({ propertyId: z.string().uuid(), version: z.number().int().positive(), section: z.literal("finance"), input: z.object({ managementFeeBps: z.number().int().min(0).max(10000).nullable(), paymentNotes: z.string().max(5000) }).strict() }).strict(),
 ]);
 export async function deviceWrite(request: Request) {
@@ -40,7 +42,9 @@ export async function propertyDetails(request: Request, native = false) {
     const quota = await requestQuota(request, "property-details-user", 20, 60, session.account.userId);
     if (!quota.allowed) return businessResponse({ error: "Too many property updates" }, 429);
     const input = propertyDetailsSchema.safeParse(await boundedJson(request));
-    if (!input.success) return businessResponse({ error: "Check the property details" }, 400);
+    // Plain-English rules (no passwords, choose the platform) are shown as they are.
+    const reason = input.success ? "" : input.error.issues.map(i => i.message).find(m => /^(Don’t|Choose)/.test(m));
+    if (!input.success) return businessResponse({ error: reason || "Check the property details" }, 400);
     const result = await session.client.rpc("workspace_save_property_details", { target_property: input.data.propertyId, expected_version: input.data.version, section: input.data.section, input: input.data.input });
     return result.error ? databaseFailure(result.error) : businessResponse({ ok: true });
   } catch { return businessResponse({ error: "Property details are temporarily unavailable" }, 503); }

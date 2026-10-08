@@ -18,6 +18,7 @@ import { dailyChecks, recordedReservationSchema, vacantNights } from "../../lib/
 import { poundsToMinor } from "../../lib/repairs-live";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { GuestInbox } from "./LiveGuestInbox";
 
 // Live Stays: arrivals, departures and cleans by day, recording stays with their
 // platform details, and the daily listing and pricing checks. Backend data only.
@@ -270,7 +271,7 @@ function SignOffCard({ p, refreshKey }: { p: Palette; refreshKey: number }) {
   );
 }
 
-export function LiveStays({ palette: p, properties, onOpenRepairs, onOpenWork }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpenRepairs: () => void; onOpenWork?: (item: Operation) => void }) {
+export function LiveStays({ palette: p, account, properties, onOpenRepairs, onOpenWork }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpenRepairs: () => void; onOpenWork?: (item: Operation) => void }) {
   const saved = useSaved();
   const [today] = useState(() => london(new Date()));
   const weekEnd = addDays(today, 6);
@@ -285,6 +286,9 @@ export function LiveStays({ palette: p, properties, onOpenRepairs, onOpenWork }:
   const [pricingFor, setPricingFor] = useState<{ property: PropertyView; nights: string[] } | null>(null);
   const [reviewFor, setReviewFor] = useState<PropertyView | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Stays has two tabs for people with the guest communication tool: the day, and the guest inbox.
+  const hasInbox = account.modules.includes("guest-communication");
+  const [tab, setTab] = useState<"today" | "inbox">(() => hasInbox && focus?.sub === "inbox" ? "inbox" : "today");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -314,12 +318,24 @@ export function LiveStays({ palette: p, properties, onOpenRepairs, onOpenWork }:
   const relistings = operations.filter(op => op.kind === "relisting" && !["completed", "cancelled"].includes(op.status));
   const nameOf = (id: string) => properties.find(x => x.id === id)?.name ?? "Property";
 
+  const tabs = hasInbox && <Pills p={p} values={["today", "inbox"] as const} value={tab} onChange={setTab} label={v => v === "today" ? "Today" : "Guest inbox"} />;
+  if (tab === "inbox") return (
+    <View style={{ gap: 20 }}>
+      <View style={{ gap: 4 }}>
+        <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Guest inbox</Text>
+        <Text style={[ui.body, { color: p.muted }]}>Messages from guests on every platform, the longest wait first.</Text>
+      </View>
+      {tabs}
+      <GuestInbox palette={p} properties={properties} />
+    </View>
+  );
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Stays</Text>
         <Text style={[ui.body, { color: p.muted }]}>Arrivals, departures, cleans and the daily listing and pricing checks.</Text>
       </View>
+      {tabs}
       <StatGrid>
         <StatTile p={p} icon="log-in" tone="stays" label="Arrivals" value={schedule.stays.filter(s => s.checkIn === today).length} detail="Today" />
         <StatTile p={p} icon="log-out" tone="stays" label="Departures" value={schedule.stays.filter(s => s.checkOut === today).length} detail="Today" />

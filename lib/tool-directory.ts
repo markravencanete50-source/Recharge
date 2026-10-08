@@ -26,7 +26,7 @@ const PLACES: Record<ModuleId, ToolPlace> = {
   'daily-pricing': work('stays', 'Work → Stays → Daily checks'),
   'listing-health': work('stays', 'Work → Stays → Daily checks'),
   'direct-bookings': work('stays', 'Work → Stays, then All work for offers'),
-  'guest-communication': work('management', 'Work → Management → Team performance; your shift card on Home'),
+  'guest-communication': work('stays', 'Work → Stays → Guest inbox; reply times in Management → Team performance'),
   'weekly-performance': { kind: 'tab', tab: 'properties', where: 'Properties → a property → Download property report' },
   'property-database': { kind: 'tab', tab: 'properties', where: 'Properties' },
   'ota-logins': { kind: 'tab', tab: 'properties', where: 'Properties → a property → Access and logins' },
@@ -70,7 +70,6 @@ export function toolsFor(role: string, modules: readonly string[]): Tool[] {
   return MODULES.filter(m => modules.includes(m.id)).map(m => {
     let place = PLACES[m.id as ModuleId];
     if (place.kind === 'work' && !views.includes(place.view)) place = role === 'client' && place.view !== 'all' ? work('owner', 'Work → Stays and statements') : work('all', 'Work → All work');
-    if (m.id === 'guest-communication' && role !== 'admin' && role !== 'super_admin') place = { kind: 'tab', tab: 'home', where: 'Home → your shift card (guest reply times)' };
     return { id: m.id as ModuleId, name: m.name, description: m.description, place };
   });
 }
