@@ -13,7 +13,7 @@
 --   with optional photos, and the clean lists what was reported.
 
 -- Pay rates ---------------------------------------------------------------------------------------------------
-create table private.workspace_cleaner_rates (
+create table if not exists private.workspace_cleaner_rates (
  cleaner_id uuid primary key references public.workspace_profiles(user_id),
  rate_minor integer not null check(rate_minor between 1 and 100000),
  version integer not null default 1 check(version>0),
@@ -22,16 +22,17 @@ create table private.workspace_cleaner_rates (
 );
 alter table private.workspace_cleaner_rates enable row level security;
 revoke all on private.workspace_cleaner_rates from public,anon,authenticated;
+drop trigger if exists business_write_limit on private.workspace_cleaner_rates;
 create trigger business_write_limit before insert or update on private.workspace_cleaner_rates for each row execute function private.workspace_enforce_write_limit();
 
 -- Admins manage every cleaner; a cleaning manager manages cleaners on a property they look after.
-create function private.workspace_manages_cleaner(cleaner uuid) returns boolean language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_manages_cleaner(cleaner uuid) returns boolean language sql stable security definer set search_path='' as $$
  select exists(select 1 from public.workspace_profiles c where c.user_id=cleaner and c.role='cleans') and (
   private.workspace_actor_role() in ('admin','super_admin') or (private.workspace_actor_role()='cleaning_manager' and exists(
    select 1 from public.workspace_property_assignments a where a.user_id=cleaner and a.assignment='cleaner' and private.workspace_can_property(a.property_id,'cleaner-performance'))))
 $$;
 
-create function private.workspace_cleaner_rate_action(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
+create or replace function private.workspace_cleaner_rate_action(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare actor text:=private.workspace_actor_role();req uuid;cleaner uuid;prior private.workspace_action_receipts;rate private.workspace_cleaner_rates;result jsonb;
 begin
  if actor is null then raise exception 'Active access required' using errcode='42501';end if;
@@ -61,7 +62,7 @@ end $$;
 
 -- Rates for the cleaners this person may see: admins and Accounts (for invoicing) see all, a cleaning manager
 -- sees their own cleaners.
-create function private.workspace_cleaner_rates_read() returns jsonb language plpgsql stable security definer set search_path='' as $$
+create or replace function private.workspace_cleaner_rates_read() returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare actor text:=private.workspace_actor_role();
 begin
  if actor is null or not (actor in ('admin','super_admin','cleaning_manager') or (actor='accounts' and private.has_workspace_module('cleans-invoices'))) then raise exception 'Cleaner rates access required' using errcode='42501';end if;
@@ -72,7 +73,7 @@ end $$;
 
 -- Disputes ----------------------------------------------------------------------------------------------------
 -- Admins decide any dispute; a cleaning manager decides disputes on the properties they manage.
-create function private.workspace_can_decide_dispute(target uuid) returns boolean language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_can_decide_dispute(target uuid) returns boolean language sql stable security definer set search_path='' as $$
  select private.workspace_actor_role() in ('admin','super_admin') or (private.workspace_actor_role()='cleaning_manager' and exists(
   select 1 from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id
   where w.id=target and d.kind='cleaning_complaint' and private.workspace_can_property(w.property_id,'cleaner-performance')))
@@ -81,7 +82,7 @@ $$;
 -- Upholding or overturning a rejected clean (every "decideComplaint" now comes here). Overturning removes the
 -- rejection from the cleaner's record and, if the clean was not redone, accepts it for invoicing. The outcome is
 -- written on the clean and the cleaner is told.
-create function private.workspace_decide_clean_dispute(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
+create or replace function private.workspace_decide_clean_dispute(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare actor text:=private.workspace_actor_role();req uuid;prior private.workspace_action_receipts;result jsonb;
  w public.workspace_work_items;d private.workspace_domain_details;src public.workspace_work_items;sd private.workspace_domain_details;cleaner uuid;event_id bigint;
 begin
@@ -141,7 +142,7 @@ end $$;
 -- Guests for each clean ---------------------------------------------------------------------------------------
 -- For each clean in the schedule the person can see: guests on the stay it follows, and the date and guests of the
 -- next arrival at that property. Nothing else about the booking leaves the database.
-create function private.workspace_clean_guests(start_on date,end_on date,target_property uuid,target_user uuid) returns jsonb language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_clean_guests(start_on date,end_on date,target_property uuid,target_user uuid) returns jsonb language sql stable security definer set search_path='' as $$
  select coalesce(jsonb_agg(jsonb_build_object('workId',c.id,
    'guestsLeaving',(select r.guests from private.workspace_reservations r where r.property_id=c.property_id and r.status='confirmed'
      and (r.id::text=c.data->>'reservationId' or (c.data->>'reservationId' is null and r.check_out=c.due_on)) order by r.check_out desc,r.id limit 1),

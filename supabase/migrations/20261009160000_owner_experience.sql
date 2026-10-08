@@ -8,23 +8,23 @@
 --    decline from Management → Waiting on you.
 -- 3. Owner reports: confirmed bookings, nights and payouts for the owner's own properties.
 
-alter table private.workspace_finance_policy add column management_repair_limit_minor bigint check(management_repair_limit_minor between 0 and 100000000);
+alter table private.workspace_finance_policy add column if not exists management_repair_limit_minor bigint check(management_repair_limit_minor between 0 and 100000000);
 
 -- Whether a repair at this cost needs management approval: above the company-wide limit (when one
 -- is set), unless management has already approved at least this amount.
-create function private.workspace_repair_needs_management(amount bigint, repair jsonb) returns boolean language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_repair_needs_management(amount bigint, repair jsonb) returns boolean language sql stable security definer set search_path='' as $$
  select exists(select 1 from private.workspace_finance_policy f where f.singleton and f.management_repair_limit_minor is not null and amount>f.management_repair_limit_minor)
   and amount>coalesce((repair->>'managementApprovedMinor')::bigint,-1);
 $$;
 
 -- Who approves repairs above the management limit.
-create function private.workspace_repair_managers() returns uuid[] language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_repair_managers() returns uuid[] language sql stable security definer set search_path='' as $$
  select coalesce(array_agg(p.user_id order by p.user_id),'{}') from public.workspace_profiles p where p.role in ('admin','super_admin') and p.status='active';
 $$;
 
 -- Who hears about a decision on a repair's cost: Stays on the property, whoever last updated the
 -- quote and (when asked) the admins.
-create function private.workspace_repair_team(prop uuid, repair jsonb, with_admins boolean) returns uuid[] language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_repair_team(prop uuid, repair jsonb, with_admins boolean) returns uuid[] language sql stable security definer set search_path='' as $$
  select coalesce(array_agg(distinct x.u),'{}') from (
   select a.user_id u from public.workspace_property_assignments a join public.workspace_profiles p on p.user_id=a.user_id
    join public.workspace_module_grants g on g.user_id=a.user_id and g.module_id='stays-maintenance-reporting'
@@ -37,7 +37,7 @@ $$;
 -- and Stays closing a declined repair. Returns the repair's new details, its status when it changes,
 -- and who to tell. Called by workspace_operations_action, which has already checked the work access,
 -- version and that the repair is open.
-create function private.workspace_repair_decision(step text, prop uuid, repair jsonb, input jsonb) returns jsonb language plpgsql stable security definer set search_path='' as $$
+create or replace function private.workspace_repair_decision(step text, prop uuid, repair jsonb, input jsonb) returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare actor text:=private.workspace_actor_role();phase text:=repair->>'phase';begin
  if step='declineBudget' then
   perform private.workspace_json_keys(input,array['reason']);
@@ -68,7 +68,7 @@ end $$;
 -- After the owner declined, it always goes back to the owner. After management declined, the owner
 -- approves first if it is now above what they agreed and their limit, then management if needed.
 -- Otherwise a higher quote above the management limit goes to management.
-create function private.workspace_repair_requote(prop uuid, amount bigint, repair jsonb, change jsonb) returns jsonb language plpgsql stable security definer set search_path='' as $$
+create or replace function private.workspace_repair_requote(prop uuid, amount bigint, repair jsonb, change jsonb) returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare j private.workspace_journeys;owner_ok boolean;begin
  j:=(select x from private.workspace_journeys x where x.property_id=prop);
  owner_ok:=coalesce((j.form->>'fullRepairPermission')::boolean,false) or amount<=coalesce((j.form->>'repairLimitMinor')::bigint,0);
@@ -85,7 +85,7 @@ declare j private.workspace_journeys;owner_ok boolean;begin
 end $$;
 
 -- Repairs waiting for management approval, for Management → Waiting on you.
-create function private.workspace_management_repairs() returns jsonb language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_management_repairs() returns jsonb language sql stable security definer set search_path='' as $$
  select coalesce(jsonb_agg(jsonb_build_object('workId',w.id,'version',w.version,'title',w.title,'propertyId',w.property_id,'propertyName',p.name,
    'issue',d.data->>'issue','repairType',d.data->>'repairType','urgent',coalesce((d.data->>'urgent')::boolean,false),'hazard',coalesce((d.data->>'hazard')::boolean,false),
    'estimatedCostMinor',(d.data->>'estimatedCostMinor')::bigint,'previousEstimateMinor',(d.data->>'previousEstimateMinor')::bigint,'quoteReason',d.data->>'quoteReason',
@@ -95,7 +95,7 @@ create function private.workspace_management_repairs() returns jsonb language sq
 $$;
 
 -- The management limit is set by admins, next to the expense approval limit.
-create function private.workspace_set_repair_limit(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
+create or replace function private.workspace_set_repair_limit(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare policy private.workspace_finance_policy;amount bigint;begin
  if private.workspace_actor_role() is null or private.workspace_actor_role() not in ('admin','super_admin') then raise exception 'Management access required' using errcode='42501';end if;
  perform private.workspace_json_keys(input,array['action','requestId','version','managementRepairLimitMinor']);
@@ -111,7 +111,7 @@ end $$;
 -- Owner reports: confirmed stays overlapping the dates at the properties the owner can see (admins
 -- see every property), with nights, guests, platform, reservation code and payout, plus totals per
 -- property (nights booked inside the dates, and payouts for stays checking out inside them).
-create function private.workspace_owner_bookings(start_on date, end_on date) returns jsonb language plpgsql stable security definer set search_path='' as $$
+create or replace function private.workspace_owner_bookings(start_on date, end_on date) returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare actor text:=private.workspace_actor_role();begin
  if actor is null or actor not in ('client','admin','super_admin') then raise exception 'Owner reports access required' using errcode='42501';end if;
  if start_on is null or end_on is null or end_on<start_on or end_on-start_on>400 then raise exception 'Choose up to 400 days' using errcode='22023';end if;
@@ -129,7 +129,7 @@ declare actor text:=private.workspace_actor_role();begin
    'stays',(select coalesce(jsonb_agg(jsonb_build_object('reservationId',s.id,'propertyId',s.property_id,'propertyName',s.name,'reference',s.reference,'checkIn',s.check_in,'checkOut',s.check_out,
       'nights',s.check_out-s.check_in,'guests',s.guests,'channel',s.channel,'channelReference',s.channel_reference,'payoutMinor',s.payout_minor) order by s.check_in,s.id),'[]') from stays s)));
 end $$;
-create function public.workspace_owner_bookings(start_on date, end_on date) returns jsonb language sql security invoker set search_path='' as $$select private.workspace_owner_bookings(start_on,end_on);$$;
+create or replace function public.workspace_owner_bookings(start_on date, end_on date) returns jsonb language sql security invoker set search_path='' as $$select private.workspace_owner_bookings(start_on,end_on);$$;
 
 revoke all on function private.workspace_repair_needs_management(bigint,jsonb),private.workspace_repair_managers(),private.workspace_repair_team(uuid,jsonb,boolean),
  private.workspace_repair_decision(text,uuid,jsonb,jsonb),private.workspace_repair_requote(uuid,bigint,jsonb,jsonb),private.workspace_management_repairs(),private.workspace_set_repair_limit(jsonb) from public,anon,authenticated;

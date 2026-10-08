@@ -4,18 +4,19 @@
 
 -- When a repair starts waiting for the owner's approval, wherever that happens (a new request
 -- above the owner's limit, or a quote revised above it), so waits are measured from then.
-create function private.workspace_stamp_owner_approval() returns trigger language plpgsql security definer set search_path='' as $$
+create or replace function private.workspace_stamp_owner_approval() returns trigger language plpgsql security definer set search_path='' as $$
 begin
  if new.kind='maintenance' and new.data->>'phase'='owner_approval' and (tg_op='INSERT' or old.data->>'phase' is distinct from 'owner_approval') then
   new.data:=new.data||jsonb_build_object('ownerApprovalSince',now());
  end if;
  return new;
 end $$;
+drop trigger if exists owner_approval_stamped on private.workspace_domain_details;
 create trigger owner_approval_stamped before insert or update of data on private.workspace_domain_details for each row execute function private.workspace_stamp_owner_approval();
 
 -- Everything waiting on an owner: repairs at owner approval, and published estimates awaiting the
 -- owner's decision. Older repairs without the stamp fall back to the revised quote or creation time.
-create function private.workspace_owner_waits() returns table(kind text,work_id uuid,property_id uuid,title text,waiting_since timestamptz,estimated_cost_minor bigint)
+create or replace function private.workspace_owner_waits() returns table(kind text,work_id uuid,property_id uuid,title text,waiting_since timestamptz,estimated_cost_minor bigint)
 language sql stable security definer set search_path='' as $$
  select 'repair'::text,w.id,w.property_id,w.title,
   coalesce((d.data->>'ownerApprovalSince')::timestamptz,case when d.data->>'resumePhase' is not null then (d.data->>'quoteRevisedAt')::timestamptz end,w.created_at),
@@ -30,7 +31,7 @@ $$;
 
 -- One row per wait (a repair that goes back to the owner later starts a new one), so each
 -- reminder and escalation goes out once.
-create table private.workspace_owner_chases (
+create table if not exists private.workspace_owner_chases (
  work_id uuid not null references public.workspace_work_items(id) on delete cascade,
  waiting_since timestamptz not null,
  kind text not null check(kind in ('repair','estimate')),
@@ -47,7 +48,7 @@ alter table private.workspace_owner_chases enable row level security;
 revoke all on private.workspace_owner_chases from public,anon,authenticated;
 
 -- A notice to the property's owners that something is waiting for them.
-create function private.workspace_remind_owner(target uuid,waiting_kind text,prop uuid,at_time timestamptz) returns integer language plpgsql security definer set search_path='' as $$
+create or replace function private.workspace_remind_owner(target uuid,waiting_kind text,prop uuid,at_time timestamptz) returns integer language plpgsql security definer set search_path='' as $$
 declare ev bigint;sent integer;begin
  insert into public.workspace_activity(actor_id,property_id,work_id,event_type,created_at)
   values(auth.uid(),prop,target,case waiting_kind when 'repair' then 'repairs.owner_reminder' else 'journey.estimate_reminder' end,at_time) returning id into ev;
@@ -59,7 +60,7 @@ declare ev bigint;sent integer;begin
 end $$;
 
 -- Who chases an owner: client relations on the property, else anyone in client relations, else admins.
-create function private.workspace_owner_chasers(prop uuid) returns uuid[] language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_owner_chasers(prop uuid) returns uuid[] language sql stable security definer set search_path='' as $$
  select coalesce(
   nullif(array(select r.user_id from private.workspace_staff_rota r join public.workspace_profiles p on p.user_id=r.user_id
     join public.workspace_property_assignments a on a.user_id=r.user_id and a.property_id=prop and a.assignment='staff'
@@ -71,7 +72,7 @@ $$;
 
 -- Run by the backend every 15 minutes: owners get one reminder once something has waited 48 hours,
 -- and client relations are told once it has waited 96. Bounded per run; the next run carries on.
-create function private.workspace_chase_owner_approvals(at_time timestamptz default now()) returns jsonb language plpgsql security definer set search_path='' as $$
+create or replace function private.workspace_chase_owner_approvals(at_time timestamptz default now()) returns jsonb language plpgsql security definer set search_path='' as $$
 declare r record;ev bigint;who uuid[];reminded integer:=0;escalated integer:=0;begin
  perform pg_advisory_xact_lock(hashtext('workspace_chase_owner_approvals'));
  for r in select o.kind wait_kind,o.work_id,o.property_id,o.waiting_since,x.reminded_at,x.escalated_at from private.workspace_owner_waits() o
@@ -96,10 +97,10 @@ declare r record;ev bigint;who uuid[];reminded integer:=0;escalated integer:=0;b
  end loop;
  return jsonb_build_object('reminded',reminded,'escalated',escalated);
 end $$;
-create function public.workspace_chase_owner_approvals() returns jsonb language sql security invoker set search_path='' as $$ select private.workspace_chase_owner_approvals() $$;
+create or replace function public.workspace_chase_owner_approvals() returns jsonb language sql security invoker set search_path='' as $$ select private.workspace_chase_owner_approvals() $$;
 
 -- The management queue's owner approvals: how long each has waited and when the owner was last reminded.
-create function private.workspace_stalled_owner_approvals() returns jsonb language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_stalled_owner_approvals() returns jsonb language sql stable security definer set search_path='' as $$
  select coalesce(jsonb_agg(jsonb_build_object('workId',o.work_id,'kind',o.kind,'title',o.title,'propertyId',o.property_id,'propertyName',p.name,
    'estimatedCostMinor',o.estimated_cost_minor,'waitingSince',o.waiting_since,'remindedAt',greatest(x.reminded_at,x.manual_at),'escalatedAt',x.escalated_at,
    'canRemindAt',greatest(x.reminded_at,x.manual_at)+interval '24 hours') order by o.waiting_since,o.work_id),'[]')
@@ -111,7 +112,7 @@ $$;
 -- Unusual owner payouts: statements not yet paid whose payout is negative, or more than 50% below
 -- or above the property's average over its previous three statements. Hidden once management
 -- approves that payout.
-create table private.workspace_payout_approvals (
+create table if not exists private.workspace_payout_approvals (
  statement_id uuid not null references private.workspace_owner_statements(id) on delete cascade,
  payout_minor bigint not null,
  approved_by uuid not null references public.workspace_profiles(user_id),
@@ -122,7 +123,7 @@ create table private.workspace_payout_approvals (
 alter table private.workspace_payout_approvals enable row level security;
 revoke all on private.workspace_payout_approvals from public,anon,authenticated;
 
-create function private.workspace_unusual_payouts() returns jsonb language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_unusual_payouts() returns jsonb language sql stable security definer set search_path='' as $$
  select coalesce(jsonb_agg(private.workspace_statement_view(x.s)||jsonb_build_object('averageMinor',x.average_minor,'previousStatements',x.previous,'reason',x.reason)
    order by (x.s).period_start,(x.s).id),'[]')
  from (
@@ -141,7 +142,7 @@ $$;
 -- Yesterday's Stays checks: each morning after 08:00 (London), anyone on the Stays team who worked a
 -- guest or client relations shift yesterday but didn't sign off, or whose listing checks weren't
 -- done, rolls over to management until an admin marks it as seen.
-create table private.workspace_missed_days (
+create table if not exists private.workspace_missed_days (
  user_id uuid not null references public.workspace_profiles(user_id) on delete cascade,
  day date not null,
  signed_off boolean not null,
@@ -152,7 +153,7 @@ create table private.workspace_missed_days (
  seen_by uuid references public.workspace_profiles(user_id),
  primary key(user_id,day)
 );
-create table private.workspace_rollover_runs (
+create table if not exists private.workspace_rollover_runs (
  day date primary key,
  missed integer not null,
  ran_at timestamptz not null default now()
@@ -161,7 +162,7 @@ alter table private.workspace_missed_days enable row level security;
 alter table private.workspace_rollover_runs enable row level security;
 revoke all on private.workspace_missed_days,private.workspace_rollover_runs from public,anon,authenticated;
 
-create function private.workspace_roll_over_signoffs(at_time timestamptz default now()) returns jsonb language plpgsql security definer set search_path='' as $$
+create or replace function private.workspace_roll_over_signoffs(at_time timestamptz default now()) returns jsonb language plpgsql security definer set search_path='' as $$
 declare today date:=(at_time at time zone 'Europe/London')::date;yesterday date:=today-1;person record;missed jsonb;due integer;signed boolean;n integer:=0;ev bigint;begin
  if extract(hour from at_time at time zone 'Europe/London')<8 then return jsonb_build_object('day',yesterday,'ran',false);end if;
  perform pg_advisory_xact_lock(hashtext('workspace_roll_over_signoffs'));
@@ -191,9 +192,9 @@ declare today date:=(at_time at time zone 'Europe/London')::date;yesterday date:
  end if;
  return jsonb_build_object('day',yesterday,'ran',true,'missed',n);
 end $$;
-create function public.workspace_roll_over_signoffs() returns jsonb language sql security invoker set search_path='' as $$ select private.workspace_roll_over_signoffs() $$;
+create or replace function public.workspace_roll_over_signoffs() returns jsonb language sql security invoker set search_path='' as $$ select private.workspace_roll_over_signoffs() $$;
 
-create function private.workspace_missed_days_json() returns jsonb language sql stable security definer set search_path='' as $$
+create or replace function private.workspace_missed_days_json() returns jsonb language sql stable security definer set search_path='' as $$
  select coalesce(jsonb_agg(jsonb_build_object('userId',m.user_id,'fullName',p.full_name,'day',m.day,'signedOff',m.signed_off,'listingsDue',m.listings_due,
    'missedListings',m.missed_listings,'createdAt',m.created_at) order by m.day desc,p.full_name,m.user_id),'[]')
  from private.workspace_missed_days m join public.workspace_profiles p on p.user_id=m.user_id
@@ -204,12 +205,13 @@ $$;
 do $$
 declare t text;begin
  foreach t in array array['workspace_owner_chases','workspace_payout_approvals','workspace_missed_days'] loop
+  execute format('drop trigger if exists business_write_limit on private.%I',t);
   execute format('create trigger business_write_limit before insert or update on private.%I for each row execute function private.workspace_enforce_write_limit()',t);
  end loop;
 end $$;
 
 -- Across the business, for admins' Home: Stays, Cleans, Ready and Accounts at a glance.
-create function private.workspace_management_overview() returns jsonb language plpgsql stable security definer set search_path='' as $$
+create or replace function private.workspace_management_overview() returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare actor text:=private.workspace_actor_role();today date:=(now() at time zone 'Europe/London')::date;month_start date;month_end date;begin
  if coalesce(actor,'') not in ('admin','super_admin') then raise exception 'Management access required' using errcode='42501';end if;
  month_start:=date_trunc('month',today)::date;month_end:=(month_start+interval '1 month')::date;
@@ -246,7 +248,7 @@ end $$;
 
 -- One work item's history: status changes with their notes, each step taken (with what was
 -- recorded for it), clean reviews, expense decisions and owner chases. Same access as the item.
-create function private.workspace_work_history(target uuid) returns jsonb language plpgsql stable security definer set search_path='' as $$
+create or replace function private.workspace_work_history(target uuid) returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare actor text:=private.workspace_actor_role();d private.workspace_domain_details;staff boolean;begin
  if actor is null then raise exception 'Active access required' using errcode='42501';end if;
  if target is null or not private.workspace_operation_access(target) then raise exception 'Work not found' using errcode='P0002';end if;
@@ -307,7 +309,7 @@ end $$;
 
 -- Management decisions over the last 90 days, newest first: repairs the owner approved, work
 -- approved or declined, expenses decided, clean disputes, cleaner reviews and payouts approved.
-create function private.workspace_decisions_report() returns jsonb language plpgsql stable security definer set search_path='' as $$
+create or replace function private.workspace_decisions_report() returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare since timestamptz:=now()-interval '90 days';begin
  if coalesce(private.workspace_actor_role(),'') not in ('admin','super_admin') then raise exception 'Management access required' using errcode='42501';end if;
  return coalesce((select jsonb_agg(r.e order by r.happened desc) from (
@@ -343,7 +345,7 @@ declare since timestamptz:=now()-interval '90 days';begin
 end $$;
 
 -- Reads for the oversight screens.
-create function private.workspace_oversight_read(section text,target uuid default null) returns jsonb language plpgsql stable security definer set search_path='' as $$
+create or replace function private.workspace_oversight_read(section text,target uuid default null) returns jsonb language plpgsql stable security definer set search_path='' as $$
 begin
  if private.workspace_actor_role() is null then raise exception 'Active access required' using errcode='42501';end if;
  if section='overview' then return private.workspace_management_overview();
@@ -355,7 +357,7 @@ end $$;
 
 -- Management's own actions: remind an owner now (once a day per item), mark a missed day as seen,
 -- and approve an unusual owner payout.
-create function private.workspace_oversight_action(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
+create or replace function private.workspace_oversight_action(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare actor text:=private.workspace_actor_role();a text;req uuid;prior private.workspace_action_receipts;result jsonb;target uuid;
  wait_kind text;wait_since timestamptz;wait_property uuid;last_reminder timestamptz;sent integer;s private.workspace_owner_statements;begin
  if coalesce(actor,'') not in ('admin','super_admin') then raise exception 'Management access required' using errcode='42501';end if;
@@ -403,8 +405,8 @@ declare actor text:=private.workspace_actor_role();a text;req uuid;prior private
  return result;
 end $$;
 
-create function public.workspace_oversight_read(section text,target uuid default null) returns jsonb language sql security invoker set search_path='' as $$select private.workspace_oversight_read(section,target);$$;
-create function public.workspace_oversight_action(input jsonb) returns jsonb language sql security invoker set search_path='' as $$select private.workspace_oversight_action(input);$$;
+create or replace function public.workspace_oversight_read(section text,target uuid default null) returns jsonb language sql security invoker set search_path='' as $$select private.workspace_oversight_read(section,target);$$;
+create or replace function public.workspace_oversight_action(input jsonb) returns jsonb language sql security invoker set search_path='' as $$select private.workspace_oversight_action(input);$$;
 
 revoke all on function private.workspace_stamp_owner_approval(),private.workspace_owner_waits(),private.workspace_remind_owner(uuid,text,uuid,timestamptz),
  private.workspace_owner_chasers(uuid),private.workspace_stalled_owner_approvals(),private.workspace_unusual_payouts(),private.workspace_missed_days_json(),
