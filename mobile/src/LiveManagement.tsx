@@ -10,6 +10,7 @@ import { ExpenseSheet, List, NoteSheet, Pills, Row, type NoteAsk } from "./LiveA
 import { LiveTraining } from "./LiveTraining";
 import { LivePeople } from "./LivePeople";
 import { LiveTeamPerformance } from "./LiveShifts";
+import { DecisionsReport, QueueExtras } from "./LiveOversight";
 import { readFinance, readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
 import { DECISION_OUTCOMES, decisionAction, managementSchema, type Decision, type Management } from "../../lib/management-live";
 import { performanceSchema } from "../../lib/cleans-live";
@@ -62,7 +63,7 @@ function DecisionSheet({ p, decision, onClose, onDone }: { p: Palette; decision:
   );
 }
 
-const MANAGEMENT_VIEWS = ["queue", "people", "properties", "performance", "team", "training", "access"] as const;
+const MANAGEMENT_VIEWS = ["queue", "people", "properties", "performance", "team", "training", "decisions", "access"] as const;
 type ManagementView = (typeof MANAGEMENT_VIEWS)[number];
 export function LiveManagement({ palette: p, account }: { palette: Palette; account: WorkspaceAccount }) {
   const saved = useSaved();
@@ -105,7 +106,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       </StatGrid>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
-      <Pills p={p} values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", access: "Access control" })[v]} />
+      <Pills p={p} values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", access: "Access control" })[v]} />
 
       {view === "access" && <AccessControl palette={p} account={account} />}
       {view === "queue" && queue && <>
@@ -126,13 +127,8 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
             ))}
           </List>
         </Section>
-        <Section title="Owner approvals waiting over 48 hours" count={queue.stalledOwnerApprovals.length} p={p}>
-          <List p={p} empty="No repairs are stuck with an owner.">
-            {queue.stalledOwnerApprovals.map((a, i) => (
-              <Row key={a.workId} p={p} first={i === 0} icon="clock" tone="clients" title={a.title} detail={`${a.propertyName} · waiting ${since(a.waitingSince)}. Chase the owner: they approve in their app.`} amount={pounds(a.estimatedCostMinor)} />
-            ))}
-          </List>
-        </Section>
+        {/* Owner approvals with reminders, unusual payouts and yesterday's missed Stays checks. */}
+        <QueueExtras p={p} queue={queue} onDone={load} />
         <Section title="Owners who owe a balance" count={queue.ownerBalancesDue.length} p={p}>
           <List p={p} empty="No owner balances due.">
             {queue.ownerBalancesDue.map((s, i) => (
@@ -155,6 +151,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       </>}
 
       {view === "training" && <LiveTraining palette={p} manage />}
+      {view === "decisions" && <DecisionsReport palette={p} />}
       {view === "performance" && <LiveTeamPerformance palette={p} />}
       {(view === "people" || view === "properties") && <LivePeople palette={p} account={account} view={view} />}
 

@@ -29,6 +29,9 @@ const PROPERTIES = tool('properties', 'Properties', 'Every property and its deta
 const HELP = tool('help', 'Help & training', 'Guides for your role', 'compass', tab('help'));
 const UPDATES = tool('updates', 'Updates', 'What changed recently', 'bell', tab('activity'));
 const RESTOCK = tool('restock', 'Restock requests', 'Ask for supplies', 'box', { kind: 'tracker', module: 'replenishment-requests' }, ['replenishment-requests']);
+// Training for every team role; admins land where courses and their files are added.
+const TRAINING = tool('training', 'Training', 'Courses for your role', 'star', { kind: 'tab', tab: 'help', anchor: sectionAnchor('Training') });
+const TRAINING_ADMIN = tool('training', 'Training', 'Courses and course files', 'star', work('management', { sub: 'training' }));
 
 const BY_ROLE: Record<string, Candidate[]> = {
   admin: [
@@ -39,7 +42,8 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('cleans', 'Cleans', 'Schedule, reviews and cleaners', 'spray', work('cleans')),
     tool('repairs', 'Repairs', 'Reports, bookings and visits', 'toolbox', work('repairs')),
     tool('accounts', 'Accounts', 'Expenses, payouts, statements', 'coins', work('accounts')),
-    PROPERTIES,
+    // Properties is always in the navigation, so its tile makes room for training.
+    TRAINING_ADMIN,
   ],
   stays: [
     tool('inbox', 'Guest inbox', 'Guests waiting for a reply', 'chat', work('stays', { sub: 'inbox' }), ['guest-communication']),
@@ -50,7 +54,8 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('cleans', 'Cleans', 'Cleans at your properties', 'spray', work('cleans'), ['cleaning-schedule', 'clean-reporting']),
     tool('bookings', 'Bookings & licences', 'Direct offers and licensing', 'calendar', work('all'), ['direct-bookings', 'licensing']),
     tool('aircover', 'AirCover claims', 'Add and close claims', 'shield', { kind: 'tracker', module: 'aircover-reporting' }, ['aircover-reporting']),
-    { ...PROPERTIES, needs: ['property-database', 'ota-logins', 'property-onboarding'] },
+    // Properties is always in the navigation, so its tile makes room for training.
+    TRAINING,
   ],
   cleans: [
     tool('today', 'My cleans', 'Schedule and checklists', 'spray', work('cleans', { section: 'Schedule' })),
@@ -58,6 +63,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('month', 'My month', 'Cleans done and pay', 'medal', work('cleans', { section: 'Your month' })),
     RESTOCK,
     UPDATES,
+    TRAINING,
     HELP,
   ],
   cleaning_manager: [
@@ -69,6 +75,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('invoices', 'Clean invoices', 'Cleans to invoice', 'receipt', work('all'), ['cleans-invoices']),
     RESTOCK,
     { ...PROPERTIES, needs: ['clean-client-database', 'property-database'] },
+    TRAINING,
   ],
   ready: [
     tool('pipeline', 'Repairs', 'Reported, booked and done', 'toolbox', work('repairs', { section: 'Pipeline' })),
@@ -77,6 +84,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('purchases', 'Purchases', 'Orders and deliveries', 'cart', work('all'), ['purchase-order']),
     tool('furnishing', 'Furnishing quotes', 'Rooms to furnish', 'sofa', work('all'), ['property-furnishing-board']),
     { ...PROPERTIES, needs: ['property-database', 'clean-client-database'] },
+    TRAINING,
     HELP,
   ],
   accounts: [
@@ -88,6 +96,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('budget', 'Budget chart', 'Most each item should cost', 'coins', work('accounts', { section: 'Budget chart' })),
     tool('invoices', 'Invoices', 'Payments and settled', 'chart', tab('analytics')),
     RESTOCK,
+    TRAINING,
   ],
   client: [
     tool('stays', 'Stays & statements', 'Bookings and money', 'calendar', work('owner')),

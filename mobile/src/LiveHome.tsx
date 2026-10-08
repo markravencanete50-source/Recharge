@@ -9,6 +9,7 @@ import { StateGraphic } from "./StateGraphic";
 import { followUpsDue } from "../../lib/portfolio-overview";
 import { ShiftCard } from "./LiveShifts";
 import { HomeTools } from "./HomeTools";
+import { AdminHome } from "./LiveOversight";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { ui, type Palette } from "./theme";
 import { LiveNoticeRow, LiveWorkRow, isDone, isWaitingWork, workDate } from "./LiveRows";
@@ -96,6 +97,7 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
   return (
     <>
       {!desktop && <WelcomeHeader palette={p} name={account.fullName || "there"} dateLabel={todayLabel()} subtitle={SUBTITLE[account.role]} onCalendar={() => onNavigate("work")} />}
+      {(account.role === "admin" || account.role === "super_admin") && <AdminHome palette={p} desktop={desktop} onTool={onTool} />}
       {/* The tools for this person's role come first, so nobody has to look for them. */}
       <HomeTools palette={p} account={account} properties={properties} desktop={desktop} onOpen={onTool} onAll={() => onNavigate("help")} />
       {account.role !== "client" && <ShiftCard palette={p} account={account} />}

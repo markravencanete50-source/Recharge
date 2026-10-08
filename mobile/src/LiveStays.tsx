@@ -19,6 +19,7 @@ import { poundsToMinor } from "../../lib/repairs-live";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { GuestInbox } from "./LiveGuestInbox";
+import { TodaysRoutine } from "./StaysRoutine";
 
 // Live Stays: arrivals, departures and cleans by day, recording stays with their
 // platform details, and the daily listing and pricing checks. Backend data only.
@@ -336,6 +337,7 @@ export function LiveStays({ palette: p, account, properties, onOpenRepairs, onOp
         <Text style={[ui.body, { color: p.muted }]}>Arrivals, departures, cleans and the daily listing and pricing checks.</Text>
       </View>
       {tabs}
+      <TodaysRoutine p={p} account={account} properties={properties} operations={operations} schedule={schedule} today={today} loading={loading} />
       <StatGrid>
         <StatTile p={p} icon="log-in" tone="stays" label="Arrivals" value={schedule.stays.filter(s => s.checkIn === today).length} detail="Today" />
         <StatTile p={p} icon="log-out" tone="stays" label="Departures" value={schedule.stays.filter(s => s.checkOut === today).length} detail="Today" />

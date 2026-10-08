@@ -30,6 +30,11 @@ const EXACT: Record<string, NoticeCopy> = {
   'operations.updateOperation.bookRepair': copy('Repair booked', 'A repair has been booked in.'),
   'operations.updateOperation.reviseQuote': copy('Repair quote updated', 'The quote for a repair has changed. If it is above your approval limit, it needs your approval before the work goes ahead.'),
   'operations.updateOperation.completeRepair': copy('Repair completed', 'A repair has been completed.'),
+  // Approvals that have waited: the owner is reminded at 48 hours, client relations told at 96.
+  'repairs.owner_reminder': copy('A repair is waiting for your approval', 'A repair at your property is waiting for you to approve its cost. Approving it, or asking us about it, lets the work go ahead.'),
+  'repairs.owner_escalated': copy('An owner hasn’t approved a repair', 'A repair has waited four days for the owner’s approval. Please contact the owner so the work doesn’t stall.'),
+  'journey.estimate_reminder': copy('Your estimate is waiting for you', 'The estimate for your property is ready and waiting for your decision. You can go ahead, ask for more time or ask us a question.'),
+  'journey.estimate_escalated': copy('An owner hasn’t answered their estimate', 'An estimate has waited four days for the owner’s decision. Please contact the owner.'),
   // Purchases.
   'operations.updateOperation.approvePurchase': copy('Purchase approved', 'A purchase request has been approved.'),
   'operations.updateOperation.recordOrder': copy('Purchase ordered', 'A purchase has been ordered.'),
@@ -53,12 +58,14 @@ const EXACT: Record<string, NoticeCopy> = {
   'operations.createOperation': copy('New task', 'A new task has been added.'),
   'operations.recordReservation': copy('Stay recorded', 'A stay has been recorded.'),
   'stays.daily_signoff': copy('Day signed off', 'The daily Stays checks have been signed off.'),
+  'stays.missed_yesterday': copy('Yesterday’s checks were missed', 'Some of yesterday’s Stays sign-offs or listing checks were not done. Open Management to see what was missed.'),
   'reservation.imported': copy('New booking', 'A new booking has come in.'),
   'reservation.updated': copy('Booking updated', 'A booking has changed.'),
   'reservation.cancelled': copy('Booking cancelled', 'A booking has been cancelled.'),
   // Accounts.
   'finance.statement_issued': copy('Owner statement issued', 'A new owner statement has been issued.'),
   'finance.owner_paid': copy('Owner payment made', 'A payment to the owner has been recorded.'),
+  'finance.payout_approved': copy('Owner payout approved', 'Management has checked and approved an unusual owner payout.'),
   // Team.
   'handover.created': copy('New task for your team', 'A new task has been handed to your team.'),
   'routine.plan_saved': copy('Routine visits updated', 'A routine visit plan has been saved.'),
