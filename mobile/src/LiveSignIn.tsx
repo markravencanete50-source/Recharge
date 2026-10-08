@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
+import { useEffect, useState, type ReactNode } from "react";
+import { ActivityIndicator, Animated, Easing, Platform, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Circle, Defs, Ellipse, Path, RadialGradient, Stop } from "react-native-svg";
 import * as Linking from "expo-linking";
 import { Text } from "./Typography";
 import { CompanyLogo } from "./CompanyLogo";
 import { HomeScene } from "./HomeScene";
 import { HeroGlow } from "./TodayAnalytics";
-import { MotionPress } from "./motion";
+import { MotionPress, Stagger, motionTokens, useReducedMotion } from "./motion";
 import { headerPalette, ui, type Palette } from "./theme";
 import { accountStep, liveApiOrigin, registrationOpen, signIn } from "./backend/client";
 import { darkBrandCanvas, designTokens } from "../../lib/design-tokens";
@@ -25,17 +25,20 @@ const KIND: Record<Kind, { icon: "mail" | "lock" | "user" | "hash"; placeholder:
 };
 function Input({ label, value, onChange, p, kind, onSubmit }: { label: string; value: string; onChange: (value: string) => void; p: Palette; kind: Kind; onSubmit?: () => void }) {
   const secure = kind === "password" || kind === "new-password", email = kind === "email", k = KIND[kind];
-  const [hidden, setHidden] = useState(true);
+  const [hidden, setHidden] = useState(true), [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 8 }}>
       <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{label}</Text>
-      <View style={[ui.row, { minHeight: 52, borderRadius: 16, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, paddingLeft: 14, gap: 10 }]}>
-        <Feather name={k.icon} size={17} color={p.muted} />
+      <View style={[ui.row, { minHeight: 52, borderRadius: 16, borderWidth: focused ? 1.5 : 1, borderColor: focused ? p.primary : p.controlBorder, backgroundColor: p.background, paddingLeft: 14, gap: 10 },
+        Platform.OS === "web" ? ({ transitionProperty: "border-color, box-shadow", transitionDuration: "200ms", boxShadow: focused ? `0 0 0 4px ${p.primary}26` : "none" } as object) : null]}>
+        <Feather name={k.icon} size={17} color={focused ? p.primary : p.muted} />
         <TextInput
           accessibilityLabel={label}
           value={value}
           onChangeText={onChange}
           onSubmitEditing={onSubmit}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           returnKeyType={secure ? "go" : "next"}
           autoCapitalize={kind === "name" ? "words" : "none"}
           autoCorrect={false}
@@ -44,7 +47,7 @@ function Input({ label, value, onChange, p, kind, onSubmit }: { label: string; v
           secureTextEntry={secure && hidden}
           placeholder={k.placeholder}
           placeholderTextColor={p.muted}
-          style={{ flex: 1, minHeight: 50, color: p.text, fontSize: 15, fontFamily: "Montserrat_500Medium" }}
+          style={[{ flex: 1, minHeight: 50, color: p.text, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: "transparent" }, Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null]}
         />
         {secure && (
           <MotionPress accessibilityRole="button" accessibilityLabel={hidden ? "Show password" : "Hide password"} onPress={() => setHidden(!hidden)} style={{ width: 48, height: 50, alignItems: "center", justifyContent: "center" }}>
@@ -66,9 +69,12 @@ function Problem({ p, text }: { p: Palette; text: string }) {
 }
 function Primary({ p, label, busy, disabled, onPress }: { p: Palette; label: string; busy: boolean; disabled: boolean; onPress: () => void }) {
   return (
-    <MotionPress accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[ui.between, { minHeight: 54, paddingHorizontal: 20, borderRadius: 18, backgroundColor: p.primary, opacity: disabled ? 0.55 : 1 }]}>
+    // Stays in the brand colour while it can't be pressed yet (no washed-out grey); only the
+    // arrow fades until the details are filled in.
+    <MotionPress accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[ui.between, { minHeight: 54, paddingHorizontal: 20, borderRadius: 18, backgroundColor: p.primary, opacity: disabled && !busy ? 0.9 : 1 },
+      Platform.OS === "web" ? ({ transitionProperty: "opacity, box-shadow", transitionDuration: "200ms", boxShadow: disabled ? "none" : `0 14px 28px -16px ${p.primary}` } as object) : null]}>
       <Text style={{ color: p.onPrimary, fontSize: 15, fontWeight: "700" }}>{label}</Text>
-      {busy ? <ActivityIndicator color={p.onPrimary} /> : <Feather name="arrow-right" size={18} color={p.onPrimary} />}
+      {busy ? <ActivityIndicator color={p.onPrimary} /> : <Feather name="arrow-right" size={18} color={p.onPrimary} style={{ opacity: disabled ? 0.45 : 1 }} />}
     </MotionPress>
   );
 }
@@ -162,37 +168,42 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palet
       onSignedIn(account);
     } catch (e) { setPassword(""); setError(message(e)); } finally { setBusy(false); }
   }
-  const themeButton = (
-    <MotionPress accessibilityRole="button" accessibilityLabel={p.isDark ? "Switch to light mode" : "Switch to dark mode"} onPress={onTheme} style={[ui.iconButton, { borderColor: header.border, backgroundColor: header.surface }]}>
-      <Feather name={p.isDark ? "sun" : "moon"} size={19} color={header.text} />
+  // A quiet theme switch: an outline on the page itself, never a coloured plate.
+  const themeButton = (tone: "page" | "header") => (
+    <MotionPress accessibilityRole="button" accessibilityLabel={p.isDark ? "Switch to light mode" : "Switch to dark mode"} onPress={onTheme}
+      style={[ui.iconButton, tone === "page" ? { borderColor: p.border, backgroundColor: p.surface } : { borderColor: header.border, backgroundColor: header.surface }]}>
+      <Feather name={p.isDark ? "sun" : "moon"} size={19} color={tone === "page" ? p.text : header.text} />
     </MotionPress>
   );
+  const items = creating ? [] : [
+    <View key="title" style={{ gap: 6 }}>
+      <Text accessibilityRole="header" style={[ui.title, { color: p.text, fontSize: desktop ? 34 : 28, lineHeight: desktop ? 40 : 34 }]}>Sign in</Text>
+      <Text style={[ui.body, { color: p.muted }]}>Use the email your administrator approved for your workspace.</Text>
+    </View>,
+    <Input key="email" label="Email" value={email} onChange={setEmail} p={p} kind="email" />,
+    <Input key="password" label="Password" value={password} onChange={setPassword} p={p} kind="password" onSubmit={() => void submit()} />,
+    ...(error ? [<Problem key="error" p={p} text={error} />] : []),
+    <Primary key="submit" p={p} label={busy ? "Signing in…" : "Sign in"} busy={busy} disabled={busy || !email.trim() || !password} onPress={() => void submit()} />,
+    <TextLink key="forgot" p={p} label="Forgot your password?" onPress={() => void Linking.openURL((liveApiOrigin() ?? "") + "/reset-password").catch(e => setError(message(e)))} />,
+    canRegister ? (
+      <MotionPress key="register" accessibilityRole="button" onPress={() => { setCreating(true); setError(""); }} style={[ui.between, { minHeight: 54, paddingHorizontal: 20, borderRadius: 18, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.surface }]}>
+        <Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>New here? Create an account</Text>
+        <Feather name="user-plus" size={18} color={p.primary} />
+      </MotionPress>
+    ) : (
+      <View key="register" style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: p.border, alignItems: "flex-start" }]}>
+        <Feather name="user-plus" size={16} color={p.primary} style={{ marginTop: 2 }} />
+        <Text style={[ui.small, { color: p.text, flex: 1 }]}>New to Recharge? Ask your administrator to add you. They’ll send you a link to choose your password.</Text>
+      </View>
+    ),
+    <View key="lockout" style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.wash, alignItems: "flex-start" }]}>
+      <Feather name="shield" size={16} color={p.primary} style={{ marginTop: 2 }} />
+      <Text style={[ui.small, { color: p.text, flex: 1 }]}>Five incorrect passwords pause sign-in for 24 hours. Password reset stays available.</Text>
+    </View>,
+  ];
   const form = creating ? <CreateAccount p={p} desktop={desktop} onBack={address => { setCreating(false); if (address) setEmail(address); }} /> : (
     <View style={{ width: "100%", maxWidth: 440, alignSelf: "center", gap: 18 }}>
-      <View style={{ gap: 6 }}>
-        <Text accessibilityRole="header" style={[ui.title, { color: p.text, fontSize: desktop ? 34 : 28, lineHeight: desktop ? 40 : 34 }]}>Sign in</Text>
-        <Text style={[ui.body, { color: p.muted }]}>Use the email your administrator approved for your workspace.</Text>
-      </View>
-      <Input label="Email" value={email} onChange={setEmail} p={p} kind="email" />
-      <Input label="Password" value={password} onChange={setPassword} p={p} kind="password" onSubmit={() => void submit()} />
-      {!!error && <Problem p={p} text={error} />}
-      <Primary p={p} label={busy ? "Signing in…" : "Sign in"} busy={busy} disabled={busy || !email.trim() || !password} onPress={() => void submit()} />
-      <TextLink p={p} label="Forgot your password?" onPress={() => void Linking.openURL((liveApiOrigin() ?? "") + "/reset-password").catch(e => setError(message(e)))} />
-      {canRegister ? (
-        <MotionPress accessibilityRole="button" onPress={() => { setCreating(true); setError(""); }} style={[ui.between, { minHeight: 54, paddingHorizontal: 20, borderRadius: 18, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.surface }]}>
-          <Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>New here? Create an account</Text>
-          <Feather name="user-plus" size={18} color={p.primary} />
-        </MotionPress>
-      ) : (
-        <View style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: p.border, alignItems: "flex-start" }]}>
-          <Feather name="user-plus" size={16} color={p.primary} style={{ marginTop: 2 }} />
-          <Text style={[ui.small, { color: p.text, flex: 1 }]}>New to Recharge? Ask your administrator to add you. They’ll send you a link to choose your password.</Text>
-        </View>
-      )}
-      <View style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.wash, alignItems: "flex-start" }]}>
-        <Feather name="shield" size={16} color={p.primary} style={{ marginTop: 2 }} />
-        <Text style={[ui.small, { color: p.text, flex: 1 }]}>Five incorrect passwords pause sign-in for 24 hours. Password reset stays available.</Text>
-      </View>
+      {items.map((item, i) => <Stagger key={item.key} index={i + 2}>{item}</Stagger>)}
     </View>
   );
   if (desktop) {
@@ -202,16 +213,21 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palet
             drawn for a forest canvas, and bone lettering keeps its contrast on it. */}
         <View style={{ flex: 1, maxWidth: 640, backgroundColor: darkBrandCanvas, padding: 48, justifyContent: "space-between", overflow: "hidden" }}>
           <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, opacity: 0.9 }}><HeroGlow palette={p} /></View>
-          <CompanyLogo palette={p} variant="dark" width={168} />
-          <View style={{ gap: 14 }}>
-            <Text style={{ color: "#FAF7F0", fontSize: 46, lineHeight: 52, fontWeight: "700", letterSpacing: -1.6 }}>{creating ? "Welcome." : "Welcome back."}</Text>
-            <Text style={{ color: "#D3E0D8", fontSize: 17, lineHeight: 26, maxWidth: 420 }}>Your properties, stays, cleans and repairs, together in one place.</Text>
+          <Rise index={0}><CompanyLogo palette={p} variant="dark" width={168} /></Rise>
+          <View style={{ gap: 18 }}>
+            <Rise index={1}><Text style={{ color: "#FAF7F0", fontSize: 46, lineHeight: 52, fontWeight: "700", letterSpacing: -1.6 }}>{creating ? "Welcome." : "Welcome back."}</Text></Rise>
+            <Rise index={2}><Text style={{ color: "#D3E0D8", fontSize: 17, lineHeight: 26, maxWidth: 420 }}>Your properties, stays, cleans and repairs, together in one place.</Text></Rise>
+            <Rise index={3}><TeamChips /></Rise>
           </View>
-          <View style={{ alignItems: "flex-end" }}><HomeScene width={300} /></View>
+          <View style={{ alignItems: "flex-end" }}><ChargeScene width={300} /></View>
         </View>
-        <View style={{ flex: 1 }}>
-          <View style={{ alignItems: "flex-end", padding: 20 }}><View style={{ backgroundColor: p.header, borderRadius: 16 }}>{themeButton}</View></View>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 32, paddingBottom: 80 }} keyboardShouldPersistTaps="handled">{form}</ScrollView>
+        <View style={{ flex: 1, overflow: "hidden" }}>
+          <PageGlow p={p} />
+          <View style={{ alignItems: "flex-end", padding: 20 }}>{themeButton("page")}</View>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 32, paddingBottom: 80 }} keyboardShouldPersistTaps="handled">
+            <View style={[{ width: "100%", maxWidth: 500, alignSelf: "center", padding: 36, borderRadius: 28, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface },
+              Platform.OS === "web" ? ({ boxShadow: p.isDark ? "0 40px 80px -48px rgba(0,0,0,.8)" : "0 40px 80px -48px rgba(21,45,40,.45)" } as object) : null]}>{form}</View>
+          </ScrollView>
         </View>
       </View>
     );
@@ -220,12 +236,12 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palet
   return (
     <ScrollView style={{ flex: 1, backgroundColor: p.background }} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <View style={{ backgroundColor: p.header, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 64, overflow: "hidden" }}>
-        <View style={ui.between}><CompanyLogo palette={header} width={width < 360 ? 112 : 144} />{themeButton}</View>
+        <Rise index={0}><View style={ui.between}><CompanyLogo palette={header} width={width < 360 ? 112 : 144} />{themeButton("header")}</View></Rise>
         <View style={{ marginTop: 26, gap: 8, paddingRight: 140 }}>
-          <Text style={{ color: p.headerText, fontSize: 30, lineHeight: 36, fontWeight: "700", letterSpacing: -1 }}>{creating ? "Welcome." : "Welcome back."}</Text>
-          <Text style={{ color: p.headerMuted, fontSize: 14, lineHeight: 21 }}>Your properties and work, together in one place.</Text>
+          <Rise index={1}><Text style={{ color: p.headerText, fontSize: 30, lineHeight: 36, fontWeight: "700", letterSpacing: -1 }}>{creating ? "Welcome." : "Welcome back."}</Text></Rise>
+          <Rise index={2}><Text style={{ color: p.headerMuted, fontSize: 14, lineHeight: 21 }}>Your properties and work, together in one place.</Text></Rise>
         </View>
-        <View pointerEvents="none" style={{ position: "absolute", right: -6, bottom: 20 }}><HomeScene width={150} /></View>
+        <View pointerEvents="none" style={{ position: "absolute", right: -6, bottom: 20 }}><ChargeScene width={150} /></View>
         <Svg pointerEvents="none" width="100%" height={44} viewBox="0 0 390 44" preserveAspectRatio="none" style={{ position: "absolute", left: 0, right: 0, bottom: -1 }}>
           <Path d="M0 8 C 110 50, 250 46, 390 2 L390 44 L0 44 Z" fill={p.isDark ? "#2E6B5E" : "#A7D9C1"} opacity={0.35} />
           <Path d="M0 18 C 120 54, 260 50, 390 12 L390 44 L0 44 Z" fill={t.background} />
@@ -233,5 +249,80 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palet
       </View>
       <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>{form}</View>
     </ScrollView>
+  );
+}
+
+const native = Platform.OS !== "web";
+// The sign-in's opening: logo, words and team chips rise into place one after another, once.
+function Rise({ index, children }: { index: number; children: ReactNode }) {
+  const reduced = useReducedMotion();
+  const [progress] = useState(() => new Animated.Value(reduced ? 1 : 0));
+  useEffect(() => {
+    if (reduced) { progress.setValue(1); return; }
+    const a = Animated.timing(progress, { toValue: 1, duration: motionTokens.reveal + 120, delay: 120 + index * 110, easing: motionTokens.entrance, useNativeDriver: native });
+    a.start(); return () => a.stop();
+  }, [index, progress, reduced]);
+  return <Animated.View style={{ opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>{children}</Animated.View>;
+}
+// A slow, endless 0 → 1 → 0 loop for ambient movement. Still when reduced motion is on.
+function useLoop(duration: number, delay = 0) {
+  const reduced = useReducedMotion();
+  const [value] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (reduced) { value.setValue(0); return; }
+    const ease = Easing.inOut(Easing.sin);
+    const loop = Animated.loop(Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(value, { toValue: 1, duration, easing: ease, useNativeDriver: native }),
+      Animated.timing(value, { toValue: 0, duration, easing: ease, useNativeDriver: native }),
+    ]));
+    loop.start(); return () => loop.stop();
+  }, [duration, delay, value, reduced]);
+  return value;
+}
+// The house and flats float gently on a charging glow that breathes beneath them.
+function ChargeScene({ width }: { width: number }) {
+  const float = useLoop(2600), pulse = useLoop(1800, 300);
+  const glow = width * 0.9;
+  return (
+    <View style={{ width, height: width * 0.75, alignItems: "center", justifyContent: "flex-end" }}>
+      <Animated.View pointerEvents="none" style={{ position: "absolute", bottom: -glow * 0.22, width: glow, height: glow * 0.5,
+        opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }), transform: [{ scaleX: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.06] }) }] }}>
+        <Svg width="100%" height="100%" viewBox="0 0 100 50"><Defs><RadialGradient id="charge-glow" cx="50%" cy="50%" r="50%"><Stop offset="0" stopColor="#A7D9C1" stopOpacity={0.42} /><Stop offset="1" stopColor="#A7D9C1" stopOpacity={0} /></RadialGradient></Defs>
+          <Ellipse cx={50} cy={25} rx={50} ry={25} fill="url(#charge-glow)" /></Svg>
+      </Animated.View>
+      <Animated.View style={{ transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }) }] }}><HomeScene width={width} /></Animated.View>
+    </View>
+  );
+}
+// The four teams, each with a soft light that passes along them in turn.
+function TeamChips() {
+  const teams: { label: string; icon: "home" | "droplet" | "tool" | "pie-chart" }[] = [
+    { label: "Stays", icon: "home" }, { label: "Cleans", icon: "droplet" }, { label: "Ready", icon: "tool" }, { label: "Accounts", icon: "pie-chart" }];
+  return (
+    <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
+      {teams.map((team, i) => <TeamChip key={team.label} {...team} index={i} />)}
+    </View>
+  );
+}
+function TeamChip({ label, icon, index }: { label: string; icon: "home" | "droplet" | "tool" | "pie-chart"; index: number }) {
+  const light = useLoop(1400, index * 700);
+  return (
+    <Animated.View style={[ui.row, { gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: "rgba(167,217,193,.35)",
+      backgroundColor: "rgba(250,247,240,.06)", opacity: light.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] }) }]}>
+      <Feather name={icon} size={14} color="#A7D9C1" />
+      <Text style={{ color: "#FAF7F0", fontSize: 13, fontWeight: "600" }}>{label}</Text>
+    </Animated.View>
+  );
+}
+// A faint mint light drifting in the corner of the sign-in side, so it shares the brand panel's glow.
+function PageGlow({ p }: { p: Palette }) {
+  const drift = useLoop(7000);
+  return (
+    <Animated.View pointerEvents="none" style={{ position: "absolute", right: -260, top: -300, width: 720, height: 720,
+      transform: [{ translateX: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -40] }) }, { translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, 30] }) }] }}>
+      <Svg width="100%" height="100%" viewBox="0 0 100 100"><Defs><RadialGradient id="page-glow" cx="50%" cy="50%" r="50%"><Stop offset="0" stopColor={p.isDark ? "#3F8A75" : "#A7D9C1"} stopOpacity={p.isDark ? 0.28 : 0.45} /><Stop offset="1" stopColor={p.isDark ? "#3F8A75" : "#A7D9C1"} stopOpacity={0} /></RadialGradient></Defs>
+        <Circle cx={50} cy={50} r={50} fill="url(#page-glow)" /></Svg>
+    </Animated.View>
   );
 }
