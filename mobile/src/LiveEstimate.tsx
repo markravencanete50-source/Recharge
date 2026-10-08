@@ -109,7 +109,7 @@ export function EstimateExplorer({ palette: p, estimate, owner }: { palette: Pal
 
       <Text style={[ui.small, { color: p.muted }]}>An estimate, not a guarantee. {fees ? "Before cleaning, maintenance, utilities and tax." : "Your Recharge contact will add the fees so you can see your earnings."} Assumes the property is available all {AVAILABLE_NIGHTS} nights of the year.</Text>
       {changed && <MotionPress accessibilityRole="button" onPress={() => setChoices(start)} style={{ alignSelf: "flex-start", minHeight: 40, justifyContent: "center" }}>
-        <Text style={{ color: p.primary, fontWeight: "700" }}>Back to Recharge's estimate</Text>
+        <Text style={{ color: p.primary, fontWeight: "700" }}>Back to Recharge’s estimate</Text>
       </MotionPress>}
     </View>
   );

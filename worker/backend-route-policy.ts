@@ -22,6 +22,8 @@ const endpoints = new Set([
 ]);
 // The app's browser build is served from /workspace/ (scripts/build-workspace-web.mjs).
 export const isWorkspaceApp = (path: string) => path === "/workspace" || path.startsWith("/workspace/");
+// Built app files whose names carry a content hash (entry-<hash>.js, logo.<hash>.png): safe to cache for good.
+export const hashedWorkspaceFile = (path: string) => isWorkspaceApp(path) && /[.-][0-9a-f]{20,}\.(js|css|png|jpg|svg|ttf|woff2?|ico)$/.test(path);
 export function backendRouteAllowed(path: string) {
   return endpoints.has(path) || isWorkspaceApp(path) || path.startsWith("/assets/") || /^\/fonts\/(inter|montserrat)-(400|500|600|700)\.ttf$/.test(path);
 }

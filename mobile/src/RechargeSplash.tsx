@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Platform, View, useWindowDimensions } from "react-native";
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg";
 import { CompanyLogo } from "./CompanyLogo";
-import { useMotionPreference } from "./motion";
+import { MotionPress, useMotionPreference } from "./motion";
 import { Text } from "./Typography";
 import type { Palette } from "./theme";
 
 const native = Platform.OS !== "web";
-const DURATION = 3600;
+const DURATION = 3000;
 // Scene coordinates are drawn on a 300 x 190 canvas, then scaled.
 const W = 300;
 const H = 190;
@@ -220,6 +220,11 @@ export function RechargeSplash({ palette: p, onDone }: { palette: Palette; onDon
         <View style={{ position: "absolute", bottom: 48 }}>
           <CompanyLogo palette={p} width={150} />
         </View>
+        {/* The app loads underneath, so anyone in a hurry can go straight in. */}
+        <MotionPress accessibilityRole="button" accessibilityLabel="Skip the intro" onPress={() => Animated.timing(exit, { toValue: 0, duration: reduced ? 1 : 200, useNativeDriver: Platform.OS !== "web" }).start(() => done.current())}
+          style={{ position: "absolute", top: 52, right: 20, minHeight: 44, paddingHorizontal: 16, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: p.headerBorder, backgroundColor: p.headerControl }}>
+          <Text style={{ color: p.headerControlText, fontSize: 14, fontWeight: "600" }}>Skip</Text>
+        </MotionPress>
       </Animated.View>
     </Modal>
   );

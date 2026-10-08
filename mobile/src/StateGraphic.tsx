@@ -2,81 +2,9 @@ import { useEffect, useState, type ComponentProps } from "react";
 import { Animated, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import Feather from "@expo/vector-icons/Feather";
-import { useReducedMotion, useReveal } from "./motion";
-import { Text } from "./Typography";
-import { themes, type Palette } from "./theme";
+import { useReducedMotion } from "./motion";
+import type { Palette } from "./theme";
 
-export function ProgressRing({
-  completed,
-  total,
-  palette: p = themes.light,
-  motionKey = "overview:ring",
-}: {
-  completed: number;
-  total: number;
-  palette?: Palette;
-  motionKey?: string;
-}) {
-  const progress = useReveal(motionKey, 0, 550);
-  const share = total ? completed / total : 0;
-  return (
-    <View
-      accessible
-      accessibilityLabel={
-        total
-          ? `${completed} of ${total} work items complete`
-          : "No recorded items in this view"
-      }
-      style={{
-        width: 88,
-        height: 88,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Animated.View style={{position:"absolute",left:0,top:0,width:88,height:88,opacity:progress,transform:[{rotate:progress.interpolate({inputRange:[0,1],outputRange:["-24deg","0deg"]})}]}}><Svg
-        width={88}
-        height={88}
-        viewBox="0 0 88 88"
-        style={{ position: "absolute" }}
-      >
-        <Circle
-          cx="44"
-          cy="44"
-          r="35"
-          fill="none"
-          stroke={p.heroLine}
-          strokeOpacity={0.4}
-          strokeWidth="6"
-        />
-        <Circle
-          cx="44"
-          cy="44"
-          r="35"
-          fill="none"
-          stroke={p.heroText}
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeDasharray="220"
-          strokeDashoffset={220 * (1-share)}
-          rotation="-90"
-          origin="44,44"
-        />
-      </Svg></Animated.View>
-      <Text
-        style={{
-          fontSize: total ? 22 : 14,
-          textAlign: "center",
-          fontWeight: "600",
-          color: p.heroText,
-          letterSpacing: -0.7,
-        }}
-      >
-        {total ? `${Math.round(share * 100)}%` : "No items"}
-      </Text>
-    </View>
-  );
-}
 export function StateGraphic({
   palette: p,
   success = false,

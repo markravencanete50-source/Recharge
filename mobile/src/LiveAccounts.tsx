@@ -4,10 +4,12 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import { Text } from "./Typography";
+import { useSaved } from "./Celebrate";
 import { MotionPress, Pop, Stagger, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
+import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { ui, type Palette } from "./theme";
-import { Button, Field, IconChip, london, message, Notice, Section, StatGrid, StatTile, Tag, useRequestId, Loading, type IconName, type Tone } from "./LiveKit";
+import { Button, Field, IconChip, london, message, Notice, Section, StatGrid, StatTile, Tag, useRequestId, useWorkFocus, Loading, type IconName, type Tone } from "./LiveKit";
 import { formatCount, formatMoney } from "../../lib/format";
 import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
 import {
@@ -33,27 +35,28 @@ const STATEMENT_LABEL: Record<string, [string, "good" | "wait" | "bad" | "plain"
 const CHANNEL_LABEL: Record<string, string> = { airbnb: "Airbnb", booking_com: "Booking.com", vrbo: "Vrbo", direct: "Direct", other: "Other" };
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v + "T12:00:00Z"));
 
-export function Pills<T extends string>({ p, values, value, onChange, label }: { p: Palette; values: readonly T[]; value: T; onChange: (v: T) => void; label?: (v: T) => string }) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-      {values.map(v => {
-        const on = v === value;
-        return (
-          <Pop key={v} active={on}><MotionPress accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(v)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-            <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label ? label(v) : readableStage(v)}</Text>
-          </MotionPress></Pop>
-        );
-      })}
-    </ScrollView>
-  );
+// Choices as pills. A short fixed set wraps onto more lines so every option is visible on a phone;
+// long lists (properties, nights) scroll sideways.
+export function Pills<T extends string>({ p, values, value, onChange, label, wrap = values.length <= 8 }: { p: Palette; values: readonly T[]; value: T; onChange: (v: T) => void; label?: (v: T) => string; wrap?: boolean }) {
+  const items = values.map(v => {
+    const on = v === value;
+    return (
+      <Pop key={v} active={on}><MotionPress accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(v)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
+        <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label ? label(v) : readableStage(v)}</Text>
+      </MotionPress></Pop>
+    );
+  });
+  return wrap
+    ? <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{items}</View>
+    : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{items}</ScrollView>;
 }
 
 // A list row: optional icon, title, supporting line and status tags, with any amount
 // right-aligned in lining figures so columns of money line up.
-export function Row({ p, title, detail, amount, tags, onPress, first, icon, tone }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean; icon?: IconName; tone?: Tone }) {
+export function Row({ p, title, detail, amount, tags, onPress, first, icon, tone, art }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean; icon?: IconName; tone?: Tone; art?: DimensionalName }) {
   return (
     <MotionPress accessibilityRole={onPress ? "button" : undefined} disabled={!onPress} accessibilityLabel={[title, amount, ...(tags ?? []).map(t => t[0])].filter(Boolean).join(", ")} onPress={onPress} style={[ui.row, { gap: 14, paddingVertical: 14, alignItems: tags?.length ? "flex-start" : "center", borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
-      {!!icon && <IconChip icon={icon} tone={tone} p={p} />}
+      {art ? <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}><DimensionalIcon name={art} size={34} /></View> : !!icon && <IconChip icon={icon} tone={tone} p={p} />}
       <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{title}</Text>
         <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{detail}</Text>
@@ -313,10 +316,12 @@ async function pickCsv(): Promise<{ name: string; text: string } | null> {
 }
 
 export function LiveAccounts({ palette: p, account, properties }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
+  const saved = useSaved();
   const role = account.role, management = role === "admin" || role === "super_admin";
   const thisMonth = london(new Date()).slice(0, 7);
   const [period, setPeriod] = useState(thisMonth);
-  const [view, setView] = useState<Tab>("expenses");
+  const focus = useWorkFocus();
+  const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements"] as const).find(v => v === focus?.sub) ?? "expenses");
   const [status, setStatus] = useState<Expense["status"]>("to_approve");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [limit, setLimit] = useState<{ minor: number | null; version: number } | null>(null);
@@ -415,7 +420,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
       </View>
 
       {view === "expenses" && <>
-        <View style={[ui.row, { gap: 10 }]}>
+        <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
           <Button label="New expense" icon="plus" primary p={p} onPress={() => setCreating(true)} />
           <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
         </View>
@@ -510,11 +515,11 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
         <Text style={[ui.small, { color: p.muted }]}>Owners see issued and paid statements in their app. Stripe payouts will be added when Stripe is connected.</Text>
       </>}
 
-      <ExpenseSheet p={p} role={role} id={openExpense} limit={limit?.minor ?? null} onClose={() => setOpenExpense(null)} onAsk={a => { setOpenExpense(null); setAsk(a); }} onDone={load} />
-      <NewExpenseSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={load} />
-      <NoteSheet p={p} ask={ask} onClose={() => setAsk(null)} onDone={load} />
-      <StaySheet p={p} stay={stay} onClose={() => setStay(null)} onDone={load} />
-      <TermsSheet p={p} row={terms} onClose={() => setTerms(null)} onDone={load} />
+      <ExpenseSheet p={p} role={role} id={openExpense} limit={limit?.minor ?? null} onClose={() => setOpenExpense(null)} onAsk={a => { setOpenExpense(null); setAsk(a); }} onDone={saved(load)} />
+      <NewExpenseSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={saved(load)} />
+      <NoteSheet p={p} ask={ask} onClose={() => setAsk(null)} onDone={saved(load)} />
+      <StaySheet p={p} stay={stay} onClose={() => setStay(null)} onDone={saved(load)} />
+      <TermsSheet p={p} row={terms} onClose={() => setTerms(null)} onDone={saved(load)} />
     </View>
   );
 }

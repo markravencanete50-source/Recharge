@@ -101,14 +101,6 @@ export const toolHues = {
   "purchase-order-accounts": "heather",
   "owner-statements": "ochre",
 } as const satisfies Record<ModuleId, ToolHue>;
-export const departmentHues = {
-  // Mirrors departmentTokens so department tiles match department pills.
-  stays: "forest",
-  ready: "moss",
-  cleans: "ochre",
-  clients: "slate",
-  accounts: "clay",
-} as const satisfies Record<DepartmentTone, ToolHue>;
 export const iconNodes: Record<
   string,
   readonly (readonly [string, Record<string, string | number>])[]

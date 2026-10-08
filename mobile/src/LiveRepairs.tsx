@@ -4,6 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
@@ -25,6 +26,7 @@ const pounds = (minor: unknown) => typeof minor === "number" ? formatMoney(minor
 const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", referReady: "Refer to Ready", bookRepair: "Book the repair", completeRepair: "Complete the repair" };
 
 export function LiveRepairs({ palette: p, account, properties }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
+  const saved = useSaved();
   const today = london(new Date());
   const [repairs, setRepairs] = useState<Operation[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -69,7 +71,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
 
-      <View style={{ flexDirection: "row", gap: 10 }}>
+      <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
         {canReportRepair(account.role) && <Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} />}
         <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
       </View>
@@ -103,10 +105,10 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
 
       {routines && (
         <Section title="Routine visits" p={p}>
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <Button label="New routine" icon="repeat" p={p} onPress={() => setPlanning(true)} />
             <Button label="Create this month's visits" icon="calendar" p={p} disabled={!plans.length}
-              onPress={() => void writeTeams({ action: "generateRoutineVisits", requestId: Crypto.randomUUID(), period: today.slice(0, 7) }).then(() => load()).catch(e => setError(message(e)))} />
+              onPress={() => void writeTeams({ action: "generateRoutineVisits", requestId: Crypto.randomUUID(), period: today.slice(0, 7) }).then(saved(load, "Visits created")).catch(e => setError(message(e)))} />
           </View>
           {visits.filter(v => v.status !== "completed").length ? visits.filter(v => v.status !== "completed").map(v => (
             <MotionPress key={v.workId} accessibilityRole="button" onPress={() => setVisitId(v.workId)} style={[ui.card, ui.between, { gap: 10, backgroundColor: p.surface, borderColor: p.border }]}>
@@ -118,10 +120,10 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
         </Section>
       )}
 
-      <RepairSheet p={p} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today} onClose={() => setOpenId(null)} onDone={async () => { setOpenId(null); await load(); }} />
-      <ReportSheet p={p} account={account} visible={reporting} properties={properties} onClose={() => setReporting(false)} onDone={async () => { setReporting(false); await load(); }} />
-      <PlanSheet p={p} visible={planning} properties={properties} account={account} onClose={() => setPlanning(false)} onDone={async () => { setPlanning(false); await load(); }} />
-      <VisitSheet p={p} role={account.role} visit={visit} plans={plans} onClose={() => setVisitId(null)} onDone={async () => { setVisitId(null); await load(); }} />
+      <RepairSheet p={p} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today} onClose={() => setOpenId(null)} onDone={saved(async () => { setOpenId(null); await load(); })} />
+      <ReportSheet p={p} account={account} visible={reporting} properties={properties} onClose={() => setReporting(false)} onDone={saved(async () => { setReporting(false); await load(); })} />
+      <PlanSheet p={p} visible={planning} properties={properties} account={account} onClose={() => setPlanning(false)} onDone={saved(async () => { setPlanning(false); await load(); })} />
+      <VisitSheet p={p} role={account.role} visit={visit} plans={plans} onClose={() => setVisitId(null)} onDone={saved(async () => { setVisitId(null); await load(); })} />
     </View>
   );
 }
@@ -223,13 +225,13 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
           <Field label="Anything else you tried or found" value={f("troubleshooting")} onChange={set("troubleshooting")} p={p} multiline placeholder="Error codes, what the guest said, photos taken" />
           <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: urgent }} onPress={() => setUrgent(u => !u)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: urgent ? p.cautionWash : p.elevated }]}>
             <Feather name={urgent ? "check-square" : "square"} size={20} color={urgent ? p.danger : p.muted} />
-            <Text style={{ color: p.text, flex: 1 }}>Urgent: the guest can't use the property properly until it's fixed</Text>
+            <Text style={{ color: p.text, flex: 1 }}>Urgent: the guest can’t use the property properly until it’s fixed</Text>
           </MotionPress>
           {repair.data.warrantyRequired === true && <Field label="Warranty provider contacted" value={f("warrantyContactEvidence")} onChange={set("warrantyContactEvidence")} p={p} multiline />}
           <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
         </>}
         {step === "bookRepair" && <>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             <Button label="Today" p={p} onPress={() => set("repairOn")(today)} />
             <Button label="Tomorrow" p={p} onPress={() => set("repairOn")(addDays(today, 1))} />
           </View>
@@ -324,7 +326,7 @@ function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: 
       </MotionPress>
       <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: urgent || hazard }} onPress={() => setUrgent(u => !u)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: urgent || hazard ? p.cautionWash : p.elevated }]}>
         <Feather name={urgent || hazard ? "check-square" : "square"} size={20} color={urgent || hazard ? p.danger : p.muted} />
-        <Text style={{ color: p.text, flex: 1 }}>Urgent: guests can't use the property properly until it's fixed</Text>
+        <Text style={{ color: p.text, flex: 1 }}>Urgent: guests can’t use the property properly until it’s fixed</Text>
       </MotionPress>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Sending…" : "Report repair"} icon="send" primary p={p} disabled={busy} onPress={() => void save()} />

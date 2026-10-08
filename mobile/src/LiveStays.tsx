@@ -3,7 +3,8 @@ import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { MotionPress, TweenNumber } from "./motion";
+import { useCelebrate, useSaved } from "./Celebrate";
+import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading, StatGrid, StatTile } from "./LiveKit";
@@ -33,8 +34,10 @@ function PropertyPills({ p, properties, value, onChange }: { p: Palette; propert
 }
 function Check({ p, label, value, onChange }: { p: Palette; label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
-    <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: value }} onPress={() => onChange(!value)} style={[ui.row, { gap: 12, minHeight: 48 }]}>
-      <Feather name={value ? "check-square" : "square"} size={20} color={p.primary} /><Text style={{ color: p.text, flex: 1 }}>{label}</Text>
+    <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: value }} onPress={() => onChange(!value)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 10, borderRadius: 14, backgroundColor: value ? p.wash : "transparent" }]}>
+      {/* The box fills and springs when ticked. */}
+      <Pop active={value}><View style={{ width: 24, height: 24, borderRadius: 7, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.primary, backgroundColor: value ? p.primary : "transparent" }}>{value && <Feather name="check" size={15} color={p.onPrimary} />}</View></Pop>
+      <Text style={{ color: p.text, flex: 1, fontWeight: value ? "600" : "400" }}>{label}</Text>
     </MotionPress>
   );
 }
@@ -226,6 +229,7 @@ function ReviewSheet({ p, property, onClose, onDone }: { p: Palette; property: P
 
 // The end-of-day sign-off: every listing visible, reviews handled, suspensions dealt with, re-listings done.
 function SignOffCard({ p, refreshKey }: { p: Palette; refreshKey: number }) {
+  const celebrate = useCelebrate();
   const [state, setState] = useState<Signoff | null>(null);
   const [ticks, setTicks] = useState({ allVisible: false, reviewsHandled: false, suspensionsHandled: false, relistingsDone: false });
   const [note, setNote] = useState("");
@@ -236,7 +240,7 @@ function SignOffCard({ p, refreshKey }: { p: Palette; refreshKey: number }) {
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load, refreshKey]);
   if (!state) return error ? <Notice text={error} p={p} tone="bad" /> : null;
   if (state.mine) return (
-    <View style={[ui.row, { gap: 12, padding: 14, borderRadius: 18, backgroundColor: p.successWash }]}>
+    <View nativeID="stays-signoff" style={[ui.row, { gap: 12, padding: 14, borderRadius: 18, backgroundColor: p.successWash }]}>
       <Feather name="check-circle" size={20} color={p.success} />
       <Text style={{ color: p.text, flex: 1, fontWeight: "600" }}>Signed off today at {new Date(state.mine.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}{state.mine.note ? ` · ${state.mine.note}` : ""}</Text>
     </View>
@@ -247,13 +251,13 @@ function SignOffCard({ p, refreshKey }: { p: Palette; refreshKey: number }) {
     if (!all) { setError("Tick all four checks before signing off."); return; }
     if (s.openRelistings > 0 && note.trim().length < 5) { setError("Say where the open re-listings are up to."); return; }
     setBusy(true); setError("");
-    try { await writeTeams({ action: "signOffDay", requestId: request.get(), ...ticks, allVisible: true, reviewsHandled: true, suspensionsHandled: true, relistingsDone: true, note: note.trim() }); request.done(); await load(); }
+    try { await writeTeams({ action: "signOffDay", requestId: request.get(), ...ticks, allVisible: true, reviewsHandled: true, suspensionsHandled: true, relistingsDone: true, note: note.trim() }); request.done(); celebrate("Day signed off"); await load(); }
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   const set = (k: keyof typeof ticks) => (v: boolean) => setTicks(t => ({ ...t, [k]: v }));
   return (
-    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
-      <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Today's sign-off</Text>
+    <View nativeID="stays-signoff" style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
+      <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Today’s sign-off</Text>
       <Text style={[ui.small, { color: p.muted }]}>{plural(s.listingChecksToday, "listing check")} and {plural(s.reviewsToday, "review")} logged by you today · {plural(s.openRelistings, "re-listing")} open{s.flaggedToday ? ` · ${plural(s.flaggedToday, "listing")} flagged today` : ""}</Text>
       <Check p={p} label="Every listing is live and visible" value={ticks.allVisible} onChange={set("allVisible")} />
       <Check p={p} label="No bad review is left without a reply" value={ticks.reviewsHandled} onChange={set("reviewsHandled")} />
@@ -267,6 +271,7 @@ function SignOffCard({ p, refreshKey }: { p: Palette; refreshKey: number }) {
 }
 
 export function LiveStays({ palette: p, properties, onOpenRepairs, onOpenWork }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpenRepairs: () => void; onOpenWork?: (item: Operation) => void }) {
+  const saved = useSaved();
   const [today] = useState(() => london(new Date()));
   const weekEnd = addDays(today, 6);
   const [schedule, setSchedule] = useState<Schedule>({ work: [], stays: [] });
@@ -321,7 +326,7 @@ export function LiveStays({ palette: p, properties, onOpenRepairs, onOpenWork }:
       </StatGrid>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
-      <View style={[ui.row, { gap: 10 }]}>
+      <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
         <Button label="Record a stay" icon="plus" primary p={p} onPress={() => setRecording(true)} />
         <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
       </View>
@@ -385,10 +390,10 @@ export function LiveStays({ palette: p, properties, onOpenRepairs, onOpenWork }:
         {!properties.length && <Notice text="No properties are assigned to you yet." p={p} />}
       </Section>
 
-      <StaySheet p={p} visible={recording} properties={properties} onClose={() => setRecording(false)} onDone={load} />
-      <ListingSheet p={p} property={listingFor} onClose={() => setListingFor(null)} onDone={load} />
-      <PricingSheet p={p} target={pricingFor} onClose={() => setPricingFor(null)} onDone={load} />
-      <ReviewSheet p={p} property={reviewFor} onClose={() => setReviewFor(null)} onDone={load} />
+      <StaySheet p={p} visible={recording} properties={properties} onClose={() => setRecording(false)} onDone={saved(load)} />
+      <ListingSheet p={p} property={listingFor} onClose={() => setListingFor(null)} onDone={saved(load)} />
+      <PricingSheet p={p} target={pricingFor} onClose={() => setPricingFor(null)} onDone={saved(load)} />
+      <ReviewSheet p={p} property={reviewFor} onClose={() => setReviewFor(null)} onDone={saved(load)} />
     </View>
   );
 }

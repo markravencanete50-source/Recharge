@@ -5,7 +5,8 @@ import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { MotionPress, TweenNumber } from "./motion";
+import { useSaved } from "./Celebrate";
+import { MotionPress } from "./motion";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading, StatGrid, StatTile } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
@@ -25,6 +26,7 @@ const checklistOf = (op?: Operation) => Array.isArray(op?.data.checklist) ? (op!
 const phaseLabel: Record<string, string> = { assigned: "To do", review: "Waiting for review", accepted: "Accepted" };
 
 export function LiveCleans({ palette: p, account, properties }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
+  const saved = useSaved();
   const manager = account.role !== "cleans";
   const today = london(new Date());
   const [schedule, setSchedule] = useState<Schedule>({ work: [], stays: [] });
@@ -95,7 +97,7 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
       )}
 
       {manager && (
-        <View style={{ flexDirection: "row", gap: 10 }}>
+        <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
           <Button label="New clean" icon="plus" primary p={p} onPress={() => setCreating(true)} />
           <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
         </View>
@@ -186,9 +188,9 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
       )}
       {!manager && <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />}
 
-      <JobSheet p={p} account={account} manager={manager} op={job} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={async () => { setOpenJob(null); await load(); }} />
-      <CreateSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={async () => { setCreating(false); await load(); }} today={today} />
-      <StatementSheet p={p} workId={statementFor} onClose={() => setStatementFor(null)} onDone={async () => { setStatementFor(null); await load(); }} />
+      <JobSheet p={p} account={account} manager={manager} op={job} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })} />
+      <CreateSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={saved(async () => { setCreating(false); await load(); })} today={today} />
+      <StatementSheet p={p} workId={statementFor} onClose={() => setStatementFor(null)} onDone={saved(async () => { setStatementFor(null); await load(); })} />
     </View>
   );
 }
@@ -280,7 +282,7 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
             ))}
           </View>
           {photos.find(x => x.status === "failed")?.error && <Notice text={photos.find(x => x.status === "failed")!.error!} p={p} tone="bad" />}
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {Platform.OS !== "web" && <Button label="Take photo" icon="camera" p={p} onPress={() => void addPhoto(true)} />}
             <Button label="Choose photos" icon="image" p={p} onPress={() => void addPhoto(false)} />
           </View>
@@ -354,7 +356,7 @@ function CreateSheet({ p, visible, properties, onClose, onDone, today }: { p: Pa
         ))}
         {!properties.length && <Notice text="No properties are assigned to you yet." p={p} />}
       </View>
-      <View style={{ flexDirection: "row", gap: 8 }}>
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
         <Button label="Today" p={p} onPress={() => setDate(today)} />
         <Button label="Tomorrow" p={p} onPress={() => setDate(addDays(today, 1))} />
       </View>

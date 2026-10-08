@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
-import { TweenNumber } from "./motion";
+import { useSaved } from "./Celebrate";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, useRequestId, Loading, StatGrid, StatTile } from "./LiveKit";
+import { Button, Field, message, Notice, Section, useRequestId, useWorkFocus, Loading, StatGrid, StatTile } from "./LiveKit";
 import { ExpenseSheet, List, NoteSheet, Pills, Row, type NoteAsk } from "./LiveAccounts";
 import { LiveTraining } from "./LiveTraining";
 import { LivePeople } from "./LivePeople";
@@ -61,13 +61,17 @@ function DecisionSheet({ p, decision, onClose, onDone }: { p: Palette; decision:
   );
 }
 
+const MANAGEMENT_VIEWS = ["queue", "people", "properties", "performance", "team", "training"] as const;
+type ManagementView = (typeof MANAGEMENT_VIEWS)[number];
 export function LiveManagement({ palette: p, account }: { palette: Palette; account: WorkspaceAccount }) {
+  const saved = useSaved();
   const [queue, setQueue] = useState<Management | null>(null);
   const [team, setTeam] = useState<z.infer<typeof performanceSchema>>([]);
   const [limit, setLimit] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [view, setView] = useState<"queue" | "people" | "properties" | "team" | "performance" | "training">("queue");
+  const focus = useWorkFocus();
+  const [view, setView] = useState<ManagementView>(() => MANAGEMENT_VIEWS.find(v => v === focus?.sub) ?? "queue");
   const [decision, setDecision] = useState<Decision | null>(null);
   const [expense, setExpense] = useState<string | null>(null);
   const [ask, setAsk] = useState<NoteAsk | null>(null);
@@ -100,7 +104,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       </StatGrid>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
-      <Pills p={p} values={["queue", "people", "properties", "performance", "team", "training"] as const} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training" })[v]} />
+      <Pills p={p} values={MANAGEMENT_VIEWS} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training" })[v]} />
 
       {view === "queue" && queue && <>
         <Section title="Cleaning decisions" count={queue.cleaningDecisions.length} p={p}>
@@ -153,9 +157,9 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       {(view === "people" || view === "properties") && <LivePeople palette={p} account={account} view={view} />}
 
       <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
-      <DecisionSheet p={p} decision={decision} onClose={() => setDecision(null)} onDone={load} />
-      <ExpenseSheet p={p} role={account.role} id={expense} limit={limit} onClose={() => setExpense(null)} onAsk={a => { setExpense(null); setAsk(a); }} onDone={load} />
-      <NoteSheet p={p} ask={ask} onClose={() => setAsk(null)} onDone={load} />
+      <DecisionSheet p={p} decision={decision} onClose={() => setDecision(null)} onDone={saved(load)} />
+      <ExpenseSheet p={p} role={account.role} id={expense} limit={limit} onClose={() => setExpense(null)} onAsk={a => { setExpense(null); setAsk(a); }} onDone={saved(load)} />
+      <NoteSheet p={p} ask={ask} onClose={() => setAsk(null)} onDone={saved(load)} />
     </View>
   );
 }

@@ -464,9 +464,6 @@ function asObject(value: unknown): JsonObject {
     : {};
 }
 
-function arrayValue(value: unknown) {
-  return Array.isArray(value) ? value : [];
-}
 
 function scalarString(value: unknown) {
   if (typeof value === "string") return value.trim();
@@ -519,24 +516,5 @@ function numberValue(value: unknown) {
   return 0;
 }
 
-function booleanLike(value: unknown) {
-  return value === true || value === 1 || value === "1" || value === "true";
-}
 
-function parseTimestamp(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value > 10_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
-  }
-  const text = scalarString(value);
-  if (!text) return 0;
-  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
-  const normalized = hasZone ? text : `${text.replace(" ", "T")}Z`;
-  const parsed = Date.parse(normalized);
-  return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : 0;
-}
 
-function titleCase(value: string) {
-  return value
-    .replace(/[-_]+/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}

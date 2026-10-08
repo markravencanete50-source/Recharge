@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { z } from "zod";
 import { Text } from "./Typography";
@@ -37,9 +37,11 @@ function Chip({ p, label, count, on, onPress }: { p: Palette; label: string; cou
 
 export function PortfolioInsights({ palette: p, properties, journeys, filter, onFilter, onOwners }: { palette: Palette; properties: PropertyView[]; journeys: JourneyView[]; filter: PropertyFilter; onFilter: (f: PropertyFilter) => void; onOwners?: (count: number) => void }) {
   const [insights, setInsights] = useState<Insights | null>(null);
+  const ownersRef = useRef(onOwners);
+  useEffect(() => { ownersRef.current = onOwners; }, [onOwners]);
   useEffect(() => {
     let active = true;
-    void workspaceRequest("/api/mobile/portfolio?section=insights").then(r => r.json()).then(body => { const parsed = insightsSchema.safeParse(body.data); if (active && parsed.success) { setInsights(parsed.data); onOwners?.(parsed.data.owners.length); } }).catch(() => undefined);
+    void workspaceRequest("/api/mobile/portfolio?section=insights").then(r => r.json()).then(body => { const parsed = insightsSchema.safeParse(body.data); if (active && parsed.success) { setInsights(parsed.data); ownersRef.current?.(parsed.data.owners.length); } }).catch(() => undefined);
     return () => { active = false; };
   }, [properties.length]);
   const byStage = new Map<string, string[]>();

@@ -8,11 +8,11 @@ import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { FurnishingSheet } from "./LiveFurnishing";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading, type IconName } from "./LiveKit";
+import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readTeams, readWorkspace, workspaceRequest, writeWorkspace } from "./backend/client";
 import { toolsFor, type Tool, type WorkView } from "../../lib/tool-directory";
-import { WORKSPACE_MAP } from "../../lib/workspace-map";
+import { MODULE_ART } from "../../lib/home-tools";
 import type { ModuleId } from "../../lib/modules";
 import type { PropertyView } from "../../lib/workspace-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -32,7 +32,7 @@ export function ToolDirectory({ palette: p, account, properties, onOpen }: { pal
     <Section title="Your tools" count={undefined} p={p}>
       <Text style={[ui.small, { color: p.muted }]}>Every tool on your account and where to find it.</Text>
       <List p={p} empty="No tools are on your account yet. Ask an administrator.">
-        {tools.map((t, i) => <Row key={t.id} p={p} first={i === 0} icon={WORKSPACE_MAP[t.id].icon as IconName} tone={WORKSPACE_MAP[t.id].tone} title={t.name} detail={t.place.where} onPress={() => open(t)} />)}
+        {tools.map((t, i) => <Row key={t.id} p={p} first={i === 0} art={MODULE_ART[t.id]} title={t.name} detail={t.place.where} onPress={() => open(t)} />)}
       </List>
       <TrackerSheet palette={p} tool={tracker} properties={properties} onClose={() => setTracker(null)} />
       <FurnishingSheet palette={p} visible={calculator} onClose={() => setCalculator(false)} />
@@ -45,7 +45,7 @@ export function ToolDirectory({ palette: p, account, properties, onOpen }: { pal
 const workRowSchema = z.object({ id: z.string().uuid(), property_id: z.string().uuid(), title: z.string(), description: z.string(), status: z.string(), due_on: z.string().nullable(), version: z.number() });
 type WorkRow = z.infer<typeof workRowSchema>;
 const STATUS_TAG: Record<string, [string, "good" | "wait" | "bad" | "plain"]> = { waiting: ["Open", "wait"], in_progress: ["In progress", "plain"], completed: ["Done", "good"], cancelled: ["Cancelled", "bad"] };
-function TrackerSheet({ palette: p, tool, properties, onClose }: { palette: Palette; tool: Tool | null; properties: PropertyView[]; onClose: () => void }) {
+export function TrackerSheet({ palette: p, tool, properties, onClose }: { palette: Palette; tool: Tool | null; properties: PropertyView[]; onClose: () => void }) {
   const [rows, setRows] = useState<WorkRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -88,7 +88,7 @@ function TrackerSheet({ palette: p, tool, properties, onClose }: { palette: Pale
         {properties.length ? <Pills p={p} values={properties.slice(0, 60).map(x => x.id)} value={property} onChange={setProperty} label={id => names.get(id) ?? "Property"} /> : <Notice text="No properties within your access yet." p={p} />}
         <Field label="Title" value={title} onChange={setTitle} p={p} />
         <Field label="Details (optional)" value={detail} onChange={setDetail} p={p} multiline />
-        <View style={[ui.row, { gap: 10 }]}>
+        <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
           <Button label={busy ? "Saving…" : "Save"} primary p={p} disabled={busy} onPress={() => void add()} />
           <Button label="Cancel" p={p} onPress={() => setAdding(false)} />
         </View>
@@ -96,7 +96,7 @@ function TrackerSheet({ palette: p, tool, properties, onClose }: { palette: Pale
       <List p={p} empty={loading ? "Loading…" : "Nothing here yet."}>
         {rows.map((r, i) => (
           <View key={r.id} style={{ gap: 8, paddingVertical: 4, borderTopWidth: i ? 1 : 0, borderColor: p.border }}>
-            <Row p={p} first icon={tool ? WORKSPACE_MAP[tool.id].icon as IconName : "clipboard"} tone={tool ? WORKSPACE_MAP[tool.id].tone : undefined} title={r.title} detail={[names.get(r.property_id), r.description].filter(Boolean).join(" · ")} tags={[STATUS_TAG[r.status] ?? [r.status, "plain"]]} />
+            <Row p={p} first art={tool ? MODULE_ART[tool.id] : "clipboard"} title={r.title} detail={[names.get(r.property_id), r.description].filter(Boolean).join(" · ")} tags={[STATUS_TAG[r.status] ?? [r.status, "plain"]]} />
             {!["completed", "cancelled"].includes(r.status) && <View style={[ui.row, { gap: 8, flexWrap: "wrap", paddingBottom: 8 }]}>
               {r.status === "waiting" && <Button label="Start" p={p} disabled={busy} onPress={() => void move(r, "in_progress")} />}
               <Button label="Done" icon="check" p={p} disabled={busy} onPress={() => void move(r, "completed")} />

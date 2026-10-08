@@ -1,7 +1,7 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
-import { backendRouteAllowed, isWorkspaceApp } from "./backend-route-policy";
+import { backendRouteAllowed, hashedWorkspaceFile, isWorkspaceApp } from "./backend-route-policy";
 import { securityHeaders } from "../lib/auth-security-policy";
 
 interface Env {
@@ -74,6 +74,13 @@ const worker = {
         if (url.pathname === "/workspace" || url.pathname === "/workspace/") return Response.redirect(new URL("/workspace/live", url), 302);
         const file = /\.[a-z0-9]+$/i.test(url.pathname);
         const response = await env.ASSETS.fetch(file ? request : new Request(new URL("/workspace/", url), request));
+        // Scripts, fonts and images carry a content hash in their names, so a phone keeps them
+        // and the app opens without downloading them again; a new build gets new names.
+        if (file && response.ok && hashedWorkspaceFile(url.pathname)) {
+          const cached = new Response(response.body, response);
+          cached.headers.set("Cache-Control", "public, max-age=31536000, immutable");
+          return cached;
+        }
         if (file) return response;
         const page = new Response(response.body, response);
         for (const [name, value] of Object.entries(securityHeaders)) page.headers.set(name, value);

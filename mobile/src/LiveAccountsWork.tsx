@@ -3,6 +3,7 @@ import { View } from "react-native";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { useSaved } from "./Celebrate";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, Loading, message, Notice, Section, useRequestId } from "./LiveKit";
@@ -77,6 +78,7 @@ function BudgetSheet({ p, item, visible, onClose, onDone }: { p: Palette; item: 
 }
 
 export function AccountsWork({ palette: p, account, properties, onOpenWork }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpenWork: (item: Operation) => void }) {
+  const saved = useSaved();
   const [work, setWork] = useState<Operation[]>([]), [budget, setBudget] = useState<BudgetItem[]>([]);
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [group, setGroup] = useState<CleanerGroup | null>(null), [editing, setEditing] = useState<BudgetItem | null>(null), [adding, setAdding] = useState(false);
@@ -117,8 +119,8 @@ export function AccountsWork({ palette: p, account, properties, onOpenWork }: { 
         </List>
         {canBudget && <Button label="Add an item" icon="plus" p={p} onPress={() => setAdding(true)} />}
       </Section>
-      <CleanerInvoiceSheet p={p} group={group} onClose={() => setGroup(null)} onDone={async () => { setGroup(null); await load(); }} />
-      <BudgetSheet key={(editing?.id ?? "new") + String(adding)} p={p} item={editing} visible={adding || !!editing} onClose={() => { setAdding(false); setEditing(null); }} onDone={async () => { setAdding(false); setEditing(null); await load(); }} />
+      <CleanerInvoiceSheet p={p} group={group} onClose={() => setGroup(null)} onDone={saved(async () => { setGroup(null); await load(); })} />
+      <BudgetSheet key={(editing?.id ?? "new") + String(adding)} p={p} item={editing} visible={adding || !!editing} onClose={() => { setAdding(false); setEditing(null); }} onDone={saved(async () => { setAdding(false); setEditing(null); await load(); })} />
     </View>
   );
 }

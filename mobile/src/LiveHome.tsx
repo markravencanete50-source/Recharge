@@ -8,6 +8,8 @@ import { CountUp, Entrance, MotionPress } from "./motion";
 import { StateGraphic } from "./StateGraphic";
 import { followUpsDue } from "../../lib/portfolio-overview";
 import { ShiftCard } from "./LiveShifts";
+import { HomeTools } from "./HomeTools";
+import type { HomeToolTarget } from "../../lib/home-tools";
 import { ui, type Palette } from "./theme";
 import { LiveNoticeRow, LiveWorkRow, isDone, isWaitingWork, workDate } from "./LiveRows";
 import { todayColors, todayPresentation } from "../../lib/today-presentation";
@@ -32,9 +34,9 @@ const greeting = () => { const hour = new Date().getHours(); return hour < 12 ? 
 const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 const todayLabel = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
 
-export function LiveHome({ palette: p, desktop, account, snapshot, period, properties, journeys = [], work, notices, loading, onNavigate }: {
+export function LiveHome({ palette: p, desktop, account, snapshot, period, properties, journeys = [], work, notices, loading, onNavigate, onTool }: {
   palette: Palette; desktop: boolean; account: WorkspaceAccount; snapshot: AnalyticsSnapshot | null; period: AnalyticsPeriod;
-  properties: PropertyView[]; journeys?: JourneyView[]; work: OperationView[]; notices: NoticeView[]; loading: boolean; onNavigate: (section: WorkspaceSection) => void;
+  properties: PropertyView[]; journeys?: JourneyView[]; work: OperationView[]; notices: NoticeView[]; loading: boolean; onNavigate: (section: WorkspaceSection) => void; onTool: (target: HomeToolTarget) => void;
 }) {
   // Clients who asked for more time, whose check-in date has arrived (onboarding team only).
   const followUps = account.role !== "client" && account.modules.includes("property-onboarding") ? followUpsDue(journeys, properties, londonToday()) : [];
@@ -94,6 +96,8 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
   return (
     <>
       {!desktop && <WelcomeHeader palette={p} name={account.fullName || "there"} dateLabel={todayLabel()} subtitle={SUBTITLE[account.role]} onCalendar={() => onNavigate("work")} />}
+      {/* The tools for this person's role come first, so nobody has to look for them. */}
+      <HomeTools palette={p} account={account} properties={properties} desktop={desktop} onOpen={onTool} onAll={() => onNavigate("help")} />
       {account.role !== "client" && <ShiftCard palette={p} account={account} />}
       {!!followUps.length && <Entrance sessionKey={"live:home:followups"} style={{ gap: 8 }}>
         <View style={ui.between}>

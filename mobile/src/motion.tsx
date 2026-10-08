@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode, type ComponentProps } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type ComponentProps } from 'react';
 import { AccessibilityInfo, Animated, Easing, Platform, Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Feather from '@expo/vector-icons/Feather';
@@ -51,10 +51,10 @@ export function useReveal(key: string, delay = 0, duration = motionTokens.ui) {
   }, [key, delay, duration, progress, ready, reduced, seen]);
   return progress;
 }
-export function Entrance({ children, style, delay = 0, trigger = '', sessionKey }: {children:ReactNode;style?:StyleProp<ViewStyle>;delay?:number;trigger?:string;sessionKey?:string}) {
+export function Entrance({ children, style, delay = 0, trigger = '', sessionKey, nativeID }: {children:ReactNode;style?:StyleProp<ViewStyle>;delay?:number;trigger?:string;sessionKey?:string;nativeID?:string}) {
   const instance = useState(()=>'entrance-' + Math.random())[0];
   const progress = useReveal(sessionKey || instance + trigger, delay);
-  return <Animated.View style={[style,{opacity:progress,transform:[{translateY:progress.interpolate({inputRange:[0,1],outputRange:[8,0]})}]}]}>{children}</Animated.View>;
+  return <Animated.View nativeID={nativeID} style={[style,{opacity:progress,transform:[{translateY:progress.interpolate({inputRange:[0,1],outputRange:[8,0]})}]}]}>{children}</Animated.View>;
 }
 export function CountUp({value, sessionKey, ...props}: ComponentProps<typeof Text> & {value:number;sessionKey:string}) {
   const {reduced,ready,seen} = useContext(Motion);
@@ -88,16 +88,16 @@ export function Stagger({ children, index, style }: { children: ReactNode; index
 export function TweenNumber({ value, format = (n: number) => String(n), ...props }: ComponentProps<typeof Text> & { value: number; format?: (n: number) => string }) {
   const reduced = useReducedMotion();
   const [shown, setShown] = useState(value);
-  const [from] = useState(() => ({ current: value }));
+  const fromRef = useRef(value);
   useEffect(() => {
-    if (reduced || from.current === value) { from.current = value; queueMicrotask(() => setShown(value)); return; }
-    const start = Date.now(), begin = from.current;
+    if (reduced || fromRef.current === value) { fromRef.current = value; queueMicrotask(() => setShown(value)); return; }
+    const start = Date.now(), begin = fromRef.current;
     const timer = setInterval(() => {
       const t = Math.min(1, (Date.now() - start) / 420), next = Math.round(begin + (value - begin) * (1 - Math.pow(1 - t, 3)));
-      from.current = next; setShown(next); if (t === 1) clearInterval(timer);
+      fromRef.current = next; setShown(next); if (t === 1) clearInterval(timer);
     }, 24);
     return () => clearInterval(timer);
-  }, [value, reduced, from]);
+  }, [value, reduced]);
   return <Text {...props} accessibilityLabel={format(value)}>{format(shown)}</Text>;
 }
 // A bar that grows to its share (0 to 1), and moves smoothly when the share changes.

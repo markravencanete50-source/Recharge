@@ -19,9 +19,6 @@ export async function getAccessProfile(email: string, displayName = ""): Promise
   const account = await getAccessAccount(email, displayName);
   return account?.status === "active" ? account : null;
 }
-export async function listAccessUsers(): Promise<AccessProfile[]> {
-  return supabaseAccessUsers();
-}
 export async function saveAccessUser(input: Omit<AccessProfile, "status"> & { status?: AccessStatus }) {
   return supabaseSaveAccess(input);
 }

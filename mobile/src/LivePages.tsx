@@ -6,6 +6,7 @@ import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { useCelebrate } from "./Celebrate";
 import { BuildingGlyph } from "./BuildingGlyph";
 import { EnquiryCard } from "./HomeOverview";
 import { HostawaySyncCard } from "./HostawaySyncCard";
@@ -25,7 +26,7 @@ import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
 import { Calendar } from "./WorkspaceScreens";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
-import { Entrance, GrowBar, MotionPress, Stagger, TweenNumber } from "./motion";
+import { Entrance, GrowBar, MotionPress, Stagger } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import { workspaceRequest } from "./backend/client";
 import { exportReport } from "./exportReport";
@@ -131,6 +132,7 @@ export function WorkflowSheet({ spec, invoices, budget = [], palette: p, onClose
 function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec: WorkflowForm; invoices: InvoiceView[]; budget: BudgetItem[]; p: Palette; onClose: () => void; onSaved: () => Promise<void> }) {
   const [values, setValues] = useState<Record<string, unknown>>(() => Object.fromEntries(spec.fields.map(f => [f.name, f.defaultValue ?? (f.type === "checkbox" ? false : "")])));
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [attempt, setAttempt] = useState<{ id: string; key: string } | null>(null);
+  const celebrate = useCelebrate();
   async function save() {
     if (busy) return;
     setBusy(true); setError("");
@@ -139,7 +141,7 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
       setAttempt({ key, id: requestId });
       await liveApi(spec.endpoint === "workspace" ? "/workspace" : "/" + spec.endpoint, { ...(spec.endpoint === "workspace" ? {} : { requestId }), ...spec.build(normalized, requestId) });
       // A successful change is never repeated merely because the following read fails.
-      onClose(); await onSaved();
+      celebrate("Done"); onClose(); await onSaved();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;

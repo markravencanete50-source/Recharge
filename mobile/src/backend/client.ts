@@ -4,10 +4,7 @@ import { z } from "zod";
 import { workspaceAccountSchema, type WorkspaceAccount } from "../../../lib/workspace-account-policy";
 import type { BusinessAction } from "../../../lib/business-policy";
 import type { AnalyticsPeriod } from "../../../lib/analytics";
-import type { JourneyAction } from "../../../lib/journey-policy";
 import type { OperationsAction } from "../../../lib/operations-policy";
-import type { PortfolioAction } from "../../../lib/portfolio-policy";
-import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import type { FinanceAction } from '../../../lib/workspace-finance-policy';
 import type { TeamsAction } from '../../../lib/workspace-teams-policy';
 import type { AdminAction } from '../../../lib/workspace-admin-policy';
@@ -117,16 +114,10 @@ export async function signOut() {
 export async function restoreAccount() { if (sameOriginWeb) return webAccount(); await refresh(); if (!account) throw new WorkspaceApiError('Please sign in again.',401); return account; }
 export const readWorkspace = async (query: Record<string, string>) => (await workspaceRequest("/api/mobile/workspace?" + new URLSearchParams(query))).json();
 export const writeWorkspace = async (action: BusinessAction) => (await workspaceRequest("/api/mobile/workspace", action)).json();
-export const readReports = async (period: AnalyticsPeriod) => (await workspaceRequest("/api/mobile/reports?" + new URLSearchParams(period))).json();
 export const downloadReport = async (period: AnalyticsPeriod) => (await workspaceRequest("/api/mobile/reports/export?" + new URLSearchParams(period))).text();
-export const readJourneys = async (propertyId?:string) => (await workspaceRequest('/api/mobile/journeys'+(propertyId?'?propertyId='+encodeURIComponent(propertyId):''))).json();
-export const writeJourney = async (action:JourneyAction) => (await workspaceRequest('/api/mobile/journeys',action)).json();
 export const readOperations = async (propertyId?:string) => (await workspaceRequest('/api/mobile/operations'+(propertyId?'?propertyId='+encodeURIComponent(propertyId):''))).json();
 export const writeOperation = async (action:OperationsAction) => (await workspaceRequest('/api/mobile/operations',action)).json();
-export const readPortfolio = async (query:Record<string,string>={}) => (await workspaceRequest('/api/mobile/portfolio?'+new URLSearchParams(query))).json();
-export const writePortfolio = async (action:PortfolioAction) => (await workspaceRequest('/api/mobile/portfolio',action)).json();
 export const readControls = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/controls?'+new URLSearchParams(query))).json();
-export const writeControls = async (action: ControlsAction) => (await workspaceRequest('/api/mobile/controls',action)).json();
 // Accounts: expenses, payout reconciliation and owner statements. Team: schedule, decisions, routines, training.
 export const readFinance = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/finance?'+new URLSearchParams(query))).json();
 export const writeFinance = async (action: FinanceAction) => (await workspaceRequest('/api/mobile/finance',action)).json();

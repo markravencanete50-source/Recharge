@@ -60,6 +60,7 @@ export function prepareFinanceAction(input: FinanceAction): { input: unknown } |
   if (!report.rows.length) return { error: 'No reservation payouts were found in this report' };
   if (report.rows.length > 2000) return { error: 'Split reports with more than 2,000 reservations' };
   if (report.rows.some(row => Math.abs(row.amountMinor) > 100000000)) return { error: 'A payout amount is too large' };
-  const { csv: _csv, ...rest } = input;
+  const rest: Omit<typeof input, 'csv'> & { csv?: string } = { ...input };
+  delete rest.csv;
   return { input: { ...rest, lines: report.rows.map(row => ({ reference: row.code, amountMinor: row.amountMinor })) } };
 }

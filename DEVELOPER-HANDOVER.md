@@ -13,6 +13,22 @@ records and was never served by the deployed backend, so it has been removed:
 `docs/LEGACY-PORT-PLAN.md` records what each old centre did, and where that work now lives or is
 planned.
 
+## The app on phones (8 October 2026)
+
+- **Home tools.** `lib/home-tools.ts` lists the tools each role sees first on Home. Each tool opens
+  a Work view, a tab inside it (`sub`), or a section further down (`anchor`). Sections are found by
+  their heading (`sectionAnchor("Daily checks")` is `section-daily-checks`), so renaming a
+  `<Section title>` breaks a Home tool. `tests/home-tools.test.mjs` catches that.
+- **Icons.** The illustrated icons are drawn in `mobile/src/DimensionalIcon.tsx`. `MODULE_ART`
+  gives every tool its icon in the full tools list.
+- **Speed.** The live build (`RECHARGE_LIVE_ONLY=1`, set by `scripts/build-workspace-web.mjs`)
+  leaves out the sample-data preview (`mobile/App.tsx`). It uses resized logos
+  (`mobile/assets/brand`) and Montserrat cut down to Latin characters (`mobile/assets/fonts`).
+  The Worker tells browsers to keep content-hashed app files for a year
+  (`hashedWorkspaceFile`). The welcome intro plays once a day per device, and it can be skipped.
+- **Feedback.** Sheets wrap their "done" handler in `useSaved()` (`mobile/src/Celebrate.tsx`),
+  so every successful save shows a short confirmation.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

@@ -3,6 +3,7 @@ import { AppState, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { useSaved } from "./Celebrate";
 import { GrowBar, MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
@@ -210,6 +211,7 @@ function ContractEditor({ p, contract, visible, onClose, onDone }: { p: Palette;
 
 // Admins: the staff contracts, who has signed, and how far each team member has got.
 export function StaffContracts({ p }: { p: Palette }) {
+  const saved = useSaved();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [people, setPeople] = useState<StaffOnboarding[]>([]);
   const [loading, setLoading] = useState(true);
@@ -256,7 +258,7 @@ export function StaffContracts({ p }: { p: Palette }) {
           <Text selectable style={[ui.body, { color: p.text }]}>{viewing.body}</Text>
         </>}
       </Sheet>
-      <ContractEditor p={p} contract={editing === "new" ? null : editing} visible={editing !== null} onClose={() => setEditing(null)} onDone={load} />
+      <ContractEditor p={p} contract={editing === "new" ? null : editing} visible={editing !== null} onClose={() => setEditing(null)} onDone={saved(load)} />
     </View>
   );
 }

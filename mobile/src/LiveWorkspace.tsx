@@ -43,6 +43,9 @@ import { periodError, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot
 import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSchema, propertyViewSchema, readableStage, reportViewSchema, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
 import { workDetails } from "../../lib/work-details";
 import { AccountsWork } from "./LiveAccountsWork";
+import { CelebrateProvider } from "./Celebrate";
+import { WorkFocusContext, type WorkFocus } from "./LiveKit";
+import type { HomeToolTarget } from "../../lib/home-tools";
 import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 
@@ -85,6 +88,9 @@ const WORK_TITLE: Record<Role, [string, string]> = {
   ready: ["Repairs", "Reports, quotes, bookings and routine visits."], accounts: ["Accounts", "Expenses, payouts and owner statements."],
 };
 
+// The welcome intro plays once a day on each device (and after signing in), not on every visit.
+const welcomeDay = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+
 function IconButton({ label, icon, onPress, palette: p }: { label: string; icon: IconName; onPress: () => void; palette: Palette }) {
   return (
     <MotionPress accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [ui.iconButton, { borderColor: p.border, backgroundColor: p.surface, opacity: pressed ? 0.65 : 1 }]}>
@@ -100,7 +106,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const { section } = useLocalSearchParams<{ section?: string }>();
   const tab: WorkspaceSection = SECTIONS.includes(section as WorkspaceSection) ? section as WorkspaceSection : "home";
   const setTab = (value: WorkspaceSection) => router.setParams({ section: value });
+  // The bottom bar and sidebar open each page at its start, not where a Home tool last pointed.
+  const navigate = (value: WorkspaceSection) => { setFocus(null); setTab(value); };
   const nav = useMemo(() => liveNavigation(account.role), [account.role]);
+  const [focus, setFocus] = useState<WorkFocus | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
   const [properties, setProperties] = useState<PropertyView[]>([]), [journeys, setJourneys] = useState<JourneyView[]>([]), [work, setWork] = useState<OperationView[]>([]);
@@ -113,6 +122,15 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active");
   const [fade] = useState(() => new Animated.Value(1));
   const scroll = useRef<ScrollView>(null);
+  // The Help button slides out of the way while the page scrolls, and back once it settles.
+  const [tucked, setTucked] = useState(false), untuck = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onScrolling = (y: number) => {
+    setScrolled(y > 12);
+    if (!tucked) setTucked(true);
+    if (untuck.current) clearTimeout(untuck.current);
+    untuck.current = setTimeout(() => setTucked(false), 900);
+  };
+  useEffect(() => () => { if (untuck.current) clearTimeout(untuck.current); }, []);
   const profile: Profile = { displayName: account.fullName || account.email || "Your profile", avatar: "forest" };
   const roleLabel = readableStage(account.role);
 
@@ -138,6 +156,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       return { data: rows };
     };
     const jobs = [["properties", ""], ["journeys", "/journeys"], ["work", "/operations"], ["invoices", ""], ["notices", "/portfolio?section=notifications"]] as const;
+    const extras = Promise.allSettled([
+      isWorkspaceAdmin(account.role) || account.role === "accounts" ? readTeams({ section: "budgetChart" }).then(r => budgetChartSchema.parse(r.data)) : Promise.resolve(null),
+      isWorkspaceAdmin(account.role) || account.role === "stays" ? liveApi("/portfolio?section=bookingPolicy").then(r => bookingPolicySchema.parse(r.data)) : Promise.resolve(null),
+    ]);
     const results = await Promise.allSettled(jobs.map(async ([key, path]) => key === "properties" || key === "invoices" ? readAll(key) : liveApi(path)));
     results.forEach((result, i) => {
       const key = jobs[i][0];
@@ -156,16 +178,11 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
         if (key === "notices") setNotices(z.array(noticeViewSchema).parse(data));
       } catch { setError("Unexpected response. Refresh to try again."); }
     });
-    // The budget chart, for approving purchases against it.
-    if (isWorkspaceAdmin(account.role) || account.role === "accounts") {
-      try { setBudget(budgetChartSchema.parse((await readTeams({ section: "budgetChart" })).data)); } catch { setBudget([]); }
-    }
-    if (isWorkspaceAdmin(account.role) || account.role === "stays") {
-      try {
-        const value = bookingPolicySchema.parse((await liveApi("/portfolio?section=bookingPolicy")).data);
-        setPolicy(value); setPolicyConfirmed(value.confirmed);
-      } catch { setPolicy(null); setPolicyConfirmed(false); }
-    }
+    // The budget chart (for approving purchases) and the direct-booking policy, read alongside the rest.
+    const [budgetResult, policyResult] = await extras;
+    setBudget(budgetResult.status === "fulfilled" && budgetResult.value ? budgetResult.value : []);
+    const value = policyResult.status === "fulfilled" ? policyResult.value : null;
+    setPolicy(value); setPolicyConfirmed(value?.confirmed ?? false);
     setLoading(false);
   }, [account.role, onSignedOut]);
   const loadReport = useCallback(async (range: AnalyticsPeriod) => {
@@ -187,10 +204,31 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
     return () => animation.stop();
   }, [tab, fade, reduced]);
 
+  // A Home tool opens its place: the Work view (and tab inside it), or another page, then the section.
+  const openTool = (target: HomeToolTarget) => {
+    if (target.kind === "work") { setWorkView(target.view); setFocus({ sub: target.sub, anchor: target.anchor, nonce: Date.now() }); setTab("work"); }
+    else if (target.kind === "tab") { setFocus(target.anchor ? { anchor: target.anchor, nonce: Date.now() } : null); setTab(target.tab); }
+  };
+  useEffect(() => {
+    if (!focus?.anchor || Platform.OS !== "web" || typeof document === "undefined") return;
+    // Sections appear once their data has loaded, so look for a few seconds, then bring it into view
+    // with a brief glow so the eye lands on it.
+    let tries = 0;
+    const timer = setInterval(() => {
+      const el = document.getElementById(focus.anchor!);
+      if (el) {
+        clearInterval(timer);
+        el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+        if (!reduced && typeof el.animate === "function") el.animate([{ boxShadow: "0 0 0 0 rgba(47,107,90,0)" }, { boxShadow: "0 0 0 6px rgba(47,107,90,0.28)" }, { boxShadow: "0 0 0 0 rgba(47,107,90,0)" }], { duration: 1200, delay: 350, easing: "ease-out" });
+      } else if (++tries > 30) clearInterval(timer);
+    }, 150);
+    return () => clearInterval(timer);
+  }, [focus, reduced]);
+
   async function logout() {
     setBusy(true);
     try { await signOut(); } catch { /* signed out on this device either way */ }
-    try { globalThis.sessionStorage?.removeItem("rc-welcomed"); } catch { /* storage unavailable */ }
+    try { globalThis.localStorage?.removeItem("rc-welcomed"); } catch { /* storage unavailable */ }
     setBusy(false); setSettings(false); onSignedOut();
   }
   async function exportCsv() {
@@ -202,7 +240,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       setExportMessage(Platform.OS === "web" ? "Report download started." : "Report ready to save or share.");
     } catch (e) { setExportMessage(message(e)); } finally { setExporting(false); }
   }
-  const finishWelcome = () => { setWelcome(null); try { globalThis.sessionStorage?.setItem("rc-welcomed", "1"); } catch { /* storage unavailable */ } };
+  const finishWelcome = () => { setWelcome(null); try { globalThis.localStorage?.setItem("rc-welcomed", welcomeDay()); } catch { /* storage unavailable */ } };
 
   // Work: each role's views, the first opening by default.
   // Every team role also has All work, where each task's steps (onboarding, inspections, invoices, purchases) live.
@@ -214,14 +252,14 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const workPage = (
     <>
       {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
-      {currentView === "management" && <LiveManagement palette={p} account={account} />}
+      {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} />}
       {currentView === "stays" && <LiveStays palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}
       {currentView === "owner" && <LiveOwner palette={p} properties={properties} />}
       {currentView === "owner" && account.modules.includes("client-mailbox") && <MailboxSection palette={p} />}
       {currentView === "owner" && account.modules.includes("client-furnishing") && <FurnishingCard palette={p} />}
       {currentView === "cleans" && <LiveCleans palette={p} account={account} properties={properties} />}
       {currentView === "repairs" && <LiveRepairs palette={p} account={account} properties={properties} />}
-      {currentView === "accounts" && <><LiveAccounts palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} /></>}
+      {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} /></>}
       {currentView === "all" && <>
         <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
         {policy && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch" }]}>
@@ -263,7 +301,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
     </>
   );
   const page = tab === "home"
-    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} />
+    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} onTool={openTool} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} />
     : tab === "analytics" ? reportsPage
@@ -275,9 +313,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : "Home");
   return (
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
+      <CelebrateProvider palette={p} bottom={desktop ? 40 : 112}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
-        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={nav} section={tab} palette={p} onNavigate={setTab} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme, motion and sign out" />}
+        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={nav} section={tab} palette={p} onNavigate={navigate} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme, motion and sign out" />}
         {desktop && sidebarHidden && <View style={{ width: 64, backgroundColor: p.isDark ? p.surface : p.background, borderRightWidth: 1, borderColor: p.border }}><View style={{ height: 81, alignItems: "center", justifyContent: "center", backgroundColor: p.header }}><IconButton label="Show left panel" icon="chevrons-right" palette={header} onPress={() => setSidebarHidden(false)} /></View></View>}
         <View style={[ui.fill, { minWidth: 0 }]}>
           {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Changes will fail until you reconnect.</Text></View>}
@@ -297,14 +336,15 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
               </View>
             </View>
           </View>
-          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => setScrolled(event.nativeEvent.contentOffset.y > 12)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
+          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
-              {animatedPage}
+              <WorkFocusContext.Provider value={focus}>{animatedPage}</WorkFocusContext.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
             </Animated.View>
           </ScrollView>
-          {!faqShortcut.hidden && tab !== "help" && <FaqShortcut palette={p} onOpen={() => setTab("help")} onHide={() => faqShortcut.setHidden(true)} />}
-          {!desktop && <NavigationBar role={account.role} items={nav} section={tab} onNavigate={setTab} palette={p} />}
+          {/* On phones Home has its own help links and some bottom bars include Help, so the floating button stays out of the way there. */}
+          {!faqShortcut.hidden && tab !== "help" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help"))) && <FaqShortcut palette={p} tucked={tucked} onOpen={() => navigate("help")} onHide={() => faqShortcut.setHidden(true)} />}
+          {!desktop && <NavigationBar role={account.role} items={nav} section={tab} onNavigate={navigate} palette={p} />}
         </View>
       </KeyboardAvoidingView>
       <Sheet palette={p} visible={settings} onClose={() => setSettings(false)} title="Profile & preferences" subtitle="Your account and comfort settings" icon="people">
@@ -356,6 +396,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       </Sheet>
       <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
       {welcome === "splash" && <RechargeSplash palette={p} onDone={() => setWelcome("greeting")} />}
+      </CelebrateProvider>
       {welcome === "greeting" && <GreetingCard palette={p} profile={profile} openTasks={work.filter(item => !isDone(item.status)).length} waiting={work.filter(item => isWaitingWork(item.status)).length} onClose={finishWelcome} onWork={() => { finishWelcome(); setTab("work"); }} />}
     </SafeAreaView>
   );
@@ -371,7 +412,7 @@ function Screen() {
     restoreAccount().then(value => {
       if (!active) return;
       let welcomed = false;
-      try { welcomed = Boolean(globalThis.sessionStorage?.getItem("rc-welcomed")); } catch { welcomed = false; }
+      try { welcomed = globalThis.localStorage?.getItem("rc-welcomed") === welcomeDay(); } catch { welcomed = false; }
       setWelcome(!welcomed); setAccount(value);
     }).catch(e => { if (active && !(e instanceof WorkspaceApiError && e.status === 401)) setError(message(e)); }).finally(() => { if (active) setChecking(false); });
     return () => { active = false; };

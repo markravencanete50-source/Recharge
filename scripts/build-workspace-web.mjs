@@ -18,7 +18,7 @@ await rm(out, { recursive: true, force: true });
 execFileSync(process.execPath, [expoCli, "export", "--platform", "web", "--output-dir", "dist-workspace", "--clear"], {
   cwd: mobile, stdio: "inherit",
   // Files under /workspace, and the live connection through the web session on the same origin.
-  env: { ...process.env, RECHARGE_WEB_BASE_URL: "/workspace", EXPO_PUBLIC_WORKSPACE_WEB: "same-origin" },
+  env: { ...process.env, RECHARGE_WEB_BASE_URL: "/workspace", EXPO_PUBLIC_WORKSPACE_WEB: "same-origin", RECHARGE_LIVE_ONLY: "1" },
 });
 
 // Cloudflare's asset upload leaves out folders named node_modules; Metro puts fonts there.

@@ -6,6 +6,13 @@ import { Text } from "./Typography";
 import { Entrance, MotionPress, Shimmer, Stagger, SwapIn, TweenNumber } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import { formatCount } from "../../lib/format";
+import { sectionAnchor } from "../../lib/home-tools";
+
+// Where a Home tool asked to land: a tab inside a Work view (sub) and a section to scroll to (anchor).
+// The nonce changes on every tap, so tapping the same tool again lands again.
+export type WorkFocus = { sub?: string; anchor?: string; nonce: number };
+export const WorkFocusContext = createContext<WorkFocus | null>(null);
+export const useWorkFocus = () => useContext(WorkFocusContext);
 
 // Shared building blocks for the live (backend-connected) screens.
 export const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
@@ -42,8 +49,9 @@ export function Loading({ p, rows = 3 }: { p: Palette; rows?: number }) {
   return <Shimmer rows={rows} color={p.surface} highlight={p.elevated} />;
 }
 export function Section({ title, count, p, children }: { title: string; count?: number; p: Palette; children: ReactNode }) {
+  // Each section can be opened directly from a Home tool by its heading (section-daily-checks).
   return (
-    <Entrance style={{ gap: 10 }}>
+    <Entrance nativeID={sectionAnchor(title)} style={{ gap: 10 }}>
       <View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>{title}</Text>{count !== undefined && <Tag label={String(count)} tone={count ? "wait" : "good"} p={p} />}</View>
       {/* Cards and rows inside a section arrive one after another. */}
       {Children.toArray(children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}

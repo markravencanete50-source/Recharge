@@ -3,7 +3,7 @@ import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { MotionPress, SwapIn } from "./motion";
+import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
 import { addDays, dayLabel, london, Notice, Section, Tag, Loading, StatGrid, StatTile } from "./LiveKit";
 import { formatDay, formatMoneyShort } from "../../lib/format";

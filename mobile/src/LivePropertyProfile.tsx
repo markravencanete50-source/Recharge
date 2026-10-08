@@ -99,7 +99,7 @@ export function PropertyProfile({ palette: p, account, propertyId, journey }: { 
   const [failed, setFailed] = useState<string[]>([]), [linkError, setLinkError] = useState("");
   useEffect(() => {
     let active = true;
-    setOwners(null); setLinks(null); setStays(null); setFailed([]);
+    queueMicrotask(() => { if (active) { setOwners(null); setLinks(null); setStays(null); setFailed([]); } });
     const jobs: [string, () => Promise<void>][] = [];
     if (access.owners) jobs.push(["owner details", async () => { const parsed = ownersSchema.safeParse(await read("/api/mobile/property-details?" + new URLSearchParams({ propertyId, section: "owner" }))); if (active) setOwners(parsed.success ? parsed.data.owners : []); }]);
     if (access.listings) jobs.push(["listing links", async () => { const data = await read("/api/mobile/portfolio?" + new URLSearchParams({ section: "portfolio", propertyId })); if (active) setLinks(listingLinks(data, propertyId)); }]);

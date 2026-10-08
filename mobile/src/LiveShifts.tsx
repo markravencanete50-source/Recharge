@@ -3,6 +3,7 @@ import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { useCelebrate, useSaved } from "./Celebrate";
 import { GrowBar, MotionPress, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
@@ -27,6 +28,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [unavailable, setUnavailable] = useState(false);
+  const celebrate = useCelebrate();
   // Keyed per shift: after a clock-out the next clock-in gets a new request, even if an earlier
   // response was lost.
   const request = useRequestId(shift ? (shift.open ? "out:" + shift.open.id : ["in", department, shift.today.at(-1)?.id ?? "first"].join(":")) : null);
@@ -41,7 +43,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
     setBusy(true); setError("");
     try {
       await writeTeams(shift.open ? { action: "clockOut", requestId: request.get() } : { action: "clockIn", requestId: request.get(), department: department as never });
-      request.done(); await load();
+      request.done(); celebrate(shift.open ? "Clocked out" : "Clocked in"); await load();
     } catch (e) { setError(message(e)); await load(); } finally { setBusy(false); }
   }
   const open = shift?.open;
@@ -137,6 +139,7 @@ function RotaSection({ p }: { p: Palette }) {
 }
 
 export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
+  const saved = useSaved();
   const [range, setRange] = useState<"today" | "week" | "month">("week");
   const [data, setData] = useState<TeamPerformance | null>(null);
   const [signoffs, setSignoffs] = useState<Signoff["recent"]>([]);
@@ -203,7 +206,7 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
               tags={o.snapshot.openRelistings ? [[`${plural(o.snapshot.openRelistings, "re-listing")} open`, "wait"]] : [["All clear", "good"]]} />)}
           </List>
         </Section>
-        <TargetsSheet key={t.version} p={p} targets={t} visible={targets} onClose={() => setTargets(false)} onDone={load} />
+        <TargetsSheet key={t.version} p={p} targets={t} visible={targets} onClose={() => setTargets(false)} onDone={saved(load)} />
       </>}
       <Sheet palette={p} visible={!!closing} onClose={() => setClosing(null)} title={closing?.fullName ?? ""} subtitle={closing ? `Clocked in at ${time(closing.clockedInAt)}` : undefined} icon="hourglass">
         <Text style={[ui.body, { color: p.text }]}>End this shift now if they forgot to clock out.</Text>

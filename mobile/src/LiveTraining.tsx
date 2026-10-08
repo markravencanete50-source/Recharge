@@ -3,6 +3,7 @@ import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Linking from "expo-linking";
 import { Text } from "./Typography";
+import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
@@ -137,6 +138,7 @@ export function CourseSheet({ p, course, onClose, onCompleted }: { p: Palette; c
 }
 
 export function LiveTraining({ palette: p, manage = false }: { palette: Palette; manage?: boolean }) {
+  const saved = useSaved();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -164,7 +166,7 @@ export function LiveTraining({ palette: p, manage = false }: { palette: Palette;
         ))}
       </List>
       <CourseSheet p={p} course={open} onClose={() => setOpen(null)} onCompleted={load} />
-      {manage && <CourseEditor p={p} course={editing === "new" ? null : editing} visible={editing !== null} onClose={() => setEditing(null)} onDone={load} onRequiredFailed={setError} />}
+      {manage && <CourseEditor p={p} course={editing === "new" ? null : editing} visible={editing !== null} onClose={() => setEditing(null)} onDone={saved(load)} onRequiredFailed={setError} />}
     </Section>
   );
   // Management sees the staff contracts first: they and the required courses gate new staff.

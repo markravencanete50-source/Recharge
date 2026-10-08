@@ -3,6 +3,7 @@ import { TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
+import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
@@ -234,6 +235,7 @@ function PropertySheet({ p, property, creating, people, onClose, onDone }: { p: 
 }
 
 export function LivePeople({ palette: p, account, view }: { palette: Palette; account: WorkspaceAccount; view: "people" | "properties" }) {
+  const saved = useSaved();
   const [people, setPeople] = useState<Person[]>([]);
   const [properties, setProperties] = useState<AdminProperty[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,8 +293,8 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
           })}
         </List>
       </>}
-      <PersonSheet key={openPerson ?? "none"} p={p} actorRole={account.role} person={person} properties={properties} onClose={() => setOpenPerson(null)} onDone={load} />
-      <PropertySheet key={(openProperty ?? "none") + (creating ? ":new" : "")} p={p} property={property} creating={creating} people={people} onClose={() => { setOpenProperty(null); setCreating(false); }} onDone={load} />
+      <PersonSheet key={openPerson ?? "none"} p={p} actorRole={account.role} person={person} properties={properties} onClose={() => setOpenPerson(null)} onDone={saved(load)} />
+      <PropertySheet key={(openProperty ?? "none") + (creating ? ":new" : "")} p={p} property={property} creating={creating} people={people} onClose={() => { setOpenProperty(null); setCreating(false); }} onDone={saved(load)} />
     </View>
   );
 }

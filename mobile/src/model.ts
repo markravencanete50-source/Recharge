@@ -23,7 +23,6 @@ import {
   operations,
   communications,
 } from "./sampleFixtures";
-import { searchFeatureTitles, WORKSPACE_MAP } from "../../lib/workspace-map";
 
 export {
   buildAnalytics,
@@ -195,19 +194,4 @@ export function inboxFor(role: WorkspaceRole) {
 }
 export function approvalItems(role: WorkspaceRole) {
   return workFor(role).filter(item => ["client-purchase-order-quotes", "property-onboarding", "client-property-maintenance"].includes(item.tool.id) && ["approval_pending", "purchase_order_review", "estimate_received", "agreement_pending"].includes(item.record.status));
-}
-export function filteredTools(role: WorkspaceRole, query: string, area = "All", saved?: string[]) {
-  return searchFeatureTitles(toolsFor(role), query).filter(tool => (area === "All" || WORKSPACE_MAP[tool.id].area === area || WORKSPACE_MAP[tool.id].tone === area) && (!saved || saved.includes(tool.id)));
-}
-export function upcomingFor(role: WorkspaceRole) {
-  const id: ModuleId =
-    role === "cleans"
-      ? "cleaning-schedule"
-      : role === "client"
-        ? "client-mailbox"
-        : "new-property-inspection-board";
-  return {
-    tool: toolsFor(role).find((tool) => tool.id === id),
-    records: recordsFor(role, id).slice(0, 3),
-  };
 }

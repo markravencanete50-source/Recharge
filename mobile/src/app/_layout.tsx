@@ -1,17 +1,16 @@
 import { Stack } from "expo-router";
 import { useFonts } from "expo-font";
-import { Montserrat_400Regular } from "@expo-google-fonts/montserrat/400Regular";
-import { Montserrat_500Medium } from "@expo-google-fonts/montserrat/500Medium";
-import { Montserrat_600SemiBold } from "@expo-google-fonts/montserrat/600SemiBold";
-import { Montserrat_700Bold } from "@expo-google-fonts/montserrat/700Bold";
 import { FontsReady } from "../Typography";
 export default function Layout() {
+  // Montserrat cut down to the Latin characters the app uses (about 40 KB a weight instead of 330 KB).
+  /* eslint-disable @typescript-eslint/no-require-imports */
   const [loaded] = useFonts({
-    Montserrat_400Regular,
-    Montserrat_500Medium,
-    Montserrat_600SemiBold,
-    Montserrat_700Bold,
+    Montserrat_400Regular: require("../../assets/fonts/Montserrat_400Regular.ttf"),
+    Montserrat_500Medium: require("../../assets/fonts/Montserrat_500Medium.ttf"),
+    Montserrat_600SemiBold: require("../../assets/fonts/Montserrat_600SemiBold.ttf"),
+    Montserrat_700Bold: require("../../assets/fonts/Montserrat_700Bold.ttf"),
   });
+  /* eslint-enable @typescript-eslint/no-require-imports */
   return (
     <FontsReady.Provider value={loaded}>
       <Stack screenOptions={{ headerShown: false, animation: "none" }} />

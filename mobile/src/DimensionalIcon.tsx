@@ -23,7 +23,21 @@ export type DimensionalName =
   | "compass"
   | "sun"
   | "sunset"
-  | "moon";
+  | "moon"
+  | "tag"
+  | "relist"
+  | "signature"
+  | "shield"
+  | "box"
+  | "bell"
+  | "receipt"
+  | "wallet"
+  | "pie"
+  | "cart"
+  | "sofa"
+  | "search"
+  | "mail"
+  | "star";
 
 const C = {
   forest: ["#2F6F5E", "#163A32"],
@@ -191,6 +205,132 @@ function draw(name: DimensionalName, g: Grad): ReactNode {
         <Path d="M32 17 L36 32 L32 34 L28 32 Z" fill={g("terracotta")} />
         <Path d="M32 47 L28 32 L32 30 L36 32 Z" fill={g("slate")} />
         <Circle cx={32} cy={32} r={2.5} fill="#163A32" />
+      </>;
+    case "tag":
+      // A price tag on a string, with a gold eyelet.
+      return <>
+        <Path d="M12 30 L30 12 L52 12 L52 34 L34 52 Z" fill={g("terracotta")} />
+        <Path d="M30 12 L52 12 L52 16 L32 16 Z" fill="#F7C2A6" opacity={0.6} />
+        <Circle cx={43} cy={21} r={4} fill="#FFF3E8" />
+        <Circle cx={43} cy={21} r={2} fill={g("forest")} />
+        <Path d="M43 21 C50 10 58 12 57 6" stroke="#163A32" strokeWidth={1.8} fill="none" strokeLinecap="round" />
+        <Rect x={22} y={31} width={14} height={4} rx={2} fill="#FFF3E8" opacity={0.85} transform="rotate(-45 29 33)" />
+      </>;
+    case "relist":
+      // Two arrows chasing each other around a listing card: list it again.
+      return <>
+        <Rect x={20} y={20} width={24} height={24} rx={5} fill={g("bone")} />
+        <Rect x={24} y={25} width={16} height={7} rx={2} fill={g("slate")} />
+        <Rect x={24} y={35} width={10} height={3} rx={1.5} fill="#C9BEA4" />
+        <Path d="M32 9 A23 23 0 0 1 55 32" stroke={g("forest")} strokeWidth={5} fill="none" strokeLinecap="round" />
+        <Path d="M55 40 L50 30 L60 30 Z" fill="#2F6F5E" />
+        <Path d="M32 55 A23 23 0 0 1 9 32" stroke={g("mint")} strokeWidth={5} fill="none" strokeLinecap="round" />
+        <Path d="M9 24 L14 34 L4 34 Z" fill="#7FC3A6" />
+      </>;
+    case "signature":
+      // A signed sheet and a fountain pen.
+      return <>
+        <Rect x={10} y={12} width={34} height={42} rx={4} fill={g("bone")} />
+        <Rect x={15} y={19} width={20} height={3} rx={1.5} fill="#C9BEA4" />
+        <Rect x={15} y={26} width={24} height={3} rx={1.5} fill="#C9BEA4" />
+        <Path d="M15 44 C19 38 21 47 25 41 C27 38 28 45 33 42" stroke="#2F6F5E" strokeWidth={2.2} fill="none" strokeLinecap="round" />
+        <Path d="M40 42 L54 14 L60 17 L46 45 Z" fill={g("forest")} />
+        <Path d="M40 42 L46 45 L41 51 Z" fill={g("gold")} />
+        <Path d="M52 18 L58 21" stroke="#C9EBDB" strokeWidth={1.6} strokeLinecap="round" />
+      </>;
+    case "shield":
+      return <>
+        <Path d="M32 8 L52 15 L52 31 C52 43 43 52 32 56 C21 52 12 43 12 31 L12 15 Z" fill={g("forest")} />
+        <Path d="M32 8 L52 15 L52 31 C52 43 43 52 32 56 Z" fill="#163A32" opacity={0.35} />
+        <Path d="M32 15 L45 20 L45 31 C45 39 39 45 32 48 C25 45 19 39 19 31 L19 20 Z" fill={g("mint")} />
+        <Path d="M25 31 L30 36 L39 26" stroke="#163A32" strokeWidth={3.2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </>;
+    case "box":
+      // An open parcel of supplies.
+      return <>
+        <Path d="M10 24 L32 16 L54 24 L32 32 Z" fill="#E9C38A" />
+        <Path d="M10 24 L32 32 L32 56 L10 48 Z" fill={g("gold", "0", "1")} />
+        <Path d="M54 24 L32 32 L32 56 L54 48 Z" fill="#B07A26" />
+        <Path d="M10 24 L4 16 L26 9 L32 16 Z" fill="#F6D58A" />
+        <Path d="M54 24 L60 16 L38 9 L32 16 Z" fill="#E9B65C" />
+        <Path d="M17 34 L25 37 M17 39 L22 41" stroke="#8A5A16" strokeWidth={1.8} strokeLinecap="round" />
+      </>;
+    case "bell":
+      return <>
+        <Path d="M32 10 C42 10 47 18 47 28 L47 38 L52 45 L12 45 L17 38 L17 28 C17 18 22 10 32 10 Z" fill={g("gold")} />
+        <Path d="M22 22 C23 17 26 14 30 13" stroke="#FFF3D2" strokeWidth={2.4} fill="none" strokeLinecap="round" opacity={0.8} />
+        <Rect x={10} y={44} width={44} height={5} rx={2.5} fill="#B07A26" />
+        <Circle cx={32} cy={53} r={4.5} fill={g("forest")} />
+        <Circle cx={48} cy={14} r={6} fill={g("terracotta")} />
+      </>;
+    case "receipt":
+      // An invoice with a zig-zag tear and a total.
+      return <>
+        <Path d="M14 8 L50 8 L50 56 L45 52 L40 56 L35 52 L30 56 L25 52 L20 56 L14 52 Z" fill={g("bone")} />
+        <Rect x={14} y={8} width={36} height={8} fill={g("forest")} />
+        <Rect x={19} y={22} width={18} height={3} rx={1.5} fill="#C9BEA4" />
+        <Rect x={19} y={29} width={24} height={3} rx={1.5} fill="#C9BEA4" />
+        <Rect x={19} y={36} width={14} height={3} rx={1.5} fill="#C9BEA4" />
+        <Rect x={33} y={42} width={12} height={5} rx={2} fill={g("gold")} />
+      </>;
+    case "wallet":
+      return <>
+        <Rect x={10} y={18} width={40} height={10} rx={4} fill="#9DB5AC" transform="rotate(-8 30 23)" />
+        <Rect x={8} y={22} width={46} height={32} rx={7} fill={g("forest")} />
+        <Rect x={36} y={32} width={20} height={13} rx={5} fill={g("mint")} />
+        <Circle cx={43} cy={38.5} r={3} fill={g("gold")} />
+        <Path d="M14 28 L34 28" stroke="#C9EBDB" strokeWidth={1.6} strokeLinecap="round" opacity={0.6} />
+      </>;
+    case "pie":
+      // A statement's share: most to the owner, a slice to Recharge.
+      return <>
+        <Circle cx={30} cy={34} r={20} fill={g("slate")} />
+        <Path d="M30 34 L30 14 A20 20 0 1 1 11.5 41.6 Z" fill={g("forest")} />
+        <Path d="M36 28 L36 8 A20 20 0 0 1 56 28 Z" fill={g("gold")} />
+        <Circle cx={30} cy={34} r={6} fill="#FFFDF7" opacity={0.9} />
+      </>;
+    case "cart":
+      return <>
+        <Path d="M6 12 L14 12 L20 40 L48 40" stroke="#163A32" strokeWidth={3.4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M16 18 L54 18 L49 36 L20 36 Z" fill={g("mint")} />
+        <Rect x={22} y={10} width={12} height={12} rx={2} fill={g("terracotta")} />
+        <Rect x={35} y={13} width={10} height={9} rx={2} fill={g("gold")} />
+        <Circle cx={23} cy={49} r={4.5} fill={g("forest")} />
+        <Circle cx={45} cy={49} r={4.5} fill={g("forest")} />
+      </>;
+    case "sofa":
+      return <>
+        <Rect x={14} y={16} width={36} height={20} rx={7} fill={g("heather", "0", "1")} />
+        <Rect x={8} y={28} width={48} height={16} rx={6} fill={g("heather")} />
+        <Rect x={6} y={26} width={10} height={20} rx={5} fill="#8C6189" />
+        <Rect x={48} y={26} width={10} height={20} rx={5} fill="#8C6189" />
+        <Rect x={18} y={30} width={28} height={6} rx={3} fill="#F3E3F0" opacity={0.55} />
+        <Rect x={11} y={46} width={4} height={6} rx={1.5} fill={g("forest")} />
+        <Rect x={49} y={46} width={4} height={6} rx={1.5} fill={g("forest")} />
+      </>;
+    case "search":
+      // A magnifying glass over a small house: an inspection.
+      return <>
+        <Path d="M14 38 L14 28 L24 20 L34 28 L34 38 Z" fill={g("bone")} />
+        <Path d="M12 29 L24 19 L36 29" stroke={g("terracotta")} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Rect x={21} y={31} width={6} height={7} rx={1} fill={g("forest")} />
+        <Circle cx={36} cy={30} r={15} fill="#C9EBDB" opacity={0.35} />
+        <Circle cx={36} cy={30} r={15} fill="none" stroke={g("forest")} strokeWidth={5} />
+        <Path d="M47 41 L57 51" stroke={g("gold")} strokeWidth={7} strokeLinecap="round" />
+      </>;
+    case "mail":
+      return <>
+        <Rect x={8} y={18} width={48} height={34} rx={5} fill={g("bone", "0", "1")} />
+        <Path d="M8 22 L32 39 L56 22" stroke="#C9BEA4" strokeWidth={2.4} fill="none" strokeLinejoin="round" />
+        <Path d="M8 50 L26 35 M56 50 L38 35" stroke="#E3DAC6" strokeWidth={2} />
+        <Rect x={42} y={10} width={12} height={14} rx={2} fill={g("terracotta")} />
+        <Circle cx={48} cy={17} r={2.6} fill="#FFF3E8" />
+      </>;
+    case "star":
+      return <>
+        <Path d="M32 8 L38.5 22.5 L54 24 L42.2 34.4 L45.6 50 L32 42 L18.4 50 L21.8 34.4 L10 24 L25.5 22.5 Z" fill={g("gold")} />
+        <Path d="M32 8 L38.5 22.5 L54 24 L42.2 34.4 L32 30 Z" fill="#FFF3D2" opacity={0.35} />
+        <Path d="M50 44 l1 2.4 2.4 1 -2.4 1 -1 2.4 -1 -2.4 -2.4 -1 2.4 -1 Z" fill="#C9EBDB" />
       </>;
   }
 }
