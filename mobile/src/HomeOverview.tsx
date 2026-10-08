@@ -47,41 +47,37 @@ export function WelcomeHeader({
   }, [float, reduced]);
   const t = designTokens[p.isDark ? "dark" : "light"];
   const bob = float.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
-  const drift = float.interpolate({ inputRange: [0, 1], outputRange: [0, 8] });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  // Compact, so the person's tools sit in the first screen: greeting and date on one row,
+  // one short line underneath, and the property pair tucked into the corner.
   return (
-    <View testID="home-welcome" style={{ marginHorizontal: -20, marginTop: -24, backgroundColor: p.header, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 58, overflow: "hidden" }}>
-      {/* Drifting clouds and the property pair sit behind the text on the right. */}
-      <Animated.View pointerEvents="none" style={{ position: "absolute", right: 96, top: 24, opacity: 0.16, transform: [{ translateX: drift }] }}>
-        <View style={{ width: 54, height: 18, borderRadius: 9, backgroundColor: p.isDark ? "#1B3E38" : "#FAF7F0" }} />
-        <View style={{ position: "absolute", left: 12, top: -9, width: 26, height: 22, borderRadius: 11, backgroundColor: p.isDark ? "#1B3E38" : "#FAF7F0" }} />
+    <View testID="home-welcome" style={{ marginHorizontal: -20, marginTop: -24, backgroundColor: p.header, paddingHorizontal: 20, paddingTop: 6, paddingBottom: 34, overflow: "hidden" }}>
+      <Animated.View pointerEvents="none" style={{ position: "absolute", right: -4, bottom: 12, transform: [{ translateY: bob }] }}>
+        <HomeScene width={118} />
       </Animated.View>
-      <Animated.View pointerEvents="none" style={{ position: "absolute", right: -6, bottom: 20, transform: [{ translateY: bob }] }}>
-        <HomeScene width={176} />
-      </Animated.View>
-      <View style={[ui.row, { gap: 14, paddingRight: 120 }]}>
-        <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: p.isDark ? "#1B3E38" : "#FAF7F0", alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#A7D9C1" }}>
-          <Text style={{ color: p.isDark ? "#FAF7F0" : "#1F3D38", fontSize: 22, fontWeight: "700", letterSpacing: -0.5 }}>{initials(name)}</Text>
+      <View style={[ui.row, { gap: 12 }]}>
+        <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: p.isDark ? "#1B3E38" : "#FAF7F0", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#A7D9C1" }}>
+          <Text style={{ color: p.isDark ? "#FAF7F0" : "#1F3D38", fontSize: 16, fontWeight: "700", letterSpacing: -0.3 }}>{initials(name)}</Text>
         </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ color: p.headerMuted, fontSize: 14, fontWeight: "500" }}>{greeting},</Text>
-          <Text accessibilityRole="header" numberOfLines={1} style={{ color: p.headerText, fontSize: 26, lineHeight: 32, fontWeight: "700", letterSpacing: -0.6 }}>{name.split(" ")[0]}</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ color: p.headerMuted, fontSize: 13, fontWeight: "500" }}>{greeting},</Text>
+          <Text accessibilityRole="header" numberOfLines={1} style={{ color: p.headerText, fontSize: 22, lineHeight: 28, fontWeight: "700", letterSpacing: -0.5 }}>{name.split(" ")[0]}</Text>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={"Open calendar, " + dateLabel}
+          onPress={onCalendar}
+          style={[ui.row, { minHeight: 36, gap: 6, paddingHorizontal: 11, borderRadius: 999, backgroundColor: p.headerControl, borderWidth: 1, borderColor: p.headerBorder }]}
+        >
+          <Feather name="calendar" size={13} color={p.headerText} />
+          <Text style={{ color: p.headerText, fontSize: 13, fontWeight: "600" }}>{dateLabel}</Text>
+        </Pressable>
       </View>
-      <Text style={{ color: p.headerMuted, fontSize: 14, lineHeight: 21, marginTop: 14, paddingRight: 130 }}>{subtitle}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={"Open calendar, " + dateLabel}
-        onPress={onCalendar}
-        style={[ui.row, { alignSelf: "flex-start", marginTop: 14, minHeight: 36, gap: 7, paddingHorizontal: 12, borderRadius: 999, backgroundColor: p.headerControl, borderWidth: 1, borderColor: p.headerBorder }]}
-      >
-        <Feather name="calendar" size={14} color={p.headerText} />
-        <Text style={{ color: p.headerText, fontSize: 13, fontWeight: "600" }}>{dateLabel}</Text>
-      </Pressable>
-      <Svg pointerEvents="none" width="100%" height={44} viewBox="0 0 390 44" preserveAspectRatio="none" style={{ position: "absolute", left: 0, right: 0, bottom: -1 }}>
-        <Path d="M0 8 C 110 50, 250 46, 390 2 L390 44 L0 44 Z" fill={p.isDark ? "#2E6B5E" : "#A7D9C1"} opacity={0.35} />
-        <Path d="M0 18 C 120 54, 260 50, 390 12 L390 44 L0 44 Z" fill={t.background} />
+      <Text numberOfLines={2} style={{ color: p.headerMuted, fontSize: 13, lineHeight: 19, marginTop: 10, paddingRight: 116 }}>{subtitle}</Text>
+      <Svg pointerEvents="none" width="100%" height={30} viewBox="0 0 390 30" preserveAspectRatio="none" style={{ position: "absolute", left: 0, right: 0, bottom: -1 }}>
+        <Path d="M0 6 C 110 34, 250 32, 390 2 L390 30 L0 30 Z" fill={p.isDark ? "#2E6B5E" : "#A7D9C1"} opacity={0.35} />
+        <Path d="M0 13 C 120 38, 260 35, 390 9 L390 30 L0 30 Z" fill={t.background} />
       </Svg>
     </View>
   );
