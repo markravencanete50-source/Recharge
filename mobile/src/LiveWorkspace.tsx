@@ -49,6 +49,7 @@ import { AnchorRegistry, WorkFocusContext, type WorkFocus } from "./LiveKit";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
+import { WorkPhotos } from "./Photos";
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
@@ -433,6 +434,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
           {openWork.kind === "direct_booking" && openWork.data.phase === "follow_up" && policy?.confirmed && <Text style={[ui.small, { color: p.muted }]}>Offer the guest {formatBps(policy.discount_bps).replace(".0%", "%")} off, up to {formatMoney(policy.discount_cap_minor)} off. The offer price is worked out when you prepare it.</Text>}
           {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
           {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: {formatMoney(Number(openWork.data.estimatedCostMinor))}</Text>}
+          <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
           {workItemForms(account, openWork, journeys, work).map(f => <SoftButton key={f.key} label={f.title} icon="arrow-right" palette={p} disabled={f.key === "prepareQuote" && !policyConfirmed} onPress={() => { setOpenWork(null); setForm(f); }} />)}
           {openWork.kind === "direct_booking" && !policyConfirmed && <Text style={[ui.small, { color: p.muted }]}>The discount policy awaits confirmation.</Text>}
           {!workItemForms(account, openWork, journeys, work).length && <Text style={[ui.small, { color: p.muted }]}>Nothing needs your action on this item.</Text>}

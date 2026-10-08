@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Platform, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -38,6 +38,7 @@ import { dateKey, parseAnalyticsDate, periodError, periodLabel, presetPeriod, ty
 import { estimateComparables, onboardingProgress, readableStage, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
 import { createOperationForms, journeyForms, newEnquiryForm, operationForms, workflowValues, type JourneyView, type OperationView, type WorkflowField, type WorkflowForm } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { PhotoPicker, WorkPhotos } from "./Photos";
 
 export const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
 const money = (n: unknown) => formatMoney(Number(n));
@@ -134,9 +135,10 @@ export function WorkflowSheet({ spec, invoices, budget = [], palette: p, onClose
 function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec: WorkflowForm; invoices: InvoiceView[]; budget: BudgetItem[]; p: Palette; onClose: () => void; onSaved: () => Promise<void> }) {
   const [values, setValues] = useState<Record<string, unknown>>(() => Object.fromEntries(spec.fields.map(f => [f.name, f.defaultValue ?? (f.type === "checkbox" ? false : "")])));
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [attempt, setAttempt] = useState<{ id: string; key: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
   const celebrate = useCelebrate();
   async function save() {
-    if (busy) return;
+    if (busy || uploading) return;
     setBusy(true); setError("");
     try {
       const normalized = workflowValues(spec.fields, values), key = JSON.stringify(normalized), requestId = attempt?.key === key ? attempt.id : Crypto.randomUUID();
@@ -149,10 +151,28 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;
   return (
     <>
-      {spec.fields.map((f, n) => <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues({ ...values, [f.name]: v })} p={p} disabled={busy} /></Stagger>)}
+      {spec.fields.map((f, n) => f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues(current => ({ ...current, [f.name]: v }))} p={p} disabled={busy} /></Stagger>)}
       {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}><Text style={[ui.small, { color: p.text }]}>{error}</Text></View>}
-      <SoftButton label={busy ? "Saving…" : "Save and continue"} icon="check" primary disabled={busy} onPress={() => void save()} palette={p} />
+      <SoftButton label={busy ? "Saving…" : uploading ? "Saving photos…" : "Save and continue"} icon="check" primary disabled={busy || uploading} onPress={() => void save()} palette={p} />
     </>
+  );
+}
+
+// Photos on the onboarding: the owner's photos and documents for the set-up form (keys, meters,
+// the mailbox, paperwork such as gas or electrical certificates), and Ready's inspection photos.
+const SETUP_STAGES = ["form", "invoice", "inspection_to_book", "inspection_booked"];
+function JourneyPhotos({ j, p, account }: { j: JourneyView; p: Palette; account: WorkspaceAccount }) {
+  const [saved, setSaved] = useState(0);
+  const onSetup = useCallback((ids: string[]) => setSaved(ids.length), []);
+  const owner = account.role === "client" && SETUP_STAGES.includes(j.stage);
+  const team = (["admin", "super_admin", "stays"].includes(account.role) && SETUP_STAGES.includes(j.stage));
+  const inspector = ["ready", "stays", "admin", "super_admin"].includes(account.role) && ["inspection_booked", "inspection_complete"].includes(j.stage);
+  return (
+    <View style={{ gap: 12 }}>
+      <WorkPhotos p={p} workId={j.workId} title="Photos and documents" refreshKey={saved} />
+      {(owner || team) && <PhotoPicker p={p} workId={j.workId} purpose="setup" label={owner ? "Add photos for your set-up" : "Add set-up photos"} hint="For example the keys, the meters, the mailbox, or a photo of a certificate. They are saved as soon as they are chosen." onChange={onSetup} />}
+      {inspector && <PhotoPicker p={p} workId={j.workId} purpose="inspection" label="Inspection photos" hint="Saved straight away, and shared with the owner." onChange={onSetup} />}
+    </View>
   );
 }
 
@@ -193,6 +213,7 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: Jour
       {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{j.agreement}</Text>{j.signedName && <Text style={{ color: p.success }}>Accepted by {j.signedName}{j.signedAt ? " on " + new Date(j.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }) : ""}.</Text>}<AgreementCopy j={j} p={p} propertyName={propertyName} /></View>}
       {j.inspectionReport && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Inspection findings</Text><InspectionResult palette={p} j={j} /><Text selectable style={[ui.body, { color: p.text }]}>{j.inspectionReport}</Text></View>}
       <JourneyQuestions palette={p} j={j} owner={account.role === "client"} />
+      <JourneyPhotos j={j} p={p} account={account} />
       {journeyForms(account, j).map(f => <SoftButton key={f.key} label={f.title} icon={f.key === "askQuestion" ? "plus" : "arrow-right"} palette={p} onPress={() => onForm(f)} />)}
       {!!linked.length && <Text style={[ui.small, { color: p.muted }]}>{linked.length} connected team {linked.length === 1 ? "handover" : "handovers"}</Text>}
     </View>

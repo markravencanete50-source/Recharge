@@ -2,8 +2,8 @@ import type { WorkspaceAccount } from './workspace-account-policy';
 import { REPAIR_GUIDES } from './repair-guides';
 import { INSPECTION_CHECKS } from './onboarding-content';
 import { SCOTTISH_REGIONS } from './regions';
-export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string};
-export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string};
+export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'};
+export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string;workId?:string};
 export type JourneyView={propertyId:string;clientId:string;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string}};
 export type OperationView={workId:string;propertyId:string;moduleId:string;title:string;kind:string;status:string;version:number;assigneeId:string|null;dueOn?:string|null;data:Record<string,unknown>};
 const field=(name:string,label:string,type:WorkflowField['type']='text',required=true):WorkflowField=>({name,label,type,required});
@@ -14,6 +14,8 @@ const admin=(a:WorkspaceAccount)=>actorIs(a,'admin','super_admin');
 export function workflowValues(fields:WorkflowField[],raw:Record<string,unknown>):Record<string,unknown>{
  const values:Record<string,unknown>={};
  for(const f of fields){
+  // Photos are saved as they are chosen; the form sends the saved photos' ids.
+  if(f.type==='photos'){const ids=Array.isArray(raw[f.name])?(raw[f.name] as unknown[]).filter((x):x is string=>typeof x==='string'):[];if(f.required&&!ids.length)throw new Error('Add at least one photo: '+f.label);values[f.name]=ids;continue;}
   if(f.type==='checkbox'){values[f.name]=raw[f.name]===true||raw[f.name]==='on';if(f.required&&!values[f.name])throw new Error('Please confirm: '+f.label);continue;}
   const text=String(raw[f.name]??'').trim();if(f.required&&!text)throw new Error('Please enter: '+f.label);
   if(f.type==='date'){values[f.name]=text||null;continue;}
@@ -59,7 +61,7 @@ export function journeyForms(a:WorkspaceAccount,j:JourneyView):WorkflowForm[]{
 export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[]{
  if(['completed','cancelled'].includes(w.status))return [];
  const forms:WorkflowForm[]=[],stays=admin(a)||a.role==='stays',ready=admin(a)||actorIs(a,'stays','ready');
- const add=(step:string,title:string,fields:WorkflowField[],transform=(v:Record<string,unknown>)=>v,unavailable?:string)=>forms.push({key:step,title,endpoint:'operations',fields,unavailable,build:v=>({action:'updateOperation',workId:w.workId,version:w.version,step,data:transform(v)})});
+ const add=(step:string,title:string,fields:WorkflowField[],transform=(v:Record<string,unknown>)=>v,unavailable?:string)=>forms.push({key:step,title,endpoint:'operations',fields,unavailable,workId:w.workId,build:v=>({action:'updateOperation',workId:w.workId,version:w.version,step,data:transform(v)})});
  if(w.kind==='daily_pricing'&&stays&&w.data.phase==='proposed')add('recordApplied','Record the applied pricing decision',[field('evidence','Where and when the price was held or changed','textarea')]);
  if(w.kind==='licensing'&&stays&&!w.data.phase)add('submitApplication','Record the submitted licence application',[field('authority','Licensing authority (council)'),field('applicationReference','Application reference'),field('submittedOn','Date submitted','date')]);
  if(w.kind==='licensing'&&stays&&w.data.phase==='applied')add('recordSafetyChecks','Record the safety checks',[field('gasSafety','Gas safety certificate','checkbox'),field('electrical','Electrical safety (EICR and PAT)','checkbox'),field('alarms','Smoke, heat and carbon monoxide alarms','checkbox'),field('legionella','Legionella risk assessment','checkbox'),field('epc','Energy performance certificate','checkbox'),field('insurance','Buildings and public liability insurance','checkbox'),field('evidence','Certificates and where they are filed','textarea')],v=>({checks:{gasSafety:v.gasSafety,electrical:v.electrical,alarms:v.alarms,legionella:v.legionella,epc:v.epc,insurance:v.insurance},evidence:v.evidence}));
@@ -94,14 +96,14 @@ export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[
   if(ready&&w.data.phase==='booked')add('completeRepair','Record the completed repair',[field('report','Repair completion report','textarea'),field('actualCostMinor','Actual repair cost, GBP','money'),field('guestUpdate','Guest completion update','textarea')]);
  }
  if(w.kind==='cleaning'){
-  if(a.role==='cleans'&&w.assigneeId===a.userId&&w.data.phase==='assigned')add('submitCleaning','Submit your clean',[field('report','Cleaning report','textarea')],v=>v,'Photo upload must be connected before a clean can be submitted.');
+  if(a.role==='cleans'&&w.assigneeId===a.userId&&w.data.phase==='assigned')add('submitCleaning','Submit your clean',[field('report','Cleaning report','textarea')],v=>v,'Open this clean from Cleans to tick the checklist and add your photos.');
   if((admin(a)||actorIs(a,'stays','cleaning_manager'))&&w.data.phase==='review')add('reviewCleaning','Review the clean and guest feedback',[field('accepted','Accept the completed clean','checkbox',false),field('guestFeedback','Guest feedback','textarea'),field('reviewNote','Management review','textarea')]);
  }
  if(w.kind==='purchase'){
   const purchasing=admin(a)||(a.role==='accounts'&&a.modules.includes('purchase-order-accounts'));
   if(purchasing&&w.data.phase==='requested')add('approvePurchase','Approve the purchase budget',[{...field('budgetItemId','Budget chart item (optional)','select',false),help:'Approving against the chart checks the amount is within the most each item should cost.'},{...field('quantity','How many','number',false),defaultValue:'1'},field('approvedAmountMinor','Approved amount, GBP','money'),field('approvalNote','Budget decision and reason','textarea')],v=>({approvedAmountMinor:v.approvedAmountMinor,approvalNote:v.approvalNote,...(typeof v.budgetItemId==='string'&&v.budgetItemId?{budgetItemId:v.budgetItemId,quantity:typeof v.quantity==='number'?v.quantity:1}:{})}));
   if(purchasing&&w.data.phase==='approved')add('recordOrder','Record the order',[field('orderReference','Order reference'),field('supplier','Supplier')]);
-  if((admin(a)||a.role==='ready')&&w.data.phase==='ordered')add('recordDelivery','Record delivery',[field('receivedOn','Date received','date'),field('evidence','Delivery evidence','textarea')],v=>v,'Verified delivery photos require the media connection.');
+  if((admin(a)||a.role==='ready')&&w.data.phase==='ordered')add('recordDelivery','Record delivery',[field('receivedOn','Date received','date'),field('evidence','Delivery evidence','textarea'),{...field('photoIds','Photos of what arrived','photos'),purpose:'delivery',help:'Take a photo of each item, and the delivery note if there is one.'}]);
   if(purchasing&&w.data.phase==='delivered')add('reconcilePurchase','Reconcile the delivered purchase',[field('invoiceId','Paid purchase invoice','select'),field('reconciliation','Invoice and delivery checks','textarea')]);
  }
  return forms;

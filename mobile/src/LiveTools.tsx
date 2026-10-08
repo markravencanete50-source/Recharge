@@ -16,6 +16,7 @@ import { MODULE_ART } from "../../lib/home-tools";
 import type { ModuleId } from "../../lib/modules";
 import type { PropertyView } from "../../lib/workspace-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { PhotoStrip } from "./Photos";
 
 // Every tool a person holds, and where it lives in the live app.
 export function ToolDirectory({ palette: p, account, properties, onOpen }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpen: (tab: "home" | "work" | "properties" | "analytics", view?: WorkView) => void }) {
@@ -124,7 +125,7 @@ export function FurnishingCard({ palette: p }: { palette: Palette }) {
 
 // Owners: what the cleaners did with the post at their properties, as the owner allowed.
 const MAIL_LABEL: Record<string, string> = { photograph: "Photographed the post", open_and_photograph: "Opened and photographed the post", leave_safely: "Left the post somewhere safe" };
-const mailSchema = z.array(z.object({ workId: z.string(), propertyId: z.string(), propertyName: z.string(), on: z.string(), action: z.string(), note: z.string() }));
+const mailSchema = z.array(z.object({ workId: z.string(), propertyId: z.string(), propertyName: z.string(), on: z.string(), action: z.string(), note: z.string(), photoIds: z.array(z.string().uuid()).default([]) }));
 export function MailboxSection({ palette: p }: { palette: Palette }) {
   const [mail, setMail] = useState<z.infer<typeof mailSchema>>([]);
   const [error, setError] = useState("");
@@ -140,7 +141,10 @@ export function MailboxSection({ palette: p }: { palette: Palette }) {
       {loading && <Loading p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <List p={p} empty={loading ? "Loading…" : "No post has been handled yet."}>
-        {mail.map((m, i) => <Row key={m.workId} p={p} first={i === 0} icon="mail" tone="clients" title={m.propertyName} detail={`${new Date(m.on + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })} · ${MAIL_LABEL[m.action] ?? m.action}${m.note ? " · " + m.note : ""}`} />)}
+        {mail.map((m, i) => <View key={m.workId} style={{ gap: 6, paddingBottom: m.photoIds.length ? 10 : 0 }}>
+          <Row p={p} first={i === 0} icon="mail" tone="clients" title={m.propertyName} detail={`${new Date(m.on + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })} · ${MAIL_LABEL[m.action] ?? m.action}${m.note ? " · " + m.note : ""}`} />
+          <PhotoStrip p={p} ids={m.photoIds} size={64} />
+        </View>)}
       </List>
     </Section>
   );

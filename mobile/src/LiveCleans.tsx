@@ -9,6 +9,7 @@ import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, StatGrid, StatTile } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
+import { PhotoPicker, WorkPhotos } from "./Photos";
 import { ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, uploadWorkPhoto, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
@@ -204,6 +205,8 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
   const [report, setReport] = useState("");
   const [mailDone, setMailDone] = useState(false);
   const [mailNote, setMailNote] = useState("");
+  const [mailPhotos, setMailPhotos] = useState<{ ids: string[]; uploading: boolean }>({ ids: [], uploading: false });
+  const onMailPhotos = useCallback((ids: string[], uploading: boolean) => setMailPhotos({ ids, uploading }), []);
   const mailPreference = typeof op?.data.mailPreference === "string" && op.data.mailPreference in MAIL_DONE ? op.data.mailPreference as keyof typeof MAIL_DONE : null;
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [busy, setBusy] = useState(false);
@@ -219,7 +222,7 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
 
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setPhotos([]); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setCandidates([]); });
+    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setPhotos([]); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setCandidates([]); });
     if (op && canAssign) readControls({ section: "resources", propertyId: op.propertyId, workId: op.workId }).then(r => { if (active) setCandidates(candidatesSchema.parse(r.data).filter(c => c.role === "cleans")); }).catch(e => { if (active) setError(message(e)); });
     return () => { active = false; };
   }, [op, canAssign]);
@@ -255,7 +258,8 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
     try { await action(); request.done(); await onDone(); } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   const verified = photos.filter(x => x.status === "verified" && x.id).map(x => x.id!);
-  const ready = ticked.length === checklist.length && checklist.length > 0 && report.trim().length >= 5 && verified.length > 0 && !photos.some(x => x.status === "uploading");
+  const postPhotos = mailDone && (mailPreference === "photograph" || mailPreference === "open_and_photograph");
+  const ready = ticked.length === checklist.length && checklist.length > 0 && report.trim().length >= 5 && verified.length > 0 && !photos.some(x => x.status === "uploading") && !(postPhotos && mailPhotos.uploading);
 
   return (
     <Sheet palette={p} visible={!!op} onClose={onClose} title={propertyName} subtitle={op ? `${typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""} · ${phaseLabel[phase] ?? readableStage(op.status)}` : ""} icon="spray">
@@ -296,15 +300,16 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
               <Text style={{ color: p.text, flex: 1 }}>There was post, and I {MAIL_DONE[mailPreference]} as the owner asked</Text>
             </MotionPress>
             {mailDone && <Field label="Note for the owner (optional)" value={mailNote} onChange={setMailNote} p={p} placeholder="For example, two letters left on the kitchen table" />}
+            {postPhotos && <PhotoPicker key={op.workId} p={p} workId={op.workId} purpose="mailbox" label="Photos of the post" hint="The owner sees these in their Mailbox." onChange={onMailPhotos} />}
           </View>}
           <Button label={busy ? "Sending…" : "Submit clean"} icon="send" primary p={p} disabled={!ready || busy}
-            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: verified, mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}) } }))} />
+            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: verified, mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}), ...(postPhotos && mailPhotos.ids.length ? { mailPhotoIds: mailPhotos.ids } : {}) } }))} />
           {!ready && <Text style={[ui.small, { color: p.muted }]}>Tick every check, add at least one saved photo and a short report to submit.</Text>}
         </>}
 
         {canReview && <>
           <Notice text={typeof op.data.report === "string" ? `Cleaner's report: ${op.data.report}` : "The cleaner has submitted this clean."} p={p} />
-          <Text style={[ui.small, { color: p.muted }]}>{Array.isArray(op.data.photoIds) ? `${op.data.photoIds.length} verified photos attached` : ""}</Text>
+          <WorkPhotos p={p} workId={op.workId} title="Photos from the clean" />
           <View style={{ flexDirection: "row", gap: 8 }}>
             <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true }} onPress={() => setAccepted(true)} style={[ui.button, { flex: 1, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? "#FFFFFF" : p.primary }]}>Accept</Text></MotionPress>
             <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === false }} onPress={() => setAccepted(false)} style={[ui.button, { flex: 1, backgroundColor: accepted === false ? "#A63A32" : p.wash }]}><Text style={[ui.buttonText, { color: accepted === false ? "#FFFFFF" : p.primary }]}>Reject</Text></MotionPress>

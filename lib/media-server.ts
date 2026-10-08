@@ -4,7 +4,7 @@ import { authSecurityConfiguration,requestQuota,securityRpc } from './auth-secur
 import { isSameOrigin,securityHeaders } from './auth-security-policy';
 import { isNativeRequest } from './native-request-policy';
 import { integrationConfiguration,MAX_PHOTO_BYTES,mediaInputSchema,photoFormat } from './integration-policy';
-import { uploadPrivatePhoto,downloadPrivatePhoto } from './integration-providers';
+import { uploadPrivatePhoto,downloadPrivatePhoto,uploadStoragePhoto,downloadStoragePhoto,STORAGE_PREFIX } from './integration-providers';
 import { integrationSettings } from './integration-server';
 
 export async function mediaRoute(request:Request,native=false) {
@@ -20,8 +20,8 @@ export async function mediaRoute(request:Request,native=false) {
         const result=await session.client.rpc('workspace_media_asset',{target_asset:parsed.data.assetId});
         if(result.error)return databaseFailure(result.error);
         const settings=integrationSettings();if(!integrationConfiguration(settings).media)return businessResponse({error:'Photo service is awaiting configuration'},503);
-        const bytes=await downloadPrivatePhoto(settings,result.data);
-        return new Response(bytes,{headers:{...securityHeaders,Vary:'Cookie, Authorization','Content-Type':`image/${result.data.format==='jpg'?'jpeg':result.data.format}`,'Content-Disposition':`inline; filename="recharge-photo.${result.data.format}"`}});
+        const bytes=String(result.data.providerAssetId).startsWith(STORAGE_PREFIX)?await downloadStoragePhoto(settings,result.data):await downloadPrivatePhoto(settings,result.data);
+        return new Response(bytes,{headers:{...securityHeaders,Vary:'Cookie, Authorization','Cache-Control':'private, max-age=3600','Content-Type':`image/${result.data.format==='jpg'?'jpeg':result.data.format}`,'Content-Disposition':`inline; filename="recharge-photo.${result.data.format}"`}});
       }
       const result=await session.client.rpc('workspace_media_read',{target_work:parsed.data.workId});
       return result.error?databaseFailure(result.error):businessResponse({data:result.data,uploadsEnabled:integrationConfiguration(integrationSettings()).media});
@@ -46,7 +46,7 @@ export async function mediaRoute(request:Request,native=false) {
     const prepared=await session.client.rpc('workspace_prepare_upload',{input:{...parsed.data,contentHash:hash}});
     if(prepared.error)return databaseFailure(prepared.error);
     if(prepared.data.evidenceId)return businessResponse({id:prepared.data.evidenceId,verified:true});
-    const asset=await uploadPrivatePhoto(settings,prepared.data.publicId,bytes,format);
+    const asset=integrationConfiguration(settings).mediaProvider==='cloudinary'?await uploadPrivatePhoto(settings,prepared.data.publicId,bytes,format):await uploadStoragePhoto(settings,prepared.data.publicId,bytes,format);
     const evidence=await securityRpc<string>('integration_commit_upload',{target_intent:prepared.data.id,asset});
     return businessResponse({id:evidence,verified:true});
   } catch {return businessResponse({error:'Photo upload could not be verified. Retry with the same request, or contact your manager.'},503);}

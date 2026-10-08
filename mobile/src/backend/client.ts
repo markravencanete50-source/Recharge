@@ -128,7 +128,8 @@ export const readAdmin = async (section: 'people' | 'properties' | 'accessContro
 export const writeAdmin = async (action: AdminAction) => (await workspaceRequest('/api/mobile/admin',action)).json();
 export const requestPhoneReset = async (phone: string) => (await call('/api/mobile/recovery',{action:'request',phone})).json();
 export const completePhoneReset = async (phone: string, code: string, password: string) => (await call('/api/mobile/recovery',{action:'verify',phone,code,password})).json();
-export async function uploadWorkPhoto(input: {requestId: string;workId: string;purpose: 'cleaning'|'mailbox'|'delivery'|'licence'|'maintenance'}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
+export type PhotoPurpose = 'cleaning'|'mailbox'|'delivery'|'licence'|'maintenance'|'inspection'|'setup';
+export async function uploadWorkPhoto(input: {requestId: string;workId: string;purpose: PhotoPurpose}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
   const form = new FormData();
   form.append('requestId', input.requestId); form.append('workId', input.workId); form.append('purpose', input.purpose);
   // React Native's multipart transport accepts a local file descriptor; a browser needs the file's bytes.
@@ -136,4 +137,14 @@ export async function uploadWorkPhoto(input: {requestId: string;workId: string;p
   if (Platform.OS === 'web') form.append('photo', new File([await (await fetch(photo.uri)).blob()], photo.name, { type: photo.type }));
   else form.append('photo', photo as unknown as Blob);
   return (await workspaceRequest('/api/mobile/media', form)).json();
+}
+
+// Photos already saved on a work item, and where to load each one from. In the browser the
+// web session cookie goes with the image request; the phone app sends its access token.
+export const readWorkMedia = async (workId: string) => (await workspaceRequest('/api/mobile/media?workId=' + encodeURIComponent(workId))).json();
+export async function photoSource(assetId: string): Promise<{ uri: string; headers?: Record<string, string> }> {
+  const path = '/api/mobile/media?assetId=' + encodeURIComponent(assetId);
+  if (sameOriginWeb) return { uri: webWorkspacePath(path) };
+  if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
+  return { uri: liveApiOrigin() + path, headers: { Authorization: `Bearer ${session!.accessToken}`, 'X-Recharge-Client': 'native' } };
 }

@@ -2,11 +2,15 @@ import { z } from 'zod';
 
 export type IntegrationSettings = Record<string, string | undefined>;
 export function integrationConfiguration(settings: IntegrationSettings) {
-  const media = settings.MEDIA_UPLOADS_ENABLED === 'true' && /^[a-z0-9_-]+$/i.test(settings.CLOUDINARY_CLOUD_NAME || '') && Boolean(settings.CLOUDINARY_API_KEY && settings.CLOUDINARY_API_SECRET);
+  const cloudinary = settings.MEDIA_UPLOADS_ENABLED === 'true' && /^[a-z0-9_-]+$/i.test(settings.CLOUDINARY_CLOUD_NAME || '') && Boolean(settings.CLOUDINARY_API_KEY && settings.CLOUDINARY_API_SECRET);
+  // Photos are kept in the project's own private Supabase Storage bucket unless Cloudinary is
+  // switched on. That needs only the backend's existing database connection.
+  const storage = settings.MEDIA_STORAGE !== 'off' && /^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test((settings.SUPABASE_URL || '').replace(/\/$/, '')) && Boolean(settings.SUPABASE_SECRET_KEY?.startsWith('sb_secret_'));
+  const media = cloudinary || storage;
   const email = settings.NOTIFICATION_EMAIL_ENABLED === 'true' && Boolean(settings.RESEND_API_KEY) && z.string().email().safeParse(settings.NOTIFICATION_FROM_EMAIL).success;
   const push = settings.NOTIFICATION_PUSH_ENABLED === 'true' && Boolean(settings.EXPO_ACCESS_TOKEN);
   const reservations = settings.HOSTAWAY_IMPORT_ENABLED === 'true' && Boolean(settings.HOSTAWAY_ACCOUNT_ID && settings.HOSTAWAY_API_KEY);
-  return { media, email, push, reservations };
+  return { media, mediaProvider: cloudinary ? 'cloudinary' as const : storage ? 'storage' as const : null, email, push, reservations };
 }
 export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 export function photoFormat(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
@@ -16,7 +20,8 @@ export function photoFormat(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
   if (String.fromCharCode(...bytes.slice(0,4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8,12)) === 'WEBP') return 'webp';
   return null;
 }
-export const mediaInputSchema = z.object({ requestId:z.string().uuid(),workId:z.string().uuid(),purpose:z.enum(['cleaning','mailbox','delivery','licence','maintenance']) }).strict();
+export const MEDIA_PURPOSES = ['cleaning','mailbox','delivery','licence','maintenance','inspection','setup'] as const;
+export const mediaInputSchema = z.object({ requestId:z.string().uuid(),workId:z.string().uuid(),purpose:z.enum(MEDIA_PURPOSES) }).strict();
 export const integrationActionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('dispatchNotifications')}).strict(),
   z.object({action:z.literal('syncHostaway')}).strict(),

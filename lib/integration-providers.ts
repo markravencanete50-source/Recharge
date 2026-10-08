@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_PHOTO_BYTES,photoFormat } from './integration-policy';
 import { noticeCopy } from './notice-copy';
 
@@ -76,5 +77,42 @@ export async function downloadPrivatePhoto(settings:IntegrationSettings,asset:{p
   while(true){const next=await reader.read();if(next.done)break;total+=next.value.length;if(total>MAX_PHOTO_BYTES){await reader.cancel();throw new ProviderFailure('rejected');}chunks.push(next.value);}
   const bytes=new Uint8Array(total);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
   if(total!==asset.bytes||photoFormat(bytes)!==asset.format)throw new ProviderFailure('rejected');
+  return bytes;
+}
+
+// Supabase Storage: a private bucket only the backend can read or write (no storage policies are
+// granted to users). Each upload intent has its own fixed path, so a retry finds the earlier copy.
+export const MEDIA_BUCKET = 'workspace-media';
+export const STORAGE_PREFIX = 'storage:';
+function storageBucket(settings:IntegrationSettings) {
+  const client = createClient(settings.SUPABASE_URL!, settings.SUPABASE_SECRET_KEY!, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+  return client.storage.from(MEDIA_BUCKET);
+}
+const storagePath = (publicId:string, format:string) => {
+  if (!/^recharge\/[0-9a-f-]{36}$/.test(publicId) || !['jpg','png','webp'].includes(format)) throw new ProviderFailure('rejected');
+  return `${publicId}.${format}`;
+};
+async function readStorage(settings:IntegrationSettings, path:string) {
+  const result = await storageBucket(settings).download(path);
+  if (result.error || !result.data) throw new ProviderFailure('retryable');
+  const bytes = new Uint8Array(await result.data.arrayBuffer());
+  if (bytes.length > MAX_PHOTO_BYTES) throw new ProviderFailure('rejected');
+  return bytes;
+}
+export async function uploadStoragePhoto(settings:IntegrationSettings,publicId:string,bytes:Uint8Array,format:string) {
+  const path = storagePath(publicId, format);
+  const asset = { assetId: STORAGE_PREFIX + path, publicId, version: 1, format, bytes: bytes.length };
+  const result = await storageBucket(settings).upload(path, bytes, { contentType: `image/${format==='jpg'?'jpeg':format}`, upsert: false, cacheControl: 'private, max-age=0' });
+  if (!result.error) return asset;
+  // Already there from an earlier attempt: accept it only if it is the same photo.
+  const existing = await readStorage(settings, path).catch(() => null);
+  if (existing && existing.length === bytes.length && existing.every((b, i) => b === bytes[i])) return asset;
+  throw new ProviderFailure('retryable');
+}
+export async function downloadStoragePhoto(settings:IntegrationSettings,asset:{providerAssetId:string;format:string;bytes:number}) {
+  const path = asset.providerAssetId.slice(STORAGE_PREFIX.length);
+  if (!/^recharge\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(path)) throw new ProviderFailure('rejected');
+  const bytes = await readStorage(settings, path);
+  if (bytes.length !== asset.bytes || photoFormat(bytes) !== asset.format) throw new ProviderFailure('rejected');
   return bytes;
 }
