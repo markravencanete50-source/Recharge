@@ -8,6 +8,7 @@ import type { OperationsAction } from "../../../lib/operations-policy";
 import type { FinanceAction } from '../../../lib/workspace-finance-policy';
 import type { TeamsAction } from '../../../lib/workspace-teams-policy';
 import type { AdminAction } from '../../../lib/workspace-admin-policy';
+import type { ChatAction } from '../../../lib/workspace-chat-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
@@ -100,7 +101,7 @@ async function refresh() {
   return refreshInFlight;
 }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (sameOriginWeb) return call(webWorkspacePath(path), body);
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
@@ -152,3 +153,7 @@ export async function photoSource(assetId: string): Promise<{ uri: string; heade
 // Browser notifications (web push): Recharge's public key, and adding or removing this browser.
 export const readNotificationKey = async () => z.object({ publicKey: z.string().nullable() }).parse(await (await call('/api/workspace/notifications')).json()).publicKey;
 export const writeNotifications = async (body: { action: 'subscribe'; endpoint: string; p256dh: string; auth: string } | { action: 'unsubscribe'; endpoint: string }) => (await call('/api/workspace/notifications', body)).json();
+
+// Messages: conversations, a conversation's messages, people to message, and sending.
+export const readChat = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/chat?' + new URLSearchParams(query))).json();
+export const writeChat = async (action: ChatAction) => (await workspaceRequest('/api/mobile/chat', action)).json();

@@ -36,7 +36,7 @@ import { FurnishingCard, MailboxSection } from "./LiveTools";
 import { ROLE_LABEL } from "../../lib/admin-live";
 import { WORK_VIEW_LABEL, workViewsFor, type WorkView } from "../../lib/tool-directory";
 import { formatBps, formatMoney } from "../../lib/format";
-import { liveApiOrigin, readTeams, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
+import { liveApiOrigin, readChat, readTeams, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import { workspaceAccountSchema, type WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { WorkspaceSection } from "../../lib/workspace-map";
 import { isWorkspaceAdmin } from "../../lib/modules";
@@ -51,10 +51,11 @@ import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 import { WorkPhotos } from "./Photos";
 import { NotificationsSetting, refreshNotificationLink } from "./Notifications";
+import { LiveChat } from "./LiveChat";
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
-const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help"];
+const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help", "inbox"];
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
 type BookingPolicy = z.infer<typeof bookingPolicySchema>;
 // Direct-booking offers use this discount policy; only a super admin can set and confirm it.
@@ -145,6 +146,16 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
   }, []);
 
   useEffect(() => { void refreshNotificationLink(); }, [account.userId]);
+  // Unread messages for the badge on the Messages button, checked every 30 seconds while open.
+  const [chatUnread, setChatUnread] = useState(0);
+  const loadUnread = useCallback(async () => {
+    try { setChatUnread(z.number().int().min(0).parse((await readChat({ section: "unread" })).data)); } catch { /* the badge simply stays as it was */ }
+  }, []);
+  useEffect(() => {
+    queueMicrotask(() => void loadUnread());
+    const timer = setInterval(() => { if (AppState.currentState === "active") void loadUnread(); }, 30_000);
+    return () => clearInterval(timer);
+  }, [loadUnread]);
   const lastRefresh = useRef(0), editing = useRef(false);
   // A super admin can change someone's role or tools while they are signed in. Every read carries
   // the current account, so the app switches to the new role's Home, Work and tools on the next refresh.
@@ -352,11 +363,12 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} />
     : tab === "analytics" ? reportsPage
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} />
+    : tab === "inbox" ? <LiveChat palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => void loadUnread()} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view) => { setTab(next); if (view) setWorkView(view); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : "page"} style={{ gap: 24 }}>{page}</SwapIn>;
   const header = headerPalette(p);
-  const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : "Home");
+  const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
   return (
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
       <CelebrateProvider palette={p} bottom={desktop ? 40 : 112}>
@@ -373,8 +385,12 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
                 {desktop ? <Text style={{ color: p.headerText, fontSize: 16, fontWeight: "600", flexShrink: 1 }}>{title}</Text> : <CompanyLogo palette={header} width={width < 360 ? 104 : 144} />}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
-                <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={() => { void refresh(); void loadReport(period); }} />
-                <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />
+                <View>
+                  <IconButton label={chatUnread ? `Messages, ${chatUnread} unread` : "Messages"} icon="message-circle" palette={header} onPress={() => navigate("inbox")} />
+                  {chatUnread > 0 && <View pointerEvents="none" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: "#E4572E", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}>{chatUnread > 99 ? "99+" : chatUnread}</Text></View>}
+                </View>
+                <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={() => { void refresh(); void loadReport(period); void loadUnread(); }} />
+                {(desktop || width >= 400) && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
                 <MotionPress accessibilityRole="button" accessibilityLabel={`Open profile and preferences, ${roleLabel}`} onPress={() => setSettings(true)} style={{ minHeight: 48, minWidth: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: desktop ? 14 : 0, borderRadius: 999, backgroundColor: desktop ? p.headerControl : "transparent", borderWidth: desktop ? 1 : 0, borderColor: p.headerBorder }}>
                   {desktop && <View style={{ maxWidth: 180 }}><Text numberOfLines={1} style={{ color: p.headerText, fontSize: 14, fontWeight: "600" }}>{profile.displayName}</Text><Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 11 }}>{roleLabel}</Text></View>}
                   <Avatar profile={profile} backgroundColor={desktop ? undefined : p.headerControl} textColor={desktop ? "#FFFFFF" : p.headerControlText} />

@@ -8,6 +8,8 @@ const copy = (title: string, message: string): NoticeCopy => ({ title, message: 
 
 const EXACT: Record<string, NoticeCopy> = {
   // Property onboarding, in the order an owner meets it.
+  'chat.message': copy('New message', 'You have a new message in Recharge.'),
+  'chat.owner_message': copy('New message from an owner', 'An owner has sent Recharge a message.'),
   'journey.createEnquiry': copy('New property enquiry', 'A new property enquiry has been started.'),
   'journey.publishEstimate': copy('Your estimate is ready', 'Recharge has prepared an estimate for your property, with expected nightly rates and comparable listings. You can review it and choose how to go ahead.'),
   'journey.decideEstimate': copy('Estimate decision recorded', 'A decision has been recorded on a property estimate.'),

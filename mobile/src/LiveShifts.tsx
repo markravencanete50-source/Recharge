@@ -9,7 +9,7 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
-import { readTeams, writeTeams } from "./backend/client";
+import { readChat, readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, rotaListSchema, SHIFTS, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
 import { DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { formatCount, formatDay, plural } from "../../lib/format";
@@ -138,6 +138,10 @@ function RotaSection({ p }: { p: Palette }) {
   );
 }
 
+const clientRelationsSchema = z.object({
+  ownerMessages: z.number().nullable(), overall: z.object({ green: z.number(), amber: z.number(), red: z.number() }).nullable(),
+  people: z.array(z.object({ userId: z.string(), fullName: z.string(), green: z.number(), amber: z.number(), red: z.number(), percentGreen: z.number().nullable(), onTrack: z.boolean().nullable(), bonusTier: z.number().nullable() })),
+});
 export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
   const saved = useSaved();
   const [range, setRange] = useState<"today" | "week" | "month">("week");
@@ -146,6 +150,7 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [targets, setTargets] = useState(false);
+  const [clients, setClients] = useState<z.infer<typeof clientRelationsSchema> | null>(null);
   const [closing, setClosing] = useState<Shift | null>(null);
   const [busy, setBusy] = useState(false);
   const request = useRequestId(closing ? "close:" + closing.id : null);
@@ -156,6 +161,8 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
       setData(teamPerformanceSchema.parse((await readTeams({ section: "teamPerformance", from, to: londonDay() })).data));
       // Only Stays and admins have sign-offs; anyone else simply sees none.
       setSignoffs(await readTeams({ section: "signoff" }).then(r => signoffSchema.parse(r.data).recent).catch(() => []));
+      // Client relations: owner messages in the app, timed the same way.
+      setClients(await readChat({ section: "clientRelations", from, to: londonDay() }).then(r => clientRelationsSchema.parse(r.data)).catch(() => null));
     } catch (e) { setError(message(e)); }
     setLoading(false);
   }, [range]);
@@ -198,6 +205,18 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
           {data.unassigned.green + data.unassigned.amber + data.unassigned.red > 0 && <Notice p={p} tone="bad"
             text={`${plural(data.unassigned.green + data.unassigned.amber + data.unassigned.red, "guest message")} arrived while nobody was clocked in to guest relations (${formatCount(data.unassigned.red)} red).`} />}
         </Section>
+        {clients && <Section title="Owner reply times (client relations)" p={p}>
+          <Text style={[ui.small, { color: p.muted }]}>Messages owners send Recharge in the app, with the same targets. Each one counts for whoever was clocked in to client relations when it arrived.</Text>
+          {!clients.people.length && <Notice text={clients.ownerMessages ? "No owner messages were answered by someone on a client relations shift yet." : "No owner messages in this period."} p={p} />}
+          <List p={p} empty="">
+            {clients.people.map((x, i) => {
+              const tags: [string, "good" | "wait" | "bad" | "plain"][] = [[`${x.percentGreen ?? 0}% green`, x.onTrack ? "good" : "bad"], [x.onTrack ? "On track" : "Off track", x.onTrack ? "good" : "bad"]];
+              if (x.bonusTier) tags.push([`Bonus tier ${x.bonusTier}%`, "good"]);
+              return <Row key={x.userId} p={p} first={i === 0} icon={x.onTrack ? "trending-up" : "trending-down"} tone="clients" title={x.fullName || "Team member"} detail={`${formatCount(x.green)} green · ${formatCount(x.amber)} amber · ${formatCount(x.red)} red`} tags={tags} />;
+            })}
+          </List>
+          {!!clients.overall && clients.overall.red > 0 && <Notice p={p} tone="bad" text={`${plural(clients.overall.red, "owner message")} waited more than ${t.amberMinutes} minutes for a reply.`} />}
+        </Section>}
         <Section title="Daily sign-offs" count={signoffs.length} p={p}>
           <Text style={[ui.small, { color: p.muted }]}>Stays confirm at the end of each day that every listing is visible, bad reviews are answered, suspensions are dealt with and re-listings are done. The last 14 days.</Text>
           <List p={p} empty="No sign-offs in the last 14 days.">
