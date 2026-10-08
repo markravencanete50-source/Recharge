@@ -196,9 +196,12 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread }:
   const changed = useCallback(() => { void loadList(); onUnread(); }, [loadList, onUnread]);
   const listView = (
     <View style={{ gap: 4, width: desktop ? 340 : "100%" }}>
-      <View style={[ui.between, { paddingBottom: 6 }]}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Messages</Text>
-        <Button label="New" icon="edit-3" p={p} primary onPress={() => setCreating(true)} />
+      <View style={[ui.between, { paddingBottom: 6, gap: 12 }]}>
+        <Text accessibilityRole="header" numberOfLines={1} style={[ui.sectionTitle, { color: p.text, flex: 1, minWidth: 0 }]}>Messages</Text>
+        <MotionPress accessibilityRole="button" accessibilityLabel="New message" onPress={() => setCreating(true)}
+          style={[ui.row, { gap: 8, minHeight: 40, paddingHorizontal: 14, borderRadius: 12, backgroundColor: p.primary }]}>
+          <Feather name="edit-3" size={15} color={p.onPrimary} /><Text style={{ color: p.onPrimary, fontWeight: "700" }}>New</Text>
+        </MotionPress>
       </View>
       {!list ? <Loading p={p} /> : list.length ? list.map(c => <ConversationRow key={c.id} p={p} c={c} active={c.id === open} onPress={() => setOpen(c.id)} />)
         : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>No conversations yet. Tap New to message someone on the team.</Text>}

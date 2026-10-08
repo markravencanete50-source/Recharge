@@ -6,6 +6,11 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    // CommonJS config files (Metro needs them) use require().
+    files: ['**/*.cjs'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     files: ['mobile/**/*.{ts,tsx}'],
     rules: {
       // Native Image accessibility uses accessible/accessibilityLabel instead of HTML alt.
@@ -23,6 +28,12 @@ const eslintConfig = defineConfig([
     "mobile/.expo/**",
     "mobile/dist/**",
     "mobile/dist-ios/**",
+    // Build output: generated, never edited by hand.
+    "dist/**",
+    "landing/dist/**",
+    "mobile/dist-web/**",
+    "mobile/dist-workspace/**",
+    "preview-dist/**",
   ]),
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],

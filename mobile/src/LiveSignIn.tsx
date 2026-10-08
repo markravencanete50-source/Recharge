@@ -119,7 +119,7 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palet
     <ScrollView style={{ flex: 1, backgroundColor: p.background }} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <View style={{ backgroundColor: p.header, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 64, overflow: "hidden" }}>
         <View style={ui.between}><CompanyLogo palette={header} width={width < 360 ? 112 : 144} />{themeButton}</View>
-        <View style={{ marginTop: 26, gap: 8, paddingRight: 120 }}>
+        <View style={{ marginTop: 26, gap: 8, paddingRight: 140 }}>
           <Text style={{ color: p.headerText, fontSize: 30, lineHeight: 36, fontWeight: "700", letterSpacing: -1 }}>Welcome back.</Text>
           <Text style={{ color: p.headerMuted, fontSize: 14, lineHeight: 21 }}>Your properties and work, together in one place.</Text>
         </View>

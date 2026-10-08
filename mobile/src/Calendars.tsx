@@ -18,8 +18,8 @@ export function DayAgenda({ palette: p, date, events, onAction, actionLabel }: {
   const colour = (event: ScheduleEvent) => KIND_COLOUR[event.kind][p.isDark ? "dark" : "light"];
   return (
     <View style={{ gap: 10 }}>
-      <View style={ui.between}>
-        <Text accessibilityRole="header" style={{ color: p.text, fontSize: 17, fontWeight: "700" }}>{longDate(date)}</Text>
+      <View style={[ui.between, { gap: 12 }]}>
+        <Text accessibilityRole="header" style={{ color: p.text, fontSize: 17, fontWeight: "700", flex: 1, minWidth: 0 }}>{longDate(date)}</Text>
         <Text style={[ui.small, { color: p.muted }]}>{today.length ? `${today.length} scheduled` : "Nothing scheduled"}</Text>
       </View>
       {today.length ? (

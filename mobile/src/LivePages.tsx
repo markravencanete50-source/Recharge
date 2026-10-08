@@ -322,8 +322,8 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
       {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
       {staff && !loading && properties.length > 0 && account.modules.includes("property-database") && <PortfolioInsights palette={p} properties={properties} journeys={journeys} filter={filter} onFilter={f => { setFilter(f); setShown(24); }} onOwners={setOwnerCount} />}
-      {!!filter && <MotionPress accessibilityRole="button" onPress={() => setFilter(null)} style={[ui.row, { gap: 8, alignSelf: "flex-start", minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.wash }]}>
-        <Text style={{ color: p.text, fontWeight: "600" }}>Showing: {filter.label} · {filter.ids.length}</Text><Feather name="x" size={16} color={p.text} />
+      {!!filter && <MotionPress accessibilityRole="button" onPress={() => setFilter(null)} style={[ui.row, { gap: 8, alignSelf: "flex-start", maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.wash }]}>
+        <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", flexShrink: 1 }}>Showing: {filter.label} · {filter.ids.length}</Text><Feather name="x" size={16} color={p.text} />
       </MotionPress>}
       <View {...(Platform.OS === "web" ? { dataSet: { searchShell: "true" } } : {})} style={[ui.row, { borderRadius: 14, minHeight: 50, borderWidth: 1, borderColor: p.controlBorder, paddingHorizontal: 14, backgroundColor: p.surface, gap: 10 }]}>
         <Feather name="search" size={18} color={p.muted} />

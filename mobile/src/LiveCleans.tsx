@@ -182,8 +182,8 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
       )}
       {!manager && mine && (
         <Section title="Your month" p={p}>
-          <View style={[ui.card, ui.between, { backgroundColor: p.surface, borderColor: p.border }]}>
-            <Text style={{ color: p.text }}>{mine.accepted} accepted · {mine.rejected} rejected{mine.overturned ? ` · ${mine.overturned} overturned` : ""}</Text>
+          <View style={[ui.card, ui.between, { backgroundColor: p.surface, borderColor: p.border, gap: 12 }]}>
+            <Text style={{ color: p.text, flex: 1, minWidth: 0 }}>{mine.accepted} accepted · {mine.rejected} rejected{mine.overturned ? ` · ${mine.overturned} overturned` : ""}</Text>
             <Tag label={mine.warning ? "Warning" : "Good standing"} tone={mine.warning ? "bad" : "good"} p={p} />
           </View>
         </Section>

@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -20,20 +18,6 @@ const vite = await createServer({
 after(async () => {
   await vite.close();
 });
-
-async function readCssTree(directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const contents = await Promise.all(
-    entries.map(async (entry) => {
-      const entryPath = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
-        return readCssTree(entryPath);
-      }
-      return entry.name.endsWith(".css") ? readFile(entryPath, "utf8") : "";
-    }),
-  );
-  return contents.join("\n");
-}
 
 test("forwards progress semantics to the primitive", async () => {
   const { Progress } = await vite.ssrLoadModule("/components/ui/progress.tsx");
@@ -75,9 +59,9 @@ test("every Recharge tool renders its assigned accessible 2D glyph", async () =>
   const { MODULES } = await vite.ssrLoadModule("/lib/modules.ts");
   const { featureGlyphs, iconNodes } = await vite.ssrLoadModule("/lib/artwork.ts");
   const { ToolIllustration } = await vite.ssrLoadModule("/components/tool-illustration.tsx");
-  for (const module of MODULES) {
-    const html = renderToStaticMarkup(React.createElement(ToolIllustration, {id: module.id}));
-    assert.ok(iconNodes[featureGlyphs[module.id]]?.length, `${module.id} must have an assigned glyph`);
+  for (const tool of MODULES) {
+    const html = renderToStaticMarkup(React.createElement(ToolIllustration, {id: tool.id}));
+    assert.ok(iconNodes[featureGlyphs[tool.id]]?.length, `${tool.id} must have an assigned glyph`);
     assert.match(html, /aria-hidden="true"/);
     assert.match(html, /<svg[^>]+stroke="currentColor"/);
     assert.doesNotMatch(html, /<img/);

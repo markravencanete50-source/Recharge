@@ -348,7 +348,7 @@ export function ManagementOverview({ palette: p, desktop, onOpenWork }: { palett
         ))}
       </View>
       <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 0, paddingVertical: 6 }]}>
-        <View style={[ui.between, { paddingVertical: 8 }]}><Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Needs a management decision</Text><Tag label={remaining ? `${remaining} open` : "All decided"} tone={remaining ? "wait" : "good"} palette={p} /></View>
+        <View style={[ui.between, { paddingVertical: 8, gap: 12 }]}><Text style={{ color: p.text, fontSize: 15, fontWeight: "700", flex: 1, minWidth: 0 }}>Needs a management decision</Text><Tag label={remaining ? `${remaining} open` : "All decided"} tone={remaining ? "wait" : "good"} palette={p} /></View>
         {DECISIONS.map(item => (
           <MotionPress key={item.id} accessibilityRole="button" onPress={() => setOpenId(item.id)} style={[ui.row, { gap: 12, paddingVertical: 12, borderTopWidth: 1, borderColor: p.border }]}>
             <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={item.icon} size={32} /></View>
