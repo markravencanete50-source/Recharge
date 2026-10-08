@@ -211,15 +211,24 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palet
       <View style={{ flex: 1, flexDirection: "row", backgroundColor: p.background }}>
         {/* The brand panel stays forest in both themes: the glow and the forest logo artwork are
             drawn for a forest canvas, and bone lettering keeps its contrast on it. */}
-        <View style={{ flex: 1, maxWidth: 640, backgroundColor: darkBrandCanvas, padding: 48, justifyContent: "space-between", overflow: "hidden" }}>
+        <View style={{ flex: 1, maxWidth: 640, backgroundColor: darkBrandCanvas, paddingHorizontal: 48, paddingVertical: 44, overflow: "hidden" }}>
           <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, opacity: 0.9 }}><HeroGlow palette={p} /></View>
           <Rise index={0}><CompanyLogo palette={p} variant="dark" width={168} /></Rise>
-          <View style={{ gap: 18 }}>
-            <Rise index={1}><Text style={{ color: "#FAF7F0", fontSize: 46, lineHeight: 52, fontWeight: "700", letterSpacing: -1.6 }}>{creating ? "Welcome." : "Welcome back."}</Text></Rise>
-            <Rise index={2}><Text style={{ color: "#D3E0D8", fontSize: 17, lineHeight: 26, maxWidth: 420 }}>Your properties, stays, cleans and repairs, together in one place.</Text></Rise>
-            <Rise index={3}><TeamChips /></Rise>
+          {/* Words and the showcase sit together in the middle, so the panel never has a gap. */}
+          <View style={{ flex: 1, justifyContent: "center", gap: 34, paddingTop: 24 }}>
+            <View style={{ gap: 16 }}>
+              <Rise index={1}><Text style={{ color: "#FAF7F0", fontSize: 46, lineHeight: 52, fontWeight: "700", letterSpacing: -1.6 }}>{creating ? "Welcome." : "Welcome back."}</Text></Rise>
+              <Rise index={2}><Text style={{ color: "#D3E0D8", fontSize: 17, lineHeight: 26, maxWidth: 420 }}>Your properties, stays, cleans and repairs, together in one place.</Text></Rise>
+              <Rise index={3}><TeamChips /></Rise>
+            </View>
+            <Showcase panel={Math.min(640, width / 2) - 96} />
           </View>
-          <View style={{ alignItems: "flex-end" }}><ChargeScene width={300} /></View>
+          <Rise index={8}>
+            <View style={[ui.row, { gap: 12, paddingTop: 18, borderTopWidth: 1, borderTopColor: "rgba(167,217,193,0.18)" }]}>
+              <Text style={{ color: "#A7D9C1", fontSize: 11, fontWeight: "700", letterSpacing: 1.6, textTransform: "uppercase", flex: 1 }}>Recharge Property Management · Scotland</Text>
+              <Text style={{ color: "#C9D7CF", fontSize: 12 }}>One standard, every stage</Text>
+            </View>
+          </Rise>
         </View>
         <View style={{ flex: 1, overflow: "hidden" }}>
           <PageGlow p={p} />
@@ -293,6 +302,49 @@ function ChargeScene({ width }: { width: number }) {
       </Animated.View>
       <Animated.View style={{ transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }) }] }}><HomeScene width={width} /></Animated.View>
     </View>
+  );
+}
+// A glimpse of the workspace at work: activity cards float beside the house, one lit at a time.
+const ACTIVITY: { icon: "check-circle" | "tool" | "message-circle" | "file-text"; title: string; detail: string }[] = [
+  { icon: "check-circle", title: "Clean accepted", detail: "Ready for tonight’s guests" },
+  { icon: "tool", title: "Repair booked", detail: "Boiler check · Tue 10:00" },
+  { icon: "message-circle", title: "Guest answered", detail: "Replied in 3 minutes" },
+  { icon: "file-text", title: "Statement ready", detail: "Owner payout, this month" },
+];
+function Showcase({ panel }: { panel: number }) {
+  const scene = Math.max(220, Math.min(340, panel * 0.68));
+  const [active, setActive] = useState(0);
+  const reduced = useReducedMotion();
+  useEffect(() => { if (reduced) return; const t = setInterval(() => setActive(a => (a + 1) % ACTIVITY.length), 2600); return () => clearInterval(t); }, [reduced]);
+  return (
+    <View style={{ height: Math.max(scene * 0.75 + 24, 272), justifyContent: "flex-end" }}>
+      <View style={{ position: "absolute", right: -8, bottom: 0 }}><ChargeScene width={scene} /></View>
+      <View style={{ width: Math.min(264, panel * 0.62), gap: 10, paddingBottom: 6 }}>
+        {ACTIVITY.map((item, i) => <Rise key={item.title} index={4 + i}><ActivityCard {...item} index={i} lit={reduced ? i === 0 : active === i} /></Rise>)}
+      </View>
+    </View>
+  );
+}
+function ActivityCard({ icon, title, detail, index, lit }: { icon: "check-circle" | "tool" | "message-circle" | "file-text"; title: string; detail: string; index: number; lit: boolean }) {
+  const bob = useLoop(2400 + index * 300, index * 400);
+  const reduced = useReducedMotion();
+  const [glow] = useState(() => new Animated.Value(lit ? 1 : 0));
+  useEffect(() => { const a = Animated.timing(glow, { toValue: lit ? 1 : 0, duration: reduced ? 0 : motionTokens.page + 160, easing: motionTokens.standard, useNativeDriver: false }); a.start(); return () => a.stop(); }, [lit, glow, reduced]);
+  return (
+    <Animated.View style={[ui.row, { gap: 12, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1,
+      borderColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(167,217,193,0.18)", "rgba(167,217,193,0.6)"] }),
+      backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(250,247,240,0.05)", "rgba(250,247,240,0.12)"] }),
+      transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }, { translateX: glow.interpolate({ inputRange: [0, 1], outputRange: [0, 6] }) }] },
+      Platform.OS === "web" ? ({ backdropFilter: "blur(6px)" } as object) : null]}>
+      <View style={{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(167,217,193,0.16)" }}>
+        <Feather name={icon} size={16} color="#A7D9C1" />
+      </View>
+      <View style={{ flex: 1, gap: 1 }}>
+        <Text numberOfLines={1} style={{ color: "#FAF7F0", fontSize: 13, fontWeight: "700" }}>{title}</Text>
+        <Text numberOfLines={1} style={{ color: "#C9D7CF", fontSize: 12 }}>{detail}</Text>
+      </View>
+      <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#A7D9C1", opacity: glow }} />
+    </Animated.View>
   );
 }
 // The four teams, each with a soft light that passes along them in turn.
