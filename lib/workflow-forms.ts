@@ -106,3 +106,22 @@ export function createOperationForms(a:WorkspaceAccount,propertyId:string):Workf
  const feature:Record<string,string>={listing_health:'listing-health',daily_pricing:'daily-pricing',maintenance:a.role==='client'?'client-property-maintenance':'stays-maintenance-reporting',purchase:a.role==='client'?'client-purchase-order-quotes':a.role==='ready'?'purchase-order':'purchase-order-requests',cleaning:'cleaning-schedule'};
  return forms.filter(f=>admin(a)||a.modules.some(m=>m===feature[f.key]));
 }
+
+// The steps a work item offers in its own sheet: its own steps, plus the steps elsewhere that move
+// it on. The onboarding root item carries the whole journey; a Ready inspection ticket carries the
+// booking and report steps; a purchase delivery ticket carries its purchase's delivery step. Each of
+// those steps also closes the ticket.
+const INSPECTION_STEPS=['bookInspection','completeInspection'];
+export function workItemForms(a:WorkspaceAccount,w:OperationView,journeys:readonly JourneyView[],work:readonly OperationView[]=[]):WorkflowForm[]{
+ const own=operationForms(a,w);
+ if(['completed','cancelled'].includes(w.status))return own;
+ if(w.kind==='purchase_delivery'){
+  const source=work.find(x=>x.workId===w.data.sourceWorkId&&x.kind==='purchase');
+  return source?[...own,...operationForms(a,source).filter(f=>f.key==='recordDelivery')]:own;
+ }
+ const j=journeys.find(x=>x.propertyId===w.propertyId);
+ if(!j)return own;
+ if(j.workId===w.workId)return [...own,...journeyForms(a,j)];
+ if(w.kind==='inspection')return [...own,...journeyForms(a,j).filter(f=>INSPECTION_STEPS.includes(f.key))];
+ return own;
+}

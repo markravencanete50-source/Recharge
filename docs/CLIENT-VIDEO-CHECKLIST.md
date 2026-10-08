@@ -6,7 +6,7 @@ Property Onboarding, Remainder of Stays), checked against the live app code and 
 
 Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outside service · ❌ not built
 
-**Totals (76 asks):** ✅ 18 · 🟡 40 · ⏸ 8 · ❌ 10
+**Totals (76 asks):** ✅ 19 · 🟡 39 · ⏸ 8 · ❌ 10
 
 ## 1. Communication Centre
 
@@ -66,9 +66,9 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | O19 | "Furnish it for me" → furnishing quote ticket for Ready; otherwise self-furnish | ✅ | Self-furnishers get the furnishing calculator. |
 | O20 | Submit the form with permissions and evidence | 🟡 | Permissions checked. No way to attach documents or photos. |
 | O21 | Once signed → Accounts ticket to send the onboarding invoice | ✅ | Sending itself is manual until Xero/email are connected. |
-| O22 | Invoice marked settled → ticked on client and team side | 🟡 | Team side yes. The client only sees the tracker step move, and the screen wrongly tells clients their invoices are in Reports. |
+| O22 | Invoice marked settled → ticked on client and team side | ✅ | The property page lists each invoice with a "Settled" tick for the client and the team. |
 | O23 | Access dates → Ready "new property inspection" ticket | 🟡 | Ticket created automatically; the access date isn't shown on it. |
-| O24 | Ready books the inspection and fills in a detailed report | 🟡 | Book date and file report work; the report is one free-text box (no checklist or photos). The ticket in All work says "nothing needs your action". |
+| O24 | Ready books the inspection and fills in a detailed report | 🟡 | Booking and the report now open straight from the inspection ticket. The report is one free-text box (no checklist or photos). |
 | O25 | Ready notified straight away when something is needed | 🟡 | In-app only, and only staff assigned to that property. New enquiries aren't auto-assigned to Ready. |
 | O26 | Whole onboarding automated, client always updated | 🟡 | Stages, tickets and in-app notices are automatic. Emails and push not yet going out; some steps are manual. |
 
@@ -90,7 +90,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | S12 | Any booking of 7+ nights → direct-booking ticket | 🟡 | Works for stays entered or edited in the app. Bookings from the channel manager don't create it yet. |
 | S13 | Recommended rate about 10% below, max £100 off | 🟡 | Worked out correctly, but Stays never sees the figure (it only pre-fills Accounts' invoice), and a super admin must confirm the policy first. |
 | S14 | Track until yes/no → Accounts invoice → settled → booking confirmed → complete | 🟡 | Yes route works end to end. No "guest said no" outcome. |
-| S15 | OTA logins database | 🟡 | One logins box per property, admin-edited. **Bug:** staff "Access and logins" panel never loads the logins. |
+| S15 | OTA logins database | 🟡 | Staff with the OTA logins tool now see them under "Access and logins". Still one logins box per property, admin-edited. |
 | S16 | Maintenance ticket: choose property, link a reservation, choose repair type | 🟡 | Property and issue yes. No repair type, no booking link on screen. |
 | S17 | Repair type → AI troubleshooting steps before passing on | ❌ | Free-text "checks made" box only. Needs an AI key and building. |
 | S18 | Refer (urgently) to Ready; ticket stays visible to Stays to chase | 🟡 | Refer works and Stays keeps seeing it. No urgent flag. |
@@ -102,7 +102,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | S24 | Two or more complaints → warning / replace section; management decides | ⏸ | Built; depends on S21. "Remove from rota" is recorded but not enforced. |
 | S25 | Purchase request with what's needed and why | ✅ | |
 | S26 | Accounts check against a budget chart and place the order | 🟡 | Admin only (Accounts can't); no per-item budget chart. |
-| S27 | Ready proves the items arrived before Accounts close it | 🟡 | Delivery proof can't be submitted from the app (needs a photo step plus Cloudinary); Ready's delivery task never closes; reconcile is admin only. |
+| S27 | Ready proves the items arrived before Accounts close it | 🟡 | Ready's delivery ticket now offers "Record delivery" and closes itself once delivery is recorded. Delivery photos still need Cloudinary and a photo step; reconcile is admin only. |
 
 ## Can be built now, no keys needed
 
@@ -110,7 +110,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 - D1, D3, D4, D5, D7, D8: rename the tab, full property sheet, stage pipeline, per-client view, Scottish region list and map, portfolio stats.
 - O5, O6, O7, O9, O10, O14, O17, O22, O23, O24, O25: interactive estimate, explainer and FAQ, questions, answers shown to Ready, repair contacts, client invoice tick, inspection checklist, auto-assignment.
 - S2–S7, S11, S13, S14, S16, S18, S19, S22, S24, S26, S27: per-review tagging, daily sign-off, licensing stages, direct-booking "no" outcome, repair types, urgent flag, notifications, running cleaner invoice, purchase fixes.
-- Bug fixes: S15 OTA logins panel; client "invoices are in Reports" message; inspection ticket "nothing needs your action"; Ready's purchase delivery task.
+- Bug fixes: done (OTA logins panel, client invoices, inspection ticket steps, Ready's purchase delivery ticket).
 
 ## Waiting on an outside service
 

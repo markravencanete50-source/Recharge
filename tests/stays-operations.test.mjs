@@ -89,9 +89,12 @@ test('purchase requires Accounts approval, verified Ready delivery and matching 
  await assert.rejects(update(purchase,'approvePurchase',{approvedAmountMinor:50000,approvalNote:'Within property budget'}),/Accounts approval/);
  await as(0);purchase=await update(purchase,'approvePurchase',{approvedAmountMinor:50000,approvalNote:'Within property budget'});purchase=await update(purchase,'recordOrder',{orderReference:'TEST-ORDER',supplier:'Test supplier'});
  await assert.rejects(update(purchase,'reconcilePurchase',{invoiceId:crypto.randomUUID(),reconciliation:'Checked invoice and delivery'}),/paid purchase invoice/);
+ await db.exec('reset role');assert.equal((await db.query("select w.status from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where d.kind='purchase_delivery' and d.data->>'sourceWorkId'=$1",[purchase.workId])).rows[0].status,'waiting');
  await as(4);await assert.rejects(update(purchase,'recordDelivery',{receivedOn:today,evidence:'Delivery recorded test receipt',photoIds:[crypto.randomUUID()]}),/Verified delivery/);
  await db.exec('reset role');const photo=(await db.query("insert into private.workspace_media_evidence(property_id,work_id,owner_id,purpose,provider_id,verified_at) values($1,$2,$3,'delivery','TEST-ONLY-delivery-photo',now()) returning id",[property,purchase.workId,users[4]])).rows[0].id;
  await as(4);purchase=await update(purchase,'recordDelivery',{receivedOn:today,evidence:'Delivery recorded test receipt',photoIds:[photo]});
+ const deliveryTicket=async()=>(await db.query("select w.status,d.data->>'workStatus' work_status from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where d.kind='purchase_delivery' and d.data->>'sourceWorkId'=$1",[purchase.workId])).rows;
+ await db.exec('reset role');assert.deepEqual(await deliveryTicket(),[{status:'completed',work_status:'completed'}]);
  await as(0);const invoice=(await db.query('select public.workspace_create_invoice($1::jsonb) id',[JSON.stringify({requestId:crypto.randomUUID(),propertyId:property,moduleId:'purchase-order-accounts',workId:purchase.workId,recipientId:users[1],reference:'PURCHASE-TEST',amountMinor:50000,currency:'GBP'})])).rows[0].id;
  await db.query("select public.workspace_set_invoice_status($1,1,'paid')",[invoice]);purchase=await update(purchase,'reconcilePurchase',{invoiceId:invoice,reconciliation:'Checked invoice and delivery evidence'});assert.equal(purchase.status,'completed');
 });

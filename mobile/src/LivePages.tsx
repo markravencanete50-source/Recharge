@@ -14,7 +14,7 @@ import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
 import { formatCount, formatMoney } from "../../lib/format";
-import { StatGrid, StatTile, type IconName } from "./LiveKit";
+import { StatGrid, StatTile, Tag, type IconName } from "./LiveKit";
 import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
 import { Calendar } from "./WorkspaceScreens";
 import { Sheet } from "./TeamFlows";
@@ -280,7 +280,18 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
             <Text style={[ui.small, { color: p.muted }]}>Pricing, listing checks and opportunities for {periodLabel(period)}. Choose up to 31 days in Reports.</Text>
             {!!exportMessage && <Text style={[ui.small, { color: p.text }]}>{exportMessage}</Text>}
           </View>}
-          {invoices.some(invoice => invoice.property_id === selected.id) && <Text style={[ui.small, { color: p.muted }]}>{invoices.filter(invoice => invoice.property_id === selected.id).length} invoices for this property are in Reports.</Text>}
+          {invoices.some(invoice => invoice.property_id === selected.id) && <View style={{ gap: 8 }}>
+            <Text style={{ color: p.text, fontWeight: "700" }}>Invoices</Text>
+            {invoices.filter(invoice => invoice.property_id === selected.id).map(invoice => (
+              <View key={invoice.id} style={[ui.between, { gap: 12, paddingVertical: 8, borderTopWidth: 1, borderColor: p.border }]}>
+                <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+                  <Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text>
+                  <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{invoice.currency === "GBP" ? money(invoice.amount_minor) : `${invoice.currency} ${(invoice.amount_minor / 100).toFixed(2)}`}</Text>
+                </View>
+                <Tag label={invoice.status === "paid" ? "Settled" : readableStage(invoice.status)} tone={invoice.status === "paid" ? "good" : invoice.status === "issued" ? "wait" : "plain"} p={p} />
+              </View>
+            ))}
+          </View>}
         </>}
       </Sheet>
     </>

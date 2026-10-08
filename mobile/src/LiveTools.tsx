@@ -148,8 +148,10 @@ export function MailboxSection({ palette: p }: { palette: Palette }) {
 
 // Staff with the property database or OTA logins tools: entry details and platform logins.
 export function PropertyAccess({ palette: p, account, propertyId }: { palette: Palette; account: WorkspaceAccount; propertyId: string }) {
+  // Entry instructions, platform logins and finance are separate sections, each with its own permission.
   const sections = [
-    ...(account.modules.includes("property-database") || account.modules.includes("ota-logins") ? ["access" as const] : []),
+    ...(account.modules.includes("property-database") ? ["access" as const] : []),
+    ...(account.modules.includes("ota-logins") && account.role !== "cleaning_manager" ? ["ota" as const] : []),
     ...(account.modules.includes("owner-statements") ? ["finance" as const] : []),
   ];
   const [open, setOpen] = useState(false);
@@ -158,10 +160,11 @@ export function PropertyAccess({ palette: p, account, propertyId }: { palette: P
   if (!sections.length || ["client", "cleans"].includes(account.role)) return null;
   async function show() {
     setOpen(true); setError("");
-    try {
-      const parts = await Promise.all(sections.map(async section => (await (await workspaceRequest("/api/mobile/property-details?" + new URLSearchParams({ propertyId, section }))).json()).data as Record<string, unknown>));
-      setDetails(Object.assign({}, ...parts));
-    } catch (e) { setError(message(e)); }
+    const parts = await Promise.allSettled(sections.map(async section => (await (await workspaceRequest("/api/mobile/property-details?" + new URLSearchParams({ propertyId, section }))).json()).data as Record<string, unknown>));
+    const loaded = parts.flatMap(part => part.status === "fulfilled" && part.value ? [part.value] : []);
+    const failed = parts.find((part): part is PromiseRejectedResult => part.status === "rejected");
+    if (loaded.length) setDetails(Object.assign({}, ...loaded));
+    if (failed) setError(loaded.length ? "Some details could not be loaded for this property." : message(failed.reason));
   }
   const line = (label: string, value: unknown) => typeof value === "string" && value.trim() ? <View key={label} style={{ gap: 4 }}><Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>{label}</Text><Text selectable style={[ui.body, { color: p.text }]}>{value}</Text></View> : null;
   if (!open) return <MotionPress accessibilityRole="button" onPress={() => void show()} style={[ui.row, { gap: 10, minHeight: 48 }]}><Feather name="key" size={18} color={p.primary} /><Text style={{ color: p.primary, fontWeight: "700", flex: 1 }}>Access and logins</Text><Feather name="chevron-down" size={18} color={p.primary} /></MotionPress>;
