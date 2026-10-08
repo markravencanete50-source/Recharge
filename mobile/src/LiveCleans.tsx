@@ -5,15 +5,20 @@ import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { useSaved } from "./Celebrate";
+import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, StatGrid, StatTile } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { PhotoPicker, WorkPhotos } from "./Photos";
+import { DisputeSheet, type DisputeTarget } from "./CleanDisputes";
+import { RateSheet } from "./CleanerPay";
+import { ProblemForm } from "./CleanProblem";
 import { ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, uploadWorkPhoto, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
-import { candidatesSchema, performanceSchema, scheduleSchema } from "../../lib/cleans-live";
+import { candidatesSchema, disputeFor, guestLine, monthPay, performanceSchema, problemsOf, scheduleSchema, type CleanerMonth } from "../../lib/cleans-live";
+import { repairTypeLabel } from "../../lib/repair-guides";
+import { formatDay, formatMoney } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Live Cleans: the cleaner's own jobs and the cleaning team's schedule, reviews and
@@ -32,6 +37,11 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
   const today = london(new Date());
   const [schedule, setSchedule] = useState<Schedule>({ work: [], stays: [] });
   const [operations, setOperations] = useState<Operation[]>([]);
+  // Open disputes about rejected cleans. Admins and cleaning managers decide them and set cleaners' pay.
+  const [complaints, setComplaints] = useState<Operation[]>([]);
+  const canDecide = ["admin", "super_admin", "cleaning_manager"].includes(account.role);
+  const [dispute, setDispute] = useState<DisputeTarget | null>(null);
+  const [rateFor, setRateFor] = useState<CleanerMonth | null>(null);
   const [performance, setPerformance] = useState<Performance>([]);
   const [day, setDay] = useState(today);
   const [cleaner, setCleaner] = useState("everyone");
@@ -50,7 +60,11 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
     const [s, o, perf] = await Promise.allSettled([readTeams(query), readOperations(), readTeams({ section: "performance" })]);
     try {
       if (s.status === "fulfilled") setSchedule(scheduleSchema.parse(s.value.data)); else throw s.reason;
-      if (o.status === "fulfilled") setOperations(z.array(operationViewSchema).parse(o.value.data).filter(op => op.kind === "cleaning")); else throw o.reason;
+      if (o.status === "fulfilled") {
+        const all = z.array(operationViewSchema).parse(o.value.data);
+        setOperations(all.filter(op => op.kind === "cleaning"));
+        setComplaints(all.filter(op => op.kind === "cleaning_complaint" && !["completed", "cancelled"].includes(op.status)));
+      } else throw o.reason;
       if (perf.status === "fulfilled") setPerformance(performanceSchema.parse(perf.value.data));
     } catch (e) { setError(e instanceof WorkspaceApiError ? e.message : "Your cleans could not be loaded. Pull to refresh."); }
     setLoading(false);
@@ -69,6 +83,10 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
   const days = Array.from({ length: 14 }, (_, i) => addDays(today, i - 2));
   const job = openJob ? byId.get(openJob) : undefined;
   const jobRow = openJob ? schedule.work.find(w => w.workId === openJob) : undefined;
+  const guests = useMemo(() => new Map((schedule.cleanGuests ?? []).map(g => [g.workId, g])), [schedule.cleanGuests]);
+  const propertyName = (id: string) => properties.find(x => x.id === id)?.name ?? schedule.work.find(w => w.propertyId === id)?.propertyName ?? "Property";
+  const cleanerName = (id: unknown) => performance.find(r => r.cleanerId === id)?.fullName ?? cleaners.find(([cid]) => cid === id)?.[1] ?? "Cleaner";
+  const decided = !manager ? (mine?.decidedComplaints ?? []) : [];
 
   return (
     <View style={{ gap: 20 }}>
@@ -88,11 +106,31 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
       {!manager && mine && (mine.warning || mine.openComplaints.length > 0) && (
         <Section title="Needs your response" count={mine.openComplaints.filter(c => !c.cleanerStatement).length} p={p}>
           {mine.warning && <Notice text={`You have ${mine.rejected} rejected cleans this month. Management will review your work.`} p={p} tone="bad" />}
-          {mine.openComplaints.map(c => (
+          {mine.openComplaints.map(c => {
+            // The rejected clean itself carries the reviewer's reason.
+            const source = c.sourceWorkId ? byId.get(c.sourceWorkId) : undefined;
+            const reason = typeof source?.data.reviewNote === "string" ? source.data.reviewNote : null;
+            return (
+              <View key={c.workId} style={[ui.card, { gap: 8, backgroundColor: p.surface, borderColor: p.border }]}>
+                <Text style={{ color: p.text, fontWeight: "700" }}>Rejected clean · {propertyName(c.propertyId)}</Text>
+                {!!reason && <Text style={{ color: p.text }}>Why: {reason}</Text>}
+                <Text style={[ui.small, { color: p.muted }]}>Raised {new Date(c.createdAt).toLocaleDateString("en-GB")}. Management decides after hearing from you.</Text>
+                {c.cleanerStatement ? <Notice text={`Your response: ${c.cleanerStatement}`} p={p} /> : <Button label="Give your side" icon="message-square" p={p} onPress={() => setStatementFor(c.workId)} />}
+              </View>
+            );
+          })}
+        </Section>
+      )}
+      {!manager && decided.length > 0 && (
+        <Section title="Disputes decided this month" p={p}>
+          {decided.map(c => (
             <View key={c.workId} style={[ui.card, { gap: 8, backgroundColor: p.surface, borderColor: p.border }]}>
-              <Text style={{ color: p.text, fontWeight: "700" }}>Guest complaint about a clean</Text>
-              <Text style={[ui.small, { color: p.muted }]}>Raised {new Date(c.createdAt).toLocaleDateString("en-GB")}. Management decides after hearing from you.</Text>
-              {c.cleanerStatement ? <Notice text={`Your response: ${c.cleanerStatement}`} p={p} /> : <Button label="Give your side" icon="message-square" p={p} onPress={() => setStatementFor(c.workId)} />}
+              <View style={[ui.between, { gap: 8 }]}>
+                <Text style={{ color: p.text, fontWeight: "700", flex: 1 }}>{propertyName(c.propertyId)}</Text>
+                <Tag label={c.decision === "overturned" ? "Overturned" : "Upheld"} tone={c.decision === "overturned" ? "good" : "bad"} p={p} />
+              </View>
+              <Text style={[ui.small, { color: p.muted }]}>{c.decision === "overturned" ? "The rejection was overturned. It no longer counts against you." : "The rejection stands."}{c.decidedAt ? ` Decided ${formatDay(c.decidedAt.slice(0, 10))}.` : ""}</Text>
+              {!!c.decisionNote && <Notice text={`Management: ${c.decisionNote}`} p={p} />}
             </View>
           ))}
         </Section>
@@ -136,6 +174,7 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
         ))}
         {dayCleans.length ? dayCleans.map(w => {
           const op = byId.get(w.workId), phase = String(op?.data.phase ?? "");
+          const people = guestLine(guests.get(w.workId)), redo = phase === "assigned" && op?.data.accepted === false, problems = op ? problemsOf(op.data).length : 0;
           return (
             <MotionPress key={w.workId} accessibilityRole="button" accessibilityLabel={`${w.propertyName}, ${phaseLabel[phase] ?? readableStage(w.status)}`} onPress={() => setOpenJob(w.workId)} style={[ui.card, { gap: 8, backgroundColor: p.surface, borderColor: p.border }]}>
               <View style={ui.between}>
@@ -144,9 +183,15 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
               </View>
               <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
                 <Tag label={phaseLabel[phase] ?? readableStage(w.status)} tone={phase === "accepted" ? "good" : phase === "review" ? "wait" : "plain"} p={p} />
+                {redo && <Tag label="Not accepted" tone="bad" p={p} />}
                 {manager && <Tag label={w.assigneeName ?? "Unassigned"} tone={w.assigneeName ? "plain" : "bad"} p={p} />}
+                {problems > 0 && <Tag label={problems === 1 ? "Problem reported" : `${problems} problems reported`} tone="wait" p={p} />}
                 <Text style={[ui.small, { color: p.muted }]}>{checklistOf(op).length} checks</Text>
               </View>
+              {!!people && <View style={[ui.row, { gap: 8 }]}>
+                <Feather name="users" size={14} color={p.muted} />
+                <Text style={[ui.small, { color: p.muted, flex: 1 }]}>{people}</Text>
+              </View>}
             </MotionPress>
           );
         }) : !loading && <Notice text={manager ? "No cleans scheduled for this day." : "Nothing booked for you on this day."} p={p} />}
@@ -162,6 +207,24 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
               </MotionPress>
             )) : <Notice text="Every submitted clean has been reviewed." p={p} />}
           </Section>
+          {canDecide && (
+            <Section title="Disputes to decide" count={complaints.length} p={p}>
+              {complaints.length ? complaints.map(c => {
+                const target: DisputeTarget = { workId: c.workId, propertyId: c.propertyId, version: c.version, cleanerName: cleanerName(c.data.cleanerId), propertyName: propertyName(c.propertyId) };
+                const responded = typeof c.data.cleanerStatement === "string";
+                return (
+                  <MotionPress key={c.workId} accessibilityRole="button" accessibilityLabel={`Rejected clean by ${target.cleanerName} at ${target.propertyName}`} onPress={() => setDispute(target)} style={[ui.card, { gap: 6, backgroundColor: p.surface, borderColor: p.border }]}>
+                    <View style={[ui.between, { gap: 8 }]}>
+                      <Text numberOfLines={1} style={{ color: p.text, fontWeight: "700", flex: 1 }}>{target.cleanerName} · {target.propertyName}</Text>
+                      <Feather name="chevron-right" size={18} color={p.muted} />
+                    </View>
+                    <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{typeof c.data.reviewNote === "string" ? `Rejected: ${c.data.reviewNote}` : "Rejected clean"}{typeof c.data.cleanedOn === "string" ? ` · cleaned ${formatDay(c.data.cleanedOn)}` : ""}</Text>
+                    <Tag label={responded ? "Cleaner has responded" : "Awaiting cleaner"} tone={responded ? "plain" : "wait"} p={p} />
+                  </MotionPress>
+                );
+              }) : <Notice text="No disputed cleans waiting for a decision." p={p} />}
+            </Section>
+          )}
           <Section title="Not yet assigned" count={unassigned.length} p={p}>
             {unassigned.length ? unassigned.map(op => (
               <MotionPress key={op.workId} accessibilityRole="button" onPress={() => setOpenJob(op.workId)} style={[ui.card, { gap: 6, backgroundColor: p.surface, borderColor: p.border }]}>
@@ -171,36 +234,61 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
             )) : <Notice text="Every clean has a cleaner." p={p} />}
           </Section>
           <Section title="Cleaner performance this month" p={p}>
-            {performance.length ? performance.map(row => (
-              <View key={row.cleanerId} style={[ui.card, ui.between, { gap: 10, backgroundColor: p.surface, borderColor: p.border }]}>
-                <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "700" }}>{row.fullName}</Text><Text style={[ui.small, { color: p.muted }]}>{row.accepted} accepted · {row.rejected} rejected{row.overturned ? ` · ${row.overturned} overturned` : ""}</Text></View>
-                <Tag label={row.warning ? "Warning" : "Good standing"} tone={row.warning ? "bad" : "good"} p={p} />
-              </View>
-            )) : <Notice text="Cleaner results appear after the first reviewed clean." p={p} />}
+            {performance.length ? performance.map(row => {
+              const pay = monthPay(row);
+              return (
+                <View key={row.cleanerId} style={[ui.card, { gap: 10, backgroundColor: p.surface, borderColor: p.border }]}>
+                  <View style={[ui.between, { gap: 10 }]}>
+                    <View style={{ flex: 1, gap: 2, minWidth: 0 }}><Text style={{ color: p.text, fontWeight: "700" }}>{row.fullName}</Text><Text style={[ui.small, { color: p.muted }]}>{row.accepted} accepted · {row.rejected} rejected{row.overturned ? ` · ${row.overturned} overturned` : ""}</Text></View>
+                    <Tag label={row.warning ? "Warning" : "Good standing"} tone={row.warning ? "bad" : "good"} p={p} />
+                  </View>
+                  {canDecide && <View style={[ui.between, { gap: 10, flexWrap: "wrap" }]}>
+                    <Text style={[ui.small, { color: p.muted, flex: 1, minWidth: 160 }]}>{pay.rateMinor === null ? "No pay rate set yet" : `${formatMoney(pay.rateMinor)} a clean · ${pay.label} this month`}</Text>
+                    <MotionPress accessibilityRole="button" accessibilityLabel={`Set pay per clean for ${row.fullName}`} onPress={() => setRateFor(row)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}>
+                      <Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>{pay.rateMinor === null ? "Set pay rate" : "Change rate"}</Text>
+                    </MotionPress>
+                  </View>}
+                </View>
+              );
+            }) : <Notice text="Cleaner results appear after the first reviewed clean." p={p} />}
           </Section>
         </>
       )}
       {!manager && mine && (
         <Section title="Your month" p={p}>
-          <View style={[ui.card, ui.between, { backgroundColor: p.surface, borderColor: p.border, gap: 12 }]}>
-            <Text style={{ color: p.text, flex: 1, minWidth: 0 }}>{mine.accepted} accepted · {mine.rejected} rejected{mine.overturned ? ` · ${mine.overturned} overturned` : ""}</Text>
-            <Tag label={mine.warning ? "Warning" : "Good standing"} tone={mine.warning ? "bad" : "good"} p={p} />
+          <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
+            <View style={[ui.between, { gap: 12 }]}>
+              <Text style={{ color: p.text, flex: 1, minWidth: 0 }}>{mine.accepted} accepted · {mine.rejected} rejected{mine.overturned ? ` · ${mine.overturned} overturned` : ""}</Text>
+              <Tag label={mine.warning ? "Warning" : "Good standing"} tone={mine.warning ? "bad" : "good"} p={p} />
+            </View>
+            <Text style={[ui.small, { color: p.muted }]}>Amount for this month: {monthPay(mine).label}{monthPay(mine).rateMinor !== null ? ` (${monthPay(mine).detail})` : ""}</Text>
           </View>
         </Section>
       )}
       {!manager && <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />}
 
-      <JobSheet p={p} account={account} manager={manager} op={job} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })} />
+      <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
+        onRespond={id => { setOpenJob(null); setStatementFor(id); }} onChanged={load} />
       <CreateSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={saved(async () => { setCreating(false); await load(); })} today={today} />
       <StatementSheet p={p} workId={statementFor} onClose={() => setStatementFor(null)} onDone={saved(async () => { setStatementFor(null); await load(); })} />
+      <DisputeSheet p={p} target={dispute} onClose={() => setDispute(null)} onDone={saved(load)} />
+      <RateSheet p={p} cleaner={rateFor} onClose={() => setRateFor(null)} onDone={saved(load)} />
     </View>
   );
 }
 
 const MAIL_DONE = { photograph: "photographed it", open_and_photograph: "opened and photographed it", leave_safely: "left it somewhere safe" } as const;
 
-function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { p: Palette; account: WorkspaceAccount; manager: boolean; op?: Operation; propertyName: string; onClose: () => void; onDone: () => Promise<void> }) {
+function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone, onRespond, onChanged }: { p: Palette; account: WorkspaceAccount; manager: boolean; op?: Operation; mine?: CleanerMonth; propertyName: string; onClose: () => void; onDone: () => Promise<void>; onRespond: (complaintWorkId: string) => void; onChanged: () => Promise<void> }) {
   const checklist = checklistOf(op), phase = String(op?.data.phase ?? "");
+  // The last review's reason when it was a rejection, where its dispute is up to, and problems reported.
+  const rejection = op?.data.accepted === false && typeof op.data.reviewNote === "string" ? op.data.reviewNote : null;
+  const feedback = op && typeof op.data.guestFeedback === "string" ? op.data.guestFeedback : null;
+  const dispute = disputeFor(op, mine);
+  const problems = op ? problemsOf(op.data) : [];
+  const mineToDo = !manager && !!op && op.assigneeId === account.userId && !["completed", "cancelled"].includes(op.status);
+  const [reporting, setReporting] = useState(false);
+  const celebrate = useCelebrate();
   const [ticked, setTicked] = useState<string[]>([]);
   const [report, setReport] = useState("");
   const [mailDone, setMailDone] = useState(false);
@@ -220,9 +308,17 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
   const canReview = manager && phase === "review" && op?.assigneeId !== account.userId;
   const canAssign = manager && phase === "assigned" && !!op && !["completed", "cancelled"].includes(op.status);
 
+  // A fresh form for each clean opened. Reloading the same clean (after reporting a problem) keeps
+  // the ticks, report and photos already added.
+  const workId = op?.workId;
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setPhotos([]); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setCandidates([]); });
+    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setPhotos([]); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
+    return () => { active = false; };
+  }, [workId]);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { if (active) setCandidates([]); });
     if (op && canAssign) readControls({ section: "resources", propertyId: op.propertyId, workId: op.workId }).then(r => { if (active) setCandidates(candidatesSchema.parse(r.data).filter(c => c.role === "cleans")); }).catch(e => { if (active) setError(message(e)); });
     return () => { active = false; };
   }, [op, canAssign]);
@@ -264,6 +360,33 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
   return (
     <Sheet palette={p} visible={!!op} onClose={onClose} title={propertyName} subtitle={op ? `${typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""} · ${phaseLabel[phase] ?? readableStage(op.status)}` : ""} icon="spray">
       {op && <>
+        {!!rejection && <View style={{ gap: 6 }}>
+          <Notice text={`${dispute?.status === "overturned" ? "Rejected, then overturned" : phase === "assigned" ? "Not accepted" : "Earlier review, not accepted"}: ${rejection}`} p={p} tone={dispute?.status !== "overturned" && phase === "assigned" ? "bad" : "plain"} />
+          {!!feedback && <Text style={[ui.small, { color: p.muted }]}>Guest feedback: {feedback}</Text>}
+        </View>}
+        {!!dispute && <View style={{ gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.border }}>
+          <View style={[ui.between, { gap: 8 }]}>
+            <Text style={{ color: p.text, fontWeight: "700", flex: 1 }}>Dispute</Text>
+            <Tag label={dispute.status === "open" ? "Waiting for management" : dispute.status === "overturned" ? "Overturned" : "Upheld"} tone={dispute.status === "open" ? "wait" : dispute.status === "overturned" ? "good" : "bad"} p={p} />
+          </View>
+          <Text style={[ui.small, { color: p.muted }]}>{dispute.status === "open" ? "Management decides whether the rejection stands, after hearing from the cleaner." : dispute.status === "overturned" ? "The rejection was overturned. It no longer counts against the cleaner." : "Management decided the rejection stands."}</Text>
+          {!!dispute.note && <Notice text={`Management: ${dispute.note}`} p={p} />}
+          {dispute.status === "open" && !manager && (dispute.statement ? <Notice text={`Your response: ${dispute.statement}`} p={p} />
+            : !dispute.responded && !!dispute.complaintWorkId && <Button label="Give your side" icon="message-square" p={p} onPress={() => onRespond(dispute.complaintWorkId!)} />)}
+        </View>}
+        {!!problems.length && <View style={{ gap: 6 }}>
+          <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Problems reported</Text>
+          {problems.map(x => (
+            <View key={x.repairWorkId} style={{ gap: 4, padding: 12, borderRadius: 14, backgroundColor: p.wash }}>
+              <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+                <Tag label={repairTypeLabel(x.repairType)} tone="plain" p={p} />
+                {x.urgent && <Tag label="Urgent" tone="bad" p={p} />}
+              </View>
+              <Text style={{ color: p.text }}>{x.issue}</Text>
+              <Text style={[ui.small, { color: p.muted }]}>Sent to the Stays team{x.photos ? ` with ${x.photos} photo${x.photos === 1 ? "" : "s"}` : ""} · {formatDay(x.reportedAt.slice(0, 10))}</Text>
+            </View>
+          ))}
+        </View>}
         {canSubmit && <>
           <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Checklist</Text>
           {checklist.map(item => {
@@ -331,6 +454,9 @@ function JobSheet({ p, account, manager, op, propertyName, onClose, onDone }: { 
 
         {!canSubmit && !canReview && !canAssign && <Notice text={phase === "accepted" ? "This clean has been accepted." : phase === "review" ? "Submitted. Waiting for the cleaning manager's review." : "Nothing to do on this clean right now."} p={p} />}
         {checklist.length > 0 && !canSubmit && <Text style={[ui.small, { color: p.muted }]}>Checklist: {checklist.join(" · ")}</Text>}
+        {mineToDo && (reporting
+          ? <ProblemForm p={p} clean={{ workId: op.workId, version: op.version }} onCancel={() => setReporting(false)} onSent={async () => { setReporting(false); celebrate("Sent to the Stays team"); await onChanged(); }} />
+          : <Button label="Report a problem" icon="alert-triangle" p={p} onPress={() => setReporting(true)} />)}
         {!!error && <Notice text={error} p={p} tone="bad" />}
       </>}
     </Sheet>

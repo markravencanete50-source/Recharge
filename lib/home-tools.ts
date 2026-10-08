@@ -63,6 +63,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
   cleaning_manager: [
     tool('schedule', 'Schedule', 'Every clean by day', 'calendar', work('cleans', { section: 'Schedule' })),
     tool('review', 'To review', 'Submitted cleans', 'star', work('cleans', { section: 'Waiting for your review' })),
+    tool('disputes', 'Disputes', 'Rejected cleans to decide', 'hourglass', work('cleans', { section: 'Disputes to decide' })),
     tool('unassigned', 'Not assigned', 'Cleans without a cleaner', 'people', work('cleans', { section: 'Not yet assigned' })),
     tool('cleaners', 'Cleaners', 'Performance this month', 'medal', work('cleans', { section: 'Cleaner performance this month' })),
     tool('setups', 'Cleaning set-ups', 'New properties to prepare', 'clipboard', work('all'), ['clean-property-onboarding']),

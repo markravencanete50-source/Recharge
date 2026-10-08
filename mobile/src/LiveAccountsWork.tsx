@@ -11,6 +11,7 @@ import { List, Row } from "./LiveAccounts";
 import { readOperations, readTeams, writeOperation, writeTeams } from "./backend/client";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import { budgetChartSchema, cleanerInvoiceGroups, type BudgetItem, type CleanerGroup } from "../../lib/accounts-work";
+import { cleanerRatesSchema } from "../../lib/cleans-live";
 import { formatDay, formatMoney, plural } from "../../lib/format";
 import { poundsToMinor } from "../../lib/repairs-live";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -22,6 +23,8 @@ const PURCHASE_STAGE: Record<string, string> = { requested: "To approve", approv
 
 function CleanerInvoiceSheet({ p, group, onClose, onDone }: { p: Palette; group: CleanerGroup | null; onClose: () => void; onDone: () => Promise<void> }) {
   const [reference, setReference] = useState(""), [amount, setAmount] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  // The total starts from the cleaner's pay rate per clean, when one is set.
+  useEffect(() => { queueMicrotask(() => setAmount(group?.amountMinor ? (group.amountMinor / 100).toFixed(2) : "")); }, [group]);
   async function save() {
     if (!group || busy) return;
     const minor = poundsToMinor(amount);
@@ -41,6 +44,7 @@ function CleanerInvoiceSheet({ p, group, onClose, onDone }: { p: Palette; group:
           {group.tasks.map((t, i) => <Row key={t.workId} p={p} first={i === 0} icon="check-circle" tone="cleans" title={t.propertyName} detail={t.cleanedOn ? formatDay(t.cleanedOn) : "Date not recorded"} />)}
         </List>
         <Field label="Invoice reference" value={reference} onChange={setReference} p={p} placeholder="For example: CARA-2026-10" />
+        <Text style={[ui.small, { color: p.muted }]}>{group.rateMinor ? `${plural(group.tasks.length, "clean")} at ${formatMoney(group.rateMinor)} each: ${formatMoney(group.amountMinor)}.` : "No pay rate is set for this cleaner yet. Admins and cleaning managers set it in Work, Cleans."}</Text>
         <Field label="Invoice total" value={amount} onChange={setAmount} p={p} placeholder="£0.00" />
         <Text style={[ui.small, { color: p.muted }]}>Records that these cleans are on one invoice and closes their invoice tasks.</Text>
         {!!error && <Notice text={error} p={p} tone="bad" />}
@@ -79,21 +83,22 @@ function BudgetSheet({ p, item, visible, onClose, onDone }: { p: Palette; item: 
 
 export function AccountsWork({ palette: p, account, properties, onOpenWork }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpenWork: (item: Operation) => void }) {
   const saved = useSaved();
-  const [work, setWork] = useState<Operation[]>([]), [budget, setBudget] = useState<BudgetItem[]>([]);
+  const [work, setWork] = useState<Operation[]>([]), [budget, setBudget] = useState<BudgetItem[]>([]), [rates, setRates] = useState<ReadonlyMap<string, number>>(new Map());
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [group, setGroup] = useState<CleanerGroup | null>(null), [editing, setEditing] = useState<BudgetItem | null>(null), [adding, setAdding] = useState(false);
   const canBudget = ["admin", "super_admin"].includes(account.role) || (account.role === "accounts" && account.modules.includes("purchase-order-accounts"));
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    const [o, b] = await Promise.allSettled([readOperations(), readTeams({ section: "budgetChart" })]);
+    const [o, b, r] = await Promise.allSettled([readOperations(), readTeams({ section: "budgetChart" }), readTeams({ section: "cleanerRates" })]);
     if (o.status === "fulfilled") setWork(z.array(operationViewSchema).parse(o.value.data)); else setError(message(o.reason));
     if (b.status === "fulfilled") setBudget(budgetChartSchema.parse(b.value.data));
+    if (r.status === "fulfilled") setRates(new Map(cleanerRatesSchema.parse(r.value.data).map(x => [x.cleanerId, x.rateMinor])));
     setLoading(false);
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const nameOf = useCallback((id: string) => properties.find(x => x.id === id)?.name ?? "Property", [properties]);
   const purchases = work.filter(w => w.kind === "purchase" && typeof w.data.phase === "string" && w.data.phase in PURCHASE_STAGE && !["completed", "cancelled"].includes(w.status));
-  const groups = useMemo(() => cleanerInvoiceGroups(work, nameOf), [work, nameOf]);
+  const groups = useMemo(() => cleanerInvoiceGroups(work, nameOf, rates), [work, nameOf, rates]);
   return (
     <View style={{ gap: 20 }}>
       {loading && <Loading p={p} rows={2} />}
@@ -109,7 +114,7 @@ export function AccountsWork({ palette: p, account, properties, onOpenWork }: { 
         <Text style={[ui.small, { color: p.muted }]}>Accepted cleans waiting to be invoiced, by cleaner. Put several on one invoice.</Text>
         <List p={p} empty="No accepted cleans waiting to be invoiced.">
           {groups.map((g, i) => <Row key={g.cleanerId} p={p} first={i === 0} icon="user" tone="cleans" title={g.cleanerName}
-            detail={`${plural(g.tasks.length, "clean")} · ${g.tasks.slice(0, 3).map(t => t.propertyName).join(", ")}${g.tasks.length > 3 ? "…" : ""}`} onPress={() => setGroup(g)} />)}
+            detail={`${plural(g.tasks.length, "clean")} · ${g.tasks.slice(0, 3).map(t => t.propertyName).join(", ")}${g.tasks.length > 3 ? "…" : ""}`} amount={g.amountMinor != null ? formatMoney(g.amountMinor) : undefined} onPress={() => setGroup(g)} />)}
         </List>
       </Section>
       <Section title="Budget chart" count={budget.length} p={p}>
