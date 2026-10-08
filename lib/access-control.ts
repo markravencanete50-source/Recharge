@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { WORKSPACE_MAP, type DepartmentTone } from './workspace-map';
-import { MODULE_IDS, MODULES, type ModuleId } from './modules';
+import { isWorkspaceAdmin, MODULE_IDS, MODULES, type ModuleId, type WorkspaceRole } from './modules';
+import { WORK_VIEW_LABEL, workViewsFor } from './tool-directory';
+import { homeToolsFor } from './home-tools';
 
 // Access control (super admins): the shapes read from the database, and the plain-English labels
 // and groups the screen uses. The database decides what is allowed.
@@ -21,9 +23,42 @@ export const STATE_LABEL: Record<AccessState, [string, 'good' | 'wait' | 'bad' |
 };
 const EVENT_LABEL: Record<string, string> = {
   tool_access_changed: 'Tools changed', account_blocked: 'Blocked', account_unblocked: 'Unblocked', password_revoked: 'Password revoked',
-  signed_out_everywhere: 'Signed out everywhere', account_deleted: 'Account deleted',
+  signed_out_everywhere: 'Signed out everywhere', account_deleted: 'Account deleted', role_changed: 'Role changed',
 };
 export const eventLabel = (event: string) => EVENT_LABEL[event] ?? event.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+
+// What each role gives, in one line, for the role picker.
+export const ROLE_SUMMARY: Record<WorkspaceRole, string> = {
+  super_admin: 'Everything an admin has, plus Access control and admin accounts',
+  admin: 'Every tool and every property, with Management and Accounts',
+  stays: 'Bookings, guests, pricing and listings for their properties',
+  cleaning_manager: 'Runs the cleaning team: schedule, checks and cleaner performance',
+  cleans: 'Their own cleaning jobs, performance and invoices',
+  ready: 'Repairs, inspections and getting properties ready',
+  accounts: 'Expenses, payouts and owner statements',
+  client: 'The owner view: their properties, bookings and statements',
+};
+const RANK: Record<WorkspaceRole, number> = { super_admin: 3, admin: 2, stays: 1, cleaning_manager: 1, cleans: 1, ready: 1, accounts: 1, client: 0 };
+
+// What changes when someone moves to another role: they see exactly what anyone in that role sees
+// (the same Work views, Home tools and usual tools), and their properties follow the role.
+export function roleChange(person: { role: string; properties: number }, to: WorkspaceRole, modules: readonly string[], label: (role: string) => string) {
+  const from = person.role as WorkspaceRole;
+  const promote = (RANK[to] ?? 0) > (RANK[from] ?? 0) && to !== 'client';
+  const crossesOwner = (from === 'client') !== (to === 'client');
+  const n = person.properties, props = `${n} propert${n === 1 ? 'y' : 'ies'}`;
+  const properties = isWorkspaceAdmin(to) ? 'They see every property.'
+    : !n ? 'They have no properties yet. Assign them in Management → Properties.'
+    : crossesOwner ? `Their ${props} will be unassigned, because owners and team members are linked to properties differently. Assign them again in Management → Properties.`
+    : `Their ${props} ${n === 1 ? 'stays' : 'stay'} assigned to them.`;
+  return {
+    same: from === to, promote,
+    action: `${promote ? 'Promote to' : 'Change to'} ${label(to)}`,
+    views: workViewsFor(to).map(v => WORK_VIEW_LABEL[v]),
+    homeTools: homeToolsFor(to, isWorkspaceAdmin(to) ? MODULE_IDS : modules).map(t => t.label),
+    properties,
+  };
+}
 
 // When someone last signed in, in words.
 export function lastSeen(iso: string | null, now = new Date()): string {

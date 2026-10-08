@@ -33,10 +33,11 @@ import { LiveStays } from "./LiveStays";
 import { LiveOwner } from "./LiveOwner";
 import { OnboardingGate } from "./LiveOnboarding";
 import { FurnishingCard, MailboxSection } from "./LiveTools";
-import { workViewsFor, type WorkView } from "../../lib/tool-directory";
+import { ROLE_LABEL } from "../../lib/admin-live";
+import { WORK_VIEW_LABEL, workViewsFor, type WorkView } from "../../lib/tool-directory";
 import { formatBps, formatMoney } from "../../lib/format";
 import { liveApiOrigin, readTeams, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
-import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { workspaceAccountSchema, type WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { WorkspaceSection } from "../../lib/workspace-map";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import { periodError, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot } from "../../lib/analytics";
@@ -51,7 +52,6 @@ import { workItemForms, type JourneyView, type OperationView, type WorkflowForm 
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
-const WORK_VIEW_LABEL: Record<WorkView, string> = { management: "Management", stays: "Stays", owner: "Stays and statements", cleans: "Cleans", repairs: "Repairs", accounts: "Accounts", all: "All work" };
 const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help"];
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
 type BookingPolicy = z.infer<typeof bookingPolicySchema>;
@@ -99,7 +99,7 @@ function IconButton({ label, icon, onPress, palette: p }: { label: string; icon:
   );
 }
 
-function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeOnOpen }: { account: WorkspaceAccount; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; welcomeOnOpen: boolean }) {
+function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
   const reduced = useReducedMotion(), motionPreference = useMotionPreference(), faqShortcut = useFaqShortcut();
@@ -143,6 +143,19 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   }, []);
 
   const lastRefresh = useRef(0), editing = useRef(false);
+  // A super admin can change someone's role or tools while they are signed in. Every read carries
+  // the current account, so the app switches to the new role's Home, Work and tools on the next refresh.
+  const accountKey = (a: WorkspaceAccount) => [a.role, a.status, a.fullName, [...a.modules].sort().join()].join("|");
+  const shownAccount = useRef(account);
+  const [accessNote, setAccessNote] = useState("");
+  useEffect(() => {
+    const before = shownAccount.current;
+    shownAccount.current = account;
+    if (accountKey(before) === accountKey(account)) return;
+    queueMicrotask(() => setAccessNote(before.role !== account.role
+      ? `Your role has changed to ${ROLE_LABEL[account.role]}. Your Home, Work and tools now match.`
+      : "Your tools have been updated."));
+  }, [account]);
   // A quiet refresh (every minute, and when someone comes back to the app) keeps what is on screen
   // and its messages; only a failed sign-in is acted on.
   const refresh = useCallback(async (quiet = false) => {
@@ -153,6 +166,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       let cursor = "";
       for (let page = 0; page < 30; page++) {
         const result = await liveApi("/workspace?" + new URLSearchParams({ entity, limit: "100", ...(cursor ? { cursor } : {}) }));
+        if (entity === "properties" && page === 0) {
+          const latest = workspaceAccountSchema.safeParse(result.account);
+          if (latest.success && latest.data.userId === shownAccount.current.userId && accountKey(latest.data) !== accountKey(shownAccount.current)) onAccount(latest.data);
+        }
         rows.push(...z.array(z.unknown()).parse(result.data));
         cursor = typeof result.nextCursor === "string" ? result.nextCursor : "";
         if (!cursor) break;
@@ -192,7 +209,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
     }
     lastRefresh.current = Date.now();
     if (!quiet) setLoading(false);
-  }, [account.role, onSignedOut]);
+  }, [account.role, onSignedOut, onAccount]);
   const loadReport = useCallback(async (range: AnalyticsPeriod) => {
     if (periodError(range)) return;
     setReportError("");
@@ -364,6 +381,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
           </View>
           <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
+              {!!accessNote && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.wash }]}><Feather name="shield" size={16} color={p.primary} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{accessNote}</Text><MotionPress accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setAccessNote("")} style={{ minHeight: 36, minWidth: 36, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={p.muted} /></MotionPress></View>}
               <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}>{animatedPage}</WorkFocusContext.Provider></AnchorRegistry.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
             </Animated.View></View>
@@ -451,7 +469,7 @@ function Screen() {
   // New team members sign their contract and finish required training first.
   return (
     <OnboardingGate key={account.userId} account={account} palette={p} onSignOut={() => { void signOut().finally(() => setAccount(null)); }}>
-      <Workspace account={account} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} welcomeOnOpen={welcome} />
+      <Workspace account={account} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onAccount={setAccount} welcomeOnOpen={welcome} />
     </OnboardingGate>
   );
 }

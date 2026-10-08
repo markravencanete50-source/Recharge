@@ -9,7 +9,7 @@ import { departmentColor, ui, type Palette } from "./theme";
 import { Anchor, Button, Field, Loading, message, Notice, Section, StatGrid, StatTile, Tag } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { readAdmin, writeAdmin } from "./backend/client";
-import { accessHistorySchema, accessPeopleSchema, accessState, accessSummary, eventLabel, lastSeen, matchesSearch, STATE_LABEL, toolGroups, type AccessEvent, type AccessPerson, type AccessState } from "../../lib/access-control";
+import { accessHistorySchema, accessPeopleSchema, accessState, accessSummary, eventLabel, lastSeen, matchesSearch, ROLE_SUMMARY, roleChange, STATE_LABEL, toolGroups, type AccessEvent, type AccessPerson, type AccessState } from "../../lib/access-control";
 import { ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange } from "../../lib/admin-live";
 import { isWorkspaceAdmin, type ModuleId, type WorkspaceRole } from "../../lib/modules";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -67,6 +67,12 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
   const self = person.userId === actor.userId, state = accessState(person), admin = isWorkspaceAdmin(role);
   const allowed = new Set(toolsFor(role).map(t => t.id));
   const changed = role !== person.role || [...modules].sort().join() !== [...person.modules].sort().join();
+  const firstName = person.fullName.trim().split(/\s+/)[0] || "This person";
+  const change = roleChange(person, role, modules, roleLabel);
+  const preview = (icon: "briefcase" | "grid" | "home" | "refresh-cw", label: string, text: string) => (
+    <View style={[ui.row, { gap: 10, alignItems: "flex-start" }]}><Feather name={icon} size={15} color={p.muted} style={{ marginTop: 2 }} />
+      <Text style={[ui.small, { color: p.text, flex: 1 }]}><Text style={[ui.small, { color: p.text, fontWeight: "700" }]}>{label}: </Text>{text}</Text></View>
+  );
   const run = async (body: Parameters<typeof writeAdmin>[0], done: string) => {
     if (busy) return;
     setBusy(true); setError("");
@@ -75,7 +81,7 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
   };
   const saveAccess = () => {
     if (!admin && person.status === "active" && !modules.length) { setError("Choose at least one tool, or block the account instead."); return; }
-    void run({ action: "setAccess", userId: person.userId, role, modules: admin ? [] : modules.filter(m => allowed.has(m)) }, "Access saved");
+    void run({ action: "setAccess", userId: person.userId, role, modules: admin ? [] : modules.filter(m => allowed.has(m)) }, change.same ? "Access saved" : `${firstName} is now ${/^[AEIOU]/.test(roleLabel(role)) ? "an" : "a"} ${roleLabel(role)}`);
   };
   const confirm = (d: Danger) => d === "deleteAccount" ? run({ action: "deleteAccount", userId: person.userId, confirm: true }, DANGER[d].done) : run({ action: d, userId: person.userId }, DANGER[d].done);
   const actions: Danger[] = state === "blocked" ? ["unblock", "revokePassword", "deleteAccount"] : ["signOut", "revokePassword", "block", "deleteAccount"];
@@ -94,7 +100,34 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
       {state === "deleted" && <Notice text="This account has been deleted. Its history stays on record." p={p} />}
       {!self && state !== "deleted" && <>
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Role</Text>
-        <Pills p={p} values={rolesFor("super_admin")} value={role} onChange={r => { setRole(r); setModules(toolsOnRoleChange(r)); }} label={roleLabel} />
+        <Text style={[ui.small, { color: p.muted }]}>Promote or move {firstName} to another role. They then see exactly what everyone in that role sees: the same Home, Work and tools.</Text>
+        <View accessibilityRole="radiogroup" style={{ gap: 6 }}>
+          {rolesFor("super_admin").map(r => {
+            const picked = r === role, current = r === person.role;
+            return (
+              <MotionPress key={r} accessibilityRole="radio" accessibilityState={{ checked: picked }} accessibilityLabel={`${roleLabel(r)}. ${ROLE_SUMMARY[r]}${current ? ". Current role" : ""}`}
+                onPress={() => { setRole(r); setModules(r === person.role ? person.modules as ModuleId[] : toolsOnRoleChange(r)); setError(""); }}
+                style={[ui.row, { gap: 12, minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: picked ? 2 : 1, borderColor: picked ? p.primary : p.border, backgroundColor: picked ? p.wash : p.surface }]}>
+                <Feather name={picked ? "check-circle" : "circle"} size={18} color={picked ? p.primary : p.muted} />
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text style={{ color: p.text, fontWeight: "700" }}>{roleLabel(r)}{current ? <Text style={[ui.small, { color: p.muted, fontWeight: "500" }]}>  · now</Text> : null}</Text>
+                  <Text style={[ui.small, { color: p.muted }]}>{ROLE_SUMMARY[r]}</Text>
+                </View>
+              </MotionPress>
+            );
+          })}
+        </View>
+        {!change.same && <SwapIn swapKey={role}><View style={{ gap: 10, padding: 14, borderRadius: 18, backgroundColor: p.background, borderWidth: 1, borderColor: p.primary }}>
+          <View style={[ui.row, { gap: 8 }]}>
+            <Feather name={change.promote ? "trending-up" : "repeat"} size={18} color={p.primary} />
+            <Text style={{ color: p.text, fontWeight: "700", flex: 1 }}>{roleLabel(person.role)} → {roleLabel(role)}</Text>
+          </View>
+          <Text style={[ui.small, { color: p.text }]}>{firstName} will see what every {roleLabel(role)} sees.</Text>
+          {preview("briefcase", "Work", change.views.join(", "))}
+          {!!change.homeTools.length && preview("grid", "Home", change.homeTools.join(", "))}
+          {preview("home", "Properties", change.properties)}
+          {preview("refresh-cw", "When", "Their app switches over within a minute. They don’t need to sign in again.")}
+        </View></SwapIn>}
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Tools{admin ? "" : ` · ${modules.filter(m => allowed.has(m)).length} on`}</Text>
         {admin ? <Text style={[ui.small, { color: p.muted }]}>Admins and super admins have every tool.</Text> : <>
           {toolGroups().map(g => {
@@ -120,7 +153,7 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
             <Button label="Remove all" p={p} onPress={() => setModules([])} />
           </View>
         </>}
-        {changed && <Button label={busy ? "Saving…" : "Save role and tools"} icon="check" primary p={p} disabled={busy} onPress={saveAccess} />}
+        {changed && <Button label={busy ? "Saving…" : change.same ? "Save tools" : `${change.action}`} icon={change.promote ? "trending-up" : "check"} primary p={p} disabled={busy} onPress={saveAccess} />}
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700", paddingTop: 6 }}>Security</Text>
         {actions.map(d => {
           const open = asking === d, deleting = d === "deleteAccount";
@@ -153,9 +186,9 @@ function HistoryRow({ p, e, first }: { p: Palette; e: AccessEvent; first: boolea
   const when = new Date(e.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
   return (
     <View style={[ui.row, { gap: 12, paddingVertical: 10, borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
-      <Feather name={e.event === "account_blocked" || e.event === "account_deleted" ? "slash" : e.event === "password_revoked" ? "key" : e.event === "signed_out_everywhere" ? "log-out" : "sliders"} size={16} color={p.muted} />
+      <Feather name={e.event === "account_blocked" || e.event === "account_deleted" ? "slash" : e.event === "password_revoked" ? "key" : e.event === "signed_out_everywhere" ? "log-out" : e.event === "role_changed" ? "trending-up" : "sliders"} size={16} color={p.muted} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 14 }}>{eventLabel(e.event)} · {e.target}</Text>
+        <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 14 }}>{eventLabel(e.event)} · {e.target}{e.event === "role_changed" && typeof e.detail.from === "string" && typeof e.detail.role === "string" ? ` (${roleLabel(e.detail.from)} → ${roleLabel(e.detail.role)})` : ""}</Text>
         <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>By {e.actor} · {when}</Text>
       </View>
     </View>

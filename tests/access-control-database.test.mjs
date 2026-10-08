@@ -46,6 +46,33 @@ test('a super admin changes role and tools',async()=>{
  const history=await read('accessHistory');assert.ok(history.some(h=>h.event==='tool_access_changed'&&h.target==='Person 2'));
 });
 
+test('a new role brings its properties along, and is recorded',async()=>{
+ // Person 4 is a cleaner on two properties; Person 3 owns one.
+ await db.exec('reset role');
+ const props=[];
+ for(const name of ['Harbour View','Castle Wynd','Mill Lade'])props.push((await db.query("insert into public.workspace_properties(name,created_by,request_id) values($1,$2,gen_random_uuid()) returning id",[name,users[0]])).rows[0].id);
+ await db.query("insert into public.workspace_property_assignments(property_id,user_id,assignment,granted_by) values($1,$3,'cleaner',$4),($2,$3,'cleaner',$4)",[props[0],props[1],users[4],users[0]]);
+ await db.query("insert into public.workspace_property_assignments(property_id,user_id,assignment,granted_by) values($1,$2,'client',$3)",[props[2],users[3],users[0]]);
+ const kinds=async user=>(await db.exec('reset role'),(await db.query('select assignment from public.workspace_property_assignments where user_id=$1 order by assignment',[user])).rows.map(r=>r.assignment));
+ await as(0);
+ await act({action:'setAccess',userId:users[4],role:'stays',modules:['listing-health']});
+ assert.deepEqual(await kinds(users[4]),['staff','staff'],'a cleaner moved to Stays keeps both properties, as a team member');
+ await as(0);
+ const promoted=await act({action:'setAccess',userId:users[4],role:'admin',modules:[]});
+ assert.equal(promoted.role,'admin');assert.equal(promoted.properties,2);
+ await as(0);
+ await act({action:'setAccess',userId:users[3],role:'stays',modules:['listing-health']});
+ assert.deepEqual(await kinds(users[3]),[],'an owner made a team member is unassigned from the property they own');
+ await as(0);
+ const history=await read('accessHistory');
+const moves=history.filter(h=>h.event==='role_changed'&&['Person 3','Person 4'].includes(h.target)).map(h=>[h.target,h.detail.from,h.detail.role]);
+ assert.deepEqual(moves,[['Person 3','client','stays'],['Person 4','stays','admin'],['Person 4','cleans','stays']]);
+ assert.deepEqual(history.find(h=>h.event==='role_changed'&&h.detail.from==='client').detail.properties,{unassigned:1});
+ // Tools alone don't count as a role change.
+ await as(0);await act({action:'setAccess',userId:users[3],role:'stays',modules:['listing-health','daily-pricing']});
+ await as(0);assert.equal((await read('accessHistory')).filter(h=>h.event==='role_changed'&&h.target==='Person 3').length,1);
+});
+
 test('sign out everywhere and revoke a password',async()=>{
  await as(0);
  let p=await act({action:'signOut',userId:users[5]});assert.equal(p.activeSessions,0);

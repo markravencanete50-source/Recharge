@@ -63,6 +63,13 @@ planned.
 - **Delete:** removes the auth user when nothing refers to it. Otherwise the account is closed:
   "Deleted account", no access, banned, password revoked.
 - **History:** every change is logged in `workspace_access_events`.
+- **Changing a role:** the sheet lists every role with what it gives (`ROLE_SUMMARY`), and previews
+  what the person will see (`roleChange`: Work views, Home tools, properties). The tools reset to the
+  new role's usual set. `workspace_move_assignments` (migration `20261008290000`) moves property
+  assignments to the new role's kind, because property access matches the assignment kind to the
+  role. An owner becoming a team member, or the reverse, is unassigned. A `role_changed` event
+  records the old and new role. The person's app reads the account returned with every refresh and
+  switches to the new role without signing in again.
 - **Applying it live:** migration `20261008280000_access_control.sql` removes sign-in sessions, so the
   database tool asks for confirmation. Run `docs/APPLY-ACCESS-CONTROL.sql` in the Supabase SQL editor
   if it isn't applied yet.

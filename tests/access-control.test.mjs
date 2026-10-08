@@ -42,3 +42,21 @@ test('only super admins get the Access control tool on Home', () => {
   assert.ok(!homeToolsFor('admin', MODULE_IDS).some(t => t.key === 'access'));
   assert.deepEqual(homeToolsFor('super_admin', MODULE_IDS).find(t => t.key === 'access').target, { kind: 'work', view: 'management', sub: 'access', anchor: 'access-control' });
 });
+
+test('changing a role shows what the person will see', async () => {
+  const { roleChange, ROLE_SUMMARY } = await vite.ssrLoadModule('/lib/access-control.ts');
+  const { ROLE_LABEL, toolsOnRoleChange, rolesFor } = await vite.ssrLoadModule('/lib/admin-live.ts');
+  const label = r => ROLE_LABEL[r];
+  for (const r of rolesFor('super_admin')) assert.ok(ROLE_SUMMARY[r], r + ' has a summary');
+  const up = roleChange({ role: 'cleaning_manager', properties: 3 }, 'admin', [], label);
+  assert.equal(up.promote, true); assert.equal(up.action, 'Promote to Admin');
+  assert.deepEqual(up.views, ['Management', 'Stays', 'Cleans', 'Repairs', 'Accounts', 'All work'], 'the same Work views as every admin');
+  assert.deepEqual(up.homeTools, homeToolsFor('admin', MODULE_IDS).map(t => t.label), 'the same Home tools as every admin');
+  assert.equal(up.properties, 'They see every property.');
+  const side = roleChange({ role: 'cleans', properties: 1 }, 'stays', toolsOnRoleChange('stays'), label);
+  assert.equal(side.promote, false); assert.equal(side.action, 'Change to Stays'); assert.equal(side.properties, 'Their 1 property stays assigned to them.');
+  assert.match(roleChange({ role: 'client', properties: 2 }, 'stays', [], label).properties, /2 properties will be unassigned/);
+  assert.match(roleChange({ role: 'admin', properties: 0 }, 'client', [], label).properties, /no properties yet/);
+  assert.equal(roleChange({ role: 'stays', properties: 0 }, 'stays', [], label).same, true);
+  assert.equal(eventLabel('role_changed'), 'Role changed');
+});

@@ -8,6 +8,8 @@ export type ToolPlace =
   | { kind: 'tracker'; where: string }
   | { kind: 'calculator'; where: string };
 
+export const WORK_VIEW_LABEL: Record<WorkView, string> = { management: 'Management', stays: 'Stays', owner: 'Stays and statements', cleans: 'Cleans', repairs: 'Repairs', accounts: 'Accounts', all: 'All work' };
+
 // The Work views each role can open, the first being the default.
 export function workViewsFor(role: string): WorkView[] {
   if (role === 'admin' || role === 'super_admin') return ['management', 'stays', 'cleans', 'repairs', 'accounts', 'all'];
