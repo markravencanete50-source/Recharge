@@ -21,6 +21,9 @@ export function repairStep(role: string, phase: string): RepairStep | null {
   return null;
 }
 export const canReportRepair = (role: string) => role === "client" || STAFF.includes(role);
+// While a repair is open, Ready or Stays can update its quote. A higher quote above the owner's
+// approval limit goes back to the owner; once approved the repair carries on where it was.
+export const canReviseQuote = (role: string, phase: string) => (role === "ready" || STAFF.includes(role)) && ["triage", "referred", "booked"].includes(phase);
 
 // Routine visit sign-off follows the generic work graph: Ready starts and submits,
 // Stays or management approve and close.

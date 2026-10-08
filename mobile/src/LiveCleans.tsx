@@ -7,7 +7,7 @@ import { z } from "zod";
 import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading, StatGrid, StatTile } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, StatGrid, StatTile } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, uploadWorkPhoto, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
@@ -37,7 +37,8 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openJob, setOpenJob] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const focus = useWorkFocus();
+  const [creating, setCreating] = useState(() => focus?.open === "new-clean" && account.role !== "cleans");
   const [statementFor, setStatementFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {

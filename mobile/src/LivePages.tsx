@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Platform, TextInput, View } from "react-native";
+import { Platform, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Crypto from "expo-crypto";
@@ -15,8 +15,10 @@ import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import { PropertyProfile } from "./LivePropertyProfile";
 import { PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
 import { EstimateExplorer } from "./LiveEstimate";
+import { ScotlandMap } from "./ScotlandMap";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
 import { readEstimate } from "../../lib/estimate-projection";
+import { agreementDocument, agreementFileName } from "../../lib/agreement-copy";
 import type { BudgetItem } from "../../lib/accounts-work";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
@@ -154,7 +156,23 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
   );
 }
 
-function JourneyDetails({ j, p, account, onForm, work }: { j: JourneyView; p: Palette; account: WorkspaceAccount; onForm: (f: WorkflowForm) => void; work: OperationView[] }) {
+// The signed agreement, kept as a page the owner and the team can open, print or save.
+function AgreementCopy({ j, p, propertyName }: { j: JourneyView; p: Palette; propertyName: string }) {
+  const [note, setNote] = useState("");
+  if (!j.signedName) return null;
+  const save = async () => {
+    try {
+      await exportReport(agreementDocument({ propertyName, agreement: j.agreement, revision: j.signedRevision ?? j.agreementRevision, signedName: j.signedName!, signedAt: j.signedAt ?? null }), agreementFileName(propertyName), { mime: "text/html", uti: "public.html" });
+      setNote(Platform.OS === "web" ? "Saved. Open it to read, print or save as a PDF." : "Ready to save or share.");
+    } catch (e) { setNote(message(e)); }
+  };
+  return <View style={{ gap: 6 }}>
+    <SoftButton label="Download a copy of the signed agreement" icon="download" palette={p} onPress={() => void save()} />
+    {!!note && <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>{note}</Text>}
+  </View>;
+}
+
+function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: JourneyView; p: Palette; account: WorkspaceAccount; propertyName: string; onForm: (f: WorkflowForm) => void; work: OperationView[] }) {
   const comparables = estimateComparables(j.estimate), [linkError, setLinkError] = useState("");
   const progress = onboardingProgress(j.stage), linked = work.filter(w => w.propertyId === j.propertyId && w.workId !== j.workId);
   return (
@@ -172,7 +190,7 @@ function JourneyDetails({ j, p, account, onForm, work }: { j: JourneyView; p: Pa
       {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
       {j.estimate && account.role === "client" && ["estimate", "reviewing"].includes(j.stage) && <EstimateGuide palette={p} />}
       {!!comparables.length && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Comparable properties</Text>{comparables.map(c => <SoftButton key={c.url} label={c.name + " · " + money(c.adrMinor) + " a night"} icon="external-link" palette={p} onPress={() => void Linking.openURL(c.url).catch(() => setLinkError("The comparable link could not be opened."))} />)}{!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}</View>}
-      {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{j.agreement}</Text>{j.signedName && <Text style={{ color: p.success }}>Accepted by {j.signedName}.</Text>}</View>}
+      {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{j.agreement}</Text>{j.signedName && <Text style={{ color: p.success }}>Accepted by {j.signedName}{j.signedAt ? " on " + new Date(j.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }) : ""}.</Text>}<AgreementCopy j={j} p={p} propertyName={propertyName} /></View>}
       {j.inspectionReport && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Inspection findings</Text><InspectionResult palette={p} j={j} /><Text selectable style={[ui.body, { color: p.text }]}>{j.inspectionReport}</Text></View>}
       <JourneyQuestions palette={p} j={j} owner={account.role === "client"} />
       {journeyForms(account, j).map(f => <SoftButton key={f.key} label={f.title} icon={f.key === "askQuestion" ? "plus" : "arrow-right"} palette={p} onPress={() => onForm(f)} />)}
@@ -206,7 +224,7 @@ function PropertyCard({ property, index, palette: p, onPress }: { property: Prop
 
 // The portfolio at a glance for the team: live, onboarding, owners, and properties per region.
 function PortfolioCard({ palette: p, summary }: { palette: Palette; summary: PortfolioSummary }) {
-  const top = summary.regions[0]?.count || 1;
+  const top = summary.regions[0]?.count || 1, wide = useWindowDimensions().width >= 700;
   const stats: [string, number, IconName][] = [["Properties", summary.total, "home"], ["Live", summary.live, "check-circle"], ["Onboarding", summary.onboarding, "key"], ["Owners", summary.owners, "users"]];
   return (
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 14 }]}>
@@ -214,15 +232,18 @@ function PortfolioCard({ palette: p, summary }: { palette: Palette; summary: Por
       <StatGrid>
         {stats.map(([label, value, icon]) => <StatTile key={label} p={p} icon={icon} tone="stays" label={label} value={value} />)}
       </StatGrid>
-      <View style={{ gap: 8 }}>
-        <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>By region</Text>
-        {summary.regions.slice(0, 8).map(r => (
-          <View key={r.region} accessibilityLabel={`${r.region}: ${r.count}`} style={[ui.row, { gap: 10 }]}>
-            <Text numberOfLines={1} style={{ color: p.text, width: 130, fontSize: 13 }}>{r.region}</Text>
-            <GrowBar share={Math.max(0.06, r.count / top)} color={p.primary} track={p.wash} />
-            <Text style={{ color: p.text, minWidth: 32, textAlign: "right", fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatCount(r.count)}</Text>
-          </View>
-        ))}
+      <View style={{ flexDirection: wide ? "row" : "column", gap: 18, alignItems: wide ? "center" : "stretch" }}>
+        <View style={{ flex: wide ? 1 : undefined, minWidth: 0 }}><ScotlandMap palette={p} regions={summary.regions} /></View>
+        <View style={{ gap: 8, flex: wide ? 1.3 : undefined, minWidth: 0 }}>
+          <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>By region</Text>
+          {summary.regions.slice(0, 8).map(r => (
+            <View key={r.region} accessibilityLabel={`${r.region}: ${r.count}`} style={[ui.row, { gap: 10 }]}>
+              <Text numberOfLines={1} style={{ color: p.text, width: 130, fontSize: 13 }}>{r.region}</Text>
+              <GrowBar share={Math.max(0.06, r.count / top)} color={p.primary} track={p.wash} />
+              <Text style={{ color: p.text, minWidth: 32, textAlign: "right", fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatCount(r.count)}</Text>
+            </View>
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -280,10 +301,10 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
             <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: selected.status === "active" ? p.successWash : p.cautionWash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.status === "active" ? "Live" : readableStage(selected.status)}</Text></View>
             {!!selected.bedrooms && <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: p.wash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.bedrooms} {selected.bedrooms === 1 ? "bedroom" : "bedrooms"}</Text></View>}
           </View>
-          {journey && selected.status !== "active" && <JourneyDetails j={journey} p={p} account={account} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
+          {journey && selected.status !== "active" && <JourneyDetails j={journey} p={p} account={account} propertyName={selected.name} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
           <PropertyProfile palette={p} account={account} propertyId={selected.id} journey={journey} />
           <PropertyAccess palette={p} account={account} propertyId={selected.id} />
-          {journey && selected.status === "active" && <JourneyDetails j={journey} p={p} account={account} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
+          {journey && selected.status === "active" && <JourneyDetails j={journey} p={p} account={account} propertyName={selected.name} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
           {createOperationForms(account, selected.id).map(f => <SoftButton key={f.key} label={f.title} icon="plus" palette={p} onPress={() => { setSelected(null); onForm(f); }} />)}
           {!!propertyWork.length && <View style={{ gap: 4 }}>
             <Text style={{ color: p.text, fontWeight: "700" }}>Work at this property · {propertyWork.length}</Text>

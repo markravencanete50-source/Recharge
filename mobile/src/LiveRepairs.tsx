@@ -8,14 +8,14 @@ import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading } from "./LiveKit";
 import { formatMoney } from "../../lib/format";
 import { readOperations, readTeams, workspaceRequest, writeOperation, writeTeams, writeWorkspace } from "./backend/client";
 import { REPAIR_GUIDES, SAFETY_STOP, repairTypeLabel, troubleshootingNote, type RepairType } from "../../lib/repair-guides";
 import { profileAccess, reservationsSchema, stayLines, type StayLine } from "../../lib/property-profile";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import { scheduleSchema } from "../../lib/cleans-live";
-import { canReportRepair, poundsToMinor, repairStep, REPAIR_STAGES, routinePlanSchema, visitMoves, type RepairStep } from "../../lib/repairs-live";
+import { canReportRepair, canReviseQuote, poundsToMinor, repairStep, REPAIR_STAGES, routinePlanSchema, visitMoves, type RepairStep } from "../../lib/repairs-live";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Live repairs: the maintenance pipeline from report to completed repair, and
@@ -35,8 +35,9 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
-  const [reporting, setReporting] = useState(false);
-  const [planning, setPlanning] = useState(false);
+  const focus = useWorkFocus();
+  const [reporting, setReporting] = useState(() => focus?.open === "report-repair" && canReportRepair(account.role));
+  const [planning, setPlanning] = useState(() => focus?.open === "new-routine" && ["ready", "stays", "admin", "super_admin"].includes(account.role));
   const [visitId, setVisitId] = useState<string | null>(null);
   const routines = ["ready", "stays", "admin", "super_admin"].includes(account.role);
 
@@ -141,10 +142,12 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
   const [urgent, setUrgent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [quoting, setQuoting] = useState(false);
   const request = useRequestId(repair ? repair.workId + ":" + repair.version : null);
+  const quoteRequest = useRequestId(repair && quoting ? ["quote", repair.workId, repair.version, fields.quote ?? "", fields.quoteReason ?? ""].join(":") : null);
   const set = (k: string) => (v: string) => setFields(f => ({ ...f, [k]: v }));
   const f = (k: string) => fields[k] ?? "";
-  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(repair?.data.urgent === true); setError(""); } }); return () => { active = false; }; }, [repair, today]);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(repair?.data.urgent === true); setError(""); setQuoting(false); } }); return () => { active = false; }; }, [repair, today]);
 
   function build(): Record<string, unknown> | string {
     if (step === "approveBudget") return consent ? { consent: true } : "Tick to approve the cost.";
@@ -161,7 +164,7 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
     if (step === "completeRepair") {
       const cost = poundsToMinor(f("actualCost"));
       if (f("report").trim().length < 10 || f("guestUpdate").trim().length < 5 || cost === null) return "Add the repair report, the actual cost and the guest update.";
-      if (typeof repair?.data.estimatedCostMinor === "number" && cost > repair.data.estimatedCostMinor) return "The cost is above the approved estimate. Report a new repair so the owner can approve the increase.";
+      if (typeof repair?.data.estimatedCostMinor === "number" && cost > repair.data.estimatedCostMinor) return "The cost is above the approved estimate. Use “Update the quote” first; if it is over the owner’s limit they approve it, then you can complete the repair.";
       return { report: f("report").trim(), actualCostMinor: cost, guestUpdate: f("guestUpdate").trim() };
     }
     return "Nothing to do.";
@@ -176,6 +179,16 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
       request.done(); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
+  async function reviseQuote() {
+    if (!repair || busy) return;
+    const quote = poundsToMinor(f("quote"));
+    if (quote === null || f("quoteReason").trim().length < 5) { setError("Add the new quote and why it changed."); return; }
+    setBusy(true); setError("");
+    try {
+      await writeOperation({ action: "updateOperation", requestId: quoteRequest.get(), workId: repair.workId, version: repair.version, step: "reviseQuote", data: { quoteMinor: quote, reason: f("quoteReason").trim() } } as Parameters<typeof writeOperation>[0]);
+      quoteRequest.done(); setQuoting(false); await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
   const label = REPAIR_STAGES.find(s => s.phase === phase);
   const type = (typeof repair?.data.repairType === "string" && repair.data.repairType in REPAIR_GUIDES ? repair.data.repairType : "other") as RepairType;
   return (
@@ -188,7 +201,9 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
           {repair.data.urgent === true && <Tag label="Urgent" tone="bad" p={p} />}
           {repair.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
           {typeof repair.data.ownerApprovedAt === "string" && <Tag label="Owner approved" tone="good" p={p} />}
+          {typeof repair.data.quoteRevisedAt === "string" && <Tag label="Quote updated" tone="wait" p={p} />}
         </View>
+        {typeof repair.data.quoteReason === "string" && <Detail label={`Quote changed from ${pounds(repair.data.previousEstimateMinor)} to ${pounds(repair.data.estimatedCostMinor)}`} value={repair.data.quoteReason} p={p} />}
         {(typeof repair.data.contactFirst === "string" || typeof repair.data.warrantyDetails === "string") && phase !== "completed" && (
           <View style={{ gap: 6, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}>
             <View style={[ui.row, { gap: 8 }]}><Feather name="phone-call" size={16} color={p.text} /><Text style={{ color: p.text, fontWeight: "700" }}>The owner asked us to contact first</Text></View>
@@ -245,6 +260,16 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
           <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
           <Text style={[ui.small, { color: p.muted }]}>Completing sends the repair to Accounts to reconcile the invoice.</Text>
         </>}
+        {canReviseQuote(role, phase) && (quoting ? <View style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border }}>
+          <Text style={{ color: p.text, fontWeight: "700" }}>Update the quote</Text>
+          <Text style={[ui.small, { color: p.muted }]}>If the new quote is higher and over the owner’s approval limit, it goes to the owner first. The repair carries on once they approve.</Text>
+          <Field label={`New quote (now ${pounds(repair.data.estimatedCostMinor)})`} value={f("quote")} onChange={set("quote")} p={p} placeholder="£0.00" />
+          <Field label="Why it changed" value={f("quoteReason")} onChange={set("quoteReason")} p={p} multiline placeholder="For example, the part needs replacing, not repairing" />
+          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+            <Button label={busy ? "Saving…" : "Save the new quote"} primary p={p} disabled={busy} onPress={() => void reviseQuote()} />
+            <Button label="Cancel" p={p} onPress={() => setQuoting(false)} />
+          </View>
+        </View> : <Button label="Update the quote" icon="edit-3" p={p} onPress={() => setQuoting(true)} />)}
         {!step && <Notice text={phase === "completed" ? "This repair is complete." : role === "ready" && phase === "triage" ? "Stays will refer this to Ready." : "Nothing for you to do at this stage."} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         {step && <Button label={busy ? "Saving…" : STEP_TITLE[step]} primary p={p} disabled={busy} onPress={() => void save()} />}

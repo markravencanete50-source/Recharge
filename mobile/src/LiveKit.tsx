@@ -10,9 +10,16 @@ import { sectionAnchor } from "../../lib/home-tools";
 
 // Where a Home tool asked to land: a tab inside a Work view (sub) and a section to scroll to (anchor).
 // The nonce changes on every tap, so tapping the same tool again lands again.
-export type WorkFocus = { sub?: string; anchor?: string; nonce: number };
+export type WorkFocus = { sub?: string; anchor?: string; open?: string; nonce: number };
 export const WorkFocusContext = createContext<WorkFocus | null>(null);
 export const useWorkFocus = () => useContext(WorkFocusContext);
+// Places a Home tool can scroll to. On the web they are found by id; in the phone app each one
+// registers itself so the page can measure where it is.
+export const AnchorRegistry = createContext<Map<string, View> | null>(null);
+export function Anchor({ id, children }: { id: string; children: ReactNode }) {
+  const registry = useContext(AnchorRegistry);
+  return <View nativeID={id} collapsable={false} ref={node => { if (!registry) return; if (node) registry.set(id, node); else registry.delete(id); }}>{children}</View>;
+}
 
 // Shared building blocks for the live (backend-connected) screens.
 export const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
@@ -51,11 +58,11 @@ export function Loading({ p, rows = 3 }: { p: Palette; rows?: number }) {
 export function Section({ title, count, p, children }: { title: string; count?: number; p: Palette; children: ReactNode }) {
   // Each section can be opened directly from a Home tool by its heading (section-daily-checks).
   return (
-    <Entrance nativeID={sectionAnchor(title)} style={{ gap: 10 }}>
+    <Anchor id={sectionAnchor(title)}><Entrance style={{ gap: 10 }}>
       <View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>{title}</Text>{count !== undefined && <Tag label={String(count)} tone={count ? "wait" : "good"} p={p} />}</View>
       {/* Cards and rows inside a section arrive one after another. */}
       {Children.toArray(children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
-    </Entrance>
+    </Entrance></Anchor>
   );
 }
 

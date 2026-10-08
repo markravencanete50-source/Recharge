@@ -331,7 +331,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openExpense, setOpenExpense] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(() => focus?.open === "new-expense");
   const [ask, setAsk] = useState<NoteAsk | null>(null);
   const [stay, setStay] = useState<(NeedsDetails | PayoutRow) & { propertyName?: string } | null>(null);
   const [terms, setTerms] = useState<StatementRow | null>(null);

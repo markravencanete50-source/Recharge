@@ -26,7 +26,7 @@ export class ProviderFailure extends Error {
   constructor(readonly code: 'unconfigured'|'retryable'|'rejected'|'uncertain'|'device_removed') { super(code); }
 }
 export type DeliveryResult = {state:'accepted'|'delivered'|'pending';providerId?:string};
-export type DeliveryJob = { id:string;lease:string;channel:'email'|'push';destination:string;state:'queued'|'accepted';providerId:string|null;createdAt:string };
+export type DeliveryJob = { id:string;lease:string;channel:'email'|'push';destination:string;state:'queued'|'accepted';providerId:string|null;createdAt:string;eventType?:string|null };
 
 export function normalizeHostawayReservation(value: {id:string;listingId:string;arrivalDate:string;departureDate:string;status:string},listingId:string) {
   const status = value.status.toLowerCase();

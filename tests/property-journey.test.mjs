@@ -69,6 +69,9 @@ test('agreement consent freezes published revision, creates invoice task exactly
  await as(0);const tasks=(await db.query('select module_id from public.workspace_work_items where property_id=$1',[journey.propertyId])).rows.map(r=>r.module_id);
  for(const module of ['onboarding-invoices','licensing','routine-bin-garden-board','property-furnishing-board','clean-property-onboarding'])assert.equal(tasks.filter(m=>m===module).length,1,module);
  await assert.rejects(db.query('select * from private.workspace_journeys'),/permission denied/);
+ // A garden also gets a monthly garden-and-bins routine for Ready.
+ await db.exec('reset role');assert.equal((await db.query("select count(*)::int n from private.workspace_routine_plans where property_id=$1 and module_id='routine-bin-garden-board' and title='Garden and bins' and frequency='monthly' and active",[journey.propertyId])).rows[0].n,1);
+ await as(0);
 });
 test('unpaid invoice blocks inspection; real settlement advances both owner and staff; booking is not completion',async()=>{
  await as(0);await assert.rejects(action({action:'bookInspection',propertyId:journey.propertyId,version:journey.version,inspectionOn:(await db.query('select current_date::text d')).rows[0].d}),/Paid invoice/);

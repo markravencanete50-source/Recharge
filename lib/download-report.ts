@@ -1,5 +1,5 @@
-export function downloadReport(csv: string, filename: string) {
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+export function downloadReport(csv: string, filename: string, type = "text/csv;charset=utf-8") {
+  const url = URL.createObjectURL(new Blob([csv], { type }));
   // The studio embeds the app. Use its same-origin outer document so browser
   // download handling receives the action at the top level as well.
   let downloadDocument = document;

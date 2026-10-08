@@ -50,6 +50,10 @@ const worker = {
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_open_pricing_gaps', {})).catch(() => {
       console.error('Pricing gap check failed; the next run retries.');
     }));
+    // Monday mornings: owners are told in the app that their weekly report is ready (once a week).
+    ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_weekly_report_notices', {})).catch(() => {
+      console.error('Weekly report notices failed; the next run retries.');
+    }));
     if (env.INTEGRATION_SCHEDULE_ENABLED !== 'true') return;
     ctx.waitUntil(import('../lib/integration-server').then(module => module.dispatchNotifications()).catch(() => {
       console.error('Recharge integration batch failed; durable job state retained.');

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { ActivityIndicator, Animated, KeyboardAvoidingView, Platform, ScrollView, Switch, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Animated, AppState, KeyboardAvoidingView, Platform, ScrollView, Switch, View, useWindowDimensions } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import Feather from "@expo/vector-icons/Feather";
@@ -44,7 +44,7 @@ import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSc
 import { workDetails } from "../../lib/work-details";
 import { AccountsWork } from "./LiveAccountsWork";
 import { CelebrateProvider } from "./Celebrate";
-import { WorkFocusContext, type WorkFocus } from "./LiveKit";
+import { AnchorRegistry, WorkFocusContext, type WorkFocus } from "./LiveKit";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
@@ -121,7 +121,8 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
   const [form, setForm] = useState<WorkflowForm | null>(null), [openWork, setOpenWork] = useState<OperationView | null>(null);
   const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active");
   const [fade] = useState(() => new Animated.Value(1));
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollView>(null), content = useRef<View>(null);
+  const [anchors] = useState(() => new Map<string, View>());
   // The Help button slides out of the way while the page scrolls, and back once it settles.
   const [tucked, setTucked] = useState(false), untuck = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onScrolling = (y: number) => {
@@ -141,8 +142,11 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
     return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
   }, []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true); setError("");
+  const lastRefresh = useRef(0), editing = useRef(false);
+  // A quiet refresh (every minute, and when someone comes back to the app) keeps what is on screen
+  // and its messages; only a failed sign-in is acted on.
+  const refresh = useCallback(async (quiet = false) => {
+    if (!quiet) { setLoading(true); setError(""); }
     // Properties and invoices come a page of 100 at a time; read every page.
     const readAll = async (entity: "properties" | "invoices") => {
       const rows: unknown[] = [];
@@ -165,6 +169,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       const key = jobs[i][0];
       // A failed collection is cleared, including after an assignment is revoked.
       if (result.status === "rejected") {
+        if (quiet) { if (result.reason instanceof WorkspaceApiError && result.reason.status === 401) onSignedOut(); return; }
         if (key === "properties") setProperties([]); if (key === "journeys") setJourneys([]); if (key === "work") setWork([]); if (key === "invoices") setInvoices([]); if (key === "notices") setNotices([]);
         if (result.reason instanceof WorkspaceApiError && result.reason.status === 401) onSignedOut();
         setError(message(result.reason)); return;
@@ -176,14 +181,17 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
         if (key === "work") setWork(z.array(operationViewSchema).parse(data));
         if (key === "invoices") setInvoices(z.array(invoiceViewSchema).parse(data));
         if (key === "notices") setNotices(z.array(noticeViewSchema).parse(data));
-      } catch { setError("Unexpected response. Refresh to try again."); }
+      } catch { if (!quiet) setError("Unexpected response. Refresh to try again."); }
     });
     // The budget chart (for approving purchases) and the direct-booking policy, read alongside the rest.
     const [budgetResult, policyResult] = await extras;
-    setBudget(budgetResult.status === "fulfilled" && budgetResult.value ? budgetResult.value : []);
-    const value = policyResult.status === "fulfilled" ? policyResult.value : null;
-    setPolicy(value); setPolicyConfirmed(value?.confirmed ?? false);
-    setLoading(false);
+    if (!quiet || budgetResult.status === "fulfilled") setBudget(budgetResult.status === "fulfilled" && budgetResult.value ? budgetResult.value : []);
+    if (!quiet || policyResult.status === "fulfilled") {
+      const value = policyResult.status === "fulfilled" ? policyResult.value : null;
+      setPolicy(value); setPolicyConfirmed(value?.confirmed ?? false);
+    }
+    lastRefresh.current = Date.now();
+    if (!quiet) setLoading(false);
   }, [account.role, onSignedOut]);
   const loadReport = useCallback(async (range: AnalyticsPeriod) => {
     if (periodError(range)) return;
@@ -192,6 +200,15 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
     catch (e) { setSnapshot(null); setReportError(message(e)); }
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void refresh(); }); return () => { active = false; }; }, [refresh]);
+  // Stay up to date without tapping refresh: every minute while the app is open and in view, and
+  // straight away when someone comes back to it. Paused while a form or sheet is open.
+  useEffect(() => { editing.current = !!form || !!openWork || settings || dates || busy; }, [form, openWork, settings, dates, busy]);
+  useEffect(() => {
+    const tick = () => { if (AppState.currentState === "active" && !editing.current && Date.now() - lastRefresh.current > 50_000) void refresh(true); };
+    const timer = setInterval(tick, 60_000);
+    const sub = AppState.addEventListener("change", state => { if (state === "active" && !editing.current && Date.now() - lastRefresh.current > 20_000) void refresh(true); });
+    return () => { clearInterval(timer); sub.remove(); };
+  }, [refresh]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void loadReport(period); }); return () => { active = false; }; }, [loadReport, period]);
 
   useEffect(() => {
@@ -206,14 +223,23 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
 
   // A Home tool opens its place: the Work view (and tab inside it), or another page, then the section.
   const openTool = (target: HomeToolTarget) => {
-    if (target.kind === "work") { setWorkView(target.view); setFocus({ sub: target.sub, anchor: target.anchor, nonce: Date.now() }); setTab("work"); }
+    if (target.kind === "work") { setWorkView(target.view); setFocus({ sub: target.sub, anchor: target.anchor, open: target.open, nonce: Date.now() }); setTab("work"); }
     else if (target.kind === "tab") { setFocus(target.anchor ? { anchor: target.anchor, nonce: Date.now() } : null); setTab(target.tab); }
   };
   useEffect(() => {
-    if (!focus?.anchor || Platform.OS !== "web" || typeof document === "undefined") return;
+    if (!focus?.anchor) return;
     // Sections appear once their data has loaded, so look for a few seconds, then bring it into view
-    // with a brief glow so the eye lands on it.
+    // (with a brief glow on the web, so the eye lands on it).
     let tries = 0;
+    if (Platform.OS !== "web") {
+      const timer = setInterval(() => {
+        const node = anchors.get(focus.anchor!);
+        if (node && content.current) { clearInterval(timer); node.measureLayout(content.current, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: !reduced }), () => undefined); }
+        else if (++tries > 30) clearInterval(timer);
+      }, 150);
+      return () => clearInterval(timer);
+    }
+    if (typeof document === "undefined") return;
     const timer = setInterval(() => {
       const el = document.getElementById(focus.anchor!);
       if (el) {
@@ -223,7 +249,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       } else if (++tries > 30) clearInterval(timer);
     }, 150);
     return () => clearInterval(timer);
-  }, [focus, reduced]);
+  }, [focus, reduced, anchors]);
 
   async function logout() {
     setBusy(true);
@@ -253,12 +279,12 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
     <>
       {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} />}
-      {currentView === "stays" && <LiveStays palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}
+      {currentView === "stays" && <LiveStays key={"stays:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}
       {currentView === "owner" && <LiveOwner palette={p} properties={properties} />}
       {currentView === "owner" && account.modules.includes("client-mailbox") && <MailboxSection palette={p} />}
       {currentView === "owner" && account.modules.includes("client-furnishing") && <FurnishingCard palette={p} />}
-      {currentView === "cleans" && <LiveCleans palette={p} account={account} properties={properties} />}
-      {currentView === "repairs" && <LiveRepairs palette={p} account={account} properties={properties} />}
+      {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
+      {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
       {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} /></>}
       {currentView === "all" && <>
         <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
@@ -337,10 +363,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
             </View>
           </View>
           <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
-            <Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
-              <WorkFocusContext.Provider value={focus}>{animatedPage}</WorkFocusContext.Provider>
+            <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
+              <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}>{animatedPage}</WorkFocusContext.Provider></AnchorRegistry.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
-            </Animated.View>
+            </Animated.View></View>
           </ScrollView>
           {/* On phones Home has its own help links and some bottom bars include Help, so the floating button stays out of the way there. */}
           {!faqShortcut.hidden && tab !== "help" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help"))) && <FaqShortcut palette={p} tucked={tucked} onOpen={() => navigate("help")} onHide={() => faqShortcut.setHidden(true)} />}

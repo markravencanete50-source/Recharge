@@ -7,7 +7,7 @@ import { MotionPress, Stagger, useReducedMotion } from "./motion";
 import { TrackerSheet } from "./LiveTools";
 import { FurnishingSheet } from "./LiveFurnishing";
 import { ui, type Palette } from "./theme";
-import { homeToolsFor, type HomeTool, type HomeToolTarget } from "../../lib/home-tools";
+import { homeActionsFor, homeToolsFor, type HomeTool, type HomeToolTarget } from "../../lib/home-tools";
 import { toolsFor, type Tool } from "../../lib/tool-directory";
 import type { PropertyView } from "../../lib/workspace-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -38,7 +38,7 @@ function ToolTile({ tool, palette: p, compact, onPress }: { tool: HomeTool; pale
 // Home's "Your tools": the tools for this person's role, one tap from where they start the day.
 export function HomeTools({ palette: p, account, properties, desktop, onOpen, onAll }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; desktop: boolean; onOpen: (target: HomeToolTarget) => void; onAll: () => void }) {
   const { width } = useWindowDimensions();
-  const tools = homeToolsFor(account.role, account.modules);
+  const tools = homeToolsFor(account.role, account.modules), actions = homeActionsFor(account.role, account.modules);
   const [tracker, setTracker] = useState<Tool | null>(null);
   const [calculator, setCalculator] = useState(false);
   if (!tools.length) return null;
@@ -65,6 +65,14 @@ export function HomeTools({ palette: p, account, properties, desktop, onOpen, on
           {Array.from({ length: columns - row.length }, (_, i) => <View key={"gap" + i} style={{ flex: 1 }} />)}
         </View>
       ))}
+      {/* The things this role starts most often, one tap from Home. */}
+      {!!actions.length && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingTop: 2 }}>
+        {actions.map((a, i) => <Stagger key={a.key} index={tools.length + i}><MotionPress accessibilityRole="button" accessibilityLabel={a.label} onPress={() => open(a.target)}
+          style={[ui.row, { gap: 8, minHeight: 44, paddingLeft: 10, paddingRight: 16, borderRadius: 999, backgroundColor: p.primary }]}>
+          <View style={{ width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: p.onPrimary }}><Feather name={a.icon} size={15} color={p.primary} /></View>
+          <Text style={{ color: p.onPrimary, fontSize: 14, fontWeight: "700" }}>{a.label}</Text>
+        </MotionPress></Stagger>)}
+      </View>}
       <TrackerSheet palette={p} tool={tracker} properties={properties} onClose={() => setTracker(null)} />
       <FurnishingSheet palette={p} visible={calculator} onClose={() => setCalculator(false)} />
     </View>

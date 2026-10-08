@@ -37,7 +37,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | D4 | See what stage every property is at | ✅ | "Where every property is": properties counted by stage (enquiry, estimate, agreement, set-up, invoice, inspection, live); tap a stage to filter the list. |
 | D5 | Client portfolio: number of clients, properties per client, portfolio size | ✅ | Every owner with their number of properties; tap an owner to see only theirs. The Owners total counts every owner, onboarded or added by an admin. |
 | D6 | Take the enquiry/onboarding strike rate out of this report | ✅ | Removed. (It isn't shown anywhere else yet.) |
-| D7 | Map, or properties per region of Scotland | ✅ | Properties counted by Scottish area, with spellings and towns grouped (Leith and Portobello count as Edinburgh). New enquiries choose from a fixed list of areas. No map: that would need each property's coordinates. |
+| D7 | Map, or properties per region of Scotland | ✅ | Properties counted by Scottish area, with spellings and towns grouped (Leith and Portobello count as Edinburgh). New enquiries choose from a fixed list of areas. A drawn map of Scotland shows a circle per area sized by its properties; tap one for the area. It uses the area counts, not exact addresses. |
 | D8 | General portfolio statistics | ✅ | Last 12 months: properties added, properties gone live, nights booked each month, and live properties now. Revenue across the portfolio will follow once payouts come in from the channel manager. |
 | D9 | Each property linked to its channel-manager listing so messages sync | ⏸ | Needs the Uplisting connection; no screen yet to link a listing by hand. |
 
@@ -46,21 +46,21 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | # | Ask | Status | What's there / what's missing |
 |---|---|---|---|
 | O1 | Client logs in and fills in a new enquiry | ✅ | |
-| O2 | Shows in the client's properties with the full journey stage by stage | ✅ | Updates when the app refreshes. |
+| O2 | Shows in the client's properties with the full journey stage by stage | ✅ | The app refreshes itself every minute while open and when someone comes back to it, so a new stage shows without tapping refresh. |
 | O3 | Team writes the estimate (e.g. 110 / 120 / 130 a night) with comparables and publishes it | ✅ | |
-| O4 | Email and app notification at every stage (WhatsApp a bonus) | 🟡 | In-app notices at every stage. Email ready but waiting on the Resend key (and the wording is generic). Phone push needs the app to register devices. No WhatsApp. |
+| O4 | Email and app notification at every stage (WhatsApp a bonus) | 🟡 | In-app notices at every stage, each with its own plain wording, and the same wording is ready for emails and phone notifications. Emails start once the Resend key is added; phone push needs the app to register devices. No WhatsApp. |
 | O5 | Estimate page explains the service, extra services and the onboarding process | ✅ | Alongside the estimate: "What Recharge does", "Extra services" and "How onboarding works". The wording lives in one file (lib/onboarding-content.ts) for Recharge to fine-tune. |
 | O6 | Client can change the occupancy level and see the estimate change | ✅ | "Explore your estimate" on the estimate: pick a quieter / expected / strong year and an occupancy, and earnings update as you go. Same sums as the team's estimate model. |
 | O7 | Client can toggle direct bookings vs Airbnb bookings | ✅ | "Booked direct" control: platform fees fall and the saving is spelled out. Shown once the team publishes the platform and management fees with the estimate. |
 | O8 | Links to the comparables | ✅ | |
 | O9 | Approve and proceed / need more time (team check-in) / won't proceed (archived both sides) / ask questions | ✅ | Approve and proceed / I need more time (with a check-in date) / I won't proceed (archived both sides). "Ask Recharge a question" works at any stage; the team is told and answers on the same page. |
 | O10 | FAQ section on the estimate | ✅ | "Questions owners ask" on the estimate page, written for owners (estimate, more time, repairs, payouts, post). |
-| O11 | Sign the management agreement electronically, stored both sides | ✅ | Typed-name signature with consent and agreement version. No PDF copy. |
+| O11 | Sign the management agreement electronically, stored both sides | ✅ | Typed-name signature with consent and agreement version. The owner and the team can download a copy of the exact signed agreement (name, date and revision) to keep, print or save as a PDF. |
 | O12 | Onboarding form: access information | ✅ | Stored privately; staff see it under "Access and logins". |
 | O13 | Recharge mailbox choice (open and photograph post, or leave it safe); cleaners' post photos go to the client's mailbox | 🟡 | Choice saved; cleaners log post with a note and it shows in the owner's Mailbox. No post photos yet (needs Cloudinary and a mailbox photo step). |
 | O14 | Ready-team questions for getting the property ready to go live | ✅ | Answers show on the property page under "Getting ready to go live" for the team, Ready included. |
 | O15 | Needs a licensing compliance report → licensing ticket in Stays | ✅ | |
-| O16 | Has a garden → Ready ticket for regular garden maintenance | ✅ | Creates a set-up ticket; doesn't create a recurring garden plan. |
+| O16 | Has a garden → Ready ticket for regular garden maintenance | ✅ | Creates a set-up ticket and a monthly "Garden and bins" routine for Ready (grass, weeds, leaves, bins, anything to repair). |
 | O17 | Warranty and repair contacts → "contact this person first" on repairs | ✅ | The owner's preferred repair contact and warranties show on every repair at that property, highlighted as "contact first", and warranty repairs need proof the provider was contacted. |
 | O18 | Auto-permission for repairs up to £X | ✅ | Under the limit goes straight ahead; over it goes to the owner. |
 | O19 | "Furnish it for me" → furnishing quote ticket for Ready; otherwise self-furnish | ✅ | Self-furnishers get the furnishing calculator. |
@@ -85,7 +85,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | S7 | Gap nights in the next 7 days → ticket; staff change or hold the price with a reason | ✅ | Every live property with an empty night in the coming week gets a "Price the empty nights" ticket automatically, kept up to date and closed once every night is priced or booked. Staff hold or change each price with a reason. Stays are entered by hand until the channel manager is connected. |
 | S8 | Pricing changes feed the weekly client report | ✅ | |
 | S9 | Weekly scan for local events near each property | ❌ | Needs an events data provider and building. The report says no scan is connected. |
-| S10 | Weekly report downloaded and sent to the client; client report section | 🟡 | Download (CSV) works for clients and staff. Not sent automatically each week (needs Resend). |
+| S10 | Weekly report downloaded and sent to the client; client report section | 🟡 | Download (CSV) works for clients and staff, and owners get an in-app notice each Monday that their weekly report is ready. Not emailed yet (needs Resend). |
 | S11 | Licensing tickets from onboarding worked through the full licensing process | ✅ | Licensing runs in stages: application submitted (council and reference) → safety checks (gas, electrical, alarms, legionella, EPC, insurance) → licence granted. |
 | S12 | Any booking of 7+ nights → direct-booking ticket | 🟡 | Works for stays entered or edited in the app. Bookings from the channel manager don't create it yet. |
 | S13 | Recommended rate about 10% below, max £100 off | ✅ | The offer price is shown on the booking once prepared, alongside the original price, and the policy (e.g. 10% off, up to £100) is shown before preparing it. A super admin confirms the policy once. |
@@ -95,7 +95,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | S17 | Repair type → AI troubleshooting steps before passing on | 🟡 | Each repair type has a guided checklist of safe checks to go through with the guest, ticked off and sent with the referral. No AI yet (needs an AI key). |
 | S18 | Refer (urgently) to Ready; ticket stays visible to Stays to chase | ✅ | "Urgent" can be set when reporting or referring; Stays keep seeing the repair to chase it. |
 | S19 | Ready books the repair → Stays told so they can tell the guest | ✅ | Ready on the property is notified when a repair is referred (admins if no Ready is assigned); the Stays person who referred it, and Stays on the property, are notified when it is booked and when it is done. |
-| S20 | Expensive work goes to the client for approval first | ✅ | Uses the estimate given when reporting; a later quote needs a new request. |
+| S20 | Expensive work goes to the client for approval first | ✅ | Uses the estimate given when reporting. If the real quote changes, Ready or Stays update it; a higher quote above the owner's limit goes back to the owner, and the repair carries on once approved. |
 | S21 | Cleaner's end-of-clean report (broadband etc., photos) | ⏸ | Built; needs Cloudinary for photos before it can be submitted. |
 | S22 | Guest happy → clean complete → added to the cleaner's invoice | ⏸ | Accepted cleans are grouped by cleaner in Accounts, so several go on one invoice. Waiting on clean photos (S21) before cleans can be accepted. |
 | S23 | Guest unhappy → management review ticket; cleaner not paid | ⏸ | Built; depends on S21. |

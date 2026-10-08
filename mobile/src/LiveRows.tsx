@@ -1,6 +1,7 @@
 import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { noticeCopy } from "../../lib/notice-copy";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { MotionPress } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
@@ -59,7 +60,7 @@ export function LiveNoticeRow({ notice, palette: p }: { notice: NoticeView; pale
     <View style={[ui.row, { gap: 14, paddingVertical: 12 }]}>
       <View style={{ backgroundColor: departmentColor(look.tone, p).wash, width: 42, height: 42, borderRadius: 14, justifyContent: "center", alignItems: "center" }}><DimensionalIcon name={look.icon} size={30} /></View>
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-        <Text numberOfLines={2} style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{readableStage(notice.event_type.replaceAll(".", " "))}</Text>
+        <Text numberOfLines={2} style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{noticeCopy(notice.event_type).title}</Text>
         <Text style={[ui.small, { color: p.muted }]}>{when}</Text>
       </View>
     </View>

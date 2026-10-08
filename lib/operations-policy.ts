@@ -30,6 +30,7 @@ export const operationsActionSchema=z.union([
  step('referReady',{troubleshooting:text(2000).min(5),warrantyContactEvidence:text(2000).optional(),guestUpdate:text(2000).min(5),urgent:z.boolean().optional()}),
  step('bookRepair',{repairOn:date,contractor:text(200).min(2),guestUpdate:text(2000).min(5)}),
  step('completeRepair',{report:text(3000).min(10),actualCostMinor:money,guestUpdate:text(2000).min(5)}),
+ step('reviseQuote',{quoteMinor:money,reason:text(2000).min(5)}),
  step('submitCleaning',{checks:z.array(text(200).min(1)).min(1).max(30),report:text(3000).min(5),photoIds:photos,mailAction:z.enum(['none','photograph','open_and_photograph','leave_safely']),mailNote:text(500).optional()}),
  step('reviewCleaning',{accepted:z.boolean(),guestFeedback:text(2000).min(5),reviewNote:text(2000).min(5)}),
  step('approvePurchase',{approvedAmountMinor:money,approvalNote:text(2000).min(5),budgetItemId:id.optional(),quantity:z.number().int().min(1).max(100).optional()}),

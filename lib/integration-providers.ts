@@ -1,4 +1,5 @@
 import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_PHOTO_BYTES,photoFormat } from './integration-policy';
+import { noticeCopy } from './notice-copy';
 
 async function jsonRequest(url:string,init:RequestInit,readOnly=false):Promise<Record<string,unknown>> {
   let response:Response;
@@ -39,8 +40,9 @@ export async function uploadPrivatePhoto(settings:IntegrationSettings,publicId:s
   return {assetId:result.asset_id,publicId,version:Number(result.version),format,bytes:Number(result.bytes)};
 }
 export async function deliverNotification(settings:IntegrationSettings,job:DeliveryJob):Promise<DeliveryResult> {
-  const text='There is an update in your Recharge workspace. Sign in to view it.';
-  // Do not send private property names, addresses, bank details, access codes or job notes.
+  // Each kind of update has its own wording (lib/notice-copy.ts). It never includes private property
+  // names, addresses, bank details, access codes or job notes.
+  const { title, message: text } = noticeCopy(job.eventType);
   if(job.channel==='email') {
     const headers={Authorization:`Bearer ${settings.RESEND_API_KEY}`,'Content-Type':'application/json'};
     if(job.state==='accepted') {
@@ -52,12 +54,12 @@ export async function deliverNotification(settings:IntegrationSettings,job:Deliv
     }
     // Resend's idempotency window is 24 hours. An expired unknown send needs human review.
     if(Date.now()-Date.parse(job.createdAt)>23*3600000)throw new ProviderFailure('uncertain');
-    const result=await jsonRequest('https://api.resend.com/emails',{method:'POST',headers:{...headers,'Idempotency-Key':`recharge-notification/${job.id}`},body:JSON.stringify({from:settings.NOTIFICATION_FROM_EMAIL,to:[job.destination],subject:'Recharge workspace update',text})});
+    const result=await jsonRequest('https://api.resend.com/emails',{method:'POST',headers:{...headers,'Idempotency-Key':`recharge-notification/${job.id}`},body:JSON.stringify({from:settings.NOTIFICATION_FROM_EMAIL,to:[job.destination],subject:title,text})});
     if(typeof result.id!=='string'||!result.id)throw new ProviderFailure('uncertain');
     return {state:'accepted',providerId:result.id};
   }
   const headers={Authorization:`Bearer ${settings.EXPO_ACCESS_TOKEN}`,'Content-Type':'application/json'};
-  const result=await jsonRequest(`https://exp.host/--/api/v2/push/${job.state==='accepted'?'getReceipts':'send'}`,{method:'POST',headers,body:JSON.stringify(job.state==='accepted'?{ids:[job.providerId]}:{to:job.destination,title:'Recharge',body:text,data:{screen:'activity'}})},job.state==='accepted');
+  const result=await jsonRequest(`https://exp.host/--/api/v2/push/${job.state==='accepted'?'getReceipts':'send'}`,{method:'POST',headers,body:JSON.stringify(job.state==='accepted'?{ids:[job.providerId]}:{to:job.destination,title:'Recharge',body:title,data:{screen:'activity'}})},job.state==='accepted');
   const data=(job.state==='accepted'?(result.data as Record<string,unknown>)?.[job.providerId!]:result.data) as Record<string,unknown>|undefined;
   if(job.state==='accepted'&&!data)return {state:'pending'};
   if(data?.status==='ok')return job.state==='accepted'?{state:'delivered'}:typeof data.id==='string'?{state:'accepted',providerId:data.id}:Promise.reject(new ProviderFailure('uncertain'));

@@ -29,6 +29,26 @@ planned.
 - **Feedback.** Sheets wrap their "done" handler in `useSaved()` (`mobile/src/Celebrate.tsx`),
   so every successful save shows a short confirmation.
 
+## Follow-ups without outside services (8 October 2026)
+
+- **Home shortcuts** (`homeActionsFor` in `lib/home-tools.ts`) open a form straight away. The Work
+  screen reads `focus.open` when it mounts (`useWorkFocus`).
+- **Automatic refresh.** `LiveWorkspace` refreshes quietly every minute while open and when the
+  app comes back to the front. It pauses while a form or sheet is open.
+- **Update wording.** `lib/notice-copy.ts` titles every update in the app, and gives the subject and
+  message for email and push. `integration_claim_notifications` now passes `eventType`.
+- **Weekly report notice.** `workspace_weekly_report_notices()` runs on the backend schedule. It
+  sends owners an in-app notice on Mondays from 8am UK time, once per property per week.
+- **Repair quotes.** The `reviseQuote` step updates the quote. A higher quote above the owner's
+  limit sends the repair back to `owner_approval` with a `resumePhase`. `approveBudget` returns it
+  to that phase.
+- **Garden routine.** An owner's "has a garden" answer also creates a monthly "Garden and bins"
+  routine plan.
+- **Agreement copy.** `lib/agreement-copy.ts` builds a page with the signed agreement.
+- **Map.** `lib/scotland-map.ts` has a hand-traced outline and area centres. Circles are placed
+  so they never overlap.
+- **Native scrolling.** `Anchor` (`LiveKit`) registers sections so the phone app can scroll to them.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

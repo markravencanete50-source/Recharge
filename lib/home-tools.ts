@@ -8,10 +8,12 @@ export type ToolArt =
   | 'chart' | 'toolbox' | 'calendar' | 'chat' | 'compass' | 'sun'
   | 'tag' | 'relist' | 'signature' | 'shield' | 'box' | 'bell' | 'receipt' | 'wallet' | 'pie' | 'cart' | 'sofa' | 'search' | 'mail' | 'star';
 export type HomeToolTarget =
-  | { kind: 'work'; view: WorkView; sub?: string; anchor?: string }
+  | { kind: 'work'; view: WorkView; sub?: string; anchor?: string; open?: HomeForm }
   | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help'; anchor?: string }
   | { kind: 'tracker'; module: ModuleId }
   | { kind: 'calculator' };
+// Forms a Home shortcut can open straight away, inside their Work view.
+export type HomeForm = 'record-stay' | 'report-repair' | 'new-clean' | 'new-expense' | 'new-routine';
 export type HomeTool = { key: string; label: string; detail: string; art: ToolArt; target: HomeToolTarget };
 type Candidate = HomeTool & { needs?: ModuleId[] };
 
@@ -106,6 +108,30 @@ export function homeToolsFor(role: string, modules: readonly string[]): HomeTool
     (!t.needs || t.needs.some(m => modules.includes(m))) &&
     (t.target.kind !== 'work' || views.includes(t.target.view)),
   ).map(({ needs, ...t }) => { void needs; return t; });
+}
+
+// Shortcuts under the tools that open a form straight away, for the things each role starts most.
+export type HomeAction = { key: HomeForm; label: string; icon: 'plus' | 'alert-triangle' | 'repeat'; target: HomeToolTarget };
+const ACTIONS: Record<HomeForm, Omit<HomeAction, 'key'>> = {
+  'record-stay': { label: 'Record a stay', icon: 'plus', target: { kind: 'work', view: 'stays', open: 'record-stay' } },
+  'report-repair': { label: 'Report a repair', icon: 'alert-triangle', target: { kind: 'work', view: 'repairs', open: 'report-repair' } },
+  'new-clean': { label: 'New clean', icon: 'plus', target: { kind: 'work', view: 'cleans', open: 'new-clean' } },
+  'new-expense': { label: 'New expense', icon: 'plus', target: { kind: 'work', view: 'accounts', sub: 'expenses', open: 'new-expense' } },
+  'new-routine': { label: 'New routine visit', icon: 'repeat', target: { kind: 'work', view: 'repairs', open: 'new-routine' } },
+};
+const ACTIONS_BY_ROLE: Record<string, [HomeForm, ModuleId[]?][]> = {
+  admin: [['record-stay'], ['report-repair'], ['new-clean'], ['new-expense']],
+  stays: [['record-stay'], ['report-repair', ['stays-maintenance-reporting', 'maintenance-reporting']], ['new-clean', ['cleaning-schedule']], ['new-routine', ['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']]],
+  ready: [['new-routine', ['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']]],
+  cleaning_manager: [['new-clean']],
+  accounts: [['new-expense']],
+  client: [['report-repair', ['client-property-maintenance']]],
+};
+ACTIONS_BY_ROLE.super_admin = ACTIONS_BY_ROLE.admin;
+export function homeActionsFor(role: string, modules: readonly string[]): HomeAction[] {
+  const views = workViewsFor(role);
+  return (ACTIONS_BY_ROLE[role] ?? []).filter(([key, needs]) => (!needs || needs.some(m => modules.includes(m))) && views.includes((ACTIONS[key].target as { view: WorkView }).view))
+    .map(([key]) => ({ key, ...ACTIONS[key] }));
 }
 
 // The illustrated icon for each tool in the full tools list.

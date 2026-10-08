@@ -7,7 +7,7 @@ import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading, StatGrid, StatTile } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Anchor, Loading, StatGrid, StatTile } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readOperations, readTeams, writeFinance, writeOperation, writeTeams, WorkspaceApiError } from "./backend/client";
 import { signoffSchema, type Signoff } from "../../lib/management-live";
@@ -240,10 +240,10 @@ function SignOffCard({ p, refreshKey }: { p: Palette; refreshKey: number }) {
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load, refreshKey]);
   if (!state) return error ? <Notice text={error} p={p} tone="bad" /> : null;
   if (state.mine) return (
-    <View nativeID="stays-signoff" style={[ui.row, { gap: 12, padding: 14, borderRadius: 18, backgroundColor: p.successWash }]}>
+    <Anchor id="stays-signoff"><View style={[ui.row, { gap: 12, padding: 14, borderRadius: 18, backgroundColor: p.successWash }]}>
       <Feather name="check-circle" size={20} color={p.success} />
       <Text style={{ color: p.text, flex: 1, fontWeight: "600" }}>Signed off today at {new Date(state.mine.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}{state.mine.note ? ` · ${state.mine.note}` : ""}</Text>
-    </View>
+    </View></Anchor>
   );
   const s = state.snapshot, all = Object.values(ticks).every(Boolean);
   async function sign() {
@@ -256,7 +256,7 @@ function SignOffCard({ p, refreshKey }: { p: Palette; refreshKey: number }) {
   }
   const set = (k: keyof typeof ticks) => (v: boolean) => setTicks(t => ({ ...t, [k]: v }));
   return (
-    <View nativeID="stays-signoff" style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
+    <Anchor id="stays-signoff"><View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
       <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Today’s sign-off</Text>
       <Text style={[ui.small, { color: p.muted }]}>{plural(s.listingChecksToday, "listing check")} and {plural(s.reviewsToday, "review")} logged by you today · {plural(s.openRelistings, "re-listing")} open{s.flaggedToday ? ` · ${plural(s.flaggedToday, "listing")} flagged today` : ""}</Text>
       <Check p={p} label="Every listing is live and visible" value={ticks.allVisible} onChange={set("allVisible")} />
@@ -266,7 +266,7 @@ function SignOffCard({ p, refreshKey }: { p: Palette; refreshKey: number }) {
       {(s.openRelistings > 0 || all) && <Field label={s.openRelistings > 0 ? "Where the open re-listings are up to" : "Anything to hand over (optional)"} value={note} onChange={setNote} p={p} multiline />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Signing off…" : "Sign off today"} icon="check" primary p={p} disabled={busy} onPress={() => void sign()} />
-    </View>
+    </View></Anchor>
   );
 }
 
@@ -279,7 +279,8 @@ export function LiveStays({ palette: p, properties, onOpenRepairs, onOpenWork }:
   const [day, setDay] = useState(today);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [recording, setRecording] = useState(false);
+  const focus = useWorkFocus();
+  const [recording, setRecording] = useState(() => focus?.open === "record-stay");
   const [listingFor, setListingFor] = useState<PropertyView | null>(null);
   const [pricingFor, setPricingFor] = useState<{ property: PropertyView; nights: string[] } | null>(null);
   const [reviewFor, setReviewFor] = useState<PropertyView | null>(null);
