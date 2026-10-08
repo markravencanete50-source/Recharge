@@ -19,7 +19,7 @@ import type { PropertyView } from "../../lib/workspace-view";
 type Schedule = z.infer<typeof scheduleSchema>;
 const nights = (from: string, to: string) => Math.round((Date.parse(to + "T12:00:00Z") - Date.parse(from + "T12:00:00Z")) / 86400000);
 
-function StatementCard({ p, s }: { p: Palette; s: Statement }) {
+export function StatementCard({ p, s }: { p: Palette; s: Statement }) {
   const [open, setOpen] = useState(false);
   const line = (label: string, value: string, strong = false) => (
     <View style={[ui.between, { gap: 12 }]}><Text style={[ui.small, { color: strong ? p.text : p.muted, flex: 1, fontWeight: strong ? "700" : "400" }]}>{label}</Text><Text style={{ color: p.text, fontWeight: strong ? "700" : "600" }}>{value}</Text></View>

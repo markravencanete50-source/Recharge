@@ -9,6 +9,7 @@ import { StateGraphic } from "./StateGraphic";
 import { followUpsDue } from "../../lib/portfolio-overview";
 import { ShiftCard } from "./LiveShifts";
 import { CleanerMonthCard } from "./CleanerPay";
+import { OwnerHome } from "./LiveOwnerHome";
 import { HomeTools } from "./HomeTools";
 import { ReadyHome } from "./ReadyHome";
 import type { HomeToolTarget } from "../../lib/home-tools";
@@ -103,6 +104,7 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
       {account.role === "cleans" && <CleanerMonthCard palette={p} onOpen={() => onTool({ kind: "work", view: "cleans" })} />}
       {account.role === "ready" && <ReadyHome palette={p} desktop={desktop} onTool={onTool} />}
       {account.role !== "client" && <ShiftCard palette={p} account={account} />}
+      {account.role === "client" && <OwnerHome palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onNavigate={onNavigate} />}
       {!!followUps.length && <Entrance sessionKey={"live:home:followups"} style={{ gap: 8 }}>
         <View style={ui.between}>
           <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Client check-ins due</Text>

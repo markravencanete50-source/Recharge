@@ -9,7 +9,7 @@ export type ToolArt =
   | 'tag' | 'relist' | 'signature' | 'shield' | 'box' | 'bell' | 'receipt' | 'wallet' | 'pie' | 'cart' | 'sofa' | 'search' | 'mail' | 'star';
 export type HomeToolTarget =
   | { kind: 'work'; view: WorkView; sub?: string; anchor?: string; open?: HomeForm }
-  | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help'; anchor?: string }
+  | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals'; anchor?: string }
   | { kind: 'tracker'; module: ModuleId }
   | { kind: 'calculator' };
 // Forms a Home shortcut can open straight away, inside their Work view.
@@ -22,7 +22,7 @@ export const sectionAnchor = (title: string) => 'section-' + title.toLowerCase()
 
 const work = (view: WorkView, extra: { sub?: string; section?: string; anchor?: string } = {}): HomeToolTarget =>
   ({ kind: 'work', view, ...(extra.sub ? { sub: extra.sub } : {}), ...(extra.section ? { anchor: sectionAnchor(extra.section) } : extra.anchor ? { anchor: extra.anchor } : {}) });
-const tab = (name: 'properties' | 'analytics' | 'activity' | 'help'): HomeToolTarget => ({ kind: 'tab', tab: name });
+const tab = (name: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals'): HomeToolTarget => ({ kind: 'tab', tab: name });
 const tool = (key: string, label: string, detail: string, art: ToolArt, target: HomeToolTarget, needs?: ModuleId[]): Candidate => ({ key, label, detail, art, target, ...(needs ? { needs } : {}) });
 
 const PROPERTIES = tool('properties', 'Properties', 'Every property and its details', 'house', tab('properties'));
@@ -91,12 +91,13 @@ const BY_ROLE: Record<string, Candidate[]> = {
     RESTOCK,
   ],
   client: [
-    tool('stays', 'Stays & statements', 'Bookings and money', 'calendar', work('owner')),
+    // Stays, earnings and statements live in Reports; decisions waiting for the owner in Approvals.
+    tool('stays', 'Stays & statements', 'Bookings, earnings, money', 'calendar', tab('analytics')),
+    tool('approvals', 'Approvals', 'Costs and steps to decide', 'hourglass', tab('approvals')),
     tool('repairs', 'Repairs', 'Request and approve', 'toolbox', work('repairs')),
     tool('mailbox', 'Mailbox', 'Post at your properties', 'mail', work('owner', { section: 'Mailbox' }), ['client-mailbox']),
     tool('furnishing', 'Furnishing calculator', 'What each room needs', 'sofa', { kind: 'calculator' }, ['client-furnishing']),
     { ...PROPERTIES, label: 'My properties', detail: 'Onboarding and details' },
-    tool('reports', 'Reports', 'How your properties do', 'chart', tab('analytics')),
     UPDATES,
     HELP,
   ],

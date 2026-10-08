@@ -12,7 +12,8 @@ import { LivePeople } from "./LivePeople";
 import { LiveTeamPerformance } from "./LiveShifts";
 import { DisputeSheet } from "./CleanDisputes";
 import { readFinance, readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
-import { DECISION_OUTCOMES, decisionAction, managementSchema, type Decision, type Management } from "../../lib/management-live";
+import { DECISION_OUTCOMES, decisionAction, managementSchema, type Decision, type Management, type RepairApproval } from "../../lib/management-live";
+import { CostDecisionSheet, type CostDecision } from "./LiveApprovals";
 import { performanceSchema } from "../../lib/cleans-live";
 import { policySchema, pounds } from "../../lib/accounts-live";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -77,6 +78,9 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
   const [decision, setDecision] = useState<Decision | null>(null);
   const [expense, setExpense] = useState<string | null>(null);
   const [ask, setAsk] = useState<NoteAsk | null>(null);
+  // Repairs above the company-wide management limit, and the limit itself.
+  const [repair, setRepair] = useState<CostDecision | null>(null);
+  const [repairPolicy, setRepairPolicy] = useState<{ limit: number | null; version: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -84,7 +88,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
     try {
       if (q.status === "fulfilled") setQueue(managementSchema.parse(q.value.data)); else throw q.reason;
       if (perf.status === "fulfilled") setTeam(performanceSchema.parse(perf.value.data));
-      if (pol.status === "fulfilled") setLimit(policySchema.parse(pol.value.data).expenseApprovalLimitMinor);
+      if (pol.status === "fulfilled") { const v = policySchema.parse(pol.value.data); setLimit(v.expenseApprovalLimitMinor); setRepairPolicy({ limit: v.managementRepairLimitMinor, version: v.version }); }
     } catch (e) { setError(e instanceof WorkspaceApiError ? e.message : "The management queue could not be loaded."); }
     setLoading(false);
   }, []);
@@ -94,7 +98,16 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
     { label: "Cleaning decisions", value: queue?.cleaningDecisions.length ?? 0, icon: "check-square" as const, detail: "Complaints and reviews" },
     { label: "Costs over limit", value: queue?.expensesOverLimit.length ?? 0, icon: "alert-triangle" as const, detail: "Need your approval" },
     { label: "Owner approvals", value: queue?.stalledOwnerApprovals.length ?? 0, icon: "clock" as const, detail: "Waiting over 48 hours" },
+    { label: "Repair costs", value: queue?.repairApprovals.length ?? 0, icon: "tool" as const, detail: "Above the management limit" },
   ];
+  const openRepair = (r: RepairApproval) => setRepair({
+    who: "management", workId: r.workId, version: r.version, propertyName: r.propertyName, issue: r.issue ?? r.title, repairType: r.repairType, urgent: r.urgent, hazard: r.hazard,
+    estimateMinor: r.estimatedCostMinor, previousEstimateMinor: r.previousEstimateMinor, quoteReason: r.quoteReason,
+    limitText: `Above the management limit${r.limitMinor !== null ? " of " + pounds(r.limitMinor) : ""}. ${r.ownerApprovedAt ? "The owner has approved it." : "It is within the owner’s own limit."} Once approved, it carries on with Stays and Ready.`,
+  });
+  const changeRepairLimit = () => repairPolicy && setAsk({ title: "Management approval for repairs", subtitle: "Repairs costing more than this also need an admin’s approval, after the owner’s", min: 0, confirm: "Save limit",
+    amount: { label: "Limit (leave 0 to switch it off)", initial: repairPolicy.limit == null ? "0" : (repairPolicy.limit / 100).toFixed(2) },
+    build: (_note, minor) => ({ action: "setRepairApprovalLimit", requestId: "", version: repairPolicy.version, managementRepairLimitMinor: minor ? minor : null }) });
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 4 }}>
@@ -126,6 +139,16 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
                 tags={[e.hasInvoice && e.hasProof ? ["Evidence complete", "good"] : ["Evidence missing", "wait"]]} onPress={() => setExpense(e.id)} />
             ))}
           </List>
+        </Section>
+        <Section title="Repairs above the management limit" count={queue.repairApprovals.length} p={p}>
+          <Text style={[ui.small, { color: p.muted }]}>{repairPolicy?.limit == null ? "Off: repairs need only the owner’s approval, above their own limit." : `Repairs above ${pounds(repairPolicy.limit)} need your approval too, after the owner’s.`}</Text>
+          <List p={p} empty="No repair costs waiting for management.">
+            {queue.repairApprovals.map((r, i) => (
+              <Row key={r.workId} p={p} first={i === 0} icon="tool" tone="ready" title={r.propertyName} detail={`${r.issue ?? r.title} · waiting ${since(r.waitingSince)}`} amount={pounds(r.estimatedCostMinor)}
+                tags={[r.ownerApprovedAt ? ["Owner approved", "good"] : ["Within the owner’s limit", "plain"], ...(r.urgent ? [["Urgent", "bad"] as [string, "bad"]] : [])]} onPress={() => openRepair(r)} />
+            ))}
+          </List>
+          {repairPolicy && <Button label="Change the repair limit" icon="sliders" p={p} onPress={changeRepairLimit} />}
         </Section>
         <Section title="Owner approvals waiting over 48 hours" count={queue.stalledOwnerApprovals.length} p={p}>
           <List p={p} empty="No repairs are stuck with an owner.">
@@ -164,6 +187,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       <DisputeSheet p={p} target={decision?.kind === "cleaning_complaint" ? decision : null} onClose={() => setDecision(null)} onDone={saved(load)} />
       <ExpenseSheet p={p} role={account.role} id={expense} limit={limit} onClose={() => setExpense(null)} onAsk={a => { setExpense(null); setAsk(a); }} onDone={saved(load)} />
       <NoteSheet p={p} ask={ask} onClose={() => setAsk(null)} onDone={saved(load)} />
+      <CostDecisionSheet p={p} decision={repair} onClose={() => setRepair(null)} onDone={saved(load)} />
     </View>
   );
 }

@@ -67,7 +67,7 @@ export const statementsSchema = z.array(z.object({
   terms: z.object({ managementFeeBps: z.number().nullable(), cleaningCostMinor: nullableMinor }).nullable(),
   statement: statementSchema.nullable(), unsettledPayouts: z.number(), missingDetails: z.number(),
 }));
-export const policySchema = z.object({ expenseApprovalLimitMinor: nullableMinor, version: z.number(), updatedAt: z.string().nullable() });
+export const policySchema = z.object({ expenseApprovalLimitMinor: nullableMinor, version: z.number(), updatedAt: z.string().nullable(), managementRepairLimitMinor: nullableMinor.default(null) });
 
 // --- Rules mirrored from workspace_finance_action, so the screens only offer what can succeed.
 export const FINANCE_ROLES = ["accounts", "admin", "super_admin"];

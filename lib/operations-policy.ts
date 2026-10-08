@@ -31,6 +31,12 @@ export const operationsActionSchema=z.union([
  step('bookRepair',{repairOn:date,contractor:text(200).min(2),guestUpdate:text(2000).min(5)}),
  step('completeRepair',{report:text(3000).min(10),actualCostMinor:money,guestUpdate:text(2000).min(5),photoIds:z.array(id).max(30).optional()}),
  step('reviseQuote',{quoteMinor:money,reason:text(2000).min(5)}),
+ // Saying no to a repair's cost: the owner, or management above the company-wide limit. Stays then
+ // re-quote it or close it.
+ step('declineBudget',{reason:text(2000).min(5)}),
+ step('approveManagement',{note:text(2000).optional()}),
+ step('declineManagement',{reason:text(2000).min(5)}),
+ step('closeRepair',{note:text(2000).min(5)}),
  step('submitCleaning',{checks:z.array(text(200).min(1)).min(1).max(30),report:text(3000).min(5),photoIds:photos,mailAction:z.enum(['none','photograph','open_and_photograph','leave_safely']),mailNote:text(500).optional(),mailPhotoIds:z.array(id).min(1).max(20).optional()}),
  step('reviewCleaning',{accepted:z.boolean(),guestFeedback:text(2000).min(5),reviewNote:text(2000).min(5)}),
  // The assigned cleaner reports a problem found on the clean; it becomes a repair for the Stays team.

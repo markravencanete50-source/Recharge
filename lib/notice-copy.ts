@@ -30,6 +30,11 @@ const EXACT: Record<string, NoticeCopy> = {
   'operations.updateOperation.bookRepair': copy('Repair booked', 'A repair has been booked in.'),
   'operations.updateOperation.reviseQuote': copy('Repair quote updated', 'The quote for a repair has changed. If it is above your approval limit, it needs your approval before the work goes ahead.'),
   'operations.updateOperation.completeRepair': copy('Repair completed', 'A repair has been completed.'),
+  'operations.updateOperation.declineBudget': copy('Owner declined a repair cost', 'An owner has declined the cost of a repair and said why. It can be re-quoted or closed.'),
+  'operations.updateOperation.approveManagement': copy('Repair cost approved by management', 'Management has approved the cost of a repair, so it can go ahead.'),
+  'operations.updateOperation.declineManagement': copy('Repair cost declined by management', 'Management has declined the cost of a repair. It can be re-quoted or closed.'),
+  'operations.updateOperation.closeRepair': copy('Repair closed', 'A repair has been closed without the work going ahead.'),
+  'finance.repair_limit_updated': copy('Repair approval limit changed', 'The amount above which repairs need management approval has changed.'),
   // Purchases.
   'operations.updateOperation.approvePurchase': copy('Purchase approved', 'A purchase request has been approved.'),
   'operations.updateOperation.recordOrder': copy('Purchase ordered', 'A purchase has been ordered.'),

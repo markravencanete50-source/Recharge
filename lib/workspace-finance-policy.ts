@@ -24,6 +24,8 @@ export const financeReadSchema = z.object({
 const channel = z.enum(['airbnb', 'booking_com']);
 export const financeActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('setFinancePolicy'), requestId: id, version, expenseApprovalLimitMinor: money.nullable() }).strict(),
+  // Repairs above this also need an admin's approval; null switches it off.
+  z.object({ action: z.literal('setRepairApprovalLimit'), requestId: id, version, managementRepairLimitMinor: money.nullable() }).strict(),
   z.object({ action: z.literal('setStatementTerms'), requestId: id, propertyId: id, managementFeeBps: z.number().int().min(0).max(10000), cleaningCostMinor: z.number().int().min(0).max(1000000) }).strict(),
   z.object({ action: z.literal('setReservationFinancials'), requestId: id, propertyId: id, reservationId: id, version,
     channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']), channelReference: text(1, 120).optional(),
