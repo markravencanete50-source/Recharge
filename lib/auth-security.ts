@@ -31,7 +31,7 @@ export async function securityRpc<T>(name: string, args: Record<string, unknown>
   if (result.error) throw new Error("Security database unavailable");
   return result.data as T;
 }
-const decisionSchema = z.object({ allowed: z.boolean(), locked: z.boolean().optional(), retryAfter: z.number().int().min(0).max(86400) });
+const decisionSchema = z.object({ allowed: z.boolean(), locked: z.boolean().optional(), retryAfter: z.number().int().min(0).max(86400), passwordReset: z.boolean().optional() });
 export type AuthDecision = z.infer<typeof decisionSchema>;
 export async function passwordDecision(name: "auth_server_begin_password" | "auth_server_finish_password", args: Record<string, unknown>) {
   return decisionSchema.parse(await securityRpc(name, args));

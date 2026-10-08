@@ -100,7 +100,8 @@ const BY_ROLE: Record<string, Candidate[]> = {
     HELP,
   ],
 };
-BY_ROLE.super_admin = BY_ROLE.admin;
+// Super admins also manage who can sign in and what they can use.
+BY_ROLE.super_admin = [...BY_ROLE.admin, tool('access', 'Access control', 'People, tools and security', 'shield', work('management', { sub: 'access', anchor: 'access-control' }))];
 
 export function homeToolsFor(role: string, modules: readonly string[]): HomeTool[] {
   const views = workViewsFor(role);

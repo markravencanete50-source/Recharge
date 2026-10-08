@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authSecurityConfiguration, passwordDecision, requestQuota, securityHash } from "@/lib/auth-security";
-import { boundedJson, securityHeaders } from "@/lib/auth-security-policy";
+import { boundedJson, PASSWORD_RESET_REQUIRED, securityHeaders } from "@/lib/auth-security-policy";
 import { isNativeRequest, nativeSessionSchema, bearerToken } from "@/lib/native-request-policy";
 import { nativeProvider, nativeIdentity, nativeWorkspace } from "@/lib/native-session";
 import { workspaceAccountSchema } from "@/lib/workspace-account-policy";
@@ -63,6 +63,7 @@ export async function POST(request: Request) {
     if (!identity || !decision.allowed || !result.data.session) {
       await client.auth.signOut({ scope: "local" });
       if (decision.locked) return limited(decision.retryAfter, true);
+      if (decision.passwordReset) return respond({ error: PASSWORD_RESET_REQUIRED, passwordReset: true }, 403);
       return respond({ error: result.error?.code === "invalid_credentials" ? "Check your contact details and password." : "Verify your email or phone number, or try again later." }, result.error?.code === "invalid_credentials" ? 401 : 503);
     }
     const scoped = nativeProvider(token)!;

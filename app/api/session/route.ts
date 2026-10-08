@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { workspaceSupabase } from "@/lib/supabase-server";
 import { authSecurityConfiguration, passwordDecision, providerIdentity, requestQuota, securityHash } from "@/lib/auth-security";
-import { boundedJson, isSameOrigin, loginSchema, loginContact, securityHeaders } from "@/lib/auth-security-policy";
+import { boundedJson, isSameOrigin, loginSchema, loginContact, PASSWORD_RESET_REQUIRED, securityHeaders } from "@/lib/auth-security-policy";
 import { confirmedContact } from '@/lib/registration-policy';
 export async function POST(request: Request) {
   const config = authSecurityConfiguration();
@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     if (!identity || !finish.allowed) {
       if (identity) await client.auth.signOut({ scope: "local" });
       if (finish.locked) return limited(finish.retryAfter, true);
+      if (finish.passwordReset) return NextResponse.json({ error: PASSWORD_RESET_REQUIRED, passwordReset: true }, { status: 403, headers: securityHeaders });
       return NextResponse.json({ error: error?.code === "invalid_credentials" ? "Sign-in failed. Check your contact details and password." : "Sign-in failed. Check your account verification or try again later." }, { status: error?.code === "invalid_credentials" ? 401 : 503, headers: securityHeaders });
     }
     return NextResponse.json({ ok: true }, { headers: securityHeaders });

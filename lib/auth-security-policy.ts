@@ -1,4 +1,6 @@
 import { z } from "zod";
+// Shown when a super admin has revoked the password: the old one no longer signs in.
+export const PASSWORD_RESET_REQUIRED = "Your password was reset by an administrator. Use “Forgot password” to set a new one.";
 export const LOCKOUT_SECONDS = 24 * 60 * 60;
 export const MAX_PASSWORD_FAILURES = 5;
 export const RECOVERY_COOKIE = "recharge-recovery-proof";

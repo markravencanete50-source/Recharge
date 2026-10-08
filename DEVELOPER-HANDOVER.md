@@ -49,6 +49,24 @@ planned.
   so they never overlap.
 - **Native scrolling.** `Anchor` (`LiveKit`) registers sections so the phone app can scroll to them.
 
+## Access control for super admins (8 October 2026)
+
+- **Where:** Work → Management → Access control (`mobile/src/LiveAccessControl.tsx`). It's also on
+  a super admin's Home.
+- **Backend:** it uses the admin endpoints (sections `accessControl` and `accessHistory`; actions
+  `setAccess`, `block`, `unblock`, `signOut`, `revokePassword` and `deleteAccount`). The database
+  functions are `workspace_access_control_*`, and only super admins can call them. Nobody can act on
+  their own account.
+- **Revoke password:** adds a row to `private.workspace_password_revocations`, which
+  `auth_server_finish_password` checks before approving a sign-in. Email or phone recovery clears it.
+- **Block:** sets the status to `revoked`, ends sessions and sets `auth.users.banned_until`.
+- **Delete:** removes the auth user when nothing refers to it. Otherwise the account is closed:
+  "Deleted account", no access, banned, password revoked.
+- **History:** every change is logged in `workspace_access_events`.
+- **Applying it live:** migration `20261008280000_access_control.sql` removes sign-in sessions, so the
+  database tool asks for confirmation. Run `docs/APPLY-ACCESS-CONTROL.sql` in the Supabase SQL editor
+  if it isn't applied yet.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

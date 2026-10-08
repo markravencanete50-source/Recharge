@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { Sheet } from "./TeamFlows";
+import { AccessControl } from "./LiveAccessControl";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, useRequestId, useWorkFocus, Loading, StatGrid, StatTile } from "./LiveKit";
 import { ExpenseSheet, List, NoteSheet, Pills, Row, type NoteAsk } from "./LiveAccounts";
@@ -61,7 +62,7 @@ function DecisionSheet({ p, decision, onClose, onDone }: { p: Palette; decision:
   );
 }
 
-const MANAGEMENT_VIEWS = ["queue", "people", "properties", "performance", "team", "training"] as const;
+const MANAGEMENT_VIEWS = ["queue", "people", "properties", "performance", "team", "training", "access"] as const;
 type ManagementView = (typeof MANAGEMENT_VIEWS)[number];
 export function LiveManagement({ palette: p, account }: { palette: Palette; account: WorkspaceAccount }) {
   const saved = useSaved();
@@ -104,8 +105,9 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       </StatGrid>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
-      <Pills p={p} values={MANAGEMENT_VIEWS} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training" })[v]} />
+      <Pills p={p} values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", access: "Access control" })[v]} />
 
+      {view === "access" && <AccessControl palette={p} account={account} />}
       {view === "queue" && queue && <>
         <Section title="Cleaning decisions" count={queue.cleaningDecisions.length} p={p}>
           <List p={p} empty="No cleaning decisions waiting.">

@@ -124,7 +124,7 @@ export const writeFinance = async (action: FinanceAction) => (await workspaceReq
 export const readTeams = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/teams?'+new URLSearchParams(query))).json();
 export const writeTeams = async (action: TeamsAction) => (await workspaceRequest('/api/mobile/teams',action)).json();
 // Administration: people and properties (admins only).
-export const readAdmin = async (section: 'people' | 'properties') => (await workspaceRequest('/api/mobile/admin?section='+section)).json();
+export const readAdmin = async (section: 'people' | 'properties' | 'accessControl' | 'accessHistory') => (await workspaceRequest('/api/mobile/admin?section='+section)).json();
 export const writeAdmin = async (action: AdminAction) => (await workspaceRequest('/api/mobile/admin',action)).json();
 export const requestPhoneReset = async (phone: string) => (await call('/api/mobile/recovery',{action:'request',phone})).json();
 export const completePhoneReset = async (phone: string, code: string, password: string) => (await call('/api/mobile/recovery',{action:'verify',phone,code,password})).json();
