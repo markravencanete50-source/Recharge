@@ -6,6 +6,7 @@ import { JumpBackIn, QuickOverview, WelcomeHeader, type OverviewItem } from "./H
 import { HeroGlow, OpenTasksTrend, TodayRing, TodayTiles } from "./TodayAnalytics";
 import { CountUp, Entrance, MotionPress } from "./motion";
 import { StateGraphic } from "./StateGraphic";
+import { followUpsDue } from "../../lib/portfolio-overview";
 import { ShiftCard } from "./LiveShifts";
 import { ui, type Palette } from "./theme";
 import { LiveNoticeRow, LiveWorkRow, isDone, isWaitingWork, workDate } from "./LiveRows";
@@ -14,7 +15,7 @@ import { periodLabel, type AnalyticsPeriod, type AnalyticsSnapshot } from "../..
 import type { WorkspaceSection } from "../../lib/workspace-map";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { NoticeView, PropertyView } from "../../lib/workspace-view";
-import type { OperationView } from "../../lib/workflow-forms";
+import type { JourneyView, OperationView } from "../../lib/workflow-forms";
 
 const SUBTITLE: Record<WorkspaceAccount["role"], string> = {
   super_admin: "Here is what needs you across the business today.",
@@ -28,12 +29,15 @@ const SUBTITLE: Record<WorkspaceAccount["role"], string> = {
 };
 const WORK_LABEL: Partial<Record<WorkspaceAccount["role"], string>> = { cleans: "Cleans to do", cleaning_manager: "Cleans to do", ready: "Repairs open", accounts: "Open items", client: "Open requests" };
 const greeting = () => { const hour = new Date().getHours(); return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"; };
+const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 const todayLabel = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
 
-export function LiveHome({ palette: p, desktop, account, snapshot, period, properties, work, notices, loading, onNavigate }: {
+export function LiveHome({ palette: p, desktop, account, snapshot, period, properties, journeys = [], work, notices, loading, onNavigate }: {
   palette: Palette; desktop: boolean; account: WorkspaceAccount; snapshot: AnalyticsSnapshot | null; period: AnalyticsPeriod;
-  properties: PropertyView[]; work: OperationView[]; notices: NoticeView[]; loading: boolean; onNavigate: (section: WorkspaceSection) => void;
+  properties: PropertyView[]; journeys?: JourneyView[]; work: OperationView[]; notices: NoticeView[]; loading: boolean; onNavigate: (section: WorkspaceSection) => void;
 }) {
+  // Clients who asked for more time, whose check-in date has arrived (onboarding team only).
+  const followUps = account.role !== "client" && account.modules.includes("property-onboarding") ? followUpsDue(journeys, properties, londonToday()) : [];
   const tone = todayColors[p.isDark ? "dark" : "light"];
   const today = useMemo(() => snapshot ? todayPresentation(snapshot, period) : null, [snapshot, period]);
   const open = work.filter(item => !isDone(item.status));
@@ -91,6 +95,25 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
     <>
       {!desktop && <WelcomeHeader palette={p} name={account.fullName || "there"} dateLabel={todayLabel()} subtitle={SUBTITLE[account.role]} onCalendar={() => onNavigate("work")} />}
       {account.role !== "client" && <ShiftCard palette={p} account={account} />}
+      {!!followUps.length && <Entrance sessionKey={"live:home:followups"} style={{ gap: 8 }}>
+        <View style={ui.between}>
+          <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Client check-ins due</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{followUps.length} waiting</Text>
+        </View>
+        <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 6, gap: 0 }]}>
+          {followUps.slice(0, 5).map((f, i) => (
+            <MotionPress key={f.propertyId} accessibilityRole="button" accessibilityLabel={`Check in on ${f.propertyName}`} onPress={() => onNavigate("properties")}
+              style={[ui.row, { gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
+              <View style={{ width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: p.cautionWash }}><Feather name="phone-call" size={18} color={p.waiting} /></View>
+              <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+                <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "600" }}>{f.propertyName}</Text>
+                <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{f.overdueDays ? `Check-in was due ${f.overdueDays} day${f.overdueDays === 1 ? "" : "s"} ago` : "Check in today"}: the client asked for more time on their estimate{f.feedback ? ` (“${f.feedback}”)` : ""}.</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={p.muted} />
+            </MotionPress>
+          ))}
+        </View>
+      </Entrance>}
       <QuickOverview palette={p} items={items} columns={desktop ? 4 : 2} sessionKey={"live:home:overview"} onReports={() => onNavigate("analytics")} />
       <View style={{ flexDirection: desktop ? "row" : "column", gap: 20, alignItems: "stretch" }}>
         {hero}

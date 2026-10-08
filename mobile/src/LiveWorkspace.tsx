@@ -253,7 +253,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
     </>
   );
   const page = tab === "home"
-    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} work={work} notices={notices} loading={loading} onNavigate={setTab} />
+    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onRefresh={() => void refresh()} />
     : tab === "analytics" ? reportsPage

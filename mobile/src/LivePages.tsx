@@ -10,6 +10,7 @@ import { BuildingGlyph } from "./BuildingGlyph";
 import { EnquiryCard } from "./HomeOverview";
 import { HostawaySyncCard } from "./HostawaySyncCard";
 import { LiveTraining } from "./LiveTraining";
+import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
 import { LiveNoticeRow, LiveWorkRow } from "./LiveRows";
 import { Calendar } from "./WorkspaceScreens";
 import { Sheet } from "./TeamFlows";
@@ -187,6 +188,35 @@ function PropertyCard({ property, index, palette: p, onPress }: { property: Prop
   );
 }
 
+// The portfolio at a glance for the team: live, onboarding, owners, and properties per region.
+function PortfolioCard({ palette: p, summary }: { palette: Palette; summary: PortfolioSummary }) {
+  const top = summary.regions[0]?.count || 1;
+  const stats: [string, number][] = [["Properties", summary.total], ["Live", summary.live], ["Onboarding", summary.onboarding], ["Owners", summary.owners]];
+  return (
+    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 14 }]}>
+      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Portfolio</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+        {stats.map(([label, value]) => (
+          <View key={label} style={{ flexGrow: 1, flexBasis: 120, padding: 12, borderRadius: 16, backgroundColor: p.wash, gap: 2 }}>
+            <Text style={{ color: p.text, fontSize: 24, fontWeight: "700" }}>{value}</Text>
+            <Text style={[ui.small, { color: p.muted }]}>{label}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={{ gap: 8 }}>
+        <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>By region</Text>
+        {summary.regions.slice(0, 8).map(r => (
+          <View key={r.region} accessibilityLabel={`${r.region}: ${r.count}`} style={[ui.row, { gap: 10 }]}>
+            <Text numberOfLines={1} style={{ color: p.text, width: 130, fontSize: 13 }}>{r.region}</Text>
+            <View style={{ flex: 1, height: 10, borderRadius: 5, backgroundColor: p.wash, overflow: "hidden" }}><View style={{ width: `${Math.max(6, (r.count / top) * 100)}%`, height: 10, borderRadius: 5, backgroundColor: p.primary }} /></View>
+            <Text style={{ color: p.text, width: 28, textAlign: "right", fontSize: 13, fontWeight: "600" }}>{r.count}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export function LiveProperties({ palette: p, desktop, account, properties, journeys, work, invoices, period, loading, onForm, onRefresh }: {
   palette: Palette; desktop: boolean; account: WorkspaceAccount; properties: PropertyView[]; journeys: JourneyView[]; work: OperationView[]; invoices: InvoiceView[];
   period: AnalyticsPeriod; loading: boolean; onForm: (form: WorkflowForm) => void; onRefresh: () => void;
@@ -212,6 +242,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Properties"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
       {account.role === "client" && account.modules.includes("property-onboarding") && <EnquiryCard palette={p} onStart={() => onForm(newEnquiryForm())} />}
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
+      {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} summary={portfolioSummary(properties, journeys)} />}
       <View {...(Platform.OS === "web" ? { dataSet: { searchShell: "true" } } : {})} style={[ui.row, { borderRadius: 14, minHeight: 50, borderWidth: 1, borderColor: p.controlBorder, paddingHorizontal: 14, backgroundColor: p.surface, gap: 10 }]}>
         <Feather name="search" size={18} color={p.muted} />
         <TextInput accessibilityLabel="Search properties" placeholder="Search by name or area" placeholderTextColor={p.muted} value={query} onChangeText={value => { setQuery(value); setShown(24); }} autoCorrect={false} style={{ flex: 1, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular", minHeight: 48 }} />
@@ -225,7 +256,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
             </Entrance>
           ))}
         </View>
-      ) : !loading && <EmptyState palette={p} icon="home" title={query ? "No matching properties" : "No properties yet"} detail={query ? "Try another name or area." : account.role === "client" ? "Start an enquiry to begin your property journey." : "Properties appear here when they are added or synced from Hostaway."} />}
+      ) : !loading && <EmptyState palette={p} icon="home" title={query ? "No matching properties" : "No properties yet"} detail={query ? "Try another name or area." : account.role === "client" ? "Start an enquiry to begin your property journey." : "Properties appear here once they are added or onboarded."} />}
       {visible.length > shown && <SoftButton label={`Show more (${visible.length - shown} more)`} icon="arrow-right" palette={p} onPress={() => setShown(shown + 24)} />}
       <Sheet palette={p} visible={!!selected} onClose={() => { setSelected(null); setExportMessage(""); }} title={selected?.name ?? ""} subtitle={selected ? [selected.address, selected.region].filter(Boolean).join(" · ") : undefined} icon="house">
         {selected && <>

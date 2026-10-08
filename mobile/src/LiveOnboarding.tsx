@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ActivityIndicator, AppState, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
@@ -34,7 +34,9 @@ function ContractSheet({ p, contract, defaultName, onClose, onSigned }: { p: Pal
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const request = useRequestId(contract ? ["sign", contract.id, contract.version, name.trim()].join(":") : null);
-  useEffect(() => { queueMicrotask(() => { setName(defaultName); setAgree(false); setError(""); }); }, [contract, defaultName]);
+  // Reset only when a different contract opens, so a "wording has changed" message stays visible
+  // while the sheet refreshes to the new wording.
+  useEffect(() => { queueMicrotask(() => { setName(defaultName); setAgree(false); setError(""); }); }, [contract?.id, defaultName]);
   async function sign() {
     if (!contract || busy) return;
     if (name.trim().length < 2) { setError("Type your full name to sign."); return; }
@@ -88,6 +90,8 @@ export function OnboardingGate({ account, palette: p, onSignOut, children }: { a
     try {
       const next = onboardingSchema.parse((await readTeams({ section: "onboarding" })).data);
       setStatus(next);
+      // An open contract refreshes to its latest wording; it closes once signed.
+      setSigning(current => current ? next.contracts.find(c => c.id === current.id && !c.current) ?? null : current);
       if (next.courses.length) setCourses(coursesSchema.parse((await readTeams({ section: "training" })).data));
     } catch (e) {
       // The database still keeps tools closed; an older backend without onboarding lets them through.
@@ -96,6 +100,14 @@ export function OnboardingGate({ account, palette: p, onSignOut, children }: { a
     setChecked(true);
   }, [staff]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  // Check again when the app comes back to the front and every 10 minutes, so a newly published
+  // contract or required course brings the checklist back instead of leaving tools closed.
+  useEffect(() => {
+    if (!staff) return;
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") void load(); });
+    const timer = setInterval(() => void load(), 600_000);
+    return () => { subscription.remove(); clearInterval(timer); };
+  }, [staff, load]);
 
   if (!checked) return <View style={[ui.fill, { backgroundColor: p.background, alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={p.primary} accessibilityLabel="Checking your onboarding" /></View>;
   if (!staff || !status || !status.required || status.complete) return <>{children}</>;

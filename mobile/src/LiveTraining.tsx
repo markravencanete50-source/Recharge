@@ -17,7 +17,7 @@ import { StaffContracts } from "./LiveOnboarding";
 // done; management writes, edits and publishes courses and sees completions.
 const AUDIENCE_LABEL: Record<string, string> = { all: "Everyone", stays: "Stays", cleans: "Cleaners", cleaning_manager: "Cleaning managers", ready: "Ready", accounts: "Accounts", admin: "Admins", client: "Owners" };
 
-function CourseEditor({ p, course, visible, onClose, onDone }: { p: Palette; course: Course | null; visible: boolean; onClose: () => void; onDone: () => Promise<void> }) {
+function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }: { p: Palette; course: Course | null; visible: boolean; onClose: () => void; onDone: () => Promise<void>; onRequiredFailed?: (text: string) => void }) {
   const [title, setTitle] = useState("");
   const [audience, setAudience] = useState<string[]>(["all"]);
   const [summary, setSummary] = useState("");
@@ -47,19 +47,26 @@ function CourseEditor({ p, course, visible, onClose, onDone }: { p: Palette; cou
     if (title.trim().length < 2 || body.trim().length < 10 || !audience.length || !Number.isInteger(mins) || mins < 1 || mins > 600) { setError("Add a title, who it is for, the course text (at least 10 characters) and the minutes it takes."); return; }
     if (videoUrl.trim() && !/^https:\/\//.test(videoUrl.trim())) { setError("Video links must start with https://"); return; }
     setBusy(true); setError("");
+    let saved: unknown;
     try {
-      const saved = await writeTeams({
+      saved = await writeTeams({
         action: "saveCourse", requestId: request.get(), ...(course ? { courseId: course.id, version: course.version } : {}), title: title.trim(),
         audience: audience as never, ...(summary.trim() ? { summary: summary.trim() } : {}), body: body.trim(), ...(videoUrl.trim() ? { videoUrl: videoUrl.trim() } : {}), minutes: mins, published,
       });
       request.done();
-      // Required courses must be finished before a team member's tools open.
-      if (required !== (course?.required ?? false)) {
-        await writeTeams({ action: "setCourseRequired", requestId: requiredRequest.get(), courseId: (saved as { id: string }).id, required });
+    } catch (e) { setError(message(e)); setBusy(false); return; }
+    // Required courses must be finished before a team member's tools open. The course is saved
+    // by now, so a failure here closes the editor and reloads rather than saving it twice.
+    let requiredError = "";
+    if (required !== (course?.required ?? false)) {
+      try {
+        const courseId = course?.id ?? (saved as { data: { id: string } }).data.id;
+        await writeTeams({ action: "setCourseRequired", requestId: requiredRequest.get(), courseId, required });
         requiredRequest.done();
-      }
-      onClose(); await onDone();
-    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+      } catch (e) { requiredError = message(e); }
+    }
+    setBusy(false); onClose(); await onDone();
+    if (requiredError) onRequiredFailed?.("The course was saved, but “Required” could not be changed: " + requiredError);
   }
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title={course ? "Edit course" : "New course"} subtitle="Staff see published courses for their role" icon="medal">
@@ -139,7 +146,7 @@ export function LiveTraining({ palette: p, manage = false }: { palette: Palette;
         ))}
       </List>
       <CourseSheet p={p} course={open} onClose={() => setOpen(null)} onCompleted={load} />
-      {manage && <CourseEditor p={p} course={editing === "new" ? null : editing} visible={editing !== null} onClose={() => setEditing(null)} onDone={load} />}
+      {manage && <CourseEditor p={p} course={editing === "new" ? null : editing} visible={editing !== null} onClose={() => setEditing(null)} onDone={load} onRequiredFailed={setError} />}
     </Section>
   );
   // Management sees the staff contracts first: they and the required courses gate new staff.

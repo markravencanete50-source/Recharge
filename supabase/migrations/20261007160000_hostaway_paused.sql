@@ -20,6 +20,9 @@ declare
 begin
  for i in 1..array_length(fixes, 1) loop
   definition := pg_get_functiondef(fixes[i][1]::regprocedure);
-  if position(fixes[i][4] in definition) = 0 and position(fixes[i][2] in definition) > 0 then execute replace(definition, fixes[i][2], fixes[i][3]); end if;
+  if position(fixes[i][4] in definition) = 0 then
+   if position(fixes[i][2] in definition) = 0 then raise exception 'Patch anchor missing in %', fixes[i][1]; end if;
+   execute replace(definition, fixes[i][2], fixes[i][3]);
+  end if;
  end loop;
 end $$;

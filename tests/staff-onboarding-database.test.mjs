@@ -32,6 +32,10 @@ for (let i = 0; i < users.length; i++) {
   await db.query("update public.workspace_profiles set status='active',role=$2,full_name=$3 where user_id=$1", [users[i], roles[i], `Person ${i}`]);
 }
 await db.query("insert into public.workspace_module_grants(user_id,module_id) values($1,'cleaning-schedule'),($2,'property-database')", [users[CLEANER], users[STAYS]]);
+// One property the cleaner is assigned to, to check direct reads are gated too.
+await db.query("insert into public.workspace_properties(id,name,created_by,request_id) values('97000000-0000-4000-8000-0000000000aa','Gate Flat',$1,gen_random_uuid())", [users[ADMIN]]);
+await db.query("insert into public.workspace_property_assignments(property_id,user_id,assignment,granted_by) values('97000000-0000-4000-8000-0000000000aa',$1,'cleaner',$2)", [users[CLEANER], users[ADMIN]]);
+const directReads = async i => { await as(i); return (await db.query('select (select count(*) from public.workspace_properties)::int properties,(select count(*) from public.workspace_property_assignments)::int assignments')).rows[0]; };
 async function as(i) {
   await db.exec('reset role');
   await db.query("select set_config('request.jwt.claims',$1,false)", [JSON.stringify({ sub: users[i], session_id: session(i) })]);
@@ -65,6 +69,7 @@ test('a team member signs the contract for their role and finishes required trai
   // The cleaner's tools are closed; the Stays member (not in the audience) keeps theirs.
   assert.equal(await hasTool(CLEANER, 'cleaning-schedule'), false);
   assert.equal(await hasTool(STAYS, 'property-database'), true);
+  assert.deepEqual(await directReads(CLEANER), { properties: 0, assignments: 0 }, 'property rows stay closed until onboarding is done');
   await as(CLEANER);
   let mine = onboardingSchema.parse(await read('onboarding'));
   assert.deepEqual([mine.required, mine.complete, mine.contracts.length, mine.courses.length], [true, false, 1, 1]);
@@ -80,6 +85,7 @@ test('a team member signs the contract for their role and finishes required trai
   await as(CLEANER);
   await act({ action: 'completeCourse', courseId: course.id });
   assert.equal(await hasTool(CLEANER, 'cleaning-schedule'), true);
+  assert.deepEqual(await directReads(CLEANER), { properties: 1, assignments: 1 });
   await as(CLEANER);
   mine = onboardingSchema.parse(await read('onboarding'));
   assert.deepEqual([mine.complete, onboardingProgress(mine)], [true, 'Onboarding complete']);
@@ -113,6 +119,10 @@ test('new wording asks everyone to sign again only when the admin says so', asyn
   assert.equal(await hasTool(STAYS, 'property-database'), false, '"all" now includes Stays');
   assert.equal(await hasTool(ADMIN, 'property-database'), true, 'admins are never gated');
   assert.equal(await hasTool(CLIENT, 'client-dashboard'), false, 'owners keep only their own tools');
+  // "Every team member" does not include owners: they never see the staff contract.
+  await as(CLIENT);
+  const owner = onboardingSchema.parse(await read('onboarding'));
+  assert.deepEqual([owner.required, owner.complete, owner.contracts.length, owner.courses.length], [false, true, 0, 0]);
   await as(CLEANER);
   const mine = onboardingSchema.parse(await read('onboarding'));
   assert.deepEqual([mine.contracts[0].signedVersion, mine.contracts[0].current, mine.contracts[0].resignRequired], [1, false, true]);

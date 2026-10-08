@@ -10,7 +10,7 @@ export const workspaceFinance = rpcRoute({
 });
 
 export const workspaceTeams = rpcRoute({
-  readSchema: teamsReadSchema, actionSchema: teamsActionSchema, bodyLimit: 65_536, unavailable: 'Team tools are temporarily unavailable',
+  readSchema: teamsReadSchema, actionSchema: teamsActionSchema, bodyLimit: 300_000, unavailable: 'Team tools are temporarily unavailable',
   read: (client, input) => client.rpc('workspace_teams_read', { section: input.section, start_on: input.from || null, end_on: input.to || null, target_property: input.propertyId || null, target_user: input.userId || null }),
   action: 'workspace_teams_action',
 });

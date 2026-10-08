@@ -25,7 +25,9 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [unavailable, setUnavailable] = useState(false);
-  const request = useRequestId(shift ? (shift.open ? "out:" + shift.open.id : "in:" + department) : null);
+  // Keyed per shift: after a clock-out the next clock-in gets a new request, even if an earlier
+  // response was lost.
+  const request = useRequestId(shift ? (shift.open ? "out:" + shift.open.id : ["in", department, shift.today.at(-1)?.id ?? "first"].join(":")) : null);
   const load = useCallback(async () => {
     try { setShift(myShiftSchema.parse((await readTeams({ section: "shift" })).data)); setError(""); }
     catch { setUnavailable(true); }
