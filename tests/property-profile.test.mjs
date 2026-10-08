@@ -44,7 +44,9 @@ test('set-up answers never show bank or access details, even if present', () => 
 
 test('listing links: HTTPS only, for the chosen property', () => {
   const data = { properties: [{ id: 'a', listingLinks: [{ platform: 'Airbnb', url: 'https://www.airbnb.co.uk/rooms/1' }, { platform: 'Bad', url: 'http://example.com' }, { platform: 'Broken', url: 'nope' }] }, { id: 'b', listingLinks: [{ platform: 'Direct', url: 'https://example.com' }] }] };
-  assert.deepEqual(listingLinks(data, 'a'), [{ platform: 'Airbnb', url: 'https://www.airbnb.co.uk/rooms/1' }]);
+  assert.deepEqual(listingLinks(data, 'a'), [{ platform: 'Airbnb', url: 'https://www.airbnb.co.uk/rooms/1', listingId: '' }]);
+  // A listing can be just its ID (for example in the channel manager); a bad ID is dropped.
+  assert.deepEqual(listingLinks({ properties: [{ id: 'c', listingLinks: [{ platform: 'Channel manager', listingId: 'UPL-1' }, { platform: 'Vrbo', listingId: 'bad id!' }] }] }, 'c'), [{ platform: 'Channel manager', url: '', listingId: 'UPL-1' }]);
   assert.deepEqual(listingLinks(data, 'missing'), []);
   assert.deepEqual(listingLinks(null, 'a'), []);
 });

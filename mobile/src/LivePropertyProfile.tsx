@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { View } from "react-native";
+import { TextInput, View } from "react-native";
+import * as Crypto from "expo-crypto";
 import Feather from "@expo/vector-icons/Feather";
 import * as Linking from "expo-linking";
 import { Text } from "./Typography";
 import { MotionPress, Stagger } from "./motion";
 import { ui, type Palette } from "./theme";
-import { IconChip, Loading, Notice, Tag, london, message, type IconName, type Tone } from "./LiveKit";
+import { Button, IconChip, Loading, Notice, Tag, london, message, type IconName, type Tone } from "./LiveKit";
+import { LISTING_PLATFORMS } from "../../lib/portfolio-policy";
 import { workspaceRequest } from "./backend/client";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { JourneyView } from "../../lib/workflow-forms";
@@ -93,10 +95,52 @@ function Payout({ p, propertyId, own }: { p: Palette; propertyId: string; own: b
   );
 }
 
+// Stays and admins keep each property's listings up to date: the platform, the public link and the
+// listing's ID (on the platform or in the channel manager), so bookings and guest messages can be
+// matched to this property when the channel manager is connected.
+function ListingEditor({ p, propertyId, links, onClose, onSaved }: { p: Palette; propertyId: string; links: ListingLink[]; onClose: () => void; onSaved: (links: ListingLink[]) => void }) {
+  const [rows, setRows] = useState<ListingLink[]>(() => links.length ? links : [{ platform: "Airbnb", url: "", listingId: "" }]);
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const update = (i: number, change: Partial<ListingLink>) => setRows(rows.map((r, j) => j === i ? { ...r, ...change } : r));
+  async function save() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      const clean = rows.map(r => ({ platform: r.platform as (typeof LISTING_PLATFORMS)[number], url: r.url.trim(), listingId: r.listingId.trim() })).filter(r => r.url || r.listingId);
+      const response = await (await workspaceRequest("/api/mobile/portfolio", { action: "saveListingLinks", requestId: Crypto.randomUUID(), propertyId, links: clean })).json();
+      onSaved(listingLinks({ properties: [{ id: propertyId, listingLinks: response.data?.links ?? clean }] }, propertyId));
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  const input = { minHeight: 44, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.surface, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14 } as const;
+  return (
+    <View style={{ gap: 12, paddingTop: 6 }}>
+      {rows.map((r, i) => (
+        <View key={i} style={{ gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.border }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            {LISTING_PLATFORMS.map(x => <MotionPress key={x} accessibilityRole="radio" accessibilityState={{ selected: r.platform === x }} onPress={() => update(i, { platform: x })}
+              style={{ paddingHorizontal: 10, minHeight: 32, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: r.platform === x ? p.primary : p.border, backgroundColor: r.platform === x ? p.wash : p.surface }}>
+              <Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>{x}</Text></MotionPress>)}
+          </View>
+          <TextInput value={r.url} onChangeText={v => update(i, { url: v })} placeholder="Link, https://…" placeholderTextColor={p.muted} autoCapitalize="none" autoCorrect={false} keyboardType="url" accessibilityLabel={`${r.platform} link`} style={input} />
+          <TextInput value={r.listingId} onChangeText={v => update(i, { listingId: v })} placeholder="Listing ID (from the platform or channel manager)" placeholderTextColor={p.muted} autoCapitalize="none" autoCorrect={false} accessibilityLabel={`${r.platform} listing ID`} style={input} />
+          <MotionPress accessibilityRole="button" onPress={() => setRows(rows.filter((_, j) => j !== i))} style={{ alignSelf: "flex-start", minHeight: 36, justifyContent: "center" }}><Text style={{ color: p.danger, fontWeight: "600" }}>Remove</Text></MotionPress>
+        </View>
+      ))}
+      {rows.length < 12 && <MotionPress accessibilityRole="button" onPress={() => setRows([...rows, { platform: "Booking.com", url: "", listingId: "" }])} style={{ alignSelf: "flex-start", minHeight: 40, justifyContent: "center" }}><Text style={{ color: p.primary, fontWeight: "700" }}>+ Add another listing</Text></MotionPress>}
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+        <Button label={busy ? "Saving…" : "Save listings"} icon="check" primary p={p} disabled={busy} onPress={() => void save()} />
+        <Button label="Cancel" p={p} onPress={onClose} />
+      </View>
+    </View>
+  );
+}
+
 export function PropertyProfile({ palette: p, account, propertyId, journey }: { palette: Palette; account: WorkspaceAccount; propertyId: string; journey?: JourneyView }) {
   const access = profileAccess(account);
   const [owners, setOwners] = useState<Owner[] | null>(null), [links, setLinks] = useState<ListingLink[] | null>(null), [stays, setStays] = useState<StayLine[] | null>(null);
-  const [failed, setFailed] = useState<string[]>([]), [linkError, setLinkError] = useState("");
+  const [failed, setFailed] = useState<string[]>([]), [linkError, setLinkError] = useState(""), [editing, setEditing] = useState(false);
+  const canEditListings = (account.role === "stays" || account.role === "admin" || account.role === "super_admin") && account.modules.includes("property-database");
   useEffect(() => {
     let active = true;
     queueMicrotask(() => { if (active) { setOwners(null); setLinks(null); setStays(null); setFailed([]); } });
@@ -124,12 +168,15 @@ export function PropertyProfile({ palette: p, account, propertyId, journey }: { 
     <Panel key="listings" p={p} icon="globe" tone="stays" title="Listings" detail="Where guests book this property.">
       {links === null ? (failed.includes("listing links") ? <Text style={[ui.small, { color: p.muted }]}>Listing links could not be loaded.</Text> : <Loading p={p} rows={1} />)
         : links.length ? links.map((l, i) => (
-          <MotionPress key={l.url} accessibilityRole="link" onPress={() => void Linking.openURL(l.url).catch(() => setLinkError("The listing could not be opened."))} style={[ui.between, { gap: 12, minHeight: 44, paddingTop: i ? 10 : 0, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
-            <View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: p.text, fontWeight: "600" }}>{l.platform}</Text><Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{new URL(l.url).host}</Text></View>
-            <Feather name="external-link" size={17} color={p.primary} />
+          <MotionPress key={l.platform + l.url + l.listingId + i} accessibilityRole={l.url ? "link" : "text"} disabled={!l.url} onPress={() => void Linking.openURL(l.url).catch(() => setLinkError("The listing could not be opened."))} style={[ui.between, { gap: 12, minHeight: 44, paddingTop: i ? 10 : 0, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
+            <View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: p.text, fontWeight: "600" }}>{l.platform}</Text><Text selectable numberOfLines={1} style={[ui.small, { color: p.muted }]}>{[l.url ? new URL(l.url).host : "", l.listingId ? "ID " + l.listingId : ""].filter(Boolean).join(" · ")}</Text></View>
+            {!!l.url && <Feather name="external-link" size={17} color={p.primary} />}
           </MotionPress>
-        )) : <Text style={[ui.small, { color: p.muted }]}>No live listings recorded yet. They are added when the property goes live.</Text>}
+        )) : <Text style={[ui.small, { color: p.muted }]}>No listings recorded yet.{canEditListings ? " Add them so bookings and messages land on this property once the channel manager is connected." : ""}</Text>}
       {!!linkError && <Notice text={linkError} p={p} tone="bad" />}
+      {canEditListings && links !== null && (editing
+        ? <ListingEditor p={p} propertyId={propertyId} links={links} onClose={() => setEditing(false)} onSaved={saved => { setLinks(saved); setEditing(false); }} />
+        : <MotionPress accessibilityRole="button" onPress={() => setEditing(true)} style={{ alignSelf: "flex-start", minHeight: 40, justifyContent: "center" }}><Text style={{ color: p.primary, fontWeight: "700" }}>{links.length ? "Edit listings" : "Add listings"}</Text></MotionPress>)}
     </Panel>);
   if (access.stays) panels.push(
     <Panel key="stays" p={p} icon="calendar" tone="stays" title="Stays" detail="Guests staying now, coming up, and recently.">

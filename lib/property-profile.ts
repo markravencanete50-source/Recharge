@@ -23,16 +23,19 @@ export function ownerContacts(value: unknown) {
 export const ownersSchema = z.object({ owners: z.array(z.object({ name: z.string(), email: z.string() })) });
 export type Owner = z.infer<typeof ownersSchema>['owners'][number];
 
-const linkSchema = z.object({ platform: z.string().max(80), url: z.string().url() });
-export type ListingLink = z.infer<typeof linkSchema>;
-// Live listing links from the portfolio read, HTTPS only.
+const linkSchema = z.object({ platform: z.string().max(80), url: z.string().optional(), listingId: z.string().max(100).optional() });
+export type ListingLink = { platform: string; url: string; listingId: string };
+// The property's listings from the portfolio read: a platform with an HTTPS link, its listing ID, or both.
 export function listingLinks(portfolio: unknown, propertyId: string): ListingLink[] {
   const properties = z.object({ properties: z.array(z.object({ id: z.string(), listingLinks: z.unknown() }).passthrough()) }).safeParse(portfolio);
   const links = properties.success ? properties.data.properties.find(p => p.id === propertyId)?.listingLinks : undefined;
   return (Array.isArray(links) ? links : []).flatMap(link => {
     const parsed = linkSchema.safeParse(link);
     if (!parsed.success) return [];
-    try { return new URL(parsed.data.url).protocol === 'https:' ? [parsed.data] : []; } catch { return []; }
+    let url = '';
+    try { url = parsed.data.url && new URL(parsed.data.url).protocol === 'https:' ? parsed.data.url : ''; } catch { url = ''; }
+    const listingId = /^[A-Za-z0-9._:-]{1,100}$/.test(parsed.data.listingId ?? '') ? parsed.data.listingId! : '';
+    return url || listingId ? [{ platform: parsed.data.platform, url, listingId }] : [];
   });
 }
 
