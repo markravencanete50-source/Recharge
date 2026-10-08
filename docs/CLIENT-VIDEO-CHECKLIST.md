@@ -6,7 +6,7 @@ Property Onboarding, Remainder of Stays), checked against the live app code and 
 
 Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outside service · ❌ not built
 
-**Totals (76 asks):** ✅ 19 · 🟡 39 · ⏸ 8 · ❌ 10
+**Totals (76 asks):** ✅ 23 · 🟡 35 · ⏸ 8 · ❌ 10
 
 ## 1. Communication Centre
 
@@ -31,9 +31,9 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 
 | # | Ask | Status | What's there / what's missing |
 |---|---|---|---|
-| D1 | Call it "Property Management Database" | 🟡 | The tool has that name, but the tab and page still say "Properties". |
+| D1 | Call it "Property Management Database" | ✅ | The page and the tool carry the name. The bottom-bar tab stays "Properties" to fit. |
 | D2 | Clear the old properties; re-onboard everything through the new process | ✅ | Old Hostaway properties archived and cleared. Admins can still add a property directly, bypassing onboarding. |
-| D3 | All of a property's information in one place | 🟡 | Shows basics, onboarding progress, access instructions and fee. Not shown: owner contact details, the onboarding form answers, guests/stays, listing links, payout details. Most of it is already stored. |
+| D3 | All of a property's information in one place | ✅ | One page: owner (name, email), listings, stays (now, upcoming, recent), the owner's set-up answers, payout details (on request, account number masked), access and logins, onboarding, work and invoices. Each part only shows to people allowed to see it. Guest names aren't stored yet; they come with the channel manager. |
 | D4 | See what stage every property is at | 🟡 | Each property has a stage tracker. No list or pipeline of all properties by stage. |
 | D5 | Client portfolio: number of clients, properties per client, portfolio size | 🟡 | Totals shown (properties, live, onboarding, owners). No per-client breakdown, although the database already works it out. |
 | D6 | Take the enquiry/onboarding strike rate out of this report | ✅ | Removed. (It isn't shown anywhere else yet.) |
@@ -58,16 +58,16 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | O11 | Sign the management agreement electronically, stored both sides | ✅ | Typed-name signature with consent and agreement version. No PDF copy. |
 | O12 | Onboarding form: access information | ✅ | Stored privately; staff see it under "Access and logins". |
 | O13 | Recharge mailbox choice (open and photograph post, or leave it safe); cleaners' post photos go to the client's mailbox | 🟡 | Choice saved; cleaners log post with a note and it shows in the owner's Mailbox. No post photos yet (needs Cloudinary and a mailbox photo step). |
-| O14 | Ready-team questions for getting the property ready to go live | 🟡 | Questions asked and saved, but no screen shows the answers to Ready. |
+| O14 | Ready-team questions for getting the property ready to go live | ✅ | Answers show on the property page under "Getting ready to go live" for the team, Ready included. |
 | O15 | Needs a licensing compliance report → licensing ticket in Stays | ✅ | |
 | O16 | Has a garden → Ready ticket for regular garden maintenance | ✅ | Creates a set-up ticket; doesn't create a recurring garden plan. |
-| O17 | Warranty and repair contacts → "contact this person first" on repairs | 🟡 | Captured, and warranty repairs need proof the provider was contacted. Repair screens don't show who to contact. |
+| O17 | Warranty and repair contacts → "contact this person first" on repairs | 🟡 | Captured and shown on the property page; warranty repairs need proof the provider was contacted. The repair screens themselves don't show who to contact yet. |
 | O18 | Auto-permission for repairs up to £X | ✅ | Under the limit goes straight ahead; over it goes to the owner. |
 | O19 | "Furnish it for me" → furnishing quote ticket for Ready; otherwise self-furnish | ✅ | Self-furnishers get the furnishing calculator. |
 | O20 | Submit the form with permissions and evidence | 🟡 | Permissions checked. No way to attach documents or photos. |
 | O21 | Once signed → Accounts ticket to send the onboarding invoice | ✅ | Sending itself is manual until Xero/email are connected. |
 | O22 | Invoice marked settled → ticked on client and team side | ✅ | The property page lists each invoice with a "Settled" tick for the client and the team. |
-| O23 | Access dates → Ready "new property inspection" ticket | 🟡 | Ticket created automatically; the access date isn't shown on it. |
+| O23 | Access dates → Ready "new property inspection" ticket | ✅ | Ticket created automatically; the first access date shows on the property page. |
 | O24 | Ready books the inspection and fills in a detailed report | 🟡 | Booking and the report now open straight from the inspection ticket. The report is one free-text box (no checklist or photos). |
 | O25 | Ready notified straight away when something is needed | 🟡 | In-app only, and only staff assigned to that property. New enquiries aren't auto-assigned to Ready. |
 | O26 | Whole onboarding automated, client always updated | 🟡 | Stages, tickets and in-app notices are automatic. Emails and push not yet going out; some steps are manual. |
@@ -107,8 +107,8 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 ## Can be built now, no keys needed
 
 - C5/C6: departments and fixed shift windows per person.
-- D1, D3, D4, D5, D7, D8: rename the tab, full property sheet, stage pipeline, per-client view, Scottish region list and map, portfolio stats.
-- O5, O6, O7, O9, O10, O14, O17, O22, O23, O24, O25: interactive estimate, explainer and FAQ, questions, answers shown to Ready, repair contacts, client invoice tick, inspection checklist, auto-assignment.
+- D4, D5, D7, D8: stage pipeline, per-client view, Scottish region list and map, portfolio stats. (D1 and D3 done.)
+- O5, O6, O7, O9, O10, O17, O24, O25: interactive estimate, explainer and FAQ, questions, repair contacts on repair screens, inspection checklist, auto-assignment.
 - S2–S7, S11, S13, S14, S16, S18, S19, S22, S24, S26, S27: per-review tagging, daily sign-off, licensing stages, direct-booking "no" outcome, repair types, urgent flag, notifications, running cleaner invoice, purchase fixes.
 - Bug fixes: done (OTA logins panel, client invoices, inspection ticket steps, Ready's purchase delivery ticket).
 

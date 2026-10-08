@@ -210,7 +210,7 @@ export const MODULES = [
     id: "property-database",
     stage: "01",
     name: "Property Management Database",
-    shortName: "Management properties",
+    shortName: "Property database",
     description:
       "Keep every managed property record, key detail and operational reference in one place.",
     audience: "Internal team",

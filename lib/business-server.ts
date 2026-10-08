@@ -1,3 +1,4 @@
+import { ownerContacts } from "./property-profile";
 import { NextResponse } from "next/server";
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { verifiedWorkspaceUser, workspaceSupabase } from "./supabase-server";
@@ -86,7 +87,7 @@ export async function businessWrite(request: Request, native = false) {
   } catch { return businessResponse({ error: "The workspace connection is temporarily unavailable" }, 503); }
 }
 export async function scopedPropertyDetails(client: SupabaseClient, input: unknown) {
-  const parsed = z.object({ propertyId: z.string().uuid(), section: z.enum(["access", "ota", "finance"]) }).strict().safeParse(input);
+  const parsed = z.object({ propertyId: z.string().uuid(), section: z.enum(["access", "ota", "finance", "owner"]) }).strict().safeParse(input);
   if (!parsed.success) return businessResponse({ error: "Check the property details" }, 400);
   const result = await client.rpc("workspace_property_details", { target_property: parsed.data.propertyId, section: parsed.data.section });
   if (result.error) return databaseFailure(result.error);
@@ -94,6 +95,7 @@ export async function scopedPropertyDetails(client: SupabaseClient, input: unkno
   // Keep the HTTP projection safe while a database migration is awaiting installation.
   const exposed = parsed.data.section === 'access' ? { accessInstructions: data.accessInstructions || '' }
     : parsed.data.section === 'ota' ? { otaInstructions: data.otaInstructions || '' }
+    : parsed.data.section === 'owner' ? { owners: ownerContacts(data.owners) }
     : { managementFeeBps: data.managementFeeBps ?? null, paymentNotes: data.paymentNotes || '' };
   return businessResponse({ data: exposed });
 }

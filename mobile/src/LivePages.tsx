@@ -11,6 +11,7 @@ import { EnquiryCard } from "./HomeOverview";
 import { HostawaySyncCard } from "./HostawaySyncCard";
 import { LiveTraining } from "./LiveTraining";
 import { PropertyAccess, ToolDirectory } from "./LiveTools";
+import { PropertyProfile } from "./LivePropertyProfile";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
 import { formatCount, formatMoney } from "../../lib/format";
@@ -238,7 +239,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   const columns = desktop ? 3 : 1;
   return (
     <>
-      <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Properties"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
+      <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Property Management Database"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
       {account.role === "client" && account.modules.includes("property-onboarding") && <EnquiryCard palette={p} onStart={() => onForm(newEnquiryForm())} />}
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
       {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} summary={portfolioSummary(properties, journeys)} />}
@@ -263,9 +264,11 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
             <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: selected.status === "active" ? p.successWash : p.cautionWash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.status === "active" ? "Live" : readableStage(selected.status)}</Text></View>
             {!!selected.bedrooms && <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: p.wash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.bedrooms} {selected.bedrooms === 1 ? "bedroom" : "bedrooms"}</Text></View>}
           </View>
-          {journey && <JourneyDetails j={journey} p={p} account={account} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
-          {createOperationForms(account, selected.id).map(f => <SoftButton key={f.key} label={f.title} icon="plus" palette={p} onPress={() => { setSelected(null); onForm(f); }} />)}
+          {journey && selected.status !== "active" && <JourneyDetails j={journey} p={p} account={account} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
+          <PropertyProfile palette={p} account={account} propertyId={selected.id} journey={journey} />
           <PropertyAccess palette={p} account={account} propertyId={selected.id} />
+          {journey && selected.status === "active" && <JourneyDetails j={journey} p={p} account={account} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
+          {createOperationForms(account, selected.id).map(f => <SoftButton key={f.key} label={f.title} icon="plus" palette={p} onPress={() => { setSelected(null); onForm(f); }} />)}
           {!!propertyWork.length && <View style={{ gap: 4 }}>
             <Text style={{ color: p.text, fontWeight: "700" }}>Work at this property · {propertyWork.length}</Text>
             {/* Open items first; each opens with every step available to you. */}
