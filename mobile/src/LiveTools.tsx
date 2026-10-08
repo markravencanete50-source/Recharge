@@ -171,11 +171,14 @@ function OtaAccountsList({ p, value }: { p: Palette; value: unknown }) {
   );
 }
 
+// Ready read the owner's access instructions for the properties they look after (repairs,
+// inspections or the Ready schedule); not logins or finance.
+export const readyAccess = (account: WorkspaceAccount) => account.role === "ready" && ["maintenance-reporting", "new-property-inspection-board", "ready-schedule"].some(m => account.modules.includes(m as ModuleId));
 // Staff with the property database or OTA logins tools: entry details and platform logins.
 export function PropertyAccess({ palette: p, account, propertyId }: { palette: Palette; account: WorkspaceAccount; propertyId: string }) {
   // Entry instructions, platform logins and finance are separate sections, each with its own permission.
   const sections = [
-    ...(account.modules.includes("property-database") ? ["access" as const] : []),
+    ...(account.modules.includes("property-database") || readyAccess(account) ? ["access" as const] : []),
     ...(account.modules.includes("ota-logins") && account.role !== "cleaning_manager" ? ["ota" as const] : []),
     ...(account.modules.includes("owner-statements") ? ["finance" as const] : []),
   ];

@@ -16,6 +16,8 @@ export type RpcRoute<R extends z.ZodTypeAny, A extends z.ZodTypeAny> = {
   // action to the database as usual.
   handle?: (context: RpcContext, input: z.infer<A>) => Promise<Response> | null;
   action: string;
+  // The database function for an action, when some actions go to another one.
+  actionFor?: (input: z.infer<A>) => string;
 };
 export type RpcContext = { request: Request; client: SupabaseClient; account: { userId: string; role: string } };
 
@@ -45,7 +47,7 @@ export function rpcRoute<R extends z.ZodTypeAny, A extends z.ZodTypeAny>(spec: R
       if (handled) return await handled;
       const prepared = spec.prepare ? spec.prepare(input.data) : { input: input.data };
       if ('error' in prepared) return businessResponse({ error: prepared.error }, 400);
-      const result = await session.client.rpc(spec.action, { input: prepared.input });
+      const result = await session.client.rpc(spec.actionFor?.(input.data) ?? spec.action, { input: prepared.input });
       return result.error ? databaseFailure(result.error) : businessResponse({ data: result.data, ok: true });
     } catch { return businessResponse({ error: spec.unavailable }, 503); }
   };

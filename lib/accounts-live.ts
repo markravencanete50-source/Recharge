@@ -6,12 +6,13 @@ import { z } from "zod";
 const minor = z.number().int();
 const nullableMinor = minor.nullable();
 
-export const EXPENSE_STATUSES = ["to_approve", "queried", "approved", "rejected"] as const;
+// A draft comes from a completed repair: Accounts add the supplier's invoice details, then send it for approval.
+export const EXPENSE_STATUSES = ["draft", "to_approve", "queried", "approved", "rejected"] as const;
 export const EXPENSE_CATEGORIES = ["maintenance", "property_setup", "cleaning_supplies", "utilities", "furnishing", "other"] as const;
 export const EVIDENCE_KINDS = ["invoice", "photo", "quote", "report"] as const;
 
 export const overviewSchema = z.object({
-  toApproveCount: z.number(), toApproveMinor: minor, queriedCount: z.number(), queuedForXero: z.number(), overLimitCount: z.number(),
+  toApproveCount: z.number(), toApproveMinor: minor, queriedCount: z.number(), queuedForXero: z.number(), overLimitCount: z.number(), draftCount: z.number().default(0),
   statements: z.object({ draft: z.number(), issued: z.number(), paid: z.number() }), unsettledPayouts: z.number(), missingDetails: z.number(),
 });
 
@@ -27,6 +28,12 @@ export const expenseSchema = z.object({
 });
 export const expensesSchema = z.array(expenseSchema);
 export type Expense = z.infer<typeof expenseSchema>;
+// Finished jobs an expense can be linked to (the "jobs" read): completed repairs and delivered purchases.
+export const jobsSchema = z.array(z.object({
+  workId: z.string().uuid(), kind: z.enum(["maintenance", "purchase"]), title: z.string(), detail: z.string(), phase: z.string().nullable(),
+  supplier: z.string().nullable(), costMinor: nullableMinor, doneOn: z.string(), photoCount: z.number(),
+}));
+export type Job = z.infer<typeof jobsSchema>[number];
 
 export const PAYOUT_STATES = ["matched", "agreed", "different", "missing", "no_reference", "no_expected_amount"] as const;
 export const payoutRowSchema = z.object({
@@ -67,12 +74,13 @@ export const FINANCE_ROLES = ["accounts", "admin", "super_admin"];
 export const isFinanceRole = (role: string) => FINANCE_ROLES.includes(role);
 const management = (role: string) => role === "admin" || role === "super_admin";
 
-export type ExpenseMove = "approve" | "query" | "resolve" | "reject" | "evidence";
+export type ExpenseMove = "approve" | "query" | "resolve" | "reject" | "evidence" | "submit" | "link";
 export function expenseMoves(role: string, expense: Pick<Expense, "status" | "amountMinor" | "hasInvoice" | "hasProof">, limitMinor: number | null): { moves: ExpenseMove[]; blocked?: string } {
   if (!isFinanceRole(role)) return { moves: [] };
-  if (expense.status === "queried") return { moves: ["resolve", "reject", "evidence"] };
+  if (expense.status === "draft") return { moves: ["submit", "evidence", "link", "reject"], blocked: "A draft from a completed repair. Add the supplier’s invoice details, then send it for approval." };
+  if (expense.status === "queried") return { moves: ["resolve", "reject", "evidence", "link"] };
   if (expense.status !== "to_approve") return { moves: [] };
-  const moves: ExpenseMove[] = ["query", "reject", "evidence"];
+  const moves: ExpenseMove[] = ["query", "reject", "evidence", "link"];
   if (!expense.hasInvoice || !expense.hasProof) return { moves, blocked: "Attach the invoice and proof of the work before approving." };
   if (role === "accounts" && limitMinor !== null && expense.amountMinor > limitMinor) return { moves, blocked: "Above the approval limit. Management approves this one." };
   return { moves: ["approve", ...moves] };

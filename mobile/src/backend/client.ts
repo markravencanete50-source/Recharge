@@ -138,10 +138,11 @@ export const readAdmin = async (section: 'people' | 'properties' | 'accessContro
 export const writeAdmin = async (action: AdminAction) => (await workspaceRequest('/api/mobile/admin',action)).json();
 export const requestPhoneReset = async (phone: string) => (await call('/api/mobile/recovery',{action:'request',phone})).json();
 export const completePhoneReset = async (phone: string, code: string, password: string) => (await call('/api/mobile/recovery',{action:'verify',phone,code,password})).json();
-export type PhotoPurpose = 'cleaning'|'mailbox'|'delivery'|'licence'|'maintenance'|'inspection'|'setup';
-export async function uploadWorkPhoto(input: {requestId: string;workId: string;purpose: PhotoPurpose}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
+export type PhotoPurpose = 'cleaning'|'mailbox'|'delivery'|'licence'|'maintenance'|'inspection'|'setup'|'expense';
+// A photo goes on a work item, or (Accounts' invoice paperwork) on an expense.
+export async function uploadWorkPhoto(input: {requestId: string;workId?: string;expenseId?: string;purpose: PhotoPurpose}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
   const form = new FormData();
-  form.append('requestId', input.requestId); form.append('workId', input.workId); form.append('purpose', input.purpose);
+  form.append('requestId', input.requestId); form.append(input.expenseId ? 'expenseId' : 'workId', input.expenseId ?? input.workId ?? ''); form.append('purpose', input.purpose);
   // React Native's multipart transport accepts a local file descriptor; a browser needs the file's bytes.
   // The server verifies bytes, size and permission either way.
   if (Platform.OS === 'web') form.append('photo', new File([await (await fetch(photo.uri)).blob()], photo.name, { type: photo.type }));

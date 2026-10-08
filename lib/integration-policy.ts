@@ -20,8 +20,10 @@ export function photoFormat(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
   if (String.fromCharCode(...bytes.slice(0,4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8,12)) === 'WEBP') return 'webp';
   return null;
 }
-export const MEDIA_PURPOSES = ['cleaning','mailbox','delivery','licence','maintenance','inspection','setup'] as const;
-export const mediaInputSchema = z.object({ requestId:z.string().uuid(),workId:z.string().uuid(),purpose:z.enum(MEDIA_PURPOSES) }).strict();
+export const MEDIA_PURPOSES = ['cleaning','mailbox','delivery','licence','maintenance','inspection','setup','expense'] as const;
+// A photo belongs to a work item, or (for Accounts' invoice paperwork) to an expense.
+export const mediaInputSchema = z.object({ requestId:z.string().uuid(),workId:z.string().uuid().optional(),expenseId:z.string().uuid().optional(),purpose:z.enum(MEDIA_PURPOSES) }).strict()
+  .refine(v => Boolean(v.workId) !== Boolean(v.expenseId) && (!v.expenseId || v.purpose === 'expense'), 'Choose a work item or an expense');
 export const integrationActionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('dispatchNotifications')}).strict(),
   z.object({action:z.literal('syncHostaway')}).strict(),

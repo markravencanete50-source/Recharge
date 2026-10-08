@@ -10,12 +10,14 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading } from "./LiveKit";
 import { formatMoney } from "../../lib/format";
-import { readOperations, readTeams, workspaceRequest, writeOperation, writeTeams, writeWorkspace } from "./backend/client";
+import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeOperation, writeTeams, writeWorkspace } from "./backend/client";
+import { PhotoPicker, PhotoStrip } from "./Photos";
+import { PropertyAccess } from "./LiveTools";
 import { REPAIR_GUIDES, SAFETY_STOP, repairTypeLabel, troubleshootingNote, type RepairType } from "../../lib/repair-guides";
 import { profileAccess, reservationsSchema, stayLines, type StayLine } from "../../lib/property-profile";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import { scheduleSchema } from "../../lib/cleans-live";
-import { canReportRepair, canReviseQuote, poundsToMinor, repairStep, REPAIR_STAGES, routinePlanSchema, visitMoves, type RepairStep } from "../../lib/repairs-live";
+import { canReportRepair, canReviseQuote, poundsToMinor, repairStage, repairStep, REPAIR_STAGES, routinePlanSchema, visitMoves, type RepairStep } from "../../lib/repairs-live";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Live repairs: the maintenance pipeline from report to completed repair, and
@@ -31,11 +33,12 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   const [repairs, setRepairs] = useState<Operation[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [plans, setPlans] = useState<z.infer<typeof routinePlanSchema>>([]);
-  const [stage, setStage] = useState<string>("open");
+  const focus = useWorkFocus();
+  // Ready Home opens this page on one stage of the pipeline.
+  const [stage, setStage] = useState<string>(() => focus?.sub && ["action", "open", ...REPAIR_STAGES.map(s => s.phase)].includes(focus.sub) ? focus.sub : "open");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
-  const focus = useWorkFocus();
   const [reporting, setReporting] = useState(() => focus?.open === "report-repair" && canReportRepair(account.role));
   const [planning, setPlanning] = useState(() => focus?.open === "new-routine" && ["ready", "stays", "admin", "super_admin"].includes(account.role));
   const [visitId, setVisitId] = useState<string | null>(null);
@@ -57,9 +60,22 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
 
   const nameOf = useCallback((id: string) => properties.find(x => x.id === id)?.name ?? "Property", [properties]);
-  const counts = useMemo(() => Object.fromEntries(REPAIR_STAGES.map(s => [s.phase, repairs.filter(r => r.data.phase === s.phase).length])), [repairs]);
+  const counts = useMemo(() => Object.fromEntries(REPAIR_STAGES.map(s => [s.phase, repairs.filter(r => repairStage(r.data) === s.phase).length])), [repairs]);
   const mineToAct = repairs.filter(r => repairStep(account.role, String(r.data.phase)));
-  const shown = stage === "open" ? repairs.filter(r => r.data.phase !== "completed") : stage === "action" ? mineToAct : repairs.filter(r => r.data.phase === stage);
+  const shown = stage === "open" ? repairs.filter(r => r.data.phase !== "completed") : stage === "action" ? mineToAct : repairs.filter(r => repairStage(r.data) === stage);
+  // Visits are created a batch at a time; keep asking until none are left.
+  async function createVisits() {
+    setError("");
+    try {
+      let created = 0;
+      for (let round = 0; round < 20; round++) {
+        const result = z.object({ data: z.object({ created: z.array(z.string()), remaining: z.number() }) }).parse(await writeTeams({ action: "generateRoutineVisits", requestId: Crypto.randomUUID(), period: today.slice(0, 7) }));
+        created += result.data.created.length;
+        if (result.data.remaining <= 0) break;
+      }
+      await saved(load, created ? `${created} visit${created === 1 ? "" : "s"} created` : "Visits are up to date")();
+    } catch (e) { setError(message(e)); }
+  }
   const open = repairs.find(r => r.workId === openId);
   const visit = visits.find(v => v.workId === visitId);
 
@@ -86,13 +102,13 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
           ))}
         </ScrollView>
         {shown.length ? shown.map(r => {
-          const phase = String(r.data.phase), step = repairStep(account.role, phase), label = REPAIR_STAGES.find(s => s.phase === phase)?.label ?? phase;
+          const phase = String(r.data.phase), step = repairStep(account.role, phase), stageNow = repairStage(r.data), label = REPAIR_STAGES.find(s => s.phase === stageNow)?.label ?? phase;
           return (
             <MotionPress key={r.workId} accessibilityRole="button" accessibilityLabel={`${nameOf(r.propertyId)}, ${label}`} onPress={() => setOpenId(r.workId)} style={[ui.card, { gap: 8, backgroundColor: p.surface, borderColor: step ? p.primary : p.border }]}>
               <View style={ui.between}><Text numberOfLines={1} style={{ color: p.text, fontWeight: "700", flex: 1 }}>{nameOf(r.propertyId)}</Text><Feather name="chevron-right" size={18} color={p.muted} /></View>
               <Text numberOfLines={2} style={[ui.small, { color: p.text }]}>{typeof r.data.issue === "string" ? r.data.issue : r.title}</Text>
               <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-                <Tag label={label} tone={phase === "completed" ? "good" : step ? "wait" : "plain"} p={p} />
+                <Tag label={label} tone={stageNow === "paid" || phase === "completed" ? "good" : step ? "wait" : "plain"} p={p} />
                 {r.data.urgent === true && <Tag label="Urgent" tone="bad" p={p} />}
                 {r.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
                 {typeof r.data.repairType === "string" && <Tag label={repairTypeLabel(r.data.repairType)} tone="plain" p={p} />}
@@ -108,20 +124,19 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
         <Section title="Routine visits" p={p}>
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <Button label="New routine" icon="repeat" p={p} onPress={() => setPlanning(true)} />
-            <Button label="Create this month's visits" icon="calendar" p={p} disabled={!plans.length}
-              onPress={() => void writeTeams({ action: "generateRoutineVisits", requestId: Crypto.randomUUID(), period: today.slice(0, 7) }).then(saved(load, "Visits created")).catch(e => setError(message(e)))} />
+            <Button label="Create this month's visits" icon="calendar" p={p} disabled={!plans.length} onPress={() => void createVisits()} />
           </View>
           {visits.filter(v => v.status !== "completed").length ? visits.filter(v => v.status !== "completed").map(v => (
             <MotionPress key={v.workId} accessibilityRole="button" onPress={() => setVisitId(v.workId)} style={[ui.card, ui.between, { gap: 10, backgroundColor: p.surface, borderColor: p.border }]}>
               <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "700" }}>{v.title}</Text><Text style={[ui.small, { color: p.muted }]}>{v.propertyName} · {v.dueOn ? dayLabel(v.dueOn) : "No date"}{v.assigneeName ? ` · ${v.assigneeName}` : ""}</Text></View>
               <Tag label={v.status === "in_review" ? "Awaiting sign-off" : v.status === "in_progress" ? "In progress" : v.status === "approved" ? "Signed off" : "To do"} tone={v.status === "in_review" ? "wait" : "plain"} p={p} />
             </MotionPress>
-          )) : !loading && <Notice text={plans.length ? "No open visits. Create this month's visits from your routines." : "No routines yet. Add bins, garden or safety checks as a routine."} p={p} />}
+          )) : !loading && <Notice text={plans.length ? "No open visits. Visits are created automatically for this month and next; create them now if one is missing." : "No routines yet. Add bins, garden or safety checks as a routine."} p={p} />}
           {plans.map(plan => <Text key={plan.id} style={[ui.small, { color: p.muted }]}>{plan.propertyName}: {plan.title} · {plan.frequency} on day {plan.dayOfMonth}{plan.active ? "" : " · paused"}</Text>)}
         </Section>
       )}
 
-      <RepairSheet p={p} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today} onClose={() => setOpenId(null)} onDone={saved(async () => { setOpenId(null); await load(); })} />
+      <RepairSheet p={p} account={account} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today} onClose={() => setOpenId(null)} onDone={saved(async () => { setOpenId(null); await load(); })} />
       <ReportSheet p={p} account={account} visible={reporting} properties={properties} onClose={() => setReporting(false)} onDone={saved(async () => { setReporting(false); await load(); })} />
       <PlanSheet p={p} visible={planning} properties={properties} account={account} onClose={() => setPlanning(false)} onDone={saved(async () => { setPlanning(false); await load(); })} />
       <VisitSheet p={p} role={account.role} visit={visit} plans={plans} onClose={() => setVisitId(null)} onDone={saved(async () => { setVisitId(null); await load(); })} />
@@ -134,8 +149,29 @@ function Detail({ label, value, p }: { label: string; value: unknown; p: Palette
   return <View style={{ gap: 2 }}><Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text><Text style={{ color: p.text, fontSize: 14 }}>{value}</Text></View>;
 }
 
-function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: { p: Palette; role: string; repair?: Operation; propertyName: string; today: string; onClose: () => void; onDone: () => Promise<void> }) {
+// Before and after photos on a repair. "After" photos are the ones sent with the completed repair.
+function RepairPhotos({ p, repair }: { p: Palette; repair: Operation }) {
+  const [ids, setIds] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    readWorkMedia(repair.workId).then(r => { const parsed = z.array(z.object({ id: z.string().uuid(), purpose: z.string() })).safeParse(r.data); if (active && parsed.success) setIds(parsed.data.filter(x => x.purpose === "maintenance").map(x => x.id)); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [repair.workId, repair.version]);
+  const after = Array.isArray(repair.data.photoIds) ? repair.data.photoIds.filter((x): x is string => typeof x === "string") : [];
+  const before = ids.filter(id => !after.includes(id));
+  if (!before.length && !after.length) return null;
+  return (
+    <View style={{ gap: 8 }}>
+      {!!before.length && <><Text style={[ui.small, { color: p.muted, fontWeight: "700" }]}>Before</Text><PhotoStrip p={p} ids={before} /></>}
+      {!!after.length && <><Text style={[ui.small, { color: p.muted, fontWeight: "700" }]}>After</Text><PhotoStrip p={p} ids={after} /></>}
+    </View>
+  );
+}
+
+function RepairSheet({ p, account, role, repair, propertyName, today, onClose, onDone }: { p: Palette; account: WorkspaceAccount; role: string; repair?: Operation; propertyName: string; today: string; onClose: () => void; onDone: () => Promise<void> }) {
   const phase = String(repair?.data.phase ?? ""), step = repair ? repairStep(role, phase) : null;
+  const team = ["ready", "stays", "admin", "super_admin"].includes(role);
+  const [afterIds, setAfterIds] = useState<string[]>([]), [uploading, setUploading] = useState(false), [addingBefore, setAddingBefore] = useState(false);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [consent, setConsent] = useState(false);
   const [ticked, setTicked] = useState<string[]>([]);
@@ -147,7 +183,7 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
   const quoteRequest = useRequestId(repair && quoting ? ["quote", repair.workId, repair.version, fields.quote ?? "", fields.quoteReason ?? ""].join(":") : null);
   const set = (k: string) => (v: string) => setFields(f => ({ ...f, [k]: v }));
   const f = (k: string) => fields[k] ?? "";
-  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(repair?.data.urgent === true); setError(""); setQuoting(false); } }); return () => { active = false; }; }, [repair, today]);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(repair?.data.urgent === true); setError(""); setQuoting(false); setAfterIds([]); setAddingBefore(false); setUploading(false); } }); return () => { active = false; }; }, [repair, today]);
 
   function build(): Record<string, unknown> | string {
     if (step === "approveBudget") return consent ? { consent: true } : "Tick to approve the cost.";
@@ -165,12 +201,12 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
       const cost = poundsToMinor(f("actualCost"));
       if (f("report").trim().length < 10 || f("guestUpdate").trim().length < 5 || cost === null) return "Add the repair report, the actual cost and the guest update.";
       if (typeof repair?.data.estimatedCostMinor === "number" && cost > repair.data.estimatedCostMinor) return "The cost is above the approved estimate. Use “Update the quote” first; if it is over the owner’s limit they approve it, then you can complete the repair.";
-      return { report: f("report").trim(), actualCostMinor: cost, guestUpdate: f("guestUpdate").trim() };
+      return { report: f("report").trim(), actualCostMinor: cost, guestUpdate: f("guestUpdate").trim(), ...(afterIds.length ? { photoIds: afterIds } : {}) };
     }
     return "Nothing to do.";
   }
   async function save() {
-    if (!repair || !step || busy) return;
+    if (!repair || !step || busy || uploading) return;
     const data = build();
     if (typeof data === "string") { setError(data); return; }
     setBusy(true); setError("");
@@ -202,7 +238,9 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
           {repair.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
           {typeof repair.data.ownerApprovedAt === "string" && <Tag label="Owner approved" tone="good" p={p} />}
           {typeof repair.data.quoteRevisedAt === "string" && <Tag label="Quote updated" tone="wait" p={p} />}
+          {typeof repair.data.paidAt === "string" && <Tag label="Paid by Accounts" tone="good" p={p} />}
         </View>
+        {team && <PropertyAccess key={repair.propertyId} palette={p} account={account} propertyId={repair.propertyId} />}
         {typeof repair.data.quoteReason === "string" && <Detail label={`Quote changed from ${pounds(repair.data.previousEstimateMinor)} to ${pounds(repair.data.estimatedCostMinor)}`} value={repair.data.quoteReason} p={p} />}
         {(typeof repair.data.contactFirst === "string" || typeof repair.data.warrantyDetails === "string") && phase !== "completed" && (
           <View style={{ gap: 6, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}>
@@ -216,6 +254,10 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
         <Detail label="Repair date" value={typeof repair.data.repairOn === "string" ? dayLabel(repair.data.repairOn) : undefined} p={p} />
         <Detail label="Repair report" value={repair.data.report} p={p} />
         <Detail label="Latest guest update" value={repair.data.guestUpdate} p={p} />
+        <RepairPhotos p={p} repair={repair} />
+        {team && ["referred", "booked"].includes(phase) && (addingBefore
+          ? <PhotoPicker p={p} workId={repair.workId} purpose="maintenance" label="Photos before the repair" hint="The problem as you found it. Each photo is saved as you add it." onChange={(_ids, loading) => setUploading(loading)} />
+          : <Button label="Add before photos" icon="camera" p={p} onPress={() => setAddingBefore(true)} />)}
         {step && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{STEP_TITLE[step]}</Text>}
         {step === "approveBudget" && (
           <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: consent }} onPress={() => setConsent(c => !c)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: consent ? p.successWash : p.elevated }]}>
@@ -258,7 +300,8 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
           <Field label="Repair report" value={f("report")} onChange={set("report")} p={p} multiline placeholder="What was fixed and anything still outstanding" />
           <Field label={`Actual cost (up to ${pounds(repair.data.estimatedCostMinor)})`} value={f("actualCost")} onChange={set("actualCost")} p={p} placeholder="£0.00" />
           <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
-          <Text style={[ui.small, { color: p.muted }]}>Completing sends the repair to Accounts to reconcile the invoice.</Text>
+          <PhotoPicker p={p} workId={repair.workId} purpose="maintenance" label="After photos (optional)" hint="The finished repair. They go to Accounts with your report." onChange={(ids, loading) => { setAfterIds(ids); setUploading(loading); }} />
+          <Text style={[ui.small, { color: p.muted }]}>Completing sends the cost to Accounts as a draft expense, with your report and the before and after photos.</Text>
         </>}
         {canReviseQuote(role, phase) && (quoting ? <View style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border }}>
           <Text style={{ color: p.text, fontWeight: "700" }}>Update the quote</Text>
@@ -272,7 +315,7 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
         </View> : <Button label="Update the quote" icon="edit-3" p={p} onPress={() => setQuoting(true)} />)}
         {!step && <Notice text={phase === "completed" ? "This repair is complete." : role === "ready" && phase === "triage" ? "Stays will refer this to Ready." : "Nothing for you to do at this stage."} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
-        {step && <Button label={busy ? "Saving…" : STEP_TITLE[step]} primary p={p} disabled={busy} onPress={() => void save()} />}
+        {step && <Button label={busy ? "Saving…" : uploading ? "Saving photos…" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading} onPress={() => void save()} />}
       </>}
     </Sheet>
   );

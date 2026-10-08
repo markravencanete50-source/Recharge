@@ -64,9 +64,13 @@ const EXACT: Record<string, NoticeCopy> = {
   // Accounts.
   'finance.statement_issued': copy('Owner statement issued', 'A new owner statement has been issued.'),
   'finance.owner_paid': copy('Owner payment made', 'A payment to the owner has been recorded.'),
+  'finance.expense_drafted': copy('Repair cost ready to check', 'A completed repair has been added to Accounts as a draft expense, with its report and photos.'),
+  'finance.expense_linked': copy('Expense linked to a job', 'An expense has been linked to the job it pays for.'),
+  'finance.purchase_invoice_recorded': copy('Purchase invoice recorded', 'The supplier invoice for a purchase has been recorded.'),
   // Team.
   'handover.created': copy('New task for your team', 'A new task has been handed to your team.'),
   'routine.plan_saved': copy('Routine visits updated', 'A routine visit plan has been saved.'),
+  'routine.visit_due': copy('Routine visit due soon', 'A routine visit is due in the next three days.'),
   'training.course_saved': copy('Training updated', 'A training course has been updated.'),
   'onboarding.contract_signed': copy('Staff contract signed', 'A staff contract has been signed.'),
   'onboarding.completed': copy('Onboarding finished', 'A new team member has signed their contract and finished their training. Their tools are open.'),

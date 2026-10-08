@@ -33,6 +33,7 @@ import { LiveStays } from "./LiveStays";
 import { LiveOwner } from "./LiveOwner";
 import { OnboardingGate } from "./LiveOnboarding";
 import { FurnishingCard, MailboxSection } from "./LiveTools";
+import { PropertyAccess } from "./LiveTools";
 import { ROLE_LABEL } from "../../lib/admin-live";
 import { WORK_VIEW_LABEL, workViewsFor, type WorkView } from "../../lib/tool-directory";
 import { formatBps, formatMoney } from "../../lib/format";
@@ -466,6 +467,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
           {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
           {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: {formatMoney(Number(openWork.data.estimatedCostMinor))}</Text>}
           <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
+          {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}
           {workItemForms(account, openWork, journeys, work).map(f => <SoftButton key={f.key} label={f.title} icon="arrow-right" palette={p} disabled={f.key === "prepareQuote" && !policyConfirmed} onPress={() => { setOpenWork(null); setForm(f); }} />)}
           {openWork.kind === "direct_booking" && !policyConfirmed && <Text style={[ui.small, { color: p.muted }]}>The discount policy awaits confirmation.</Text>}
           {!workItemForms(account, openWork, journeys, work).length && <Text style={[ui.small, { color: p.muted }]}>Nothing needs your action on this item.</Text>}
