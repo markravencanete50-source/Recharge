@@ -120,20 +120,21 @@ end $$;
 
 create or replace function private.workspace_chat_action(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare me uuid:=auth.uid();actor text:=private.workspace_actor_role();a text:=input->>'action';target uuid;other uuid;conv private.chat_conversations;
- people uuid[];msg private.chat_messages;ev bigint;previous timestamptz;
+ people uuid[];msg private.chat_messages;ev bigint;previous timestamptz;new_id uuid:=gen_random_uuid();
 begin
  if actor is null then raise exception 'Active workspace access required' using errcode='42501';end if;
  if a='startDirect' then
   perform private.workspace_json_keys(input,array['action','userId']);
   other:=(input->>'userId')::uuid;
   if actor='client' or other=me or not private.chat_is_team(other) then raise exception 'Choose someone on the team' using errcode='22023';end if;
-  select c.* into conv from private.chat_conversations c where c.kind='direct'
+  conv:=(select c from private.chat_conversations c where c.kind='direct'
    and exists(select 1 from private.chat_members m where m.conversation_id=c.id and m.user_id=me)
    and exists(select 1 from private.chat_members m where m.conversation_id=c.id and m.user_id=other)
-   and (select count(*) from private.chat_members m where m.conversation_id=c.id)=2 limit 1;
-  if not found then
-   insert into private.chat_conversations(kind,created_by) values('direct',me) returning * into conv;
-   insert into private.chat_members(conversation_id,user_id) values(conv.id,me),(conv.id,other);
+   and (select count(*) from private.chat_members m where m.conversation_id=c.id)=2 limit 1);
+  if conv.id is null then
+   insert into private.chat_conversations(id,kind,created_by) values(new_id,'direct',me);
+   insert into private.chat_members(conversation_id,user_id) values(new_id,me),(new_id,other);
+   conv:=(select c from private.chat_conversations c where c.id=new_id);
   end if;
   return private.chat_summary(conv,me);
  elsif a='startGroup' then
@@ -144,18 +145,19 @@ begin
   if exists(select 1 from unnest(people) u where not private.chat_is_team(u)) then raise exception 'Only team members can be added' using errcode='22023';end if;
   if input->>'propertyId' is not null and not (actor in ('admin','super_admin') or exists(select 1 from public.workspace_property_assignments x where x.user_id=me and x.property_id=(input->>'propertyId')::uuid)) then raise exception 'Property not found' using errcode='42501';end if;
   if input->>'workId' is not null and not private.workspace_operation_access((input->>'workId')::uuid) then raise exception 'Job not found' using errcode='42501';end if;
-  insert into private.chat_conversations(kind,title,property_id,work_id,created_by) values('group',trim(input->>'title'),(input->>'propertyId')::uuid,(input->>'workId')::uuid,me) returning * into conv;
-  insert into private.chat_members(conversation_id,user_id) select conv.id,u from unnest(array_append(people,me)) u on conflict do nothing;
+  insert into private.chat_conversations(id,kind,title,property_id,work_id,created_by) values(new_id,'group',trim(input->>'title'),(input->>'propertyId')::uuid,(input->>'workId')::uuid,me);
+  insert into private.chat_members(conversation_id,user_id) select new_id,u from unnest(array_append(people,me)) u on conflict do nothing;
+  conv:=(select c from private.chat_conversations c where c.id=new_id);
   return private.chat_summary(conv,me);
  elsif a='startOwner' then
   -- An owner opens their conversation with Recharge; the team opens one with an owner they look after.
   perform private.workspace_json_keys(input,array['action','ownerId']);
   other:=case when actor='client' then me else (input->>'ownerId')::uuid end;
   if other is null or not exists(select 1 from public.workspace_profiles where user_id=other and role='client' and status='active') or (actor<>'client' and not private.chat_owner_team(other,me)) then raise exception 'Owner not found' using errcode='42501';end if;
-  select * into conv from private.chat_conversations where kind='owner' and owner_id=other;
-  if not found then
-   insert into private.chat_conversations(kind,owner_id,created_by) values('owner',other,me) on conflict do nothing returning * into conv;
-   if conv.id is null then select * into conv from private.chat_conversations where kind='owner' and owner_id=other;end if;
+  conv:=(select c from private.chat_conversations c where c.kind='owner' and c.owner_id=other);
+  if conv.id is null then
+   insert into private.chat_conversations(id,kind,owner_id,created_by) values(new_id,'owner',other,me) on conflict do nothing;
+   conv:=(select c from private.chat_conversations c where c.kind='owner' and c.owner_id=other);
    insert into private.chat_members(conversation_id,user_id) values(conv.id,other) on conflict do nothing;
   end if;
   return private.chat_summary(conv,me);
@@ -164,11 +166,13 @@ begin
   target:=(input->>'conversationId')::uuid;
   if not private.chat_can(target,me) then raise exception 'Conversation not found' using errcode='42501';end if;
   if char_length(trim(coalesce(input->>'body','')))=0 or char_length(input->>'body')>4000 then raise exception 'Write a message of up to 4,000 characters' using errcode='22023';end if;
-  select * into msg from private.chat_messages where author_id=me and request_id=(input->>'requestId')::uuid;
-  if found then return jsonb_build_object('id',msg.id,'at',msg.created_at);end if;
+  msg:=(select m from private.chat_messages m where m.author_id=me and m.request_id=(input->>'requestId')::uuid);
+  if msg.id is not null then return jsonb_build_object('id',msg.id,'at',msg.created_at);end if;
   previous:=(select max(created_at) from private.chat_messages where conversation_id=target);
-  insert into private.chat_messages(conversation_id,author_id,body,request_id) values(target,me,trim(input->>'body'),(input->>'requestId')::uuid) returning * into msg;
-  update private.chat_conversations set last_message_at=msg.created_at where id=target returning * into conv;
+  insert into private.chat_messages(id,conversation_id,author_id,body,request_id) values(new_id,target,me,trim(input->>'body'),(input->>'requestId')::uuid);
+  msg:=(select m from private.chat_messages m where m.id=new_id);
+  update private.chat_conversations set last_message_at=msg.created_at where id=target;
+  conv:=(select c from private.chat_conversations c where c.id=target);
   insert into private.chat_reads(conversation_id,user_id,last_read_at) values(target,me,msg.created_at) on conflict(conversation_id,user_id) do update set last_read_at=excluded.last_read_at;
   -- People are notified once per conversation until they read it, not for every message.
   insert into public.workspace_activity(actor_id,property_id,event_type) values(me,conv.property_id,case when conv.kind='owner' and conv.owner_id=me then 'chat.owner_message' else 'chat.message' end) returning id into ev;
@@ -213,7 +217,7 @@ begin
  admin:=actor in ('admin','super_admin');
  if start_on is null or end_on is null or end_on<start_on or end_on-start_on>92 then raise exception 'Choose up to 92 days' using errcode='22023';end if;
  lower_at:=start_on::timestamp at time zone 'Europe/London';upper_at:=(end_on+1)::timestamp at time zone 'Europe/London';
- select * into t from private.workspace_performance_targets where singleton;
+ t:=(select x from private.workspace_performance_targets x where x.singleton);
  return jsonb_build_object(
   'ownerMessages',(select count(*) from private.chat_messages x join private.chat_conversations c on c.id=x.conversation_id and c.kind='owner' and x.author_id=c.owner_id where x.created_at>=lower_at and x.created_at<upper_at and admin),
   'overall',(select jsonb_build_object('green',count(*) filter(where r.grade='green'),'amber',count(*) filter(where r.grade='amber'),'red',count(*) filter(where r.grade='red'))

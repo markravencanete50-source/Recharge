@@ -47,17 +47,18 @@ end $$;
 create or replace function private.integration_claim_web_push() returns jsonb language plpgsql security definer set search_path='' as $$
 declare result jsonb;
 begin
- with candidates as (
-  select o.id outbox_id,s.id subscription_id,s.endpoint,s.p256dh,s.auth,a.event_type,a.created_at
-  from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id
-  join private.workspace_web_push s on s.user_id=o.user_id join public.workspace_profiles p on p.user_id=o.user_id and p.status='active'
-  where a.created_at>now()-interval '1 day' and a.created_at>=s.created_at-interval '1 minute'
-   and not exists(select 1 from private.workspace_web_push_sent x where x.outbox_id=o.id and x.subscription_id=s.id)
-   and (o.work_id is null or private.integration_can_work(o.user_id,o.work_id))
-  order by a.created_at limit 50),
- marked as (insert into private.workspace_web_push_sent(outbox_id,subscription_id) select outbox_id,subscription_id from candidates on conflict do nothing returning outbox_id,subscription_id)
- select coalesce(jsonb_agg(jsonb_build_object('endpoint',c.endpoint,'p256dh',c.p256dh,'auth',c.auth,'eventType',c.event_type) order by c.created_at),'[]') into result
- from candidates c join marked m on m.outbox_id=c.outbox_id and m.subscription_id=c.subscription_id;
+ -- One claim at a time, so two runs never pick the same notice.
+ perform pg_advisory_xact_lock(hashtextextended('recharge-web-push-claim',0));
+ result:=(select coalesce(jsonb_agg(jsonb_build_object('outboxId',c.outbox_id,'subscriptionId',c.subscription_id,'endpoint',c.endpoint,'p256dh',c.p256dh,'auth',c.auth,'eventType',c.event_type) order by c.created_at),'[]')
+  from (select o.id outbox_id,s.id subscription_id,s.endpoint,s.p256dh,s.auth,a.event_type,a.created_at
+   from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id
+   join private.workspace_web_push s on s.user_id=o.user_id join public.workspace_profiles p on p.user_id=o.user_id and p.status='active'
+   where a.created_at>now()-interval '1 day' and a.created_at>=s.created_at-interval '1 minute'
+    and not exists(select 1 from private.workspace_web_push_sent x where x.outbox_id=o.id and x.subscription_id=s.id)
+    and (o.work_id is null or private.integration_can_work(o.user_id,o.work_id))
+   order by a.created_at limit 50) c);
+ insert into private.workspace_web_push_sent(outbox_id,subscription_id)
+  select (j->>'outboxId')::bigint,(j->>'subscriptionId')::uuid from jsonb_array_elements(result) j on conflict do nothing;
  delete from private.workspace_web_push_sent where sent_at<now()-interval '3 days';
  return result;
 end $$;

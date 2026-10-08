@@ -82,8 +82,8 @@ end $$;
 create or replace function private.workspace_media_asset(target_asset uuid) returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare e private.workspace_media_evidence;
 begin
- select * into e from private.workspace_media_evidence where id=target_asset;
- if not found or not private.workspace_media_visible(e) then raise exception 'Media access denied' using errcode='42501';end if;
+ e:=(select x from private.workspace_media_evidence x where x.id=target_asset);
+ if e.id is null or not private.workspace_media_visible(e) then raise exception 'Media access denied' using errcode='42501';end if;
  if e.provider_asset_id is null then raise exception 'Verified asset unavailable' using errcode='P0002';end if;
  return jsonb_build_object('providerAssetId',e.provider_asset_id,'format',e.asset_format,'bytes',e.asset_bytes);
 end $$;

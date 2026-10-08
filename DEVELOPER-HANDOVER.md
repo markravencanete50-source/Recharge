@@ -74,6 +74,27 @@ planned.
   database tool asks for confirmation. Run `docs/APPLY-ACCESS-CONTROL.sql` in the Supabase SQL editor
   if it isn't applied yet.
 
+## Built without outside services (9 October 2026)
+
+- **Photos** use a private Supabase Storage bucket (`workspace-media`) that only the backend reads
+  or writes (`uploadStoragePhoto`/`downloadStoragePhoto` in `lib/integration-providers.ts`).
+  Cloudinary is used instead only when `MEDIA_UPLOADS_ENABLED=true` and its keys are set; set
+  `MEDIA_STORAGE=off` to switch photos off. Photo kinds now include `inspection` and `setup` on the
+  onboarding journey, and post photos (`mailPhotoIds`) on a clean. `mobile/src/Photos.tsx` has the
+  picker and viewer; workflow forms take a `photos` field.
+- **Web push** (`lib/web-push.ts`): VAPID-signed, aes128gcm-encrypted, sent from the Worker every
+  minute (second cron). Keys: `npm run push:setup` stores `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` as
+  Worker secrets without printing them. People switch it on in Profile & preferences. The browser
+  build adds `mobile/web-static` (service worker, manifest, icons) so the app can be installed.
+- **Messages** (`mobile/src/LiveChat.tsx`, `lib/workspace-chat-*.ts`, migration `20261009110000`):
+  direct, group and owner conversations; the open conversation polls every 3 seconds. Owner
+  messages are timed for client relations (`workspace_client_relations_read`).
+- **Weekly report page** (`weeklyReportDocument` in `lib/weekly-report.ts`) and **local events**
+  added by hand (`recordLocalEvent`).
+- **Listings** per property with links and IDs (`saveListingLinks`, migration `20261009120000`).
+- **Applying it live:** run `docs/APPLY-2026-10-09.sql` in the Supabase SQL editor (it avoids
+  `select … into`, which the editor misreads).
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never
