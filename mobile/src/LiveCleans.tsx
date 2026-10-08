@@ -13,6 +13,7 @@ import { PhotoPicker, WorkPhotos } from "./Photos";
 import { DisputeSheet, type DisputeTarget } from "./CleanDisputes";
 import { RateSheet } from "./CleanerPay";
 import { ProblemForm } from "./CleanProblem";
+import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, uploadWorkPhoto, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
@@ -457,6 +458,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
         {mineToDo && (reporting
           ? <ProblemForm p={p} clean={{ workId: op.workId, version: op.version }} onCancel={() => setReporting(false)} onSent={async () => { setReporting(false); celebrate("Sent to the Stays team"); await onChanged(); }} />
           : <Button label="Report a problem" icon="alert-triangle" p={p} onPress={() => setReporting(true)} />)}
+        <PropertyTeamChatButton palette={p} propertyId={op.propertyId} workId={op.workId} />
         {!!error && <Notice text={error} p={p} tone="bad" />}
       </>}
     </Sheet>
