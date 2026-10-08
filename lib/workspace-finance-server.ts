@@ -18,5 +18,8 @@ export const workspaceTeams = rpcRoute({
 export const workspaceAdmin = rpcRoute({
   readSchema: adminReadSchema, actionSchema: adminActionSchema, bodyLimit: 16_384, unavailable: 'Administration is temporarily unavailable',
   read: (client, input) => client.rpc('workspace_admin_read', { section: input.section }),
+  // Adding people and set-password links use the sign-in service; loaded only when used.
+  handle: (context, input) => input.action === 'addPerson' ? import('./account-invite-server').then(m => m.addPerson(context, input))
+    : input.action === 'passwordLink' ? import('./account-invite-server').then(m => m.passwordLink(context, input)) : null,
   action: 'workspace_admin_action',
 });

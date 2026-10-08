@@ -34,11 +34,12 @@ export function Button({ label, onPress, p, primary = false, disabled = false, i
     </MotionPress>
   );
 }
-export function Field({ label, value, onChange, p, multiline = false, placeholder }: { label: string; value: string; onChange: (v: string) => void; p: Palette; multiline?: boolean; placeholder?: string }) {
+export function Field({ label, value, onChange, p, multiline = false, placeholder, email = false }: { label: string; value: string; onChange: (v: string) => void; p: Palette; multiline?: boolean; placeholder?: string; email?: boolean }) {
   return (
     <View style={{ gap: 6 }}>
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text>
       <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={p.muted} multiline={multiline} accessibilityLabel={label}
+        {...(email ? { autoCapitalize: "none" as const, autoCorrect: false, keyboardType: "email-address" as const, autoComplete: "email" as const } : {})}
         style={{ minHeight: multiline ? 88 : 48, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, color: p.text, backgroundColor: p.background, textAlignVertical: multiline ? "top" : "center", fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
     </View>
   );

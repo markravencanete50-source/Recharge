@@ -100,6 +100,14 @@ async function refresh() {
   })().finally(() => { refreshInFlight = null; });
   return refreshInFlight;
 }
+// Self sign-up, when the server has it switched on (MOBILE_REGISTRATION_ENABLED and an email
+// service for the codes). New accounts wait for an administrator to approve them.
+export async function registrationOpen() {
+  try { return z.object({ enabled: z.boolean() }).parse(await (await call("/api/mobile/account")).json()).enabled; } catch { return false; }
+}
+export async function accountStep(body: Record<string, unknown>, accessToken?: string) {
+  return z.record(z.unknown()).parse(await (await call("/api/mobile/account", body, accessToken)).json());
+}
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
   if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (sameOriginWeb) return call(webWorkspacePath(path), body);

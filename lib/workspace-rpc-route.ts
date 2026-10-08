@@ -12,8 +12,12 @@ export type RpcRoute<R extends z.ZodTypeAny, A extends z.ZodTypeAny> = {
   read: (client: SupabaseClient, input: z.infer<R>) => PromiseLike<{ data: unknown; error: { code?: string } | null }>;
   // Returns the RPC input, or a message describing why the request cannot be sent.
   prepare?: (input: z.infer<A>) => { input: unknown } | { error: string };
+  // Actions the server carries out itself (for example with the sign-in service); null sends the
+  // action to the database as usual.
+  handle?: (context: RpcContext, input: z.infer<A>) => Promise<Response> | null;
   action: string;
 };
+export type RpcContext = { request: Request; client: SupabaseClient; account: { userId: string; role: string } };
 
 export function rpcRoute<R extends z.ZodTypeAny, A extends z.ZodTypeAny>(spec: RpcRoute<R, A>) {
   return async function route(request: Request, native = false) {
@@ -37,6 +41,8 @@ export function rpcRoute<R extends z.ZodTypeAny, A extends z.ZodTypeAny>(spec: R
       }
       const input = spec.actionSchema.safeParse(await boundedJson(request, spec.bodyLimit));
       if (!input.success) return businessResponse({ error: input.error.issues[0]?.message || 'Check the update' }, 400);
+      const handled = spec.handle?.({ request, client: session.client, account: session.account }, input.data);
+      if (handled) return await handled;
       const prepared = spec.prepare ? spec.prepare(input.data) : { input: input.data };
       if ('error' in prepared) return businessResponse({ error: prepared.error }, 400);
       const result = await session.client.rpc(spec.action, { input: prepared.input });

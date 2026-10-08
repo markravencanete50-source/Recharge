@@ -1,7 +1,7 @@
 // This deployable backend exposes only Supabase-backed routes. Legacy D1
 // handlers remain excluded until their business contracts are ported.
 const endpoints = new Set([
-  "/sign-in", "/sign-out", "/reset-password", "/update-password", "/auth/recovery",
+  "/sign-in", "/sign-out", "/reset-password", "/update-password", "/auth/recovery", "/auth/set-password",
   "/api/session", "/api/session/logout", "/api/session/recovery", "/api/session/password",
   "/api/access", "/api/access/register", "/api/mobile/account", "/api/mobile/session",
   "/api/mobile/workspace", "/api/mobile/reports", "/api/mobile/reports/export",

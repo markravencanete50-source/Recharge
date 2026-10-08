@@ -24,6 +24,7 @@ export const STATE_LABEL: Record<AccessState, [string, 'good' | 'wait' | 'bad' |
 const EVENT_LABEL: Record<string, string> = {
   tool_access_changed: 'Tools changed', account_blocked: 'Blocked', account_unblocked: 'Unblocked', password_revoked: 'Password revoked',
   signed_out_everywhere: 'Signed out everywhere', account_deleted: 'Account deleted', role_changed: 'Role changed',
+  account_created: 'Added', password_link_created: 'Set-password link made',
 };
 export const eventLabel = (event: string) => EVENT_LABEL[event] ?? event.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
 

@@ -95,6 +95,28 @@ planned.
 - **Applying it live:** run `docs/APPLY-2026-10-09.sql` in the Supabase SQL editor (it avoids
   `select … into`, which the editor misreads).
 
+## Adding people and signing up (8 October 2026)
+
+- **Add a person** (Access control, super admins): name, email and role. `addPerson` in
+  `lib/account-invite-server.ts` creates the sign-in with the server key, already verified
+  (`email_confirm`), then saves the role and the role's usual tools through
+  `workspace_admin_action` as the super admin (so every database check applies; the sign-in is
+  removed again if the database refuses). No email is sent and no password is set: the reply
+  carries a one-time link, `/auth/set-password?token=…`, for the super admin to send privately.
+- **Set-password link** (`passwordLink`): the same link for an existing account, from its sheet.
+  Not for super admins, your own account, or blocked or deleted accounts. Both are recorded in
+  the access history (`account_created`, `password_link_created`).
+- **The link** opens `app/auth/set-password`, which uses the code only when the person presses the
+  button (so chat-app link previews can't use it up). It POSTs to `/auth/recovery`, which accepts it
+  only as a recovery (`verifyOtp` with `type: "recovery"`) and continues to `/update-password`, the
+  same step as "Forgot password". The link lasts as long as Supabase Auth's email link lifetime
+  (1 hour by default).
+- **Create an account** on the sign-in screen appears only when `GET /api/mobile/account` reports
+  `enabled` (Worker variable `MOBILE_REGISTRATION_ENABLED=true`). It needs custom SMTP in Supabase
+  Auth (the built-in sender only reaches the project team) and the "Confirm signup" email template
+  must show the code (`{{ .Token }}`). New accounts wait for approval in People or Access control.
+  When it's off, the sign-in screen tells new people to ask their administrator.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

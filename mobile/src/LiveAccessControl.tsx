@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Switch, TextInput, View } from "react-native";
+import { Platform, Share, Switch, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { useCelebrate } from "./Celebrate";
@@ -12,6 +12,7 @@ import { readAdmin, writeAdmin } from "./backend/client";
 import { accessHistorySchema, accessPeopleSchema, accessState, accessSummary, eventLabel, lastSeen, matchesSearch, ROLE_SUMMARY, roleChange, STATE_LABEL, toolGroups, type AccessEvent, type AccessPerson, type AccessState } from "../../lib/access-control";
 import { ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange } from "../../lib/admin-live";
 import { isWorkspaceAdmin, type ModuleId, type WorkspaceRole } from "../../lib/modules";
+import { z } from "zod";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Access control, for super admins: every account, its role and tools, and the security actions
@@ -64,6 +65,7 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
   const [asking, setAsking] = useState<Danger | null>(null);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [link, setLink] = useState<{ link: string; minutes: number } | null>(null);
   const self = person.userId === actor.userId, state = accessState(person), admin = isWorkspaceAdmin(role);
   const allowed = new Set(toolsFor(role).map(t => t.id));
   const changed = role !== person.role || [...modules].sort().join() !== [...person.modules].sort().join();
@@ -82,6 +84,12 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
   const saveAccess = () => {
     if (!admin && person.status === "active" && !modules.length) { setError("Choose at least one tool, or block the account instead."); return; }
     void run({ action: "setAccess", userId: person.userId, role, modules: admin ? [] : modules.filter(m => allowed.has(m)) }, change.same ? "Access saved" : `${firstName} is now ${/^[AEIOU]/.test(roleLabel(role)) ? "an" : "a"} ${roleLabel(role)}`);
+  };
+  const makeLink = async () => {
+    if (busy) return;
+    setBusy(true); setError("");
+    try { const made = linkSchema.parse(await writeAdmin({ action: "passwordLink", userId: person.userId })).data; if (made.link) setLink({ link: made.link, minutes: made.minutes }); await onDone(); }
+    catch (e) { setError(message(e)); } finally { setBusy(false); }
   };
   const confirm = (d: Danger) => d === "deleteAccount" ? run({ action: "deleteAccount", userId: person.userId, confirm: true }, DANGER[d].done) : run({ action: d, userId: person.userId }, DANGER[d].done);
   const actions: Danger[] = state === "blocked" ? ["unblock", "revokePassword", "deleteAccount"] : ["signOut", "revokePassword", "block", "deleteAccount"];
@@ -155,6 +163,10 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
         </>}
         {changed && <Button label={busy ? "Saving…" : change.same ? "Save tools" : `${change.action}`} icon={change.promote ? "trending-up" : "check"} primary p={p} disabled={busy} onPress={saveAccess} />}
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700", paddingTop: 6 }}>Security</Text>
+        {state !== "blocked" && person.role !== "super_admin" && !!person.email && (link?.link ? <LinkCard p={p} name={firstName} link={link.link} minutes={link.minutes} /> : <>
+          <Button label={busy ? "Working…" : "Set-password link"} icon="link" p={p} disabled={busy} onPress={() => void makeLink()} />
+          <Text style={[ui.small, { color: p.muted }]}>{person.lastSignInAt ? "For when they can’t get into their account: a one-time link to choose a new password, to send them yourself." : "They haven’t signed in yet. Make a new one-time link to send them, if the first one ran out."}</Text>
+        </>)}
         {actions.map(d => {
           const open = asking === d, deleting = d === "deleteAccount";
           return (
@@ -182,6 +194,77 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
   );
 }
 
+// The one-time link a new (or locked-out) person opens to choose their own password. It's shown
+// once, here; nobody else sees the password they choose.
+const linkSchema = z.object({ data: z.object({ link: z.string().url().nullable(), minutes: z.number() }) });
+function LinkCard({ p, name, link, minutes }: { p: Palette; name: string; link: string; minutes: number }) {
+  const [note, setNote] = useState("");
+  const text = `Hi ${name}, your Recharge account is ready. Open this link to choose your password (it works once, for ${minutes} minutes): ${link}`;
+  async function share() {
+    try {
+      if (Platform.OS === "web" && globalThis.navigator?.clipboard) { await globalThis.navigator.clipboard.writeText(text); setNote("Message copied. Paste it into WhatsApp, a text or an email."); }
+      else { await Share.share({ message: text }); setNote(""); }
+    } catch { setNote("Couldn’t copy. Press and hold the link to copy it."); }
+  }
+  return (
+    <View style={{ gap: 10, padding: 14, borderRadius: 18, backgroundColor: p.wash, borderWidth: 1, borderColor: p.primary }}>
+      <View style={[ui.row, { gap: 8 }]}><Feather name="link" size={17} color={p.primary} /><Text style={{ color: p.text, fontWeight: "700", flex: 1 }}>Set-password link for {name}</Text></View>
+      <Text selectable style={[ui.small, { color: p.text, padding: 10, borderRadius: 12, backgroundColor: p.background }]}>{link}</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Send it to them privately. It works once and only for {minutes} minutes; make a new one from their account if it runs out.</Text>
+      <Button label={Platform.OS === "web" ? "Copy message with link" : "Share link"} icon={Platform.OS === "web" ? "copy" : "share"} primary p={p} onPress={() => void share()} />
+      {!!note && <Text style={[ui.small, { color: p.text }]}>{note}</Text>}
+    </View>
+  );
+}
+
+function AddPersonSheet({ p, onClose, onDone }: { p: Palette; onClose: () => void; onDone: () => Promise<void> }) {
+  const celebrate = useCelebrate();
+  const [name, setName] = useState(""), [email, setEmail] = useState(""), [role, setRole] = useState<WorkspaceRole>("stays");
+  const [busy, setBusy] = useState(false), [error, setError] = useState(""), [made, setMade] = useState<{ link: string | null; minutes: number } | null>(null);
+  const first = name.trim().split(/\s+/)[0] || "them";
+  const ready = name.trim().length >= 2 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  async function add() {
+    if (busy || !ready) return;
+    setBusy(true); setError("");
+    try {
+      const result = linkSchema.parse(await writeAdmin({ action: "addPerson", fullName: name.trim(), email: email.trim().toLowerCase(), role, modules: isWorkspaceAdmin(role) ? [] : toolsOnRoleChange(role) }));
+      setMade(result.data); celebrate(`${first} added`); await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  return (
+    <Sheet palette={p} visible onClose={onClose} title={made ? `${name.trim()} is added` : "Add a person"} subtitle={made ? `${roleLabel(role)} · Active` : "Create their account and choose their role"} icon="people">
+      {made ? <>
+        {made.link ? <LinkCard p={p} name={first} link={made.link} minutes={made.minutes} />
+          : <Notice text="The account is ready, but the link couldn’t be made just now. Open their account in the list and choose “Set-password link”." p={p} />}
+        <Text style={[ui.small, { color: p.muted }]}>They sign in with {email.trim().toLowerCase()} and the password they choose. You can change their role and tools any time from the list.</Text>
+        <Button label="Done" p={p} onPress={onClose} />
+      </> : <>
+        <Field label="Full name" value={name} onChange={setName} p={p} placeholder="First and last name" />
+        <Field label="Email" value={email} onChange={setEmail} p={p} placeholder="name@example.com" email />
+        <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Role</Text>
+        <View accessibilityRole="radiogroup" style={{ gap: 6 }}>
+          {rolesFor("super_admin").map(r => {
+            const picked = r === role;
+            return (
+              <MotionPress key={r} accessibilityRole="radio" accessibilityState={{ checked: picked }} accessibilityLabel={`${roleLabel(r)}. ${ROLE_SUMMARY[r]}`} onPress={() => { setRole(r); setError(""); }}
+                style={[ui.row, { gap: 12, minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: picked ? 2 : 1, borderColor: picked ? p.primary : p.border, backgroundColor: picked ? p.wash : p.surface }]}>
+                <Feather name={picked ? "check-circle" : "circle"} size={18} color={picked ? p.primary : p.muted} />
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text style={{ color: p.text, fontWeight: "700" }}>{roleLabel(r)}</Text>
+                  <Text style={[ui.small, { color: p.muted }]}>{ROLE_SUMMARY[r]}</Text>
+                </View>
+              </MotionPress>
+            );
+          })}
+        </View>
+        <Text style={[ui.small, { color: p.muted }]}>They get the usual tools for this role. You can change them afterwards. No email is sent: you get a link to send them yourself.</Text>
+        {!!error && <Notice text={error} p={p} tone="bad" />}
+        <Button label={busy ? "Adding…" : "Add and make link"} icon="user-plus" primary p={p} disabled={busy || !ready} onPress={() => void add()} />
+      </>}
+    </Sheet>
+  );
+}
+
 function HistoryRow({ p, e, first }: { p: Palette; e: AccessEvent; first: boolean }) {
   const when = new Date(e.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
   return (
@@ -199,7 +282,7 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
   const [people, setPeople] = useState<AccessPerson[]>([]), [history, setHistory] = useState<AccessEvent[]>([]);
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [query, setQuery] = useState(""), [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null), [adding, setAdding] = useState(false);
   const load = useCallback(async () => {
     setError("");
     const [list, log] = await Promise.allSettled([readAdmin("accessControl"), readAdmin("accessHistory")]);
@@ -217,8 +300,9 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
     <Anchor id="access-control"><View style={{ gap: 18 }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Access control</Text>
-        <Text style={[ui.small, { color: p.muted }]}>Everyone with a Recharge account. Open a person to change their role and tools, sign them out, revoke their password, block or delete them.</Text>
+        <Text style={[ui.small, { color: p.muted }]}>Everyone with a Recharge account. Add someone new, or open a person to change their role and tools, sign them out, revoke their password, block or delete them.</Text>
       </View>
+      <View style={{ flexDirection: "row" }}><Button label="Add a person" icon="user-plus" primary p={p} onPress={() => setAdding(true)} /></View>
       <StatGrid>
         <StatTile key="people" p={p} icon="users" label="People" value={summary.people} />
         <StatTile key="signed" p={p} icon="monitor" label="Signed in now" value={summary.signedIn} />
@@ -241,6 +325,7 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
           {history.slice(0, 20).map((e, i) => <HistoryRow key={e.id} p={p} e={e} first={i === 0} />)}
         </View>
       </Section>}
+      {adding && <AddPersonSheet p={p} onClose={() => setAdding(false)} onDone={load} />}
       {person && <AccessSheet key={person.userId + person.status + person.modules.join() + person.role + String(person.passwordRevoked) + person.activeSessions} p={p} actor={account} person={person} onClose={() => setOpenId(null)} onDone={load} />}
     </View></Anchor>
   );
