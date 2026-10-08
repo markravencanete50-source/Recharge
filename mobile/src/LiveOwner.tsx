@@ -5,7 +5,8 @@ import { z } from "zod";
 import { Text } from "./Typography";
 import { MotionPress, SwapIn } from "./motion";
 import { ui, type Palette } from "./theme";
-import { addDays, dayLabel, london, Notice, Section, Tag, Loading } from "./LiveKit";
+import { addDays, dayLabel, london, Notice, Section, Tag, Loading, StatGrid, StatTile } from "./LiveKit";
+import { formatDay, formatMoneyShort } from "../../lib/format";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readFinance, readTeams, WorkspaceApiError } from "./backend/client";
 import { scheduleSchema } from "../../lib/cleans-live";
@@ -83,27 +84,20 @@ export function LiveOwner({ palette: p, properties }: { palette: Palette; proper
         <Text style={[ui.body, { color: p.muted }]}>Who is staying, and what each month paid you.</Text>
       </View>
       {properties.length > 1 && <Pills p={p} values={["all", ...properties.map(x => x.id)]} value={propertyId} onChange={setPropertyId} label={v => v === "all" ? "All properties" : properties.find(x => x.id === v)?.name ?? "Property"} />}
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        {[
-          { label: "Next arrival", value: nextArrival ? dayLabel(nextArrival.checkIn) : "None booked" },
-          { label: "Nights booked ahead", value: String(bookedNights) },
-          { label: "Latest payout", value: shown[0] ? pounds(shown[0].payoutMinor) : "–" },
-        ].map(tile => (
-          <View key={tile.label} style={[ui.card, { flex: 1, padding: 14, gap: 4, backgroundColor: p.surface, borderColor: p.border }]}>
-            <SwapIn swapKey={String(tile.value)}><Text numberOfLines={1} style={{ color: p.text, fontSize: 18, fontWeight: "700" }}>{tile.value}</Text></SwapIn>
-            <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{tile.label}</Text>
-          </View>
-        ))}
-      </View>
+      <StatGrid>
+        <StatTile p={p} icon="calendar" tone="clients" label="Next arrival" value={nextArrival ? formatDay(nextArrival.checkIn) : "None booked"} />
+        <StatTile p={p} icon="moon" tone="clients" label="Nights booked ahead" value={bookedNights} />
+        <StatTile p={p} icon="credit-card" tone="clients" label="Latest payout" value={shown[0] ? formatMoneyShort(shown[0].payoutMinor) : "–"} />
+      </StatGrid>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
       <Section title="Upcoming stays" count={upcoming.length} p={p}>
         <List p={p} empty="No stays booked in the next six weeks.">
-          {upcoming.map((s, i) => <Row key={s.reservationId} p={p} first={i === 0} title={`${dayLabel(s.checkIn)} to ${dayLabel(s.checkOut)}`} detail={`${s.propertyName} · ${nights(s.checkIn, s.checkOut)} nights${s.guests ? ` · ${s.guests} guests` : ""}`} tags={[s.checkIn <= today ? ["Staying now", "good"] : ["Booked", "plain"]]} />)}
+          {upcoming.map((s, i) => <Row key={s.reservationId} p={p} first={i === 0} icon="calendar" tone="clients" title={`${dayLabel(s.checkIn)} to ${dayLabel(s.checkOut)}`} detail={`${s.propertyName} · ${nights(s.checkIn, s.checkOut)} nights${s.guests ? ` · ${s.guests} guests` : ""}`} tags={[s.checkIn <= today ? ["Staying now", "good"] : ["Booked", "plain"]]} />)}
         </List>
       </Section>
       {recent.length > 0 && <Section title="Recent stays" p={p}>
-        <List p={p} empty="">{recent.map((s, i) => <Row key={s.reservationId} p={p} first={i === 0} title={`${dayLabel(s.checkIn)} to ${dayLabel(s.checkOut)}`} detail={`${s.propertyName} · ${nights(s.checkIn, s.checkOut)} nights`} />)}</List>
+        <List p={p} empty="">{recent.map((s, i) => <Row key={s.reservationId} p={p} first={i === 0} icon="check-circle" tone="clients" title={`${dayLabel(s.checkIn)} to ${dayLabel(s.checkOut)}`} detail={`${s.propertyName} · ${nights(s.checkIn, s.checkOut)} nights`} />)}</List>
       </Section>}
       <Section title="Statements" count={shown.length} p={p}>
         {shown.map(s => <StatementCard key={s.id} p={p} s={s} />)}

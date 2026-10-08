@@ -6,7 +6,7 @@ import { Text } from "./Typography";
 import { MotionPress, TweenNumber } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading, StatGrid, StatTile } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readOperations, readTeams, writeFinance, writeOperation, WorkspaceApiError } from "./backend/client";
 import { scheduleSchema } from "../../lib/cleans-live";
@@ -215,18 +215,11 @@ export function LiveStays({ palette: p, properties, onOpenRepairs }: { palette: 
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Stays</Text>
         <Text style={[ui.body, { color: p.muted }]}>Arrivals, departures, cleans and the daily listing and pricing checks.</Text>
       </View>
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        {[
-          { label: "Arrivals today", value: schedule.stays.filter(s => s.checkIn === today).length },
-          { label: "Departures today", value: schedule.stays.filter(s => s.checkOut === today).length },
-          { label: "Listings to check", value: listingsDue },
-        ].map(tile => (
-          <View key={tile.label} style={[ui.card, { flex: 1, padding: 14, gap: 4, backgroundColor: p.surface, borderColor: p.border }]}>
-            <TweenNumber value={tile.value} style={{ color: p.text, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} />
-            <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{tile.label}</Text>
-          </View>
-        ))}
-      </View>
+      <StatGrid>
+        <StatTile p={p} icon="log-in" tone="stays" label="Arrivals" value={schedule.stays.filter(s => s.checkIn === today).length} detail="Today" />
+        <StatTile p={p} icon="log-out" tone="stays" label="Departures" value={schedule.stays.filter(s => s.checkOut === today).length} detail="Today" />
+        <StatTile p={p} icon="check-square" tone="stays" label="Listings to check" value={listingsDue} detail="Daily listing check" attention={listingsDue > 0} />
+      </StatGrid>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
       <View style={[ui.row, { gap: 10 }]}>

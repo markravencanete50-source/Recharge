@@ -1,10 +1,11 @@
-import { Children, isValidElement, useRef, type ComponentProps, type ReactNode } from "react";
-import { TextInput, View } from "react-native";
+import { Children, createContext, isValidElement, useContext, useRef, type ComponentProps, type ReactNode } from "react";
+import { TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
-import { Entrance, MotionPress, Shimmer, Stagger, SwapIn } from "./motion";
-import { ui, type Palette } from "./theme";
+import { Entrance, MotionPress, Shimmer, Stagger, SwapIn, TweenNumber } from "./motion";
+import { departmentColor, ui, type Palette } from "./theme";
+import { formatCount } from "../../lib/format";
 
 // Shared building blocks for the live (backend-connected) screens.
 export const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
@@ -60,3 +61,47 @@ export function useRequestId(key: string | null) {
   };
 }
 
+
+// A small coloured icon tile: department colour behind a line icon. Used on rows and stats.
+export type IconName = ComponentProps<typeof Feather>["name"];
+export type Tone = "cleans" | "ready" | "stays" | "clients" | "accounts";
+export function IconChip({ icon, tone, p, size = 40 }: { icon: IconName; tone?: Tone; p: Palette; size?: number }) {
+  const colour = tone ? departmentColor(tone, p) : { ink: p.primary, wash: p.wash };
+  return <View style={{ width: size, height: size, borderRadius: size * 0.32, alignItems: "center", justifyContent: "center", backgroundColor: colour.wash }}><Feather name={icon} size={Math.round(size * 0.45)} color={colour.ink} /></View>;
+}
+
+// Headline figures: label, a value that glides, and a supporting line. Laid out in a grid that
+// keeps every tile the same width and wraps to two per row on phones, never squashing labels.
+const StatCompact = createContext(false);
+export function StatTile({ p, icon, tone, label, value, format = formatCount, detail, attention = false }: {
+  p: Palette; icon: IconName; tone?: Tone; label: string; value: number | string; format?: (n: number) => string; detail?: string; attention?: boolean;
+}) {
+  // Phones show three compact tiles across (label, figure, icon); wider screens add the supporting line.
+  const compact = useContext(StatCompact);
+  const figure = { color: p.text, fontSize: compact ? 24 : 28, lineHeight: compact ? 28 : 32, fontWeight: "700" as const, letterSpacing: -0.5, fontVariant: ["tabular-nums" as const] };
+  return (
+    <View accessibilityLabel={[label, typeof value === "number" ? format(value) : value, detail].filter(Boolean).join(", ")}
+      style={{ flex: 1, minWidth: 0, padding: compact ? 12 : 16, gap: compact ? 6 : 10, borderRadius: compact ? 18 : 20, borderWidth: 1, borderColor: attention ? p.primary : p.border, backgroundColor: attention ? p.wash : p.surface }}>
+      <View style={[ui.between, { gap: 6, alignItems: "flex-start" }]}>
+        <Text numberOfLines={2} style={{ color: p.muted, fontSize: compact ? 11 : 12, lineHeight: compact ? 14 : 16, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase", flex: 1 }}>{label}</Text>
+        {!compact && <IconChip icon={icon} tone={tone} p={p} size={32} />}
+      </View>
+      {typeof value === "number"
+        ? <TweenNumber value={value} format={format} numberOfLines={1} adjustsFontSizeToFit style={figure} />
+        : <SwapIn swapKey={value}><Text numberOfLines={1} adjustsFontSizeToFit style={{ ...figure, fontSize: compact ? 17 : 22 }}>{value}</Text></SwapIn>}
+      {compact ? <Feather name={icon} size={15} color={tone ? departmentColor(tone, p).ink : p.primary} /> : !!detail && <Text numberOfLines={1} style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{detail}</Text>}
+    </View>
+  );
+}
+export function StatGrid({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions();
+  const items = Children.toArray(children);
+  const compact = width < 600 && items.length <= 3;
+  return (
+    <StatCompact.Provider value={compact}>
+      <View style={{ flexDirection: "row", flexWrap: compact ? "nowrap" : "wrap", gap: compact ? 8 : 12 }}>
+        {items.map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n} style={compact ? { flex: 1, minWidth: 0 } : { flexGrow: 1, flexBasis: width < 600 ? 140 : 200, minWidth: 0 }}>{child}</Stagger>)}
+      </View>
+    </StatCompact.Provider>
+  );
+}

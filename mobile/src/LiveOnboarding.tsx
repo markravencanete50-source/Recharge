@@ -132,7 +132,7 @@ export function OnboardingGate({ account, palette: p, onSignOut, children }: { a
           {!!status.contractsNeeded && <Step p={p} number={1} title="Sign your contract" done={contractsDone}>
             <List p={p} empty="">
               {status.contracts.map((c, i) => (
-                <Row key={c.id} p={p} first={i === 0} title={c.title} detail={c.current ? `Signed ${c.signedAt ? when(c.signedAt) : ""}` : c.signedVersion ? "The wording has changed. Read it and sign again." : "Read and sign"}
+                <Row key={c.id} p={p} first={i === 0} icon={c.current ? "check-circle" : "edit-3"} title={c.title} detail={c.current ? `Signed ${c.signedAt ? when(c.signedAt) : ""}` : c.signedVersion ? "The wording has changed. Read it and sign again." : "Read and sign"}
                   tags={[c.current ? ["Signed", "good"] : ["To sign", "wait"]]} onPress={c.current ? undefined : () => setSigning(c)} />
               ))}
             </List>
@@ -141,7 +141,7 @@ export function OnboardingGate({ account, palette: p, onSignOut, children }: { a
             <List p={p} empty="">
               {status.courses.map((c, i) => {
                 const course = courses.find(x => x.id === c.id);
-                return <Row key={c.id} p={p} first={i === 0} title={c.title} detail={c.completedAt ? `Completed ${when(c.completedAt)}` : course ? `${course.minutes} min` : "Open to read"}
+                return <Row key={c.id} p={p} first={i === 0} icon={c.completedAt ? "check-circle" : "play-circle"} title={c.title} detail={c.completedAt ? `Completed ${when(c.completedAt)}` : course ? `${course.minutes} min` : "Open to read"}
                   tags={[c.completedAt ? ["Completed", "good"] : ["To do", "wait"]]} onPress={course ? () => setReading(course) : undefined} />;
               })}
             </List>
@@ -233,14 +233,14 @@ export function StaffContracts({ p }: { p: Palette }) {
         <Button label="New contract" icon="plus" p={p} onPress={() => setEditing("new")} />
         <List p={p} empty="No contracts yet. Add the one new staff sign.">
           {contracts.map((c, i) => (
-            <Row key={c.id} p={p} first={i === 0} title={c.title} detail={`${c.audience.map(a => AUDIENCE_LABEL[a] ?? a).join(", ")} · version ${c.version}`}
+            <Row key={c.id} p={p} first={i === 0} icon="file-text" title={c.title} detail={`${c.audience.map(a => AUDIENCE_LABEL[a] ?? a).join(", ")} · version ${c.version}`}
               tags={[c.active ? ["In use", "good"] : ["Not in use", "plain"], [`${new Set((c.signatures ?? []).map(s => s.userId)).size} signed`, "plain"]]} onPress={() => setViewing(c)} />
           ))}
         </List>
       </Section>
       <Section title="Team onboarding" count={waiting} p={p}>
         <List p={p} empty="No active team members yet.">
-          {people.map((x, i) => <Row key={x.userId} p={p} first={i === 0} title={x.fullName || "Team member"} detail={AUDIENCE_LABEL[x.role] ?? x.role}
+          {people.map((x, i) => <Row key={x.userId} p={p} first={i === 0} icon={!x.required || x.complete ? "user-check" : "user"} title={x.fullName || "Team member"} detail={AUDIENCE_LABEL[x.role] ?? x.role}
             tags={[[onboardingProgress(x), !x.required || x.complete ? "good" : "wait"]]} />)}
         </List>
       </Section>
@@ -249,7 +249,7 @@ export function StaffContracts({ p }: { p: Palette }) {
           <Button label="Edit contract" icon="edit-3" primary p={p} onPress={() => { const c = viewing; setViewing(null); setEditing(c); }} />
           <Section title="Signatures" count={undefined} p={p}>
             <List p={p} empty="Nobody has signed yet.">
-              {(viewing.signatures ?? []).map((s, i) => <Row key={s.userId + s.version} p={p} first={i === 0} title={s.fullName} detail={`Signed “${s.signedName}” on ${when(s.signedAt)}`}
+              {(viewing.signatures ?? []).map((s, i) => <Row key={s.userId + s.version} p={p} first={i === 0} icon="edit-3" title={s.fullName} detail={`Signed “${s.signedName}” on ${when(s.signedAt)}`}
                 tags={[s.version === viewing.version ? ["Current wording", "good"] : [`Version ${s.version}`, "plain"]]} />)}
             </List>
           </Section>

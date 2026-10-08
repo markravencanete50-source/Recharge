@@ -4,7 +4,7 @@ import { Text } from "./Typography";
 import { TweenNumber } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, useRequestId, Loading } from "./LiveKit";
+import { Button, Field, message, Notice, Section, useRequestId, Loading, StatGrid, StatTile } from "./LiveKit";
 import { ExpenseSheet, List, NoteSheet, Pills, Row, type NoteAsk } from "./LiveAccounts";
 import { LiveTraining } from "./LiveTraining";
 import { LivePeople } from "./LivePeople";
@@ -85,9 +85,9 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
 
   const tiles = [
-    { label: "Cleaning decisions", value: queue?.cleaningDecisions.length ?? 0 },
-    { label: "Costs above the limit", value: queue?.expensesOverLimit.length ?? 0 },
-    { label: "Owner approvals over 48 hours", value: queue?.stalledOwnerApprovals.length ?? 0 },
+    { label: "Cleaning decisions", value: queue?.cleaningDecisions.length ?? 0, icon: "check-square" as const, detail: "Complaints and reviews" },
+    { label: "Costs over limit", value: queue?.expensesOverLimit.length ?? 0, icon: "alert-triangle" as const, detail: "Need your approval" },
+    { label: "Owner approvals", value: queue?.stalledOwnerApprovals.length ?? 0, icon: "clock" as const, detail: "Waiting over 48 hours" },
   ];
   return (
     <View style={{ gap: 20 }}>
@@ -95,14 +95,9 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Management</Text>
         <Text style={[ui.body, { color: p.muted }]}>Everything waiting on a management decision, in one place.</Text>
       </View>
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        {tiles.map(tile => (
-          <View key={tile.label} style={[ui.card, { flex: 1, padding: 14, gap: 4, backgroundColor: p.surface, borderColor: tile.value ? p.primary : p.border }]}>
-            <TweenNumber value={tile.value} style={{ color: p.text, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} />
-            <Text numberOfLines={3} style={[ui.small, { color: p.muted }]}>{tile.label}</Text>
-          </View>
-        ))}
-      </View>
+      <StatGrid>
+        {tiles.map(tile => <StatTile key={tile.label} p={p} icon={tile.icon} label={tile.label} value={tile.value} detail={tile.detail} attention={tile.value > 0} />)}
+      </StatGrid>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
       <Pills p={p} values={["queue", "people", "properties", "performance", "team", "training"] as const} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training" })[v]} />
@@ -111,7 +106,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
         <Section title="Cleaning decisions" count={queue.cleaningDecisions.length} p={p}>
           <List p={p} empty="No cleaning decisions waiting.">
             {queue.cleaningDecisions.map((d, i) => (
-              <Row key={d.workId} p={p} first={i === 0} title={d.kind === "cleaning_complaint" ? `Rejected clean · ${d.cleanerName ?? "Cleaner"}` : `Review ${d.cleanerName ?? "cleaner"}`}
+              <Row key={d.workId} p={p} first={i === 0} icon="check-square" tone="cleans" title={d.kind === "cleaning_complaint" ? `Rejected clean · ${d.cleanerName ?? "Cleaner"}` : `Review ${d.cleanerName ?? "cleaner"}`}
                 detail={`${d.propertyName} · raised ${since(d.createdAt)}`} tags={[d.cleanerStatement ? ["Cleaner has responded", "plain"] : ["Awaiting cleaner", "wait"]]} onPress={() => setDecision(d)} />
             ))}
           </List>
@@ -120,7 +115,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
           {limit !== null && <Text style={[ui.small, { color: p.muted }]}>Accounts approves up to {pounds(limit)}. These need you.</Text>}
           <List p={p} empty="Nothing above the limit.">
             {queue.expensesOverLimit.map((e, i) => (
-              <Row key={e.id} p={p} first={i === 0} title={e.supplier} detail={`${e.propertyName} · ${e.reference}`} amount={pounds(e.amountMinor)}
+              <Row key={e.id} p={p} first={i === 0} icon="alert-triangle" tone="accounts" title={e.supplier} detail={`${e.propertyName} · ${e.reference}`} amount={pounds(e.amountMinor)}
                 tags={[e.hasInvoice && e.hasProof ? ["Evidence complete", "good"] : ["Evidence missing", "wait"]]} onPress={() => setExpense(e.id)} />
             ))}
           </List>
@@ -128,14 +123,14 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
         <Section title="Owner approvals waiting over 48 hours" count={queue.stalledOwnerApprovals.length} p={p}>
           <List p={p} empty="No repairs are stuck with an owner.">
             {queue.stalledOwnerApprovals.map((a, i) => (
-              <Row key={a.workId} p={p} first={i === 0} title={a.title} detail={`${a.propertyName} · waiting ${since(a.waitingSince)}. Chase the owner: they approve in their app.`} amount={pounds(a.estimatedCostMinor)} />
+              <Row key={a.workId} p={p} first={i === 0} icon="clock" tone="clients" title={a.title} detail={`${a.propertyName} · waiting ${since(a.waitingSince)}. Chase the owner: they approve in their app.`} amount={pounds(a.estimatedCostMinor)} />
             ))}
           </List>
         </Section>
         <Section title="Owners who owe a balance" count={queue.ownerBalancesDue.length} p={p}>
           <List p={p} empty="No owner balances due.">
             {queue.ownerBalancesDue.map((s, i) => (
-              <Row key={s.id} p={p} first={i === 0} title={s.propertyName} detail={`${s.period} statement · ${s.status === "draft" ? "not issued yet" : "issued"}. Invoice the owner.`} amount={pounds(-s.payoutMinor)} />
+              <Row key={s.id} p={p} first={i === 0} icon="pie-chart" tone="accounts" title={s.propertyName} detail={`${s.period} statement · ${s.status === "draft" ? "not issued yet" : "issued"}. Invoice the owner.`} amount={pounds(-s.payoutMinor)} />
             ))}
           </List>
         </Section>
@@ -146,7 +141,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
         <Section title="Cleaners this month" p={p}>
           <List p={p} empty="No active cleaners yet.">
             {team.map((c, i) => (
-              <Row key={c.cleanerId} p={p} first={i === 0} title={c.fullName} detail={`${c.accepted} accepted · ${c.rejected} rejected · ${c.overturned} overturned`}
+              <Row key={c.cleanerId} p={p} first={i === 0} icon="user" tone="cleans" title={c.fullName} detail={`${c.accepted} accepted · ${c.rejected} rejected · ${c.overturned} overturned`}
                 tags={c.warning ? [["Warning", "bad"]] : c.openComplaints.length ? [[`${c.openComplaints.length} open complaint${c.openComplaints.length === 1 ? "" : "s"}`, "wait"]] : [["On track", "good"]]} />
             ))}
           </List>

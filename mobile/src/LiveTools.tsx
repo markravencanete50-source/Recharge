@@ -8,10 +8,11 @@ import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { FurnishingSheet } from "./LiveFurnishing";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
+import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading, type IconName } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readTeams, readWorkspace, workspaceRequest, writeWorkspace } from "./backend/client";
 import { toolsFor, type Tool, type WorkView } from "../../lib/tool-directory";
+import { WORKSPACE_MAP } from "../../lib/workspace-map";
 import type { ModuleId } from "../../lib/modules";
 import type { PropertyView } from "../../lib/workspace-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -31,7 +32,7 @@ export function ToolDirectory({ palette: p, account, properties, onOpen }: { pal
     <Section title="Your tools" count={undefined} p={p}>
       <Text style={[ui.small, { color: p.muted }]}>Every tool on your account and where to find it.</Text>
       <List p={p} empty="No tools are on your account yet. Ask an administrator.">
-        {tools.map((t, i) => <Row key={t.id} p={p} first={i === 0} title={t.name} detail={t.place.where} onPress={() => open(t)} />)}
+        {tools.map((t, i) => <Row key={t.id} p={p} first={i === 0} icon={WORKSPACE_MAP[t.id].icon as IconName} tone={WORKSPACE_MAP[t.id].tone} title={t.name} detail={t.place.where} onPress={() => open(t)} />)}
       </List>
       <TrackerSheet palette={p} tool={tracker} properties={properties} onClose={() => setTracker(null)} />
       <FurnishingSheet palette={p} visible={calculator} onClose={() => setCalculator(false)} />
@@ -95,7 +96,7 @@ function TrackerSheet({ palette: p, tool, properties, onClose }: { palette: Pale
       <List p={p} empty={loading ? "Loading…" : "Nothing here yet."}>
         {rows.map((r, i) => (
           <View key={r.id} style={{ gap: 8, paddingVertical: 4, borderTopWidth: i ? 1 : 0, borderColor: p.border }}>
-            <Row p={p} first title={r.title} detail={[names.get(r.property_id), r.description].filter(Boolean).join(" · ")} tags={[STATUS_TAG[r.status] ?? [r.status, "plain"]]} />
+            <Row p={p} first icon={tool ? WORKSPACE_MAP[tool.id].icon as IconName : "clipboard"} tone={tool ? WORKSPACE_MAP[tool.id].tone : undefined} title={r.title} detail={[names.get(r.property_id), r.description].filter(Boolean).join(" · ")} tags={[STATUS_TAG[r.status] ?? [r.status, "plain"]]} />
             {!["completed", "cancelled"].includes(r.status) && <View style={[ui.row, { gap: 8, flexWrap: "wrap", paddingBottom: 8 }]}>
               {r.status === "waiting" && <Button label="Start" p={p} disabled={busy} onPress={() => void move(r, "in_progress")} />}
               <Button label="Done" icon="check" p={p} disabled={busy} onPress={() => void move(r, "completed")} />
@@ -139,7 +140,7 @@ export function MailboxSection({ palette: p }: { palette: Palette }) {
       {loading && <Loading p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <List p={p} empty={loading ? "Loading…" : "No post has been handled yet."}>
-        {mail.map((m, i) => <Row key={m.workId} p={p} first={i === 0} title={m.propertyName} detail={`${new Date(m.on + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })} · ${MAIL_LABEL[m.action] ?? m.action}${m.note ? " · " + m.note : ""}`} />)}
+        {mail.map((m, i) => <Row key={m.workId} p={p} first={i === 0} icon="mail" tone="clients" title={m.propertyName} detail={`${new Date(m.on + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })} · ${MAIL_LABEL[m.action] ?? m.action}${m.note ? " · " + m.note : ""}`} />)}
       </List>
     </Section>
   );

@@ -273,7 +273,7 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
         <Pills p={p} values={["pending", "active", "revoked", "all"] as const} value={shownFilter} onChange={setPersonFilter} label={v => ({ pending: `Waiting (${pending})`, active: "Active", revoked: "Revoked", all: "Everyone" })[v]} />
         <List p={p} empty={shownFilter === "pending" ? "Nobody is waiting for approval." : "No people match."}>
           {shownPeople.map((x, i) => (
-            <Row key={x.userId} p={p} first={i === 0} title={x.fullName || x.email || "New account"} detail={`${roleLabel(x.role)} · ${x.email ?? "phone sign-up"}${!isWorkspaceAdmin(x.role) ? ` · ${x.assignments.length} propert${x.assignments.length === 1 ? "y" : "ies"}` : ""}`}
+            <Row key={x.userId} p={p} first={i === 0} icon={x.status === "pending" ? "user-plus" : x.status === "revoked" ? "user-x" : "user"} title={x.fullName || x.email || "New account"} detail={`${roleLabel(x.role)} · ${x.email ?? "phone sign-up"}${!isWorkspaceAdmin(x.role) ? ` · ${x.assignments.length} propert${x.assignments.length === 1 ? "y" : "ies"}` : ""}`}
               tags={[STATUS_TAG[x.status], ...(!x.emailVerified ? [["Email not verified", "wait"] as [string, "wait"]] : [])]} onPress={() => setOpenPerson(x.userId)} />
           ))}
         </List>
@@ -286,7 +286,7 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
         <List p={p} empty="No properties match.">
           {shownProperties.map((x, i) => {
             const owners = x.people.filter(y => y.assignment === "client").map(y => y.fullName);
-            return <Row key={x.id} p={p} first={i === 0} title={x.name} detail={`${x.region || "No region"} · ${x.bedrooms} bed · ${owners.length ? "Owner " + owners.join(", ") : "No owner assigned"} · ${x.people.length} people`}
+            return <Row key={x.id} p={p} first={i === 0} icon="home" tone="stays" title={x.name} detail={`${x.region || "No region"} · ${x.bedrooms} bed · ${owners.length ? "Owner " + owners.join(", ") : "No owner assigned"} · ${x.people.length} people`}
               tags={[PROPERTY_TAG[x.status]]} onPress={() => setOpenProperty(x.id)} />;
           })}
         </List>

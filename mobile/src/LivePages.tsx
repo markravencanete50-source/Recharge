@@ -13,6 +13,8 @@ import { LiveTraining } from "./LiveTraining";
 import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
+import { formatCount, formatMoney } from "../../lib/format";
+import { StatGrid, StatTile, type IconName } from "./LiveKit";
 import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
 import { Calendar } from "./WorkspaceScreens";
 import { Sheet } from "./TeamFlows";
@@ -29,7 +31,7 @@ import { createOperationForms, journeyForms, newEnquiryForm, operationForms, wor
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 export const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
-const money = (n: unknown) => "£" + (Number(n) / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (n: unknown) => formatMoney(Number(n));
 const hoverLift = Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {};
 export async function liveApi(path: string, body?: Record<string, unknown>) {
   const response = await workspaceRequest("/api/mobile" + path, body);
@@ -193,25 +195,20 @@ function PropertyCard({ property, index, palette: p, onPress }: { property: Prop
 // The portfolio at a glance for the team: live, onboarding, owners, and properties per region.
 function PortfolioCard({ palette: p, summary }: { palette: Palette; summary: PortfolioSummary }) {
   const top = summary.regions[0]?.count || 1;
-  const stats: [string, number][] = [["Properties", summary.total], ["Live", summary.live], ["Onboarding", summary.onboarding], ["Owners", summary.owners]];
+  const stats: [string, number, IconName][] = [["Properties", summary.total, "home"], ["Live", summary.live, "check-circle"], ["Onboarding", summary.onboarding, "key"], ["Owners", summary.owners, "users"]];
   return (
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 14 }]}>
       <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Portfolio</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-        {stats.map(([label, value]) => (
-          <View key={label} style={{ flexGrow: 1, flexBasis: 120, padding: 12, borderRadius: 16, backgroundColor: p.wash, gap: 2 }}>
-            <TweenNumber value={value} style={{ color: p.text, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} />
-            <Text style={[ui.small, { color: p.muted }]}>{label}</Text>
-          </View>
-        ))}
-      </View>
+      <StatGrid>
+        {stats.map(([label, value, icon]) => <StatTile key={label} p={p} icon={icon} tone="stays" label={label} value={value} />)}
+      </StatGrid>
       <View style={{ gap: 8 }}>
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>By region</Text>
         {summary.regions.slice(0, 8).map(r => (
           <View key={r.region} accessibilityLabel={`${r.region}: ${r.count}`} style={[ui.row, { gap: 10 }]}>
             <Text numberOfLines={1} style={{ color: p.text, width: 130, fontSize: 13 }}>{r.region}</Text>
             <GrowBar share={Math.max(0.06, r.count / top)} color={p.primary} track={p.wash} />
-            <Text style={{ color: p.text, width: 28, textAlign: "right", fontSize: 13, fontWeight: "600" }}>{r.count}</Text>
+            <Text style={{ color: p.text, minWidth: 32, textAlign: "right", fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatCount(r.count)}</Text>
           </View>
         ))}
       </View>

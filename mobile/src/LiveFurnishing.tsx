@@ -5,8 +5,9 @@ import { Text } from "./Typography";
 import { MotionPress, Pop, SwapIn, TweenNumber } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Notice } from "./LiveKit";
+import { Button, Notice, StatGrid, StatTile } from "./LiveKit";
 import { exportReport } from "./exportReport";
+import { formatCount } from "../../lib/format";
 import { calculateFurnishing, clampInput, DEFAULT_LAYOUT, furnishingCsv, furnishingText, INPUTS, type Count, type Layout } from "../../lib/furnishing-calculator";
 
 // The furnishing calculator, inside the app: enter the property layout and the full quantity list
@@ -55,12 +56,7 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
   }
 
   const group = (g: "rooms" | "sleeping") => INPUTS.filter(i => i.group === g).map(i => <Stepper key={i.key} p={p} label={i.label} help={i.help} value={layout[i.key]} min={i.min} max={i.max} onChange={v => set(i.key, v)} />);
-  const stat = (label: string, value: number | string) => (
-    <View style={{ flexGrow: 1, flexBasis: 110, padding: 14, borderRadius: 16, backgroundColor: p.wash, gap: 2 }}>
-      <Text style={{ color: p.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>{label}</Text>
-      {typeof value === "number" ? <TweenNumber value={value} style={{ color: p.text, fontSize: 26, fontWeight: "700", fontVariant: ["tabular-nums"] }} /> : <Text style={{ color: p.text, fontSize: 26, fontWeight: "700" }}>{value}</Text>}
-    </View>
-  );
+
 
   return (
     <View style={{ gap: 18 }}>
@@ -96,9 +92,11 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
           <Text style={{ color: p.muted, fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>Property</Text>
           <Text style={{ color: p.text, fontSize: 17, fontWeight: "700" }}>{layout.address.trim() || "Address not entered"}</Text>
         </View>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          {stat("Bedrooms", layout.bedrooms)}{stat("Guests", layout.guests)}{stat("Total beds", list.beds)}
-        </View>
+        <StatGrid>
+          <StatTile p={p} icon="moon" tone="clients" label="Bedrooms" value={layout.bedrooms} />
+          <StatTile p={p} icon="users" tone="clients" label="Guests" value={layout.guests} />
+          <StatTile p={p} icon="layers" tone="clients" label="Total beds" value={list.beds} />
+        </StatGrid>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {list.categories.map(c => {
             const on = c.id === selected?.id;
@@ -136,7 +134,7 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
       </SwapIn>
 
       <View style={[ui.between, { gap: 12, padding: 16, borderRadius: 18, backgroundColor: p.header }]}>
-        <View style={[ui.row, { gap: 8, alignItems: "baseline" }]}><TweenNumber value={list.total} style={{ color: p.headerText, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} /><Text style={{ color: p.headerText, fontSize: 15 }}>required units</Text></View>
+        <View style={[ui.row, { gap: 8, alignItems: "baseline" }]}><TweenNumber value={list.total} format={formatCount} style={{ color: p.headerText, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} /><Text style={{ color: p.headerText, fontSize: 15 }}>required units</Text></View>
         <MotionPress accessibilityRole="button" onPress={() => setStep(step === "details" ? "list" : "details")} style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 12, justifyContent: "center", backgroundColor: p.headerText }}>
           <Text style={{ color: p.header, fontWeight: "700" }}>{step === "details" ? "View list" : "Edit details"}</Text>
         </MotionPress>

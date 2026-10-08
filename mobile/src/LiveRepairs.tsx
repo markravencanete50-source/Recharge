@@ -8,6 +8,7 @@ import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
+import { formatMoney } from "../../lib/format";
 import { readOperations, readTeams, writeOperation, writeTeams, writeWorkspace } from "./backend/client";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import { scheduleSchema } from "../../lib/cleans-live";
@@ -18,7 +19,7 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 // Ready's routine visits. Every action here is checked again by the database.
 type Operation = z.infer<typeof operationViewSchema>;
 type Visit = z.infer<typeof scheduleSchema>["work"][number];
-const pounds = (minor: unknown) => typeof minor === "number" ? "£" + (minor / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+const pounds = (minor: unknown) => typeof minor === "number" ? formatMoney(minor) : "–";
 const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", referReady: "Refer to Ready", bookRepair: "Book the repair", completeRepair: "Complete the repair" };
 
 export function LiveRepairs({ palette: p, account, properties }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {

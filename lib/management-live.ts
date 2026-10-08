@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatDuration } from "./format";
 import { expenseSchema, statementSchema } from "./accounts-live";
 import { performanceSchema } from "./cleans-live";
 
@@ -97,4 +98,4 @@ export const teamPerformanceSchema = z.object({
 export type TeamPerformance = z.infer<typeof teamPerformanceSchema>;
 // The shift a clock-in falls in: early 08:00-15:00/16:00, late from 15:00 (London time).
 export const shiftName = (iso: string) => { const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hour12: false }).format(new Date(iso))); return hour < 7 || hour >= 23 ? "Out of hours" : hour < 13 ? "Early shift" : "Late shift"; };
-export const hoursLabel = (minutes: number) => minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+export const hoursLabel = (minutes: number) => formatDuration(minutes);

@@ -158,7 +158,7 @@ export function LiveTraining({ palette: p, manage = false }: { palette: Palette;
       <List p={p} empty={manage ? "No courses yet. Add the first one." : "No training has been assigned to you yet."}>
         {/* Drafts are for the people writing them; everyone else sees published courses only. */}
         {courses.filter(c => manage || c.published).map((c, i) => (
-          <Row key={c.id} p={p} first={i === 0} title={c.title} detail={`${c.minutes} min · ${c.audience.map(a => AUDIENCE_LABEL[a] ?? readableStage(a)).join(", ")}`}
+          <Row key={c.id} p={p} first={i === 0} icon={c.completedAt ? "check-circle" : c.videoUrl ? "play-circle" : "book-open"} title={c.title} detail={`${c.minutes} min · ${c.audience.map(a => AUDIENCE_LABEL[a] ?? readableStage(a)).join(", ")}`}
             tags={[c.completedAt ? ["Completed", "good"] : manage && !c.published ? ["Draft", "plain"] : ["To do", "wait"], ...(c.required ? [["Required", "plain"] as [string, "plain"]] : []), ...(manage && c.completions != null ? [[`${c.completions} completed`, "plain"] as [string, "plain"]] : [])]}
             onPress={() => manage ? setEditing(c) : setOpen(c)} />
         ))}

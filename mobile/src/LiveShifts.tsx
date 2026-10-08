@@ -10,6 +10,7 @@ import { List, Pills, Row } from "./LiveAccounts";
 import { readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, shiftName, teamPerformanceSchema, type Shift, type TeamPerformance } from "../../lib/management-live";
 import { DEPARTMENTS } from "../../lib/workspace-teams-policy";
+import { formatCount, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Clocking in and out, and the team's guest reply times. Guest relations replies are timed:
@@ -129,7 +130,7 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
       {data && t && <>
         <Section title="On shift now" count={data.onShift.length} p={p}>
           <List p={p} empty="Nobody is clocked in.">
-            {data.onShift.map((s, i) => <Row key={s.id} p={p} first={i === 0} title={s.fullName ?? "Team member"} detail={`${DEPARTMENT_LABEL[s.department] ?? s.department} · since ${time(s.clockedInAt)} · ${hoursLabel(sinceMinutes(s.clockedInAt))}`}
+            {data.onShift.map((s, i) => <Row key={s.id} p={p} first={i === 0} icon="clock" tone="stays" title={s.fullName ?? "Team member"} detail={`${DEPARTMENT_LABEL[s.department] ?? s.department} · since ${time(s.clockedInAt)} · ${hoursLabel(sinceMinutes(s.clockedInAt))}`}
               tags={[[shiftName(s.clockedInAt), "plain"]]} onPress={() => setClosing(s)} />)}
           </List>
         </Section>
@@ -144,12 +145,12 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
               const total = x.green + x.amber + x.red;
               const tags: [string, "good" | "wait" | "bad" | "plain"][] = total ? [[`${x.percentGreen}% green`, x.onTrack ? "good" : "bad"], [x.onTrack ? "On track" : "Off track", x.onTrack ? "good" : "bad"]] : [["No replies yet", "plain"]];
               if (x.bonusTier) tags.push([`Bonus tier ${x.bonusTier}%`, "good"]);
-              return <Row key={x.userId} p={p} first={i === 0} title={x.fullName || "Team member"}
-                detail={`${total ? `${x.green} green · ${x.amber} amber · ${x.red} red · ` : ""}${hoursLabel(x.minutes)} over ${x.shifts} shift${x.shifts === 1 ? "" : "s"} · ${x.listingChecks} listing checks · ${x.pricingDecisions} pricing decisions`} tags={tags} />;
+              return <Row key={x.userId} p={p} first={i === 0} icon={x.onTrack ? "trending-up" : total ? "trending-down" : "user"} tone="stays" title={x.fullName || "Team member"}
+                detail={`${total ? `${formatCount(x.green)} green · ${formatCount(x.amber)} amber · ${formatCount(x.red)} red · ` : ""}${hoursLabel(x.minutes)} over ${plural(x.shifts, "shift")} · ${plural(x.listingChecks, "listing check")} · ${plural(x.pricingDecisions, "pricing decision")}`} tags={tags} />;
             })}
           </List>
           {data.unassigned.green + data.unassigned.amber + data.unassigned.red > 0 && <Notice p={p} tone="bad"
-            text={`${data.unassigned.green + data.unassigned.amber + data.unassigned.red} guest messages arrived while nobody was clocked in to guest relations (${data.unassigned.red} red).`} />}
+            text={`${plural(data.unassigned.green + data.unassigned.amber + data.unassigned.red, "guest message")} arrived while nobody was clocked in to guest relations (${formatCount(data.unassigned.red)} red).`} />}
         </Section>
         <TargetsSheet key={t.version} p={p} targets={t} visible={targets} onClose={() => setTargets(false)} onDone={load} />
       </>}

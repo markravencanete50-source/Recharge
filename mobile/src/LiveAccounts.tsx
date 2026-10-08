@@ -7,7 +7,8 @@ import { Text } from "./Typography";
 import { MotionPress, Pop, Stagger, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, london, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
+import { Button, Field, IconChip, london, message, Notice, Section, StatGrid, StatTile, Tag, useRequestId, Loading, type IconName, type Tone } from "./LiveKit";
+import { formatCount, formatMoney } from "../../lib/format";
 import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
 import {
   EVIDENCE_KINDS, EXPENSE_CATEGORIES, PAYOUT_LABEL, expenseMoves, expenseSchema, expensesSchema, monthLabel, overviewSchema, policySchema, pounds,
@@ -47,16 +48,19 @@ export function Pills<T extends string>({ p, values, value, onChange, label }: {
   );
 }
 
-export function Row({ p, title, detail, amount, tags, onPress, first }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean }) {
+// A list row: optional icon, title, supporting line and status tags, with any amount
+// right-aligned in lining figures so columns of money line up.
+export function Row({ p, title, detail, amount, tags, onPress, first, icon, tone }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean; icon?: IconName; tone?: Tone }) {
   return (
-    <MotionPress accessibilityRole={onPress ? "button" : undefined} disabled={!onPress} accessibilityLabel={[title, amount, ...(tags ?? []).map(t => t[0])].filter(Boolean).join(", ")} onPress={onPress} style={[ui.row, { gap: 12, paddingVertical: 14, borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
+    <MotionPress accessibilityRole={onPress ? "button" : undefined} disabled={!onPress} accessibilityLabel={[title, amount, ...(tags ?? []).map(t => t[0])].filter(Boolean).join(", ")} onPress={onPress} style={[ui.row, { gap: 14, paddingVertical: 14, alignItems: tags?.length ? "flex-start" : "center", borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
+      {!!icon && <IconChip icon={icon} tone={tone} p={p} />}
       <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{title}</Text>
         <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{detail}</Text>
         {!!tags?.length && <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{tags.map(([label, tone]) => <Tag key={label} label={label} tone={tone} p={p} />)}</View>}
       </View>
-      {!!amount && <Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{amount}</Text>}
-      {!!onPress && <Feather name="chevron-right" size={18} color={p.muted} />}
+      {!!amount && <Text style={{ color: p.text, fontSize: 15, fontWeight: "700", fontVariant: ["tabular-nums"], textAlign: "right", alignSelf: "center" }}>{amount}</Text>}
+      {!!onPress && <Feather name="chevron-right" size={18} color={p.muted} style={{ alignSelf: "center" }} />}
     </MotionPress>
   );
 }
@@ -381,9 +385,9 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
 
   const unsettled = (overview?.unsettledPayouts ?? 0) + (overview?.missingDetails ?? 0);
   const tiles = [
-    { label: "To approve", value: String(overview?.toApproveCount ?? 0), detail: pounds(overview?.toApproveMinor ?? 0) },
-    { label: "Stays to reconcile", value: String(unsettled), detail: monthLabel(period) },
-    { label: "Statements paid", value: `${overview?.statements.paid ?? 0}/${statements.length}`, detail: `${overview?.statements.issued ?? 0} issued, ${overview?.statements.draft ?? 0} draft` },
+    { label: "To approve", value: overview?.toApproveCount ?? 0, icon: "check-circle" as IconName, detail: formatMoney(overview?.toApproveMinor ?? 0) + " in costs", attention: (overview?.toApproveCount ?? 0) > 0 },
+    { label: "To reconcile", value: unsettled, icon: "repeat" as IconName, detail: "Stays · " + monthLabel(period), attention: unsettled > 0 },
+    { label: "Statements paid", value: `${formatCount(overview?.statements.paid ?? 0)} of ${formatCount(statements.length)}`, icon: "pie-chart" as IconName, detail: `${formatCount(overview?.statements.issued ?? 0)} issued · ${formatCount(overview?.statements.draft ?? 0)} draft`, attention: false },
   ];
 
   return (
@@ -399,15 +403,9 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
         <MotionPress accessibilityRole="button" accessibilityLabel="Next month" accessibilityState={{ disabled: period >= thisMonth }} disabled={period >= thisMonth} onPress={() => setPeriod(shiftMonth(period, 1))} style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: period >= thisMonth ? p.elevated : p.wash }}><Feather name="chevron-right" size={20} color={period >= thisMonth ? p.muted : p.primary} /></MotionPress>
       </View>
 
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        {tiles.map(tile => (
-          <View key={tile.label} style={[ui.card, { flex: 1, padding: 14, gap: 4, backgroundColor: p.surface, borderColor: p.border }]}>
-            <SwapIn swapKey={String(tile.value)}><Text style={{ color: p.text, fontSize: 22, fontWeight: "700" }}>{tile.value}</Text></SwapIn>
-            <Text numberOfLines={2} style={[ui.small, { color: p.text, fontWeight: "600" }]}>{tile.label}</Text>
-            <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{tile.detail}</Text>
-          </View>
-        ))}
-      </View>
+      <StatGrid>
+        {tiles.map(tile => <StatTile key={tile.label} p={p} icon={tile.icon} tone="accounts" label={tile.label} value={tile.value} detail={tile.detail} attention={tile.attention} />)}
+      </StatGrid>
 
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}

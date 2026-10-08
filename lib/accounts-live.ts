@@ -1,3 +1,4 @@
+import { formatMoney } from "./format";
 import { z } from "zod";
 
 // Response shapes and rules the live Accounts screens rely on, shared with the
@@ -99,6 +100,7 @@ export const PAYOUT_LABEL: Record<PayoutRow["state"], [string, "good" | "wait" |
   no_reference: ["Needs platform code", "wait"], no_expected_amount: ["Needs expected payout", "wait"],
 };
 
-export const pounds = (value: number | null | undefined) => value == null ? "–" : (value < 0 ? "−£" : "£") + (Math.abs(value) / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Money is written one way across the app (lib/format).
+export const pounds = (value: number | null | undefined) => formatMoney(value);
 export const shiftMonth = (period: string, by: number) => { const [y, m] = period.split("-").map(Number); const d = new Date(Date.UTC(y, m - 1 + by, 1)); return d.toISOString().slice(0, 7); };
 export const monthLabel = (period: string) => new Date(period + "-01T12:00:00Z").toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });

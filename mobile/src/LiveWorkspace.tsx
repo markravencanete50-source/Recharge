@@ -34,6 +34,7 @@ import { LiveOwner } from "./LiveOwner";
 import { OnboardingGate } from "./LiveOnboarding";
 import { FurnishingCard, MailboxSection } from "./LiveTools";
 import { workViewsFor, type WorkView } from "../../lib/tool-directory";
+import { formatBps, formatMoney } from "../../lib/format";
 import { liveApiOrigin, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { WorkspaceSection } from "../../lib/workspace-map";
@@ -218,7 +219,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
         {policy && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch" }]}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Direct-booking discount policy</Text>
-            <Text style={[ui.small, { color: p.muted }]}>{policy.confirmed ? `Confirmed: ${policy.discount_bps / 100}% off, up to £${(policy.discount_cap_minor / 100).toFixed(2)}, for stays of ${policy.minimum_nights} nights or more.` : "Not confirmed yet, so direct-booking offers can't be prepared."}</Text>
+            <Text style={[ui.small, { color: p.muted }]}>{policy.confirmed ? `Confirmed: ${formatBps(policy.discount_bps)} off, up to ${formatMoney(policy.discount_cap_minor)}, for stays of ${policy.minimum_nights} nights or more.` : "Not confirmed yet, so direct-booking offers can't be prepared."}</Text>
           </View>
           {account.role === "super_admin" && <SoftButton label={policy.confirmed ? "Change policy" : "Review and confirm"} icon="check" primary={!policy.confirmed} palette={p} onPress={() => setForm(bookingPolicyForm(policy))} />}
         </View>}
@@ -245,7 +246,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
         <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
           {invoices.map((invoice, i) => (
             <View key={invoice.id} style={[ui.between, { gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
-              <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text><Text style={[ui.small, { color: p.muted }]}>{names.get(invoice.property_id) ?? "Property"} · {invoice.currency} {(invoice.amount_minor / 100).toFixed(2)} · {readableStage(invoice.status)}</Text></View>
+              <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text><Text style={[ui.small, { color: p.muted }]}>{names.get(invoice.property_id) ?? "Property"} · {invoice.currency === "GBP" ? formatMoney(invoice.amount_minor) : `${invoice.currency} ${(invoice.amount_minor / 100).toFixed(2)}`} · {readableStage(invoice.status)}</Text></View>
               {invoice.status === "issued" && <MotionPress accessibilityRole="button" onPress={() => setForm({ key: "settle-" + invoice.id, title: "Confirm verified invoice payment", description: "Only confirm after checking the payment has actually settled.", endpoint: "workspace", fields: [{ name: "verified", label: "I have verified this invoice payment has settled", type: "checkbox", required: true }], build: () => ({ action: "setInvoiceStatus", invoiceId: invoice.id, version: invoice.version, status: "paid" }) })} style={[ui.button, { backgroundColor: p.wash, minHeight: 40 }]}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Record payment</Text></MotionPress>}
             </View>
           ))}
@@ -338,7 +339,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
         {openWork && <>
           {["issue", "report", "requirements", "guestUpdate", "reason"].filter(key => typeof openWork.data[key] === "string").map(key => <View key={key} style={{ gap: 4 }}><Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>{readableStage(key)}</Text><Text style={[ui.body, { color: p.text }]}>{String(openWork.data[key])}</Text></View>)}
           {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
-          {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: £{(Number(openWork.data.estimatedCostMinor) / 100).toFixed(2)}</Text>}
+          {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: {formatMoney(Number(openWork.data.estimatedCostMinor))}</Text>}
           {operationForms(account, openWork).map(f => <SoftButton key={f.key} label={f.title} icon="arrow-right" palette={p} disabled={f.key === "prepareQuote" && !policyConfirmed} onPress={() => { setOpenWork(null); setForm(f); }} />)}
           {openWork.kind === "direct_booking" && !policyConfirmed && <Text style={[ui.small, { color: p.muted }]}>The discount policy awaits confirmation.</Text>}
           {!operationForms(account, openWork).length && <Text style={[ui.small, { color: p.muted }]}>Nothing needs your action on this item.</Text>}
