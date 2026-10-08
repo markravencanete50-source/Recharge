@@ -1,6 +1,8 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import { ArrowRight, Mail } from "lucide-react";
 import { authResponseMessage } from "@/lib/auth-security-policy";
+import { PasswordField } from "@/components/password-field";
 export function SignInForm({ configured }: { configured: boolean }) {
   const [error, setError] = useState(""); const [saving, setSaving] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -14,5 +16,11 @@ export function SignInForm({ configured }: { configured: boolean }) {
       window.location.assign("/workspace");
     } catch { setError("Could not connect. Please try again."); } finally { setSaving(false); }
   }
-  return <form className="mt-6 space-y-4" onSubmit={submit}><label className="block text-sm">Email<input className="field mt-2" name="email" type="email" required autoComplete="username" maxLength={254} /></label><label className="block text-sm">Password<input className="field mt-2" name="password" type="password" required autoComplete="current-password" maxLength={1024} /></label>{!configured && <p role="status" className="text-sm text-muted-foreground">Live sign-in is awaiting connection to Supabase.</p>}{error && <p role="alert" className="text-sm text-[var(--rc-danger-text)]">{error}</p>}<button className="primary-button w-full" disabled={!configured || saving}>{saving ? "Signing in…" : "Sign in"}</button></form>;
+  return <form className="auth-form" onSubmit={submit}>
+    <div className="auth-field"><label htmlFor="sign-in-email">Email</label><div className="auth-control"><Mail aria-hidden size={17} className="auth-control-icon" /><input id="sign-in-email" name="email" type="email" required autoComplete="username" maxLength={254} placeholder="you@example.com" spellCheck={false} autoCapitalize="none" /></div></div>
+    <PasswordField label="Password" name="password" autoComplete="current-password" maxLength={1024} />
+    {!configured && <p role="status" className="auth-note">Live sign-in is awaiting connection to Supabase.</p>}
+    {error && <p role="alert" className="auth-alert">{error}</p>}
+    <button className="auth-submit" disabled={!configured || saving}><span>{saving ? "Signing in…" : "Sign in"}</span><ArrowRight aria-hidden size={18} /></button>
+  </form>;
 }

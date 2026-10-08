@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { authResponseMessage } from "@/lib/auth-security-policy";
 export function SetPasswordForm({ token }: { token: string }) {
   const [error, setError] = useState(token ? "" : "This link is incomplete. Ask the person who added you for a new one."); const [busy, setBusy] = useState(false);
@@ -14,5 +15,5 @@ export function SetPasswordForm({ token }: { token: string }) {
       window.location.assign("/update-password");
     } catch { setError("Could not connect. Please try again."); } finally { setBusy(false); }
   }
-  return <div className="mt-6 space-y-4">{error && <p role="alert" className="text-sm text-[var(--rc-danger-text)]">{error}</p>}<button type="button" className="primary-button w-full" disabled={!token || busy} onClick={() => void start()}>{busy ? "Opening…" : "Choose my password"}</button></div>;
+  return <div className="auth-form">{error && <p role="alert" className="auth-alert">{error}</p>}<button type="button" className="auth-submit" disabled={!token || busy} onClick={() => void start()}><span>{busy ? "Opening…" : "Choose my password"}</span><ArrowRight aria-hidden size={18} /></button></div>;
 }

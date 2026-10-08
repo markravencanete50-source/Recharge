@@ -34,7 +34,7 @@ export async function boundedJson(request: Pick<Request, "body" | "headers">, li
   } catch { return null; } finally { reader.releaseLock(); }
 }
 export async function authResponseMessage(response: Response) {
-  const parsed = z.object({ error: z.string().max(500).optional(), message: z.string().max(500).optional() }).safeParse(await boundedJson(response));
+  const parsed = z.object({ error: z.string().max(500).optional(), message: z.string().max(500).optional(), signedIn: z.boolean().optional() }).safeParse(await boundedJson(response));
   return parsed.success ? parsed.data : {};
 }
 export const securityHeaders = {

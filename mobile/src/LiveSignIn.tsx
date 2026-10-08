@@ -10,7 +10,7 @@ import { HeroGlow } from "./TodayAnalytics";
 import { MotionPress } from "./motion";
 import { headerPalette, ui, type Palette } from "./theme";
 import { accountStep, liveApiOrigin, registrationOpen, signIn } from "./backend/client";
-import { designTokens } from "../../lib/design-tokens";
+import { darkBrandCanvas, designTokens } from "../../lib/design-tokens";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
@@ -198,12 +198,14 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palet
   if (desktop) {
     return (
       <View style={{ flex: 1, flexDirection: "row", backgroundColor: p.background }}>
-        <View style={{ flex: 1, maxWidth: 640, backgroundColor: p.header, padding: 48, justifyContent: "space-between", overflow: "hidden" }}>
+        {/* The brand panel stays forest in both themes: the glow and the forest logo artwork are
+            drawn for a forest canvas, and bone lettering keeps its contrast on it. */}
+        <View style={{ flex: 1, maxWidth: 640, backgroundColor: darkBrandCanvas, padding: 48, justifyContent: "space-between", overflow: "hidden" }}>
           <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, opacity: 0.9 }}><HeroGlow palette={p} /></View>
-          <CompanyLogo palette={header} width={168} />
+          <CompanyLogo palette={p} variant="dark" width={168} />
           <View style={{ gap: 14 }}>
-            <Text style={{ color: p.headerText, fontSize: 46, lineHeight: 52, fontWeight: "700", letterSpacing: -1.6 }}>{creating ? "Welcome." : "Welcome back."}</Text>
-            <Text style={{ color: p.headerMuted, fontSize: 17, lineHeight: 26, maxWidth: 420 }}>Your properties, stays, cleans and repairs, together in one place.</Text>
+            <Text style={{ color: "#FAF7F0", fontSize: 46, lineHeight: 52, fontWeight: "700", letterSpacing: -1.6 }}>{creating ? "Welcome." : "Welcome back."}</Text>
+            <Text style={{ color: "#D3E0D8", fontSize: 17, lineHeight: 26, maxWidth: 420 }}>Your properties, stays, cleans and repairs, together in one place.</Text>
           </View>
           <View style={{ alignItems: "flex-end" }}><HomeScene width={300} /></View>
         </View>

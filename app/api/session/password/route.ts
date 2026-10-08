@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { workspaceSupabase } from "@/lib/supabase-server";
 import { authSecurityConfiguration, providerIdentity, recoveryPhase, requestQuota, securityHash } from "@/lib/auth-security";
 import { boundedJson, isSameOrigin, newPasswordSchema, RECOVERY_COOKIE, securityHeaders, uuidSchema } from "@/lib/auth-security-policy";
+import { passwordLogin } from "../password-login";
 export async function POST(request: Request) {
   const config = authSecurityConfiguration();
   if (!isSameOrigin(request, config?.origin)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403, headers: securityHeaders });
@@ -28,7 +29,12 @@ export async function POST(request: Request) {
     recovery = undefined;
     // The database has already revoked every approved Recharge session.
     await client.auth.signOut({ scope: "global" }).catch(() => null);
-    const response = NextResponse.json({ ok: true }, { headers: securityHeaders });
+    // Sign straight in with the password just chosen, through the same lockout guard as the
+    // sign-in form. This proves the new password works and spares a second step where a
+    // browser could fill in a different saved password. If it fails, the person signs in as usual.
+    const email = identity.user.email!.trim().toLowerCase();
+    const signedIn = await passwordLogin(client, { email, password: body.data.password }).then(result => result.ok, () => false);
+    const response = NextResponse.json({ ok: true, signedIn }, { headers: securityHeaders });
     response.cookies.set(RECOVERY_COOKIE, "", { httpOnly: true, secure: config.origin.startsWith("https:"), sameSite: "lax", path: "/", maxAge: 0 });
     return response;
   } catch {

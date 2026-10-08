@@ -72,7 +72,10 @@ test('a missing or invalid recovery proof cannot change a password or unlock an 
   reset();state.proofAllowed=false;assert.equal((await password.POST(request('/api/session/password',{password:'synthetic-new-password'}))).status,403);assert.equal(state.authCalls,0);assert.deepEqual(state.events.map(e=>e[0]),['begin']);
 });
 test('only successful password replacement clears lockout, invalidates sessions and consumes the proof',async()=>{
-  reset();const response=await password.POST(request('/api/session/password',{password:'synthetic-new-password'}));assert.equal(response.status,200);assert.deepEqual(state.events.map(e=>e[0]),['begin','update-password','complete']);assert.equal(state.signOutCalls,1);assert.match(response.headers.get('set-cookie'),/Max-Age=0/i);
+  reset();const response=await password.POST(request('/api/session/password',{password:'synthetic-new-password'}));assert.equal(response.status,200);assert.deepEqual(state.events.map(e=>e[0]),['begin','update-password','complete','auth_server_begin_password','auth_server_finish_password']);assert.equal(state.signOutCalls,1);assert.match(response.headers.get('set-cookie'),/Max-Age=0/i);
+  // The new password signs the person straight in, through the same lockout guard as the sign-in form.
+  assert.equal((await response.json()).signedIn,true);assert.deepEqual(state.providerInput,{email:'staff@example.com',password:'synthetic-new-password'});assert.equal(state.events[4][1].outcome,'success');
+  reset();state.finish={allowed:false,retryAfter:0};const unapproved=await password.POST(request('/api/session/password',{password:'synthetic-new-password'}));assert.equal(unapproved.status,200);assert.equal((await unapproved.json()).signedIn,false);assert.equal(state.signOutCalls,2);
   reset();state.providerError={message:'weak password'};assert.equal((await password.POST(request('/api/session/password',{password:'synthetic-new-password'}))).status,400);assert.deepEqual(state.events.map(e=>e[0]),['begin','update-password','release']);assert.equal(state.signOutCalls,0);
 });
 test('global API limiter blocks cross-origin mutations and excessive reads before route handling',async()=>{
