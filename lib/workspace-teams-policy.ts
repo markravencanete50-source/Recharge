@@ -14,7 +14,7 @@ const https = z.string().url().max(1000).refine(value => {
 }, 'Use a public HTTPS link');
 
 export const teamsReadSchema = z.object({
-  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota']),
+  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota', 'readyHome']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {

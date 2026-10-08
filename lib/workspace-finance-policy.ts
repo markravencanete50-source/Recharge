@@ -11,12 +11,13 @@ const text = (min: number, max: number) => z.string().trim().min(min).max(max);
 const note = text(5, 2000);
 
 export const financeReadSchema = z.object({
-  section: z.enum(['overview', 'expenses', 'expense', 'reconciliation', 'statements', 'policy']),
+  section: z.enum(['overview', 'expenses', 'expense', 'reconciliation', 'statements', 'policy', 'jobs']),
   propertyId: id.optional(), period: period.optional(), id: id.optional(),
-  status: z.enum(['to_approve', 'queried', 'approved', 'rejected']).optional(),
+  status: z.enum(['draft', 'to_approve', 'queried', 'approved', 'rejected']).optional(),
 }).strict().superRefine((value, context) => {
   if (['overview', 'reconciliation'].includes(value.section) && !value.period) context.addIssue({ code: 'custom', message: 'Choose a month' });
   if (value.section === 'expense' && !value.id) context.addIssue({ code: 'custom', message: 'Choose an expense' });
+  if (value.section === 'jobs' && !value.propertyId) context.addIssue({ code: 'custom', message: 'Choose a property' });
   if (value.status && value.section !== 'expenses') context.addIssue({ code: 'custom', message: 'Status applies to expenses only' });
 });
 
@@ -44,11 +45,21 @@ export const financeActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('issueStatement'), requestId: id, statementId: id, version }).strict(),
   z.object({ action: z.literal('recordOwnerPayout'), requestId: id, statementId: id, version, method: z.enum(['bank_transfer', 'stripe']), reference: text(3, 120) }).strict(),
   z.object({ action: z.literal('voidStatement'), requestId: id, statementId: id, version, reason: note }).strict(),
+  // Expense paperwork and purchase invoices (workspace_accounts_action).
+  z.object({ action: z.literal('attachExpensePhotos'), requestId: id, expenseId: id, kind: z.enum(['invoice', 'photo', 'quote', 'report']), label: text(2, 180),
+    mediaIds: z.array(id).min(1).max(20), note: z.string().trim().max(2000).optional() }).strict(),
+  z.object({ action: z.literal('linkExpenseJob'), requestId: id, expenseId: id, version, workId: id.nullable() }).strict(),
+  z.object({ action: z.literal('submitDraftExpense'), requestId: id, expenseId: id, version, supplier: text(2, 200), reference: text(1, 120),
+    amountMinor: money.min(1), receivedOn: date, description: text(5, 3000) }).strict(),
+  z.object({ action: z.literal('recordPurchaseInvoice'), requestId: id, purchaseId: id, reference: text(1, 100), amountMinor: money.min(1), paid: z.boolean() }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'setReservationFinancials' && (value.channel === 'airbnb' || value.channel === 'booking_com') && !value.channelReference) context.addIssue({ code: 'custom', message: 'Add the platform reservation code' });
   if (value.action === 'addExpenseEvidence' && !value.mediaId && !value.workId && (value.note?.length ?? 0) < 10) context.addIssue({ code: 'custom', message: 'Describe the evidence you checked' });
 });
 export type FinanceAction = z.infer<typeof financeActionSchema>;
+// Sent to workspace_accounts_action / workspace_accounts_read instead of the finance functions.
+export const ACCOUNTS_ACTIONS: readonly string[] = ['attachExpensePhotos', 'linkExpenseJob', 'submitDraftExpense', 'recordPurchaseInvoice'];
+export const ACCOUNTS_SECTIONS: readonly string[] = ['jobs'];
 
 const CHANNEL_SOURCE: Record<'airbnb' | 'booking_com', string> = { airbnb: 'Airbnb', booking_com: 'Booking.com' };
 export function prepareFinanceAction(input: FinanceAction): { input: unknown } | { error: string } {

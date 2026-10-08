@@ -15,7 +15,7 @@ import { photoSource, readWorkMedia, uploadWorkPhoto, WorkspaceApiError, type Ph
 type Pending = { key: string; uri: string; status: "uploading" | "verified" | "failed"; id?: string; error?: string; requestId: string; name: string; type: "image/jpeg" | "image/png" | "image/webp" };
 const mediaSchema = z.array(z.object({ id: z.string().uuid(), purpose: z.string(), verifiedAt: z.string().optional() }));
 
-export function PhotoPicker({ p, workId, purpose, label = "Photos", hint, onChange, max = 20 }: { p: Palette; workId: string; purpose: PhotoPurpose; label?: string; hint?: string; onChange: (ids: string[], uploading: boolean) => void; max?: number }) {
+export function PhotoPicker({ p, workId, expenseId, purpose, label = "Photos", hint, onChange, max = 20 }: { p: Palette; workId?: string; expenseId?: string; purpose: PhotoPurpose; label?: string; hint?: string; onChange: (ids: string[], uploading: boolean) => void; max?: number }) {
   const [photos, setPhotos] = useState<Pending[]>([]);
   const [error, setError] = useState("");
   // The latest callback is kept aside, so a parent re-rendering never triggers another report.
@@ -25,7 +25,7 @@ export function PhotoPicker({ p, workId, purpose, label = "Photos", hint, onChan
   async function upload(photo: Pending) {
     setPhotos(current => current.map(x => x.key === photo.key ? { ...x, status: "uploading", error: undefined } : x));
     try {
-      const response = z.object({ id: z.string().uuid() }).parse(await uploadWorkPhoto({ requestId: photo.requestId, workId, purpose }, { uri: photo.uri, name: photo.name, type: photo.type }));
+      const response = z.object({ id: z.string().uuid() }).parse(await uploadWorkPhoto({ requestId: photo.requestId, workId, expenseId, purpose }, { uri: photo.uri, name: photo.name, type: photo.type }));
       setPhotos(current => current.map(x => x.key === photo.key ? { ...x, status: "verified", id: response.id } : x));
     } catch (e) {
       const text = e instanceof WorkspaceApiError && e.status === 503 ? "Photos can't be saved just now. Try again in a moment." : message(e);
@@ -107,7 +107,7 @@ function LargePhoto({ id }: { id: string }) {
   return source ? <Image source={source} style={{ width: "100%", maxWidth: 900, aspectRatio: 1 }} resizeMode="contain" accessibilityLabel="Photo" /> : <ActivityIndicator color="#FFFFFF" />;
 }
 
-const PURPOSE_LABEL: Record<string, string> = { cleaning: "Clean", mailbox: "Post", delivery: "Delivery", licence: "Licensing", maintenance: "Repair", inspection: "Inspection", setup: "From the owner" };
+const PURPOSE_LABEL: Record<string, string> = { cleaning: "Clean", mailbox: "Post", delivery: "Delivery", licence: "Licensing", maintenance: "Repair", inspection: "Inspection", setup: "From the owner", expense: "Invoice" };
 // Every photo saved on a work item that this person may see, grouped by kind.
 export function WorkPhotos({ p, workId, title = "Photos", refreshKey = 0 }: { p: Palette; workId: string; title?: string; refreshKey?: number }) {
   const [items, setItems] = useState<z.infer<typeof mediaSchema>>([]);

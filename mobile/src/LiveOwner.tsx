@@ -9,6 +9,7 @@ import { addDays, dayLabel, london, Notice, Section, Tag, Loading, StatGrid, Sta
 import { formatDay, formatMoneyShort } from "../../lib/format";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readFinance, readTeams, WorkspaceApiError } from "./backend/client";
+import { StatementFiles } from "./AccountsFiles";
 import { scheduleSchema } from "../../lib/cleans-live";
 import { monthLabel, pounds, statementSchema, type Statement } from "../../lib/accounts-live";
 import type { PropertyView } from "../../lib/workspace-view";
@@ -48,6 +49,7 @@ function StatementCard({ p, s }: { p: Palette; s: Statement }) {
         {s.detail.expenses.map(x => line(`${x.supplier} (${x.reference})`, "−" + pounds(x.amountMinor)))}
         {!s.detail.stays.length && !s.detail.expenses.length && <Text style={[ui.small, { color: p.muted }]}>No stays or costs this month.</Text>}
       </View>}
+      <StatementFiles p={p} statement={s} audience="owner" />
     </View>
   );
 }

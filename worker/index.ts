@@ -55,6 +55,10 @@ const worker = {
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_open_pricing_gaps', {})).catch(() => {
       console.error('Pricing gap check failed; the next run retries.');
     }));
+    // Routine visits for this month and next, and a reminder three days before each is due.
+    ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_routine_auto', {})).catch(() => {
+      console.error('Routine visit schedule failed; the next run retries.');
+    }));
     // Monday mornings: owners are told in the app that their weekly report is ready (once a week).
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_weekly_report_notices', {})).catch(() => {
       console.error('Weekly report notices failed; the next run retries.');

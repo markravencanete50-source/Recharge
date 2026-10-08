@@ -7,9 +7,31 @@ export const REPAIR_STAGES = [
   { phase: "triage", label: "Reported", detail: "Stays checks the issue and refers it" },
   { phase: "referred", label: "With Ready", detail: "Ready books the repair" },
   { phase: "booked", label: "Booked", detail: "Repair date and contractor set" },
-  { phase: "completed", label: "Completed", detail: "Report filed, invoice raised for Accounts" },
+  { phase: "completed", label: "Completed", detail: "Report filed; Accounts check the cost" },
+  { phase: "paid", label: "Paid", detail: "Paid by Accounts" },
 ] as const;
 export type RepairPhase = (typeof REPAIR_STAGES)[number]["phase"];
+// Where a repair is: its workflow phase, or "paid" once Accounts have paid or charged the cost
+// (its expense approved, its invoice paid or its invoice task closed).
+export const repairStage = (data: Record<string, unknown>): string => data.phase === "completed" && typeof data.paidAt === "string" ? "paid" : String(data.phase ?? "triage");
+
+// Ready Home: repairs at each stage and this month's routine visits, from the "readyHome" read.
+export const readyHomeSchema = z.object({
+  month: z.string(), today: z.string(),
+  stages: z.record(z.number()),
+  visits: z.array(z.object({
+    propertyId: z.string().uuid(), propertyName: z.string(),
+    items: z.array(z.object({ workId: z.string().uuid(), title: z.string(), dueOn: z.string().nullable(), status: z.string(), assigneeName: z.string().nullable(), mine: z.boolean().nullable() })),
+  })),
+});
+export type ReadyHome = z.infer<typeof readyHomeSchema>;
+// A visit is done once Ready have marked it done (Stays then sign it off).
+export const visitDone = (status: string) => ["in_review", "approved", "completed"].includes(status);
+export function visitSummary(items: { dueOn: string | null; status: string }[], today: string) {
+  const done = items.filter(i => visitDone(i.status)).length;
+  const overdue = items.filter(i => !visitDone(i.status) && !!i.dueOn && i.dueOn < today).length;
+  return { done, due: items.length - done, overdue };
+}
 export type RepairStep = "approveBudget" | "referReady" | "bookRepair" | "completeRepair";
 
 const STAFF = ["stays", "admin", "super_admin"];

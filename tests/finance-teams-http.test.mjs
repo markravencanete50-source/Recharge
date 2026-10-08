@@ -94,3 +94,21 @@ test('team input requires versions for edits, HTTPS course links and known outco
   assert.equal(teamsActionSchema.safeParse({ action: 'decideComplaint', requestId: uuid, workId: uuid, version: 1, outcome: 'ignore', note: 'Valid note' }).success, false);
   assert.equal(teamsReadSchema.safeParse({ section: 'schedule', from: '2026-10-05', to: '2026-10-01' }).success, false);
 });
+
+test('expense paperwork, purchase invoices and Ready Home go to their own database functions', async () => {
+  reset();
+  assert.equal((await workspaceFinance(post({ action: 'recordPurchaseInvoice', requestId: uuid, purchaseId: uuid, reference: 'LAMPS-1', amountMinor: 6800, paid: true }))).status, 200);
+  assert.deepEqual(state.calls[0], { name: 'workspace_accounts_action', args: { input: { action: 'recordPurchaseInvoice', requestId: uuid, purchaseId: uuid, reference: 'LAMPS-1', amountMinor: 6800, paid: true } } });
+  reset();
+  assert.equal((await workspaceFinance(post({ action: 'attachExpensePhotos', requestId: uuid, expenseId: uuid, kind: 'invoice', label: 'Invoice', mediaIds: [] }))).status, 400, 'at least one photo');
+  assert.equal((await workspaceFinance(post({ action: 'approveExpense', requestId: uuid, expenseId: uuid, version: 1 }))).status, 200);
+  assert.equal(state.calls[0].name, 'workspace_finance_action');
+  reset();
+  assert.equal((await workspaceFinance(new Request(`https://recharge.example/api/workspace/finance?section=jobs&propertyId=${uuid}`))).status, 200);
+  assert.deepEqual(state.calls[0], { name: 'workspace_accounts_read', args: { section: 'jobs', target_property: uuid, target_id: null } });
+  assert.equal((await workspaceFinance(new Request('https://recharge.example/api/workspace/finance?section=jobs'))).status, 400, 'jobs need a property');
+  assert.equal((await workspaceFinance(new Request('https://recharge.example/api/workspace/finance?section=expenses&status=draft'))).status, 200);
+  reset();
+  assert.equal((await workspaceTeams(new Request('https://recharge.example/api/workspace/teams?section=readyHome'))).status, 200);
+  assert.deepEqual(state.calls[0], { name: 'workspace_ready_home', args: undefined });
+});

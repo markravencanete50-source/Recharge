@@ -102,7 +102,7 @@ test('expenses: create, attach evidence, approve within the limit, escalate abov
   await as(ACCOUNTS);
   let queried = live.expenseSchema.parse(await create('Example Supplies', 4500));
   queried = live.expenseSchema.parse(await write({ action: 'queryExpense', expenseId: queried.id, version: queried.version, note: 'Which property was this for?' }));
-  assert.deepEqual(live.expenseMoves('accounts', queried, limit).moves, ['resolve', 'reject', 'evidence']);
+  assert.deepEqual(live.expenseMoves('accounts', queried, limit).moves, ['resolve', 'reject', 'evidence', 'link']);
   queried = live.expenseSchema.parse(await write({ action: 'resolveExpenseQuery', expenseId: queried.id, version: queried.version, note: 'Supplier confirmed the property' }));
   assert.equal(queried.status, 'to_approve');
   await write({ action: 'rejectExpense', expenseId: queried.id, version: queried.version, note: 'Duplicate of an earlier invoice' });

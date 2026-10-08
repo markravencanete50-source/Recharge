@@ -9,6 +9,7 @@ import { StateGraphic } from "./StateGraphic";
 import { followUpsDue } from "../../lib/portfolio-overview";
 import { ShiftCard } from "./LiveShifts";
 import { HomeTools } from "./HomeTools";
+import { ReadyHome } from "./ReadyHome";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { ui, type Palette } from "./theme";
 import { LiveNoticeRow, LiveWorkRow, isDone, isWaitingWork, workDate } from "./LiveRows";
@@ -98,6 +99,7 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
       {!desktop && <WelcomeHeader palette={p} name={account.fullName || "there"} dateLabel={todayLabel()} subtitle={SUBTITLE[account.role]} onCalendar={() => onNavigate("work")} />}
       {/* The tools for this person's role come first, so nobody has to look for them. */}
       <HomeTools palette={p} account={account} properties={properties} desktop={desktop} onOpen={onTool} onAll={() => onNavigate("help")} />
+      {account.role === "ready" && <ReadyHome palette={p} desktop={desktop} onTool={onTool} />}
       {account.role !== "client" && <ShiftCard palette={p} account={account} />}
       {!!followUps.length && <Entrance sessionKey={"live:home:followups"} style={{ gap: 8 }}>
         <View style={ui.between}>

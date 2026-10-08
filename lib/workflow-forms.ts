@@ -2,8 +2,8 @@ import type { WorkspaceAccount } from './workspace-account-policy';
 import { REPAIR_GUIDES } from './repair-guides';
 import { INSPECTION_CHECKS } from './onboarding-content';
 import { SCOTTISH_REGIONS } from './regions';
-export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'};
-export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string;workId?:string};
+export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense'};
+export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls'|'finance';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string;workId?:string};
 export type JourneyView={propertyId:string;clientId:string;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string}};
 export type OperationView={workId:string;propertyId:string;moduleId:string;title:string;kind:string;status:string;version:number;assigneeId:string|null;dueOn?:string|null;data:Record<string,unknown>};
 const field=(name:string,label:string,type:WorkflowField['type']='text',required=true):WorkflowField=>({name,label,type,required});
@@ -87,7 +87,7 @@ export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[
   if(w.data.phase==='follow_up')add('prepareQuote','Prepare a direct-booking offer',[field('checkIn','Arrival','date'),field('checkOut','Departure','date'),field('baseAmountMinor','Original price, GBP','money')]);
   if(w.data.phase==='quoted')add('recordGuestAcceptance','Record guest acceptance',[field('guestEvidence','Guest agreement reference and notes','textarea')]);
   if(w.data.phase==='follow_up'||w.data.phase==='quoted')add('recordGuestDecline','The guest said no',[field('reason','What the guest said','textarea')]);
-  if(w.data.phase==='accepted')add('confirmBooking','Confirm the paid booking',[field('invoiceId','Matching paid invoice','select'),field('reference','Direct booking reference')]);
+  if(w.data.phase==='accepted')add('confirmBooking','Confirm the paid booking',[{...field('invoiceId','Matching paid invoice','select'),help:'Accounts issue the booking invoice and record the payment; it then appears here.'},field('reference','Direct booking reference')]);
  }
  if(w.kind==='maintenance'){
   if(a.role==='client'&&w.data.phase==='owner_approval')add('approveBudget','Approve the quoted repair budget',[field('consent','I approve the estimated repair cost shown above','checkbox')]);
@@ -104,7 +104,13 @@ export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[
   if(purchasing&&w.data.phase==='requested')add('approvePurchase','Approve the purchase budget',[{...field('budgetItemId','Budget chart item (optional)','select',false),help:'Approving against the chart checks the amount is within the most each item should cost.'},{...field('quantity','How many','number',false),defaultValue:'1'},field('approvedAmountMinor','Approved amount, GBP','money'),field('approvalNote','Budget decision and reason','textarea')],v=>({approvedAmountMinor:v.approvedAmountMinor,approvalNote:v.approvalNote,...(typeof v.budgetItemId==='string'&&v.budgetItemId?{budgetItemId:v.budgetItemId,quantity:typeof v.quantity==='number'?v.quantity:1}:{})}));
   if(purchasing&&w.data.phase==='approved')add('recordOrder','Record the order',[field('orderReference','Order reference'),field('supplier','Supplier')]);
   if((admin(a)||a.role==='ready')&&w.data.phase==='ordered')add('recordDelivery','Record delivery',[field('receivedOn','Date received','date'),field('evidence','Delivery evidence','textarea'),{...field('photoIds','Photos of what arrived','photos'),purpose:'delivery',help:'Take a photo of each item, and the delivery note if there is one.'}]);
-  if(purchasing&&w.data.phase==='delivered')add('reconcilePurchase','Reconcile the delivered purchase',[field('invoiceId','Paid purchase invoice','select'),field('reconciliation','Invoice and delivery checks','textarea')]);
+  // The supplier's invoice is recorded (and marked paid) first; reconciling then picks it.
+  if(purchasing&&w.data.phase==='delivered')forms.push({key:'recordPurchaseInvoice',title:'Record the supplier invoice',endpoint:'finance',workId:w.workId,
+   description:'The invoice from '+(typeof w.data.supplier==='string'?w.data.supplier:'the supplier')+', up to the approved amount. Reconcile the purchase once it is paid.',
+   fields:[field('reference','Supplier invoice number'),{...field('amountMinor','Invoice amount, GBP','money'),defaultValue:minor('approvedAmountMinor')},{...field('paid','The supplier has been paid','checkbox',false),defaultValue:true},
+    {...field('photoIds','Photo of the invoice (optional)','photos',false),purpose:'expense',help:'Photos and screenshots are saved with the purchase as you add them.'}],
+   build:(v,requestId)=>({action:'recordPurchaseInvoice',requestId,purchaseId:w.workId,reference:v.reference,amountMinor:v.amountMinor,paid:v.paid===true})});
+  if(purchasing&&w.data.phase==='delivered')add('reconcilePurchase','Reconcile the delivered purchase',[{...field('invoiceId','Paid purchase invoice','select'),help:'Record the supplier invoice first; once it is paid it appears here.'},field('reconciliation','Invoice and delivery checks','textarea')]);
  }
  return forms;
 }
