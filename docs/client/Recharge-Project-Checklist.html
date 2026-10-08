@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recharge Project Checklist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a single reading column, progress against the client's videos up top, then areas of the business as sections with state chips. */
+:root {
+  --bg: #F3EEE4;          /* bone */
+  --surface: #FBF8F2;
+  --ink: #17302A;         /* deep forest text */
+  --muted: #5B6B65;
+  --line: #DDD5C6;
+  --forest: #1D4038;      /* brand header */
+  --forest-ink: #F3EEE4;
+  --forest-muted: #B9C9C1;
+  --accent: #2F6B5A;
+  --live: #2E7D4F; --live-wash: #DDEFE3;
+  --part: #6B7A1F; --part-wash: #EBEFD2;
+  --wait: #9A5B0F; --wait-wash: #F6E7CF;
+  --todo: #8A3B3B; --todo-wash: #F3DEDB;
+  --decide: #3C5A9A; --decide-wash: #E1E7F5;
+  --display: "Montserrat", "Segoe UI", system-ui, sans-serif;
+  --body: "Montserrat", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1A17; --surface: #16241F; --ink: #E9E4D9; --muted: #A2B0AA; --line: #2A3B35;
+    --forest: #1F4A40; --forest-ink: #F3EEE4; --forest-muted: #B9C9C1; --accent: #7CC2A8;
+    --live: #7FD3A0; --live-wash: #1D3527; --part: #C9D77A; --part-wash: #2C3218;
+    --wait: #E9B467; --wait-wash: #3A2C16; --todo: #EC9A92; --todo-wash: #3B2220;
+    --decide: #A9BEEB; --decide-wash: #222C44;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1A17; --surface: #16241F; --ink: #E9E4D9; --muted: #A2B0AA; --line: #2A3B35;
+  --forest: #1F4A40; --forest-ink: #F3EEE4; --forest-muted: #B9C9C1; --accent: #7CC2A8;
+  --live: #7FD3A0; --live-wash: #1D3527; --part: #C9D77A; --part-wash: #2C3218;
+  --wait: #E9B467; --wait-wash: #3A2C16; --todo: #EC9A92; --todo-wash: #3B2220;
+  --decide: #A9BEEB; --decide-wash: #222C44;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6; padding: 0 16px; }
+.wrap { max-width: 860px; margin: 0 auto; padding-block: 28px 64px; display: flex; flex-direction: column; gap: 40px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; text-wrap: balance; margin: 0; }
+h2 { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 16px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--accent); font-weight: 600; }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+.hero { background: var(--forest); color: var(--forest-ink); border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+.hero .eyebrow { color: var(--forest-muted); }
+.hero h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 800; letter-spacing: -0.02em; }
+.hero p { color: var(--forest-muted); }
+.link-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 4px; }
+.link-pill { display: inline-flex; align-items: center; gap: 8px; background: var(--forest-ink); color: var(--forest); padding: 10px 16px; border-radius: 999px; text-decoration: none; font-weight: 700; font-size: 14px; max-width: 100%; overflow-wrap: anywhere; }
+.copy { background: transparent; color: var(--forest-ink); border: 1px solid var(--forest-muted); border-radius: 999px; padding: 9px 14px; font: 600 13px var(--body); cursor: pointer; }
+
+/* Progress against the 76 asks */
+.progress { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.progress-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.progress-head b { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; color: var(--live); }
+.progress-head span { color: var(--muted); font-size: 14px; }
+.bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--line); gap: 2px; }
+.bar i { display: block; height: 100%; }
+.bar .s-live { background: var(--live); } .bar .s-part { background: var(--part); } .bar .s-wait { background: var(--wait); } .bar .s-todo { background: var(--todo); }
+.legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.legend div { display: flex; flex-direction: column; gap: 2px; border-top: 3px solid currentColor; padding-top: 8px; }
+.legend b { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.legend span { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.legend .live { color: var(--live); } .legend .part { color: var(--part); } .legend .wait { color: var(--wait); } .legend .todo { color: var(--todo); }
+@media (max-width: 620px) { .legend { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.videos { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--line); }
+.video { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) 7.5em; gap: 6px 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.video:last-child { border-bottom: 0; }
+.video h3 { font-size: 14px; }
+.video .bar { height: 10px; }
+.video .count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+@media (max-width: 560px) { .video { grid-template-columns: minmax(0, 1fr) 7.5em; } .video .bar { grid-column: 1 / -1; grid-row: 2; } }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.chip.live { color: var(--live); background: var(--live-wash); }
+.chip.part { color: var(--part); background: var(--part-wash); }
+.chip.wait { color: var(--wait); background: var(--wait-wash); }
+.chip.todo { color: var(--todo); background: var(--todo-wash); }
+.chip.decide { color: var(--decide); background: var(--decide-wash); }
+.new { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; margin-left: 8px; vertical-align: 2px; }
+
+.hero .new { color: var(--forest-ink); }
+section { display: flex; flex-direction: column; gap: 14px; }
+.lead { color: var(--muted); }
+.area { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 6px 18px; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.item:first-child { border-top: 0; }
+.item h3 { grid-column: 1; }
+.item .chip { grid-column: 2; grid-row: 1; align-self: start; }
+.item p { grid-column: 1 / -1; color: var(--muted); font-size: 14px; }
+@media (max-width: 480px) { .item { grid-template-columns: minmax(0, 1fr); } .item .chip { grid-column: 1; grid-row: auto; justify-self: start; } }
+
+.flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.flow span { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-weight: 600; }
+.flow i { color: var(--muted); font-style: normal; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+th, td { text-align: left; padding: 12px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+thead th { border-top: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+td:first-child { font-weight: 700; }
+td small { display: block; color: var(--muted); font-weight: 500; }
+
+ol.steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; max-width: 68ch; }
+ol.steps li::marker { font-weight: 800; color: var(--accent); }
+.note { border-left: 4px solid var(--accent); background: var(--surface); padding: 14px 16px; border-radius: 0 14px 14px 0; color: var(--ink); max-width: none; }
+.mono { font-family: var(--mono); font-size: 13px; }
+footer { color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: no-preference) { .link-pill { transition: transform .15s ease; } .link-pill:hover { transform: translateY(-1px); } }
+
+/* Checklist and print additions for the downloadable copy */
+.checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 720px) { .checks { grid-template-columns: minmax(0, 1fr); } }
+.checkcol { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.checkcol h3 { display: flex; align-items: center; gap: 8px; }
+.checkcol .count { font-size: 12px; font-weight: 800; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; }
+ul.checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+ul.checklist li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; font-size: 14px; line-height: 1.45; }
+ul.checklist small { color: var(--muted); }
+ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
+.box { width: 18px; height: 18px; border-radius: 5px; border: 2px solid var(--wait); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; margin-top: 1px; }
+.box.on { border-color: var(--live); background: var(--live); color: var(--surface); }
+#costs h3 { margin-top: 6px; }
+#costs table { min-width: 560px; }
+#costs td:last-child { font-weight: 700; width: 30%; }
+@media (max-width: 640px) {
+  #costs table { min-width: 0; }
+  #costs thead { display: none; }
+  #costs tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
+  #costs tbody tr:first-child { border-top: 0; }
+  #costs td { display: block; padding: 0; border: 0; }
+  #costs td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; color: var(--muted); }
+  #costs td:last-child { white-space: normal; text-align: right; max-width: 12em; }
+}
+@media print {
+  :root { --bg: #FFFFFF; --surface: #FFFFFF; }
+  body { padding: 0; font-size: 12px; }
+  .wrap { padding-block: 0; gap: 24px; }
+  .copy { display: none; }
+  .hero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .item, tr, ul.checklist li, .note { break-inside: avoid; }
+  .table-wrap { overflow: visible; }
+  table { min-width: 0 !important; }
+  .chip, .box.on, .bar i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Recharge · Project checklist · 8 October 2026</div>
+    <h1>What is done, how it works, and what is next</h1>
+    <p>We went through your four feedback videos (Communication Centre, Property Management Database, Property Onboarding and the rest of Stays) and listed every request: 76 in all. This page shows what is now built and working, how it works, what is waiting on an outside service, and what we need from you to finish it. Items marked <span class="new" style="margin-left:0">New</span> were added in this round.</p>
+    <p>Recharge is a web application first. It runs in any browser on a computer, laptop, tablet or phone, with nothing to install. The App Store and Google Play versions are an extra way in, alongside the web app, not instead of it.</p>
+    <div class="link-row">
+      <a class="link-pill" id="app-link" href="https://recharge-backend.markravencanete50.workers.dev/workspace/live" target="_blank" rel="noopener">Open the Recharge web app ↗</a>
+      <button class="copy" id="copy-link" type="button">Copy link</button>
+    </div>
+    <p class="mono" style="color: var(--forest-muted); overflow-wrap: anywhere;">recharge-backend.markravencanete50.workers.dev/workspace/live</p>
+  </header>
+
+  <section aria-labelledby="progress-title">
+    <div class="eyebrow">Your feedback videos</div>
+    <h2 id="progress-title">Progress on your 76 requests</h2>
+    <div class="progress">
+      <div class="progress-head"><b>47 of 76</b><span>requests built and working in the live app today</span></div>
+      <div class="bar" role="img" aria-label="47 built, 12 partly built, 10 waiting on a service, 7 not built yet">
+        <i class="s-live" style="width: 61.84%"></i><i class="s-part" style="width: 15.79%"></i><i class="s-wait" style="width: 13.16%"></i><i class="s-todo" style="width: 9.21%"></i>
+      </div>
+      <div class="legend">
+        <div class="live"><b>47</b><span>Built and working</span></div>
+        <div class="part"><b>12</b><span>Partly built; the rest needs a service or your decision</span></div>
+        <div class="wait"><b>10</b><span>Built, switches on when a service is connected</span></div>
+        <div class="todo"><b>7</b><span>Not built yet; each needs a service first</span></div>
+      </div>
+      <div class="videos" aria-label="Progress by video">
+        <div class="video"><h3>Communication Centre</h3>
+          <div class="bar" role="img" aria-label="3 built, 2 partly, 4 waiting, 5 not built"><i class="s-live" style="width: 21.43%"></i><i class="s-part" style="width: 14.29%"></i><i class="s-wait" style="width: 28.57%"></i><i class="s-todo" style="width: 35.71%"></i></div>
+          <span class="count">3 of 14 built</span></div>
+        <div class="video"><h3>Property Management Database</h3>
+          <div class="bar" role="img" aria-label="8 built, 1 waiting"><i class="s-live" style="width: 88.89%"></i><i class="s-wait" style="width: 11.11%"></i></div>
+          <span class="count">8 of 9 built</span></div>
+        <div class="video"><h3>Property Onboarding</h3>
+          <div class="bar" role="img" aria-label="22 built, 4 partly"><i class="s-live" style="width: 84.62%"></i><i class="s-part" style="width: 15.38%"></i></div>
+          <span class="count">22 of 26 built</span></div>
+        <div class="video"><h3>Remainder of Stays</h3>
+          <div class="bar" role="img" aria-label="14 built, 6 partly, 5 waiting, 2 not built"><i class="s-live" style="width: 51.85%"></i><i class="s-part" style="width: 22.22%"></i><i class="s-wait" style="width: 18.52%"></i><i class="s-todo" style="width: 7.41%"></i></div>
+          <span class="count">14 of 27 built</span></div>
+      </div>
+    </div>
+    <p class="lead">Everything that could be built without an outside account is now built. The Communication Centre is furthest behind because the guest inbox, WhatsApp and shared mailboxes all need their accounts connected before we can build them.</p>
+  </section>
+
+  <section id="checklist">
+    <div class="eyebrow">Checklist</div>
+    <h2>At a glance</h2>
+    <p class="lead">42 parts are done and working in the live app. 23 are built or partly built and switch on once an outside service is connected or you make a decision. Each one is explained in more detail further down.</p>
+    <div class="checks">
+      <div class="checkcol"><h3>Done and working <span class="count">42</span></h3><ul class="checklist">
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Your tools on Home, for every role</b> <small>Easier to find, faster to open</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Shortcuts that open the form straight away</b> <small>Easier to find, faster to open</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Always up to date</b> <small>Easier to find, faster to open</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Illustrated icons for every tool</b> <small>Easier to find, faster to open</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Opens much faster</b> <small>Easier to find, faster to open</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>More motion and feedback</b> <small>Easier to find, faster to open</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Fixes for small screens</b> <small>Easier to find, faster to open</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Hostaway data cleared and the sync switched off</b> <small>The new business set-up</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Everything about a property on one page</b> <small>The Property Management Database</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Where every property is</b> <small>The Property Management Database</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Owners and their portfolios</b> <small>The Property Management Database</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Properties by area of Scotland</b> <small>The Property Management Database</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>The last 12 months</b> <small>The Property Management Database</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Estimates and the owner's decision</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Explore your estimate</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>What Recharge does, extra services and an FAQ</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Ask Recharge a question</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Agreement and set-up form</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>A copy of the signed agreement</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Garden care set up automatically</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Onboarding invoice</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Inspection checklist</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>The right team told straight away</b> <small>Property onboarding and the owner app</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Contract and training before access</b> <small>Staff onboarding, shifts and performance</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Access control for super admins</b> <small>Staff onboarding, shifts and performance</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Departments and shifts</b> <small>Staff onboarding, shifts and performance</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Clock in and clock out</b> <small>Staff onboarding, shifts and performance</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Team performance report</b> <small>Staff onboarding, shifts and performance</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Log a review</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Re-listings</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Today's sign-off</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Empty nights become tickets automatically</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Licensing in stages</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Direct bookings</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Repairs with types and guided checks</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>When a repair quote changes</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Everyone kept in the loop on repairs</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Purchases and the budget chart</b> <small>Cleans, Ready and Accounts</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Remove a cleaner from the rota</b> <small>Cleans, Ready and Accounts</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Ready</b> <small>Cleans, Ready and Accounts</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Accounts</b> <small>Cleans, Ready and Accounts</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Access and data protection</b> <small>Security check</small></span></li>
+      </ul></div>
+      <div class="checkcol"><h3>Pending <span class="count">23</span></h3><ul class="checklist">
+<li><span class="box " aria-hidden="true"></span><span><b>Ready for the new channel manager</b> <small>The new business set-up</small> <span class="chip wait">Needs your choice</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Linking each property to its channel-manager listing</b> <small>The Property Management Database</small> <span class="chip wait">Needs the channel manager</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Post photos and documents on the set-up form</b> <small>Property onboarding and the owner app</small> <span class="chip part">Needs photo storage</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Emails and phone notifications at each stage</b> <small>Property onboarding and the owner app</small> <span class="chip wait">Needs email and push keys</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Guest reply times and bonus tiers</b> <small>Staff onboarding, shifts and performance</small> <span class="chip wait">Built, waiting on the channel manager</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Client relations score</b> <small>Staff onboarding, shifts and performance</small> <span class="chip part">Needs the shared mailboxes</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Logins for each platform</b> <small>Listings, pricing, licensing and repairs</small> <span class="chip part">Your decision</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Weekly owner report</b> <small>Listings, pricing, licensing and repairs</small> <span class="chip part">Email needs the service</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Cleaner invoices</b> <small>Cleans, Ready and Accounts</small> <span class="chip wait">Waiting on clean photos</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Cleans</b> <small>Cleans, Ready and Accounts</small> <span class="chip wait">Submitting cleans needs photo storage</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Guest inbox for Airbnb, Booking.com and direct messages</b> <small>What needs a service before we can build it</small> <span class="chip todo">Channel manager</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>New reviews appearing automatically</b> <small>What needs a service before we can build it</small> <span class="chip todo">Channel manager</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>AI-suggested guest replies</b> <small>What needs a service before we can build it</small> <span class="chip todo">AI key</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Team WhatsApp inbox</b> <small>What needs a service before we can build it</small> <span class="chip todo">Meta WhatsApp</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Shared mailboxes, and each person's own email</b> <small>What needs a service before we can build it</small> <span class="chip todo">Google or Microsoft</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Weekly scan for local events</b> <small>What needs a service before we can build it</small> <span class="chip todo">Events data</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Channel manager</b> <small>Decisions we need</small> <span class="chip decide">Decide</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>How daily Stays work counts towards bonuses</b> <small>Decisions we need</small> <span class="chip decide">Decide</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Where platform passwords live</b> <small>Decisions we need</small> <span class="chip decide">Decide</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Reply targets and bonus tiers</b> <small>Decisions we need</small> <span class="chip decide">Confirm</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Staff contract wording and required training</b> <small>Decisions we need</small> <span class="chip decide">Send us</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Owner-facing wording</b> <small>Decisions we need</small> <span class="chip decide">Review</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>The first properties to onboard</b> <small>Decisions we need</small> <span class="chip decide">Plan</span></span></li>
+      </ul></div>
+    </div>
+  </section>
+
+
+  <section>
+    <div class="eyebrow">The app on your phone</div>
+    <h2>Easier to find, faster to open</h2>
+    <p class="lead">This round focused on the app as people use it every day on their phones: getting to their tools in one tap, opening quickly, and feeling responsive.</p>
+    <div class="area">
+      <div class="item"><h3>Your tools on Home, for every role<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Home now opens with a "Your tools" grid made for each person's role. One tap goes straight to the right screen, tab or section, so nobody has to search through menus. "All tools" lists everything else on their account.</p></div>
+      <div class="item"><h3>Shortcuts that open the form straight away<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Under the tools, each role has buttons for what they start most: Record a stay, Report a repair, New clean, New expense or New routine visit. One tap opens the form ready to fill in.</p></div>
+      <div class="item"><h3>Always up to date<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>The app checks for changes every minute while it is open, and as soon as someone comes back to it. A new onboarding stage, task or update appears without anyone tapping refresh. It waits while someone is filling in a form.</p></div>
+      <div class="item"><h3>Illustrated icons for every tool<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Each tool has its own colour illustration in the Recharge palette: a price tag for pricing, a signed sheet for sign-off, a shield for AirCover, a parcel for restock requests and so on. The same icons appear in the full tools list.</p></div>
+      <div class="item"><h3>Opens much faster<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>What a phone downloads to open the app has dropped from about 6 MB to 2.7 MB: smaller logo and font files, and the old sample-data preview removed from the live app. After the first visit, the phone keeps these files, so later visits open almost straight away. The battery intro now plays once a day and has a Skip button, and the app loads underneath it.</p></div>
+      <div class="item"><h3>More motion and feedback<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Every save now shows a short animated confirmation, such as "Saved", "Day signed off" or "Clocked in". Tool tiles lift when tapped, checklists tick with a small spring, the section a tool opens briefly glows, and screens slide in as you move between them. People who prefer less motion can turn it off in Profile and preferences.</p></div>
+      <div class="item"><h3>Fixes for small screens<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Rows of buttons that ran off the edge of the screen now wrap onto a second line. Choices such as departments and tabs wrap so every option is visible without scrolling sideways. The round Help button no longer sits over Home or on screens whose bottom bar already has Help, and it slides out of the way while you scroll. The browser tab now says "Recharge".</p></div>
+    </div>
+    <p class="lead">We checked this on phone, narrow-phone and desktop screens, in light and dark mode, for every role. Unused code was removed, and all 330 automated checks pass.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Fresh start</div>
+    <h2>The new business set-up</h2>
+    <div class="area">
+      <div class="item"><h3>Hostaway data cleared and the sync switched off</h3><span class="chip live">Done</span>
+        <p>As agreed, the old Hostaway properties, bookings and cleans were copied to a private archive (kept as a template only) and removed from the app. The Hostaway connection is switched off, so nothing new comes in from it. Every property, owner and staff member now starts fresh in Recharge.</p></div>
+      <div class="item"><h3>Ready for the new channel manager</h3><span class="chip wait">Needs your choice</span>
+        <p>The booking and automatic-checkout-clean engine built for Hostaway is kept and will be reused for Uplisting or a cheaper alternative once you choose one.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Properties</div>
+    <h2>The Property Management Database</h2>
+    <p class="lead">The Properties tab now opens the Property Management Database: the whole portfolio at a glance, and one page per property.</p>
+    <div class="area">
+      <div class="item"><h3>Everything about a property on one page<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Owner and contact details, listings, stays (now, upcoming and recent), the owner's set-up answers, payout details (the account number is masked and only shown on request), access and logins, onboarding progress, open work and invoices with a "Settled" tick. Each part only shows to the people allowed to see it.</p></div>
+      <div class="item"><h3>Where every property is<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Properties counted by stage: enquiry, estimate, agreement, set-up, invoice, inspection and live. Tap a stage to see only those properties. The onboarding strike rate has been taken out of this report, as you asked.</p></div>
+      <div class="item"><h3>Owners and their portfolios<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Every owner with their number of properties, and the total number of owners. Tap an owner to see only their properties.</p></div>
+      <div class="item"><h3>Properties by area of Scotland<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>A drawn map of Scotland shows a circle in each area, sized by how many properties are there; tap a circle to see the area. Towns are grouped sensibly (Leith and Portobello count as Edinburgh), and new enquiries pick their area from a fixed list so the counts stay clean.</p></div>
+      <div class="item"><h3>The last 12 months<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Properties added, properties gone live, nights booked each month and live properties now. Portfolio revenue joins this once payouts come in from the channel manager.</p></div>
+      <div class="item"><h3>Linking each property to its channel-manager listing</h3><span class="chip wait">Needs the channel manager</span>
+        <p>So guest messages and bookings land on the right property. Built once the channel manager is connected.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Owners</div>
+    <h2>Property onboarding and the owner app</h2>
+    <p class="lead">Owners sign in to see their properties, every stage of their onboarding, upcoming stays, statements and repairs. The full onboarding journey runs inside the app:</p>
+    <div class="flow" aria-label="Onboarding stages">
+      <span>Enquiry</span><i>→</i><span>Estimate with comparables</span><i>→</i><span>Owner decides</span><i>→</i><span>Management agreement signed</span><i>→</i><span>Set-up form</span><i>→</i><span>Onboarding invoice</span><i>→</i><span>Inspection</span><i>→</i><span>Live</span>
+    </div>
+    <div class="area">
+      <div class="item"><h3>Estimates and the owner's decision</h3><span class="chip live">Working</span>
+        <p>The team publishes an estimate with low, expected and high nightly rates and links to comparable listings. The owner approves, asks for more time (the team is reminded on the follow-up date), or declines (the property is archived on both sides).</p></div>
+      <div class="item"><h3>Explore your estimate<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Owners pick a quieter, expected or strong year and an occupancy level, and their earnings update as they go. A "Booked direct" switch shows how much they save in platform fees on direct bookings. The team sets the occupancy, direct-booking share, platform fee and management fee when publishing the estimate.</p></div>
+      <div class="item"><h3>What Recharge does, extra services and an FAQ<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Next to the estimate, owners read what Recharge does, the extra services, how onboarding works, and answers to the questions owners usually ask (the estimate, more time, repairs, payouts and post). The wording sits in one place, so we can change it to your exact words.</p></div>
+      <div class="item"><h3>Ask Recharge a question<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>At any stage the owner can ask a question on their onboarding page. The team is told and answers on the same page.</p></div>
+      <div class="item"><h3>Agreement and set-up form</h3><span class="chip live">Working</span>
+        <p>The owner signs the management agreement in the app; their name, the date and the exact wording are kept. The set-up form captures bank details, access, utilities, mail preference, warranty and repair contacts, the repair amount Recharge can approve without asking, furnishing and licensing. Those answers create the follow-up tasks automatically, and the Ready team's answers show on the property page under "Getting ready to go live".</p></div>
+      <div class="item"><h3>A copy of the signed agreement<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Once the agreement is signed, the owner and the team can download a copy of the exact wording, with who signed it, when, and which revision. It opens in any browser to keep, print or save as a PDF.</p></div>
+      <div class="item"><h3>Garden care set up automatically<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>When the owner says the property has a garden, Ready get a monthly "Garden and bins" routine (grass, weeds, leaves, bins and anything that needs a repair) as well as the set-up task.</p></div>
+      <div class="item"><h3>Onboarding invoice<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Accounts get a task to raise the onboarding invoice. Once the payment is recorded, the invoice shows "Settled" for both the owner and the team, and the property moves on to the inspection.</p></div>
+      <div class="item"><h3>Inspection checklist<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Ready book the inspection and file it with a checklist: keys and access, alarms, heating and hot water, appliances, Wi-Fi, damage, furnishing, safety items and guest-ready. They note any issues found and write the report. Inspection photos switch on with photo storage.</p></div>
+      <div class="item"><h3>The right team told straight away<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Stays staff with the onboarding tool are put on every new enquiry, and Ready on every new inspection, so they see it in the app the moment it arrives.</p></div>
+      <div class="item"><h3>Post photos and documents on the set-up form</h3><span class="chip part">Needs photo storage</span>
+        <p>The owner's mailbox choice is saved and cleaners already log post with a note that shows in the owner's Mailbox. Photos of post and documents attached to the set-up form switch on with photo storage.</p></div>
+      <div class="item"><h3>Emails and phone notifications at each stage</h3><span class="chip wait">Needs email and push keys</span>
+        <p>Every stage already shows an update in the web app, with its own clear title such as "Your estimate is ready" or "Your property is live". The same wording is written and ready for emails and phone notifications, so they start as soon as the email service and the phone apps are connected.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Team</div>
+    <h2>Staff onboarding, shifts and performance</h2>
+    <div class="area">
+      <div class="item"><h3>Contract and training before access</h3><span class="chip live">Working</span>
+        <p>New team members sign the staff contract for their role in the app and complete the training marked "required" before any tool opens.</p></div>
+      <div class="item"><h3>Access control for super admins<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>One screen lists every account, with when each person last signed in and whether they are signed in now. A super admin can promote someone or move them to another role (for example from Cleaning manager to Admin). They then see exactly what everyone in that role sees, with the same Home, Work and tools, and their app switches over within a minute. Their properties move with them. A super admin can also switch individual tools on or off, sign them out of every device, revoke their password (they set a new one with "Forgot password"), block or unblock them, and delete the account. A deleted account with work history is closed rather than erased, so the record of who did what stays. Every change is logged with who made it. It is in Work → Management → Access control, and on a super admin's Home.</p></div>
+      <div class="item"><h3>Departments and shifts<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Admins give each person a department (guest relations, client relations, cleaning, Ready, Accounts or management) and their usual shift: early (8am to 4pm), late (3pm to 11pm) or both. Clock-in starts from their department, and both show on their shift card and in Team performance.</p></div>
+      <div class="item"><h3>Clock in and clock out</h3><span class="chip live">Working</span>
+        <p>Every team member clocks in and out from Home. Admins see who is on shift and can end a shift someone forgot to close.</p></div>
+      <div class="item"><h3>Team performance report<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>For today, the last 7 or 30 days: each person's replies, hours, listing checks, reviews logged, pricing decisions and daily sign-offs, whether they are on track, and their bonus tier. Admins also see the last 14 days of Stays sign-offs.</p></div>
+      <div class="item"><h3>Guest reply times and bonus tiers</h3><span class="chip wait">Built, waiting on the channel manager</span>
+        <p>Every guest message is timed: green within 5 minutes, amber within 10, red after that, credited to whoever was clocked in to guest relations. 90% green is on track; 95% and 100% unlock the bonus tiers. The figures fill in as soon as guest messages flow in.</p></div>
+      <div class="item"><h3>Client relations score</h3><span class="chip part">Needs the shared mailboxes</span>
+        <p>Client relations can already be set as a department. Their reply score needs owner emails, which come with the shared mailboxes.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Stays</div>
+    <h2>Listings, pricing, licensing and repairs</h2>
+    <div class="area">
+      <div class="item"><h3>Log a review<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>On each property, Stays log a guest review: platform, rating, good, mixed or bad, what the guest said and how it was handled. A really bad review can be marked "re-list". Until the channel manager feeds reviews in, they are entered by hand.</p></div>
+      <div class="item"><h3>Re-listings<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>A review marked "re-list", or a listing check that finds a listing hidden or suspended, goes on the re-listing list on the Stays screen: to start, under way, then re-listed.</p></div>
+      <div class="item"><h3>Today's sign-off<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>At the end of each day Stays sign off that all listings are visible, bad reviews are answered, suspensions are dealt with and re-listings are done or under way, with a note for anything still open. Sign-offs count in Team performance.</p></div>
+      <div class="item"><h3>Empty nights become tickets automatically<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Every live property with an empty night in the coming week gets one "Price the empty nights" ticket. It updates itself as nights are booked or priced and closes once every night is covered. Staff hold or change each price with a reason, and those decisions feed the weekly owner report.</p></div>
+      <div class="item"><h3>Licensing in stages<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Licensing tickets from onboarding run through the full process: application submitted (council and reference), safety checks (gas, electrical, alarms, legionella, EPC and insurance), then licence granted.</p></div>
+      <div class="item"><h3>Direct bookings</h3><span class="chip live">Working</span>
+        <p>Stays of 7 nights or more get a direct-booking ticket. The offer shows next to the original price, with the 10% off, up to £100 policy. A yes goes to Accounts for the invoice, and "The guest said no" now closes the offer. Bookings from the channel manager will create these tickets once it is connected.</p></div>
+      <div class="item"><h3>Repairs with types and guided checks<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Stays choose the repair type (heating, hot water, leak, toilet, electrics, appliance, Wi-Fi, locks, pests, damage or other), link the guest's stay and mark it urgent. Each type has a checklist of safe checks to go through with the guest; the ticked checks travel with the referral to Ready. The owner's preferred repair contact and warranties show on every repair as "contact first".</p></div>
+      <div class="item"><h3>When a repair quote changes<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>If the real quote differs from the estimate, Ready or Stays update it with the reason. A higher quote above the owner's approval limit goes back to the owner first, and the repair carries on from where it was once they approve. A lower one needs nothing more.</p></div>
+      <div class="item"><h3>Everyone kept in the loop on repairs<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Ready are told when a repair is referred. The Stays person who referred it is told when it is booked and when it is done, so they can update the guest. Work over the owner's limit still goes to the owner for approval first.</p></div>
+      <div class="item"><h3>Logins for each platform<span class="new">New</span></h3><span class="chip part">Your decision</span>
+        <p>Staff with the logins tool see each property's platform logins under "Access and logins". See the decision below on where passwords should live.</p></div>
+      <div class="item"><h3>Weekly owner report<span class="new">New</span></h3><span class="chip part">Email needs the service</span>
+        <p>Owners and staff can download the weekly report, and every Monday morning owners get a notice in the app that this week's report is ready. Emailing it automatically starts once the email service is connected.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Departments</div>
+    <h2>Cleans, Ready and Accounts</h2>
+    <div class="area">
+      <div class="item"><h3>Purchases and the budget chart<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Accounts are told about every purchase request. They keep a budget chart (the most each item should cost) on the Accounts screen, approve each request against it, and record the order. Ready's delivery ticket closes itself once the delivery is recorded, and Accounts reconcile it against the paid invoice.</p></div>
+      <div class="item"><h3>Cleaner invoices<span class="new">New</span></h3><span class="chip wait">Waiting on clean photos</span>
+        <p>Accepted cleans are grouped by cleaner in Accounts, so several cleans go on one invoice. This fills in once cleans can be submitted, which needs photo storage.</p></div>
+      <div class="item"><h3>Remove a cleaner from the rota<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Removing a cleaner takes them off every property and frees their open cleans so they can be given to someone else.</p></div>
+      <div class="item"><h3>Cleans</h3><span class="chip wait">Submitting cleans needs photo storage</span>
+        <p>Clean calendar, checklists, assigning cleaners, the end-of-clean report, reviews with guest feedback, complaints going to management and the two-strikes warning list are all in place. Cleaners attach photos to submit a clean, so this switches on with photo storage.</p></div>
+      <div class="item"><h3>Ready</h3><span class="chip live">Working</span>
+        <p>Repairs referred from Stays, booking and completing repairs, owner approval above the owner's limit, routine garden, bin and safety visits, inspections, furnishing quotes and purchase deliveries. Delivery photos switch on with photo storage.</p></div>
+      <div class="item"><h3>Accounts</h3><span class="chip live">Working</span>
+        <p>Expenses with evidence and approval limits, platform payout reconciliation, owner statements, invoices raised straight from tasks (cleans, repairs, direct bookings, onboarding) and payment recording.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Safety</div>
+    <h2>Security check</h2>
+    <div class="area">
+      <div class="item"><h3>Access and data protection</h3><span class="chip live">Done</span>
+        <p>Everyone only sees the properties and tools they are given, owners never see staff-only information, sign-in is verified on every request, and nothing can be read without signing in. Every new part in this round follows the same rules: for example, owner contact details show only to admins and the staff whose tools need them, and bank details stay masked. All 330 automated checks pass.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Not built yet</div>
+    <h2>What needs a service before we can build it</h2>
+    <p class="lead">The 7 requests not built yet all need an account behind them first, because there is nothing to connect to until it exists.</p>
+    <div class="area">
+      <div class="item"><h3>Guest inbox for Airbnb, Booking.com and direct messages</h3><span class="chip todo">Channel manager</span></div>
+      <div class="item"><h3>New reviews appearing automatically</h3><span class="chip todo">Channel manager</span></div>
+      <div class="item"><h3>AI-suggested guest replies</h3><span class="chip todo">AI key</span></div>
+      <div class="item"><h3>Team WhatsApp inbox</h3><span class="chip todo">Meta WhatsApp</span></div>
+      <div class="item"><h3>Shared mailboxes, and each person's own email</h3><span class="chip todo">Google or Microsoft</span></div>
+      <div class="item"><h3>Weekly scan for local events</h3><span class="chip todo">Events data</span></div>
+    </div>
+  </section>
+
+  <section id="costs">
+    <div class="eyebrow">Costs</div>
+    <h2>Possible running costs</h2>
+    <p class="lead">What Recharge costs to run, now and as each service is connected. These are each provider's published prices as we understand them in October 2026. Please check each provider's pricing page before signing up, because prices change. Amounts in dollars are billed in dollars; pounds are approximate.</p>
+
+    <h3>1. To run the app today</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Service</th><th>What it does</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td>Supabase<small>Pro plan</small></td><td>The database: every property, job, account and message, with daily backups. The free plan pauses after a week without activity, so a live business should be on Pro.</td><td>$25 / month</td></tr>
+        <tr><td>Cloudflare Workers<small>Paid plan</small></td><td>Runs the web app and the backend. The free plan allows 100,000 requests a day, which a busy team, and chat, can pass.</td><td>$5 / month</td></tr>
+        <tr><td><b>Total</b></td><td>Includes the planned built-in team chat at no extra cost</td><td><b>About $30 / month (about £25)</b></td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>2. When each pending service is connected</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Service</th><th>What it switches on</th><th>Likely cost</th></tr></thead>
+      <tbody>
+        <tr><td>Channel manager<small>Uplisting, or a cheaper alternative</small></td><td>Bookings, automatic checkout cleans, the guest inbox, reply times and bonus tiers, reviews</td><td>About £13 per listing / month (Hostaway is about £25)</td></tr>
+        <tr><td>Photo storage<small>Cloudinary</small></td><td>Submitting cleans, cleaner invoices, and inspection, delivery, post and chat photos</td><td>Free tier to start; about $89 / month only at very high photo volumes</td></tr>
+        <tr><td>Email sending<small>Resend</small></td><td>Stage-by-stage emails and the weekly owner report</td><td>Free up to 3,000 emails / month; $20 / month above that</td></tr>
+        <tr><td>Shared mailboxes<small>Google Workspace or Microsoft 365</small></td><td>The onboarding, enquiries, guest relations and client relations inboxes</td><td>About £5 to £7 per user / month</td></tr>
+        <tr><td>WhatsApp<small>Meta WhatsApp Business</small></td><td>The team WhatsApp inbox for guests and owners</td><td>No monthly fee. Replies within 24 hours of a customer's message are free; messages you start cost a few pence each.</td></tr>
+        <tr><td>Push notifications<small>Expo</small></td><td>Alerts on phones when the app is closed, including chat messages</td><td>Free</td></tr>
+        <tr><td>Stripe</td><td>Card payments and owner payouts</td><td>No monthly fee; about 1.5% + 20p per UK card payment</td></tr>
+        <tr><td>Xero</td><td>Owner statements and invoices synced to your accounts</td><td>Your existing Xero subscription; nothing extra</td></tr>
+        <tr><td>AI provider<small>Optional</small></td><td>Suggested guest replies, review sentiment and repair troubleshooting</td><td>Pay as you go; usually £5 to £20 / month at your size</td></tr>
+        <tr><td>Events data<small>Optional</small></td><td>The weekly local-events scan</td><td>Varies by provider; quoted on request</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>3. One-off and yearly</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Item</th><th>What it is for</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td>Apple Developer</td><td>Recharge in the App Store, with notifications on iPhone</td><td>$99 / year</td></tr>
+        <tr><td>Google Play Console</td><td>Recharge in Google Play</td><td>$25 once</td></tr>
+        <tr><td>Own web address<small>Optional</small></td><td>Your own address (for example app.yourdomain.co.uk) instead of the current link</td><td>About £10 to £15 / year, or free if you already own the domain</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="note"><b>Example:</b> with 20 listings on Uplisting, four Google Workspace users, and photos and email on their free tiers, the monthly total would be about <b>£25</b> (app) + <b>£260</b> (channel manager) + <b>£25</b> (mailboxes) = <b>about £310 a month</b>. Stripe and WhatsApp add small per-use amounts. The channel manager is the largest cost and grows with the number of listings. For comparison, a ready-made chat service alone (Stream, Sendbird) would cost about $300 to $500 a month; the built-in chat costs nothing extra.</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Pending</div>
+    <h2>What we need from you</h2>
+    <p class="lead">These parts are built or ready to build, and switch on once the account exists. Please create each account in Recharge's name, then share access with us securely. Please never send passwords or keys over WhatsApp or email.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Connection</th><th>What it switches on</th><th>What to get</th></tr></thead>
+        <tbody>
+          <tr><td>Channel manager<small>Uplisting or a cheaper alternative</small></td><td>Bookings flowing in, automatic checkout cleans, the guest inbox, reply timing and bonus tiers, new reviews, suspension alerts, and direct-booking tickets from real bookings</td><td>Your choice of provider, an account with the listings connected, and its API access</td></tr>
+          <tr><td>Photo storage<small>Cloudinary</small></td><td>Submitting cleans (and with it cleaner invoices and complaints), delivery photos, inspection photos, post photos and set-up documents</td><td>A Cloudinary account (the free tier is enough to start)</td></tr>
+          <tr><td>Email sending<small>Resend</small></td><td>Stage-by-stage emails to owners and staff, and the weekly owner report sent automatically</td><td>A Resend account and access to the domain's DNS settings, to verify the sending address</td></tr>
+          <tr><td>Shared mailboxes<small>Google Workspace or Microsoft 365</small></td><td>The onboarding, enquiries, guest relations and client relations inboxes, each person's own inbox, and the client relations score</td><td>A Google Workspace or Microsoft 365 account with those four mailboxes</td></tr>
+          <tr><td>WhatsApp<small>Meta WhatsApp Business</small></td><td>The team WhatsApp inbox for guests and owners</td><td>A verified Meta Business account and a phone number for WhatsApp Business</td></tr>
+          <tr><td>Phone app stores<small>Apple and Google</small></td><td>Phone versions of Recharge in the App Store and Google Play, with push notifications. The web app keeps working in the browser alongside them.</td><td>An Apple Developer account and a Google Play Console account in Recharge's name</td></tr>
+          <tr><td>Xero</td><td>Owner statements and invoices synced to your accounts, and onboarding invoices sent from the app</td><td>Access to the Recharge Xero organisation</td></tr>
+          <tr><td>Stripe</td><td>Card payments and owner payouts</td><td>A Stripe account for Recharge</td></tr>
+          <tr><td>AI and events<small>Optional</small></td><td>Suggested guest replies, review sentiment, troubleshooting help on repairs, and the weekly local-events scan</td><td>An AI provider key (for example your existing ChatGPT one) and, if wanted, an events data subscription</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Your call</div>
+    <h2>Decisions we need</h2>
+    <div class="area">
+      <div class="item"><h3>Channel manager</h3><span class="chip decide">Decide</span>
+        <p>Uplisting (about £13 per listing, against about £25 with Hostaway) or a cheaper alternative. This unlocks the guest inbox, reply timing, review import and more.</p></div>
+      <div class="item"><h3>How daily Stays work counts towards bonuses<span class="new">New</span></h3><span class="chip decide">Decide</span>
+        <p>Team performance already shows listing checks, reviews logged, pricing decisions and daily sign-offs per person. Today the bonus tiers use guest reply times only. Tell us whether this daily work should count, and how much.</p></div>
+      <div class="item"><h3>Where platform passwords live<span class="new">New</span></h3><span class="chip decide">Decide</span>
+        <p>Each property has one logins box, edited by admins. We recommend keeping the actual passwords in a shared password manager (such as 1Password or Bitwarden) and using the app to note which account each listing uses. It is safer than storing passwords in the app.</p></div>
+      <div class="item"><h3>Reply targets and bonus tiers</h3><span class="chip decide">Confirm</span>
+        <p>Green within 5 minutes, amber within 10, 90% to be on track, bonus tiers at 95% and 100%. Shifts overlap from 3pm to 4pm, and messages in that hour currently count for both people on shift; tell us if one person should own them instead.</p></div>
+      <div class="item"><h3>Staff contract wording and required training</h3><span class="chip decide">Send us</span>
+        <p>The contract each role signs, and which courses every new team member must finish before starting. Admins can add both themselves under Work → Management → Onboarding &amp; training.</p></div>
+      <div class="item"><h3>Owner-facing wording<span class="new">New</span></h3><span class="chip decide">Review</span>
+        <p>Read "What Recharge does", "Extra services", "How onboarding works" and "Questions owners ask" on an estimate, and send us any changes. We wrote them from your videos.</p></div>
+      <div class="item"><h3>The first properties to onboard</h3><span class="chip decide">Plan</span>
+        <p>Which owners and properties go through the new onboarding first, so we can follow them end to end with you.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Next</div>
+    <h2>Getting started this week</h2>
+    <ol class="steps">
+      <li>Open the web app link above on your computer or phone and sign in with your admin account.</li>
+      <li>Add the staff contract and mark the required courses under Work → Management → Onboarding &amp; training.</li>
+      <li>Ask each team member to sign up in the app, approve them in People, give them their tools and properties, then set their department and usual shift in Team performance.</li>
+      <li>Ask Accounts to fill in the budget chart on the Accounts screen, so purchase requests can be checked against it.</li>
+      <li>Show each team member the "Your tools" grid at the top of Home. It is set up for their role, and "All tools" lists everything else on their account.</li>
+      <li>Start the first owner enquiry from Properties, or ask the owner to sign up and start it themselves.</li>
+      <li>Send us the accounts from the list above as they are ready, starting with the channel manager and photo storage.</li>
+    </ol>
+    <p class="note">Every tool on someone's account is listed under Help → Your tools, with a button that opens it, so each person can see exactly what they have and where to find it.</p>
+  </section>
+
+  <footer>Prepared 8 October 2026. Recharge is a web application. It works today in any browser on desktop, laptop, tablet or phone, and the App Store and Google Play versions will be added alongside it.</footer>
+</div>
+
+<script>
+document.getElementById('copy-link').addEventListener('click', function () {
+  var url = document.getElementById('app-link').href, button = this;
+  function done(text) { button.textContent = text; setTimeout(function () { button.textContent = 'Copy link'; }, 2000); }
+  try {
+    navigator.clipboard.writeText(url).then(function () { done('Copied'); }, function () { done('Select the link below'); });
+  } catch (e) { done('Select the link below'); }
+});
+</script>
+
+</body>
+</html>
