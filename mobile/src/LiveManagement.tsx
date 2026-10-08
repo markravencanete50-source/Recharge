@@ -10,6 +10,7 @@ import { ExpenseSheet, List, NoteSheet, Pills, Row, type NoteAsk } from "./LiveA
 import { LiveTraining } from "./LiveTraining";
 import { LivePeople } from "./LivePeople";
 import { LiveTeamPerformance } from "./LiveShifts";
+import { DisputeSheet } from "./CleanDisputes";
 import { readFinance, readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
 import { DECISION_OUTCOMES, decisionAction, managementSchema, type Decision, type Management } from "../../lib/management-live";
 import { performanceSchema } from "../../lib/cleans-live";
@@ -159,7 +160,8 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       {(view === "people" || view === "properties") && <LivePeople palette={p} account={account} view={view} />}
 
       <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
-      <DecisionSheet p={p} decision={decision} onClose={() => setDecision(null)} onDone={saved(load)} />
+      <DecisionSheet p={p} decision={decision?.kind === "cleaning_complaint" ? null : decision} onClose={() => setDecision(null)} onDone={saved(load)} />
+      <DisputeSheet p={p} target={decision?.kind === "cleaning_complaint" ? decision : null} onClose={() => setDecision(null)} onDone={saved(load)} />
       <ExpenseSheet p={p} role={account.role} id={expense} limit={limit} onClose={() => setExpense(null)} onAsk={a => { setExpense(null); setAsk(a); }} onDone={saved(load)} />
       <NoteSheet p={p} ask={ask} onClose={() => setAsk(null)} onDone={saved(load)} />
     </View>

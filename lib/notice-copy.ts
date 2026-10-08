@@ -39,6 +39,11 @@ const EXACT: Record<string, NoticeCopy> = {
   'operations.updateOperation.submitCleaning': copy('Clean submitted', 'A clean has been submitted for review.'),
   'operations.updateOperation.reviewCleaning': copy('Clean reviewed', 'A clean has been reviewed.'),
   'cleaning.cleaner_responded': copy('Cleaner responded', 'A cleaner has responded to a complaint.'),
+  'cleaning.accepted': copy('Clean accepted', 'One of your cleans has been checked and accepted.'),
+  'cleaning.rejected': copy('Clean not accepted', 'One of your cleans was not accepted. You can see why, and give your side before management decides.'),
+  'cleaning.dispute_upheld': copy('Rejection upheld', 'Management has looked at the rejected clean and your response. The rejection stands.'),
+  'cleaning.dispute_overturned': copy('Rejection overturned', 'Management has overturned the rejection of your clean. It no longer counts against you.'),
+  'operations.updateOperation.reportCleanProblem': copy('Problem reported from a clean', 'A cleaner has reported a problem at a property.'),
   // Stays.
   'operations.updateOperation.prepareQuote': copy('Direct-booking offer prepared', 'A direct-booking offer has been prepared for a guest.'),
   'operations.updateOperation.recordGuestAcceptance': copy('Guest accepted the offer', 'A guest has accepted a direct-booking offer.'),

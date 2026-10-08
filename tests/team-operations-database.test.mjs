@@ -63,7 +63,8 @@ test('the cleaner responds once and management overturns a rejection so the clea
   assert.equal(mine.rejected, 1); assert.equal(mine.openComplaints.length, 1);
   await teams({ action: 'addCleanerStatement', workId: complaint.id, statement: 'Counter was wiped; photo shows it clean' });
   await assert.rejects(teams({ action: 'addCleanerStatement', workId: complaint.id, statement: 'Trying to answer a second time' }), /already responded/);
-  await as(MANAGER);
+  // Cleaning managers decide disputes on their own properties (cleans-disputes-database.test.mjs); Stays do not.
+  await as(STAYS);
   await assert.rejects(teams({ action: 'decideComplaint', workId: complaint.id, version: complaint.version, outcome: 'overturned', note: 'Not management' }), /Management access required/);
   await as(ADMIN);
   const queue = await read('management');
