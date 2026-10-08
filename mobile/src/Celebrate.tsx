@@ -27,8 +27,8 @@ export function CelebrateProvider({ palette: p, bottom = 112, children }: { pale
     if (!shown) return;
     rise.setValue(reduced ? 1 : 0); tick.setValue(reduced ? 1 : 0);
     const enter = Animated.parallel([
-      Animated.spring(rise, { toValue: 1, speed: 16, bounciness: 7, useNativeDriver: native }),
-      Animated.sequence([Animated.delay(120), Animated.spring(tick, { toValue: 1, speed: 14, bounciness: 14, useNativeDriver: native })]),
+      Animated.spring(rise, { toValue: 1, speed: 16, bounciness: 3, useNativeDriver: native }),
+      Animated.sequence([Animated.delay(120), Animated.spring(tick, { toValue: 1, speed: 14, bounciness: 6, useNativeDriver: native })]),
     ]);
     if (!reduced) enter.start();
     if (timer.current) clearTimeout(timer.current);

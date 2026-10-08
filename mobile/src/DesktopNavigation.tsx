@@ -23,7 +23,7 @@ export function DesktopNavigation({role,section,palette:p,onNavigate,onDepartmen
   const found=items.findIndex(item=>item.value===section);
   const index=Math.max(0,found);
   const [indicator]=useState(()=>new Animated.Value(index*(ROW+GAP))); const reduced=useReducedMotion();
-  useEffect(()=>{if(reduced){indicator.setValue(index*(ROW+GAP));return;}const animation=Animated.spring(indicator,{toValue:index*(ROW+GAP),speed:18,bounciness:6,useNativeDriver:Platform.OS!=='web'});animation.start();return()=>animation.stop();},[indicator,index,reduced]);
+  useEffect(()=>{if(reduced){indicator.setValue(index*(ROW+GAP));return;}const animation=Animated.spring(indicator,{toValue:index*(ROW+GAP),speed:16,bounciness:2,useNativeDriver:Platform.OS!=='web'});animation.start();return()=>animation.stop();},[indicator,index,reduced]);
   return <View testID="workspace-sidebar" style={{width:248,backgroundColor:p.isDark?p.surface:p.background,borderRightWidth:1,borderColor:p.border}}>
     <View testID="sidebar-brand" style={[ui.between,{height:81,paddingHorizontal:16,gap:12,backgroundColor:p.header,borderBottomWidth:1,borderColor:p.isDark?p.border:p.header}]}><CompanyLogo palette={p} width={144}/><MotionPress accessibilityRole="button" accessibilityLabel="Hide left panel" accessibilityState={{expanded:true}} onPress={onCollapse} style={[ui.iconButton,{width:44,height:44,borderRadius:14,backgroundColor:p.headerControl,borderColor:p.headerBorder}]}><Feather name="chevrons-left" size={18} color={p.headerControlText}/></MotionPress></View>
     <ScrollView contentContainerStyle={{paddingHorizontal:14,paddingTop:20,paddingBottom:24}} showsVerticalScrollIndicator={false}>

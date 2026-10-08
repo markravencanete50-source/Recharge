@@ -4,7 +4,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Feather from '@expo/vector-icons/Feather';
 import Svg, {Circle, Path, Rect} from 'react-native-svg';
 import { Text } from './Typography';
-export const motionTokens = { ui: 200, reveal: 550, stagger: 55, entrance: Easing.bezier(0.22, 1, 0.36, 1) };
+// One motion language for the whole app: quick, calm and without overshoot.
+// fast: presses and toggles. ui: small changes. page: tabs, views and sheets. reveal: charts and
+// progress. entrance eases out (things arrive), exit eases in (things leave).
+export const motionTokens = {
+  fast: 140, ui: 200, page: 240, reveal: 520, stagger: 40,
+  entrance: Easing.bezier(0.22, 1, 0.36, 1), standard: Easing.bezier(0.2, 0, 0, 1), exit: Easing.bezier(0.4, 0, 1, 1),
+};
+const nativeDriver = Platform.OS !== 'web';
 const Motion = createContext({ reduced: true, ready: false, system: false, preference: false, setPreference: (value: boolean) => { void value; }, seen: new Set<string>() });
 export function MotionProvider({ children }: {children: ReactNode}) {
   const [system, setSystem] = useState(true), [preference, setPreference] = useState(false), [ready, setReady] = useState(false);
@@ -25,7 +32,7 @@ export const useReducedMotion = () => useContext(Motion).reduced;
 export const useMotionPreference = () => useContext(Motion);
 export function SlidingPill({x,y=0,width,height,color,visible=true}:{x:number;y?:number;width:number;height:number;color:string;visible?:boolean}) {
   const reduced=useReducedMotion(); const [position]=useState(()=>new Animated.ValueXY({x,y}));
-  useEffect(()=>{if(reduced){position.setValue({x,y});return;}const animation=Animated.timing(position,{toValue:{x,y},duration:motionTokens.ui,easing:motionTokens.entrance,useNativeDriver:Platform.OS!=='web'});animation.start();return()=>animation.stop();},[x,y,position,reduced]);
+  useEffect(()=>{if(reduced){position.setValue({x,y});return;}const animation=Animated.timing(position,{toValue:{x,y},duration:motionTokens.page,easing:motionTokens.entrance,useNativeDriver:nativeDriver});animation.start();return()=>animation.stop();},[x,y,position,reduced]);
   return <Animated.View pointerEvents="none" style={{position:'absolute',left:0,top:0,width,height,borderRadius:999,backgroundColor:color,opacity:visible?1:0,transform:position.getTranslateTransform()}}/>;
 }
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -35,18 +42,18 @@ export function MotionPress({ style, onPressIn, onPressOut, ...props }: Pressabl
   const [pressed, setPressed] = useState(false);
   useEffect(() => { if (reduced) { scale.stopAnimation(); scale.setValue(1); } return () => scale.stopAnimation(); }, [scale, reduced]);
   return <AnimatedPressable {...props} {...(Platform.OS === 'web' ? { 'aria-checked': props.accessibilityState?.checked, 'aria-selected': props.accessibilityState?.selected, 'aria-disabled': props.accessibilityState?.disabled, 'aria-busy': props.accessibilityState?.busy, 'aria-expanded': props.accessibilityState?.expanded } : {})}
-    onPressIn={event => { setPressed(true); if (!reduced) Animated.timing(scale, {toValue:0.97,duration:100,useNativeDriver:Platform.OS !== 'web'}).start(); onPressIn?.(event); }}
-    onPressOut={event => { setPressed(false); if (reduced) scale.setValue(1); else Animated.spring(scale,{toValue:1,speed:24,bounciness:5,useNativeDriver:Platform.OS !== 'web'}).start(); onPressOut?.(event); }}
+    onPressIn={event => { setPressed(true); if (!reduced) Animated.timing(scale, {toValue:0.975,duration:90,easing:motionTokens.standard,useNativeDriver:nativeDriver}).start(); onPressIn?.(event); }}
+    onPressOut={event => { setPressed(false); if (reduced) scale.setValue(1); else Animated.timing(scale,{toValue:1,duration:180,easing:motionTokens.entrance,useNativeDriver:nativeDriver}).start(); onPressOut?.(event); }}
     style={[typeof style === 'function' ? style({pressed}) : style, {transform:[{scale}]}]} />;
 }
-export function useReveal(key: string, delay = 0, duration = motionTokens.ui) {
+export function useReveal(key: string, delay = 0, duration = motionTokens.page) {
   const {reduced, ready, seen} = useContext(Motion);
   const progress = useState(()=>new Animated.Value(1))[0];
   useEffect(() => {
     if (!ready) return;
     if (reduced || seen.has(key)) { progress.setValue(1); return; }
     seen.add(key); progress.setValue(0);
-    const animation = Animated.timing(progress, {toValue:1,duration,delay:Math.min(delay,220),easing:motionTokens.entrance,useNativeDriver:Platform.OS !== 'web'});
+    const animation = Animated.timing(progress, {toValue:1,duration,delay:Math.min(delay,240),easing:motionTokens.entrance,useNativeDriver:nativeDriver});
     animation.start(); return () => { animation.stop(); progress.setValue(1); };
   }, [key, delay, duration, progress, ready, reduced, seen]);
   return progress;
@@ -70,15 +77,44 @@ export function CountUp({value, sessionKey, ...props}: ComponentProps<typeof Tex
 const FILLED:string[]=['home','grid','bar-chart-2','check-square','calendar','key','check-circle','message-circle'];
 export function NavSymbol({name,active,color}: {name:ComponentProps<typeof Feather>['name'];active:boolean;color:string}) {
   const reduced = useReducedMotion(), scale = useState(()=>new Animated.Value(1))[0];
-  useEffect(() => { if (!active || reduced) { scale.setValue(1);return; } scale.setValue(0.88); const a=Animated.spring(scale,{toValue:1,speed:22,bounciness:6,useNativeDriver:Platform.OS!=='web'});a.start();return()=>a.stop(); },[active,reduced,scale]);
+  useEffect(() => { if (!active || reduced) { scale.setValue(1);return; } scale.setValue(0.9); const a=Animated.spring(scale,{toValue:1,speed:20,bounciness:3,useNativeDriver:nativeDriver});a.start();return()=>a.stop(); },[active,reduced,scale]);
   return <Animated.View style={{transform:[{scale}]}}>{active&&FILLED.includes(name)?<Svg width={22} height={22} viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
     {name==='home'?<Path d="M3 10 12 3 21 10V20H15V13H9V20H3Z"/>:name==='grid'?<><Rect x={3} y={3} width={7} height={7} rx={1}/><Rect x={14} y={3} width={7} height={7} rx={1}/><Rect x={3} y={14} width={7} height={7} rx={1}/><Rect x={14} y={14} width={7} height={7} rx={1}/></>:name==='bar-chart-2'?<><Rect x={4} y={12} width={3} height={9} rx={1}/><Rect x={10} y={4} width={3} height={17} rx={1}/><Rect x={16} y={8} width={3} height={13} rx={1}/></>:name==='check-square'?<><Path d="M3 3H15V6H6V18H18V13H21V21H3Z"/><Path d="m10 10 3 3 8-8" fill="none"/></>:name==='calendar'?<><Path d="M3 7H21V21H3Z"/><Path d="M7 2V6M17 2V6" fill="none"/></>:name==='key'?<><Circle cx={7.5} cy={15.5} r={5}/><Path d="M11 12 21 2M16 7l3 3M14 9l2 2" fill="none"/></>:name==='check-circle'?<><Path d="M10 3a9 9 0 1 0 11 11h-3a6 6 0 1 1-8-8Z"/><Path d="m10 10 3 3 8-8" fill="none"/></>:<Path d="M3 3H21V16H9L3 21Z"/>}
   </Svg>:<Feather name={name} size={22} color={color}/>}</Animated.View>;
 }
 
-// Content that slides in whenever its key changes: tabs, views, steps and selections.
+// Content that eases in whenever its key changes (tabs, views, steps, selections, messages):
+// every time, not only the first, so switching back and forth always feels the same.
 export function SwapIn({ children, swapKey, style }: { children: ReactNode; swapKey: string; style?: StyleProp<ViewStyle> }) {
-  return <Entrance trigger={':' + swapKey} style={style}>{children}</Entrance>;
+  const {reduced, ready} = useContext(Motion);
+  const progress = useState(()=>new Animated.Value(1))[0];
+  useEffect(() => {
+    if (!ready || reduced) { progress.setValue(1); return; }
+    progress.setValue(0);
+    const animation = Animated.timing(progress, {toValue:1,duration:motionTokens.page,easing:motionTokens.entrance,useNativeDriver:nativeDriver});
+    animation.start(); return () => { animation.stop(); progress.setValue(1); };
+  }, [swapKey, progress, ready, reduced]);
+  return <Animated.View style={[style,{opacity:progress,transform:[{translateY:progress.interpolate({inputRange:[0,1],outputRange:[6,0]})}]}]}>{children}</Animated.View>;
+}
+// Mount and unmount with an animation both ways, for panels and overlays: `shown` stays true
+// until the exit has finished, and `progress` runs 0 → 1 on the way in and back on the way out.
+export function usePresence(visible: boolean, enter: number = motionTokens.page, exit: number = motionTokens.ui - 20) {
+  const reduced = useReducedMotion();
+  const progress = useState(()=>new Animated.Value(visible ? 1 : 0))[0];
+  const [shown, setShown] = useState(visible);
+  useEffect(() => {
+    if (visible) {
+      queueMicrotask(() => setShown(true));
+      if (reduced) { progress.setValue(1); return; }
+      const animation = Animated.timing(progress, {toValue:1,duration:enter,easing:motionTokens.entrance,useNativeDriver:nativeDriver});
+      animation.start(); return () => animation.stop();
+    }
+    if (reduced) { progress.setValue(0); queueMicrotask(() => setShown(false)); return; }
+    const animation = Animated.timing(progress, {toValue:0,duration:exit,easing:motionTokens.exit,useNativeDriver:nativeDriver});
+    animation.start(({finished}) => { if (finished) setShown(false); });
+    return () => animation.stop();
+  }, [visible, reduced, progress, enter, exit]);
+  return { shown: shown || visible, progress };
 }
 // Items that arrive one after another (lists, cards, form fields). Only the first dozen wait.
 export function Stagger({ children, index, style }: { children: ReactNode; index: number; style?: StyleProp<ViewStyle> }) {
@@ -117,7 +153,7 @@ export function GrowBar({ share, color, track, height = 10 }: { share: number; c
 // A gentle spring when something becomes selected (pills, tabs, chips).
 export function Pop({ children, active, style }: { children: ReactNode; active: boolean; style?: StyleProp<ViewStyle> }) {
   const reduced = useReducedMotion(), scale = useState(() => new Animated.Value(1))[0];
-  useEffect(() => { if (!active || reduced) { scale.setValue(1); return; } scale.setValue(0.92); const a = Animated.spring(scale, { toValue: 1, speed: 20, bounciness: 8, useNativeDriver: Platform.OS !== 'web' }); a.start(); return () => a.stop(); }, [active, reduced, scale]);
+  useEffect(() => { if (!active || reduced) { scale.setValue(1); return; } scale.setValue(0.96); const a = Animated.spring(scale, { toValue: 1, speed: 18, bounciness: 3, useNativeDriver: nativeDriver }); a.start(); return () => a.stop(); }, [active, reduced, scale]);
   return <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>;
 }
 // Shimmering placeholders while content loads, shaped like the rows that are coming.

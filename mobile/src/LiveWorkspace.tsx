@@ -366,7 +366,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
     : tab === "inbox" ? <LiveChat palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => void loadUnread()} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view) => { setTab(next); if (view) setWorkView(view); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
-  const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : "page"} style={{ gap: 24 }}>{page}</SwapIn>;
+  const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;
   const header = headerPalette(p);
   const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
   return (

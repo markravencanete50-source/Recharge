@@ -38,14 +38,14 @@ export function FilterBar({
     const animation = Animated.parallel([
       Animated.spring(x, {
         toValue: box.x + box.width / 2 - 50,
-        speed: 18,
-        bounciness: 6,
+        speed: 16,
+        bounciness: 2,
         useNativeDriver: false,
       }),
       Animated.spring(width, {
         toValue: box.width,
-        speed: 18,
-        bounciness: 6,
+        speed: 16,
+        bounciness: 2,
         useNativeDriver: false,
       }),
     ]);

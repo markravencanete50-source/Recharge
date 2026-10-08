@@ -26,7 +26,7 @@ export function GreetingCard({ palette: p, profile, openTasks, waiting, onClose,
   const [bob] = useState(() => new Animated.Value(0));
   useEffect(() => {
     if (reduced) return;
-    const a = Animated.spring(enter, { toValue: 1, speed: 9, bounciness: 9, useNativeDriver: native });
+    const a = Animated.spring(enter, { toValue: 1, speed: 10, bounciness: 4, useNativeDriver: native });
     const b = Animated.loop(Animated.sequence([
       Animated.timing(bob, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: native }),
       Animated.timing(bob, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: native }),

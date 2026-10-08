@@ -29,7 +29,7 @@ import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
 import { Calendar } from "./WorkspaceScreens";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
-import { Entrance, GrowBar, MotionPress, Stagger } from "./motion";
+import { Entrance, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import { workspaceRequest } from "./backend/client";
 import { exportReport } from "./exportReport";
@@ -412,7 +412,7 @@ export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy
               <Text style={{ color: p.text, fontSize: 15, fontWeight: "600", flex: 1 }}>{f.question}</Text>
               <Feather name={open === f.id ? "chevron-up" : "chevron-down"} size={18} color={p.muted} />
             </MotionPress>
-            {open === f.id && <Text style={[ui.body, { color: p.muted, paddingBottom: 14 }]}>{f.answer}</Text>}
+            {open === f.id && <SwapIn swapKey={f.id}><Text style={[ui.body, { color: p.muted, paddingBottom: 14 }]}>{f.answer}</Text></SwapIn>}
           </View>
         ))}
       </View>

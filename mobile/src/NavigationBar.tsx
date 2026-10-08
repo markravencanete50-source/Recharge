@@ -10,10 +10,10 @@ import { ui, type Palette } from "./theme";
 // pill that springs in; the centre item lifts out of the bar as a forest disc.
 function ActivePill({ color }: { color: string }) {
   const reduced = useReducedMotion();
-  const [scale] = useState(() => new Animated.Value(reduced ? 1 : 0.4));
+  const [scale] = useState(() => new Animated.Value(reduced ? 1 : 0.6));
   useEffect(() => {
     if (reduced) return;
-    const a = Animated.spring(scale, { toValue: 1, speed: 18, bounciness: 9, useNativeDriver: Platform.OS !== "web" });
+    const a = Animated.spring(scale, { toValue: 1, speed: 18, bounciness: 3, useNativeDriver: Platform.OS !== "web" });
     a.start();
     return () => a.stop();
   }, [scale, reduced]);

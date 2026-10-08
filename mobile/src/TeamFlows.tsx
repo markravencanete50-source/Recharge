@@ -1,10 +1,10 @@
-import { Children, isValidElement, useEffect, useState, type ReactNode } from "react";
-import { Animated, Modal, Platform, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
+import { Children, isValidElement, useState, type ReactNode } from "react";
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as ImagePicker from "expo-image-picker";
 import { Artwork } from "./Artwork";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
-import { Entrance, MotionPress, Stagger, useReducedMotion } from "./motion";
+import { Entrance, MotionPress, Stagger, usePresence } from "./motion";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 import { WORKSPACE_MAP } from "../../lib/workspace-map";
@@ -30,28 +30,32 @@ function SectionTitle({ palette: p, title, detail, action }: { palette: Palette;
 }
 
 export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, children }: { palette: Palette; visible: boolean; onClose: () => void; title: string; subtitle?: string; icon?: DimensionalName; children: ReactNode }) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const wide = width >= 768;
-  // The panel settles in with a soft scale and lift, then its contents arrive one after another.
-  const reduced = useReducedMotion();
-  const [settle] = useState(() => new Animated.Value(1));
-  useEffect(() => {
-    if (!visible || reduced) { settle.setValue(1); return; }
-    settle.setValue(0);
-    const animation = Animated.spring(settle, { toValue: 1, speed: 16, bounciness: 4, useNativeDriver: Platform.OS !== "web" });
-    animation.start(); return () => animation.stop();
-  }, [visible, reduced, settle]);
+  // The backdrop fades while the panel rises from the bottom (phones) or settles in the middle
+  // (larger screens), and both run back out on close before the panel is removed.
+  const { shown, progress } = usePresence(visible, wide ? 240 : 300, 200);
+  // While closing, keep showing what was there: callers often clear the content as they close.
+  const [kept, setKept] = useState({ title, subtitle, icon, children });
+  if (visible && (kept.title !== title || kept.subtitle !== subtitle || kept.icon !== icon || kept.children !== children)) setKept({ title, subtitle, icon, children });
+  const content = visible ? { title, subtitle, icon, children } : kept;
+  const lift = progress.interpolate({ inputRange: [0, 1], outputRange: [wide ? 14 : Math.min(560, height * 0.6), 0] });
   return (
-    <Modal visible={visible} transparent animationType={wide ? "fade" : "slide"} onRequestClose={onClose}>
-      <View {...(Platform.OS === "web" ? { dataSet: { overlay: "blur" } } : {})} style={{ flex: 1, backgroundColor: p.overlay, justifyContent: wide ? "center" : "flex-end", alignItems: "center", padding: wide ? 16 : 0 }}>
-        <Animated.View accessibilityViewIsModal style={{ width: "100%", maxWidth: 560, maxHeight: wide ? "92%" : "90%", borderRadius: 28, borderBottomLeftRadius: wide ? 28 : 0, borderBottomRightRadius: wide ? 28 : 0, backgroundColor: p.surface, overflow: "hidden",
-          transform: [{ scale: settle.interpolate({ inputRange: [0, 1], outputRange: [wide ? 0.96 : 1, 1] }) }, { translateY: settle.interpolate({ inputRange: [0, 1], outputRange: [wide ? 12 : 0, 0] }) }] }}>
-          <View style={[ui.between, { gap: 12, padding: 18, borderBottomWidth: 1, borderColor: p.border }]}>
+    <Modal visible={shown} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex: 1, justifyContent: wide ? "center" : "flex-end", alignItems: "center", padding: wide ? 16 : 0 }}>
+        <Animated.View {...(Platform.OS === "web" ? { dataSet: { overlay: "blur" } } : {})} style={[StyleSheet.absoluteFill, { backgroundColor: p.overlay, opacity: progress }]}>
+          <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onClose} disabled={!visible} style={StyleSheet.absoluteFill} {...(Platform.OS === "web" ? { tabIndex: -1 } : {})} />
+        </Animated.View>
+        <Animated.View accessibilityViewIsModal pointerEvents={visible ? "auto" : "none"} style={{ width: "100%", maxWidth: 560, maxHeight: wide ? "92%" : "90%", borderRadius: 28, borderBottomLeftRadius: wide ? 28 : 0, borderBottomRightRadius: wide ? 28 : 0, backgroundColor: p.surface, overflow: "hidden",
+          opacity: wide ? progress : progress.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 1, 1] }),
+          transform: [{ translateY: lift }, { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [wide ? 0.97 : 1, 1] }) }] }}>
+          {!wide && <View style={{ alignItems: "center", paddingTop: 8 }}><View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: p.border }} /></View>}
+          <View style={[ui.between, { gap: 12, padding: 18, paddingTop: wide ? 18 : 10, borderBottomWidth: 1, borderColor: p.border }]}>
             <View style={[ui.row, { gap: 12, flex: 1 }]}>
-              {!!icon && <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={icon} size={34} /></View>}
+              {!!content.icon && <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={content.icon} size={34} /></View>}
               <View style={{ flex: 1 }}>
-                <Text accessibilityRole="header" numberOfLines={2} style={{ color: p.text, fontSize: 17, fontWeight: "700" }}>{title}</Text>
-                {!!subtitle && <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{subtitle}</Text>}
+                <Text accessibilityRole="header" numberOfLines={2} style={{ color: p.text, fontSize: 17, fontWeight: "700" }}>{content.title}</Text>
+                {!!content.subtitle && <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{content.subtitle}</Text>}
               </View>
             </View>
             <MotionPress accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}>
@@ -59,7 +63,7 @@ export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, chi
             </MotionPress>
           </View>
           <ScrollView contentContainerStyle={{ padding: 18, gap: 14 }} keyboardShouldPersistTaps="handled">
-            {visible && Children.toArray(children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
+            {shown && Children.toArray(content.children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
           </ScrollView>
         </Animated.View>
       </View>
