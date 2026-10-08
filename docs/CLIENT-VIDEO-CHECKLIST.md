@@ -6,7 +6,7 @@ Property Onboarding, Remainder of Stays), checked against the live app code and 
 
 Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outside service · ❌ not built
 
-**Totals (76 asks):** ✅ 25 · 🟡 35 · ⏸ 8 · ❌ 8
+**Totals (76 asks):** ✅ 35 · 🟡 26 · ⏸ 8 · ❌ 7
 
 ## 1. Communication Centre
 
@@ -61,7 +61,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | O14 | Ready-team questions for getting the property ready to go live | ✅ | Answers show on the property page under "Getting ready to go live" for the team, Ready included. |
 | O15 | Needs a licensing compliance report → licensing ticket in Stays | ✅ | |
 | O16 | Has a garden → Ready ticket for regular garden maintenance | ✅ | Creates a set-up ticket; doesn't create a recurring garden plan. |
-| O17 | Warranty and repair contacts → "contact this person first" on repairs | 🟡 | Captured and shown on the property page; warranty repairs need proof the provider was contacted. The repair screens themselves don't show who to contact yet. |
+| O17 | Warranty and repair contacts → "contact this person first" on repairs | ✅ | The owner's preferred repair contact and warranties show on every repair at that property, highlighted as "contact first", and warranty repairs need proof the provider was contacted. |
 | O18 | Auto-permission for repairs up to £X | ✅ | Under the limit goes straight ahead; over it goes to the owner. |
 | O19 | "Furnish it for me" → furnishing quote ticket for Ready; otherwise self-furnish | ✅ | Self-furnishers get the furnishing calculator. |
 | O20 | Submit the form with permissions and evidence | 🟡 | Permissions checked. No way to attach documents or photos. |
@@ -77,24 +77,24 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 | # | Ask | Status | What's there / what's missing |
 |---|---|---|---|
 | S1 | Every new Airbnb / Booking.com review appears in Listing health | ❌ | Reviews aren't imported. Needs the channel manager and building. |
-| S2 | Staff acknowledge each review as good or bad | 🟡 | One sentiment tick per daily listing check, not per review. |
-| S3 | Tag a really bad review "re-list" → re-listing ticket → complete | 🟡 | Any negative review opens a re-listing ticket automatically; staff can't choose. No in-progress stage. |
-| S4 | Suspension found → automatic re-list ticket | 🟡 | Works when staff tick "suspended"; no automatic scan. |
-| S5 | Daily check: all visible, no unhandled bad reviews, suspensions dealt with, re-listings done | 🟡 | A daily check per property. No single daily sign-off covering all four. |
-| S6 | Report of that daily work per person feeding performance and bonuses | 🟡 | Counted per person; bonuses use reply times only. |
+| S2 | Staff acknowledge each review as good or bad | ✅ | "Log a review" on each property: platform, rating, good / mixed / bad, what the guest said and how it was handled. Reviews still have to be entered by hand until the channel manager feeds them in. |
+| S3 | Tag a really bad review "re-list" → re-listing ticket → complete | ✅ | Staff choose to re-list after a bad review (from the review or the listing check). Re-listings show on the Stays screen: to start → under way → re-listed. |
+| S4 | Suspension found → automatic re-list ticket | 🟡 | Hidden or suspended listings go on the re-listing list automatically when a check records it. No automatic scan of the platforms (needs the channel manager). |
+| S5 | Daily check: all visible, no unhandled bad reviews, suspensions dealt with, re-listings done | ✅ | "Today's sign-off" on the Stays screen: all listings visible, bad reviews answered, suspensions dealt with, re-listings done or under way, with a note if any are still open. Admins see the last 14 days in Team performance. |
+| S6 | Report of that daily work per person feeding performance and bonuses | 🟡 | Team performance shows each person's listing checks, reviews, pricing decisions and daily sign-offs. Bonus tiers still use reply times only. |
 | S7 | Gap nights in the next 7 days → ticket; staff change or hold the price with a reason | 🟡 | Gaps highlighted, decision and reason recorded. The ticket only appears once staff save a decision, and stays are entered by hand while there's no channel manager. |
 | S8 | Pricing changes feed the weekly client report | ✅ | |
 | S9 | Weekly scan for local events near each property | ❌ | Needs an events data provider and building. The report says no scan is connected. |
 | S10 | Weekly report downloaded and sent to the client; client report section | 🟡 | Download (CSV) works for clients and staff. Not sent automatically each week (needs Resend). |
-| S11 | Licensing tickets from onboarding worked through the full licensing process | 🟡 | One "record the licence grant" step. No stages or documents. |
+| S11 | Licensing tickets from onboarding worked through the full licensing process | ✅ | Licensing runs in stages: application submitted (council and reference) → safety checks (gas, electrical, alarms, legionella, EPC, insurance) → licence granted. |
 | S12 | Any booking of 7+ nights → direct-booking ticket | 🟡 | Works for stays entered or edited in the app. Bookings from the channel manager don't create it yet. |
-| S13 | Recommended rate about 10% below, max £100 off | 🟡 | Worked out correctly, but Stays never sees the figure (it only pre-fills Accounts' invoice), and a super admin must confirm the policy first. |
-| S14 | Track until yes/no → Accounts invoice → settled → booking confirmed → complete | 🟡 | Yes route works end to end. No "guest said no" outcome. |
+| S13 | Recommended rate about 10% below, max £100 off | ✅ | The offer price is shown on the booking once prepared, alongside the original price, and the policy (e.g. 10% off, up to £100) is shown before preparing it. A super admin confirms the policy once. |
+| S14 | Track until yes/no → Accounts invoice → settled → booking confirmed → complete | ✅ | Yes route works end to end, and "The guest said no" closes the offer. |
 | S15 | OTA logins database | 🟡 | Staff with the OTA logins tool now see them under "Access and logins". Still one logins box per property, admin-edited. |
-| S16 | Maintenance ticket: choose property, link a reservation, choose repair type | 🟡 | Property and issue yes. No repair type, no booking link on screen. |
-| S17 | Repair type → AI troubleshooting steps before passing on | ❌ | Free-text "checks made" box only. Needs an AI key and building. |
-| S18 | Refer (urgently) to Ready; ticket stays visible to Stays to chase | 🟡 | Refer works and Stays keeps seeing it. No urgent flag. |
-| S19 | Ready books the repair → Stays told so they can tell the guest | 🟡 | Ready books it with a guest update; Stays isn't notified. |
+| S16 | Maintenance ticket: choose property, link a reservation, choose repair type | ✅ | Repair type (heating, hot water, leak, toilet, electrics, appliance, Wi-Fi, locks, pests, damage, other), urgent flag, and the guest's stay can be linked. |
+| S17 | Repair type → AI troubleshooting steps before passing on | 🟡 | Each repair type has a guided checklist of safe checks to go through with the guest, ticked off and sent with the referral. No AI yet (needs an AI key). |
+| S18 | Refer (urgently) to Ready; ticket stays visible to Stays to chase | ✅ | "Urgent" can be set when reporting or referring; Stays keep seeing the repair to chase it. |
+| S19 | Ready books the repair → Stays told so they can tell the guest | ✅ | Ready on the property is notified when a repair is referred (admins if no Ready is assigned); the Stays person who referred it, and Stays on the property, are notified when it is booked and when it is done. |
 | S20 | Expensive work goes to the client for approval first | ✅ | Uses the estimate given when reporting; a later quote needs a new request. |
 | S21 | Cleaner's end-of-clean report (broadband etc., photos) | ⏸ | Built; needs Cloudinary for photos before it can be submitted. |
 | S22 | Guest happy → clean complete → added to the cleaner's invoice | 🟡 | Creates an invoice task per clean, not a running cleaner invoice. Depends on S21. |
@@ -109,7 +109,7 @@ Key: ✅ built and usable · 🟡 partly built · ⏸ built, waiting on an outsi
 - C5/C6: departments and fixed shift windows per person.
 - D4, D5, D7, D8: stage pipeline, per-client view, Scottish region list and map, portfolio stats. (D1 and D3 done.)
 - O5, O9, O10, O17, O24, O25: explainer and FAQ, questions, repair contacts on repair screens, inspection checklist, auto-assignment.
-- S2–S7, S11, S13, S14, S16, S18, S19, S22, S24, S26, S27: per-review tagging, daily sign-off, licensing stages, direct-booking "no" outcome, repair types, urgent flag, notifications, running cleaner invoice, purchase fixes.
+- S22, S24, S26, S27: running cleaner invoice, removal from the rota, purchase fixes. (Stays and repairs done.)
 - Bug fixes: done (OTA logins panel, client invoices, inspection ticket steps, Ready's purchase delivery ticket).
 
 ## Waiting on an outside service

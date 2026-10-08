@@ -8,9 +8,9 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readTeams, writeTeams } from "./backend/client";
-import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, shiftName, teamPerformanceSchema, type Shift, type TeamPerformance } from "../../lib/management-live";
+import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
 import { DEPARTMENTS } from "../../lib/workspace-teams-policy";
-import { formatCount, plural } from "../../lib/format";
+import { formatCount, formatDay, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Clocking in and out, and the team's guest reply times. Guest relations replies are timed:
@@ -101,6 +101,7 @@ function TargetsSheet({ p, targets, visible, onClose, onDone }: { p: Palette; ta
 export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
   const [range, setRange] = useState<"today" | "week" | "month">("week");
   const [data, setData] = useState<TeamPerformance | null>(null);
+  const [signoffs, setSignoffs] = useState<Signoff["recent"]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [targets, setTargets] = useState(false);
@@ -110,8 +111,11 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
   const load = useCallback(async () => {
     setLoading(true); setError("");
     const from = londonDay(range === "today" ? 0 : range === "week" ? -6 : -29);
-    try { setData(teamPerformanceSchema.parse((await readTeams({ section: "teamPerformance", from, to: londonDay() })).data)); }
-    catch (e) { setError(message(e)); }
+    try {
+      setData(teamPerformanceSchema.parse((await readTeams({ section: "teamPerformance", from, to: londonDay() })).data));
+      // Only Stays and admins have sign-offs; anyone else simply sees none.
+      setSignoffs(await readTeams({ section: "signoff" }).then(r => signoffSchema.parse(r.data).recent).catch(() => []));
+    } catch (e) { setError(message(e)); }
     setLoading(false);
   }, [range]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
@@ -146,11 +150,19 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
               const tags: [string, "good" | "wait" | "bad" | "plain"][] = total ? [[`${x.percentGreen}% green`, x.onTrack ? "good" : "bad"], [x.onTrack ? "On track" : "Off track", x.onTrack ? "good" : "bad"]] : [["No replies yet", "plain"]];
               if (x.bonusTier) tags.push([`Bonus tier ${x.bonusTier}%`, "good"]);
               return <Row key={x.userId} p={p} first={i === 0} icon={x.onTrack ? "trending-up" : total ? "trending-down" : "user"} tone="stays" title={x.fullName || "Team member"}
-                detail={`${total ? `${formatCount(x.green)} green · ${formatCount(x.amber)} amber · ${formatCount(x.red)} red · ` : ""}${hoursLabel(x.minutes)} over ${plural(x.shifts, "shift")} · ${plural(x.listingChecks, "listing check")} · ${plural(x.pricingDecisions, "pricing decision")}`} tags={tags} />;
+                detail={`${total ? `${formatCount(x.green)} green · ${formatCount(x.amber)} amber · ${formatCount(x.red)} red · ` : ""}${hoursLabel(x.minutes)} over ${plural(x.shifts, "shift")} · ${plural(x.listingChecks, "listing check")} · ${plural(x.reviewsLogged, "review")} · ${plural(x.pricingDecisions, "pricing decision")} · ${plural(x.signOffs, "daily sign-off")}`} tags={tags} />;
             })}
           </List>
           {data.unassigned.green + data.unassigned.amber + data.unassigned.red > 0 && <Notice p={p} tone="bad"
             text={`${plural(data.unassigned.green + data.unassigned.amber + data.unassigned.red, "guest message")} arrived while nobody was clocked in to guest relations (${formatCount(data.unassigned.red)} red).`} />}
+        </Section>
+        <Section title="Daily sign-offs" count={signoffs.length} p={p}>
+          <Text style={[ui.small, { color: p.muted }]}>Stays confirm at the end of each day that every listing is visible, bad reviews are answered, suspensions are dealt with and re-listings are done. The last 14 days.</Text>
+          <List p={p} empty="No sign-offs in the last 14 days.">
+            {signoffs.map((o, i) => <Row key={o.day + o.fullName + o.createdAt} p={p} first={i === 0} icon="check-circle" tone="stays" title={o.fullName || "Team member"}
+              detail={[`${formatDay(o.day)} at ${time(o.createdAt)}`, `${plural(o.snapshot.listingChecksToday, "listing check")}, ${plural(o.snapshot.reviewsToday, "review")}`, o.note].filter(Boolean).join(" · ")}
+              tags={o.snapshot.openRelistings ? [[`${plural(o.snapshot.openRelistings, "re-listing")} open`, "wait"]] : [["All clear", "good"]]} />)}
+          </List>
         </Section>
         <TargetsSheet key={t.version} p={p} targets={t} visible={targets} onClose={() => setTargets(false)} onDone={load} />
       </>}

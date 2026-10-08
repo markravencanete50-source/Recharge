@@ -93,9 +93,18 @@ export const teamPerformanceSchema = z.object({
   onShift: z.array(shiftSchema), messages: z.number(),
   unassigned: z.object({ green: z.number(), amber: z.number(), red: z.number() }),
   people: z.array(z.object({ userId: z.string().uuid(), fullName: z.string(), role: z.string(), shifts: z.number(), minutes: z.number(), green: z.number(), amber: z.number(), red: z.number(),
-    percentGreen: z.number().nullable(), onTrack: z.boolean().nullable(), bonusTier: z.number().nullable(), listingChecks: z.number(), pricingDecisions: z.number() })),
+    percentGreen: z.number().nullable(), onTrack: z.boolean().nullable(), bonusTier: z.number().nullable(), listingChecks: z.number(), pricingDecisions: z.number(), signOffs: z.number().default(0), reviewsLogged: z.number().default(0) })),
 });
 export type TeamPerformance = z.infer<typeof teamPerformanceSchema>;
+// The Stays end-of-day sign-off: today's picture, the person's own sign-off, and (for admins) the
+// last fortnight's sign-offs.
+const signoffSnapshotSchema = z.object({ openRelistings: z.number(), listingChecksToday: z.number(), reviewsToday: z.number(), flaggedToday: z.number() });
+export const signoffSchema = z.object({
+  today: z.string(), snapshot: signoffSnapshotSchema,
+  mine: z.object({ createdAt: z.string(), note: z.string() }).nullable(),
+  recent: z.array(z.object({ day: z.string(), fullName: z.string(), createdAt: z.string(), note: z.string(), snapshot: signoffSnapshotSchema })),
+});
+export type Signoff = z.infer<typeof signoffSchema>;
 // The shift a clock-in falls in: early 08:00-15:00/16:00, late from 15:00 (London time).
 export const shiftName = (iso: string) => { const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hour12: false }).format(new Date(iso))); return hour < 7 || hour >= 23 ? "Out of hours" : hour < 13 ? "Early shift" : "Late shift"; };
 export const hoursLabel = (minutes: number) => formatDuration(minutes);

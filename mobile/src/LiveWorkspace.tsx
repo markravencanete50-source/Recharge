@@ -41,6 +41,7 @@ import type { WorkspaceSection } from "../../lib/workspace-map";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import { periodError, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot } from "../../lib/analytics";
 import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSchema, propertyViewSchema, readableStage, reportViewSchema, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
+import { workDetails } from "../../lib/work-details";
 import { workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 
 type Role = WorkspaceAccount["role"];
@@ -207,7 +208,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
     <>
       {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
       {currentView === "management" && <LiveManagement palette={p} account={account} />}
-      {currentView === "stays" && <LiveStays palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} />}
+      {currentView === "stays" && <LiveStays palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}
       {currentView === "owner" && <LiveOwner palette={p} properties={properties} />}
       {currentView === "owner" && account.modules.includes("client-mailbox") && <MailboxSection palette={p} />}
       {currentView === "owner" && account.modules.includes("client-furnishing") && <FurnishingCard palette={p} />}
@@ -337,7 +338,8 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
       <WorkflowSheet spec={form} invoices={invoices} palette={p} onClose={() => setForm(null)} onSaved={refresh} />
       <Sheet palette={p} visible={!!openWork} onClose={() => setOpenWork(null)} title={openWork?.title ?? ""} subtitle={openWork ? [names.get(openWork.propertyId), readableStage(openWork.status)].filter(Boolean).join(" · ") : undefined} icon="clipboard">
         {openWork && <>
-          {["issue", "report", "requirements", "guestUpdate", "reason"].filter(key => typeof openWork.data[key] === "string").map(key => <View key={key} style={{ gap: 4 }}><Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>{readableStage(key)}</Text><Text style={[ui.body, { color: p.text }]}>{String(openWork.data[key])}</Text></View>)}
+          {workDetails(openWork).map(d => <View key={d.label} style={{ gap: 4 }}><Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>{d.label}</Text><Text selectable style={[ui.body, { color: d.tone === "bad" ? p.danger : d.tone === "good" ? p.success : p.text, fontWeight: d.tone ? "700" : "400" }]}>{d.value}</Text></View>)}
+          {openWork.kind === "direct_booking" && openWork.data.phase === "follow_up" && policy?.confirmed && <Text style={[ui.small, { color: p.muted }]}>Offer the guest {formatBps(policy.discount_bps).replace(".0%", "%")} off, up to {formatMoney(policy.discount_cap_minor)} off. The offer price is worked out when you prepare it.</Text>}
           {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
           {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: {formatMoney(Number(openWork.data.estimatedCostMinor))}</Text>}
           {workItemForms(account, openWork, journeys, work).map(f => <SoftButton key={f.key} label={f.title} icon="arrow-right" palette={p} disabled={f.key === "prepareQuote" && !policyConfirmed} onPress={() => { setOpenWork(null); setForm(f); }} />)}

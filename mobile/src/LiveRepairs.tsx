@@ -9,7 +9,9 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { formatMoney } from "../../lib/format";
-import { readOperations, readTeams, writeOperation, writeTeams, writeWorkspace } from "./backend/client";
+import { readOperations, readTeams, workspaceRequest, writeOperation, writeTeams, writeWorkspace } from "./backend/client";
+import { REPAIR_GUIDES, SAFETY_STOP, repairTypeLabel, troubleshootingNote, type RepairType } from "../../lib/repair-guides";
+import { profileAccess, reservationsSchema, stayLines, type StayLine } from "../../lib/property-profile";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import { scheduleSchema } from "../../lib/cleans-live";
 import { canReportRepair, poundsToMinor, repairStep, REPAIR_STAGES, routinePlanSchema, visitMoves, type RepairStep } from "../../lib/repairs-live";
@@ -88,7 +90,9 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
               <Text numberOfLines={2} style={[ui.small, { color: p.text }]}>{typeof r.data.issue === "string" ? r.data.issue : r.title}</Text>
               <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
                 <Tag label={label} tone={phase === "completed" ? "good" : step ? "wait" : "plain"} p={p} />
+                {r.data.urgent === true && <Tag label="Urgent" tone="bad" p={p} />}
                 {r.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
+                {typeof r.data.repairType === "string" && <Tag label={repairTypeLabel(r.data.repairType)} tone="plain" p={p} />}
                 <Text style={[ui.small, { color: p.muted }]}>Estimate {pounds(r.data.estimatedCostMinor)}</Text>
               </View>
               {step && <Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Next for you: {STEP_TITLE[step]}</Text>}
@@ -115,7 +119,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
       )}
 
       <RepairSheet p={p} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today} onClose={() => setOpenId(null)} onDone={async () => { setOpenId(null); await load(); }} />
-      <ReportSheet p={p} visible={reporting} properties={properties} onClose={() => setReporting(false)} onDone={async () => { setReporting(false); await load(); }} />
+      <ReportSheet p={p} account={account} visible={reporting} properties={properties} onClose={() => setReporting(false)} onDone={async () => { setReporting(false); await load(); }} />
       <PlanSheet p={p} visible={planning} properties={properties} account={account} onClose={() => setPlanning(false)} onDone={async () => { setPlanning(false); await load(); }} />
       <VisitSheet p={p} role={account.role} visit={visit} plans={plans} onClose={() => setVisitId(null)} onDone={async () => { setVisitId(null); await load(); }} />
     </View>
@@ -131,19 +135,22 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
   const phase = String(repair?.data.phase ?? ""), step = repair ? repairStep(role, phase) : null;
   const [fields, setFields] = useState<Record<string, string>>({});
   const [consent, setConsent] = useState(false);
+  const [ticked, setTicked] = useState<string[]>([]);
+  const [urgent, setUrgent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const request = useRequestId(repair ? repair.workId + ":" + repair.version : null);
   const set = (k: string) => (v: string) => setFields(f => ({ ...f, [k]: v }));
   const f = (k: string) => fields[k] ?? "";
-  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setError(""); } }); return () => { active = false; }; }, [repair, today]);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(repair?.data.urgent === true); setError(""); } }); return () => { active = false; }; }, [repair, today]);
 
   function build(): Record<string, unknown> | string {
     if (step === "approveBudget") return consent ? { consent: true } : "Tick to approve the cost.";
     if (step === "referReady") {
-      if (f("troubleshooting").trim().length < 5 || f("guestUpdate").trim().length < 5) return "Describe the checks made and what the guest was told.";
+      const note = troubleshootingNote(type, ticked, f("troubleshooting"));
+      if (note.trim().length < 5 || f("guestUpdate").trim().length < 5) return "Tick the checks you went through (or describe them) and add what the guest was told.";
       if (repair?.data.warrantyRequired === true && f("warrantyContactEvidence").trim().length < 10) return "This property needs the warranty provider contacted first. Add who you contacted.";
-      return { troubleshooting: f("troubleshooting").trim(), guestUpdate: f("guestUpdate").trim(), ...(f("warrantyContactEvidence").trim() ? { warrantyContactEvidence: f("warrantyContactEvidence").trim() } : {}) };
+      return { troubleshooting: note, guestUpdate: f("guestUpdate").trim(), urgent, ...(f("warrantyContactEvidence").trim() ? { warrantyContactEvidence: f("warrantyContactEvidence").trim() } : {}) };
     }
     if (step === "bookRepair") {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(f("repairOn")) || f("contractor").trim().length < 2 || f("guestUpdate").trim().length < 5) return "Add the date, contractor and guest update.";
@@ -168,15 +175,25 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   const label = REPAIR_STAGES.find(s => s.phase === phase);
+  const type = (typeof repair?.data.repairType === "string" && repair.data.repairType in REPAIR_GUIDES ? repair.data.repairType : "other") as RepairType;
   return (
     <Sheet palette={p} visible={!!repair} onClose={onClose} title={propertyName} subtitle={label ? `${label.label} · ${label.detail}` : ""} icon="hardhat">
       {repair && <>
         <Detail label="Issue" value={repair.data.issue} p={p} />
         <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
           <Tag label={`Estimate ${pounds(repair.data.estimatedCostMinor)}`} tone="plain" p={p} />
+          {typeof repair.data.repairType === "string" && <Tag label={repairTypeLabel(repair.data.repairType)} tone="plain" p={p} />}
+          {repair.data.urgent === true && <Tag label="Urgent" tone="bad" p={p} />}
           {repair.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
           {typeof repair.data.ownerApprovedAt === "string" && <Tag label="Owner approved" tone="good" p={p} />}
         </View>
+        {(typeof repair.data.contactFirst === "string" || typeof repair.data.warrantyDetails === "string") && phase !== "completed" && (
+          <View style={{ gap: 6, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}>
+            <View style={[ui.row, { gap: 8 }]}><Feather name="phone-call" size={16} color={p.text} /><Text style={{ color: p.text, fontWeight: "700" }}>The owner asked us to contact first</Text></View>
+            <Detail label="Preferred repair contact" value={repair.data.contactFirst} p={p} />
+            <Detail label="Warranties" value={repair.data.warrantyDetails} p={p} />
+          </View>
+        )}
         <Detail label="Checks made" value={repair.data.troubleshooting} p={p} />
         <Detail label="Contractor" value={repair.data.contractor} p={p} />
         <Detail label="Repair date" value={typeof repair.data.repairOn === "string" ? dayLabel(repair.data.repairOn) : undefined} p={p} />
@@ -190,7 +207,24 @@ function RepairSheet({ p, role, repair, propertyName, today, onClose, onDone }: 
           </MotionPress>
         )}
         {step === "referReady" && <>
-          <Field label="Checks made before referral" value={f("troubleshooting")} onChange={set("troubleshooting")} p={p} multiline placeholder="What you tried with the guest" />
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: p.text, fontWeight: "700" }}>{REPAIR_GUIDES[type].label}: go through these with the guest</Text>
+            <View style={[ui.row, { gap: 8, padding: 10, borderRadius: 12, backgroundColor: p.cautionWash, alignItems: "flex-start" }]}><Feather name="alert-triangle" size={15} color={p.danger} style={{ marginTop: 2 }} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{SAFETY_STOP}</Text></View>
+            {REPAIR_GUIDES[type].checks.map(c => {
+              const on = ticked.includes(c);
+              return (
+                <MotionPress key={c} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => setTicked(t => on ? t.filter(x => x !== c) : [...t, c])} style={[ui.row, { gap: 12, minHeight: 46, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: on ? p.successWash : p.elevated }]}>
+                  <Feather name={on ? "check-square" : "square"} size={19} color={on ? p.success : p.muted} />
+                  <Text style={{ color: p.text, flex: 1 }}>{c}</Text>
+                </MotionPress>
+              );
+            })}
+          </View>
+          <Field label="Anything else you tried or found" value={f("troubleshooting")} onChange={set("troubleshooting")} p={p} multiline placeholder="Error codes, what the guest said, photos taken" />
+          <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: urgent }} onPress={() => setUrgent(u => !u)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: urgent ? p.cautionWash : p.elevated }]}>
+            <Feather name={urgent ? "check-square" : "square"} size={20} color={urgent ? p.danger : p.muted} />
+            <Text style={{ color: p.text, flex: 1 }}>Urgent: the guest can't use the property properly until it's fixed</Text>
+          </MotionPress>
           {repair.data.warrantyRequired === true && <Field label="Warranty provider contacted" value={f("warrantyContactEvidence")} onChange={set("warrantyContactEvidence")} p={p} multiline />}
           <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
         </>}
@@ -230,8 +264,23 @@ function PropertyChips({ p, properties, value, onChange }: { p: Palette; propert
   );
 }
 
-function ReportSheet({ p, visible, properties, onClose, onDone }: { p: Palette; visible: boolean; properties: PropertyView[]; onClose: () => void; onDone: () => Promise<void> }) {
+function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: Palette; account: WorkspaceAccount; visible: boolean; properties: PropertyView[]; onClose: () => void; onDone: () => Promise<void> }) {
   const [propertyId, setPropertyId] = useState("");
+  const [type, setType] = useState<RepairType>("other");
+  const [urgent, setUrgent] = useState(false);
+  const [stays, setStays] = useState<StayLine[]>([]);
+  const [reservationId, setReservationId] = useState("");
+  const canLink = profileAccess(account).stays;
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { if (active) { setStays([]); setReservationId(""); } });
+    if (!canLink || !propertyId) return () => { active = false; };
+    void workspaceRequest("/api/mobile/portfolio?" + new URLSearchParams({ section: "reservations", propertyId })).then(r => r.json()).then(body => {
+      const parsed = reservationsSchema.safeParse(body.data);
+      if (active && parsed.success) setStays(stayLines(parsed.data, london(new Date()), 6));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [canLink, propertyId]);
   const [issue, setIssue] = useState("");
   const [estimate, setEstimate] = useState("");
   const [hazard, setHazard] = useState(false);
@@ -242,17 +291,40 @@ function ReportSheet({ p, visible, properties, onClose, onDone }: { p: Palette; 
     const cost = poundsToMinor(estimate);
     if (!propertyId || issue.trim().length < 5 || cost === null) { setError("Choose the property, describe the issue and add an estimate."); return; }
     setBusy(true); setError("");
-    try { await writeOperation({ action: "createOperation", requestId: request.get(), propertyId, kind: "maintenance", data: { issue: issue.trim(), estimatedCostMinor: cost, hazard } }); request.done(); setIssue(""); setEstimate(""); setHazard(false); await onDone(); }
+    try { await writeOperation({ action: "createOperation", requestId: request.get(), propertyId, kind: "maintenance", data: { issue: issue.trim(), estimatedCostMinor: cost, hazard, repairType: type, urgent: urgent || hazard, ...(reservationId ? { reservationId } : {}) } }); request.done(); setIssue(""); setEstimate(""); setHazard(false); setUrgent(false); setType("other"); await onDone(); }
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="Report a repair" subtitle="Above the owner's limit, the owner approves the cost first" icon="hardhat">
       <PropertyChips p={p} properties={properties} value={propertyId} onChange={setPropertyId} />
+      <Text style={{ color: p.text, fontWeight: "700" }}>Type of repair</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {(Object.keys(REPAIR_GUIDES) as RepairType[]).map(t => (
+          <MotionPress key={t} accessibilityRole="radio" accessibilityState={{ selected: type === t }} onPress={() => setType(t)} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, backgroundColor: type === t ? p.primary : p.surface, borderWidth: 1, borderColor: type === t ? p.primary : p.border }]}>
+            <Feather name={REPAIR_GUIDES[t].icon as "tool"} size={14} color={type === t ? p.onPrimary : p.muted} />
+            <Text style={{ color: type === t ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{REPAIR_GUIDES[t].label}</Text>
+          </MotionPress>
+        ))}
+      </View>
       <Field label="What is wrong" value={issue} onChange={setIssue} p={p} multiline placeholder="For example: kitchen tap leaking under the sink" />
+      {!!stays.length && <>
+        <Text style={{ color: p.text, fontWeight: "700" }}>Which stay is this for? (optional)</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {stays.map(s => (
+            <MotionPress key={s.id} accessibilityRole="radio" accessibilityState={{ selected: reservationId === s.id }} onPress={() => setReservationId(reservationId === s.id ? "" : s.id)} style={{ minHeight: 40, paddingHorizontal: 12, borderRadius: 12, justifyContent: "center", backgroundColor: reservationId === s.id ? p.primary : p.surface, borderWidth: 1, borderColor: reservationId === s.id ? p.primary : p.border }}>
+              <Text style={{ color: reservationId === s.id ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{s.dates}{s.when === "now" ? " · staying now" : ""}</Text>
+            </MotionPress>
+          ))}
+        </View>
+      </>}
       <Field label="Estimated cost" value={estimate} onChange={setEstimate} p={p} placeholder="£0.00" />
       <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: hazard }} onPress={() => setHazard(h => !h)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: hazard ? "#F6DEDA" : p.elevated }]}>
         <Feather name={hazard ? "check-square" : "square"} size={20} color={hazard ? "#A63A32" : p.muted} />
         <Text style={{ color: p.text, flex: 1 }}>This is a safety hazard</Text>
+      </MotionPress>
+      <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: urgent || hazard }} onPress={() => setUrgent(u => !u)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: urgent || hazard ? p.cautionWash : p.elevated }]}>
+        <Feather name={urgent || hazard ? "check-square" : "square"} size={20} color={urgent || hazard ? p.danger : p.muted} />
+        <Text style={{ color: p.text, flex: 1 }}>Urgent: guests can't use the property properly until it's fixed</Text>
       </MotionPress>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Sending…" : "Report repair"} icon="send" primary p={p} disabled={busy} onPress={() => void save()} />

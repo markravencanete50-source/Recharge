@@ -52,7 +52,7 @@ test('policy version freezes capped quote; acceptance does not confirm until mat
  await db.query("select public.workspace_set_invoice_status($1,1,'paid')",[invoice]);booking=await update(booking,'confirmBooking',{invoiceId:invoice,reference:'DIRECT-TEST'});assert.equal(booking.status,'completed');
 });
 test('daily listing evidence creates one relisting task; pricing cannot target occupied nights',async()=>{
- await as(3);const input={action:'createOperation',requestId:crypto.randomUUID(),propertyId:property,kind:'listing_health',data:{checkedOn:today,platform:'Airbnb',listingVisible:true,reviewSentiment:'negative',reviewAcknowledged:true,suspended:false,evidence:'Actual recorded negative review reference'}};
+ await as(3);const input={action:'createOperation',requestId:crypto.randomUUID(),propertyId:property,kind:'listing_health',data:{checkedOn:today,platform:'Airbnb',listingVisible:true,reviewSentiment:'negative',reviewAcknowledged:true,suspended:false,evidence:'Actual recorded negative review reference',relist:true}};
  const checked=await action(input);assert.equal(checked.status,'completed');assert.deepEqual(await action(input),checked);
  await assert.rejects(action({...input,requestId:crypto.randomUUID()}),/already exists/);
  const rows=(await db.query('select public.workspace_operations_read($1) data',[property])).rows[0].data;assert.equal(rows.filter(w=>w.kind==='relisting').length,1);
