@@ -7,6 +7,7 @@ import { Button, Field, message, Notice, Section, useRequestId } from "./LiveKit
 import { ExpenseSheet, List, NoteSheet, Pills, Row, type NoteAsk } from "./LiveAccounts";
 import { LiveTraining } from "./LiveTraining";
 import { LivePeople } from "./LivePeople";
+import { LiveTeamPerformance } from "./LiveShifts";
 import { readFinance, readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
 import { DECISION_OUTCOMES, decisionAction, managementSchema, type Decision, type Management } from "../../lib/management-live";
 import { performanceSchema } from "../../lib/cleans-live";
@@ -65,7 +66,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
   const [limit, setLimit] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [view, setView] = useState<"queue" | "people" | "properties" | "team" | "training">("queue");
+  const [view, setView] = useState<"queue" | "people" | "properties" | "team" | "performance" | "training">("queue");
   const [decision, setDecision] = useState<Decision | null>(null);
   const [expense, setExpense] = useState<string | null>(null);
   const [ask, setAsk] = useState<NoteAsk | null>(null);
@@ -103,7 +104,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading the management queue" />}
-      <Pills p={p} values={["queue", "people", "properties", "team", "training"] as const} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", team: "Cleaning team", training: "Onboarding & training" })[v]} />
+      <Pills p={p} values={["queue", "people", "properties", "performance", "team", "training"] as const} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training" })[v]} />
 
       {view === "queue" && queue && <>
         <Section title="Cleaning decisions" count={queue.cleaningDecisions.length} p={p}>
@@ -152,6 +153,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       </>}
 
       {view === "training" && <LiveTraining palette={p} manage />}
+      {view === "performance" && <LiveTeamPerformance palette={p} />}
       {(view === "people" || view === "properties") && <LivePeople palette={p} account={account} view={view} />}
 
       <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />

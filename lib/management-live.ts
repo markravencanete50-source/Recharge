@@ -79,3 +79,22 @@ export function dailyChecks(propertyIds: string[], operations: { propertyId: str
 export function vacantNights(propertyId: string, stays: { propertyId: string; checkIn: string; checkOut: string }[], days: string[]) {
   return days.filter(day => !stays.some(s => s.propertyId === propertyId && s.checkIn <= day && s.checkOut > day));
 }
+
+// Shifts and team performance: clock in/out, and how fast guests get a reply.
+export const DEPARTMENT_LABEL: Record<string, string> = { guest_relations: "Guest relations", client_relations: "Client relations", cleaning: "Cleaning", ready: "Ready", accounts: "Accounts", management: "Management" };
+// The department a role usually clocks in to.
+export const departmentFor = (role: string) => ({ stays: "guest_relations", cleans: "cleaning", cleaning_manager: "cleaning", ready: "ready", accounts: "accounts" } as Record<string, string>)[role] ?? "management";
+export const shiftSchema = z.object({ id: z.string().uuid(), userId: z.string().uuid(), fullName: z.string().nullable(), department: z.string(), clockedInAt: z.string(), clockedOutAt: z.string().nullable() });
+export type Shift = z.infer<typeof shiftSchema>;
+export const myShiftSchema = z.object({ open: shiftSchema.nullable(), today: z.array(shiftSchema), green: z.number(), responses: z.number(), passPercent: z.number() });
+export const teamPerformanceSchema = z.object({
+  targets: z.object({ greenMinutes: z.number(), amberMinutes: z.number(), passPercent: z.number(), bonusPercents: z.array(z.number()), version: z.number() }),
+  onShift: z.array(shiftSchema), messages: z.number(),
+  unassigned: z.object({ green: z.number(), amber: z.number(), red: z.number() }),
+  people: z.array(z.object({ userId: z.string().uuid(), fullName: z.string(), role: z.string(), shifts: z.number(), minutes: z.number(), green: z.number(), amber: z.number(), red: z.number(),
+    percentGreen: z.number().nullable(), onTrack: z.boolean().nullable(), bonusTier: z.number().nullable(), listingChecks: z.number(), pricingDecisions: z.number() })),
+});
+export type TeamPerformance = z.infer<typeof teamPerformanceSchema>;
+// The shift a clock-in falls in: early 08:00-15:00/16:00, late from 15:00 (London time).
+export const shiftName = (iso: string) => { const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hour12: false }).format(new Date(iso))); return hour < 7 || hour >= 23 ? "Out of hours" : hour < 13 ? "Early shift" : "Late shift"; };
+export const hoursLabel = (minutes: number) => minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;

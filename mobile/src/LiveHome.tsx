@@ -6,6 +6,7 @@ import { JumpBackIn, QuickOverview, WelcomeHeader, type OverviewItem } from "./H
 import { HeroGlow, OpenTasksTrend, TodayRing, TodayTiles } from "./TodayAnalytics";
 import { CountUp, Entrance, MotionPress } from "./motion";
 import { StateGraphic } from "./StateGraphic";
+import { ShiftCard } from "./LiveShifts";
 import { ui, type Palette } from "./theme";
 import { LiveNoticeRow, LiveWorkRow, isDone, isWaitingWork, workDate } from "./LiveRows";
 import { todayColors, todayPresentation } from "../../lib/today-presentation";
@@ -89,6 +90,7 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
   return (
     <>
       {!desktop && <WelcomeHeader palette={p} name={account.fullName || "there"} dateLabel={todayLabel()} subtitle={SUBTITLE[account.role]} onCalendar={() => onNavigate("work")} />}
+      {account.role !== "client" && <ShiftCard palette={p} account={account} />}
       <QuickOverview palette={p} items={items} columns={desktop ? 4 : 2} sessionKey={"live:home:overview"} onReports={() => onNavigate("analytics")} />
       <View style={{ flexDirection: desktop ? "row" : "column", gap: 20, alignItems: "stretch" }}>
         {hero}

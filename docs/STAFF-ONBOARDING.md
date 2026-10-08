@@ -30,3 +30,19 @@ skipped from another screen. Admins and owners are never gated.
 
 1. They sign up in the app; you approve them in People and choose their tools and properties.
 2. They sign in and complete the checklist; their tools open the moment the last step is done.
+
+# Shifts and team performance (8 October 2026)
+
+- **Clocking in and out:** every team member has a shift card at the top of Home. They choose
+  their department (guest relations, client relations, cleaning, Ready, Accounts or management)
+  and tap Clock in; Clock out when they finish. Early shift is 08:00-15:00/16:00, late 15:00-23:00.
+- **Guest reply times:** each guest message that is waiting for a reply is timed until the team
+  replies. Green within 5 minutes, amber within 10, red after that. It counts for whoever was
+  clocked in to guest relations when it arrived. 90% green is on track; 95% and 100% unlock the
+  bonus tiers. Admins change these under Work → Management → Team performance → Change the targets.
+- **Team performance** (admins) shows who is on shift now (tap someone to end a shift they forgot
+  to clock out of) and, for today, 7 or 30 days: each person's green/amber/red replies, on or off
+  track, bonus tier, hours worked, listing checks and pricing decisions. Team members see their
+  own figures on their shift card.
+- Guest messages arrive once the new channel manager is connected; until then reply times read
+  "No guest messages yet". The backend stores them through `workspace_guest_messages_ingest`.

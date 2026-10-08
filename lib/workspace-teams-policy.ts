@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
 
 const id = z.string().uuid();
+export const DEPARTMENTS = ['guest_relations', 'client_relations', 'cleaning', 'ready', 'accounts', 'management'] as const;
 export const CONTRACT_AUDIENCES = ['all', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts'] as const;
 const version = z.number().int().positive();
 const date = z.string().refine(value => Boolean(parseAnalyticsDate(value)), 'Choose a valid date');
@@ -13,12 +14,16 @@ const https = z.string().url().max(1000).refine(value => {
 }, 'Use a public HTTPS link');
 
 export const teamsReadSchema = z.object({
-  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts']),
+  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'shift', 'teamPerformance']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the schedule dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
+  }
+  if (value.section === 'teamPerformance') {
+    if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
+    else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 92 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 92 days' });
   }
 });
 
@@ -39,10 +44,17 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('saveContract'), requestId: id, contractId: id.optional(), version: version.optional(), title: text(2, 200),
     audience: z.array(z.enum(CONTRACT_AUDIENCES)).min(1).max(6), body: text(20, 100000), active: z.boolean(), resignRequired: z.boolean().optional() }).strict(),
   z.object({ action: z.literal('setCourseRequired'), requestId: id, courseId: id, required: z.boolean() }).strict(),
+  // Shifts and team performance targets.
+  z.object({ action: z.literal('clockIn'), requestId: id, department: z.enum(DEPARTMENTS) }).strict(),
+  z.object({ action: z.literal('clockOut'), requestId: id }).strict(),
+  z.object({ action: z.literal('closeShift'), requestId: id, shiftId: id, endedAt: z.string().datetime({ offset: true }) }).strict(),
+  z.object({ action: z.literal('saveTargets'), requestId: id, version, greenMinutes: z.number().int().min(1).max(120), amberMinutes: z.number().int().min(2).max(240),
+    passPercent: z.number().int().min(1).max(100), bonusPercents: z.array(z.number().int().min(1).max(100)).max(5) }).strict(),
   z.object({ action: z.literal('signContract'), requestId: id, contractId: id, version, signedName: text(2, 200), agree: z.literal(true, { errorMap: () => ({ message: 'Tick the box to agree to the contract' }) }) }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'saveRoutinePlan' && Boolean(value.planId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a plan needs its current version' });
   if (value.action === 'saveCourse' && Boolean(value.courseId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a course needs its current version' });
+  if (value.action === 'saveTargets' && value.amberMinutes <= value.greenMinutes) context.addIssue({ code: 'custom', message: 'Amber must be longer than green' });
   if (value.action === 'saveContract' && Boolean(value.contractId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a contract needs its current version' });
 });
 export type TeamsAction = z.infer<typeof teamsActionSchema>;
