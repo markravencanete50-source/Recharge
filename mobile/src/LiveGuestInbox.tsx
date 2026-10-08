@@ -12,6 +12,7 @@ import { Pills } from "./LiveAccounts";
 import { readInbox, writeInbox } from "./backend/client";
 import { CHANNEL_LABEL, GUEST_CHANNELS, INBOX_FILTERS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
 import { chatTime } from "../../lib/workspace-chat-policy";
+import { SavedReplies } from "./SavedReplies";
 import type { PropertyView } from "../../lib/workspace-view";
 
 // The guest inbox (Stays → Guest inbox): every conversation with guests, the longest wait first.
@@ -184,6 +185,7 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
         {t.status === "open" ? <>
           <View style={{ gap: 6 }}>
             <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Your reply</Text>
+            <SavedReplies p={p} audience="guest" fill={{ name: t.guestName, property: t.propertyName }} onInsert={text => setReply(current => current.trim() ? current.trimEnd() + "\n\n" + text : text)} />
             <TextInput value={reply} onChangeText={setReply} multiline placeholder={t.source === "manual" ? `Write it here, then send it on ${CHANNEL_LABEL[t.channel]}` : "Write your reply"} placeholderTextColor={p.muted} accessibilityLabel="Your reply"
               style={{ minHeight: 88, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, color: p.text, backgroundColor: p.background, textAlignVertical: "top", fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
           </View>
@@ -215,7 +217,7 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
   );
 }
 
-export function GuestInbox({ palette: p, properties }: { palette: Palette; properties: PropertyView[] }) {
+export function GuestInbox({ palette: p, properties, onChanged }: { palette: Palette; properties: PropertyView[]; onChanged?: () => void }) {
   const [filter, setFilter] = useState<(typeof INBOX_FILTERS)[number]>("waiting");
   const [data, setData] = useState<ReturnType<typeof inboxListSchema.parse> | null>(null);
   const [error, setError] = useState(""), [logging, setLogging] = useState(false), [openId, setOpenId] = useState<string | null>(null);
@@ -252,8 +254,8 @@ export function GuestInbox({ palette: p, properties }: { palette: Palette; prope
             : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{filter === "waiting" ? "Nobody is waiting for a reply." : "No conversations here."}</Text>}
         </View>
       )}
-      {logging && <LogMessageSheet p={p} properties={properties} onClose={() => setLogging(false)} onDone={id => { setLogging(false); void load(); if (id) setOpenId(id); }} />}
-      {openId && <ThreadSheet key={openId} p={p} threadId={openId} properties={properties} onClose={() => setOpenId(null)} onChanged={() => void load()} />}
+      {logging && <LogMessageSheet p={p} properties={properties} onClose={() => setLogging(false)} onDone={id => { setLogging(false); void load(); onChanged?.(); if (id) setOpenId(id); }} />}
+      {openId && <ThreadSheet key={openId} p={p} threadId={openId} properties={properties} onClose={() => setOpenId(null)} onChanged={() => { void load(); onChanged?.(); }} />}
     </View>
   );
 }

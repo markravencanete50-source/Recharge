@@ -51,7 +51,9 @@ import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 import { WorkPhotos } from "./Photos";
 import { NotificationsSetting, refreshNotificationLink } from "./Notifications";
-import { LiveChat } from "./LiveChat";
+import { LiveChat, useGuestWaiting } from "./LiveChat";
+import { LiveCalendar } from "./LiveCalendar";
+import { OpenMessagesContext } from "./PropertyTeamChat";
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
@@ -156,6 +158,12 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
     const timer = setInterval(() => { if (AppState.currentState === "active") void loadUnread(); }, 30_000);
     return () => clearInterval(timer);
   }, [loadUnread]);
+  // Guests waiting for a reply join the badge for people with the guest inbox (read once a minute).
+  const { waiting: guestWaiting, reload: loadWaiting } = useGuestWaiting(account);
+  const messagesBadge = chatUnread + (guestWaiting ?? 0);
+  // "Message the property team" (and similar) opens Messages on one conversation.
+  const [chatTarget, setChatTarget] = useState<{ id: string; nonce: number } | null>(null);
+  const openMessages = (id: string) => { setOpenWork(null); setChatTarget({ id, nonce: Date.now() }); setFocus(null); router.setParams({ section: "inbox" }); };
   const lastRefresh = useRef(0), editing = useRef(false);
   // A super admin can change someone's role or tools while they are signed in. Every read carries
   // the current account, so the app switches to the new role's Home, Work and tools on the next refresh.
@@ -309,6 +317,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
   const workPage = (
     <>
       {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
+      {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} onOpenWork={setOpenWork} onOpenView={setWorkView} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} />}
       {currentView === "stays" && <LiveStays key={"stays:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}
       {currentView === "owner" && <LiveOwner palette={p} properties={properties} />}
@@ -363,7 +372,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} />
     : tab === "analytics" ? reportsPage
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} />
-    : tab === "inbox" ? <LiveChat palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => void loadUnread()} />
+    : tab === "inbox" ? <LiveChat key={chatTarget?.nonce ?? 0} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} openConversation={chatTarget?.id} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view) => { setTab(next); if (view) setWorkView(view); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;
@@ -371,7 +380,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
   const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
   return (
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
-      <CelebrateProvider palette={p} bottom={desktop ? 40 : 112}>
+      <CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
         {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={nav} section={tab} palette={p} onNavigate={navigate} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme, motion and sign out" />}
@@ -386,10 +395,10 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 <View>
-                  <IconButton label={chatUnread ? `Messages, ${chatUnread} unread` : "Messages"} icon="message-circle" palette={header} onPress={() => navigate("inbox")} />
-                  {chatUnread > 0 && <View pointerEvents="none" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: "#E4572E", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}>{chatUnread > 99 ? "99+" : chatUnread}</Text></View>}
+                  <IconButton label={messagesBadge ? `Messages, ${[chatUnread ? `${chatUnread} unread` : "", guestWaiting ? `${guestWaiting} ${guestWaiting === 1 ? "guest" : "guests"} waiting` : ""].filter(Boolean).join(", ")}` : "Messages"} icon="message-circle" palette={header} onPress={() => { setChatTarget(null); navigate("inbox"); }} />
+                  {messagesBadge > 0 && <View pointerEvents="none" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: "#E4572E", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View>}
                 </View>
-                <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={() => { void refresh(); void loadReport(period); void loadUnread(); }} />
+                <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={() => { void refresh(); void loadReport(period); void loadUnread(); void loadWaiting(); }} />
                 {(desktop || width >= 400) && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
                 <MotionPress accessibilityRole="button" accessibilityLabel={`Open profile and preferences, ${roleLabel}`} onPress={() => setSettings(true)} style={{ minHeight: 48, minWidth: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: desktop ? 14 : 0, borderRadius: 999, backgroundColor: desktop ? p.headerControl : "transparent", borderWidth: desktop ? 1 : 0, borderColor: p.headerBorder }}>
                   {desktop && <View style={{ maxWidth: 180 }}><Text numberOfLines={1} style={{ color: p.headerText, fontSize: 14, fontWeight: "600" }}>{profile.displayName}</Text><Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 11 }}>{roleLabel}</Text></View>}
@@ -464,7 +473,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
       </Sheet>
       <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
       {welcome === "splash" && <RechargeSplash palette={p} onDone={() => setWelcome("greeting")} />}
-      </CelebrateProvider>
+      </OpenMessagesContext.Provider></CelebrateProvider>
       {welcome === "greeting" && <GreetingCard palette={p} profile={profile} openTasks={work.filter(item => !isDone(item.status)).length} waiting={work.filter(item => isWaitingWork(item.status)).length} onClose={finishWelcome} onWork={() => { finishWelcome(); setTab("work"); }} />}
     </SafeAreaView>
   );

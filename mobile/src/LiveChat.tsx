@@ -3,20 +3,29 @@ import { AppState, Platform, ScrollView, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
+import { MotionPress, Pop, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
 import { ui, type Palette } from "./theme";
-import { readChat, writeChat } from "./backend/client";
-import { chatPeopleSchema, chatTime, conversationSchema, threadSchema, type ChatMessage, type Conversation } from "../../lib/workspace-chat-policy";
+import { readChat, readInbox, writeChat } from "./backend/client";
+import { GuestInbox } from "./LiveGuestInbox";
+import { SavedReplies } from "./SavedReplies";
+import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, threadSchema, type ChatMessage, type Conversation } from "../../lib/workspace-chat-policy";
+import { inboxListSchema } from "../../lib/guest-inbox-policy";
 import { ROLE_LABEL } from "../../lib/admin-live";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
 import { z } from "zod";
 
-// Messages: one-to-one and group conversations for the team, and each owner's conversation with
-// Recharge. While a conversation is open it checks for new messages every few seconds.
-const LIST_EVERY = 15000, THREAD_EVERY = 3000;
+// Messages: one inbox for the team, in three tabs: Guests (the guest inbox, for people with the
+// guest communication tool), Clients (each owner's conversation with Recharge) and Team (one-to-one
+// and group conversations). Owners only see their conversation with Recharge. While a conversation
+// is open it checks for new messages every few seconds.
+const LIST_EVERY = 15000, THREAD_EVERY = 3000, GUESTS_EVERY = 60000;
+type Tab = "guests" | "clients" | "team";
+const TAB_LABEL: Record<Tab, string> = { guests: "Guests", clients: "Clients", team: "Team" };
+const TAB_ICON = { guests: "globe", clients: "home", team: "users" } as const;
+const tabOf = (c: Conversation): Tab => c.kind === "owner" ? "clients" : "team";
 const initials = (name: string) => name.replace(/^Recharge · /, "").trim().split(/\s+/).slice(0, 2).map(w => w[0] ?? "").join("").toUpperCase() || "R";
 const roleName = (role: string) => ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role;
 
@@ -29,6 +38,20 @@ function useVisiblePoll(run: () => void, every: number, active: boolean) {
     const timer = setInterval(tick, every);
     return () => clearInterval(timer);
   }, [every, active]);
+}
+
+// Guests waiting for a reply, for the Messages badge and the Guests tab. Read once a minute, and
+// only for people with the guest inbox. Null until the first read.
+export function useGuestWaiting(account: WorkspaceAccount) {
+  const enabled = hasGuestInbox(account);
+  const [waiting, setWaiting] = useState<number | null>(null);
+  const load = useCallback(async () => {
+    if (!enabled) return;
+    try { setWaiting(inboxListSchema.parse((await readInbox({ section: "list", status: "waiting" })).data).waiting); } catch { /* the count stays as it was */ }
+  }, [enabled]);
+  useEffect(() => { queueMicrotask(() => void load()); }, [load]);
+  useVisiblePoll(() => void load(), GUESTS_EVERY, enabled);
+  return { waiting: enabled ? waiting : 0, reload: load };
 }
 
 function Avatar({ p, name, kind }: { p: Palette; name: string; kind: Conversation["kind"] }) {
@@ -72,7 +95,7 @@ function Bubble({ p, m, showName }: { p: Palette; m: ChatMessage; showName: bool
   );
 }
 
-function Thread({ p, id, onBack, onChanged }: { p: Palette; id: string; onBack?: () => void; onChanged: () => void }) {
+function Thread({ p, id, onBack, onChanged, savedReplies = false }: { p: Palette; id: string; onBack?: () => void; onChanged: () => void; savedReplies?: boolean }) {
   const [thread, setThread] = useState<z.infer<typeof threadSchema> | null>(null);
   const [text, setText] = useState(""), [sending, setSending] = useState(false), [error, setError] = useState("");
   const scroll = useRef<ScrollView>(null), lastSeen = useRef("");
@@ -113,6 +136,7 @@ function Thread({ p, id, onBack, onChanged }: { p: Palette; id: string; onBack?:
           : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property. The team usually replies within minutes during the day." : "Say hello. Messages are only seen by the people in this conversation."}</Text>}
       </ScrollView>
       {!!error && <Notice text={error} p={p} tone="bad" />}
+      {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.title, property: c.propertyName }} onInsert={reply => setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply)} />}
       <View style={[ui.row, { gap: 8, alignItems: "flex-end" }]}>
         <TextInput value={text} onChangeText={setText} placeholder="Write a message" placeholderTextColor={p.muted} multiline maxLength={4000} accessibilityLabel="Message"
           onKeyPress={e => { const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean }; if (Platform.OS === "web" && key.key === "Enter" && !key.shiftKey) { (e as unknown as { preventDefault: () => void }).preventDefault(); void send(); } }}
@@ -126,7 +150,7 @@ function Thread({ p, id, onBack, onChanged }: { p: Palette; id: string; onBack?:
   );
 }
 
-function NewConversation({ p, properties, onClose, onOpen }: { p: Palette; properties: PropertyView[]; onClose: () => void; onOpen: (c: Conversation) => void }) {
+function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette; properties: PropertyView[]; only?: "team" | "owners"; onClose: () => void; onOpen: (c: Conversation) => void }) {
   const [people, setPeople] = useState<z.infer<typeof chatPeopleSchema> | null>(null);
   const [picked, setPicked] = useState<string[]>([]), [title, setTitle] = useState(""), [propertyId, setPropertyId] = useState(""), [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -136,12 +160,13 @@ function NewConversation({ p, properties, onClose, onOpen }: { p: Palette; prope
     try { onOpen(conversationSchema.parse((await writeChat(action)).data)); } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   const match = (name: string) => name.toLowerCase().includes(query.trim().toLowerCase());
-  const team = (people?.team ?? []).filter(x => match(x.fullName)), owners = (people?.owners ?? []).filter(x => match(x.fullName));
+  const team = only === "owners" ? [] : (people?.team ?? []).filter(x => match(x.fullName)), owners = only === "team" ? [] : (people?.owners ?? []).filter(x => match(x.fullName));
   const group = picked.length > 1;
   return (
-    <Sheet palette={p} visible onClose={onClose} title="New message" subtitle="Choose one person, or several for a group" icon="people">
+    <Sheet palette={p} visible onClose={onClose} title="New message" subtitle={only === "owners" ? "Choose an owner you look after" : "Choose one person, or several for a group"} icon="people">
       <TextInput value={query} onChangeText={setQuery} placeholder="Search by name" placeholderTextColor={p.muted} accessibilityLabel="Search people" style={{ minHeight: 46, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, color: p.text, fontFamily: "Montserrat_500Medium" }} />
       {!people && !error && <Loading p={p} />}
+      {people && !team.length && !owners.length && <Text style={[ui.small, { color: p.muted }]}>{query.trim() ? "Nobody matches." : only === "owners" ? "No owners to message yet. You can message the owners of the properties you look after." : "Nobody to message yet."}</Text>}
       {!!team.length && <Text style={[ui.small, { color: p.muted, fontWeight: "700" }]}>Team</Text>}
       {team.map(x => {
         const on = picked.includes(x.userId);
@@ -179,9 +204,9 @@ function NewConversation({ p, properties, onClose, onOpen }: { p: Palette; prope
   );
 }
 
-export function LiveChat({ palette: p, account, desktop, properties, onUnread }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void }) {
-  const owner = account.role === "client";
-  const [list, setList] = useState<Conversation[] | null>(null), [open, setOpen] = useState<string | null>(null), [creating, setCreating] = useState(false), [error, setError] = useState("");
+export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, openConversation }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; openConversation?: string }) {
+  const owner = account.role === "client", guests = hasGuestInbox(account);
+  const [list, setList] = useState<Conversation[] | null>(null), [open, setOpen] = useState<string | null>(openConversation ?? null), [creating, setCreating] = useState(false), [error, setError] = useState("");
   const loadList = useCallback(async () => {
     try { setList(z.array(conversationSchema).parse((await readChat({ section: "list" })).data)); setError(""); } catch (e) { setError(message(e)); }
   }, []);
@@ -194,33 +219,69 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread }:
   }, [loadList, owner]);
   useVisiblePoll(() => void loadList(), LIST_EVERY, !owner);
   const changed = useCallback(() => { void loadList(); onUnread(); }, [loadList, onUnread]);
+  // The team's tabs: Clients for the people who answer owners, Guests for the guest inbox.
+  const showClients = ["admin", "super_admin", "stays"].includes(account.role) || !!list?.some(c => c.kind === "owner");
+  const tabs: Tab[] = owner ? [] : [...(guests ? ["guests" as const] : []), ...(showClients ? ["clients" as const] : []), "team"];
+  const [chosenTab, setTab] = useState<Tab>(openConversation ? "team" : guests ? "guests" : "team");
+  const tab: Tab = tabs.includes(chosenTab) ? chosenTab : "team";
+  const count = (t: Tab) => t === "guests" ? guestWaiting ?? 0 : (list ?? []).filter(c => tabOf(c) === t).reduce((sum, c) => sum + c.unread, 0);
+  // The first time the list arrives, open the first tab that needs attention, unless one was chosen.
+  const picked = useRef(!!openConversation);
+  const attention = list && !owner ? tabs.find(t => count(t) > 0) ?? null : undefined;
+  useEffect(() => {
+    if (picked.current || attention === undefined) return;
+    picked.current = true;
+    if (attention) queueMicrotask(() => setTab(attention));
+  }, [attention]);
+  const choose = (t: Tab) => { picked.current = true; setTab(t); setOpen(null); };
+  const shown = (list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab);
   const listView = (
     <View style={{ gap: 4, width: desktop ? 340 : "100%" }}>
       <View style={[ui.between, { paddingBottom: 6, gap: 12 }]}>
-        <Text accessibilityRole="header" numberOfLines={1} style={[ui.sectionTitle, { color: p.text, flex: 1, minWidth: 0 }]}>Messages</Text>
-        <MotionPress accessibilityRole="button" accessibilityLabel="New message" onPress={() => setCreating(true)}
+        <Text accessibilityRole="header" numberOfLines={1} style={[ui.sectionTitle, { color: p.text, flex: 1, minWidth: 0 }]}>{tabs.length > 1 ? TAB_LABEL[tab] : "Messages"}</Text>
+        <MotionPress accessibilityRole="button" accessibilityLabel={tab === "clients" ? "New message to an owner" : "New message"} onPress={() => setCreating(true)}
           style={[ui.row, { gap: 8, minHeight: 40, paddingHorizontal: 14, borderRadius: 12, backgroundColor: p.primary }]}>
           <Feather name="edit-3" size={15} color={p.onPrimary} /><Text style={{ color: p.onPrimary, fontWeight: "700" }}>New</Text>
         </MotionPress>
       </View>
-      {!list ? <Loading p={p} /> : list.length ? list.map(c => <ConversationRow key={c.id} p={p} c={c} active={c.id === open} onPress={() => setOpen(c.id)} />)
-        : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>No conversations yet. Tap New to message someone on the team.</Text>}
+      {!list ? <Loading p={p} /> : shown.length ? shown.map(c => <ConversationRow key={c.id} p={p} c={c} active={c.id === open} onPress={() => setOpen(c.id)} />)
+        : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{tab === "clients" && tabs.length > 1 ? "No owner conversations yet. Tap New to message an owner you look after." : "No conversations yet. Tap New to message someone on the team."}</Text>}
     </View>
   );
+  const tabBar = tabs.length > 1 && (
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {tabs.map(t => {
+        const on = t === tab, n = count(t);
+        return (
+          <Pop key={t} active={on}><MotionPress accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={`${TAB_LABEL[t]}${n ? `, ${n} ${t === "guests" ? "waiting" : "unread"}` : ""}`} onPress={() => choose(t)}
+            style={[ui.row, { gap: 8, minHeight: 42, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.primary : p.surface }]}>
+            <Feather name={TAB_ICON[t]} size={15} color={on ? p.onPrimary : p.text} />
+            <Text style={{ color: on ? p.onPrimary : p.text, fontWeight: "700", fontSize: 14 }}>{TAB_LABEL[t]}</Text>
+            {n > 0 && <View style={{ minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, alignItems: "center", justifyContent: "center", backgroundColor: on ? p.onPrimary : p.primary }}><Text style={{ color: on ? p.primary : p.onPrimary, fontSize: 12, fontWeight: "800" }}>{n > 99 ? "99+" : n}</Text></View>}
+          </MotionPress></Pop>
+        );
+      })}
+    </View>
+  );
+  const thread = (id: string, back?: () => void) => <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} />;
   return (
     <View style={{ gap: 12 }}>
+      {tabBar}
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {owner ? (open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}><Thread key={open} p={p} id={open} onChanged={changed} /></View> : <Loading p={p} />)
-        : desktop ? (
-          <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: "row", gap: 18, alignItems: "stretch" }]}>
-            {listView}
-            <View style={{ flex: 1, minWidth: 0, borderLeftWidth: 1, borderColor: p.border, paddingLeft: 18 }}>
-              {open ? <Thread key={open} p={p} id={open} onChanged={changed} /> : <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minHeight: 420, gap: 8 }}><Feather name="message-circle" size={32} color={p.muted} /><Text style={{ color: p.muted }}>Choose a conversation</Text></View>}
+      <SwapIn swapKey={owner ? "owner" : tab}>
+        {owner ? (open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View> : <Loading p={p} />)
+          : tab === "guests" ? <GuestInbox palette={p} properties={properties} onChanged={onUnread} />
+          : desktop ? (
+            <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: "row", gap: 18, alignItems: "stretch" }]}>
+              {listView}
+              <View style={{ flex: 1, minWidth: 0, borderLeftWidth: 1, borderColor: p.border, paddingLeft: 18 }}>
+                {open ? thread(open) : <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minHeight: 420, gap: 8 }}><Feather name="message-circle" size={32} color={p.muted} /><Text style={{ color: p.muted }}>Choose a conversation</Text></View>}
+              </View>
             </View>
-          </View>
-        ) : open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}><Thread key={open} p={p} id={open} onBack={() => { setOpen(null); void loadList(); }} onChanged={changed} /></View>
-          : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{listView}</View>}
-      {creating && <NewConversation p={p} properties={properties} onClose={() => setCreating(false)} onOpen={c => { setCreating(false); setOpen(c.id); void loadList(); }} />}
+          ) : open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open, () => { setOpen(null); void loadList(); })}</View>
+            : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{listView}</View>}
+      </SwapIn>
+      {creating && <NewConversation p={p} properties={properties} only={tabs.length < 2 ? undefined : tab === "clients" ? "owners" : "team"} onClose={() => setCreating(false)} onOpen={c => { setCreating(false); setOpen(c.id); void loadList(); }} />}
     </View>
   );
 }
