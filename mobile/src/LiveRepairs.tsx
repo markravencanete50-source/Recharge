@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
@@ -349,6 +350,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         {!step && <Notice text={phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will refer this to Ready." : "Nothing for you to do at this stage."} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         {step && !declining && <Button label={busy ? "Saving…" : uploading ? "Saving photos…" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading} onPress={() => void save()} />}
+        {role !== "client" && <PropertyTeamChatButton palette={p} propertyId={repair.propertyId} workId={repair.workId} />}
       </>}
     </Sheet>
   );
@@ -493,6 +495,7 @@ function VisitSheet({ p, role, visit, plans, onClose, onDone }: { p: Palette; ro
       {moves.length > 0 && <Field label="Note (optional)" value={note} onChange={setNote} p={p} multiline placeholder="Anything found on the visit" />}
       {moves.map(m => <Button key={m.status} label={busy ? "Saving…" : m.label} primary p={p} disabled={busy} onPress={() => void move(m.status)} />)}
       {!moves.length && <Notice text={visit?.status === "in_review" ? "Waiting for Stays to sign off this visit." : "Nothing for you to do on this visit."} p={p} />}
+      {visit && <PropertyTeamChatButton palette={p} propertyId={visit.propertyId} workId={visit.workId} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
     </Sheet>
   );
