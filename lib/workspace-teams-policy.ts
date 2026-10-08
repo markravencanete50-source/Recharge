@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
 
 const id = z.string().uuid();
+export const CONTRACT_AUDIENCES = ['all', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts'] as const;
 const version = z.number().int().positive();
 const date = z.string().refine(value => Boolean(parseAnalyticsDate(value)), 'Choose a valid date');
 const text = (min: number, max: number) => z.string().trim().min(min).max(max);
@@ -12,7 +13,7 @@ const https = z.string().url().max(1000).refine(value => {
 }, 'Use a public HTTPS link');
 
 export const teamsReadSchema = z.object({
-  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training']),
+  section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -34,8 +35,14 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
     audience: z.array(z.enum(['all', 'super_admin', 'admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts', 'client'])).min(1).max(9),
     summary: z.string().trim().max(1000).optional(), body: text(10, 50000), videoUrl: https.optional(), minutes: z.number().int().min(1).max(600), published: z.boolean() }).strict(),
   z.object({ action: z.literal('completeCourse'), requestId: id, courseId: id }).strict(),
+  // Staff onboarding: admins write the contracts and choose required courses; team members sign.
+  z.object({ action: z.literal('saveContract'), requestId: id, contractId: id.optional(), version: version.optional(), title: text(2, 200),
+    audience: z.array(z.enum(CONTRACT_AUDIENCES)).min(1).max(6), body: text(20, 100000), active: z.boolean(), resignRequired: z.boolean().optional() }).strict(),
+  z.object({ action: z.literal('setCourseRequired'), requestId: id, courseId: id, required: z.boolean() }).strict(),
+  z.object({ action: z.literal('signContract'), requestId: id, contractId: id, version, signedName: text(2, 200), agree: z.literal(true, { errorMap: () => ({ message: 'Tick the box to agree to the contract' }) }) }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'saveRoutinePlan' && Boolean(value.planId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a plan needs its current version' });
   if (value.action === 'saveCourse' && Boolean(value.courseId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a course needs its current version' });
+  if (value.action === 'saveContract' && Boolean(value.contractId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a contract needs its current version' });
 });
 export type TeamsAction = z.infer<typeof teamsActionSchema>;

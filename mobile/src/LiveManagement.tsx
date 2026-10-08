@@ -103,7 +103,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading the management queue" />}
-      <Pills p={p} values={["queue", "people", "properties", "team", "training"] as const} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", team: "Cleaning team", training: "Training" })[v]} />
+      <Pills p={p} values={["queue", "people", "properties", "team", "training"] as const} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", team: "Cleaning team", training: "Onboarding & training" })[v]} />
 
       {view === "queue" && queue && <>
         <Section title="Cleaning decisions" count={queue.cleaningDecisions.length} p={p}>

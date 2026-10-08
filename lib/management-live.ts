@@ -29,10 +29,31 @@ export const queueCount = (m: Management) => m.cleaningDecisions.length + m.expe
 export const AUDIENCES = ["all", "stays", "cleans", "cleaning_manager", "ready", "accounts", "admin", "client"] as const;
 export const courseSchema = z.object({
   id: z.string().uuid(), title: z.string(), audience: z.array(z.string()), summary: z.string().nullable(), body: z.string(), videoUrl: z.string().nullable(),
-  minutes: z.number(), published: z.boolean(), version: z.number(), completedAt: z.string().nullable(), completions: z.number().nullable(),
+  minutes: z.number(), published: z.boolean(), required: z.boolean().default(false), version: z.number(), completedAt: z.string().nullable(), completions: z.number().nullable(),
 });
 export const coursesSchema = z.array(courseSchema);
 export type Course = z.infer<typeof courseSchema>;
+
+// Staff onboarding: the contract each team member signs and the training they finish first.
+const onboardingCounts = { required: z.boolean(), complete: z.boolean(), contractsSigned: z.number(), contractsNeeded: z.number(), coursesDone: z.number(), coursesNeeded: z.number() };
+export const onboardingSchema = z.object({
+  ...onboardingCounts,
+  contracts: z.array(z.object({ id: z.string().uuid(), title: z.string(), version: z.number(), body: z.string(), resignRequired: z.boolean(), signedVersion: z.number().nullable(), signedAt: z.string().nullable(), current: z.boolean().nullable() })),
+  courses: z.array(z.object({ id: z.string().uuid(), title: z.string(), completedAt: z.string().nullable() })),
+});
+export type Onboarding = z.infer<typeof onboardingSchema>;
+export const contractSchema = z.object({
+  id: z.string().uuid(), title: z.string(), audience: z.array(z.string()), active: z.boolean(), version: z.number(), body: z.string(), resignRequired: z.boolean(), publishedAt: z.string(),
+  signatures: z.array(z.object({ userId: z.string().uuid(), fullName: z.string(), signedName: z.string(), version: z.number(), signedAt: z.string() })).nullable(),
+});
+export type Contract = z.infer<typeof contractSchema>;
+export const staffOnboardingSchema = z.object({ userId: z.string().uuid(), fullName: z.string(), role: z.string(), ...onboardingCounts });
+export type StaffOnboarding = z.infer<typeof staffOnboardingSchema>;
+export const contractsSchema = z.object({ contracts: z.array(contractSchema), people: z.array(staffOnboardingSchema) });
+// Who still has something to do, in plain words.
+export const onboardingProgress = (s: Pick<Onboarding, "required" | "complete" | "contractsSigned" | "contractsNeeded" | "coursesDone" | "coursesNeeded">) =>
+  !s.required ? "Nothing to complete" : s.complete ? "Onboarding complete" :
+  [s.contractsNeeded ? `Contract ${s.contractsSigned}/${s.contractsNeeded}` : "", s.coursesNeeded ? `Training ${s.coursesDone}/${s.coursesNeeded}` : ""].filter(Boolean).join(" · ");
 
 // The reservation as returned by recordReservation (a database row).
 export const recordedReservationSchema = z.object({

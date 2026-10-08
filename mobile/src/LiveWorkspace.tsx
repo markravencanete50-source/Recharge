@@ -31,6 +31,7 @@ import { LiveAccounts } from "./LiveAccounts";
 import { LiveManagement } from "./LiveManagement";
 import { LiveStays } from "./LiveStays";
 import { LiveOwner } from "./LiveOwner";
+import { OnboardingGate } from "./LiveOnboarding";
 import { liveApiOrigin, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { WorkspaceSection } from "../../lib/workspace-map";
@@ -367,7 +368,12 @@ function Screen() {
   if (!liveApiOrigin()) return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center" }]}><EmptyState palette={p} icon="inbox" title="Live connection is awaiting configuration" detail="The backend address will be added to the app when deployment is ready." /></View>;
   if (!account) return <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}><StatusBar style="light" /><LiveSignIn palette={p} onTheme={() => setTheme(theme === "dark" ? "light" : "dark")} onSignedIn={value => { setWelcome(true); setAccount(value); }} />{!!error && <Text accessibilityRole="alert" style={[ui.small, { color: p.danger, textAlign: "center", padding: 12 }]}>{error}</Text>}</SafeAreaView>;
   if (account.status !== "active") return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center", gap: 16 }]}><EmptyState palette={p} icon="inbox" title={account.status === "pending" ? "Your access is being reviewed" : "Your access has been removed"} detail={account.status === "pending" ? "An administrator will approve your account and choose your tools. You'll then see your workspace here." : "Ask an administrator if you think this is a mistake."} /><SoftButton label="Sign out" icon="log-out" palette={p} onPress={() => { void signOut().finally(() => setAccount(null)); }} /></View>;
-  return <Workspace key={account.userId} account={account} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} welcomeOnOpen={welcome} />;
+  // New team members sign their contract and finish required training first.
+  return (
+    <OnboardingGate key={account.userId} account={account} palette={p} onSignOut={() => { void signOut().finally(() => setAccount(null)); }}>
+      <Workspace account={account} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} welcomeOnOpen={welcome} />
+    </OnboardingGate>
+  );
 }
 
 export default function LiveWorkspace() {
