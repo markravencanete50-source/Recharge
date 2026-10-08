@@ -1,10 +1,10 @@
-import { useState, type ReactNode } from "react";
-import { Modal, Platform, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
+import { Children, isValidElement, useEffect, useState, type ReactNode } from "react";
+import { Animated, Modal, Platform, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as ImagePicker from "expo-image-picker";
 import { Artwork } from "./Artwork";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
-import { Entrance, MotionPress } from "./motion";
+import { Entrance, MotionPress, Stagger, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 import { WORKSPACE_MAP } from "../../lib/workspace-map";
@@ -32,10 +32,20 @@ function SectionTitle({ palette: p, title, detail, action }: { palette: Palette;
 export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, children }: { palette: Palette; visible: boolean; onClose: () => void; title: string; subtitle?: string; icon?: DimensionalName; children: ReactNode }) {
   const { width } = useWindowDimensions();
   const wide = width >= 768;
+  // The panel settles in with a soft scale and lift, then its contents arrive one after another.
+  const reduced = useReducedMotion();
+  const [settle] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    if (!visible || reduced) { settle.setValue(1); return; }
+    settle.setValue(0);
+    const animation = Animated.spring(settle, { toValue: 1, speed: 16, bounciness: 4, useNativeDriver: Platform.OS !== "web" });
+    animation.start(); return () => animation.stop();
+  }, [visible, reduced, settle]);
   return (
     <Modal visible={visible} transparent animationType={wide ? "fade" : "slide"} onRequestClose={onClose}>
       <View {...(Platform.OS === "web" ? { dataSet: { overlay: "blur" } } : {})} style={{ flex: 1, backgroundColor: p.overlay, justifyContent: wide ? "center" : "flex-end", alignItems: "center", padding: wide ? 16 : 0 }}>
-        <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 560, maxHeight: wide ? "92%" : "90%", borderRadius: 28, borderBottomLeftRadius: wide ? 28 : 0, borderBottomRightRadius: wide ? 28 : 0, backgroundColor: p.surface, overflow: "hidden" }}>
+        <Animated.View accessibilityViewIsModal style={{ width: "100%", maxWidth: 560, maxHeight: wide ? "92%" : "90%", borderRadius: 28, borderBottomLeftRadius: wide ? 28 : 0, borderBottomRightRadius: wide ? 28 : 0, backgroundColor: p.surface, overflow: "hidden",
+          transform: [{ scale: settle.interpolate({ inputRange: [0, 1], outputRange: [wide ? 0.96 : 1, 1] }) }, { translateY: settle.interpolate({ inputRange: [0, 1], outputRange: [wide ? 12 : 0, 0] }) }] }}>
           <View style={[ui.between, { gap: 12, padding: 18, borderBottomWidth: 1, borderColor: p.border }]}>
             <View style={[ui.row, { gap: 12, flex: 1 }]}>
               {!!icon && <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={icon} size={34} /></View>}
@@ -48,8 +58,10 @@ export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, chi
               <Feather name="x" size={18} color={p.text} />
             </MotionPress>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 18, gap: 14 }} keyboardShouldPersistTaps="handled">{children}</ScrollView>
-        </View>
+          <ScrollView contentContainerStyle={{ padding: 18, gap: 14 }} keyboardShouldPersistTaps="handled">
+            {visible && Children.toArray(children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
+          </ScrollView>
+        </Animated.View>
       </View>
     </Modal>
   );

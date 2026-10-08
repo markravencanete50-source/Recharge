@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, AppState, ScrollView, View } from "react-native";
+import { AppState, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
+import { GrowBar, MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
+import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
 import { CourseSheet } from "./LiveTraining";
 import { readTeams, writeTeams } from "./backend/client";
@@ -109,7 +109,7 @@ export function OnboardingGate({ account, palette: p, onSignOut, children }: { a
     return () => { subscription.remove(); clearInterval(timer); };
   }, [staff, load]);
 
-  if (!checked) return <View style={[ui.fill, { backgroundColor: p.background, alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={p.primary} accessibilityLabel="Checking your onboarding" /></View>;
+  if (!checked) return <View style={[ui.fill, { backgroundColor: p.background, alignItems: "center", justifyContent: "center" }]}><Loading p={p} /></View>;
   if (!staff || !status || !status.required || status.complete) return <>{children}</>;
 
   const contractsDone = status.contractsSigned === status.contractsNeeded, coursesDone = status.coursesDone === status.coursesNeeded;
@@ -126,6 +126,7 @@ export function OnboardingGate({ account, palette: p, onSignOut, children }: { a
               Sign your contract and finish your training, and your tools open straight away.{minutes ? ` The training takes about ${minutes} minutes.` : ""}
             </Text>
             <View style={[ui.row, { gap: 8, marginTop: 6 }]}><Tag label={onboardingProgress(status)} tone="wait" p={p} /></View>
+            <GrowBar share={(status.contractsSigned + status.coursesDone) / Math.max(1, status.contractsNeeded + status.coursesNeeded)} height={8} color={p.headerText} track={p.headerBorder} />
           </View>
           {!!error && <Notice text={error} p={p} tone="bad" />}
           {!!status.contractsNeeded && <Step p={p} number={1} title="Sign your contract" done={contractsDone}>
@@ -227,7 +228,7 @@ export function StaffContracts({ p }: { p: Palette }) {
     <View style={{ gap: 18 }}>
       <Section title="Staff contracts" p={p}>
         <Text style={[ui.small, { color: p.muted }]}>New team members sign these, and finish any course marked “Required”, before their tools open.</Text>
-        {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading contracts" />}
+        {loading && <Loading p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         <Button label="New contract" icon="plus" p={p} onPress={() => setEditing("new")} />
         <List p={p} empty="No contracts yet. Add the one new staff sign.">

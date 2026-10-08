@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
+import { MotionPress, SwapIn } from "./motion";
 import { ui, type Palette } from "./theme";
-import { addDays, dayLabel, london, Notice, Section, Tag } from "./LiveKit";
+import { addDays, dayLabel, london, Notice, Section, Tag, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readFinance, readTeams, WorkspaceApiError } from "./backend/client";
 import { scheduleSchema } from "../../lib/cleans-live";
@@ -90,13 +90,13 @@ export function LiveOwner({ palette: p, properties }: { palette: Palette; proper
           { label: "Latest payout", value: shown[0] ? pounds(shown[0].payoutMinor) : "–" },
         ].map(tile => (
           <View key={tile.label} style={[ui.card, { flex: 1, padding: 14, gap: 4, backgroundColor: p.surface, borderColor: p.border }]}>
-            <Text numberOfLines={1} style={{ color: p.text, fontSize: 18, fontWeight: "700" }}>{tile.value}</Text>
+            <SwapIn swapKey={String(tile.value)}><Text numberOfLines={1} style={{ color: p.text, fontSize: 18, fontWeight: "700" }}>{tile.value}</Text></SwapIn>
             <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{tile.label}</Text>
           </View>
         ))}
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading your stays" />}
+      {loading && <Loading p={p} />}
       <Section title="Upcoming stays" count={upcoming.length} p={p}>
         <List p={p} empty="No stays booked in the next six weeks.">
           {upcoming.map((s, i) => <Row key={s.reservationId} p={p} first={i === 0} title={`${dayLabel(s.checkIn)} to ${dayLabel(s.checkOut)}`} detail={`${s.propertyName} · ${nights(s.checkIn, s.checkOut)} nights${s.guests ? ` · ${s.guests} guests` : ""}`} tags={[s.checkIn <= today ? ["Staying now", "good"] : ["Booked", "plain"]]} />)}

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { Text } from "./Typography";
+import { TweenNumber } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, useRequestId } from "./LiveKit";
+import { Button, Field, message, Notice, Section, useRequestId, Loading } from "./LiveKit";
 import { ExpenseSheet, List, NoteSheet, Pills, Row, type NoteAsk } from "./LiveAccounts";
 import { LiveTraining } from "./LiveTraining";
 import { LivePeople } from "./LivePeople";
@@ -97,13 +98,13 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
       <View style={{ flexDirection: "row", gap: 10 }}>
         {tiles.map(tile => (
           <View key={tile.label} style={[ui.card, { flex: 1, padding: 14, gap: 4, backgroundColor: p.surface, borderColor: tile.value ? p.primary : p.border }]}>
-            <Text style={{ color: p.text, fontSize: 24, fontWeight: "700" }}>{tile.value}</Text>
+            <TweenNumber value={tile.value} style={{ color: p.text, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} />
             <Text numberOfLines={3} style={[ui.small, { color: p.muted }]}>{tile.label}</Text>
           </View>
         ))}
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading the management queue" />}
+      {loading && <Loading p={p} />}
       <Pills p={p} values={["queue", "people", "properties", "performance", "team", "training"] as const} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training" })[v]} />
 
       {view === "queue" && queue && <>

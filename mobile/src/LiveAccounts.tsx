@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { Children, isValidElement, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
+import { MotionPress, Pop, Stagger, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, london, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
+import { Button, Field, london, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
 import {
   EVIDENCE_KINDS, EXPENSE_CATEGORIES, PAYOUT_LABEL, expenseMoves, expenseSchema, expensesSchema, monthLabel, overviewSchema, policySchema, pounds,
@@ -38,9 +38,9 @@ export function Pills<T extends string>({ p, values, value, onChange, label }: {
       {values.map(v => {
         const on = v === value;
         return (
-          <MotionPress key={v} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(v)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
+          <Pop key={v} active={on}><MotionPress accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(v)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
             <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label ? label(v) : readableStage(v)}</Text>
-          </MotionPress>
+          </MotionPress></Pop>
         );
       })}
     </ScrollView>
@@ -61,8 +61,10 @@ export function Row({ p, title, detail, amount, tags, onPress, first }: { p: Pal
   );
 }
 
+// Rows arrive one after another; new rows added later slide in on their own.
 export function List({ p, empty, children }: { p: Palette; empty: string; children: ReactNode[] }) {
-  return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>{children.length ? children : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{empty}</Text>}</View>;
+  const items = Children.toArray(children);
+  return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>{items.length ? items.map((child, i) => <Stagger key={isValidElement(child) && child.key != null ? child.key : i} index={i}>{child}</Stagger>) : <SwapIn swapKey={empty}><Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{empty}</Text></SwapIn>}</View>;
 }
 
 export function Line({ p, label, value }: { p: Palette; label: string; value: string }) {
@@ -142,7 +144,7 @@ export function ExpenseSheet({ p, role, id, limit, onClose, onAsk, onDone }: { p
 
   return (
     <Sheet palette={p} visible={!!id} onClose={onClose} title={expense?.supplier ?? "Expense"} subtitle={expense ? `${expense.reference} · ${expense.propertyName}` : undefined} icon="coins">
-      {!expense && !error && <ActivityIndicator color={p.primary} accessibilityLabel="Loading expense" />}
+      {!expense && !error && <Loading p={p} />}
       {expense && <>
         <View style={[ui.between, { alignItems: "flex-end" }]}>
           <View><Text style={[ui.small, { color: p.muted }]}>Amount</Text><Text style={{ color: p.text, fontSize: 30, fontWeight: "700", letterSpacing: -1 }}>{pounds(expense.amountMinor)}</Text></View>
@@ -400,7 +402,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
       <View style={{ flexDirection: "row", gap: 10 }}>
         {tiles.map(tile => (
           <View key={tile.label} style={[ui.card, { flex: 1, padding: 14, gap: 4, backgroundColor: p.surface, borderColor: p.border }]}>
-            <Text style={{ color: p.text, fontSize: 22, fontWeight: "700" }}>{tile.value}</Text>
+            <SwapIn swapKey={String(tile.value)}><Text style={{ color: p.text, fontSize: 22, fontWeight: "700" }}>{tile.value}</Text></SwapIn>
             <Text numberOfLines={2} style={[ui.small, { color: p.text, fontWeight: "600" }]}>{tile.label}</Text>
             <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{tile.detail}</Text>
           </View>
@@ -408,7 +410,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
       </View>
 
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading accounts" />}
+      {loading && <Loading p={p} />}
 
       <View style={[ui.row, { gap: 8 }]}>
         {(["expenses", "payouts", "statements"] as const).map(v => <Button key={v} label={{ expenses: "Expenses", payouts: "Payouts", statements: "Statements" }[v]} primary={view === v} p={p} onPress={() => setView(v)} />)}

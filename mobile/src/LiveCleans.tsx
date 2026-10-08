@@ -5,8 +5,8 @@ import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
+import { MotionPress, TweenNumber } from "./motion";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, uploadWorkPhoto, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
@@ -73,7 +73,7 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
         <Text style={[ui.body, { color: p.muted }]}>{manager ? "Schedule, review and assign every clean you look after." : "Your jobs, checklists and results, straight from the office."}</Text>
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading cleans" />}
+      {loading && <Loading p={p} />}
 
       <View style={{ flexDirection: "row", gap: 10 }}>
         {[
@@ -82,7 +82,7 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
           { label: manager ? "Unassigned" : "Accepted this month", value: manager ? unassigned.length : mine?.accepted ?? 0 },
         ].map(tile => (
           <View key={tile.label} style={[ui.card, { flex: 1, padding: 14, gap: 4, backgroundColor: p.surface, borderColor: p.border }]}>
-            <Text style={{ color: p.text, fontSize: 24, fontWeight: "700" }}>{tile.value}</Text>
+            <TweenNumber value={tile.value} style={{ color: p.text, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} />
             <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{tile.label}</Text>
           </View>
         ))}

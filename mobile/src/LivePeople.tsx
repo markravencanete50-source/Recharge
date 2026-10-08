@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, TextInput, View } from "react-native";
+import { TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, Tag } from "./LiveKit";
+import { Button, Field, message, Notice, Section, Tag, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { HostawaySyncCard } from "./HostawaySyncCard";
 import { readAdmin, workspaceRequest, writeAdmin, writeWorkspace, WorkspaceApiError } from "./backend/client";
@@ -203,7 +203,7 @@ function PropertySheet({ p, property, creating, people, onClose, onDone }: { p: 
       <Pills p={p} values={["onboarding", "active", "archived"] as const} value={status} onChange={setStatus} label={v => PROPERTY_TAG[v][0]} />
       {status === "archived" && property?.status !== "archived" && <Text style={[ui.small, { color: p.muted }]}>Archived properties drop out of schedules, statements and lists. Their history is kept.</Text>}
       {property && <Section title="Private details" p={p}>
-        {!draft && !error && <ActivityIndicator color={p.primary} accessibilityLabel="Loading private details" />}
+        {!draft && !error && <Loading p={p} />}
         {draft && <>
           <Field label="Access instructions (key safe, door codes)" value={draft.access} onChange={v => setDraft({ ...draft, access: v })} p={p} multiline />
           <Field label="Platform logins and notes" value={draft.ota} onChange={v => setDraft({ ...draft, ota: v })} p={p} multiline />
@@ -267,7 +267,7 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
   return (
     <View style={{ gap: 16 }}>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading administration" />}
+      {loading && <Loading p={p} />}
       <Search p={p} value={query} onChange={setQuery} placeholder={view === "people" ? "Search people" : "Search properties"} />
       {view === "people" && <>
         <Pills p={p} values={["pending", "active", "revoked", "all"] as const} value={shownFilter} onChange={setPersonFilter} label={v => ({ pending: `Waiting (${pending})`, active: "Active", revoked: "Revoked", all: "Everyone" })[v]} />

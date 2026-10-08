@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
+import { GrowBar, MotionPress, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
+import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, shiftName, teamPerformanceSchema, type Shift, type TeamPerformance } from "../../lib/management-live";
@@ -47,19 +47,20 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
   return (
     <View style={[ui.card, { backgroundColor: open ? p.header : p.surface, borderColor: open ? p.header : p.border, gap: 12 }]}>
       <View style={[ui.between, { gap: 12, flexWrap: "wrap" }]}>
-        <View style={{ gap: 4, flexShrink: 1 }}>
+        <SwapIn swapKey={open ? "on:" + open.id : "off"} style={{ gap: 4, flexShrink: 1 }}>
           <Text style={{ color: open ? p.headerMuted : p.muted, fontSize: 12, fontWeight: "700", letterSpacing: 0.5 }}>{open ? "ON SHIFT" : "YOUR SHIFT"}</Text>
           <Text style={{ color: open ? p.headerText : p.text, fontSize: 18, fontWeight: "700" }}>
             {!shift ? "Checking…" : open ? `${DEPARTMENT_LABEL[open.department] ?? open.department} · since ${time(open.clockedInAt)}` : "You’re clocked out"}
           </Text>
           {!!open && <Text style={{ color: p.headerMuted, fontSize: 13 }}>{shiftName(open.clockedInAt)} · {hoursLabel(sinceMinutes(open.clockedInAt))} so far</Text>}
           {score !== null && <Text style={{ color: open ? p.headerMuted : p.muted, fontSize: 13 }}>Guest replies, last 30 days: {score}% on time ({shift!.passPercent}% is on track)</Text>}
-        </View>
+          {score !== null && <View style={{ marginTop: 4, maxWidth: 260 }}><GrowBar share={score / 100} height={6} color={score >= shift!.passPercent ? p.success : p.waiting} track={open ? p.headerBorder : p.wash} /></View>}
+        </SwapIn>
         {shift ? <MotionPress accessibilityRole="button" accessibilityLabel={open ? "Clock out" : "Clock in"} disabled={busy} onPress={() => void toggle()}
           style={[ui.button, { backgroundColor: open ? p.background : p.primary, paddingHorizontal: 20 }]}>
           <Feather name={open ? "log-out" : "log-in"} size={16} color={open ? p.text : p.onPrimary} />
           <Text style={[ui.buttonText, { color: open ? p.text : p.onPrimary }]}>{busy ? "Saving…" : open ? "Clock out" : "Clock in"}</Text>
-        </MotionPress> : <ActivityIndicator color={p.primary} />}
+        </MotionPress> : <Loading p={p} />}
       </View>
       {shift && !open && <Pills p={p} values={DEPARTMENTS} value={department as (typeof DEPARTMENTS)[number]} onChange={setDepartment} label={d => DEPARTMENT_LABEL[d]} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
@@ -123,7 +124,7 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
   return (
     <View style={{ gap: 20 }}>
       <Pills p={p} values={["today", "week", "month"] as const} value={range} onChange={setRange} label={v => ({ today: "Today", week: "Last 7 days", month: "Last 30 days" })[v]} />
-      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading team performance" />}
+      {loading && <Loading p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {data && t && <>
         <Section title="On shift now" count={data.onShift.length} p={p}>

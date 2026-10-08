@@ -17,7 +17,7 @@ import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
 import { Calendar } from "./WorkspaceScreens";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
-import { Entrance, MotionPress } from "./motion";
+import { Entrance, GrowBar, MotionPress, Stagger, TweenNumber } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
 import { workspaceRequest } from "./backend/client";
 import { exportReport } from "./exportReport";
@@ -137,7 +137,7 @@ function WorkflowEditor({ spec, invoices, p, onClose, onSaved }: { spec: Workflo
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;
   return (
     <>
-      {spec.fields.map(f => <Field key={f.name} field={f.name === "invoiceId" ? { ...f, options: invoices.map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues({ ...values, [f.name]: v })} p={p} disabled={busy} />)}
+      {spec.fields.map((f, n) => <Stagger key={f.name} index={n}><Field field={f.name === "invoiceId" ? { ...f, options: invoices.map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues({ ...values, [f.name]: v })} p={p} disabled={busy} /></Stagger>)}
       {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}><Text style={[ui.small, { color: p.text }]}>{error}</Text></View>}
       <SoftButton label={busy ? "Saving…" : "Save and continue"} icon="check" primary disabled={busy} onPress={() => void save()} palette={p} />
     </>
@@ -200,7 +200,7 @@ function PortfolioCard({ palette: p, summary }: { palette: Palette; summary: Por
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
         {stats.map(([label, value]) => (
           <View key={label} style={{ flexGrow: 1, flexBasis: 120, padding: 12, borderRadius: 16, backgroundColor: p.wash, gap: 2 }}>
-            <Text style={{ color: p.text, fontSize: 24, fontWeight: "700" }}>{value}</Text>
+            <TweenNumber value={value} style={{ color: p.text, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} />
             <Text style={[ui.small, { color: p.muted }]}>{label}</Text>
           </View>
         ))}
@@ -210,7 +210,7 @@ function PortfolioCard({ palette: p, summary }: { palette: Palette; summary: Por
         {summary.regions.slice(0, 8).map(r => (
           <View key={r.region} accessibilityLabel={`${r.region}: ${r.count}`} style={[ui.row, { gap: 10 }]}>
             <Text numberOfLines={1} style={{ color: p.text, width: 130, fontSize: 13 }}>{r.region}</Text>
-            <View style={{ flex: 1, height: 10, borderRadius: 5, backgroundColor: p.wash, overflow: "hidden" }}><View style={{ width: `${Math.max(6, (r.count / top) * 100)}%`, height: 10, borderRadius: 5, backgroundColor: p.primary }} /></View>
+            <GrowBar share={Math.max(0.06, r.count / top)} color={p.primary} track={p.wash} />
             <Text style={{ color: p.text, width: 28, textAlign: "right", fontSize: 13, fontWeight: "600" }}>{r.count}</Text>
           </View>
         ))}

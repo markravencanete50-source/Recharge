@@ -17,7 +17,7 @@ import { RechargeSplash } from "./RechargeSplash";
 import { GreetingCard } from "./WelcomeMoment";
 import { Reports } from "./Reports";
 import { Sheet } from "./TeamFlows";
-import { MotionPress, MotionProvider, useMotionPreference, useReducedMotion } from "./motion";
+import { MotionPress, MotionProvider, Stagger, SwapIn, useMotionPreference, useReducedMotion } from "./motion";
 import { headerPalette, themes, ui, type Palette } from "./theme";
 import { useThemePreference } from "./usePreviewPreferences";
 import { exportReport } from "./exportReport";
@@ -226,7 +226,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
         <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>{filtered.length} {filtered.length === 1 ? "item" : "items"} within your access</Text>
         {filtered.length ? (() => {
           const due = workFilter === "Active" ? filtered.filter(item => (workDate(item) || "9999") <= todayKey) : [], rest = workFilter === "Active" ? filtered.filter(item => (workDate(item) || "9999") > todayKey) : filtered;
-          const list = (items: OperationView[]) => <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 6, gap: 0 }]}>{items.slice(0, 200).map(item => <LiveWorkRow key={item.workId} item={item} property={names.get(item.propertyId)} palette={p} onPress={() => setOpenWork(item)} />)}</View>;
+          const list = (items: OperationView[]) => <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 6, gap: 0 }]}>{items.slice(0, 200).map((item, i) => <Stagger key={item.workId} index={i}><LiveWorkRow item={item} property={names.get(item.propertyId)} palette={p} onPress={() => setOpenWork(item)} /></Stagger>)}</View>;
           return <>
             {!!due.length && <View style={{ gap: 8 }}><Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Due today or overdue · {due.length}</Text>{list(due)}</View>}
             {!!rest.length && <View style={{ gap: 8 }}>{workFilter === "Active" && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Ongoing · {rest.length}</Text>}{list(rest)}</View>}
@@ -260,6 +260,8 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
     : tab === "analytics" ? reportsPage
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view) => { setTab(next); if (view) setWorkView(view); }} />;
+  // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
+  const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : "page"} style={{ gap: 24 }}>{page}</SwapIn>;
   const header = headerPalette(p);
   const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : "Home");
   return (
@@ -288,7 +290,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, welcomeO
           </View>
           <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => setScrolled(event.nativeEvent.contentOffset.y > 12)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
-              {page}
+              {animatedPage}
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
             </Animated.View>
           </ScrollView>

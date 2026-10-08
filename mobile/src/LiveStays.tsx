@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
+import { MotionPress, TweenNumber } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readOperations, readTeams, writeFinance, writeOperation, WorkspaceApiError } from "./backend/client";
 import { scheduleSchema } from "../../lib/cleans-live";
@@ -222,13 +222,13 @@ export function LiveStays({ palette: p, properties, onOpenRepairs }: { palette: 
           { label: "Listings to check", value: listingsDue },
         ].map(tile => (
           <View key={tile.label} style={[ui.card, { flex: 1, padding: 14, gap: 4, backgroundColor: p.surface, borderColor: p.border }]}>
-            <Text style={{ color: p.text, fontSize: 24, fontWeight: "700" }}>{tile.value}</Text>
+            <TweenNumber value={tile.value} style={{ color: p.text, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} />
             <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{tile.label}</Text>
           </View>
         ))}
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading stays" />}
+      {loading && <Loading p={p} />}
       <View style={[ui.row, { gap: 10 }]}>
         <Button label="Record a stay" icon="plus" primary p={p} onPress={() => setRecording(true)} />
         <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />

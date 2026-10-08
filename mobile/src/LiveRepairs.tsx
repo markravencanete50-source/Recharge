@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
@@ -7,7 +7,7 @@ import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { readOperations, readTeams, writeOperation, writeTeams, writeWorkspace } from "./backend/client";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import { scheduleSchema } from "../../lib/cleans-live";
@@ -64,7 +64,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
         <Text style={[ui.body, { color: p.muted }]}>{account.role === "client" ? "Repairs at your properties, and costs waiting for your approval." : "Every repair from report to completion, with routine visits."}</Text>
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading repairs" />}
+      {loading && <Loading p={p} />}
 
       <View style={{ flexDirection: "row", gap: 10 }}>
         {canReportRepair(account.role) && <Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} />}

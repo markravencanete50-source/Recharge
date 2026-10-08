@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { createElement, useCallback, useEffect, useState } from "react";
+import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Linking from "expo-linking";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
+import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
 import { readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
 import { AUDIENCES, coursesSchema, type Course } from "../../lib/management-live";
 import { readableStage } from "../../lib/workspace-view";
+import { videoEmbed } from "../../lib/video-embed";
 import { StaffContracts } from "./LiveOnboarding";
 
 // Live Training: everyone sees the courses meant for their role and marks them
@@ -94,6 +95,23 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
   );
 }
 
+// The course video plays inside the app on the web; the phone app opens it until an in-app
+// player is added to the store build.
+function CourseVideo({ p, url, onError }: { p: Palette; url: string; onError: (text: string) => void }) {
+  const embed = videoEmbed(url);
+  if (Platform.OS === "web" && embed) {
+    const frame = { width: "100%", aspectRatio: "16 / 9", border: 0, borderRadius: 16, background: "#000", display: "block" } as const;
+    return (
+      <View style={{ borderRadius: 16, overflow: "hidden", backgroundColor: "#000" }}>
+        {embed.kind === "frame"
+          ? createElement("iframe", { src: embed.src, title: "Course video", style: frame, allow: "accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen", allowFullScreen: true, loading: "lazy", referrerPolicy: "strict-origin-when-cross-origin" })
+          : createElement("video", { src: embed.src, controls: true, playsInline: true, preload: "metadata", style: frame })}
+      </View>
+    );
+  }
+  return <Button label="Watch the video" icon="play-circle" p={p} onPress={() => void Linking.openURL(url).catch(() => onError("The video link could not be opened."))} />;
+}
+
 // Reading a course and marking it done; also used by the onboarding checklist.
 export function CourseSheet({ p, course, onClose, onCompleted }: { p: Palette; course: Course | null; onClose: () => void; onCompleted: () => Promise<void> | void }) {
   const [busy, setBusy] = useState(false);
@@ -110,7 +128,7 @@ export function CourseSheet({ p, course, onClose, onCompleted }: { p: Palette; c
       {course && <>
         {!!course.summary && <Text style={[ui.body, { color: p.muted }]}>{course.summary}</Text>}
         <Text selectable style={[ui.body, { color: p.text }]}>{course.body}</Text>
-        {!!course.videoUrl && <Button label="Watch the video" icon="play-circle" p={p} onPress={() => void Linking.openURL(course.videoUrl!).catch(() => setError("The video link could not be opened."))} />}
+        {!!course.videoUrl && <CourseVideo p={p} url={course.videoUrl} onError={setError} />}
         {course.completedAt ? <Tag label={`Completed ${new Date(course.completedAt).toLocaleDateString("en-GB")}`} tone="good" p={p} /> : <Button label={busy ? "Saving…" : "Mark as complete"} icon="check" primary p={p} disabled={busy} onPress={() => void complete()} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
       </>}
@@ -134,7 +152,7 @@ export function LiveTraining({ palette: p, manage = false }: { palette: Palette;
   const todo = courses.filter(c => c.published && !c.completedAt).length;
   const training = (
     <Section title="Training" count={manage ? undefined : todo} p={p}>
-      {loading && <ActivityIndicator color={p.primary} accessibilityLabel="Loading training" />}
+      {loading && <Loading p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {manage && <Button label="New course" icon="plus" p={p} onPress={() => setEditing("new")} />}
       <List p={p} empty={manage ? "No courses yet. Add the first one." : "No training has been assigned to you yet."}>

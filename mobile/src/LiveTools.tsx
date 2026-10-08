@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { FurnishingSheet } from "./LiveFurnishing";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
+import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readTeams, readWorkspace, workspaceRequest, writeWorkspace } from "./backend/client";
 import { toolsFor, type Tool, type WorkView } from "../../lib/tool-directory";
@@ -79,7 +79,7 @@ function TrackerSheet({ palette: p, tool, properties, onClose }: { palette: Pale
   }
   return (
     <Sheet palette={p} visible={!!tool} onClose={onClose} title={tool?.name ?? ""} subtitle={tool?.description} icon="clipboard">
-      {loading && <ActivityIndicator color={p.primary} />}
+      {loading && <Loading p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!adding && <Button label="Add" icon="plus" primary p={p} onPress={() => { setAdding(true); setProperty(properties[0]?.id ?? ""); }} />}
       {adding && <View style={{ gap: 10 }}>
@@ -136,7 +136,7 @@ export function MailboxSection({ palette: p }: { palette: Palette }) {
   return (
     <Section title="Mailbox" count={undefined} p={p}>
       <Text style={[ui.small, { color: p.muted }]}>Post handled at your properties in the last 90 days, as you asked during onboarding.</Text>
-      {loading && <ActivityIndicator color={p.primary} />}
+      {loading && <Loading p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <List p={p} empty={loading ? "Loading…" : "No post has been handled yet."}>
         {mail.map((m, i) => <Row key={m.workId} p={p} first={i === 0} title={m.propertyName} detail={`${new Date(m.on + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })} · ${MAIL_LABEL[m.action] ?? m.action}${m.note ? " · " + m.note : ""}`} />)}
@@ -168,7 +168,7 @@ export function PropertyAccess({ palette: p, account, propertyId }: { palette: P
     <View style={[ui.card, { backgroundColor: p.background, borderColor: p.border, gap: 10 }]}>
       <Text style={{ color: p.text, fontWeight: "700" }}>Access and logins</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {!details && !error && <ActivityIndicator color={p.primary} />}
+      {!details && !error && <Loading p={p} />}
       {details && <>
         {line("Access instructions", details.accessInstructions)}
         {line("Platform logins and notes", details.otaInstructions)}

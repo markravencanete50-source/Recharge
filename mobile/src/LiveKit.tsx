@@ -1,9 +1,9 @@
-import { useRef, type ComponentProps, type ReactNode } from "react";
+import { Children, isValidElement, useRef, type ComponentProps, type ReactNode } from "react";
 import { TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
+import { Entrance, MotionPress, Shimmer, Stagger, SwapIn } from "./motion";
 import { ui, type Palette } from "./theme";
 
 // Shared building blocks for the live (backend-connected) screens.
@@ -32,15 +32,21 @@ export function Tag({ label, tone, p }: { label: string; tone: "good" | "wait" |
   const [bg, fg] = { good: [p.successWash, p.success], wait: [p.cautionWash, p.waiting], bad: ["#F6DEDA", "#A63A32"], plain: [p.wash, p.primary] }[tone];
   return <View style={{ alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: bg }}><Text style={{ color: fg, fontSize: 12, fontWeight: "700" }}>{label}</Text></View>;
 }
+// Messages slide in, and again whenever their wording changes, so a new result is noticed.
 export function Notice({ text, p, tone = "plain" }: { text: string; p: Palette; tone?: "plain" | "bad" }) {
-  return <View style={{ padding: 12, borderRadius: 14, backgroundColor: tone === "bad" ? "#F6DEDA" : p.wash }}><Text accessibilityLiveRegion="polite" style={[ui.small, { color: tone === "bad" ? "#A63A32" : p.text }]}>{text}</Text></View>;
+  return <SwapIn swapKey={text}><View style={{ padding: 12, borderRadius: 14, backgroundColor: tone === "bad" ? "#F6DEDA" : p.wash }}><Text accessibilityLiveRegion="polite" style={[ui.small, { color: tone === "bad" ? "#A63A32" : p.text }]}>{text}</Text></View></SwapIn>;
+}
+// Shimmering placeholder rows while a tool loads.
+export function Loading({ p, rows = 3 }: { p: Palette; rows?: number }) {
+  return <Shimmer rows={rows} color={p.surface} highlight={p.elevated} />;
 }
 export function Section({ title, count, p, children }: { title: string; count?: number; p: Palette; children: ReactNode }) {
   return (
-    <View style={{ gap: 10 }}>
+    <Entrance style={{ gap: 10 }}>
       <View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>{title}</Text>{count !== undefined && <Tag label={String(count)} tone={count ? "wait" : "good"} p={p} />}</View>
-      {children}
-    </View>
+      {/* Cards and rows inside a section arrive one after another. */}
+      {Children.toArray(children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
+    </Entrance>
   );
 }
 

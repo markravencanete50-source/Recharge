@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Platform, Share, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
+import { MotionPress, Pop, SwapIn, TweenNumber } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Notice } from "./LiveKit";
@@ -58,7 +58,7 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
   const stat = (label: string, value: number | string) => (
     <View style={{ flexGrow: 1, flexBasis: 110, padding: 14, borderRadius: 16, backgroundColor: p.wash, gap: 2 }}>
       <Text style={{ color: p.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>{label}</Text>
-      <Text style={{ color: p.text, fontSize: 26, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{value}</Text>
+      {typeof value === "number" ? <TweenNumber value={value} style={{ color: p.text, fontSize: 26, fontWeight: "700", fontVariant: ["tabular-nums"] }} /> : <Text style={{ color: p.text, fontSize: 26, fontWeight: "700" }}>{value}</Text>}
     </View>
   );
 
@@ -78,6 +78,7 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
         ))}
       </View>
 
+      <SwapIn swapKey={step} style={{ gap: 18 }}>
       {step === "details" ? <>
         <View style={{ gap: 6 }}>
           <Text style={{ color: p.muted, fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>Property address</Text>
@@ -102,15 +103,15 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
           {list.categories.map(c => {
             const on = c.id === selected?.id;
             return (
-              <MotionPress key={c.id} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setCategory(c.id)}
+              <Pop key={c.id} active={on}><MotionPress accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setCategory(c.id)}
                 style={[ui.row, { gap: 8, minHeight: 42, paddingHorizontal: 14, borderRadius: 14, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }]}>
                 <Text style={{ color: on ? p.onPrimary : p.text, fontWeight: "700" }}>{c.label}</Text>
                 <View style={{ paddingHorizontal: 7, paddingVertical: 1, borderRadius: 6, backgroundColor: on ? p.onPrimary : p.wash }}><Text style={{ color: on ? p.primary : p.text, fontSize: 12, fontWeight: "700" }}>{c.lines.length}</Text></View>
-              </MotionPress>
+              </MotionPress></Pop>
             );
           })}
         </View>
-        {selected && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
+        {selected && <SwapIn swapKey={selected.id}><View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
           <View style={{ paddingVertical: 12, gap: 2 }}>
             <Text style={{ color: p.text, fontSize: 18, fontWeight: "700" }}>{selected.title}</Text>
             <Text style={[ui.small, { color: p.muted }]}>{selected.lines.length} required item types</Text>
@@ -125,16 +126,17 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
               <Text style={{ color: p.text, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{l.quantity}<Text style={[ui.small, { color: p.muted, fontWeight: "500" }]}> {l.quantity === 1 ? "unit" : "units"}</Text></Text>
             </View>
           ))}
-        </View>}
+        </View></SwapIn>}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           <Button label={Platform.OS === "web" ? "Copy list" : "Share list"} icon={Platform.OS === "web" ? "copy" : "share"} p={p} onPress={() => void copy()} />
           <Button label="Download spreadsheet" icon="download" p={p} onPress={() => void download()} />
         </View>
         {!!notice && <Notice text={notice} p={p} />}
       </>}
+      </SwapIn>
 
       <View style={[ui.between, { gap: 12, padding: 16, borderRadius: 18, backgroundColor: p.header }]}>
-        <Text style={{ color: p.headerText, fontSize: 15 }}><Text style={{ color: p.headerText, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{list.total}</Text> required units</Text>
+        <View style={[ui.row, { gap: 8, alignItems: "baseline" }]}><TweenNumber value={list.total} style={{ color: p.headerText, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }} /><Text style={{ color: p.headerText, fontSize: 15 }}>required units</Text></View>
         <MotionPress accessibilityRole="button" onPress={() => setStep(step === "details" ? "list" : "details")} style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 12, justifyContent: "center", backgroundColor: p.headerText }}>
           <Text style={{ color: p.header, fontWeight: "700" }}>{step === "details" ? "View list" : "Edit details"}</Text>
         </MotionPress>
