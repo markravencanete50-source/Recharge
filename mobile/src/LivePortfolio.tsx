@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { GrowBar, MotionPress, Pop } from "./motion";
+import Feather from "@expo/vector-icons/Feather";
+import { GrowBar, MotionPress, Pop, Stagger } from "./motion";
 import { ui, type Palette } from "./theme";
 import { workspaceRequest } from "./backend/client";
 import { formatCount, plural } from "../../lib/format";
-import { ONBOARDING_PHASES, journeyPhase, type PropertyView } from "../../lib/workspace-view";
+import { ONBOARDING_PHASES, journeyPhase, onboardingProgress, type PropertyView } from "../../lib/workspace-view";
 import type { JourneyView } from "../../lib/workflow-forms";
 
 // The portfolio for the team: where every property is in its journey, each owner and their
@@ -87,6 +88,46 @@ export function PortfolioInsights({ palette: p, properties, journeys, filter, on
         </View>
         <GrowBar share={(trend.at(-1)?.liveProperties ?? 0) / Math.max(1, properties.filter(x => x.status !== "archived").length)} color={p.success} track={p.wash} height={6} />
       </View>}
+    </View>
+  );
+}
+
+// The onboarding pipeline at a glance: every property still onboarding, its stage and the next
+// step, with owner questions waiting for an answer and any agreed check-in date. Furthest along first.
+export function OnboardingPipeline({ palette: p, properties, journeys, onOpen }: { palette: Palette; properties: PropertyView[]; journeys: JourneyView[]; onOpen: (property: PropertyView) => void }) {
+  const rows = journeys
+    .map(j => ({ j, property: properties.find(x => x.id === j.propertyId) }))
+    .filter((r): r is { j: JourneyView; property: PropertyView } => !!r.property && r.property.status === "onboarding" && !["live", "declined", "archived"].includes(r.j.stage))
+    .map(r => ({ ...r, phase: journeyPhase(r.j.stage), index: ONBOARDING_PHASES.indexOf(journeyPhase(r.j.stage)), questions: (r.j.questions ?? []).filter(q => !q.answer).length }))
+    .sort((a, b) => b.index - a.index || a.property.name.localeCompare(b.property.name));
+  if (!rows.length) return null;
+  return (
+    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 4 }]}>
+      <View style={[ui.between, { paddingBottom: 6 }]}>
+        <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Onboarding pipeline</Text>
+        <Text style={[ui.small, { color: p.muted }]}>{plural(rows.length, "property", "properties")}</Text>
+      </View>
+      {rows.map((r, i) => (
+        <Stagger key={r.property.id} index={i}>
+          <MotionPress accessibilityRole="button" accessibilityLabel={`${r.property.name}, ${r.phase}. Next: ${onboardingProgress(r.j.stage).next}`} onPress={() => onOpen(r.property)}
+            style={[ui.row, { gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border, alignItems: "flex-start" }]}>
+            <View style={{ gap: 3, alignItems: "center", paddingTop: 2 }}>
+              {ONBOARDING_PHASES.map((_, n) => <View key={n} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: n < r.index ? p.success : n === r.index ? p.primary : p.border }} />)}
+            </View>
+            <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+              <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+                <Text numberOfLines={1} style={{ color: p.text, fontWeight: "700", fontSize: 15, flexShrink: 1 }}>{r.property.name}</Text>
+                <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: p.wash }}><Text style={{ color: p.primary, fontSize: 12, fontWeight: "700" }}>{r.phase}</Text></View>
+              </View>
+              <Text style={[ui.small, { color: p.text }]}>Next: {onboardingProgress(r.j.stage).next}</Text>
+              {(r.questions > 0 || !!r.j.followUpOn) && <Text style={[ui.small, { color: p.waiting }]}>
+                {[r.questions ? `${plural(r.questions, "question")} from the owner to answer` : "", r.j.followUpOn ? `Check in on ${new Date(r.j.followUpOn + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""].filter(Boolean).join(" · ")}
+              </Text>}
+            </View>
+            <Feather name="chevron-right" size={18} color={p.muted} style={{ alignSelf: "center" }} />
+          </MotionPress>
+        </Stagger>
+      ))}
     </View>
   );
 }

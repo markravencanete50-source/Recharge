@@ -14,7 +14,7 @@ import { LiveTraining } from "./LiveTraining";
 import { MyContracts } from "./LiveOnboarding";
 import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import { PropertyProfile } from "./LivePropertyProfile";
-import { PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
+import { OnboardingPipeline, PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
 import { EstimateExplorer } from "./LiveEstimate";
 import { ScotlandMap } from "./ScotlandMap";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
@@ -323,6 +323,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
       {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
       {staff && !loading && properties.length > 0 && account.modules.includes("property-database") && <PortfolioInsights palette={p} properties={properties} journeys={journeys} filter={filter} onFilter={f => { setFilter(f); setShown(24); }} onOwners={setOwnerCount} />}
+      {staff && !loading && account.modules.includes("property-onboarding") && <OnboardingPipeline palette={p} properties={properties} journeys={journeys} onOpen={setSelected} />}
       {!!filter && <MotionPress accessibilityRole="button" onPress={() => setFilter(null)} style={[ui.row, { gap: 8, alignSelf: "flex-start", maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.wash }]}>
         <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", flexShrink: 1 }}>Showing: {filter.label} · {filter.ids.length}</Text><Feather name="x" size={16} color={p.text} />
       </MotionPress>}
