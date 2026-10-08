@@ -15,7 +15,7 @@ after(() => vite.close());
 const sources = readdirSync('mobile/src').filter(f => f.endsWith('.tsx')).map(f => readFileSync('mobile/src/' + f, 'utf8')).join('\n');
 const anchors = new Set([
   ...[...sources.matchAll(/<Section title="([^"]+)"/g)].map(m => sectionAnchor(m[1])),
-  ...[...sources.matchAll(/nativeID="([^"]+)"/g)].map(m => m[1]),
+  ...[...sources.matchAll(/(?:nativeID|<Anchor id)="([^"]+)"/g)].map(m => m[1]),
 ]);
 const icon = readFileSync('mobile/src/DimensionalIcon.tsx', 'utf8');
 const drawn = new Set([...icon.matchAll(/case "([a-z]+)":/g)].map(m => m[1]));
