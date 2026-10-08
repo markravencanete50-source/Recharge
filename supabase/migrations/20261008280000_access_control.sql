@@ -62,7 +62,7 @@ create or replace function private.workspace_access_control_action(input jsonb) 
 declare a text:=input->>'action';target uuid;person public.workspace_profiles;email text;ended integer;other_super boolean;begin
  if coalesce(private.workspace_actor_role(),'')<>'super_admin' then raise exception 'Super admin access required' using errcode='42501';end if;
  target:=(input->>'userId')::uuid;
- select * into person from public.workspace_profiles where user_id=target for update;
+ person:=(select p from public.workspace_profiles p where p.user_id=target for update);
  if person.user_id is null then raise exception 'Account not found' using errcode='P0002';end if;
  if target=auth.uid() then raise exception 'You can’t change your own access here. Ask another super admin.' using errcode='42501';end if;
  other_super:=exists(select 1 from public.workspace_profiles where user_id<>target and role='super_admin' and status='active');
@@ -70,7 +70,7 @@ declare a text:=input->>'action';target uuid;person public.workspace_profiles;em
  if a='setAccess' then
   perform private.workspace_json_keys(input,array['action','userId','role','modules']);
   if jsonb_typeof(input->'modules') is distinct from 'array' or jsonb_array_length(input->'modules')>60 then raise exception 'Choose the tools for this account' using errcode='22023';end if;
-  select u.email into email from auth.users u where u.id=target;
+  email:=(select u.email from auth.users u where u.id=target);
   if email is null then raise exception 'This account signed up by phone and has no email yet, so its access cannot be changed here' using errcode='22023';end if;
   perform private.workspace_save_access(email,person.full_name,input->>'role',person.status,array(select jsonb_array_elements_text(input->'modules')),person.responsibilities);
  elsif a in ('block','deleteAccount') or (a='revokePassword') or (a='signOut') or (a='unblock') then
