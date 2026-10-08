@@ -225,7 +225,7 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palet
           </View>
           <Rise index={8}>
             <View style={[ui.row, { gap: 12, paddingTop: 18, borderTopWidth: 1, borderTopColor: "rgba(167,217,193,0.18)" }]}>
-              <Text style={{ color: "#A7D9C1", fontSize: 11, fontWeight: "700", letterSpacing: 1.6, textTransform: "uppercase", flex: 1 }}>Recharge Property Management · Scotland</Text>
+              <Text style={{ color: "#A7D9C1", fontSize: 11, fontWeight: "700", letterSpacing: 1.6, textTransform: "uppercase", flex: 1 }}>Recharge · Scotland</Text>
               <Text style={{ color: "#C9D7CF", fontSize: 12 }}>One standard, every stage</Text>
             </View>
           </Rise>
@@ -306,22 +306,23 @@ function ChargeScene({ width }: { width: number }) {
 }
 // A glimpse of the workspace at work: activity cards float beside the house, one lit at a time.
 const ACTIVITY: { icon: "check-circle" | "tool" | "message-circle" | "file-text"; title: string; detail: string }[] = [
-  { icon: "check-circle", title: "Clean accepted", detail: "Ready for tonight’s guests" },
-  { icon: "tool", title: "Repair booked", detail: "Boiler check · Tue 10:00" },
-  { icon: "message-circle", title: "Guest answered", detail: "Replied in 3 minutes" },
-  { icon: "file-text", title: "Statement ready", detail: "Owner payout, this month" },
+  { icon: "check-circle", title: "Clean accepted", detail: "Ready for guests" },
+  { icon: "tool", title: "Repair booked", detail: "Boiler · Tue 10:00" },
+  { icon: "message-circle", title: "Guest answered", detail: "Replied in 3 min" },
+  { icon: "file-text", title: "Statement ready", detail: "Owner payout" },
 ];
 function Showcase({ panel }: { panel: number }) {
-  const scene = Math.max(220, Math.min(340, panel * 0.68));
+  // Cards and picture each get their own column, so neither ever sits on top of the other.
+  const cards = Math.round(Math.max(200, Math.min(250, panel * 0.5))), scene = Math.round(Math.max(150, Math.min(300, panel - cards - 20)));
   const [active, setActive] = useState(0);
   const reduced = useReducedMotion();
   useEffect(() => { if (reduced) return; const t = setInterval(() => setActive(a => (a + 1) % ACTIVITY.length), 2600); return () => clearInterval(t); }, [reduced]);
   return (
-    <View style={{ height: Math.max(scene * 0.75 + 24, 272), justifyContent: "flex-end" }}>
-      <View style={{ position: "absolute", right: -8, bottom: 0 }}><ChargeScene width={scene} /></View>
-      <View style={{ width: Math.min(264, panel * 0.62), gap: 10, paddingBottom: 6 }}>
+    <View style={[ui.row, { gap: 20, alignItems: "center" }]}>
+      <View style={{ width: cards, gap: 10 }}>
         {ACTIVITY.map((item, i) => <Rise key={item.title} index={4 + i}><ActivityCard {...item} index={i} lit={reduced ? i === 0 : active === i} /></Rise>)}
       </View>
+      <View style={{ flex: 1, alignItems: "center" }}><ChargeScene width={scene} /></View>
     </View>
   );
 }
@@ -334,16 +335,16 @@ function ActivityCard({ icon, title, detail, index, lit }: { icon: "check-circle
     <Animated.View style={[ui.row, { gap: 12, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1,
       borderColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(167,217,193,0.18)", "rgba(167,217,193,0.6)"] }),
       backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(250,247,240,0.05)", "rgba(250,247,240,0.12)"] }),
-      transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }, { translateX: glow.interpolate({ inputRange: [0, 1], outputRange: [0, 6] }) }] },
+      transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }] },
       Platform.OS === "web" ? ({ backdropFilter: "blur(6px)" } as object) : null]}>
-      <View style={{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(167,217,193,0.16)" }}>
+      <Animated.View style={{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center",
+        backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(167,217,193,0.14)", "rgba(167,217,193,0.3)"] }) }}>
         <Feather name={icon} size={16} color="#A7D9C1" />
-      </View>
+      </Animated.View>
       <View style={{ flex: 1, gap: 1 }}>
         <Text numberOfLines={1} style={{ color: "#FAF7F0", fontSize: 13, fontWeight: "700" }}>{title}</Text>
         <Text numberOfLines={1} style={{ color: "#C9D7CF", fontSize: 12 }}>{detail}</Text>
       </View>
-      <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#A7D9C1", opacity: glow }} />
     </Animated.View>
   );
 }
