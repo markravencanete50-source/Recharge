@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // Anonymous boundary checks only: no accounts, credentials or business writes.
-const origin = 'https://recharge-backend.markravencanete50.workers.dev';
+// BACKEND_ORIGIN checks the live address once the custom domain is attached.
+const origin = process.env.BACKEND_ORIGIN || 'https://recharge-backend.markravencanete50.workers.dev';
+assert.match(origin, /^https:\/\/[a-z0-9.-]+$/, 'BACKEND_ORIGIN must be an https origin with no path');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 async function request(path, expectedStatus, options = {}) {
   const fetchResponse = () => fetch(new URL(path, origin), {
