@@ -80,7 +80,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
   ],
   ready: [
     tool('pipeline', 'Reactive maintenance', 'Reported, booked and done', 'toolbox', work('repairs', { section: 'Reactive maintenance' })),
-    tool('visits', 'Preventative maintenance', 'Garden, bins and safety', 'sun', work('repairs', { section: 'Preventative maintenance' })),
+    tool('visits', 'Preventative visits', 'Garden, bins and safety', 'sun', work('repairs', { section: 'Preventative maintenance' })),
     tool('inspections', 'Inspections', 'New properties to inspect', 'search', work('all'), ['new-property-inspection-board']),
     tool('purchases', 'Purchases', 'Orders and deliveries', 'cart', work('all'), ['purchase-order']),
     tool('furnishing', 'Furnishing quotes', 'Rooms to furnish', 'sofa', work('all'), ['property-furnishing-board']),

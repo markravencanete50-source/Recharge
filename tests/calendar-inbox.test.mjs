@@ -11,8 +11,12 @@ const chat = await vite.ssrLoadModule('/lib/workspace-chat-policy.ts');
 const { workViewsFor } = await vite.ssrLoadModule('/lib/tool-directory.ts');
 const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-test('every team role has the Calendar second; owners do not', () => {
-  for (const role of ['admin', 'super_admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts']) assert.equal(workViewsFor(role)[1], 'calendar', role);
+test('every team role has the Hub second and the Calendar third; owners have neither', () => {
+  for (const role of ['admin', 'super_admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts']) {
+    assert.equal(workViewsFor(role)[1], 'hub', role);
+    assert.equal(workViewsFor(role)[2], 'calendar', role);
+  }
+  assert.ok(!workViewsFor('client').includes('hub'));
   assert.ok(!workViewsFor('client').includes('calendar'));
 });
 
