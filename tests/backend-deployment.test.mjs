@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { backendRouteAllowed } from '../worker/backend-route-policy.ts';
 
 test('live backend excludes legacy D1 handlers, sample pages and unconfigured integrations',()=>{
- for(const path of ['/','/team','/tool/property-onboarding','/api/analytics','/api/maintenance','/api/communications/hostaway/sync','/api/onboarding/files','/api/mobile/unknown'])assert.equal(backendRouteAllowed(path),false,path);
- for(const path of ['/sign-in','/api/session/password','/api/workspace','/api/mobile/workspace','/api/mobile/reports/export','/api/access','/recharge-company-logo.png','/recharge-company-logo-dark.png','/api/workspace/journeys','/api/workspace/operations','/api/workspace/portfolio','/api/workspace/finance','/api/mobile/teams','/api/mobile/admin','/fonts/montserrat-400.ttf','/fonts/montserrat-700.ttf','/api/workspace/account','/workspace/live','/workspace/_expo/static/js/web/entry.js'])assert.equal(backendRouteAllowed(path),true,path);
+ for(const path of ['/','/team','/tool/property-onboarding','/api/analytics','/api/maintenance','/api/communications/hostaway/sync','/api/onboarding/files','/api/mobile/unknown','/api/access','/api/access/register'])assert.equal(backendRouteAllowed(path),false,path);
+ for(const path of ['/sign-in','/api/session/password','/api/workspace','/api/mobile/workspace','/api/mobile/reports/export','/recharge-company-logo.png','/recharge-company-logo-dark.png','/api/workspace/journeys','/api/workspace/operations','/api/workspace/portfolio','/api/workspace/finance','/api/mobile/teams','/api/mobile/admin','/fonts/montserrat-400.ttf','/fonts/montserrat-700.ttf','/api/workspace/account','/workspace/live','/workspace/_expo/static/js/web/entry.js'])assert.equal(backendRouteAllowed(path),true,path);
  for(const path of ['/workspacex','/api/workspace/accounts',"/fonts/montserrat-secret.ttf",'/fonts/montserrat-400.ttf/extra','/recharge-company-logo.png/extra'])assert.equal(backendRouteAllowed(path),false,path);
 });
 test('prepared Worker has no D1, R2, privileged keys or public sample data',async()=>{

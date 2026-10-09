@@ -82,6 +82,9 @@ test('global API limiter blocks cross-origin mutations and excessive reads befor
   reset();const bad=new NextRequest('https://recharge.example/api/property-database',{method:'POST',headers:{origin:'https://attacker.example'}});assert.equal((await proxy(bad)).status,403);
   state.quota={allowed:false,retryAfter:42};const r=await proxy(new NextRequest('https://recharge.example/api/property-database'));assert.equal(r.status,429);assert.equal(r.headers.get('retry-after'),'42');
   state.config=null;assert.equal((await proxy(new NextRequest('https://recharge.example/api/access'))).status,503);
+  // Hostaway's servers post with Basic auth and no Origin header; the route checks the credentials itself.
+  reset();assert.notEqual((await proxy(new NextRequest('https://recharge.example/api/hostaway/webhook',{method:'POST'}))).status,403);
+  reset();assert.equal((await proxy(new NextRequest('https://recharge.example/api/workspace/finance',{method:'POST'}))).status,403);
 });
 test('page protections do not overwrite private API file sandbox/frame policies',async()=>{
   reset();const page=await proxy(new NextRequest('https://recharge.example/sign-in'));assert.equal(page.headers.get('x-frame-options'),'DENY');assert.match(page.headers.get('content-security-policy'),/frame-ancestors 'none'/);

@@ -17,6 +17,9 @@ export async function mediaRoute(request:Request,native=false) {
       const parsed=z.union([z.object({workId:z.string().uuid()}).strict(),z.object({assetId:z.string().uuid()}).strict()]).safeParse(Object.fromEntries(new URL(request.url).searchParams));
       if(!parsed.success)return businessResponse({error:'Choose a work item'},400);
       if('assetId' in parsed.data) {
+        // A signed-in person can view photos freely, but not pull them without limit.
+        const reads=await requestQuota(request,'media-read-user',240,60,session.account.userId);
+        if(!reads.allowed){const response=businessResponse({error:'Too many photo requests. Please wait.'},429);response.headers.set('Retry-After',String(reads.retryAfter||60));return response;}
         const result=await session.client.rpc('workspace_media_asset',{target_asset:parsed.data.assetId});
         if(result.error)return databaseFailure(result.error);
         const settings=integrationSettings();if(!integrationConfiguration(settings).media)return businessResponse({error:'Photo service is awaiting configuration'},503);

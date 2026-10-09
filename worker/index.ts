@@ -102,7 +102,8 @@ const worker = {
           cached.headers.set("Cache-Control", "public, max-age=31536000, immutable");
           return cached;
         }
-        if (file) return response;
+        // Any page (the app shell or another HTML file) carries the same protections as /workspace/live.
+        if (file && !/\.html?$/i.test(url.pathname)) return response;
         const page = new Response(response.body, response);
         for (const [name, value] of Object.entries(securityHeaders)) page.headers.set(name, value);
         return page;
