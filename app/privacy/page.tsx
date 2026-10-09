@@ -100,7 +100,7 @@ export default function Privacy() {
 
       <section>
         <h2>International transfers</h2>
-        <p>Some of these providers process data outside the UK, including in the European Economic Area and the United States. When they do, we rely on UK adequacy regulations (including the UK extension to the EU-US Data Privacy Framework where the provider is certified) or on the UK International Data Transfer Agreement or the UK Addendum to the EU standard contractual clauses.</p>
+        <p>Our database, sign-in records and private files are stored with Supabase in Mumbai, India. India does not have UK adequacy regulations, so for that transfer we rely on the UK Addendum to the EU standard contractual clauses in Supabase’s data processing agreement, and we have assessed the risks of the transfer. Cloudflare and our other providers also process some data outside the UK, including in the European Economic Area and the United States. When they do, we rely on UK adequacy regulations (including the UK extension to the EU-US Data Privacy Framework where the provider is certified) or on the UK International Data Transfer Agreement or the UK Addendum.</p>
       </section>
 
       <section>
