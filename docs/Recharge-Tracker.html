@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recharge Project Tracker</title>
+<style>
+:root{
+  --bg:#F4F1EA; --surface:#FFFFFF; --surface-2:#ECE8DE; --ink:#16241F; --muted:#56655F; --line:#D9D3C4;
+  --forest:#1F3D36; --on-forest:#F4F1EA;
+  --ok:#1F6B4A; --ok-bg:#DCEBE1;
+  --wait:#8A5A00; --wait-bg:#F6E8C8;
+  --todo:#A63A32; --todo-bg:#F6DEDA;
+  --svc:#2D4E8A; --svc-bg:#DEE6F5;
+  --chg:#6B3F8C; --chg-bg:#E9DEF2;
+  --off:#4A5560; --off-bg:#E3E6E8;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111A17; --surface:#18241F; --surface-2:#1F2E28; --ink:#EDE9DE; --muted:#A5B3AC; --line:#2E4038;
+    --forest:#0C1512; --on-forest:#EDE9DE;
+    --ok:#7FD0A4; --ok-bg:#1C3A2B;
+    --wait:#E9BE5F; --wait-bg:#3B2F13;
+    --todo:#F0A39B; --todo-bg:#3A201D;
+    --svc:#9DB8EE; --svc-bg:#1B2A47;
+    --chg:#CDA8EA; --chg-bg:#33203F;
+    --off:#B3BEC8; --off-bg:#27313A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111A17; --surface:#18241F; --surface-2:#1F2E28; --ink:#EDE9DE; --muted:#A5B3AC; --line:#2E4038;
+  --forest:#0C1512; --on-forest:#EDE9DE;
+  --ok:#7FD0A4; --ok-bg:#1C3A2B;
+  --wait:#E9BE5F; --wait-bg:#3B2F13;
+  --todo:#F0A39B; --todo-bg:#3A201D;
+  --svc:#9DB8EE; --svc-bg:#1B2A47;
+  --chg:#CDA8EA; --chg-bg:#33203F;
+  --off:#B3BEC8; --off-bg:#27313A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+a{color:inherit}
+h1,h2,h3{line-height:1.2;text-wrap:balance;margin:0}
+h2{font-size:1.45rem;letter-spacing:-.01em}
+h3{font-size:1.05rem}
+p{margin:0}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:16px}
+header.hero{background:var(--forest);color:var(--on-forest);padding-block:32px 28px}
+header.hero .eyebrow{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
+header.hero h1{font-size:clamp(1.8rem,5vw,2.6rem);margin-top:6px;letter-spacing:-.02em}
+header.hero p{max-width:62ch;margin-top:10px;opacity:.88}
+nav.top{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+nav.top .wrap{display:flex;gap:4px;overflow-x:auto;padding-block:6px}
+nav.top a{white-space:nowrap;text-decoration:none;font-size:.85rem;padding:8px 12px;border-radius:8px;color:var(--muted);min-height:36px;display:inline-flex;align-items:center}
+nav.top a:hover{background:var(--surface-2);color:var(--ink)}
+main section{padding-block:36px 8px}
+.sec-head{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.sec-head p{color:var(--muted);max-width:70ch}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:-26px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.tile b{display:block;font-size:1.7rem;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.tile span{color:var(--muted);font-size:.82rem}
+.chip{display:inline-block;font-size:.72rem;font-weight:600;padding:2px 9px;border-radius:99px;white-space:nowrap;vertical-align:middle}
+.c-ok{background:var(--ok-bg);color:var(--ok)}
+.c-wait{background:var(--wait-bg);color:var(--wait)}
+.c-todo{background:var(--todo-bg);color:var(--todo)}
+.c-svc{background:var(--svc-bg);color:var(--svc)}
+.c-chg{background:var(--chg-bg);color:var(--chg)}
+.c-off{background:var(--off-bg);color:var(--off)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;min-width:0}
+.card h3{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.card ul{margin:8px 0 0;padding-left:18px}
+.card li{margin-block:4px}
+.card .how{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);color:var(--muted);font-size:.9rem}
+.card .how b{color:var(--ink)}
+.callout{background:var(--surface-2);border-left:4px solid var(--forest);border-radius:8px;padding:12px 16px;margin-block:14px}
+.callout.warn{border-left-color:var(--todo)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.tools input[type=search]{flex:1 1 220px;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit}
+.tools button,.btn{min-height:44px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}
+.tools button[aria-pressed="true"]{background:var(--forest);color:var(--on-forest);border-color:var(--forest)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:720px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);position:sticky;top:0}
+tr:last-child td{border-bottom:0}
+td.tick{width:44px}
+td.tick input{width:22px;height:22px;accent-color:var(--forest)}
+tr.done td:not(.tick){opacity:.55;text-decoration:line-through;text-decoration-color:var(--muted)}
+tr.done td:not(.tick) .chip{text-decoration:none}
+td small{display:block;color:var(--muted);margin-top:2px}
+.group-label{font-weight:700;margin:22px 0 8px;font-size:1rem}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.flow span{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:3px 9px;font-size:.82rem}
+.flow i{color:var(--muted);font-style:normal}
+code{background:var(--surface-2);padding:1px 6px;border-radius:5px;font-size:.88em;overflow-wrap:anywhere}
+pre{background:var(--surface-2);padding:12px 14px;border-radius:10px;overflow-x:auto;margin:8px 0 0}
+footer{padding-block:30px 60px;color:var(--muted);font-size:.85rem}
+.hidden{display:none!important}
+@media print{
+  nav.top,.tools,.noprint{display:none!important}
+  body{background:#fff;color:#000}
+  header.hero{background:#fff;color:#000;border-bottom:2px solid #000}
+  .card,.tablewrap,.tile{break-inside:avoid;border-color:#999}
+  table{min-width:0}
+  main section{padding-block:18px 4px}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Recharge · Project tracker · October 2026</div>
+    <h1>What we built, what is left, and what keeps it safe</h1>
+    <p>One page for the client and for us: what is live and how it works, what is still pending and how to fix it, the security checklist before real people use the app, and every place we changed what the client originally asked for.</p>
+  </div>
+</header>
+
+<nav class="top" aria-label="Sections">
+  <div class="wrap">
+    <a href="#summary">Summary</a>
+    <a href="#built">What we built</a>
+    <a href="#pending">Pending and fixes</a>
+    <a href="#security">Security</a>
+    <a href="#stores">App stores</a>
+    <a href="#changes">Changed from the brief</a>
+    <a href="#notbuilt">Not built</a>
+    <a href="#deploy">Deploy and checks</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<!-- ====================== SUMMARY ====================== -->
+<section id="summary">
+  <div class="tiles">
+    <div class="tile"><b>61 / 76</b><span>client video asks fully built (10 partly, 5 not built)</span></div>
+    <div class="tile"><b>78 / 78</b><span>database tables protected by row-level security (checked live)</span></div>
+    <div class="tile"><b>476</b><span>automated tests passing at the last full run</span></div>
+    <div class="tile"><b>58</b><span>database migrations applied</span></div>
+    <div class="tile"><b>8</b><span>roles with their own access and screens</span></div>
+  </div>
+  <div class="sec-head" style="margin-top:28px">
+    <h2>Where we are</h2>
+    <p>The app works end to end for every role on the live database. The sweep of security, quality, design and store requirements is done, and the fixes are built and live. What is left is mostly decisions and paperwork from you and the client, outside services that need accounts or keys, and the store build itself.</p>
+  </div>
+  <div class="grid">
+    <div class="card"><h3><span class="chip c-ok">Live</span> Working now</h3>
+      <ul>
+        <li>All role screens: owners, Stays, cleaners, cleaning managers, Ready, Accounts, admins and management</li>
+        <li>Owner onboarding from enquiry to live property</li>
+        <li>Repairs, cleans, purchases, invoices, statements and payouts</li>
+        <li>Secure sign-in, rate limits, lockout and role-based access</li>
+        <li>In-app account deletion, privacy policy, terms and data export</li>
+        <li>Photo-required checklists and offline photo capture (web now; phone app after a new build)</li>
+      </ul></div>
+    <div class="card"><h3><span class="chip c-wait">Waiting on you</span> Needed before launch</h3>
+      <ul>
+        <li>Company details for the legal pages</li>
+        <li>Decide who owns the Supabase account, then sign its data agreement there</li>
+        <li>ICO registration number</li>
+        <li>Approve the app identity and store build</li>
+        <li>Confirm the changes in "Changed from the brief" with Alex</li>
+      </ul></div>
+    <div class="card"><h3><span class="chip c-svc">Waiting on a service</span> Outside accounts or keys</h3>
+      <ul>
+        <li>Channel manager (Uplisting plan): guest messages, reviews, bookings</li>
+        <li>Email sending (Resend), WhatsApp (Meta), shared mailboxes, AI key, events provider, Xero</li>
+      </ul></div>
+  </div>
+  <p class="noprint" style="margin-top:14px;color:var(--muted);font-size:.85rem">Tick boxes in the tables save in this browser only. Use the Print button at the bottom for a paper or PDF copy.</p>
+</section>
+
+<!-- ====================== BUILT ====================== -->
+<section id="built">
+  <div class="sec-head">
+    <h2>What we built and how it works</h2>
+    <p>Grouped by who uses it. Each card says what the person can do, then how it works behind the scenes.</p>
+  </div>
+
+  <div class="grid">
+    <article class="card">
+      <h3>Owners <span class="chip c-ok">Live</span></h3>
+      <ul>
+        <li><b>Home:</b> what is waiting for you, new messages, this month's earnings, and each property's onboarding progress with the next step. "Start a new enquiry" is here.</li>
+        <li><b>Properties:</b> each property's details, listings, stays and documents.</li>
+        <li><b>Inbox:</b> built-in chat with Recharge. Filter chips show what needs a reply.</li>
+        <li><b>Approvals:</b> one list for repairs over your limit and onboarding steps. Approve, decline with a reason, or message Recharge.</li>
+        <li><b>Reports:</b> earnings, occupancy and average nightly rate with a period picker; a month calendar with a colour per property; statements; the weekly report; the mailbox with photos of post.</li>
+      </ul>
+      <div class="how"><b>How it works:</b> an owner only ever sees their own properties. A repair above the owner's limit waits on Approvals. After 48 hours the owner gets a reminder, and after 96 hours client relations is told.</div>
+      <div class="flow"><span>Enquiry</span><i>→</i><span>Estimate</span><i>→</i><span>Decision</span><i>→</i><span>Sign agreement</span><i>→</i><span>Set-up form</span><i>→</i><span>Invoice</span><i>→</i><span>Inspection</span><i>→</i><span>Live</span></div>
+    </article>
+
+    <article class="card">
+      <h3>Stays team <span class="chip c-ok">Live</span></h3>
+      <ul>
+        <li>"Today's routine" card: listing checks, empty nights, repairs to refer, cleans, claims, offers</li>
+        <li>Listing health: log reviews as good, mixed or bad, tag "re-list", and track the re-listing</li>
+        <li>Empty nights in the next 7 days get a pricing ticket automatically; staff hold or change the price with a reason</li>
+        <li>Direct-booking offers (10% off, up to £100) tracked from yes to invoice to confirmed</li>
+        <li>Repairs: choose the type, run the guided checks with the guest, refer to Ready, chase until done</li>
+        <li>Licensing in stages, local events, platform login records (no passwords stored)</li>
+        <li>Guest inbox with saved replies and green, amber and red reply timers</li>
+      </ul>
+      <div class="how"><b>How it works:</b> daily sign-off and daily work count towards each person's score and bonus tier. A sign-off missed yesterday shows on Admin Home after 8am.</div>
+    </article>
+
+    <article class="card">
+      <h3>Cleaners and cleaning managers <span class="chip c-ok">Live</span></h3>
+      <ul>
+        <li><b>Today board:</b> Today, Tomorrow and Overdue, with a "Next up" card</li>
+        <li><b>Checklist:</b> items can require a photo. A clean cannot be submitted until every required photo is attached</li>
+        <li><b>Offline photos:</b> photos are saved on the device and upload when the signal returns, with a visible status</li>
+        <li>"Report a problem" inside a clean makes a repair for Stays, with photos</li>
+        <li>"Your month": cleans accepted and rejected, and the amount for the invoice</li>
+        <li>Disputes: "Give your side"; the cleaning manager decides for their properties</li>
+        <li>Managers edit checklist templates per property and set pay rates per clean</li>
+      </ul>
+      <div class="how"><b>How it works:</b> the database refuses a clean that is missing its required photos, so this cannot be bypassed by the app. Accepted cleans go on the cleaner's invoice; rejected cleans do not.</div>
+    </article>
+
+    <article class="card">
+      <h3>Ready team <span class="chip c-ok">Live</span></h3>
+      <ul>
+        <li>Repairs by stage from referral to paid; book the repair and Stays are told</li>
+        <li>Record delivery with photos of what arrived</li>
+        <li>New-property inspection with checklist, issues and photos</li>
+        <li>Routine visits (garden and bins, maintenance) created automatically, with a reminder three days before</li>
+        <li>Read access instructions for their properties, but not logins or finance</li>
+      </ul>
+      <div class="how"><b>How it works:</b> Ready only sees repairs once Stays has referred them. Warranty repairs need proof the provider was contacted first.</div>
+    </article>
+
+    <article class="card">
+      <h3>Accounts <span class="chip c-ok">Live</span></h3>
+      <ul>
+        <li>Supplier invoices with evidence attached; approval needs proof of the work</li>
+        <li>Purchase requests checked against the budget chart, then the order recorded; Ready proves delivery, then Accounts close it</li>
+        <li>Upload Airbnb and Booking.com payout files and reconcile by reservation code</li>
+        <li>Owner statements: revenue, cleaning, approved costs, 15% management fee and owner payout; spreadsheet and printable page</li>
+        <li>Mark as paid by bank transfer; costs are queued for Xero</li>
+      </ul>
+      <div class="how"><b>How it works:</b> unusual payouts and costs over the limit go to management for a decision before they are paid.</div>
+    </article>
+
+    <article class="card">
+      <h3>Admins and management <span class="chip c-ok">Live</span></h3>
+      <ul>
+        <li>Admin Home: Stays, Cleans, Ready and Accounts at a glance; "Needs a management decision"</li>
+        <li>Every job has a History; Decisions list for 90 days with a spreadsheet</li>
+        <li>Team performance: shifts, reply times, scores and bonus tiers at 95% and 100%</li>
+        <li>People and invites, super-admin Access control, role changes, training uploads</li>
+        <li>Staff onboarding: contract and role training before access</li>
+      </ul>
+      <div class="how"><b>How it works:</b> only a super admin can change privileged accounts, and the last super admin cannot be removed. Every change is logged.</div>
+    </article>
+
+    <article class="card">
+      <h3>Everyone <span class="chip c-ok">Live</span></h3>
+      <ul>
+        <li>Sign-in with eye toggles, invite links that sign you straight in, and password reset</li>
+        <li>Calendar by team, built-in group chat for a property or job, Help and FAQ</li>
+        <li>Notifications in the app and on phones and computers through the browser</li>
+        <li>Light and dark mode; installable as a web app</li>
+        <li>Profile: privacy policy, terms, download my data, delete my account</li>
+      </ul>
+      <div class="how"><b>How it works:</b> deleting your account removes your name, email, phone and password at once and shows you as "Deleted user". Business records are kept for the legal period, then removed.</div>
+    </article>
+
+    <article class="card">
+      <h3>Behind the scenes <span class="chip c-ok">Live</span></h3>
+      <ul>
+        <li><b>Supabase</b> (Mumbai): database, sign-in and private file storage</li>
+        <li><b>Cloudflare:</b> the website, the app's server and scheduled jobs</li>
+        <li><b>Expo app:</b> one codebase for the web app and the phone app</li>
+        <li>Daily job removes expired records (notifications, reset links, old security logs, deleted-account leftovers)</li>
+        <li>Hostaway sync is switched off and old data archived; the channel manager comes later</li>
+      </ul>
+    </article>
+  </div>
+
+  <h3 class="group-label">Done in the sweep (this round)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Area</th><th>What changed</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Security audit</td><td>Webhook origin check, camera permission strings, dev page headers, legacy routes capped, media read limits, login-record role limit</td><td><span class="chip c-ok">Done</span></td></tr>
+      <tr><td>Quality testing</td><td>Fixed wrong tiles, dead buttons, Accounts access error, stale text, missing stay-edit, local events, mark-as-read; added tests</td><td><span class="chip c-ok">Done</span></td></tr>
+      <tr><td>Design review</td><td>One set of danger colours, 44px touch targets, consistent refresh buttons, notice styling, sheet widths, channel colours, no overlapping elements</td><td><span class="chip c-ok">Done</span></td></tr>
+      <tr><td>Store compliance</td><td>In-app account deletion, privacy policy and terms pages, consent lines at sign-up, bank details moved to a protected table, data export, retention jobs</td><td><span class="chip c-ok">Done</span></td></tr>
+      <tr><td>Owner flow</td><td>One approvals flow, statements period picker, inbox filter chips; the duplicate owner Work tab removed</td><td><span class="chip c-ok">Done</span></td></tr>
+      <tr><td>Field features</td><td>Today, Tomorrow and Overdue board; photo-required checklists; offline photo capture</td><td><span class="chip c-ok">Done</span></td></tr>
+      <tr><td>Competitor research</td><td>15 patterns from other property-management apps, prioritised; the approved ones were built</td><td><span class="chip c-ok">Done</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ====================== PENDING ====================== -->
+<section id="pending">
+  <div class="sec-head">
+    <h2>Pending, and how to fix each one</h2>
+    <p>Filter by who needs to act. Tick an item when it is finished.</p>
+  </div>
+  <div class="tools noprint">
+    <input type="search" id="q" placeholder="Search pending items" aria-label="Search pending items">
+    <button type="button" data-f="all" aria-pressed="true">All</button>
+    <button type="button" data-f="you" aria-pressed="false">You / client</button>
+    <button type="button" data-f="svc" aria-pressed="false">Outside service</button>
+    <button type="button" data-f="build" aria-pressed="false">We build</button>
+  </div>
+
+  <h3 class="group-label">A. Needs you or the client</h3>
+  <div class="tablewrap"><table class="pend" data-group="you">
+    <thead><tr><th></th><th>Item</th><th>Why it matters</th><th>How to fix</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr data-k="you" data-id="a1"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Company details for the legal pages</b><small>Registered name, address, company number, ICO number, privacy email</small></td><td>The privacy policy and terms currently say "TO BE CONFIRMED". Both stores reject that.</td><td>Send the five details. We fill <code>lib/legal-details.ts</code>, test, push and deploy. Use the company that will run the app for the public.</td><td><span class="chip c-wait">Waiting on you</span></td></tr>
+      <tr data-k="you" data-id="a2"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Decide who owns Supabase</b><small>You, or the client's account</small></td><td>The data agreement is signed by the account owner. Signing from the wrong account puts the wrong company on the contract.</td><td>When the app is final, transfer the project to the client's Supabase organisation. Then they sign the data agreement from that account (organisation Legal documents → Data Processing Addendum). Check the UK Addendum is in it. Re-test sign-in after the move.</td><td><span class="chip c-wait">Waiting on you</span></td></tr>
+      <tr data-k="you" data-id="a3"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Transfer risk assessment</b><small>One page</small></td><td>The database is in Mumbai, and India has no UK adequacy decision. UK GDPR asks for a short written risk assessment.</td><td>We draft it: what data goes to India, why the risk is low, which safeguards apply. The company owner reviews and keeps it on file.</td><td><span class="chip c-wait">Waiting on you</span></td></tr>
+      <tr data-k="you" data-id="a4"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>ICO registration</b></td><td>UK organisations that handle personal data normally register with the ICO and pay a fee. The number goes on the privacy page.</td><td>Register at ico.org.uk for the company that runs the app; send us the number.</td><td><span class="chip c-wait">Waiting on you</span></td></tr>
+      <tr data-k="you" data-id="a5"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Approve the app identity and store build</b></td><td>The phone app still carries the preview name and bundle ID, has no Android package, and has no production build profile. A store build made today would be rejected or open the sample app.</td><td>Say yes. We set the final name, bundle ID, Android package, version numbers, the encryption declaration and a production build profile pointing at the live server, then block the sample-app fallback in release builds.</td><td><span class="chip c-todo">Needs your approval</span></td></tr>
+      <tr data-k="you" data-id="a6"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Apple and Google developer accounts</b></td><td>Needed to submit to either store.</td><td>Apple Developer Programme (paid, yearly) and Google Play Console (one-off fee), both under the company's name. Business accounts need a D-U-N-S number for Apple.</td><td><span class="chip c-wait">Waiting on you</span></td></tr>
+      <tr data-k="you" data-id="a7"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Revoke the Cloudflare token that was pasted in chat</b></td><td>A key shared in a chat is treated as exposed, even if it was never misused.</td><td>Cloudflare dashboard → My Profile → API Tokens → delete it. If a new one is ever needed, create it fresh and set it as a secret, never in a message.</td><td><span class="chip c-todo">Do now</span></td></tr>
+      <tr data-k="you" data-id="a8"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Answers for Alex</b></td><td>Open questions we settled with a default.</td><td>Confirm: (1) both people get credit in the 3–4pm shift overlap; (2) bonus amounts for the 95% and 100% tiers; (3) whether to switch on the management spend limit for repairs (off now); (4) every item in "Changed from the brief".</td><td><span class="chip c-wait">Waiting on you</span></td></tr>
+      <tr data-k="you" data-id="a9"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Store listing links and demo accounts</b></td><td>Both stores ask for a privacy policy link, an account-deletion link, and a login so the reviewer can see every screen.</td><td>Use <code>/privacy</code> and <code>/delete-account</code> on the live domain. We create one demo account per role with sample data; you give the reviewer the details in the store form, not by chat or email.</td><td><span class="chip c-wait">Waiting on you</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 class="group-label">B. Waiting on an outside service</h3>
+  <div class="tablewrap"><table class="pend" data-group="svc">
+    <thead><tr><th></th><th>Service</th><th>Unlocks</th><th>How to fix</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr data-k="svc" data-id="b1"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Channel manager</b><small>Uplisting plan (task open)</small></td><td>C1 guest messages arrive and replies send; D9 listing sync; S1 review import; S7 live bookings; S12 7+ night alert. Also guest names.</td><td>Pick the channel manager and get API access. We research the connection, map reservations, messages and reviews, and test on the live database. The earlier Hostaway sync is paused and can be reused as a pattern.</td><td><span class="chip c-svc">Needs service</span></td></tr>
+      <tr data-k="svc" data-id="b2"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Email sending (Resend)</b></td><td>O4 stage emails, O26 full automation, S10 emailing the weekly report. Also reliable sign-in and reset emails.</td><td>Create a Resend account, verify the sending domain (DNS records), and add the key as a Cloudflare secret. We switch on the email sends.</td><td><span class="chip c-svc">Needs service</span></td></tr>
+      <tr data-k="svc" data-id="b3"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>AI key</b></td><td>C2 suggested guest replies, C14 sentiment, S17 troubleshooting steps.</td><td>Create an API key, set it as a secret. We build the three features with a human always approving before anything sends.</td><td><span class="chip c-svc">Needs service</span></td></tr>
+      <tr data-k="svc" data-id="b4"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Meta WhatsApp Business</b></td><td>C11 team WhatsApp, O4 WhatsApp notices.</td><td>Set up a WhatsApp Business account with Meta and approve message templates. Then we build it.</td><td><span class="chip c-svc">Needs service</span></td></tr>
+      <tr data-k="svc" data-id="b5"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Google Workspace or Microsoft 365</b></td><td>C12 and C13 shared mailboxes and personal email.</td><td>Give us a connection to the mailboxes (OAuth consent by the admin). We build the inbox views.</td><td><span class="chip c-svc">Needs service</span></td></tr>
+      <tr data-k="svc" data-id="b6"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Events data provider</b></td><td>S9 weekly local-event scan. Events are added by hand today.</td><td>Choose a provider, add the key, and we schedule the weekly scan.</td><td><span class="chip c-svc">Needs service</span></td></tr>
+      <tr data-k="svc" data-id="b7"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Xero</b></td><td>O21 and approved costs actually posted to Xero. They are queued today.</td><td>Connect Xero (OAuth) and map accounts and tracking by property.</td><td><span class="chip c-svc">Needs service</span></td></tr>
+      <tr data-k="svc" data-id="b8"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Native push on phones</b></td><td>Notifications on the phone app. Web push works today; the phone app does not register for push yet.</td><td>Add the notifications module and ask permission from a user-tapped screen. Needs the new store build.</td><td><span class="chip c-svc">With the store build</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 class="group-label">C. We build or tidy</h3>
+  <div class="tablewrap"><table class="pend" data-group="build">
+    <thead><tr><th></th><th>Item</th><th>Why it matters</th><th>How to fix</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr data-k="build" data-id="c1"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>New phone build for offline photos</b></td><td>Offline photo capture works in the web app now. Phones need a fresh build to get it.</td><td>Done as part of the store build once the identity is approved.</td><td><span class="chip c-todo">Needs approval first</span></td></tr>
+      <tr data-k="build" data-id="c2"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Uploads while the phone app is closed</b></td><td>Today queued photos upload when the app is opened again, not in the background.</td><td>Add a background-upload library and test on real devices. Not needed for launch.</td><td><span class="chip c-off">Later</span></td></tr>
+      <tr data-k="build" data-id="c3"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Reports and Home use different months</b></td><td>The Reports page counts earnings by check-out month; owner Home uses check-in month, so the two numbers can differ.</td><td>Pick one rule (check-out month is the usual accounting choice) and use it in both places.</td><td><span class="chip c-wait">Needs a decision</span></td></tr>
+      <tr data-k="build" data-id="c4"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Two small unfinished edits</b></td><td>Editing a stay from the Accounts stay sheet, and saving an estimate or location edit, exist in the database but have no screen button.</td><td>Add the buttons and tests (about half a day).</td><td><span class="chip c-todo">To do</span></td></tr>
+      <tr data-k="build" data-id="c5"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Remove the old navigation maps</b></td><td>Two definitions of the navigation exist and one is only a fallback. They could drift apart.</td><td>Delete the unused one and keep the live definition as the single source.</td><td><span class="chip c-todo">To do</span></td></tr>
+      <tr data-k="build" data-id="c6"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Client asks not yet built</b></td><td>5 asks from the video checklist: C2 AI replies, C11 WhatsApp, C12 and C13 mailboxes, S1 review import.</td><td>Each depends on a service in section B; build after the service is connected.</td><td><span class="chip c-svc">Needs service</span></td></tr>
+      <tr data-k="build" data-id="c7"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Partly built asks</b></td><td>10 asks work by hand-entry until a service is connected: C1, C14, D9, O4, O26, S4, S9, S10, S12, S17.</td><td>Finish them with the matching service in section B.</td><td><span class="chip c-svc">Needs service</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ====================== SECURITY ====================== -->
+<section id="security">
+  <div class="sec-head">
+    <h2>Security: what is in place, and what must be true before launch</h2>
+    <p>The core design holds up under review. The items below are what we checked, then what still needs to be done by someone with the right account.</p>
+  </div>
+
+  <div class="grid">
+    <article class="card"><h3><span class="chip c-ok">In place</span> Sign-in</h3>
+      <ul>
+        <li>Passwords of 12 or more characters</li>
+        <li>5 wrong passwords lock the account for 24 hours; recovery lifts it</li>
+        <li>Reset links are one-use, expire in 15 minutes and sign everyone out</li>
+        <li>Phone app keeps only a rotating token in the phone's secure storage</li>
+        <li>New accounts wait for admin approval; nothing is granted until then</li>
+      </ul></article>
+    <article class="card"><h3><span class="chip c-ok">In place</span> Rate limits</h3>
+      <ul>
+        <li>120 requests a minute per address overall</li>
+        <li>Sign-in 20 a minute; reset emails 5 an hour per address and 3 per account</li>
+        <li>Registration 20 an hour per address, 3 per contact</li>
+        <li>Writes 60 a minute per user; uploads 10 a minute</li>
+        <li>Too many requests get a "slow down" answer, not an error</li>
+      </ul></article>
+    <article class="card"><h3><span class="chip c-ok">In place</span> Who can see what</h3>
+      <ul>
+        <li>All 78 database tables have row-level security (checked live today)</li>
+        <li>The 66 private tables have no direct access at all; only checked database functions reach them</li>
+        <li>Every function checks the person's role and property assignment, never a value sent by the app</li>
+        <li>Owners see only their properties; cleaners see only their own cleans and photos</li>
+        <li>Bank details live in their own protected table, masked on screen</li>
+      </ul></article>
+    <article class="card"><h3><span class="chip c-ok">In place</span> Data handling</h3>
+      <ul>
+        <li>Uploads: size caps, file type checked from the file's bytes, private storage</li>
+        <li>No keys or passwords in the code; platform passwords are refused by design</li>
+        <li>Requests from other websites are refused (exact origin check)</li>
+        <li>Pages cannot be framed; responses are not cached</li>
+        <li>Daily retention job; account deletion; data export</li>
+      </ul></article>
+  </div>
+
+  <div class="callout">
+    <b>Live check today:</b> Supabase's security advisor reports 0 errors. It reports 66 information notes (private tables with no direct access, which is intended) and 1 warning: leaked-password protection is off. See the first item below.
+  </div>
+
+  <h3 class="group-label">Before real people use the app</h3>
+  <div class="tablewrap"><table class="pend" data-group="sec">
+    <thead><tr><th></th><th>Check</th><th>Why</th><th>How</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr data-id="s1"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Turn on leaked-password protection</b></td><td>Stops people choosing passwords that appear in known breaches.</td><td>Supabase → Authentication → Password security. This setting needs the Pro plan.</td><td><span class="chip c-todo">To do</span></td></tr>
+      <tr data-id="s2"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Backups</b></td><td>The free plan has no automatic backups. Losing the database would lose every record.</td><td>Move the project to Pro (daily backups) before real data goes in, and ask about point-in-time recovery. Test a restore once.</td><td><span class="chip c-todo">To do</span></td></tr>
+      <tr data-id="s3"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Two-step sign-in on the admin accounts</b></td><td>The most powerful accounts are the likeliest targets.</td><td>Switch on 2-factor for Supabase, Cloudflare, GitHub, Apple Developer, Google Play and the domain registrar.</td><td><span class="chip c-todo">To do</span></td></tr>
+      <tr data-id="s4"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Sign the Supabase data agreement</b></td><td>Required for the transfer to Mumbai and for the privacy policy to be accurate.</td><td>From the account that will keep the project (see A2).</td><td><span class="chip c-wait">After transfer</span></td></tr>
+      <tr data-id="s5"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Rotate keys after any account change</b></td><td>After moving the project or revoking a token, old keys should stop working.</td><td>Regenerate the server key, update it as a Cloudflare secret, deploy, and re-run the sign-in checks. Never paste keys in chat.</td><td><span class="chip c-wait">After transfer</span></td></tr>
+      <tr data-id="s6"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Confirm HSTS at Cloudflare</b></td><td>Forces browsers to use HTTPS. It is set at the edge, so it cannot be verified from the code.</td><td>Cloudflare → SSL/TLS → Edge Certificates → HTTP Strict Transport Security. Include subdomains.</td><td><span class="chip c-todo">To do</span></td></tr>
+      <tr data-id="s7"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Reliable sending address for sign-in emails</b></td><td>The default Supabase mail sender is rate-limited and lands in spam.</td><td>Set custom SMTP (Resend) in Supabase Authentication. Same account as B2.</td><td><span class="chip c-svc">With Resend</span></td></tr>
+      <tr data-id="s8"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Fresh live test after deploy and after the transfer</b></td><td>Proves every role still sees only what it should.</td><td>Sign in as each demo role, try another owner's property link, try a wrong password five times, delete a test account, export test data.</td><td><span class="chip c-todo">To do</span></td></tr>
+      <tr data-id="s9"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Independent penetration test (recommended)</b></td><td>We reviewed our own work. A second pair of eyes catches what we missed, and some clients ask for the report.</td><td>Book a UK security firm once the app is final. Give them the demo accounts.</td><td><span class="chip c-off">Recommended</span></td></tr>
+      <tr data-id="s10"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Phone build tooling advisories</b></td><td>The Expo build tools report 20 high advisories. They affect the build machine, not the app users run, and the only automatic fix is a downgrade that breaks the app.</td><td>Keep builds on trusted inputs and re-run the audit after each Expo update.</td><td><span class="chip c-off">Watch</span></td></tr>
+      <tr data-id="s11"><td class="tick"><input type="checkbox" aria-label="Done"></td><td><b>Stricter browser script policy</b></td><td>The current content policy blocks framing and form hijacking but does not restrict which scripts may run.</td><td>List the web bundle's inline scripts and add a script-source rule. Optional hardening.</td><td><span class="chip c-off">Later</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 class="group-label">Privacy and compliance (UK GDPR)</h3>
+  <div class="grid">
+    <article class="card"><h3><span class="chip c-ok">Done</span> In the app</h3>
+      <ul>
+        <li>Privacy policy and terms pages, linked from sign-in, sign-up and profile</li>
+        <li>Consent line at registration</li>
+        <li>Delete my account, inside the app and on the web</li>
+        <li>Download my data</li>
+        <li>Retention schedule enforced by a daily job</li>
+        <li>Processors and international transfers named (Supabase in Mumbai, Cloudflare and others)</li>
+      </ul></article>
+    <article class="card"><h3><span class="chip c-wait">Still needed</span> On paper</h3>
+      <ul>
+        <li>Company and ICO details on the legal pages</li>
+        <li>Signed Supabase data agreement</li>
+        <li>Transfer risk assessment</li>
+        <li>A short record of processing: what data, why, who sees it, how long</li>
+        <li>A written process for data requests and for reporting a breach to the ICO within 72 hours</li>
+        <li>Guest data: the owner and Recharge must tell guests about it in their own booking terms</li>
+      </ul></article>
+  </div>
+</section>
+
+<!-- ====================== STORES ====================== -->
+<section id="stores">
+  <div class="sec-head">
+    <h2>App Store and Google Play readiness</h2>
+    <p>The app is ready in function and compliance. The listing, accounts and the production build are what is left.</p>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Requirement</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>In-app account deletion (Apple, Google)</td><td><span class="chip c-ok">Done</span></td><td>Profile → delete my account, plus a web page for the store form.</td></tr>
+      <tr><td>Privacy policy link and terms</td><td><span class="chip c-ok">Built</span></td><td>Live at <code>/privacy</code> and <code>/terms</code>. Company details still to fill in.</td></tr>
+      <tr><td>Camera and photo permission wording</td><td><span class="chip c-ok">Done</span></td><td>Fixed so the iPhone app will not crash on "Take photo".</td></tr>
+      <tr><td>Consent at sign-up</td><td><span class="chip c-ok">Done</span></td><td>One-line agreement with links.</td></tr>
+      <tr><td>Not a web wrapper (Apple 4.2)</td><td><span class="chip c-ok">Passes</span></td><td>Native screens, no embedded web view.</td></tr>
+      <tr><td>No tracking or ad code</td><td><span class="chip c-ok">Passes</span></td><td>No analytics or advertising tools found. Declare "no tracking".</td></tr>
+      <tr><td>App identity, version numbers, production build</td><td><span class="chip c-todo">Needs your approval</span></td><td>See A5. This blocks the first store build.</td></tr>
+      <tr><td>Encryption declaration</td><td><span class="chip c-todo">With the build</span></td><td>Set "standard HTTPS only" in the app config.</td></tr>
+      <tr><td>Apple privacy labels and Google Data safety form</td><td><span class="chip c-todo">To do</span></td><td>We prepare the answers from the data list; you submit them in the store consoles.</td></tr>
+      <tr><td>Demo login for reviewers</td><td><span class="chip c-todo">To do</span></td><td>See A9.</td></tr>
+      <tr><td>Screenshots, icon, description, age rating</td><td><span class="chip c-todo">To do</span></td><td>We capture screenshots per role at store sizes. Age rating is for adults and businesses.</td></tr>
+      <tr><td>Sign in with Apple</td><td><span class="chip c-ok">Not required</span></td><td>Only email and password are offered, with no third-party sign-in.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ====================== CHANGES ====================== -->
+<section id="changes">
+  <div class="sec-head">
+    <h2>What we changed from what the client asked</h2>
+    <p>Honest list. Some changes are approved by you, some are our judgement calls for safety or fairness. Please confirm each one with Alex.</p>
+  </div>
+  <div class="tablewrap"><table class="pend" data-group="chg">
+    <thead><tr><th></th><th>The ask</th><th>What we did instead</th><th>Why</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr data-id="d1"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>S23: a guest-unhappy clean opens a management review ticket and the cleaner is not paid</td><td>The cleaner is not paid for a rejected clean, but management review only starts after two upheld rejections in a month. One rejection that is overturned on dispute does not count.</td><td>Fairness to cleaners and fewer needless escalations.</td><td><span class="chip c-chg">Confirm with Alex</span></td></tr>
+      <tr data-id="d2"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>C9, C10: bonus tiers from reply times</td><td>The score blends reply times with daily work (sign-offs, listing checks, pricing, reviews). Daily work counts 40% to start, adjustable by admins.</td><td>Alex left this open (S6). Stays staff are judged on more than replies.</td><td><span class="chip c-chg">Confirm with Alex</span></td></tr>
+      <tr data-id="d3"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>S15: a database of platform logins</td><td>One row per platform records the login, whose account it is, where the password is kept and who gets the security code. Passwords themselves are refused.</td><td>Storing platform passwords in the app is a real risk. A password manager is safer.</td><td><span class="chip c-chg">Confirm with Alex</span></td></tr>
+      <tr data-id="d4"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>O4: email, app and WhatsApp notices at every stage</td><td>In-app notices and browser push now. Emails and WhatsApp are not live yet.</td><td>They need Resend and Meta accounts (see section B).</td><td><span class="chip c-svc">Until services connect</span></td></tr>
+      <tr data-id="d5"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>Channel manager feeds messages, reviews and bookings</td><td>Hostaway sync switched off and its data archived. Stays and messages are entered by hand for now.</td><td>The client is choosing Uplisting or similar; D2 asked for a clean slate.</td><td><span class="chip c-svc">Until connected</span></td></tr>
+      <tr data-id="d6"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>Photos with Cloudinary</td><td>Photos are stored in Recharge's own private storage in Supabase.</td><td>No extra service or cost, and files stay under the same access rules.</td><td><span class="chip c-chg">Confirm with Alex</span></td></tr>
+      <tr data-id="d7"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>D1: call it "Property Management Database"</td><td>The page and tool carry that name; the bottom-bar tab says "Properties".</td><td>The longer name does not fit on a phone tab bar.</td><td><span class="chip c-chg">Confirm with Alex</span></td></tr>
+      <tr data-id="d8"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>Owner Work tab and Mailbox</td><td>The owner Work tab was removed because it repeated Reports. Mailbox and the furnishing calculator moved to Reports and Properties. Approvals became one flow.</td><td>One clear place for each job. You approved this.</td><td><span class="chip c-ok">Approved</span></td></tr>
+      <tr data-id="d9"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>(Not asked) Today, Tomorrow and Overdue board</td><td>Field roles now open on the Today board with a "Next up" card.</td><td>Common in competitor apps; makes the day clear. You approved this.</td><td><span class="chip c-ok">Approved</span></td></tr>
+      <tr data-id="d10"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>(Not asked) Photo-required checklists</td><td>Cleaners must attach a photo for items marked as needing one before submitting.</td><td>Better proof for owners and disputes. Cleaners may notice the extra step; managers choose which items need photos.</td><td><span class="chip c-ok">Approved</span></td></tr>
+      <tr data-id="d11"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>(Not asked) Statements period picker, inbox chips, offline photos</td><td>Added for owners and staff.</td><td>Competitor research. You approved these.</td><td><span class="chip c-ok">Approved</span></td></tr>
+      <tr data-id="d12"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>(Not asked) Strict sign-in rules</td><td>12-character passwords, 24-hour lockout after 5 mistakes, and approval before access.</td><td>Security. The cost is a locked-out user needs the reset link or an admin.</td><td><span class="chip c-chg">Confirm with Alex</span></td></tr>
+      <tr data-id="d13"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>(Not asked) Account deletion keeps some records</td><td>Personal details go at once, but invoices, work records and signed contracts are kept for the legal period (6 years), with the person shown as "Deleted user".</td><td>UK tax and contract law. The privacy policy says so.</td><td><span class="chip c-chg">Confirm with Alex</span></td></tr>
+      <tr data-id="d14"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>C8: reply credited to whoever is clocked in</td><td>In the 3–4pm overlap both people get credit.</td><td>Alex did not say. This is our default.</td><td><span class="chip c-chg">Confirm with Alex</span></td></tr>
+      <tr data-id="d15"><td class="tick"><input type="checkbox" aria-label="Confirmed"></td><td>Names and labels</td><td>"Reports" and "Profile" in sentence case; staff "Properties" title; shorter profile captions; the "Invoices" tab label kept for Accounts.</td><td>Consistency and fit on small screens.</td><td><span class="chip c-ok">Minor</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ====================== NOT BUILT ====================== -->
+<section id="notbuilt">
+  <div class="sec-head">
+    <h2>Suggested but not built</h2>
+    <p>These came out of the sweep and the competitor research. We did not build them because you did not approve them. Say the word and we will.</p>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Idea</th><th>What it would do</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>App identity and production build</td><td>Final name and bundle IDs, store build profile. Needed to submit (see A5).</td><td><span class="chip c-todo">Needs approval</span></td></tr>
+      <tr><td>One tab style and one filter style everywhere</td><td>Make all tabs and filters look and behave the same; Admin Work becomes a dropdown.</td><td><span class="chip c-off">Not approved</span></td></tr>
+      <tr><td>Shorter staff Home</td><td>Cut the staff Home screen down to the essentials.</td><td><span class="chip c-off">Not approved</span></td></tr>
+      <tr><td>Bottom-bar centre button change</td><td>Rework the raised centre button on the phone bar.</td><td><span class="chip c-off">Not approved</span></td></tr>
+      <tr><td>Other competitor ideas</td><td>Multi-property timeline calendar, reference photos on checklist items, saved inbox views and snooze, pinnable tools, a "Create" button on every Work screen.</td><td><span class="chip c-off">Not planned</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout">We deliberately left alone: the sign-in screen motion (you wanted it), the full module names in the Help directory (the client's own terms), and the "Invoices" tab label.</div>
+</section>
+
+<!-- ====================== DEPLOY ====================== -->
+<section id="deploy">
+  <div class="sec-head">
+    <h2>Deploy and quick checks</h2>
+    <p>Everything built is on the main branch and the database changes are applied.</p>
+  </div>
+  <div class="grid">
+    <article class="card"><h3>Deploy from Git Bash</h3>
+      <pre>git pull origin main
+npm run build &amp;&amp; npm run backend:deploy</pre>
+      <p class="how">If the lock file blocks the pull: <code>git restore package-lock.json</code>, then <code>npm ci</code>. Keep the deploy command as it is: it keeps your existing server settings.</p></article>
+    <article class="card"><h3>After each deploy, check</h3>
+      <ul>
+        <li>Sign in as an owner, a cleaner and an admin</li>
+        <li>Open /privacy, /terms and /delete-account</li>
+        <li>Submit a clean with a required photo; try one without the photo</li>
+        <li>Switch the device offline, take a photo, go back online</li>
+        <li>Try a wrong password; confirm the message is the same for any account</li>
+      </ul></article>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <p>Built from the project's own audit notes, the client video checklist and a live check of the database. Counts: tests are from the last full run; table protection was checked on the live database. Sources in the repository: <code>docs/CLIENT-VIDEO-CHECKLIST.md</code>, <code>docs/SECURITY-AUDIT.md</code>.</p>
+  <p style="margin-top:12px"><button type="button" class="btn noprint" onclick="window.print()">Print or save as PDF</button></p>
+</footer>
+
+<script>
+(function(){
+  var KEY="recharge-tracker-v1", saved={};
+  try{ saved=JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(e){ saved={}; }
+  function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(saved)); }catch(e){} }
+  var rows=[].slice.call(document.querySelectorAll("tr[data-id]"));
+  rows.forEach(function(tr){
+    var box=tr.querySelector("input[type=checkbox]"); if(!box) return;
+    var id=tr.getAttribute("data-id");
+    if(saved[id]){ box.checked=true; tr.classList.add("done"); }
+    box.addEventListener("change",function(){
+      tr.classList.toggle("done", box.checked);
+      if(box.checked) saved[id]=1; else delete saved[id];
+      persist();
+    });
+  });
+
+  var filter="all", q="";
+  var pend=[].slice.call(document.querySelectorAll("#pending tr[data-k]"));
+  function apply(){
+    pend.forEach(function(tr){
+      var okF = filter==="all" || tr.getAttribute("data-k")===filter;
+      var okQ = !q || tr.textContent.toLowerCase().indexOf(q)>-1;
+      tr.classList.toggle("hidden", !(okF&&okQ));
+    });
+    [].slice.call(document.querySelectorAll("#pending .tablewrap")).forEach(function(w){
+      var any=w.querySelector("tbody tr:not(.hidden)");
+      w.classList.toggle("hidden", !any);
+      var lab=w.previousElementSibling; if(lab && lab.classList.contains("group-label")) lab.classList.toggle("hidden", !any);
+    });
+  }
+  [].slice.call(document.querySelectorAll(".tools button")).forEach(function(b){
+    b.addEventListener("click",function(){
+      filter=b.getAttribute("data-f");
+      [].slice.call(document.querySelectorAll(".tools button")).forEach(function(x){ x.setAttribute("aria-pressed", x===b ? "true":"false"); });
+      apply();
+    });
+  });
+  var input=document.getElementById("q");
+  if(input) input.addEventListener("input",function(){ q=input.value.trim().toLowerCase(); apply(); });
+})();
+</script>
+</body>
+</html>
