@@ -72,7 +72,7 @@ function StayRow({ p, stay, first, onEdit }: { p: Palette; stay: StayLine; first
 
 function Payout({ p, propertyId, own }: { p: Palette; propertyId: string; own: boolean }) {
   const [state, setState] = useState<"closed" | "loading" | "open">("closed"), [full, setFull] = useState(false), [error, setError] = useState("");
-  const [payout, setPayout] = useState<{ bankAccountName?: string | null; bankAccountNumber?: string | null; bankSortCode?: string | null }>({});
+  const [payout, setPayout] = useState<{ bankAccountName?: string | null; bankAccountNumber?: string | null; bankSortCode?: string | null; masked?: boolean }>({});
   async function show() {
     setState("loading"); setError("");
     try { const parsed = payoutSchema.safeParse(await read("/api/mobile/portfolio?" + new URLSearchParams({ section: "onboardingPayout", propertyId }))); setPayout(parsed.success ? parsed.data : {}); setState("open"); }
@@ -87,10 +87,11 @@ function Payout({ p, propertyId, own }: { p: Palette; propertyId: string; own: b
         {!!payout.bankAccountName && <Pair p={p} label="Account holder" value={payout.bankAccountName} first />}
         {!!payout.bankSortCode && <Pair p={p} label="Sort code" value={payout.bankSortCode} first={!payout.bankAccountName} />}
         {!!number && <View style={[ui.between, { gap: 12, paddingTop: 10, borderTopWidth: 1, borderColor: p.border }]}>
-          <View style={{ gap: 2 }}><Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase" }}>Account number</Text><Text selectable style={[ui.body, { color: p.text, fontVariant: ["tabular-nums"] }]}>{full ? number : maskAccount(number)}</Text></View>
-          <MotionPress accessibilityRole="button" onPress={() => setFull(!full)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}><Text style={{ color: p.primary, fontWeight: "700" }}>{full ? "Hide" : "Show all"}</Text></MotionPress>
+          <View style={{ gap: 2 }}><Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase" }}>Account number</Text><Text selectable style={[ui.body, { color: p.text, fontVariant: ["tabular-nums"] }]}>{full || payout.masked ? number : maskAccount(number)}</Text></View>
+          {!payout.masked && <MotionPress accessibilityRole="button" onPress={() => setFull(!full)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}><Text style={{ color: p.primary, fontWeight: "700" }}>{full ? "Hide" : "Show all"}</Text></MotionPress>}
         </View>}
         <MotionPress accessibilityRole="button" onPress={() => { setState("closed"); setPayout({}); setFull(false); }} style={{ alignSelf: "flex-start", minHeight: 40, justifyContent: "center" }}><Text style={{ color: p.muted, fontWeight: "600" }}>Hide payout details</Text></MotionPress>
+        {!!payout.masked && <Text style={[ui.small, { color: p.muted }]}>Only the last digits are shown. To change these details, message Recharge.</Text>}
       </View> : <Text style={[ui.small, { color: p.muted }]}>No payout details yet. {own ? "You add them" : "The owner adds them"} in the property set-up form.</Text>)}
       {!!error && <Notice text={error} p={p} tone="bad" />}
     </Panel>

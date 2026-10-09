@@ -89,6 +89,9 @@ const EXACT: Record<string, NoticeCopy> = {
   'onboarding.action_needed': copy('Something to do before you carry on', 'There is a contract to sign or training to finish before your tools open again. Open Recharge to see what it is.'),
   'training.file_added': copy('Training updated', 'A file has been added to a training course.'),
   'message.sent': copy('New message', 'You have a new message.'),
+  // People who delete their own account (admins are told).
+  'account.owner_deleted': copy('An owner deleted their account', 'An owner has deleted their Recharge account. Their properties stay with the business, no longer linked to a login. Check whether their management agreement should end.'),
+  'account.staff_deleted': copy('A team member deleted their account', 'A team member has deleted their Recharge account. Their access has been removed and their work stays on record as “Deleted user”.'),
 };
 const BY_AREA: [string, NoticeCopy][] = [
   ['journey.', copy('Onboarding update', 'There is an update on a property onboarding.')],

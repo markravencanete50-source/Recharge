@@ -11,7 +11,8 @@ export function profileAccess(a: WorkspaceAccount) {
     owners: admin(a) || (a.role === 'stays' && has(a, 'property-database')) || (a.role === 'accounts' && has(a, 'owner-statements')),
     listings: ((admin(a) || a.role === 'stays') && has(a, 'property-database')) || (a.role === 'client' && has(a, 'client-dashboard')),
     stays: (admin(a) || a.role === 'stays') && has(a, 'daily-pricing'),
-    payout: (admin(a) && has(a, 'owner-statements')) || (a.role === 'client' && has(a, 'client-dashboard')),
+    // Accounts and admins see payout bank details in full; the owner sees them masked.
+    payout: ((admin(a) || a.role === 'accounts') && has(a, 'owner-statements')) || (a.role === 'client' && has(a, 'client-dashboard')),
   };
 }
 // Stays recorded in the app can be corrected or cancelled by Stays and admins with Direct
@@ -93,4 +94,5 @@ export function stayLines(rows: readonly Reservation[], today: string, limit = 8
 
 // Only the last four digits of an account number are shown until the person asks for the rest.
 export const maskAccount = (number: string) => { const digits = number.replace(/\D/g, ''); return digits.length > 4 ? '•••• ' + digits.slice(-4) : digits; };
-export const payoutSchema = z.object({ bankAccountName: z.string().nullable(), bankAccountNumber: z.string().nullable(), bankSortCode: z.string().nullable() }).partial();
+// The owner's own copy arrives already masked (masked: true), so there is nothing more to reveal.
+export const payoutSchema = z.object({ bankAccountName: z.string().nullable(), bankAccountNumber: z.string().nullable(), bankSortCode: z.string().nullable(), masked: z.boolean() }).partial();

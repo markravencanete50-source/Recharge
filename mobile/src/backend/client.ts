@@ -12,6 +12,7 @@ import type { ChatAction } from '../../../lib/workspace-chat-policy';
 import type { InboxAction } from '../../../lib/guest-inbox-policy';
 import type { OversightAction } from '../../../lib/oversight-policy';
 import type { ControlsAction } from '../../../lib/workspace-controls-policy';
+import type { DeleteAccountInput } from '../../../lib/privacy-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
@@ -112,7 +113,7 @@ export async function accountStep(body: Record<string, unknown>, accessToken?: s
   return z.record(z.unknown()).parse(await (await call("/api/mobile/account", body, accessToken)).json());
 }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (sameOriginWeb) return call(webWorkspacePath(path), body);
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
@@ -187,3 +188,11 @@ export const writeInbox = async (action: InboxAction) => (await workspaceRequest
 // Management oversight: the business overview, an item's history, the decisions report and management's reminders.
 export const readOversight = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/oversight?' + new URLSearchParams(query))).json();
 export const writeOversight = async (action: OversightAction) => (await workspaceRequest('/api/mobile/oversight', action)).json();
+// Your own data: what deleting your account would mean, a full copy, and deleting the account.
+export const readPrivacy = async (query: { section: 'deletion' | 'export' }) => (await workspaceRequest('/api/mobile/privacy?' + new URLSearchParams(query))).json();
+export async function deleteMyAccount(input: DeleteAccountInput) {
+  await workspaceRequest('/api/mobile/privacy', input);
+  // The server has ended every session; forget this one here too.
+  session = null; account = null;
+  if (!sameOriginWeb) await SecureStore.deleteItemAsync(storedRefreshKey, storageOptions).catch(() => undefined);
+}

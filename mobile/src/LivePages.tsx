@@ -42,6 +42,7 @@ import { estimateComparables, MARK_READ_PER_VISIT, onboardingProgress, readableS
 import { createOperationForms, inspectionReportFrom, journeyForms, newEnquiryForm, operationForms, workflowValues, type JourneyView, type OperationView, type WorkflowField, type WorkflowForm } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { PhotoPicker, WorkPhotos } from "./Photos";
+import { LegalLinks } from "./LivePrivacy";
 
 export const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
 const money = (n: unknown) => formatMoney(Number(n));
@@ -439,6 +440,7 @@ export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy
       <LiveTraining palette={p} />
       <MyContracts palette={p} account={account} />
       <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={onSignOut} />
+      <LegalLinks p={p} />
     </>
   );
 }
