@@ -133,7 +133,7 @@ test('the clean checklist counter and why Submit is not ready yet', () => {
   let progress = checklistProgress(checklist, ['Kitchen'], rules, { 'Hot tub': 1 });
   assert.equal(progressCounter(progress), '1 of 4 done · 2 photos needed');
   assert.deepEqual(progress.missing, [{ label: 'Hot tub', missing: 1 }, { label: 'Bins', missing: 1 }]);
-  assert.deepEqual(submitBlockers(progress, { report: '', savedPhotos: 1, uploading: true }), ['Tick 3 more checks.', 'Add the photos for Hot tub and Bins.', 'Write a short report.', 'Wait for your photos to finish saving.']);
+  assert.deepEqual(submitBlockers(progress, { report: '', savedPhotos: 1, uploading: true }), ['Tick 3 more checks.', 'Add the photos for Hot tub and Bins.', 'Write a short report.', 'Wait for your photos to upload. They go by themselves when there is signal.']);
   progress = checklistProgress(checklist, checklist, rules, { 'Hot tub': 2, Bins: 1 });
   assert.equal(progressCounter(progress), '4 of 4 done');
   assert.deepEqual(submitBlockers(progress, { report: 'All done and checked', savedPhotos: 3, uploading: false }), []);

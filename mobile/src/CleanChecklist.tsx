@@ -1,23 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Image, Platform, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { z } from "zod";
 import { Text } from "./Typography";
 import { GrowBar, MotionPress } from "./motion";
 import { message, Notice, Tag } from "./LiveKit";
 import { PhotoStrip } from "./Photos";
+import { QueuedPhoto } from "./UploadStatus";
 import { ui, type Palette } from "./theme";
-import { readChecklists, readWorkMedia, uploadWorkPhoto, WorkspaceApiError } from "./backend/client";
+import { readChecklists, readWorkMedia } from "./backend/client";
+import { isOffline, queuePhoto, uploads, useUploads } from "./uploadQueue";
 import { checklistProgress, cleanRulesSchema, progressCounter, type ChecklistProgress, type PhotoRule } from "../../lib/clean-checklist-policy";
 import { plural } from "../../lib/format";
 
 // The checklist on an open clean. Checks that need photos carry a camera button; the photos taken
 // there belong to that check, and a sticky counter says how much is left. The database refuses
 // the clean while any check is short of photos, so this only helps the cleaner get there first.
-type Pending = { key: string; label: string; uri: string; status: "uploading" | "verified" | "failed"; id?: string; error?: string; requestId: string; name: string; type: "image/jpeg" | "image/png" | "image/webp" };
+// Photos are kept on the device and upload in the background with their check (uploadQueue.ts).
 const mediaSchema = z.array(z.object({ id: z.string().uuid(), purpose: z.string(), checklistItem: z.string().nullable().optional() }));
+const SLOT = "Checklist";
 export type ChecklistState = { progress: ChecklistProgress; photoIds: string[]; uploading: boolean };
 
 // The photo rules on a clean and the photos already saved for each check (after reopening it).
@@ -38,31 +40,28 @@ function useItemPhotos(workId: string) {
 
 export function CleanChecklist({ p, workId, checklist, ticked, onToggle, onState }: { p: Palette; workId: string; checklist: string[]; ticked: string[]; onToggle: (item: string) => void; onState: (state: ChecklistState) => void }) {
   const { rules, saved } = useItemPhotos(workId);
-  const [pending, setPending] = useState<Pending[]>([]);
+  const { owner, items } = useUploads();
+  // This clean's checklist photos in the upload line, including any still waiting from earlier.
+  const pending = useMemo(() => owner ? items.filter(x => x.ownerId === owner && x.workId === workId && x.purpose === "cleaning" && x.label === SLOT && x.checklistItem) : [], [items, owner, workId]);
   const [error, setError] = useState("");
+  const uploaded = useMemo(() => pending.filter(x => x.status === "done" && x.evidenceId && !saved.some(s => s.id === x.evidenceId)).map(x => ({ id: x.evidenceId!, label: x.checklistItem! })), [pending, saved]);
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
-    for (const x of [...saved, ...pending.filter(x => x.status === "verified" && x.id && !saved.some(s => s.id === x.id))]) out[x.label] = (out[x.label] ?? 0) + 1;
+    for (const x of [...saved, ...uploaded]) out[x.label] = (out[x.label] ?? 0) + 1;
     return out;
-  }, [saved, pending]);
+  }, [saved, uploaded]);
   const progress = useMemo(() => checklistProgress(checklist, ticked, rules, counts), [checklist, ticked, rules, counts]);
-  const photoIds = useMemo(() => [...new Set([...saved.map(x => x.id), ...pending.filter(x => x.status === "verified" && x.id).map(x => x.id!)])], [saved, pending]);
-  const uploading = pending.some(x => x.status === "uploading");
+  const photoIds = useMemo(() => [...new Set([...saved, ...uploaded].map(x => x.id))], [saved, uploaded]);
+  const uploading = pending.some(x => x.status === "waiting" || x.status === "uploading");
   // The latest callback is kept aside, so a parent re-rendering never triggers another report.
   const report = useRef(onState);
   useEffect(() => { report.current = onState; }, [onState]);
   useEffect(() => { report.current({ progress, photoIds, uploading }); }, [progress, photoIds, uploading]);
+  // Uploaded photos shown here are let go when the clean closes; photos still waiting carry on.
+  const shown = useRef(new Set<string>());
+  useEffect(() => { for (const x of pending) if (x.status === "done") shown.current.add(x.id); }, [pending]);
+  useEffect(() => { const held = shown.current; return () => { void uploads.release([...held]); }; }, []);
 
-  const upload = useCallback(async (photo: Pending) => {
-    setPending(current => current.map(x => x.key === photo.key ? { ...x, status: "uploading", error: undefined } : x));
-    try {
-      const response = z.object({ id: z.string().uuid() }).parse(await uploadWorkPhoto({ requestId: photo.requestId, workId, purpose: "cleaning", checklistItem: photo.label }, { uri: photo.uri, name: photo.name, type: photo.type }));
-      setPending(current => current.map(x => x.key === photo.key ? { ...x, status: "verified", id: response.id } : x));
-    } catch (e) {
-      const text = e instanceof WorkspaceApiError && e.status === 503 ? "Photos can't be saved just now. Try again in a moment." : message(e);
-      setPending(current => current.map(x => x.key === photo.key ? { ...x, status: "failed", error: text } : x));
-    }
-  }, [workId]);
   async function add(label: string, camera: boolean) {
     setError("");
     const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -72,10 +71,8 @@ export function CleanChecklist({ p, workId, checklist, ticked, onToggle, onState
     if (result.canceled) return;
     for (const asset of result.assets.slice(0, 5)) {
       const type = asset.mimeType === "image/png" || asset.mimeType === "image/webp" ? asset.mimeType : "image/jpeg";
-      const requestId = Crypto.randomUUID();
-      const photo: Pending = { key: requestId, label, uri: asset.uri, status: "uploading", requestId, name: asset.fileName || `check-${requestId.slice(0, 8)}.jpg`, type };
-      setPending(current => [...current, photo]);
-      void upload(photo);
+      try { await queuePhoto({ workId, purpose: "cleaning", label: SLOT, checklistItem: label, uri: asset.uri, name: asset.fileName || `check.${type === "image/jpeg" ? "jpg" : type.slice(6)}`, type, file: asset.file }); }
+      catch (e) { setError(message(e)); }
     }
     // Taking the photo is doing the check, so it is ticked too.
     if (!ticked.includes(label)) onToggle(label);
@@ -83,6 +80,8 @@ export function CleanChecklist({ p, workId, checklist, ticked, onToggle, onState
 
   const rule = new Map(rules.map(r => [r.label, r.minPhotos]));
   const failed = pending.find(x => x.status === "failed");
+  // Taken with no signal: say where the photos are, never an error.
+  const waiting = pending.some(x => x.status === "waiting" && (x.waitReason === "connection" || isOffline()));
   const share = progress.total ? progress.done / progress.total : 0;
   return (
     <View style={{ gap: 8 }}>
@@ -96,7 +95,7 @@ export function CleanChecklist({ p, workId, checklist, ticked, onToggle, onState
       </View>
       {checklist.map(item => {
         const on = ticked.includes(item), need = rule.get(item) ?? 0, have = counts[item] ?? 0, short = need > 0 && have < need;
-        const mine = pending.filter(x => x.label === item), stored = saved.filter(x => x.label === item).map(x => x.id);
+        const mine = pending.filter(x => x.checklistItem === item && !(x.status === "done" && saved.some(s => s.id === x.evidenceId))), stored = saved.filter(x => x.label === item).map(x => x.id);
         return (
           <View key={item} style={{ gap: 8, padding: 6, borderRadius: 14, borderWidth: 1, borderColor: short ? p.waiting : "transparent", backgroundColor: short ? p.cautionWash : on ? p.successWash : p.elevated }}>
             <View style={[ui.row, { gap: 8 }]}>
@@ -118,18 +117,13 @@ export function CleanChecklist({ p, workId, checklist, ticked, onToggle, onState
             </View>
             {(!!stored.length || !!mine.length) && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 6, paddingBottom: 4 }}>
               <PhotoStrip p={p} ids={stored} size={56} />
-              {mine.map(photo => (
-                <View key={photo.key} style={{ width: 56, gap: 4 }}>
-                  <Image source={{ uri: photo.uri }} style={{ width: 56, height: 56, borderRadius: 10, opacity: photo.status === "verified" ? 1 : 0.5 }} accessibilityLabel={`Photo for ${item}`} />
-                  {photo.status === "uploading" && <ActivityIndicator size="small" color={p.primary} />}
-                  {photo.status === "failed" && <MotionPress accessibilityRole="button" accessibilityLabel="Retry this photo" onPress={() => void upload(photo)}><Tag label="Retry" tone="bad" p={p} /></MotionPress>}
-                </View>
-              ))}
+              {mine.map(photo => <QueuedPhoto key={photo.id} p={p} item={photo} size={56} />)}
             </View>}
           </View>
         );
       })}
-      {!!(failed?.error || error) && <Notice text={failed?.error || error} p={p} tone="bad" />}
+      {waiting && <Notice text="Saved on this device. It will upload when you're back online." p={p} />}
+      {!!(error || failed?.error) && <Notice text={error || failed?.error || ""} p={p} tone="bad" />}
     </View>
   );
 }

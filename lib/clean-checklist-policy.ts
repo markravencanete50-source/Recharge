@@ -56,6 +56,6 @@ export function submitBlockers(p: ChecklistProgress, state: { report: string; sa
   if (p.missing.length) out.push(`Add the photos for ${names(p.missing.map(m => m.label))}.`);
   if (!state.savedPhotos) out.push('Add at least one photo of the clean.');
   if (state.report.trim().length < 5) out.push('Write a short report.');
-  if (state.uploading) out.push('Wait for your photos to finish saving.');
+  if (state.uploading) out.push('Wait for your photos to upload. They go by themselves when there is signal.');
   return out;
 }

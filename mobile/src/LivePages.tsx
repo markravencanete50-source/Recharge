@@ -173,7 +173,7 @@ function JourneyPhotos({ j, p, account }: { j: JourneyView; p: Palette; account:
   const inspector = ["ready", "stays", "admin", "super_admin"].includes(account.role) && ["inspection_booked", "inspection_complete"].includes(j.stage);
   return (
     <View style={{ gap: 12 }}>
-      <WorkPhotos p={p} workId={j.workId} title="Photos and documents" refreshKey={saved} />
+      <WorkPhotos p={p} workId={j.workId} title="Photos and documents" refreshKey={saved} queued={false} />
       {(owner || team) && <PhotoPicker p={p} workId={j.workId} purpose="setup" label={owner ? "Add photos for your set-up" : "Add set-up photos"} hint="For example the keys, the meters, the mailbox, or a photo of a certificate. They are saved as soon as they are chosen." onChange={onSetup} />}
       {inspector && <PhotoPicker p={p} workId={j.workId} purpose="inspection" label="Inspection photos" hint="Saved straight away, and shared with the owner." onChange={onSetup} />}
     </View>
