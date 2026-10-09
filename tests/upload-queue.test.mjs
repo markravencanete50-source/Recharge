@@ -54,7 +54,7 @@ test("a photo is kept, persisted and sent straight away with its own key", async
 test("the line survives the app closing: a fresh queue reads it back, mid-upload photos wait again", async () => {
   const storage = new Map();
   const first = harness({ storage });
-  await first.queue.enqueue(photo(1)); await first.queue.enqueue(photo(2)); // nobody signed in yet: nothing sent
+  await first.queue.enqueue(photo(1)); await first.queue.enqueue({ ...photo(2), checklistItem: "Hot tub" }); // nobody signed in yet: nothing sent
   assert.deepEqual(first.sent, []);
   const saved = JSON.parse(storage.get(UPLOAD_QUEUE_KEY));
   saved[0].status = "uploading";
@@ -62,6 +62,7 @@ test("the line survives the app closing: a fresh queue reads it back, mid-upload
   const second = harness({ storage });
   await second.queue.load();
   assert.deepEqual(second.items().map(x => [x.id, x.status]), [[key(1), "waiting"], [key(2), "waiting"]]);
+  assert.equal(second.items()[1].checklistItem, "Hot tub", "the checklist item goes with the photo");
   second.queue.setOwner(ME);
   await second.queue.drain();
   assert.deepEqual(second.sent, [key(1), key(2)], "oldest first, with the keys they were given");

@@ -21,6 +21,8 @@ const itemSchema = z.object({
   expenseId: z.string().uuid().optional(),
   purpose: z.string().min(1).max(40),
   label: z.string().max(120),
+  // The check on a clean's checklist the photo was taken for, sent with it.
+  checklistItem: z.string().min(1).max(200).optional(),
   name: z.string().min(1).max(200),
   type: z.enum(['image/jpeg', 'image/png', 'image/webp']),
   file: z.string().min(1).max(500),
@@ -35,7 +37,7 @@ const itemSchema = z.object({
 });
 export type QueuedUpload = z.infer<typeof itemSchema>;
 export type UploadStatus = QueuedUpload['status'];
-export type NewUpload = Pick<QueuedUpload, 'id' | 'ownerId' | 'workId' | 'expenseId' | 'purpose' | 'label' | 'name' | 'type' | 'file'>;
+export type NewUpload = Pick<QueuedUpload, 'id' | 'ownerId' | 'workId' | 'expenseId' | 'purpose' | 'label' | 'checklistItem' | 'name' | 'type' | 'file'>;
 export type KeyValueStorage = { getItem(key: string): Promise<string | null>; setItem(key: string, value: string): Promise<void> };
 
 // An error that retrying cannot fix, such as the photo file having gone from the device.

@@ -40,10 +40,11 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   const [stage, setStage] = useState<string>(() => focus?.sub && ["action", "open", ...REPAIR_STAGES.map(s => s.phase)].includes(focus.sub) ? focus.sub : "open");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
+  // Home's Today board opens a repair or a routine visit straight away.
+  const [openId, setOpenId] = useState<string | null>(() => focus?.workId ?? null);
   const [reporting, setReporting] = useState(() => focus?.open === "report-repair" && canReportRepair(account.role));
   const [planning, setPlanning] = useState(() => focus?.open === "new-routine" && ["ready", "stays", "admin", "super_admin"].includes(account.role));
-  const [visitId, setVisitId] = useState<string | null>(null);
+  const [visitId, setVisitId] = useState<string | null>(() => focus?.workId ?? null);
   const routines = ["ready", "stays", "admin", "super_admin"].includes(account.role);
 
   const load = useCallback(async () => {

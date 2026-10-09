@@ -14,10 +14,10 @@ import { uploads, useLocalPhoto, useUploadRunner, useUploads } from "./uploadQue
 export const PURPOSE_LABEL: Record<string, string> = { cleaning: "Clean", mailbox: "Post", delivery: "Delivery", licence: "Licensing", maintenance: "Repair", inspection: "Inspection", setup: "From the owner", expense: "Invoice" };
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-function Badge({ item, p }: { item: QueuedUpload; p: Palette }) {
+function Badge({ item, p, short }: { item: QueuedUpload; p: Palette; short?: boolean }) {
   const reduced = useReducedMotion();
   const [label, bg, fg, icon] = {
-    waiting: ["Waiting to upload", p.cautionWash, p.waiting, "clock"],
+    waiting: [short ? "Waiting" : "Waiting to upload", p.cautionWash, p.waiting, "clock"],
     uploading: ["Uploading", p.wash, p.primary, "upload-cloud"],
     failed: ["Failed", p.dangerWash, p.danger, "alert-circle"],
     done: ["Saved", p.successWash, p.success, "check"],
@@ -44,9 +44,9 @@ export function QueuedPhoto({ p, item, size = 96 }: { p: Palette; item: QueuedUp
       <View style={{ width: size, height: size, borderRadius: 12, overflow: "hidden", backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}>
         {uri ? <Image source={{ uri }} style={{ width: size, height: size, opacity: item.status === "done" ? 1 : 0.7 }} resizeMode="cover" accessibilityLabel={`Photo, ${state}`} /> : <Feather name="image" size={20} color={p.muted} accessibilityLabel={`Photo, ${state}`} />}
       </View>
-      <Badge item={item} p={p} />
+      <Badge item={item} p={p} short={size < 80} />
       {item.status === "failed" && <>
-        {action("Try again", () => void uploads.retry(item.id), "plain")}
+        {action(size < 80 ? "Retry" : "Try again", () => void uploads.retry(item.id), "plain")}
         {action("Remove", () => void uploads.remove(item.id), "bad")}
       </>}
     </View>

@@ -8,7 +8,7 @@ export type ToolArt =
   | 'chart' | 'toolbox' | 'calendar' | 'chat' | 'compass' | 'sun'
   | 'tag' | 'relist' | 'signature' | 'shield' | 'box' | 'bell' | 'receipt' | 'wallet' | 'pie' | 'cart' | 'sofa' | 'search' | 'mail' | 'star';
 export type HomeToolTarget =
-  | { kind: 'work'; view: WorkView; sub?: string; anchor?: string; open?: HomeForm }
+  | { kind: 'work'; view: WorkView; sub?: string; anchor?: string; open?: HomeForm; workId?: string }
   | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals'; anchor?: string }
   | { kind: 'tracker'; module: ModuleId }
   | { kind: 'calculator' };

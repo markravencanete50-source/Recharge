@@ -10,7 +10,8 @@ import { sectionAnchor } from "../../lib/home-tools";
 
 // Where a Home tool asked to land: a tab inside a Work view (sub) and a section to scroll to (anchor).
 // The nonce changes on every tap, so tapping the same tool again lands again.
-export type WorkFocus = { sub?: string; anchor?: string; open?: string; nonce: number };
+// workId opens one job straight away (Home's Today board).
+export type WorkFocus = { sub?: string; anchor?: string; open?: string; workId?: string; nonce: number };
 export const WorkFocusContext = createContext<WorkFocus | null>(null);
 export const useWorkFocus = () => useContext(WorkFocusContext);
 // Places a Home tool can scroll to. On the web they are found by id; in the phone app each one

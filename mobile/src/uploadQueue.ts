@@ -18,7 +18,7 @@ export const uploads = new UploadQueue({
   async send(item) {
     const uri = await photoUri(item.file);
     if (!uri) throw new PermanentUploadError("This photo is no longer on this device.");
-    const response = await uploadWorkPhoto({ requestId: item.id, workId: item.workId, expenseId: item.expenseId, purpose: item.purpose as PhotoPurpose }, { uri, name: item.name, type: item.type });
+    const response = await uploadWorkPhoto({ requestId: item.id, workId: item.workId, expenseId: item.expenseId, purpose: item.purpose as PhotoPurpose, checklistItem: item.checklistItem }, { uri, name: item.name, type: item.type });
     return z.object({ id: z.string().uuid() }).parse(response).id;
   },
   discard: item => deletePhoto(item.file),
@@ -30,12 +30,12 @@ export const pendingUploadCount = () => uploads.pendingCount();
 
 // Keeps a picked or taken photo on the device and puts it in the line. Never fails because of the
 // connection; it only fails if nobody is signed in.
-export async function queuePhoto(input: { workId?: string; expenseId?: string; purpose: PhotoPurpose; label: string; uri: string; name: string; type: QueuedUpload["type"]; file?: Blob }) {
+export async function queuePhoto(input: { workId?: string; expenseId?: string; purpose: PhotoPurpose; label: string; checklistItem?: string; uri: string; name: string; type: QueuedUpload["type"]; file?: Blob }) {
   const ownerId = uploads.currentOwner();
   if (!ownerId) throw new Error("Sign in again to add photos.");
   const id = Crypto.randomUUID();
   const file = await savePhoto(id, { uri: input.uri, type: input.type, file: input.file });
-  return uploads.enqueue({ id, ownerId, workId: input.workId, expenseId: input.expenseId, purpose: input.purpose, label: input.label, name: input.name, type: input.type, file });
+  return uploads.enqueue({ id, ownerId, workId: input.workId, expenseId: input.expenseId, purpose: input.purpose, label: input.label, checklistItem: input.checklistItem, name: input.name, type: input.type, file });
 }
 
 export function useUploads() {
