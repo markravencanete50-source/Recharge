@@ -5,12 +5,12 @@ export const SCOTTISH_REGIONS = [
   'Aberdeenshire and Moray', 'Angus', 'Lanarkshire', 'Renfrewshire and Inverclyde', 'Dunbartonshire', 'Scottish islands', 'Outside Scotland',
 ] as const;
 const ALIASES: [RegionMatch, string][] = [
-  [/leith|portobello|musselburgh|edinburgh/i, 'Edinburgh'], [/glasgow/i, 'Glasgow'], [/aberdeenshire|moray|elgin/i, 'Aberdeenshire and Moray'], [/aberdeen/i, 'Aberdeen'],
-  [/dundee/i, 'Dundee'], [/inverness|highland|skye|fort william|aviemore/i, 'Inverness and Highlands'], [/fife|st andrews|kirkcaldy|dunfermline/i, 'Fife'],
-  [/perth|kinross|pitlochry/i, 'Perth and Kinross'], [/stirling|falkirk/i, 'Stirling and Falkirk'], [/east lothian|north berwick|dunbar|haddington/i, 'East Lothian'],
-  [/midlothian|dalkeith/i, 'Midlothian'], [/west lothian|livingston|linlithgow/i, 'West Lothian'], [/borders|peebles|melrose|kelso/i, 'Scottish Borders'],
-  [/ayr/i, 'Ayrshire'], [/dumfries|galloway/i, 'Dumfries and Galloway'], [/argyll|oban|bute/i, 'Argyll and Bute'], [/angus|arbroath|montrose/i, 'Angus'],
-  [/lanark|hamilton|motherwell/i, 'Lanarkshire'], [/renfrew|paisley|inverclyde|greenock/i, 'Renfrewshire and Inverclyde'], [/dunbarton|clydebank/i, 'Dunbartonshire'],
+  [/leith|portobello|musselburgh|edinburgh|balerno|kirkliston/i, 'Edinburgh'], [/glasgow/i, 'Glasgow'], [/aberdeenshire|moray|elgin|huntly|alford|peterhead|buckie|portgordon|cruden bay|ellon|inverurie|stonehaven|banchory|fraserburgh|forres|turriff/i, 'Aberdeenshire and Moray'], [/aberdeen/i, 'Aberdeen'],
+  [/dundee/i, 'Dundee'], [/inverness|highland|skye|fort william|aviemore|portree|ullapool|nairn|dingwall|thurso/i, 'Inverness and Highlands'], [/fife|st andrews|kirkcaldy|dunfermline/i, 'Fife'],
+  [/perth|kinross|pitlochry/i, 'Perth and Kinross'], [/stirling|falkirk/i, 'Stirling and Falkirk'], [/east lothian|north berwick|dunbar|haddington|prestonpans|port seton|tranent/i, 'East Lothian'],
+  [/midlothian|dalkeith|polton|lasswade|bonnyrigg|penicuik|loanhead/i, 'Midlothian'], [/west lothian|livingston|linlithgow|bathgate|armadale|blackridge|whitburn|broxburn/i, 'West Lothian'], [/borders|peebles|melrose|kelso|hawick|galashiels|selkirk|jedburgh|innerleithen/i, 'Scottish Borders'],
+  [/ayr|prestwick|kilmarnock|irvine|troon|largs|saltcoats|ardrossan/i, 'Ayrshire'], [/dumfries|galloway/i, 'Dumfries and Galloway'], [/argyll|oban|bute/i, 'Argyll and Bute'], [/angus|arbroath|montrose/i, 'Angus'],
+  [/lanark|hamilton|motherwell|rutherglen|east kilbride|cambuslang|airdrie|coatbridge|wishaw|bellshill/i, 'Lanarkshire'], [/renfrew|paisley|inverclyde|greenock/i, 'Renfrewshire and Inverclyde'], [/dunbarton|clydebank|dumbarton|alexandria|helensburgh|bearsden|milngavie|kirkintilloch|balloch/i, 'Dunbartonshire'],
   [/island|orkney|shetland|lewis|harris|mull|islay|arran/i, 'Scottish islands'],
 ];
 type RegionMatch = RegExp;
