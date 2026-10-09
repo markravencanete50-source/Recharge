@@ -1,21 +1,22 @@
 import { MODULES, type ModuleId } from './modules';
 
 // Where each tool lives in the live app, so every tool a person holds opens somewhere real.
-export type WorkView = 'management' | 'calendar' | 'stays' | 'owner' | 'cleans' | 'repairs' | 'accounts' | 'all';
+export type WorkView = 'management' | 'calendar' | 'stays' | 'cleans' | 'repairs' | 'accounts' | 'all';
 export type ToolPlace =
   | { kind: 'work'; view: WorkView; where: string }
   | { kind: 'tab'; tab: 'home' | 'properties' | 'analytics'; where: string }
   | { kind: 'tracker'; where: string }
   | { kind: 'calculator'; where: string };
 
-export const WORK_VIEW_LABEL: Record<WorkView, string> = { management: 'Management', calendar: 'Calendar', stays: 'Stays', owner: 'Stays and statements', cleans: 'Cleans', repairs: 'Repairs', accounts: 'Accounts', all: 'All work' };
+export const WORK_VIEW_LABEL: Record<WorkView, string> = { management: 'Management', calendar: 'Calendar', stays: 'Stays', cleans: 'Cleans', repairs: 'Repairs', accounts: 'Accounts', all: 'All work' };
 
 // The Work views each role can open, the first being the default. Team roles have the Calendar
-// second, after their main view.
+// second, after their main view. Owners' stays, earnings, statements and mailbox are in Reports
+// (one place), so their Work holds only repairs and their other requests.
 export function workViewsFor(role: string): WorkView[] {
   if (role === 'admin' || role === 'super_admin') return ['management', 'calendar', 'stays', 'cleans', 'repairs', 'accounts', 'all'];
   if (role === 'stays') return ['stays', 'calendar', 'cleans', 'repairs', 'all'];
-  if (role === 'client') return ['owner', 'repairs', 'all'];
+  if (role === 'client') return ['repairs', 'all'];
   if (role === 'cleans' || role === 'cleaning_manager') return ['cleans', 'calendar', 'all'];
   if (role === 'ready') return ['repairs', 'calendar', 'all'];
   if (role === 'accounts') return ['accounts', 'calendar', 'all'];
@@ -57,8 +58,8 @@ const PLACES: Record<ModuleId, ToolPlace> = {
   'onboarding-invoices': work('all', 'Work → All work (onboarding invoices); payments in Reports'),
   'purchase-order-invoices': work('all', 'Work → All work (purchases); payments in Reports'),
   'purchase-order-accounts': work('all', 'Work → All work (purchases); payments in Reports'),
-  'client-dashboard': work('owner', 'Work → Stays and statements'),
-  'client-mailbox': work('owner', 'Work → Stays and statements → Mailbox'),
+  'client-dashboard': { kind: 'tab', tab: 'analytics', where: 'Reports → stays, earnings and statements' },
+  'client-mailbox': { kind: 'tab', tab: 'analytics', where: 'Reports → Mailbox' },
   'aircover-reporting': { kind: 'tracker', where: 'A simple tracker: add and close AirCover claims' },
   'replenishment-requests': { kind: 'tracker', where: 'A simple tracker: add and close restock requests' },
 };
@@ -72,7 +73,7 @@ export function toolsFor(role: string, modules: readonly string[]): Tool[] {
   const onPropertiesTab = (place: ToolPlace) => place.kind === 'tab' && place.tab === 'properties';
   return MODULES.filter(m => modules.includes(m.id) && !(role === 'accounts' && onPropertiesTab(PLACES[m.id as ModuleId]))).map(m => {
     let place = PLACES[m.id as ModuleId];
-    if (place.kind === 'work' && !views.includes(place.view)) place = role === 'client' && place.view !== 'all' ? work('owner', 'Work → Stays and statements') : work('all', 'Work → All work');
+    if (place.kind === 'work' && !views.includes(place.view)) place = work('all', 'Work → All work');
     return { id: m.id as ModuleId, name: m.name, description: m.description, place };
   });
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Platform, ScrollView, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Text } from "./Typography";
 import { useCelebrate } from "./Celebrate";
 import { MotionPress, Pop } from "./motion";
@@ -10,7 +11,9 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Tag, Loading, RefreshButton } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { readInbox, writeInbox } from "./backend/client";
-import { CHANNEL_LABEL, GUEST_CHANNELS, INBOX_FILTERS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
+import { CHANNEL_LABEL, GUEST_CHANNELS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
+import { ALL_PROPERTIES, chipCounts, emptyMessage, filterInbox, GUEST_CHIPS, guestFacts, propertyChips } from "../../lib/inbox-filters";
+import { InboxChips } from "./InboxChips";
 import { chatTime } from "../../lib/workspace-chat-policy";
 import { SavedReplies } from "./SavedReplies";
 import type { PropertyView } from "../../lib/workspace-view";
@@ -18,7 +21,6 @@ import type { PropertyView } from "../../lib/workspace-view";
 // The guest inbox (Stays → Guest inbox): every conversation with guests, the longest wait first.
 // The channel manager fills it once connected. Until then staff log each guest message as it
 // arrives and record their reply, so reply times and bonuses already count.
-const FILTER_LABEL: Record<(typeof INBOX_FILTERS)[number], string> = { waiting: "Needs a reply", open: "Open", done: "Done", all: "All" };
 // Channel colours, darkened or given dark letters where needed so each letter reads at 4.5:1.
 const CHANNEL_STYLE: Record<GuestChannel, { bg: string; fg: string; letter: string }> = {
   airbnb: { bg: "#D0353B", fg: "#FFFFFF", letter: "A" }, booking_com: { bg: "#003580", fg: "#FFFFFF", letter: "B." }, vrbo: { bg: "#245ABC", fg: "#FFFFFF", letter: "V" },
@@ -47,16 +49,17 @@ function ChannelBadge({ channel, size = 40 }: { channel: GuestChannel; size?: nu
   );
 }
 
-function ThreadRow({ p, t, targets, first, onPress }: { p: Palette; t: GuestThread; targets: { greenMinutes: number; amberMinutes: number }; first: boolean; onPress: () => void }) {
+function ThreadRow({ p, t, targets, first, unread = false, onPress }: { p: Palette; t: GuestThread; targets: { greenMinutes: number; amberMinutes: number }; first: boolean; unread?: boolean; onPress: () => void }) {
   const wait = t.status === "open" ? waitGrade(t.waitingSince, targets) : null;
   const where = [CHANNEL_LABEL[t.channel], t.propertyName ?? "No property yet", t.reservationRef].filter(Boolean).join(" · ");
   return (
-    <MotionPress accessibilityRole="button" accessibilityLabel={`${t.guestName ?? "Guest"}, ${where}${wait ? `, waiting ${waitLabel(wait.minutes)}` : ""}`} onPress={onPress}
+    <MotionPress accessibilityRole="button" accessibilityLabel={`${t.guestName ?? "Guest"}${unread ? ", unread" : ""}, ${where}${wait ? `, waiting ${waitLabel(wait.minutes)}` : ""}`} onPress={onPress}
       style={[ui.row, { gap: 12, paddingVertical: 12, borderTopWidth: first ? 0 : 1, borderColor: p.border, alignItems: "flex-start" }]}>
       <ChannelBadge channel={t.channel} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={[ui.row, { gap: 8 }]}>
-          <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700", flex: 1 }}>{t.guestName ?? "Guest"}</Text>
+          {unread && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.primary }} />}
+          <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: unread ? "800" : "700", flex: 1 }}>{t.guestName ?? "Guest"}</Text>
           {!!t.lastMessageAt && <Text style={[ui.small, { color: p.muted }]}>{chatTime(t.lastMessageAt)}</Text>}
         </View>
         <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{where}</Text>
@@ -218,15 +221,39 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
   );
 }
 
+// When this person last opened each conversation, on this device, for the Unread chip. Kept to the
+// most recent few hundred; nothing is sent to the server.
+const SEEN_KEY = "rc-guest-inbox-seen";
+function useSeenThreads() {
+  const [seen, setSeen] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(SEEN_KEY).then(value => {
+      if (!active || !value) return;
+      try { const parsed = JSON.parse(value) as unknown; if (parsed && typeof parsed === "object") setSeen(parsed as Record<string, string>); } catch { /* start afresh */ }
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  const mark = useCallback((id: string) => setSeen(current => {
+    const next = Object.fromEntries(Object.entries({ ...current, [id]: new Date().toISOString() }).sort((a, b) => b[1].localeCompare(a[1])).slice(0, 400));
+    void AsyncStorage.setItem(SEEN_KEY, JSON.stringify(next)).catch(() => undefined);
+    return next;
+  }), []);
+  return { seen, mark };
+}
+
 export function GuestInbox({ palette: p, properties, onChanged }: { palette: Palette; properties: PropertyView[]; onChanged?: () => void }) {
-  const [filter, setFilter] = useState<(typeof INBOX_FILTERS)[number]>("waiting");
+  // Every recent conversation is read once; the chips (Needs a reply first) filter it here.
+  const [chip, setChip] = useState<(typeof GUEST_CHIPS)[number]>("reply"), [property, setProperty] = useState(ALL_PROPERTIES);
   const [data, setData] = useState<ReturnType<typeof inboxListSchema.parse> | null>(null);
   const [error, setError] = useState(""), [logging, setLogging] = useState(false), [openId, setOpenId] = useState<string | null>(null);
   const [, setTick] = useState(0);
+  const { seen, mark } = useSeenThreads();
+  const open = (id: string | null) => { if (id) mark(id); else if (openId) mark(openId); setOpenId(id); };
   const load = useCallback(async () => {
-    try { setData(inboxListSchema.parse((await readInbox({ section: "list", status: filter })).data)); setError(""); }
+    try { setData(inboxListSchema.parse((await readInbox({ section: "list", status: "all" })).data)); setError(""); }
     catch (e) { setError(message(e)); }
-  }, [filter]);
+  }, []);
   useEffect(() => {
     let active = true;
     queueMicrotask(() => { if (active) void load(); });
@@ -236,6 +263,12 @@ export function GuestInbox({ palette: p, properties, onChanged }: { palette: Pal
     return () => { active = false; clearInterval(poll); clearInterval(tick); };
   }, [load]);
   const red = data ? data.threads.filter(t => t.status === "open" && waitGrade(t.waitingSince, data.targets)?.grade === "red").length : 0;
+  const threads = data?.threads ?? [];
+  const facts = (t: GuestThread) => guestFacts(t, seen[t.id]);
+  const names = new Map([...threads.filter(t => t.propertyId && t.propertyName).map(t => [t.propertyId!, t.propertyName!] as const), ...properties.map(x => [x.id, x.name] as const)]);
+  const propertyOptions = propertyChips(threads, facts, names, chip);
+  const where = propertyOptions.some(x => x.id === property) ? property : ALL_PROPERTIES;
+  const shown = filterInbox(threads, facts, chip, where);
   return (
     <View style={{ gap: 16 }}>
       {data && !data.connected && <View style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.wash, alignItems: "flex-start" }]}>
@@ -246,17 +279,17 @@ export function GuestInbox({ palette: p, properties, onChanged }: { palette: Pal
         <Button label="Log a guest message" icon="plus" primary p={p} onPress={() => setLogging(true)} />
         <RefreshButton p={p} onPress={() => void load()} />
       </View>
-      <Pills p={p} values={INBOX_FILTERS} value={filter} onChange={v => { setFilter(v); setData(null); }} label={v => FILTER_LABEL[v] + (v === "waiting" && data?.waiting ? ` (${data.waiting})` : "")} />
+      {data && <InboxChips p={p} chips={GUEST_CHIPS} chip={chip} counts={chipCounts(threads, facts, GUEST_CHIPS, where)} onChip={setChip} properties={propertyOptions} property={where} onProperty={setProperty} />}
       {red > 0 && <Notice text={`${red} guest${red === 1 ? " has" : "s have"} waited longer than ${data?.targets.amberMinutes} minutes.`} p={p} tone="bad" />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!data && !error ? <Loading p={p} /> : data && (
         <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
-          {data.threads.length ? data.threads.map((t, i) => <Pop key={t.id} active={t.id === openId}><ThreadRow p={p} t={t} targets={data.targets} first={i === 0} onPress={() => setOpenId(t.id)} /></Pop>)
-            : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{filter === "waiting" ? "Nobody is waiting for a reply." : "No conversations here."}</Text>}
+          {shown.length ? shown.map((t, i) => <Pop key={t.id} active={t.id === openId}><ThreadRow p={p} t={t} targets={data.targets} unread={facts(t).unread} first={i === 0} onPress={() => open(t.id)} /></Pop>)
+            : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyMessage(chip, "guests", where !== ALL_PROPERTIES ? names.get(where) : undefined)}</Text>}
         </View>
       )}
-      {logging && <LogMessageSheet p={p} properties={properties} onClose={() => setLogging(false)} onDone={id => { setLogging(false); void load(); onChanged?.(); if (id) setOpenId(id); }} />}
-      {openId && <ThreadSheet key={openId} p={p} threadId={openId} properties={properties} onClose={() => setOpenId(null)} onChanged={() => { void load(); onChanged?.(); }} />}
+      {logging && <LogMessageSheet p={p} properties={properties} onClose={() => setLogging(false)} onDone={id => { setLogging(false); void load(); onChanged?.(); if (id) open(id); }} />}
+      {openId && <ThreadSheet key={openId} p={p} threadId={openId} properties={properties} onClose={() => open(null)} onChanged={() => { void load(); onChanged?.(); }} />}
     </View>
   );
 }

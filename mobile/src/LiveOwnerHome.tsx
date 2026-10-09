@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useMemo } from "react";
 import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
@@ -6,11 +6,8 @@ import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { EnquiryCard } from "./HomeOverview";
 import { Entrance, GrowBar, MotionPress, Stagger, TweenNumber } from "./motion";
 import { ui, type Palette } from "./theme";
-import { readOwner } from "./backend/client";
-import { london } from "./LiveKit";
+import { OwnerPeriodSummary } from "./OwnerPeriodSummary";
 import { ownerApprovals, propertyProgress } from "../../lib/owner-approvals";
-import { ownerBookingsSchema } from "../../lib/owner-policy";
-import { checksOutIn, monthEnd, monthStart } from "../../lib/owner-reports";
 import { formatCount, formatMoneyShort } from "../../lib/format";
 import { newEnquiryForm, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 import type { WorkspaceSection } from "../../lib/workspace-map";
@@ -24,35 +21,25 @@ const hover = Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {};
 
 type Tile = { key: string; icon: DimensionalName; value: number | null; money?: boolean; label: string; hint: string; attention: boolean; onPress: () => void };
 
-// An owner's Home: what is waiting for them, new messages, this month's earnings, where each
-// property is up to, and a new enquiry.
+// An owner's Home: what is waiting for them, new messages, their figures for a period they choose
+// (statement style), where each property is up to, and a new enquiry.
 export function OwnerHome({ palette: p, desktop, account, properties, journeys, work, loading, onNavigate }: {
   palette: Palette; desktop: boolean; account: WorkspaceAccount; properties: PropertyView[]; journeys: JourneyView[]; work: OperationView[]; loading: boolean; onNavigate: (section: WorkspaceSection) => void;
 }) {
   const actions = useContext(OwnerActions);
   const approvals = useMemo(() => ownerApprovals(account, work, journeys, properties), [account, work, journeys, properties]);
   const progress = useMemo(() => propertyProgress(properties, journeys, approvals), [properties, journeys, approvals]);
-  const [month] = useState(() => london(new Date()).slice(0, 7));
-  const [earnings, setEarnings] = useState<number | null>(null);
-  useEffect(() => {
-    let active = true;
-    readOwner({ section: "bookings", from: monthStart(month), to: monthEnd(month) })
-      .then(r => { const data = ownerBookingsSchema.parse(r.data); if (active) setEarnings(data.stays.filter(s => checksOutIn(s, month)).reduce((n, s) => n + (s.payoutMinor ?? 0), 0)); })
-      .catch(() => { if (active) setEarnings(null); });
-    return () => { active = false; };
-  }, [month]);
   const unread = actions?.unread ?? 0;
   const tiles: Tile[] = [
     { key: "waiting", icon: "hourglass", value: loading ? null : approvals.length, label: "Waiting for you", hint: "Open your approvals", attention: approvals.length > 0, onPress: () => onNavigate("approvals") },
     { key: "messages", icon: "chat", value: unread, label: unread === 1 ? "New message" : "New messages", hint: "Open your inbox", attention: unread > 0, onPress: () => onNavigate("inbox") },
-    { key: "earnings", icon: "coins", value: earnings, money: true, label: "Earnings this month", hint: "Open your reports", attention: false, onPress: () => onNavigate("analytics") },
   ];
   const onboarding = progress.filter(x => !x.live);
   return (
     <Entrance sessionKey="live:owner-home" style={{ gap: 18 }}>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {tiles.map((tile, i) => (
-          <Stagger key={tile.key} index={i} style={{ flexBasis: desktop ? "30%" : i === 2 ? "100%" : "46%", flexGrow: 1, minWidth: 0 }}>
+          <Stagger key={tile.key} index={i} style={{ flexBasis: desktop ? "30%" : "46%", flexGrow: 1, minWidth: 0 }}>
             <MotionPress {...hover} accessibilityRole="button" accessibilityLabel={`${tile.value === null ? "Unavailable" : tile.money ? formatMoneyShort(tile.value) : formatCount(tile.value)} ${tile.label}. ${tile.hint}`} onPress={tile.onPress}
               style={{ padding: 16, gap: 12, borderRadius: 24, backgroundColor: tile.attention ? p.wash : p.surface, borderWidth: 1, borderColor: tile.attention ? p.primary : p.border, ...(Platform.OS === "web" ? { boxShadow: "0 14px 30px -24px rgba(21, 45, 40, 0.45)" } : { elevation: 2 }) }}>
               <View style={[ui.between, { alignItems: "flex-start" }]}>
@@ -68,6 +55,9 @@ export function OwnerHome({ palette: p, desktop, account, properties, journeys, 
           </Stagger>
         ))}
       </View>
+
+      {/* Earnings, occupancy, nightly rate and bookings for the chosen period, with the statement lines. */}
+      {account.modules.includes("owner-statements") && <OwnerPeriodSummary palette={p} onStatements={() => onNavigate("analytics")} />}
 
       {!!progress.length && <View style={{ gap: 8 }}>
         <View style={ui.between}>

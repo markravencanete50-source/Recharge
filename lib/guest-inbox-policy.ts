@@ -31,6 +31,8 @@ export const guestThreadSchema = z.object({
   id: uuid, source: z.string(), channel: z.enum(GUEST_CHANNELS), guestName: z.string().nullable(), propertyId: uuid.nullable(), propertyName: z.string().nullable(),
   reservationRef: z.string().nullable(), checkIn: z.string().nullable(), checkOut: z.string().nullable(), status: z.enum(['open', 'done']),
   lastMessageAt: z.string().nullable(), preview: z.string().nullable(), lastFrom: z.enum(['guest', 'team']).nullable(), waitingSince: z.string().nullable(), messages: z.number(),
+  // The reader replied or logged a message here, or looks after the property (the Mine chip).
+  mine: z.boolean().default(false),
 });
 export type GuestThread = z.infer<typeof guestThreadSchema>;
 const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() });

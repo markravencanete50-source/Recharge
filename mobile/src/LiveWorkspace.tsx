@@ -30,16 +30,14 @@ import { LiveRepairs } from "./LiveRepairs";
 import { LiveAccounts } from "./LiveAccounts";
 import { LiveManagement } from "./LiveManagement";
 import { LiveStays } from "./LiveStays";
-import { LiveOwner } from "./LiveOwner";
 import { OnboardingGate } from "./LiveOnboarding";
-import { FurnishingCard, MailboxSection } from "./LiveTools";
 import { PropertyAccess } from "./LiveTools";
 import { ROLE_LABEL } from "../../lib/admin-live";
 import { WORK_VIEW_LABEL, workViewsFor, type WorkView } from "../../lib/tool-directory";
 import { formatBps, formatMoney } from "../../lib/format";
 import { liveApiOrigin, readChat, readTeams, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import { workspaceAccountSchema, type WorkspaceAccount } from "../../lib/workspace-account-policy";
-import type { WorkspaceSection } from "../../lib/workspace-map";
+import { ownerNavigation, type WorkspaceSection } from "../../lib/workspace-map";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import { periodError, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot } from "../../lib/analytics";
 import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSchema, propertyViewSchema, readableStage, reportViewSchema, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
@@ -94,13 +92,13 @@ function liveNavigation(role: Role): NavigationItem[] {
   if (role === "ready") return [home, item("work", "Repairs", "tool"), properties, activity, help];
   // Accounts: invoices and owner statements are the daily work (both in Work → Accounts).
   if (role === "accounts") return [home, item("work", "Invoices", "file-text"), item("statements", "Statements", "pie-chart"), item("inbox", "Inbox", "message-circle"), item("help", "Tools", "grid")];
-  // Owners: messages in the centre; stays, earnings and statements are in Reports.
-  if (role === "client") return [home, properties, item("inbox", "Inbox", "message-circle"), item("approvals", "Approvals", "check-circle"), reports];
+  // Owners: messages in the centre; stays, earnings, statements and mailbox are in Reports (once).
+  if (role === "client") return [...ownerNavigation()];
   return [home, item("work", "Work", "check-square"), properties, reports, activity];
 }
 const WORK_TITLE: Record<Role, [string, string]> = {
   super_admin: ["Work", "Management, repairs and accounts in one place."], admin: ["Work", "Management, repairs and accounts in one place."],
-  stays: ["Your work", "Stays, guests and repairs for your properties."], client: ["Stays and repairs", "Upcoming stays, statements and repairs at your properties."],
+  stays: ["Your work", "Stays, guests and repairs for your properties."], client: ["Repairs and requests", "Repairs and other requests at your properties."],
   cleans: ["Your cleans", "Today's cleans, checklists and photos."], cleaning_manager: ["Cleans", "Your team's cleans, reviews and schedule."],
   ready: ["Repairs", "Reports, quotes, bookings and routine visits."], accounts: ["Accounts", "Expenses, payouts and owner statements."],
 };
@@ -125,7 +123,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
   const setTab = (value: WorkspaceSection) => router.setParams({ section: value });
   const nav = useMemo(() => liveNavigation(account.role), [account.role]);
   // Owners on a wide screen also get Tools (Help and the tools directory) in the sidebar.
-  const sideNav = useMemo(() => account.role === "client" ? [...nav, { value: "help" as const, label: "Tools", icon: "grid" as const }] : nav, [account.role, nav]);
+  const sideNav = useMemo(() => account.role === "client" ? [...ownerNavigation(true)] : nav, [account.role, nav]);
   const [focus, setFocus] = useState<WorkFocus | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false), [deleting, setDeleting] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
@@ -366,9 +364,6 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
       {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} onOpenWork={setOpenWork} onOpenView={setWorkView} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} />}
       {currentView === "stays" && <LiveStays key={"stays:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}
-      {currentView === "owner" && <LiveOwner palette={p} properties={properties} />}
-      {currentView === "owner" && account.modules.includes("client-mailbox") && <MailboxSection palette={p} />}
-      {currentView === "owner" && account.modules.includes("client-furnishing") && <FurnishingCard palette={p} />}
       {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
       {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
       {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
@@ -406,7 +401,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
     ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} onTool={openTool} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} />
-    : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} /> : reportsPage)
+    : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} mailbox={account.modules.includes("client-mailbox")} /> : reportsPage)
     : tab === "approvals" ? <LiveApprovals palette={p} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onForm={setForm} onRefresh={() => refresh()} onInbox={() => navigate("inbox")} onProperties={() => navigate("properties")} />
     : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} />
