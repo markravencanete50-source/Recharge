@@ -24,6 +24,7 @@ import { exportReport } from "./exportReport";
 import { LiveSignIn } from "./LiveSignIn";
 import { LiveHome } from "./LiveHome";
 import { LiveWorkRow, isDone, isWaitingWork, workDate } from "./LiveRows";
+import { LiveHub } from "./LiveHub";
 import { DateRangeSheet, EmptyState, LiveActivity, LiveHelp, LiveProperties, PageHeading, SoftButton, WorkflowSheet, liveApi, message } from "./LivePages";
 import { LiveCleans } from "./LiveCleans";
 import { LiveRepairs } from "./LiveRepairs";
@@ -366,6 +367,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
   const workPage = (
     <>
       {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
+      {currentView === "hub" && <LiveHub palette={p} account={account} properties={properties} journeys={journeys} work={work} onForm={setForm} onOpenWork={setOpenWork} />}
       {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} onOpenWork={setOpenWork} onOpenView={setWorkView} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} />}
       {currentView === "stays" && <LiveStays key={"stays:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}

@@ -92,6 +92,13 @@ const EXACT: Record<string, NoticeCopy> = {
   'onboarding.action_needed': copy('Something to do before you carry on', 'There is a contract to sign or training to finish before your tools open again. Open Recharge to see what it is.'),
   'training.file_added': copy('Training updated', 'A file has been added to a training course.'),
   'message.sent': copy('New message', 'You have a new message.'),
+  // The hub: to-dos and approval tickets.
+  'hub.todo_added': copy('New to-do for you', 'A to-do has been added to your list or your department\'s.'),
+  'hub.todo_changed': copy('To-do updated', 'A to-do on your list has been changed.'),
+  'hub.todo_done': copy('To-do done', 'A to-do you set has been marked done.'),
+  'hub.approval_added': copy('Approval needed', 'Someone on the team has asked management to approve a cost.'),
+  'hub.approval_approved': copy('Approved', 'Management has approved your request.'),
+  'hub.approval_declined': copy('Not approved', 'Management has declined your request and said why.'),
   // People who delete their own account (admins are told).
   'account.owner_deleted': copy('An owner deleted their account', 'An owner has deleted their Recharge account. Their properties stay with the business, no longer linked to a login. Check whether their management agreement should end.'),
   'account.staff_deleted': copy('A team member deleted their account', 'A team member has deleted their Recharge account. Their access has been removed and their work stays on record as “Deleted user”.'),
@@ -102,6 +109,7 @@ const BY_AREA: [string, NoticeCopy][] = [
   ['finance.', copy('Accounts update', 'There is an update in Accounts.')],
   ['cleaning.', copy('Cleaning update', 'There is an update on a clean.')],
   ['reservation.', copy('Booking update', 'There is an update on a booking.')],
+  ['hub.', copy('Hub update', 'There is an update in the hub.')],
   ['property_details.', copy('Property details updated', 'A property’s details have been updated.')],
 ];
 const FALLBACK = copy('Update in Recharge', 'There is an update in your Recharge workspace.');

@@ -3,6 +3,8 @@ import { parseAnalyticsDate } from './analytics';
 
 const id = z.string().uuid();
 export const DEPARTMENTS = ['guest_relations', 'client_relations', 'cleaning', 'ready', 'accounts', 'management'] as const;
+export const HUB_KINDS = ['todo', 'approval', 'aircover', 'invoice'] as const;
+export const HUB_STATUSES = ['open', 'done', 'pending', 'approved', 'declined', 'to_claim', 'claimed', 'paid', 'to_send', 'sent'] as const;
 export const CONTRACT_AUDIENCES = ['all', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts'] as const;
 const version = z.number().int().positive();
 const date = z.string().refine(value => Boolean(parseAnalyticsDate(value)), 'Choose a valid date');
@@ -15,7 +17,7 @@ const https = z.string().url().max(1000).refine(value => {
 
 export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
-    'cleanerRates', 'readyHome', 'defaultCleaners']),
+    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -36,6 +38,13 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('decideCleanerReview'), requestId: id, workId: id, version, outcome: z.enum(['no_action', 'supervised', 'removed_from_rota']), note }).strict(),
   z.object({ action: z.literal('addCleanerStatement'), requestId: id, workId: id, statement: text(10, 2000) }).strict(),
   // A cleaner's pay per clean, in pence (version 0 when no rate is set yet).
+  // The hub's rows: to-dos, approval tickets, AirCover claims and invoices to send.
+  z.object({ action: z.literal('saveHubItem'), requestId: id, id: id.optional(), version: version.optional(), kind: z.enum(HUB_KINDS), title: text(2, 200),
+    details: z.string().trim().max(3000).optional(), propertyId: id.nullable().optional(), assigneeId: id.nullable().optional(), department: z.enum(DEPARTMENTS).nullable().optional(),
+    dueOn: date.nullable().optional(), amountMinor: z.number().int().min(0).max(100000000).nullable().optional(), link: https.nullable().optional(),
+    reference: z.string().trim().max(120).optional() }).strict(),
+  z.object({ action: z.literal('moveHubItem'), requestId: id, id, version, status: z.enum(HUB_STATUSES), note: z.string().trim().max(2000).optional(),
+    settledMinor: z.number().int().min(0).max(100000000).optional() }).strict(),
   // A property's usual cleaner, who gets its cleans automatically (null clears it).
   z.object({ action: z.literal('setDefaultCleaner'), requestId: id, propertyId: id, cleanerId: id.nullable() }).strict(),
   z.object({ action: z.literal('setCleanerRate'), requestId: id, cleanerId: id, rateMinor: z.number().int().min(1).max(100000), version: z.number().int().min(0) }).strict(),
@@ -69,6 +78,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('signContract'), requestId: id, contractId: id, version, signedName: text(2, 200), agree: z.literal(true, { errorMap: () => ({ message: 'Tick the box to agree to the contract' }) }) }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'saveRoutinePlan' && Boolean(value.planId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a plan needs its current version' });
+  if (value.action === 'saveHubItem' && Boolean(value.id) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing needs the current version' });
+  if (value.action === 'saveHubItem' && value.kind === 'approval' && value.amountMinor == null) context.addIssue({ code: 'custom', message: 'Add the amount to approve' });
   if (value.action === 'saveCourse' && Boolean(value.courseId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a course needs its current version' });
   if (value.action === 'saveTargets' && value.amberMinutes <= value.greenMinutes) context.addIssue({ code: 'custom', message: 'Amber must be longer than green' });
   if (value.action === 'saveContract' && Boolean(value.contractId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a contract needs its current version' });
@@ -80,3 +91,17 @@ export const defaultCleanersSchema = z.object({
   cleaners: z.array(z.object({ userId: id, fullName: z.string(), propertyIds: z.array(id) })),
 });
 export type DefaultCleaners = z.infer<typeof defaultCleanersSchema>;
+
+export const hubItemSchema = z.object({
+  id, kind: z.enum(HUB_KINDS), title: z.string(), details: z.string(), propertyId: id.nullable(), propertyName: z.string().nullable(),
+  assigneeId: id.nullable(), assigneeName: z.string().nullable(), department: z.enum(DEPARTMENTS).nullable(), dueOn: z.string().nullable(),
+  amountMinor: z.number().nullable(), settledMinor: z.number().nullable(), link: z.string().nullable(), reference: z.string(),
+  status: z.enum(HUB_STATUSES), outcomeNote: z.string(), decidedBy: z.string().nullable(), decidedAt: z.string().nullable(),
+  createdBy: id, createdByName: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(), version: z.number(),
+});
+export const hubSchema = z.object({
+  department: z.enum(DEPARTMENTS).nullable(), canDecide: z.boolean(), keeps: z.array(z.enum(HUB_KINDS)), items: z.array(hubItemSchema),
+  people: z.array(z.object({ userId: id, fullName: z.string(), role: z.string(), department: z.enum(DEPARTMENTS).nullable() })),
+});
+export type HubItem = z.infer<typeof hubItemSchema>;
+export type Hub = z.infer<typeof hubSchema>;

@@ -1,25 +1,25 @@
 import { MODULES, type ModuleId } from './modules';
 
 // Where each tool lives in the live app, so every tool a person holds opens somewhere real.
-export type WorkView = 'management' | 'calendar' | 'stays' | 'cleans' | 'repairs' | 'accounts' | 'all';
+export type WorkView = 'management' | 'hub' | 'calendar' | 'stays' | 'cleans' | 'repairs' | 'accounts' | 'all';
 export type ToolPlace =
   | { kind: 'work'; view: WorkView; where: string }
   | { kind: 'tab'; tab: 'home' | 'properties' | 'analytics'; where: string }
   | { kind: 'tracker'; where: string }
   | { kind: 'calculator'; where: string };
 
-export const WORK_VIEW_LABEL: Record<WorkView, string> = { management: 'Management', calendar: 'Calendar', stays: 'Stays', cleans: 'Cleans', repairs: 'Maintenance', accounts: 'Accounts', all: 'All work' };
+export const WORK_VIEW_LABEL: Record<WorkView, string> = { management: 'Management', hub: 'Hub', calendar: 'Calendar', stays: 'Stays', cleans: 'Cleans', repairs: 'Maintenance', accounts: 'Accounts', all: 'All work' };
 
-// The Work views each role can open, the first being the default. Team roles have the Calendar
-// second, after their main view. Owners' stays, earnings, statements and mailbox are in Reports
+// The Work views each role can open, the first being the default. Team roles have the Hub (to-dos
+// and trackers) and the Calendar after their main view. Owners' stays, earnings, statements and mailbox are in Reports
 // (one place), so their Work holds only repairs and their other requests.
 export function workViewsFor(role: string): WorkView[] {
-  if (role === 'admin' || role === 'super_admin') return ['management', 'calendar', 'stays', 'cleans', 'repairs', 'accounts', 'all'];
-  if (role === 'stays') return ['stays', 'calendar', 'cleans', 'repairs', 'all'];
+  if (role === 'admin' || role === 'super_admin') return ['management', 'hub', 'calendar', 'stays', 'cleans', 'repairs', 'accounts', 'all'];
+  if (role === 'stays') return ['stays', 'hub', 'calendar', 'cleans', 'repairs', 'all'];
   if (role === 'client') return ['repairs', 'all'];
-  if (role === 'cleans' || role === 'cleaning_manager') return ['cleans', 'calendar', 'all'];
-  if (role === 'ready') return ['repairs', 'calendar', 'all'];
-  if (role === 'accounts') return ['accounts', 'calendar', 'all'];
+  if (role === 'cleans' || role === 'cleaning_manager') return ['cleans', 'hub', 'calendar', 'all'];
+  if (role === 'ready') return ['repairs', 'hub', 'calendar', 'all'];
+  if (role === 'accounts') return ['accounts', 'hub', 'calendar', 'all'];
   return ['all'];
 }
 
