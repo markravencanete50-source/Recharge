@@ -15,7 +15,7 @@ const https = z.string().url().max(1000).refine(value => {
 
 export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
-    'cleanerRates', 'readyHome']),
+    'cleanerRates', 'readyHome', 'defaultCleaners']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -36,6 +36,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('decideCleanerReview'), requestId: id, workId: id, version, outcome: z.enum(['no_action', 'supervised', 'removed_from_rota']), note }).strict(),
   z.object({ action: z.literal('addCleanerStatement'), requestId: id, workId: id, statement: text(10, 2000) }).strict(),
   // A cleaner's pay per clean, in pence (version 0 when no rate is set yet).
+  // A property's usual cleaner, who gets its cleans automatically (null clears it).
+  z.object({ action: z.literal('setDefaultCleaner'), requestId: id, propertyId: id, cleanerId: id.nullable() }).strict(),
   z.object({ action: z.literal('setCleanerRate'), requestId: id, cleanerId: id, rateMinor: z.number().int().min(1).max(100000), version: z.number().int().min(0) }).strict(),
   z.object({ action: z.literal('saveRoutinePlan'), requestId: id, planId: id.optional(), version: version.optional(), propertyId: id,
     moduleId: z.enum(['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']), title: text(2, 200),
@@ -72,3 +74,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   if (value.action === 'saveContract' && Boolean(value.contractId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a contract needs its current version' });
 });
 export type TeamsAction = z.infer<typeof teamsActionSchema>;
+
+export const defaultCleanersSchema = z.object({
+  properties: z.array(z.object({ propertyId: id, propertyName: z.string(), cleanerId: id.nullable(), cleanerName: z.string().nullable(), canEdit: z.boolean() })),
+  cleaners: z.array(z.object({ userId: id, fullName: z.string(), propertyIds: z.array(id) })),
+});
+export type DefaultCleaners = z.infer<typeof defaultCleanersSchema>;

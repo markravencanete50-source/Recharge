@@ -14,6 +14,7 @@ import { ProblemForm } from "./CleanProblem";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { CleanChecklist, ChecklistReview, type ChecklistState } from "./CleanChecklist";
 import { ChecklistTemplatesSheet, useChecklistTemplates } from "./ChecklistTemplates";
+import { DefaultCleanersSheet, WhoIsCleaning } from "./DefaultCleaners";
 import { CleanCheckForm, CleanCheckSummary, conditionOf, unanswered, type ItemRow } from "./CleanReport";
 import { ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
@@ -60,6 +61,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   // Clean checklists with their photo rules, kept by admins and cleaning managers.
   const templates = useChecklistTemplates(manager);
   const [editingChecklists, setEditingChecklists] = useState(false);
+  const [editingCleaners, setEditingCleaners] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -149,9 +151,14 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
         <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
           {canStart(account, "new-clean") && <Button label="New clean" icon="plus" primary p={p} onPress={() => setCreating(true)} />}
           {templates.data?.canEdit && <Button label="Checklists" icon="check-square" p={p} onPress={() => setEditingChecklists(true)} />}
+          {["admin", "super_admin", "cleaning_manager", "stays"].includes(account.role) && <Button label="Property cleaners" icon="users" p={p} onPress={() => setEditingCleaners(true)} />}
           <RefreshButton p={p} loading={loading} onPress={() => void load()} />
         </View>
       )}
+
+      {manager && <Section title="Who's cleaning today" p={p}>
+        <WhoIsCleaning p={p} onOpen={setOpenJob} cleans={schedule.work.filter(w => w.kind === "cleaning" && w.dueOn === today).map(w => ({ workId: w.workId, propertyName: w.propertyName, assigneeId: w.assigneeId, assigneeName: w.assigneeName, phase: String(byId.get(w.workId)?.data.phase ?? "") }))} />
+      </Section>}
 
       <Section title="Schedule" p={p}>
         {manager && cleaners.length > 0 && (
@@ -280,6 +287,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
         onRespond={id => { setOpenJob(null); setStatementFor(id); }} onChanged={load} onForm={onForm && (f => { setOpenJob(null); onForm(f); })} />
       <CreateSheet p={p} visible={creating} properties={properties} templates={templates.data?.templates ?? []} onClose={() => setCreating(false)} onDone={saved(async () => { setCreating(false); await load(); })} today={today} />
+      <DefaultCleanersSheet p={p} visible={editingCleaners} admin={["admin", "super_admin"].includes(account.role)} onClose={() => setEditingCleaners(false)} onChanged={load} />
       <ChecklistTemplatesSheet p={p} visible={editingChecklists} properties={properties} state={templates} onClose={() => setEditingChecklists(false)} />
       <StatementSheet p={p} workId={statementFor} onClose={() => setStatementFor(null)} onDone={saved(async () => { setStatementFor(null); await load(); })} />
       <DisputeSheet p={p} target={dispute} onClose={() => setDispute(null)} onDone={saved(load)} />
