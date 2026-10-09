@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Platform, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import * as Crypto from "expo-crypto";
-import * as ImagePicker from "expo-image-picker";
 import { z } from "zod";
 import { Text } from "./Typography";
 import { useCelebrate, useSaved } from "./Celebrate";
@@ -15,7 +13,7 @@ import { RateSheet } from "./CleanerPay";
 import { ProblemForm } from "./CleanProblem";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { ui, type Palette } from "./theme";
-import { readControls, readOperations, readTeams, uploadWorkPhoto, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
+import { readControls, readOperations, readTeams, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
 import { candidatesSchema, disputeFor, guestLine, monthPay, performanceSchema, problemsOf, scheduleSchema, type CleanerMonth } from "../../lib/cleans-live";
 import { repairTypeLabel } from "../../lib/repair-guides";
@@ -28,7 +26,6 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 type Schedule = z.infer<typeof scheduleSchema>;
 type Operation = z.infer<typeof operationViewSchema>;
 type Performance = z.infer<typeof performanceSchema>;
-type Photo = { key: string; uri: string; status: "uploading" | "verified" | "failed"; id?: string; error?: string; requestId: string; name: string; type: "image/jpeg" | "image/png" | "image/webp" };
 
 const checklistOf = (op?: Operation) => Array.isArray(op?.data.checklist) ? (op!.data.checklist as unknown[]).filter((v): v is string => typeof v === "string") : [];
 const phaseLabel: Record<string, string> = { assigned: "To do", review: "Waiting for review", accepted: "Accepted" };
@@ -298,7 +295,9 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   const [mailPhotos, setMailPhotos] = useState<{ ids: string[]; uploading: boolean }>({ ids: [], uploading: false });
   const onMailPhotos = useCallback((ids: string[], uploading: boolean) => setMailPhotos({ ids, uploading }), []);
   const mailPreference = typeof op?.data.mailPreference === "string" && op.data.mailPreference in MAIL_DONE ? op.data.mailPreference as keyof typeof MAIL_DONE : null;
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  // Clean photos are queued on the device and upload in the background (PhotoPicker).
+  const [photos, setPhotos] = useState<{ ids: string[]; uploading: boolean }>({ ids: [], uploading: false });
+  const onCleanPhotos = useCallback((ids: string[], uploading: boolean) => setPhotos({ ids, uploading }), []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState<boolean | null>(null);
@@ -315,7 +314,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   const workId = op?.workId;
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setPhotos([]); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
+    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
     return () => { active = false; };
   }, [workId]);
   useEffect(() => {
@@ -325,39 +324,13 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
     return () => { active = false; };
   }, [op, canAssign]);
 
-  async function addPhoto(camera: boolean) {
-    if (!op) return;
-    setError("");
-    const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { setError(camera ? "Allow camera access to take photos of the clean." : "Allow photo access to choose photos of the clean."); return; }
-    const result = camera ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.7 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7, allowsMultipleSelection: true, selectionLimit: 10 });
-    if (result.canceled) return;
-    for (const asset of result.assets) {
-      const type = asset.mimeType === "image/png" || asset.mimeType === "image/webp" ? asset.mimeType : "image/jpeg";
-      const requestId = Crypto.randomUUID();
-      const photo: Photo = { key: requestId, uri: asset.uri, status: "uploading", requestId, name: asset.fileName || `clean-${requestId.slice(0, 8)}.jpg`, type };
-      setPhotos(current => [...current, photo]);
-      void upload(photo);
-    }
-  }
-  async function upload(photo: Photo) {
-    if (!op) return;
-    setPhotos(current => current.map(x => x.key === photo.key ? { ...x, status: "uploading", error: undefined } : x));
-    try {
-      const response = z.object({ id: z.string().uuid() }).parse(await uploadWorkPhoto({ requestId: photo.requestId, workId: op.workId, purpose: "cleaning" }, { uri: photo.uri, name: photo.name, type: photo.type }));
-      setPhotos(current => current.map(x => x.key === photo.key ? { ...x, status: "verified", id: response.id } : x));
-    } catch (e) {
-      const text = e instanceof WorkspaceApiError && e.status === 503 ? "Photo uploads are not switched on yet. Ask the office to connect the photo service." : message(e);
-      setPhotos(current => current.map(x => x.key === photo.key ? { ...x, status: "failed", error: text } : x));
-    }
-  }
   async function run(action: () => Promise<unknown>) {
     if (busy) return; setBusy(true); setError("");
     try { await action(); request.done(); await onDone(); } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
-  const verified = photos.filter(x => x.status === "verified" && x.id).map(x => x.id!);
+  const verified = photos.ids;
   const postPhotos = mailDone && (mailPreference === "photograph" || mailPreference === "open_and_photograph");
-  const ready = ticked.length === checklist.length && checklist.length > 0 && report.trim().length >= 5 && verified.length > 0 && !photos.some(x => x.status === "uploading") && !(postPhotos && mailPhotos.uploading);
+  const ready = ticked.length === checklist.length && checklist.length > 0 && report.trim().length >= 5 && verified.length > 0 && !photos.uploading && !(postPhotos && mailPhotos.uploading);
 
   return (
     <Sheet palette={p} visible={!!op} onClose={onClose} title={propertyName} subtitle={op ? `${typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""} · ${phaseLabel[phase] ?? readableStage(op.status)}` : ""} icon="spray">
@@ -400,22 +373,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
               </MotionPress>
             );
           })}
-          <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Photos</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {photos.map(photo => (
-              <View key={photo.key} style={{ width: 96, gap: 4 }}>
-                <Image source={{ uri: photo.uri }} style={{ width: 96, height: 96, borderRadius: 12, opacity: photo.status === "verified" ? 1 : 0.5 }} accessibilityLabel="Clean photo" />
-                {photo.status === "uploading" && <ActivityIndicator size="small" color={p.primary} />}
-                {photo.status === "verified" && <Tag label="Saved" tone="good" p={p} />}
-                {photo.status === "failed" && <MotionPress accessibilityRole="button" onPress={() => void upload(photo)}><Tag label="Retry" tone="bad" p={p} /></MotionPress>}
-              </View>
-            ))}
-          </View>
-          {photos.find(x => x.status === "failed")?.error && <Notice text={photos.find(x => x.status === "failed")!.error!} p={p} tone="bad" />}
-          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-            {Platform.OS !== "web" && <Button label="Take photo" icon="camera" p={p} onPress={() => void addPhoto(true)} />}
-            <Button label="Choose photos" icon="image" p={p} onPress={() => void addPhoto(false)} />
-          </View>
+          <PhotoPicker key={op.workId} p={p} workId={op.workId} purpose="cleaning" label="Photos" max={50} onChange={onCleanPhotos} />
           <Field label="Report" value={report} onChange={setReport} p={p} multiline placeholder="What you cleaned, anything broken or missing, Wi-Fi checked" />
           {/* The owner's mailbox permission from onboarding: the cleaner records doing exactly that. */}
           {mailPreference && <View style={{ gap: 8 }}>
@@ -429,7 +387,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
           </View>}
           <Button label={busy ? "Sending…" : "Submit clean"} icon="send" primary p={p} disabled={!ready || busy}
             onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: verified, mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}), ...(postPhotos && mailPhotos.ids.length ? { mailPhotoIds: mailPhotos.ids } : {}) } }))} />
-          {!ready && <Text style={[ui.small, { color: p.muted }]}>Tick every check, add at least one saved photo and a short report to submit.</Text>}
+          {!ready && <Text style={[ui.small, { color: p.muted }]}>{photos.uploading ? "Your photos upload by themselves when there's signal, and you can submit once they have. " : ""}Tick every check, add at least one saved photo and a short report to submit.</Text>}
         </>}
 
         {canReview && <>

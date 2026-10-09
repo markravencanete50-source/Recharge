@@ -51,6 +51,8 @@ import type { HomeToolTarget } from "../../lib/home-tools";
 import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { inspectionReportFrom, workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 import { WorkPhotos } from "./Photos";
+import { SignOutUploadsWarning, UploadBanner } from "./UploadStatus";
+import { pendingUploadCount } from "./uploadQueue";
 import { NotificationsSetting, refreshNotificationLink } from "./Notifications";
 import { LiveChat, useGuestWaiting } from "./LiveChat";
 import { LiveCalendar } from "./LiveCalendar";
@@ -306,8 +308,11 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
     return () => clearInterval(timer);
   }, [focus, reduced, anchors]);
 
-  async function logout() {
-    setBusy(true);
+  // Photos still waiting to upload: say so (in the profile sheet) before signing out.
+  const [confirmOut, setConfirmOut] = useState(false);
+  async function logout(anyway = false) {
+    if (!anyway && pendingUploadCount() > 0) { setConfirmOut(true); setSettings(true); return; }
+    setConfirmOut(false); setBusy(true);
     try { await signOut(); } catch { /* signed out on this device either way */ }
     try { globalThis.localStorage?.removeItem("rc-welcomed"); } catch { /* storage unavailable */ }
     setBusy(false); setSettings(false); onSignedOut();
@@ -425,7 +430,8 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
         {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={sideNav} section={tab} palette={p} onNavigate={navigate} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme, motion and sign out" />}
         {desktop && sidebarHidden && <View style={{ width: 64, backgroundColor: p.isDark ? p.surface : p.background, borderRightWidth: 1, borderColor: p.border }}><View style={{ height: 81, alignItems: "center", justifyContent: "center", backgroundColor: p.header }}><IconButton label="Show left panel" icon="chevrons-right" palette={header} onPress={() => setSidebarHidden(false)} /></View></View>}
         <View style={[ui.fill, { minWidth: 0 }]}>
-          {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Changes will fail until you reconnect.</Text></View>}
+          {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Photos are saved on this device; other changes will fail until you reconnect.</Text></View>}
+          <UploadBanner p={p} userId={account.userId} />
           <View testID="workspace-toolbar" style={{ backgroundColor: p.header, borderBottomWidth: 1, borderColor: scrolled ? p.headerBorder : p.isDark && desktop ? p.border : "transparent" }}>
             <View style={[ui.between, { width: "100%", maxWidth: desktop ? undefined : 760, alignSelf: "center", paddingHorizontal: 20, paddingVertical: 16, gap: 12 }]}>
               <View style={[ui.row, { flex: 1, minWidth: 0, gap: 16 }]}>
@@ -458,7 +464,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
           {!desktop && <NavigationBar role={account.role} items={nav} section={tab} onNavigate={navigate} palette={p} />}
         </View>
       </KeyboardAvoidingView>
-      <Sheet palette={p} visible={settings} onClose={() => setSettings(false)} title="Profile & preferences" subtitle="Your account and comfort settings" icon="people">
+      <Sheet palette={p} visible={settings} onClose={() => { setSettings(false); setConfirmOut(false); }} title="Profile & preferences" subtitle="Your account and comfort settings" icon="people">
         <View style={{ borderRadius: 22, padding: 18, gap: 6, backgroundColor: p.header, overflow: "hidden" }}>
           <View style={[ui.row, { gap: 14 }]}>
             <Avatar profile={profile} size={56} backgroundColor={p.headerControl} textColor={p.headerControlText} />
@@ -495,7 +501,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
           </View>
         </View>
         <SoftButton label="Your tools, help and training" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("help"); }} />
-        <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={() => void logout()} />
+        {confirmOut ? <SignOutUploadsWarning p={p} busy={busy} onCancel={() => setConfirmOut(false)} onConfirm={() => void logout(true)} /> : <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={() => void logout()} />}
       </Sheet>
       <WorkflowSheet spec={form} invoices={invoices} budget={budget} palette={p} onClose={() => setForm(null)} onSaved={refresh} />
       <Sheet palette={p} visible={!!openWork} onClose={() => setOpenWork(null)} title={openWork?.title ?? ""} subtitle={openWork ? [names.get(openWork.propertyId), readableStage(openWork.status)].filter(Boolean).join(" · ") : undefined} icon="clipboard">
