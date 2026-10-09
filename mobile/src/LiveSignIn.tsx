@@ -10,6 +10,7 @@ import { HeroGlow } from "./TodayAnalytics";
 import { MotionPress, Stagger, motionTokens, useReducedMotion } from "./motion";
 import { headerPalette, ui, type Palette } from "./theme";
 import { accountStep, liveApiOrigin, registrationOpen, signIn } from "./backend/client";
+import { LegalConsent } from "./LivePrivacy";
 import { darkBrandCanvas, designTokens } from "../../lib/design-tokens";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
@@ -138,6 +139,7 @@ function CreateAccount({ p, desktop, onBack }: { p: Palette; desktop: boolean; o
         {(short || mismatch) && <Text style={[ui.small, { color: p.waiting }]}>{short ? "Use at least 12 characters." : "The passwords don’t match."}</Text>}
         {!!error && <Problem p={p} text={error} />}
         <Primary p={p} label={busy ? "Creating…" : "Create account"} busy={busy} disabled={busy || !ready} onPress={() => void register()} />
+        <LegalConsent p={p} />
       </> : <>
         {title("Check your email", `We sent a code to ${address}. Enter it here to confirm your email. It can take a minute to arrive; check spam too.`)}
         <Input label="Code" value={code} onChange={v => setCode(v.replace(/\D/g, "").slice(0, 8))} p={p} kind="code" onSubmit={() => void verify()} />
@@ -151,7 +153,7 @@ function CreateAccount({ p, desktop, onBack }: { p: Palette; desktop: boolean; o
 }
 
 // The live sign-in, in the same forest-and-bone design as the workspace.
-export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palette; onSignedIn: (account: WorkspaceAccount) => void; onTheme: () => void }) {
+export function LiveSignIn({ palette: p, onSignedIn, onTheme, notice = "" }: { palette: Palette; onSignedIn: (account: WorkspaceAccount) => void; onTheme: () => void; notice?: string }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
   const [email, setEmail] = useState(""), [password, setPassword] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -180,10 +182,15 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme }: { palette: Palet
       <Text accessibilityRole="header" style={[ui.title, { color: p.text, fontSize: desktop ? 34 : 28, lineHeight: desktop ? 40 : 34 }]}>Sign in</Text>
       <Text style={[ui.body, { color: p.muted }]}>Use the email your administrator approved for your workspace.</Text>
     </View>,
+    ...(notice ? [<View key="notice" accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.successWash, alignItems: "flex-start" }]}>
+      <Feather name="check-circle" size={16} color={p.success} style={{ marginTop: 2 }} />
+      <Text style={[ui.small, { color: p.text, flex: 1 }]}>{notice}</Text>
+    </View>] : []),
     <Input key="email" label="Email" value={email} onChange={setEmail} p={p} kind="email" />,
     <Input key="password" label="Password" value={password} onChange={setPassword} p={p} kind="password" onSubmit={() => void submit()} />,
     ...(error ? [<Problem key="error" p={p} text={error} />] : []),
     <Primary key="submit" p={p} label={busy ? "Signing in…" : "Sign in"} busy={busy} disabled={busy || !email.trim() || !password} onPress={() => void submit()} />,
+    <LegalConsent key="consent" p={p} />,
     <TextLink key="forgot" p={p} label="Forgot your password?" onPress={() => void Linking.openURL((liveApiOrigin() ?? "") + "/reset-password").catch(e => setError(message(e)))} />,
     canRegister ? (
       <MotionPress key="register" accessibilityRole="button" onPress={() => { setCreating(true); setError(""); }} style={[ui.between, { minHeight: 54, paddingHorizontal: 20, borderRadius: 18, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.surface }]}>

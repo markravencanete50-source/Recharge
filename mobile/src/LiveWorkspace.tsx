@@ -58,6 +58,8 @@ import { OpenMessagesContext } from "./PropertyTeamChat";
 import { LiveApprovals } from "./LiveApprovals";
 import { LiveClientReports } from "./LiveClientReports";
 import { OwnerActions } from "./LiveOwnerHome";
+import { DeleteAccountButton, DeleteAccountSheet, PrivacySection } from "./LivePrivacy";
+import { ACCOUNT_DELETED } from "../../lib/privacy-policy";
 import { PriceNightsLink, WorkHistory } from "./WorkHistory";
 import { WorkJumpContext } from "./WorkJump";
 
@@ -114,7 +116,7 @@ function IconButton({ label, icon, onPress, palette: p }: { label: string; icon:
   );
 }
 
-function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
+function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDeleted, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onDeleted: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
   const reduced = useReducedMotion(), motionPreference = useMotionPreference(), faqShortcut = useFaqShortcut();
@@ -125,7 +127,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
   // Owners on a wide screen also get Tools (Help and the tools directory) in the sidebar.
   const sideNav = useMemo(() => account.role === "client" ? [...nav, { value: "help" as const, label: "Tools", icon: "grid" as const }] : nav, [account.role, nav]);
   const [focus, setFocus] = useState<WorkFocus | null>(null);
-  const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false), [deleting, setDeleting] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
   const [properties, setProperties] = useState<PropertyView[]>([]), [journeys, setJourneys] = useState<JourneyView[]>([]), [work, setWork] = useState<OperationView[]>([]);
   const [budget, setBudget] = useState<BudgetItem[]>([]);
@@ -494,9 +496,11 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
             </View>
           </View>
         </View>
+        <PrivacySection p={p} onDelete={() => { setSettings(false); setDeleting(true); }} />
         <SoftButton label="Your tools, help and training" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("help"); }} />
         <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={() => void logout()} />
       </Sheet>
+      <DeleteAccountSheet p={p} visible={deleting} onClose={() => setDeleting(false)} onDeleted={() => { setDeleting(false); onDeleted(); }} />
       <WorkflowSheet spec={form} invoices={invoices} budget={budget} palette={p} onClose={() => setForm(null)} onSaved={refresh} />
       <Sheet palette={p} visible={!!openWork} onClose={() => setOpenWork(null)} title={openWork?.title ?? ""} subtitle={openWork ? [names.get(openWork.propertyId), readableStage(openWork.status)].filter(Boolean).join(" · ") : undefined} icon="clipboard">
         {openWork && <>
@@ -525,7 +529,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
 function Screen() {
   const { theme, setTheme } = useThemePreference();
   const p = themes[theme];
-  const [account, setAccount] = useState<WorkspaceAccount | null>(null), [checking, setChecking] = useState(true), [error, setError] = useState(""), [welcome, setWelcome] = useState(false);
+  const [account, setAccount] = useState<WorkspaceAccount | null>(null), [checking, setChecking] = useState(true), [error, setError] = useState(""), [welcome, setWelcome] = useState(false), [notice, setNotice] = useState("");
   useEffect(() => {
     let active = true;
     if (!liveApiOrigin()) { queueMicrotask(() => { if (active) setChecking(false); }); return () => { active = false; }; }
@@ -538,14 +542,16 @@ function Screen() {
     return () => { active = false; };
   }, []);
   const signedOut = useCallback(() => setAccount(null), []);
+  // After deleting their account the person lands on sign-in with a confirmation.
+  const deleted = useCallback(() => { setNotice(ACCOUNT_DELETED); setAccount(null); }, []);
   if (checking) return <View style={[ui.fill, { backgroundColor: p.header, alignItems: "center", justifyContent: "center", gap: 20 }]}><CompanyLogo palette={headerPalette(p)} width={180} /><ActivityIndicator accessibilityLabel="Restoring your session" color={p.headerText} /></View>;
   if (!liveApiOrigin()) return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center" }]}><EmptyState palette={p} icon="inbox" title="Live connection is awaiting configuration" detail="The backend address will be added to the app when deployment is ready." /></View>;
-  if (!account) return <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}><StatusBar style="light" /><LiveSignIn palette={p} onTheme={() => setTheme(theme === "dark" ? "light" : "dark")} onSignedIn={value => { setWelcome(true); setAccount(value); }} />{!!error && <Text accessibilityRole="alert" style={[ui.small, { color: p.danger, textAlign: "center", padding: 12 }]}>{error}</Text>}</SafeAreaView>;
-  if (account.status !== "active") return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center", gap: 16 }]}><EmptyState palette={p} icon="inbox" title={account.status === "pending" ? "Your access is being reviewed" : "Your access has been removed"} detail={account.status === "pending" ? "An administrator will approve your account and choose your tools. You'll then see your workspace here." : "Ask an administrator if you think this is a mistake."} /><SoftButton label="Sign out" icon="log-out" palette={p} onPress={() => { void signOut().finally(() => setAccount(null)); }} /></View>;
+  if (!account) return <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}><StatusBar style="light" /><LiveSignIn palette={p} notice={notice} onTheme={() => setTheme(theme === "dark" ? "light" : "dark")} onSignedIn={value => { setNotice(""); setWelcome(true); setAccount(value); }} />{!!error && <Text accessibilityRole="alert" style={[ui.small, { color: p.danger, textAlign: "center", padding: 12 }]}>{error}</Text>}</SafeAreaView>;
+  if (account.status !== "active") return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center", gap: 16 }]}><EmptyState palette={p} icon="inbox" title={account.status === "pending" ? "Your access is being reviewed" : "Your access has been removed"} detail={account.status === "pending" ? "An administrator will approve your account and choose your tools. You'll then see your workspace here." : "Ask an administrator if you think this is a mistake."} /><SoftButton label="Sign out" icon="log-out" palette={p} onPress={() => { void signOut().finally(() => setAccount(null)); }} /><DeleteAccountButton p={p} onDeleted={deleted} /></View>;
   // New team members sign their contract and finish required training first.
   return (
     <OnboardingGate key={account.userId} account={account} palette={p} onSignOut={() => { void signOut().finally(() => setAccount(null)); }}>
-      <Workspace account={account} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onAccount={setAccount} welcomeOnOpen={welcome} />
+      <Workspace account={account} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onDeleted={deleted} onAccount={setAccount} welcomeOnOpen={welcome} />
     </OnboardingGate>
   );
 }

@@ -529,3 +529,30 @@ input {
   .auth-title { font-size: 2.1rem; }
 }
 @media (prefers-reduced-motion: reduce) { .auth-card, .auth-alert { animation: none; } .auth-submit, .auth-submit svg, .auth-control { transition: none; } }
+/* Consent line under the sign-in and choose-password forms, and the privacy, terms and
+   account-deletion pages: the same card, wider, for reading. */
+.auth-consent { margin-top: 16px; font-size: 0.8rem; line-height: 1.5; color: var(--rc-muted); }
+.auth-consent a, .legal-body a { color: var(--rc-primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--rc-primary) 40%, transparent); overflow-wrap: anywhere; }
+.auth-card.legal-card { max-width: 760px; }
+.legal-body { margin-top: 22px; display: grid; gap: 26px; font-size: 0.92rem; line-height: 1.65; color: var(--rc-text); overflow-wrap: break-word; }
+.legal-body section { display: grid; gap: 8px; }
+.legal-body h2 { font-size: 1.1rem; line-height: 1.3; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+.legal-body h3 { margin-top: 6px; font-size: 0.95rem; font-weight: 700; }
+.legal-body ul { display: grid; gap: 6px; padding-left: 1.2rem; list-style: disc; }
+.legal-body ol { display: grid; gap: 6px; padding-left: 1.3rem; list-style: decimal; }
+.legal-body li::marker { color: var(--rc-muted); }
+.legal-body strong { font-weight: 650; }
+.legal-details { display: grid; gap: 8px; margin: 0; padding: 14px 16px; border-radius: 14px; background: var(--rc-wash); font-size: 0.85rem; }
+.legal-details div { display: grid; gap: 2px; }
+.legal-details dt { color: var(--rc-muted); font-weight: 600; }
+.legal-details dd { margin: 0; overflow-wrap: anywhere; }
+.legal-retention { display: grid; gap: 0; margin: 0; border: 1px solid var(--rc-border); border-radius: 14px; overflow: hidden; }
+.legal-retention div { display: grid; gap: 2px; padding: 10px 14px; border-top: 1px solid var(--rc-border); }
+.legal-retention div:first-child { border-top: 0; }
+.legal-retention dt { font-weight: 650; }
+.legal-retention dd { margin: 0; color: var(--rc-muted); }
+.legal-form { margin-top: 0; }
+.legal-danger { background: var(--rc-danger, #A63A32); color: var(--rc-onPrimary, #FAF7F0); }
+@media (min-width: 640px) {
+  .legal-details div, .legal-retention div { grid-template-columns: minmax(0, 13rem) minmax(0, 1fr); gap: 12px; }
+}

@@ -71,6 +71,11 @@ const worker = {
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_weekly_report_notices', {})).catch(() => {
       console.error('Weekly report notices failed; the next run retries.');
     }));
+    // Once a day: read notifications after 12 months, sign-in security records after 90 days,
+    // expired recovery proofs and anything left on deleted accounts (see the privacy policy).
+    ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_privacy_retention', {})).catch(() => {
+      console.error('Privacy retention failed; the next run retries.');
+    }));
     if (env.INTEGRATION_SCHEDULE_ENABLED !== 'true') return;
     ctx.waitUntil(import('../lib/integration-server').then(module => module.dispatchNotifications()).catch(() => {
       console.error('Recharge integration batch failed; durable job state retained.');

@@ -13,7 +13,7 @@ test('each part is offered only to the people the database allows', () => {
   const admin = profileAccess(account('admin', ['property-database', 'daily-pricing', 'owner-statements']));
   assert.deepEqual(admin, { owners: true, listings: true, stays: true, payout: true });
   assert.deepEqual(profileAccess(account('stays', ['property-database', 'daily-pricing'])), { owners: true, listings: true, stays: true, payout: false });
-  assert.deepEqual(profileAccess(account('accounts', ['owner-statements'])), { owners: true, listings: false, stays: false, payout: false });
+  assert.deepEqual(profileAccess(account('accounts', ['owner-statements'])), { owners: true, listings: false, stays: false, payout: true }, 'Accounts read payout details in full');
   assert.deepEqual(profileAccess(account('client', ['client-dashboard'])), { owners: false, listings: true, stays: false, payout: true });
   for (const role of ['ready', 'cleans', 'cleaning_manager']) assert.deepEqual(profileAccess(account(role, ['property-database', 'daily-pricing', 'owner-statements', 'client-dashboard'])), { owners: false, listings: false, stays: false, payout: false }, role);
   assert.equal(profileAccess(account('stays', [])).owners, false, 'Stays need the property database');
