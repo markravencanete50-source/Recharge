@@ -67,6 +67,7 @@ test('responsibilities: admins keep the register, the whole team reads it', asyn
   await as(ADMIN);
   await act({ action: 'removeResponsibility', id: made.id, version: moved.version });
   assert.equal(responsibilitiesSchema.parse(await read('responsibilities')).items.length, 0);
+  assert.deepEqual(await owner('select removed_by from private.workspace_responsibilities where id=$1', [made.id]), [{ removed_by: users[ADMIN] }], 'kept on record, with who removed it');
 });
 
 test('rota by date: admins plan days, everyone on the team sees the week', async () => {
@@ -91,6 +92,10 @@ test('rota by date: admins plan days, everyone on the team sees the week', async
   await as(ADMIN);
   await act({ action: 'planRota', userId: users[ERIC], days: [{ day: day(2), shift: null }] });
   assert.deepEqual(rotaPlanSchema.parse(await read('rotaPlan', day(0), day(6))).people.find(p => p.userId === users[ERIC]).days.map(d => d.day), [day(1), day(3)]);
+  assert.equal((await owner('select count(*)::int n from private.workspace_rota_days where user_id=$1 and cleared_at is not null', [users[ERIC]]))[0].n, 1, 'a cleared day stays on record');
+  await as(ADMIN);
+  await act({ action: 'planRota', userId: users[ERIC], days: [{ day: day(2), shift: 'late' }] });
+  assert.deepEqual(rotaPlanSchema.parse(await read('rotaPlan', day(0), day(6))).people.find(p => p.userId === users[ERIC]).days.map(d => [d.day, d.shift]), [[day(1), 'early'], [day(2), 'late'], [day(3), 'late']], 'and can be planned again');
 });
 
 test('timesheets: your own hours, everyone\'s for admins, and corrections they are told about', async () => {

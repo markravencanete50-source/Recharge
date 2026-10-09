@@ -28,6 +28,10 @@ create index if not exists workspace_responsibilities_updater_idx on private.wor
 alter table private.workspace_responsibilities enable row level security;
 revoke all on private.workspace_responsibilities from public,anon,authenticated;
 create or replace trigger business_write_limit before insert or update on private.workspace_responsibilities for each row execute function private.workspace_enforce_write_limit();
+-- A removed duty stays on record, with who removed it and when.
+alter table private.workspace_responsibilities add column if not exists removed_at timestamptz;
+alter table private.workspace_responsibilities add column if not exists removed_by uuid references public.workspace_profiles(user_id);
+create index if not exists workspace_responsibilities_remover_idx on private.workspace_responsibilities(removed_by);
 
 create table if not exists private.workspace_rota_days (
  user_id uuid not null references public.workspace_profiles(user_id) on delete cascade,
@@ -44,6 +48,8 @@ create index if not exists workspace_rota_days_updater_idx on private.workspace_
 alter table private.workspace_rota_days enable row level security;
 revoke all on private.workspace_rota_days from public,anon,authenticated;
 create or replace trigger business_write_limit before insert or update on private.workspace_rota_days for each row execute function private.workspace_enforce_write_limit();
+-- A cleared day stays on record (who cleared it is the last updater) until it is planned again.
+alter table private.workspace_rota_days add column if not exists cleared_at timestamptz;
 
 -- A corrected or added shift keeps who changed it and why.
 alter table private.workspace_shifts add column if not exists edited_by uuid references public.workspace_profiles(user_id);
@@ -77,7 +83,7 @@ begin
   'items',(select coalesce(jsonb_agg(jsonb_build_object('id',r.id,'department',r.department,'title',r.title,'details',r.details,'frequency',r.frequency,
     'ownerId',r.owner_id,'ownerName',o.full_name,'backupId',r.backup_id,'backupName',b.full_name,'updatedAt',r.updated_at,'version',r.version)
     order by r.department,r.title,r.id),'[]')
-   from private.workspace_responsibilities r left join public.workspace_profiles o on o.user_id=r.owner_id left join public.workspace_profiles b on b.user_id=r.backup_id),
+   from private.workspace_responsibilities r left join public.workspace_profiles o on o.user_id=r.owner_id left join public.workspace_profiles b on b.user_id=r.backup_id where r.removed_at is null),
   'people',(select coalesce(jsonb_agg(jsonb_build_object('userId',p.user_id,'fullName',p.full_name,'role',p.role,'department',s.department) order by p.full_name,p.user_id),'[]')
    from public.workspace_profiles p left join private.workspace_staff_rota s on s.user_id=p.user_id where p.status='active' and p.role<>'client'));
 end $fn$;
@@ -105,7 +111,7 @@ begin
   if (owner is not null and not private.workspace_team_member(owner)) or (backup is not null and not private.workspace_team_member(backup)) then raise exception 'Choose someone on the team' using errcode='22023';end if;
   if owner is not null and owner=backup then raise exception 'The backup must be someone else' using errcode='22023';end if;
   if input ? 'id' then
-   select * into r from private.workspace_responsibilities x where x.id=(input->>'id')::uuid for update;
+   select * into r from private.workspace_responsibilities x where x.id=(input->>'id')::uuid and x.removed_at is null for update;
    if r.id is null then raise exception 'Responsibility not found' using errcode='P0002';end if;
    if r.version is distinct from (input->>'version')::int then raise exception 'Changed by someone else. Refresh and try again' using errcode='40001';end if;
    notify:=array(select u from unnest(array[owner,backup]) u where u is not null and u is distinct from r.owner_id and u is distinct from r.backup_id);
@@ -120,10 +126,10 @@ begin
   insert into public.workspace_activity(actor_id,event_type) values(auth.uid(),'team.responsibility_given') returning id into event_id;
  elsif a='removeResponsibility' then
   perform private.workspace_json_keys(input,array['action','requestId','id','version']);
-  select * into r from private.workspace_responsibilities x where x.id=(input->>'id')::uuid for update;
+  select * into r from private.workspace_responsibilities x where x.id=(input->>'id')::uuid and x.removed_at is null for update;
   if r.id is null then raise exception 'Responsibility not found' using errcode='P0002';end if;
   if r.version is distinct from (input->>'version')::int then raise exception 'Changed by someone else. Refresh and try again' using errcode='40001';end if;
-  delete from private.workspace_responsibilities where id=r.id;
+  update private.workspace_responsibilities set removed_at=now(),removed_by=auth.uid(),updated_by=auth.uid(),updated_at=now(),version=version+1 where id=r.id;
   result:=jsonb_build_object('id',r.id,'removed',true);
   insert into public.workspace_activity(actor_id,event_type) values(auth.uid(),'team.responsibility_removed') returning id into event_id;
  else raise exception 'Unknown team action' using errcode='22023';end if;
@@ -141,7 +147,7 @@ begin
  return jsonb_build_object('from',start_on,'to',end_on,'canEdit',actor in ('admin','super_admin'),
   'people',(select coalesce(jsonb_agg(jsonb_build_object('userId',p.user_id,'fullName',p.full_name,'role',p.role,'department',s.department,'usualShift',s.usual_shift,
     'days',(select coalesce(jsonb_agg(jsonb_build_object('day',d.day,'shift',d.shift,'department',d.department,'note',d.note) order by d.day),'[]')
-      from private.workspace_rota_days d where d.user_id=p.user_id and d.day between start_on and end_on))
+      from private.workspace_rota_days d where d.user_id=p.user_id and d.cleared_at is null and d.day between start_on and end_on))
     order by (s.department is null),s.department,p.full_name,p.user_id),'[]')
    from public.workspace_profiles p left join private.workspace_staff_rota s on s.user_id=p.user_id where p.status='active' and p.role<>'client'));
 end $fn$;
@@ -158,14 +164,14 @@ begin
   'people',(select coalesce(jsonb_agg(person order by person->>'fullName',person->>'userId'),'[]') from (
    select jsonb_build_object('userId',p.user_id,'fullName',p.full_name,'role',p.role,'active',p.status='active','department',s.department,
     'days',(select coalesce(jsonb_agg(jsonb_build_object('day',x.day,
-       'planned',(select jsonb_build_object('shift',d.shift,'department',d.department,'note',d.note) from private.workspace_rota_days d where d.user_id=p.user_id and d.day=x.day),
+       'planned',(select jsonb_build_object('shift',d.shift,'department',d.department,'note',d.note) from private.workspace_rota_days d where d.user_id=p.user_id and d.day=x.day and d.cleared_at is null),
        'shifts',(select coalesce(jsonb_agg(jsonb_build_object('id',h.id,'department',h.department,'clockedInAt',h.clocked_in_at,'clockedOutAt',h.clocked_out_at,
           'minutes',round(extract(epoch from coalesce(h.clocked_out_at,now())-h.clocked_in_at)/60)::int,'edited',h.edited_at is not null or h.closed_by is not null,'editNote',h.edit_note) order by h.clocked_in_at),'[]')
          from private.workspace_shifts h where h.user_id=p.user_id and (h.clocked_in_at at time zone 'Europe/London')::date=x.day),
        'minutes',(select coalesce(round(sum(extract(epoch from coalesce(h.clocked_out_at,now())-h.clocked_in_at)/60)),0)::int
          from private.workspace_shifts h where h.user_id=p.user_id and (h.clocked_in_at at time zone 'Europe/London')::date=x.day)) order by x.day),'[]')
       from (select (h.clocked_in_at at time zone 'Europe/London')::date as day from private.workspace_shifts h where h.user_id=p.user_id and h.clocked_in_at>=lower_at and h.clocked_in_at<upper_at
-            union select d.day from private.workspace_rota_days d where d.user_id=p.user_id and d.day between start_on and end_on) x),
+            union select d.day from private.workspace_rota_days d where d.user_id=p.user_id and d.cleared_at is null and d.day between start_on and end_on) x),
     'totalMinutes',(select coalesce(round(sum(extract(epoch from coalesce(h.clocked_out_at,now())-h.clocked_in_at)/60)),0)::int
       from private.workspace_shifts h where h.user_id=p.user_id and h.clocked_in_at>=lower_at and h.clocked_in_at<upper_at)) person
    from public.workspace_profiles p left join private.workspace_staff_rota s on s.user_id=p.user_id
@@ -199,14 +205,14 @@ begin
    on_day:=(entry->>'day')::date;
    if on_day<current_date-31 or on_day>current_date+366 then raise exception 'Plan from a month ago to a year ahead' using errcode='22023';end if;
    if entry->>'shift' is null then
-    delete from private.workspace_rota_days where user_id=who and day=on_day;
+    update private.workspace_rota_days set cleared_at=now(),updated_by=auth.uid(),updated_at=now() where user_id=who and day=on_day and cleared_at is null;
    else
     dept:=nullif(entry->>'department','');
     if entry->>'shift' not in ('early','late','both','off') or (dept is not null and dept not in ('guest_relations','client_relations','cleaning','ready','accounts','management'))
      or (entry ? 'note' and (jsonb_typeof(entry->'note')<>'string' or length(entry->>'note')>300)) then raise exception 'Choose early, late, both or off' using errcode='22023';end if;
     insert into private.workspace_rota_days(user_id,day,shift,department,note,updated_by)
      values(who,on_day,entry->>'shift',case when entry->>'shift'='off' then null else coalesce(dept,(select r.department from private.workspace_staff_rota r where r.user_id=who)) end,coalesce(btrim(entry->>'note'),''),auth.uid())
-     on conflict(user_id,day) do update set shift=excluded.shift,department=excluded.department,note=excluded.note,updated_by=excluded.updated_by,updated_at=now();
+     on conflict(user_id,day) do update set shift=excluded.shift,department=excluded.department,note=excluded.note,updated_by=excluded.updated_by,updated_at=now(),cleared_at=null;
    end if;
    changed:=changed+1;
   end loop;
