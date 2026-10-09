@@ -59,6 +59,7 @@ export function TodayBoard({ palette: p, account, properties, work, desktop, onT
   const active: Bucket = bucket === "overdue" && !overdue ? "today" : bucket;
   const list = buckets ? buckets[active] : [];
   const next = active === "today" && !manager ? nextUp(list) : null;
+  const rest = next ? list.filter(job => job.workId !== next.workId) : list;
   const open = (job: BoardJob) => onTool(targetOf(job));
 
   const segments: [Bucket, string, number][] = [["today", "Today", buckets?.today.length ?? 0], ["tomorrow", "Tomorrow", buckets?.tomorrow.length ?? 0], ...(overdue ? [["overdue", "Overdue", overdue] as [Bucket, string, number]] : [])];
@@ -114,8 +115,9 @@ export function TodayBoard({ palette: p, account, properties, work, desktop, onT
               </View>
             </Stagger>
           ))
-          : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
-            {list.map((job, i) => <JobRow key={job.workId} p={p} job={job} first={i === 0} manager={false} today={today} highlight={job.workId === next?.workId} onOpen={() => open(job)} />)}
+          // The next job already has its own card above, so the list shows the rest of the day.
+          : rest.length > 0 && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
+            {rest.map((job, i) => <JobRow key={job.workId} p={p} job={job} first={i === 0} manager={false} today={today} onOpen={() => open(job)} />)}
           </View>)}
       </>}
     </Entrance>
