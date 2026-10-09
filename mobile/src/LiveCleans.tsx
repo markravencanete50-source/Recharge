@@ -14,6 +14,7 @@ import { ProblemForm } from "./CleanProblem";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { CleanChecklist, ChecklistReview, type ChecklistState } from "./CleanChecklist";
 import { ChecklistTemplatesSheet, useChecklistTemplates } from "./ChecklistTemplates";
+import { CleanCheckForm, CleanCheckSummary, conditionOf, unanswered, type ItemRow } from "./CleanReport";
 import { ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
@@ -23,6 +24,8 @@ import { formatDay, formatMoney } from "../../lib/format";
 import { canStart } from "../../lib/home-tools";
 import { checklistProgress, submitBlockers, templateFor, type ChecklistTemplate } from "../../lib/clean-checklist-policy";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { readCleanCondition, type CleanCondition } from "../../lib/clean-report";
+import { createOperationForms, type WorkflowForm } from "../../lib/workflow-forms";
 
 // Live Cleans: the cleaner's own jobs and the cleaning team's schedule, reviews and
 // assignments, read from and written to the backend. Nothing here uses sample data.
@@ -33,7 +36,7 @@ type Performance = z.infer<typeof performanceSchema>;
 const checklistOf = (op?: Operation) => Array.isArray(op?.data.checklist) ? (op!.data.checklist as unknown[]).filter((v): v is string => typeof v === "string") : [];
 const phaseLabel: Record<string, string> = { assigned: "To do", review: "Waiting for review", accepted: "Accepted" };
 
-export function LiveCleans({ palette: p, account, properties }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
+export function LiveCleans({ palette: p, account, properties, onForm }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onForm?: (form: WorkflowForm) => void }) {
   const saved = useSaved();
   const manager = account.role !== "cleans";
   const today = london(new Date());
@@ -275,7 +278,7 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
       {!manager && <RefreshButton p={p} loading={loading} onPress={() => void load()} />}
 
       <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
-        onRespond={id => { setOpenJob(null); setStatementFor(id); }} onChanged={load} />
+        onRespond={id => { setOpenJob(null); setStatementFor(id); }} onChanged={load} onForm={onForm && (f => { setOpenJob(null); onForm(f); })} />
       <CreateSheet p={p} visible={creating} properties={properties} templates={templates.data?.templates ?? []} onClose={() => setCreating(false)} onDone={saved(async () => { setCreating(false); await load(); })} today={today} />
       <ChecklistTemplatesSheet p={p} visible={editingChecklists} properties={properties} state={templates} onClose={() => setEditingChecklists(false)} />
       <StatementSheet p={p} workId={statementFor} onClose={() => setStatementFor(null)} onDone={saved(async () => { setStatementFor(null); await load(); })} />
@@ -287,7 +290,15 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
 
 const MAIL_DONE = { photograph: "photographed it", open_and_photograph: "opened and photographed it", leave_safely: "left it somewhere safe" } as const;
 
-function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone, onRespond, onChanged }: { p: Palette; account: WorkspaceAccount; manager: boolean; op?: Operation; mine?: CleanerMonth; propertyName: string; onClose: () => void; onDone: () => Promise<void>; onRespond: (complaintWorkId: string) => void; onChanged: () => Promise<void> }) {
+// A purchase order or reactive maintenance job started from the clean report, when this person can raise one.
+function followUp(account: WorkspaceAccount, propertyId: string, workId: string, kind: "purchase" | "maintenance", text: string): WorkflowForm | null {
+  const form = createOperationForms(account, propertyId).find(f => f.key === kind);
+  if (!form) return null;
+  const field = kind === "purchase" ? "requirements" : "issue";
+  return { ...form, key: `${kind}-from-clean-${workId}`, fields: form.fields.map(f => f.name === field ? { ...f, defaultValue: text } : f) };
+}
+
+function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone, onRespond, onChanged, onForm }: { p: Palette; account: WorkspaceAccount; manager: boolean; op?: Operation; mine?: CleanerMonth; propertyName: string; onClose: () => void; onDone: () => Promise<void>; onRespond: (complaintWorkId: string) => void; onChanged: () => Promise<void>; onForm?: (form: WorkflowForm) => void }) {
   const checklist = checklistOf(op), phase = String(op?.data.phase ?? "");
   // The last review's reason when it was a rejection, where its dispute is up to, and problems reported.
   const rejection = op?.data.accepted === false && typeof op.data.reviewNote === "string" ? op.data.reviewNote : null;
@@ -299,6 +310,9 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   const celebrate = useCelebrate();
   const [ticked, setTicked] = useState<string[]>([]);
   const [report, setReport] = useState("");
+  const [answers, setAnswers] = useState<Partial<CleanCondition>>({});
+  const [items, setItems] = useState<ItemRow[]>([]);
+  const submitted = readCleanCondition(op?.data.condition);
   const [mailDone, setMailDone] = useState(false);
   const [mailNote, setMailNote] = useState("");
   const [mailPhotos, setMailPhotos] = useState<{ ids: string[]; uploading: boolean }>({ ids: [], uploading: false });
@@ -325,7 +339,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   const workId = op?.workId;
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setList(null); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
+    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setAnswers({}); setItems([]); setList(null); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
     return () => { active = false; };
   }, [workId]);
   useEffect(() => {
@@ -344,7 +358,12 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   // Photos taken on checks count as photos of the clean, and go with it (up to 30).
   const progress = list?.progress ?? checklistProgress(checklist, ticked, [], {});
   const sent = [...new Set([...verified, ...(list?.photoIds ?? [])])].slice(0, 30);
-  const blockers = submitBlockers(progress, { report, savedPhotos: sent.length, uploading: photos.uploading || !!list?.uploading || (postPhotos && mailPhotos.uploading) });
+  const left = unanswered(answers);
+  const blockers = [...submitBlockers(progress, { report, savedPhotos: sent.length, uploading: photos.uploading || !!list?.uploading || (postPhotos && mailPhotos.uploading) }),
+    ...(left ? [`Answer the property check (${left} question${left === 1 ? "" : "s"} left).`] : [])];
+  const condition = conditionOf(answers, items);
+  const purchaseForm = op && submitted ? followUp(account, op.propertyId, op.workId, "purchase", "") : null;
+  const repairForm = op && submitted ? followUp(account, op.propertyId, op.workId, "maintenance", "") : null;
   const ready = !blockers.length;
 
   return (
@@ -382,6 +401,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
             onToggle={item => setTicked(current => current.includes(item) ? current.filter(x => x !== item) : [...current, item])} />
           <PhotoPicker key={op.workId} p={p} workId={op.workId} purpose="cleaning" label="Photos" max={50} onChange={onCleanPhotos} />
           <Field label="Report" value={report} onChange={setReport} p={p} multiline placeholder="What you cleaned, anything broken or missing, Wi-Fi checked" />
+          <CleanCheckForm p={p} answers={answers} items={items} onAnswers={setAnswers} onItems={setItems} />
           {/* The owner's mailbox permission from onboarding: the cleaner records doing exactly that. */}
           {mailPreference && <View style={{ gap: 8 }}>
             <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Post</Text>
@@ -393,10 +413,13 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
             {postPhotos && <PhotoPicker key={op.workId} p={p} workId={op.workId} purpose="mailbox" label="Photos of the post" hint="The owner sees these in their Mailbox." onChange={onMailPhotos} />}
           </View>}
           <Button label={busy ? "Sending…" : "Submit clean"} icon="send" primary p={p} disabled={!ready || busy}
-            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: sent, mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}), ...(postPhotos && mailPhotos.ids.length ? { mailPhotoIds: mailPhotos.ids } : {}) } }))} />
+            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: sent, ...(condition ? { condition } : {}), mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}), ...(postPhotos && mailPhotos.ids.length ? { mailPhotoIds: mailPhotos.ids } : {}) } }))} />
           {!ready && <View accessibilityLiveRegion="polite" style={{ gap: 2 }}>{blockers.map(b => <Text key={b} style={[ui.small, { color: p.muted }]}>{b}</Text>)}</View>}
         </>}
 
+        {!canSubmit && submitted && <CleanCheckSummary p={p} condition={submitted}
+          onPurchase={purchaseForm && onForm ? text => onForm(followUp(account, op.propertyId, op.workId, "purchase", text)!) : undefined}
+          onRepair={repairForm && onForm ? text => onForm(followUp(account, op.propertyId, op.workId, "maintenance", text)!) : undefined} />}
         {canReview && <>
           <Notice text={typeof op.data.report === "string" ? `Cleaner's report: ${op.data.report}` : "The cleaner has submitted this clean."} p={p} />
           <ChecklistReview key={op.workId} p={p} workId={op.workId} checklist={checklist} />

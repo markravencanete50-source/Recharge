@@ -369,7 +369,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
       {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} onOpenWork={setOpenWork} onOpenView={setWorkView} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} />}
       {currentView === "stays" && <LiveStays key={"stays:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}
-      {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
+      {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onForm={setForm} />}
       {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
       {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
       {currentView === "all" && <>
