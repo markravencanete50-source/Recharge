@@ -40,7 +40,7 @@ export function DesktopNavigation({role,section,palette:p,onNavigate,onDepartmen
     </ScrollView>
     <MotionPress {...hover} accessibilityRole="button" accessibilityLabel="Open profile and preferences" onPress={onProfile} style={[ui.row,{gap:12,margin:14,padding:12,borderRadius:18,borderWidth:1,borderColor:p.border,backgroundColor:p.surface}]}>
       <View style={{width:38,height:38,borderRadius:12,backgroundColor:p.header,alignItems:'center',justifyContent:'center'}}><Feather name="settings" size={17} color={p.headerText}/></View>
-      <View style={{flex:1,minWidth:0}}><Text numberOfLines={1} style={{fontSize:13,fontWeight:'600',color:p.text}}>Profile & preferences</Text><Text numberOfLines={1} style={{fontSize:12,color:p.muted}}>{profileDetail}</Text></View>
+      <View style={{flex:1,minWidth:0}}><Text numberOfLines={1} style={{fontSize:13,fontWeight:'600',color:p.text}}>Profile</Text><Text numberOfLines={1} style={{fontSize:12,color:p.muted}}>{profileDetail}</Text></View>
       <Feather name="chevron-right" size={16} color={p.muted}/>
     </MotionPress>
   </View>;

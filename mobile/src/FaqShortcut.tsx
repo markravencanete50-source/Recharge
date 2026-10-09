@@ -12,14 +12,15 @@ export function useFaqShortcut() {
   const update=(value:boolean)=>{changed.current=true;setHidden(value);void AsyncStorage.setItem('recharge:faq-shortcut-hidden',String(value)).catch(()=>{});};
   return {hidden,setHidden:update};
 }
-// A quiet floating pill in the corner. It clears the mobile dock and slides away while the page
-// scrolls, so it never sits over what someone is reading.
+// A quiet floating pill in the corner. It clears the mobile dock and shrinks away while the page
+// scrolls, so it never sits over what someone is reading. Shrinking in place, rather than sliding
+// off the edge, keeps the page from growing sideways.
 export function FaqShortcut({palette:p,onOpen,onHide,tucked=false}:{palette:Palette;onOpen:()=>void;onHide:()=>void;tucked?:boolean}) {
   const {width}=useWindowDimensions();
   const reduced=useReducedMotion();
   const [away]=useState(()=>new Animated.Value(0));
   useEffect(()=>{const to=tucked?1:0;if(reduced){away.setValue(to);return;}const a=Animated.spring(away,{toValue:to,speed:18,bounciness:tucked?0:6,useNativeDriver:Platform.OS!=='web'});a.start();return()=>a.stop();},[tucked,reduced,away]);
-  const slide={opacity:away.interpolate({inputRange:[0,1],outputRange:[1,0]}),transform:[{translateX:away.interpolate({inputRange:[0,1],outputRange:[0,72]})}]};
+  const slide={opacity:away.interpolate({inputRange:[0,1],outputRange:[1,0]}),transform:[{scale:away.interpolate({inputRange:[0,1],outputRange:[1,0.6]})}]};
   const desktop=width>=1024;
   const shadow=Platform.OS==='web'?{boxShadow:'0 12px 30px -12px rgba(8, 22, 18, 0.55)'}:{elevation:6};
   // On phones a compact round button keeps charts and lists readable; it can
