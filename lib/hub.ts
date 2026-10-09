@@ -4,10 +4,10 @@ import type { HubItem } from './workspace-teams-policy';
 // The hub: the business's trackers laid out like rows in a sheet. Its own rows (to-dos, approval
 // tickets, AirCover claims, invoices to send) come from the hub read; the rest are worked out here
 // from the work, routine plans and onboardings the app already holds.
-export type HubTab = 'todos' | 'approvals' | 'purchases' | 'preventative' | 'daily' | 'aircover' | 'invoices' | 'onboarding';
+export type HubTab = 'todos' | 'approvals' | 'purchases' | 'preventative' | 'daily' | 'aircover' | 'invoices' | 'onboarding' | 'responsibilities' | 'rota' | 'timesheets';
 export const HUB_TAB_LABEL: Record<HubTab, string> = {
   todos: 'To-dos', approvals: 'Approvals', purchases: 'Purchase orders', preventative: 'Preventative', daily: 'Reviews & pricing',
-  aircover: 'AirCover', invoices: 'Invoices to send', onboarding: 'Onboarding',
+  aircover: 'AirCover', invoices: 'Invoices to send', onboarding: 'Onboarding', responsibilities: 'Responsibilities', rota: 'Rota', timesheets: 'Timesheets',
 };
 export function hubTabsFor(role: string, keeps: readonly string[]): HubTab[] {
   const admin = role === 'admin' || role === 'super_admin';
@@ -18,6 +18,8 @@ export function hubTabsFor(role: string, keeps: readonly string[]): HubTab[] {
   if (keeps.includes('aircover')) tabs.push('aircover');
   if (keeps.includes('invoice')) tabs.push('invoices');
   if (admin || role === 'stays') tabs.push('onboarding');
+  // Everyone on the team reads who does what and the rota, and their own timesheet.
+  tabs.push('responsibilities', 'rota', 'timesheets');
   return tabs;
 }
 

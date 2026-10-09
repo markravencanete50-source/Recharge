@@ -17,12 +17,16 @@ const https = z.string().url().max(1000).refine(value => {
 
 export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
-    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub']),
+    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the schedule dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
+  }
+  if (value.section === 'rotaPlan' || value.section === 'timesheet') {
+    if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
+    else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 31 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 31 days' });
   }
   if (value.section === 'teamPerformance') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
@@ -30,6 +34,11 @@ export const teamsReadSchema = z.object({
   }
 });
 
+export const RESPONSIBILITY_FREQUENCIES = ['daily', 'weekly', 'monthly', 'as_needed'] as const;
+export const ROTA_SHIFTS = ['early', 'late', 'both', 'off'] as const;
+// A time of day in the UK, as HH:MM.
+export const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Enter the time as HH:MM, for example 10:30');
+const moment = z.string().datetime({ offset: true });
 export const DAILY_WORK = { signOffs: 'Daily sign-off', listingChecks: 'Listing checks', pricingDecisions: 'Pricing decisions', reviewsLogged: 'Reviews logged' } as const;
 const perDay = z.number().int().min(0).max(99);
 export const dailyTargetsSchema = z.object({ signOffs: perDay, listingChecks: perDay, pricingDecisions: perDay, reviewsLogged: perDay }).strict();
@@ -45,6 +54,17 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
     reference: z.string().trim().max(120).optional() }).strict(),
   z.object({ action: z.literal('moveHubItem'), requestId: id, id, version, status: z.enum(HUB_STATUSES), note: z.string().trim().max(2000).optional(),
     settledMinor: z.number().int().min(0).max(100000000).optional() }).strict(),
+  // The responsibilities register, kept by admins.
+  z.object({ action: z.literal('saveResponsibility'), requestId: id, id: id.optional(), version: version.optional(), department: z.enum(DEPARTMENTS), title: text(2, 200),
+    details: z.string().trim().max(3000).optional(), ownerId: id.nullable(), backupId: id.nullable(), frequency: z.enum(RESPONSIBILITY_FREQUENCIES) }).strict(),
+  z.object({ action: z.literal('removeResponsibility'), requestId: id, id, version }).strict(),
+  // The rota by date (a null shift clears the day), and corrected or forgotten shifts.
+  z.object({ action: z.literal('planRota'), requestId: id, userId: id, days: z.array(z.object({ day: date, shift: z.enum(ROTA_SHIFTS).nullable(),
+    department: z.enum(DEPARTMENTS).optional(), note: z.string().trim().max(300).optional() }).strict()).min(1).max(31) }).strict(),
+  z.object({ action: z.literal('editShift'), requestId: id, shiftId: id, clockedInAt: moment, clockedOutAt: moment.nullable(), department: z.enum(DEPARTMENTS).optional(), note: text(3, 500) }).strict(),
+  z.object({ action: z.literal('addShift'), requestId: id, userId: id, clockedInAt: moment, clockedOutAt: moment, department: z.enum(DEPARTMENTS), note: text(3, 500) }).strict(),
+  // The day and time of a piece of work on the calendar (no start time: any time that day).
+  z.object({ action: z.literal('setWorkTime'), requestId: id, workId: id, version, dueOn: date, startTime: clockTime.nullable(), endTime: clockTime.nullable() }).strict(),
   // A property's usual cleaner, who gets its cleans automatically (null clears it).
   z.object({ action: z.literal('setDefaultCleaner'), requestId: id, propertyId: id, cleanerId: id.nullable() }).strict(),
   z.object({ action: z.literal('setCleanerRate'), requestId: id, cleanerId: id, rateMinor: z.number().int().min(1).max(100000), version: z.number().int().min(0) }).strict(),
@@ -80,6 +100,10 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   if (value.action === 'saveRoutinePlan' && Boolean(value.planId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a plan needs its current version' });
   if (value.action === 'saveHubItem' && Boolean(value.id) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing needs the current version' });
   if (value.action === 'saveHubItem' && value.kind === 'approval' && value.amountMinor == null) context.addIssue({ code: 'custom', message: 'Add the amount to approve' });
+  if (value.action === 'saveResponsibility' && Boolean(value.id) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing needs the current version' });
+  if (value.action === 'saveResponsibility' && value.ownerId && value.ownerId === value.backupId) context.addIssue({ code: 'custom', message: 'The backup must be someone else' });
+  if (value.action === 'setWorkTime' && value.endTime && (!value.startTime || value.endTime <= value.startTime)) context.addIssue({ code: 'custom', message: 'The end time must be after the start time' });
+  if ((value.action === 'editShift' || value.action === 'addShift') && value.clockedOutAt && Date.parse(value.clockedOutAt) <= Date.parse(value.clockedInAt)) context.addIssue({ code: 'custom', message: 'The shift must end after it starts' });
   if (value.action === 'saveCourse' && Boolean(value.courseId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a course needs its current version' });
   if (value.action === 'saveTargets' && value.amberMinutes <= value.greenMinutes) context.addIssue({ code: 'custom', message: 'Amber must be longer than green' });
   if (value.action === 'saveContract' && Boolean(value.contractId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a contract needs its current version' });
@@ -105,3 +129,29 @@ export const hubSchema = z.object({
 });
 export type HubItem = z.infer<typeof hubItemSchema>;
 export type Hub = z.infer<typeof hubSchema>;
+
+const person = { userId: id, fullName: z.string(), role: z.string(), department: z.enum(DEPARTMENTS).nullable() };
+export const responsibilitiesSchema = z.object({
+  canEdit: z.boolean(),
+  items: z.array(z.object({ id, department: z.enum(DEPARTMENTS), title: z.string(), details: z.string(), frequency: z.enum(RESPONSIBILITY_FREQUENCIES),
+    ownerId: id.nullable(), ownerName: z.string().nullable(), backupId: id.nullable(), backupName: z.string().nullable(), updatedAt: z.string(), version: z.number() })),
+  people: z.array(z.object(person)),
+});
+export type Responsibilities = z.infer<typeof responsibilitiesSchema>;
+export type Responsibility = Responsibilities['items'][number];
+
+const rotaDay = z.object({ day: z.string(), shift: z.enum(ROTA_SHIFTS), department: z.enum(DEPARTMENTS).nullable(), note: z.string() });
+export const rotaPlanSchema = z.object({
+  from: z.string(), to: z.string(), canEdit: z.boolean(),
+  people: z.array(z.object({ ...person, usualShift: z.enum(['early', 'late', 'both']).nullable(), days: z.array(rotaDay) })),
+});
+export type RotaPlan = z.infer<typeof rotaPlanSchema>;
+
+export const timesheetSchema = z.object({
+  from: z.string(), to: z.string(), canEdit: z.boolean(),
+  people: z.array(z.object({ ...person, active: z.boolean(), totalMinutes: z.number(),
+    days: z.array(z.object({ day: z.string(), planned: rotaDay.omit({ day: true }).nullable(), minutes: z.number(),
+      shifts: z.array(z.object({ id, department: z.enum(DEPARTMENTS), clockedInAt: z.string(), clockedOutAt: z.string().nullable(), minutes: z.number(), edited: z.boolean(), editNote: z.string() })) })) })),
+});
+export type Timesheet = z.infer<typeof timesheetSchema>;
+export type TimesheetPerson = Timesheet['people'][number];

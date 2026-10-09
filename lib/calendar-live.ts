@@ -7,7 +7,7 @@ const uuid = z.string().uuid();
 export const calendarScheduleSchema = z.object({
   work: z.array(z.object({
     workId: uuid, propertyId: uuid, propertyName: z.string(), moduleId: z.string().nullable().default(null), title: z.string(), status: z.string(),
-    dueOn: z.string().nullable(), assigneeId: z.string().nullable(), assigneeName: z.string().nullable(), kind: z.string().nullable(), version: z.number(),
+    dueOn: z.string().nullable(), dueTime: z.string().nullable().default(null), endTime: z.string().nullable().default(null), assigneeId: z.string().nullable(), assigneeName: z.string().nullable(), kind: z.string().nullable(), version: z.number(),
   })),
   stays: z.array(z.object({ reservationId: z.string(), propertyId: z.string(), propertyName: z.string(), checkIn: z.string(), checkOut: z.string(), guests: z.number().nullable(), channel: z.string().nullable().optional() })),
   payments: z.array(z.object({
@@ -66,23 +66,24 @@ export function calendarTeamsFor(role: string): Team[] {
 export const canPickPerson = (role: string) => role === 'admin' || role === 'super_admin' || role === 'cleaning_manager';
 
 export type CalendarEntry = {
-  id: string; date: string; kind: EntryKind; team: Team; title: string; propertyId: string; propertyName: string;
+  id: string; date: string; time: string | null; endTime: string | null; kind: EntryKind; team: Team; title: string; propertyId: string; propertyName: string;
   personId: string | null; personName: string | null; status: string | null;
   work?: CalendarWork; stay?: CalendarStay; payments?: CalendarPayment[];
 };
 const workKind = (kind: string | null): EntryKind => kind === 'cleaning' ? 'clean' : kind === 'maintenance' ? 'repair' : kind === 'routine_visit' ? 'routine' : kind === 'inspection' ? 'inspection' : 'work';
 
 // Every entry in the schedule: work on its due day, each stay's arrival and departure, and one
-// payment run per day for the statements on it.
+// payment run per day for the statements on it. Within a day, entries without a time come first,
+// then the timed ones in time order.
 export function calendarEntries(s: CalendarSchedule): CalendarEntry[] {
   const out: CalendarEntry[] = [];
   for (const w of s.work) {
     if (!w.dueOn) continue;
-    out.push({ id: 'w:' + w.workId, date: w.dueOn, kind: workKind(w.kind), team: teamOf(w.moduleId, w.kind), title: w.title, propertyId: w.propertyId, propertyName: w.propertyName,
+    out.push({ id: 'w:' + w.workId, date: w.dueOn, time: w.dueTime, endTime: w.endTime, kind: workKind(w.kind), team: teamOf(w.moduleId, w.kind), title: w.title, propertyId: w.propertyId, propertyName: w.propertyName,
       personId: w.assigneeId, personName: w.assigneeName, status: w.status, work: w });
   }
   for (const stay of s.stays) {
-    const base = { team: 'stays' as const, propertyId: stay.propertyId, propertyName: stay.propertyName, personId: null, personName: null, status: null, stay };
+    const base = { team: 'stays' as const, time: null, endTime: null, propertyId: stay.propertyId, propertyName: stay.propertyName, personId: null, personName: null, status: null, stay };
     out.push({ ...base, id: 'in:' + stay.reservationId, date: stay.checkIn, kind: 'check-in', title: 'Guests arrive' });
     out.push({ ...base, id: 'out:' + stay.reservationId, date: stay.checkOut, kind: 'check-out', title: 'Guests leave' });
   }
@@ -90,12 +91,15 @@ export function calendarEntries(s: CalendarSchedule): CalendarEntry[] {
   for (const pay of s.payments) runs.set(pay.date, [...(runs.get(pay.date) ?? []), pay]);
   for (const [date, payments] of runs) {
     const one = payments.length === 1 ? payments[0] : null;
-    out.push({ id: 'pay:' + date, date, kind: 'payment', team: 'accounts', title: 'Owner payment run', propertyId: one?.propertyId ?? '', propertyName: one ? one.propertyName : `${payments.length} properties`,
+    out.push({ id: 'pay:' + date, date, time: null, endTime: null, kind: 'payment', team: 'accounts', title: 'Owner payment run', propertyId: one?.propertyId ?? '', propertyName: one ? one.propertyName : `${payments.length} properties`,
       personId: null, personName: null, status: null, payments });
   }
   const order = (k: EntryKind) => ENTRY_KINDS.indexOf(k);
-  return out.sort((a, b) => a.date.localeCompare(b.date) || order(a.kind) - order(b.kind) || a.propertyName.localeCompare(b.propertyName) || a.id.localeCompare(b.id));
+  return out.sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '') || order(a.kind) - order(b.kind) || a.propertyName.localeCompare(b.propertyName) || a.id.localeCompare(b.id));
 }
+
+// "10:00–12:00", "10:00", or null for any time that day.
+export const timeRange = (start: string | null | undefined, end?: string | null) => start ? (end ? `${start}–${end}` : start) : null;
 
 // A team filter keeps that team's entries; a person shows only the work assigned to them.
 export function filterEntries(entries: CalendarEntry[], team: Team | 'all', person: string | null) {

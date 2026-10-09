@@ -4,21 +4,22 @@ import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
-import { Button, london, message, Notice, Tag } from "./LiveKit";
+import { Button, Field, london, message, Notice, Tag, useRequestId } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { PageHeading } from "./LivePages";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
-import { readTeams } from "./backend/client";
+import { readTeams, writeTeams } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import type { DimensionalName } from "./DimensionalIcon";
 import {
   calendarEntries, calendarPeople, calendarScheduleSchema, calendarTeamsFor, canPickPerson, ENTRY_KINDS, filterEntries, KIND_COLOUR, KIND_LABEL, kindCount,
-  monthGrid, monthLabel, paymentSummary, periodLabel, shiftMonth, TEAM_LABEL, type CalendarEntry, type CalendarSchedule, type EntryKind, type Team,
+  monthGrid, monthLabel, paymentSummary, periodLabel, shiftMonth, TEAM_LABEL, timeRange, type CalendarEntry, type CalendarSchedule, type EntryKind, type Team,
 } from "../../lib/calendar-live";
 import { CHANNEL_LABEL, type GuestChannel } from "../../lib/guest-inbox-policy";
 import { workViewsFor, type WorkView } from "../../lib/tool-directory";
 import { readableStage } from "../../lib/workspace-view";
 import { formatMoney } from "../../lib/format";
+import { validClock } from "../../lib/team-time";
 import type { OperationView } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
@@ -79,6 +80,40 @@ function Fact({ p, icon, label, value }: { p: Palette; icon: IconName; label: st
   );
 }
 
+// Moving work to another day or giving it a time of day (UK time). The person it is assigned to is told.
+function WorkTimeEditor({ p, entry, onSaved }: { p: Palette; entry: CalendarEntry; onSaved: () => Promise<void> }) {
+  const w = entry.work!;
+  const [editing, setEditing] = useState(false);
+  const [day, setDay] = useState(w.dueOn ?? entry.date), [start, setStart] = useState(w.dueTime ?? ""), [end, setEnd] = useState(w.endTime ?? "");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const request = useRequestId(editing ? [w.workId, w.version, day, start, end].join(":") : null);
+  async function save() {
+    if (busy) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) { setError("Enter the date as YYYY-MM-DD."); return; }
+    if ((start && !validClock(start)) || (end && !validClock(end))) { setError("Enter times as HH:MM, for example 10:30."); return; }
+    if (end && !start) { setError("Add a start time as well as an end time."); return; }
+    if (start && end && end <= start) { setError("The end time must be after the start time."); return; }
+    setBusy(true); setError("");
+    try {
+      await writeTeams({ action: "setWorkTime", requestId: request.get(), workId: w.workId, version: w.version, dueOn: day, startTime: start || null, endTime: end || null });
+      request.done(); await onSaved();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  if (!editing) return <Button label={entry.time ? "Change the day or time" : "Set the day and time"} icon="clock" p={p} onPress={() => setEditing(true)} />;
+  return (
+    <View style={{ gap: 10, padding: 14, borderRadius: 18, borderWidth: 1, borderColor: p.border }}>
+      <Field label="Date (YYYY-MM-DD)" value={day} onChange={setDay} p={p} placeholder={entry.date} />
+      <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+        <View style={{ flex: 1, minWidth: 120 }}><Field label="Starts (HH:MM)" value={start} onChange={setStart} p={p} placeholder="10:00" /></View>
+        <View style={{ flex: 1, minWidth: 120 }}><Field label="Ends (optional)" value={end} onChange={setEnd} p={p} placeholder="14:00" /></View>
+      </View>
+      <Text style={[ui.small, { color: p.muted }]}>UK time. Leave the times empty for any time that day.</Text>
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <Button label={busy ? "Saving…" : "Save"} icon="check" primary p={p} disabled={busy} onPress={() => void save()} />
+    </View>
+  );
+}
+
 export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, onOpenView }: { palette: Palette; account: WorkspaceAccount; work: OperationView[]; desktop: boolean; onOpenWork: (item: OperationView) => void; onOpenView?: (view: WorkView) => void }) {
   const { width } = useWindowDimensions();
   const roomy = width >= 700;
@@ -123,8 +158,9 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   const who = (e: CalendarEntry) => e.personId === account.userId ? "You" : e.personName ?? "Not assigned yet";
   const detailOf = (e: CalendarEntry) => e.stay ? [e.propertyName, e.stay.guests ? `${e.stay.guests} guests` : "", channelName(e.stay.channel)].filter(Boolean).join(" · ")
     : e.payments ? `${e.propertyName} · ${paymentSummary(e.payments)}`
-    : `${e.propertyName} · ${who(e)}`;
+    : [timeRange(e.time, e.endTime), e.propertyName, who(e)].filter(Boolean).join(" · ");
   const canChat = account.role !== "client" && account.role !== "accounts";
+  const canTime = account.role !== "client" && account.role !== "cleans";
 
   const header = (
     <View style={[ui.between, { gap: 10, flexWrap: "wrap" }]}>
@@ -235,11 +271,13 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
         {open?.work && <>
           <Fact p={p} icon={KIND_ICON[open.kind]} label="Type" value={open.kind === "work" && open.work.kind ? readableStage(open.work.kind) : KIND_LABEL[open.kind]} />
           <Fact p={p} icon="home" label="Property" value={open.propertyName} />
+          <Fact p={p} icon="clock" label="Time" value={timeRange(open.time, open.endTime) ?? "Any time"} />
           <Fact p={p} icon="user" label="Assigned to" value={who(open)} />
           <Fact p={p} icon="activity" label="Status" value={readableStage(open.work.status)} />
           <Fact p={p} icon="users" label="Team" value={TEAM_LABEL[open.team]} />
           {op ? <Button label="Open" icon="arrow-right" primary p={p} onPress={() => { setOpen(null); onOpenWork(op); }} />
             : <Text style={[ui.small, { color: p.muted }]}>{open.status === "completed" ? "This is done. Its record stays on the calendar." : "Its full details open from Work → All work."}</Text>}
+          {canTime && !["completed", "cancelled", "declined"].includes(open.work.status) && <WorkTimeEditor key={open.id + ":" + open.work.version} p={p} entry={open} onSaved={async () => { setOpen(null); await load(); }} />}
           {canChat && <PropertyTeamChatButton palette={p} propertyId={open.propertyId} workId={open.work.workId} />}
         </>}
         {open?.stay && <>

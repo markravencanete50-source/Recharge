@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Linking, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
+import { Chip, SheetTable, cellText } from "./SheetTable";
+import { ResponsibilitiesTab, RotaTab, TimesheetTab } from "./LiveTeamTime";
 import { FilterBar } from "./FilterBar";
 import { Button, Field, Loading, message, Notice, Tag, london, useRequestId } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
@@ -20,28 +22,6 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 // The hub: the business's trackers as rows, like a sheet you can tap into. To-dos per person and
 // department, approval tickets, purchase orders, preventative maintenance, the day's reviews and
 // pricing, AirCover claims, invoices to send and onboarding.
-type Column<T> = { label: string; width: number; cell: (row: T) => ReactNode };
-
-function SheetTable<T>({ p, columns, rows, keyOf, onRow, empty }: { p: Palette; columns: Column<T>[]; rows: T[]; keyOf: (row: T) => string; onRow?: (row: T) => void; empty: string }) {
-  if (!rows.length) return <Notice text={empty} p={p} />;
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: "100%" }}>
-      <View style={{ borderWidth: 1, borderColor: p.border, borderRadius: 14, overflow: "hidden", backgroundColor: p.surface, minWidth: "100%" }}>
-        <View style={{ flexDirection: "row", backgroundColor: p.wash }}>
-          {columns.map(c => <Text key={c.label} style={[ui.small, { width: c.width, flexGrow: 1, paddingHorizontal: 10, paddingVertical: 8, color: p.muted, fontWeight: "700", letterSpacing: 0.3 }]}>{c.label}</Text>)}
-        </View>
-        {rows.map((row, i) => (
-          <MotionPress key={keyOf(row)} accessibilityRole={onRow ? "button" : undefined} disabled={!onRow} onPress={() => onRow?.(row)}
-            style={{ flexDirection: "row", alignItems: "center", minHeight: 44, borderTopWidth: i ? 1 : 0, borderTopColor: p.border }}>
-            {columns.map(c => <View key={c.label} style={{ width: c.width, flexGrow: 1, paddingHorizontal: 10, paddingVertical: 8 }}>{c.cell(row)}</View>)}
-          </MotionPress>
-        ))}
-      </View>
-    </ScrollView>
-  );
-}
-
-const cellText = (p: Palette, value: string | null | undefined, strong = false) => <Text numberOfLines={2} style={[strong ? { fontWeight: "700" } : ui.small, { color: value ? p.text : p.muted, fontVariant: ["tabular-nums"] }]}>{value || "–"}</Text>;
 const tone = (status: string): "good" | "wait" | "bad" | "plain" => ["done", "approved", "paid", "Delivered", "Live", "live"].includes(status) ? "good" : ["declined", "Cancelled"].includes(status) ? "bad" : ["pending", "to_claim", "to_send", "Requested"].includes(status) ? "wait" : "plain";
 
 export function LiveHub({ palette: p, account, properties, journeys, work, onForm, onOpenWork }: {
@@ -210,20 +190,15 @@ export function LiveHub({ palette: p, account, properties, journeys, work, onFor
               { label: "Inspection", width: 100, cell: r => cellText(p, r.inspectionOn ? formatDay(r.inspectionOn) : null) },
             ]} />
         )}
+
+        {current === "responsibilities" && <ResponsibilitiesTab p={p} account={account} />}
+        {current === "rota" && <RotaTab p={p} account={account} />}
+        {current === "timesheets" && <TimesheetTab p={p} account={account} />}
       </>}
 
       <HubItemSheet p={p} hub={hub} account={account} properties={properties} target={editing} onClose={() => setEditing(null)} onSaved={saved(async () => { setEditing(null); await load(); })} />
       <PropertyPicker p={p} properties={properties} title={picking?.title ?? ""} visible={!!picking} onClose={() => setPicking(null)} onPick={id => { const text = picking?.text ?? ""; setPicking(null); purchaseFor(id, text); }} />
     </View>
-  );
-}
-
-function Chip({ p, label, on, onPress }: { p: Palette; label: string; on: boolean; onPress: () => void }) {
-  return (
-    <MotionPress accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={onPress}
-      style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-      <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label}</Text>
-    </MotionPress>
   );
 }
 

@@ -17,9 +17,9 @@ const todo = (n, extra) => ({ id: id(n), kind: 'todo', title: 'T' + n, details: 
 test('every team role has the Hub; each sees the trackers for their work', () => {
   for (const role of ['admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts']) assert.ok(workViewsFor(role).includes('hub'), role);
   assert.equal(workViewsFor('client').includes('hub'), false);
-  assert.deepEqual(hubTabsFor('admin', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'invoices', 'onboarding']);
-  assert.deepEqual(hubTabsFor('cleans', ['todo', 'approval']), ['todos', 'approvals']);
-  assert.deepEqual(hubTabsFor('accounts', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'aircover', 'invoices']);
+  assert.deepEqual(hubTabsFor('admin', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'invoices', 'onboarding', 'responsibilities', 'rota', 'timesheets']);
+  assert.deepEqual(hubTabsFor('cleans', ['todo', 'approval']), ['todos', 'approvals', 'responsibilities', 'rota', 'timesheets']);
+  assert.deepEqual(hubTabsFor('accounts', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'aircover', 'invoices', 'responsibilities', 'rota', 'timesheets']);
   assert.ok(teamsReadSchema.safeParse({ section: 'hub' }).success);
 });
 

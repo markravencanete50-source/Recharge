@@ -99,6 +99,10 @@ const EXACT: Record<string, NoticeCopy> = {
   'hub.approval_added': copy('Approval needed', 'Someone on the team has asked management to approve a cost.'),
   'hub.approval_approved': copy('Approved', 'Management has approved your request.'),
   'hub.approval_declined': copy('Not approved', 'Management has declined your request and said why.'),
+  // Who does what and when.
+  'team.responsibility_given': copy('A responsibility is yours', 'You have been made responsible for something, or its backup, in the responsibilities register.'),
+  'team.rota_planned': copy('Your rota has changed', 'Management has planned or changed your shifts. Check the rota for your days.'),
+  'team.shift_corrected': copy('Your timesheet was corrected', 'Management has corrected or added one of your shifts, with a note of why.'),
   // People who delete their own account (admins are told).
   'account.owner_deleted': copy('An owner deleted their account', 'An owner has deleted their Recharge account. Their properties stay with the business, no longer linked to a login. Check whether their management agreement should end.'),
   'account.staff_deleted': copy('A team member deleted their account', 'A team member has deleted their Recharge account. Their access has been removed and their work stays on record as “Deleted user”.'),
@@ -110,6 +114,7 @@ const BY_AREA: [string, NoticeCopy][] = [
   ['cleaning.', copy('Cleaning update', 'There is an update on a clean.')],
   ['reservation.', copy('Booking update', 'There is an update on a booking.')],
   ['hub.', copy('Hub update', 'There is an update in the hub.')],
+  ['team.', copy('Team update', 'There is an update to the team’s rota or responsibilities.')],
   ['property_details.', copy('Property details updated', 'A property’s details have been updated.')],
 ];
 const FALLBACK = copy('Update in Recharge', 'There is an update in your Recharge workspace.');
