@@ -13,6 +13,7 @@ import { writeOperation } from "./backend/client";
 import { formatMoney } from "../../lib/format";
 import { repairTypeLabel } from "../../lib/repair-guides";
 import { ownerApprovals, type RepairApproval } from "../../lib/owner-approvals";
+import type { RepairApproval as ManagementRepair } from "../../lib/management-live";
 import type { JourneyView, OperationView, WorkflowForm } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
@@ -25,6 +26,15 @@ export type CostDecision = {
   estimateMinor: number | null; previousEstimateMinor: number | null; quoteReason: string | null; limitText: string | null;
 };
 type Choice = "approve" | "decline";
+
+// A repair above the company-wide limit, as Management decides it (Management and admins' Home).
+export function managementCostDecision(r: ManagementRepair): CostDecision {
+  return {
+    who: "management", workId: r.workId, version: r.version, propertyName: r.propertyName, issue: r.issue ?? r.title, repairType: r.repairType, urgent: r.urgent, hazard: r.hazard,
+    estimateMinor: r.estimatedCostMinor, previousEstimateMinor: r.previousEstimateMinor, quoteReason: r.quoteReason,
+    limitText: `Above the management limit${r.limitMinor !== null ? " of " + formatMoney(r.limitMinor) : ""}. ${r.ownerApprovedAt ? "The owner has approved it." : "It is within the owner’s own limit."} Once approved, it carries on with Stays and Ready.`,
+  };
+}
 
 export function ownerLimitText(r: Pick<RepairApproval, "limitMinor" | "anyAmount">) {
   if (r.anyAmount) return "You authorised repairs of any amount, but this one was sent to you to check.";

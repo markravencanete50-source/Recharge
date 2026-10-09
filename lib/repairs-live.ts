@@ -15,6 +15,9 @@ export const REPAIR_STAGES = [
   { phase: "closed", label: "Closed", detail: "Closed after the cost was declined" },
 ] as const;
 export type RepairPhase = (typeof REPAIR_STAGES)[number]["phase"];
+// The stages Ready can open: repairs reach them once Stays refer them, so approvals, declines and
+// new reports are not counted on Ready's Home (their Repairs list would be empty).
+export const READY_STAGES = REPAIR_STAGES.filter(s => ["referred", "booked", "completed", "paid"].includes(s.phase));
 // Where a repair is: its workflow phase, or "paid" once Accounts have paid or charged the cost
 // (its expense approved, its invoice paid or its invoice task closed).
 export const repairStage = (data: Record<string, unknown>): string => data.phase === "completed" && typeof data.paidAt === "string" ? "paid" : String(data.phase ?? "triage");

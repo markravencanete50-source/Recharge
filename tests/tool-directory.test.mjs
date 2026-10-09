@@ -13,7 +13,9 @@ test('every default tool of every role has a place the role can open', () => {
   for (const role of ROLES) {
     const modules = role.endsWith('admin') ? [...MODULE_IDS] : defaultModulesForRole(role);
     const tools = toolsFor(role, modules);
-    assert.equal(tools.length, modules.length, role + ': every tool is listed');
+    // Accounts have no Properties tab, so the property database is not listed for them.
+    const listed = role === 'accounts' ? modules.filter(m => m !== 'property-database') : modules;
+    assert.equal(tools.length, listed.length, role + ': every tool is listed');
     for (const t of tools) {
       if (t.place.kind === 'work') assert.ok(workViewsFor(role).includes(t.place.view), `${role} can open ${t.place.view} for ${t.id}`);
       assert.ok(t.place.where.length > 3, t.id);
@@ -26,4 +28,10 @@ test('team roles all have All work, and admins can open the Stays screens', () =
   assert.ok(workViewsFor('admin').includes('stays'));
   assert.deepEqual(toolsFor('client', ['client-furnishing']).map(t => t.place.kind), ['calculator'], 'the calculator runs inside the app');
   assert.deepEqual(toolsFor('stays', ['aircover-reporting']).map(t => t.place.kind), ['tracker']);
+});
+
+test('Accounts are not sent to a Properties tab they cannot open', () => {
+  const tools = toolsFor('accounts', ['property-database', 'ota-logins', 'owner-statements']);
+  assert.deepEqual(tools.map(t => t.id), ['owner-statements']);
+  assert.ok(toolsFor('stays', ['property-database']).some(t => t.place.kind === 'tab' && t.place.tab === 'properties'));
 });

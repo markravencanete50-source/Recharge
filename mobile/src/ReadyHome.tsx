@@ -7,10 +7,10 @@ import { dayLabel, Loading, message, Notice, Tag } from "./LiveKit";
 import { ui, type Palette } from "./theme";
 import { readTeams } from "./backend/client";
 import { monthLabel } from "../../lib/accounts-live";
-import { readyHomeSchema, REPAIR_STAGES, visitDone, visitSummary, type ReadyHome as ReadyHomeData } from "../../lib/repairs-live";
+import { readyHomeSchema, READY_STAGES, visitDone, visitSummary, type ReadyHome as ReadyHomeData } from "../../lib/repairs-live";
 import { sectionAnchor, type HomeToolTarget } from "../../lib/home-tools";
 
-// Ready's Home: every repair at the properties they look after, by stage from the Stays report to
+// Ready's Home: the repairs at the properties they look after, by stage from Stays' referral to
 // payment by Accounts, and this month's routine visits for each property (done and still due).
 // Tapping a stage opens Work → Repairs on that stage.
 const ACTS: string[] = ["referred", "booked"];
@@ -25,7 +25,7 @@ export function ReadyHome({ palette: p, desktop, onTool }: { palette: Palette; d
     return () => { active = false; };
   }, []);
   const open = (sub: string) => onTool({ kind: "work", view: "repairs", sub, anchor: sectionAnchor("Pipeline") });
-  const total = home ? REPAIR_STAGES.reduce((n, s) => n + (home.stages[s.phase] ?? 0), 0) : 0;
+  const total = home ? READY_STAGES.reduce((n, s) => n + (home.stages[s.phase] ?? 0), 0) : 0;
   return (
     <Entrance sessionKey="live:home:ready" style={{ gap: 20 }}>
       <View style={{ gap: 10 }}>
@@ -37,7 +37,7 @@ export function ReadyHome({ palette: p, desktop, onTool }: { palette: Palette; d
         {!!error && <Notice text={error} p={p} tone="bad" />}
         {home && <>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {REPAIR_STAGES.map((s, i) => {
+            {READY_STAGES.map((s, i) => {
               const n = home.stages[s.phase] ?? 0, yours = ACTS.includes(s.phase) && n > 0;
               return (
                 <Stagger key={s.phase} index={i} style={{ flexGrow: 1, flexBasis: desktop ? 140 : 100, minWidth: 0 }}>
@@ -45,7 +45,7 @@ export function ReadyHome({ palette: p, desktop, onTool }: { palette: Palette; d
                     style={{ minHeight: 92, padding: 12, gap: 4, borderRadius: 18, borderWidth: 1, borderColor: yours ? p.primary : p.border, backgroundColor: yours ? p.wash : p.surface }}>
                     <View style={[ui.between, { gap: 6 }]}>
                       <Text style={{ color: p.text, fontSize: 26, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{n}</Text>
-                      {i < REPAIR_STAGES.length - 1 ? <Feather name="arrow-right" size={14} color={p.muted} /> : <Feather name="check-circle" size={14} color={p.success} />}
+                      {i < READY_STAGES.length - 1 ? <Feather name="arrow-right" size={14} color={p.muted} /> : <Feather name="check-circle" size={14} color={p.success} />}
                     </View>
                     <Text numberOfLines={1} style={{ color: p.text, fontWeight: "700", fontSize: 13 }}>{s.label}</Text>
                     <Text numberOfLines={2} style={{ color: p.muted, fontSize: 11, lineHeight: 15 }}>{s.phase === "paid" ? "This month" : s.detail}</Text>

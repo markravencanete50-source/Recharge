@@ -12,7 +12,8 @@ import { List, Pills } from "./LiveAccounts";
 import { StateGraphic } from "./StateGraphic";
 import { exportReport } from "./exportReport";
 import { readOversight, readTeams, writeFinance, writeOversight, writeTeams, WorkspaceApiError } from "./backend/client";
-import { DECISION_OUTCOMES, decisionAction, managementSchema, type Decision, type Management } from "../../lib/management-live";
+import { DECISION_OUTCOMES, decisionAction, managementSchema, queueCount, type Decision, type Management, type RepairApproval } from "../../lib/management-live";
+import { CostDecisionSheet, managementCostDecision, type CostDecision } from "./LiveApprovals";
 import { AREA_LABEL, decisionsCsv, decisionsSchema, outcomeLabel, overviewSchema, waitedLabel, type DecisionRow, type Overview } from "../../lib/oversight-policy";
 import { formatCount, formatMoney } from "../../lib/format";
 import { sectionAnchor, type HomeToolTarget } from "../../lib/home-tools";
@@ -137,9 +138,9 @@ function DecideSheet({ p, pending, onClose, onDone }: { p: Palette; pending: Pen
 }
 
 // Decisions waiting on management, each with its buttons: rejected cleans, cleaner reviews, costs
-// above the approval limit and unusual owner payouts.
+// above the approval limit, repairs above the management limit and unusual owner payouts.
 type RowSpec = { key: string; icon: IconName; tone: Tone; title: string; detail: string; amount?: string; tags: [string, "good" | "wait" | "bad" | "plain"][]; actions: Action[] };
-function decisionRows(p: Palette, queue: Management, decide: (x: Pending) => void, limit = Infinity) {
+function decisionRows(p: Palette, queue: Management, decide: (x: Pending) => void, limit = Infinity, repair?: (r: RepairApproval, start: "approve" | "decline") => void) {
   const specs: RowSpec[] = [
     ...queue.cleaningDecisions.map((d): RowSpec => ({ key: d.workId, icon: "check-square", tone: "cleans",
       title: d.kind === "cleaning_complaint" ? `Contested clean · ${d.cleanerName ?? "Cleaner"}` : `Second quality warning · ${d.cleanerName ?? "Cleaner"}`,
@@ -153,6 +154,10 @@ function decisionRows(p: Palette, queue: Management, decide: (x: Pending) => voi
         tags: [evidence ? ["Evidence complete", "good"] : ["Invoice or proof missing", "wait"]],
         actions: [{ label: "Approve", icon: "check", primary: true, disabled: !evidence, onPress: () => decide({ kind: "expense", expense: e, approve: true }) }, { label: "Decline", icon: "x", onPress: () => decide({ kind: "expense", expense: e, approve: false }) }] };
     }),
+    ...(repair ? queue.repairApprovals : []).map((r): RowSpec => ({ key: r.workId, icon: "tool", tone: "ready", title: `Repair over the limit · ${r.propertyName}`,
+      detail: `${r.issue ?? r.title} · waiting ${waitedLabel(r.waitingSince)}`, amount: r.estimatedCostMinor != null ? formatMoney(r.estimatedCostMinor) : undefined,
+      tags: [r.ownerApprovedAt ? ["Owner approved", "good"] : ["Within the owner’s limit", "plain"], ...(r.urgent ? [["Urgent", "bad"] as [string, "bad"]] : [])],
+      actions: [{ label: "Approve", icon: "check", primary: true, onPress: () => repair?.(r, "approve") }, { label: "Decline", icon: "x", onPress: () => repair?.(r, "decline") }] })),
     ...queue.unusualPayouts.map((s): RowSpec => ({ key: s.id, icon: "pie-chart", tone: "accounts", title: `Unusual owner payout · ${s.propertyName}`,
       detail: `${s.period} statement, ${s.status === "draft" ? "not issued yet" : "issued"}${s.averageMinor != null && s.previousStatements ? ` · usually ${formatMoney(s.averageMinor)}` : ""}`, amount: formatMoney(s.payoutMinor),
       tags: [[REASON[s.reason], s.reason === "negative" ? "bad" : "wait"]],
@@ -286,6 +291,7 @@ export function AdminHome({ palette: p, desktop, onTool }: { palette: Palette; d
   const [overviewError, setOverviewError] = useState("");
   const { queue, error, load: loadQueue } = useQueue();
   const [pending, setPending] = useState<Pending | null>(null);
+  const [repair, setRepair] = useState<{ decision: CostDecision; start: "approve" | "decline" } | null>(null);
   const load = useCallback(async () => {
     const [o] = await Promise.allSettled([readOversight({ section: "overview" }).then(r => overviewSchema.parse(r.data)), loadQueue()]);
     if (o.status === "fulfilled") { setOverview(o.value); setOverviewError(""); } else setOverviewError(message(o.reason));
@@ -293,8 +299,9 @@ export function AdminHome({ palette: p, desktop, onTool }: { palette: Palette; d
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const actions = useQueueActions(load);
   const columns = desktop ? 4 : width >= 600 ? 2 : 1;
-  const decisions = queue ? queue.cleaningDecisions.length + queue.expensesOverLimit.length + queue.unusualPayouts.length : 0;
-  const waiting = queue ? decisions + queue.stalledOwnerApprovals.length + queue.missedYesterday.length : 0;
+  const decisions = queue ? queue.cleaningDecisions.length + queue.expensesOverLimit.length + queue.repairApprovals.length + queue.unusualPayouts.length : 0;
+  // The same total as Management → Waiting on you, so "See all" matches what is there.
+  const waiting = queue ? queueCount(queue) : 0;
   const cards = overview ? departments(overview) : [];
   return (
     <>
@@ -330,10 +337,10 @@ export function AdminHome({ palette: p, desktop, onTool }: { palette: Palette; d
           <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 22 }]}>
             <StateGraphic palette={p} success icon="check-circle" />
             <Text style={[ui.sectionTitle, { color: p.text, textAlign: "center" }]}>Nothing needs a decision</Text>
-            <Text style={[ui.body, { color: p.muted, textAlign: "center" }]}>Contested cleans, quotes over the limit, warnings and unusual payouts appear here.</Text>
+            <Text style={[ui.body, { color: p.muted, textAlign: "center" }]}>Contested cleans, quotes and repairs over the limit, warnings and unusual payouts appear here.</Text>
           </View>
         )}
-        {queue && !!decisions && <List p={p} empty="">{decisionRows(p, queue, setPending, 6)}</List>}
+        {queue && !!decisions && <List p={p} empty="">{decisionRows(p, queue, setPending, 6, (r, start) => setRepair({ decision: managementCostDecision(r), start }))}</List>}
         {queue && !!queue.stalledOwnerApprovals.length && <List p={p} empty="">{stalledRows(p, queue.stalledOwnerApprovals, actions.remind, actions.busy, 3)}</List>}
         {queue && !!queue.missedYesterday.length && <List p={p} empty="">{missedRows(p, queue.missedYesterday, actions.seen, actions.busy, 3)}</List>}
         {queue && waiting > Math.min(decisions, 6) + Math.min(queue.stalledOwnerApprovals.length, 3) + Math.min(queue.missedYesterday.length, 3) && (
@@ -341,6 +348,7 @@ export function AdminHome({ palette: p, desktop, onTool }: { palette: Palette; d
         )}
       </Entrance>
       <DecideSheet p={p} pending={pending} onClose={() => setPending(null)} onDone={saved(load)} />
+      <CostDecisionSheet p={p} decision={repair?.decision ?? null} start={repair?.start} onClose={() => setRepair(null)} onDone={saved(load)} />
     </>
   );
 }

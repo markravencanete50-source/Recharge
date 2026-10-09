@@ -9,7 +9,7 @@ import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton } from "./LiveKit";
 import { formatMoney } from "../../lib/format";
 import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeOperation, writeTeams, writeWorkspace } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
@@ -18,6 +18,7 @@ import { REPAIR_GUIDES, SAFETY_STOP, repairTypeLabel, troubleshootingNote, type 
 import { profileAccess, reservationsSchema, stayLines, type StayLine } from "../../lib/property-profile";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import { scheduleSchema } from "../../lib/cleans-live";
+import { canStart } from "../../lib/home-tools";
 import { canCloseRepair, canReportRepair, canReviseQuote, declineNote, poundsToMinor, repairClosed, repairStage, repairStep, REPAIR_STAGES, routinePlanSchema, visitMoves, type RepairStep } from "../../lib/repairs-live";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
@@ -90,8 +91,8 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
       {loading && <Loading p={p} />}
 
       <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-        {canReportRepair(account.role) && <Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} />}
-        <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
+        {canStart(account, "report-repair") && <Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} />}
+        <RefreshButton p={p} loading={loading} onPress={() => void load()} />
       </View>
 
       <Section title="Pipeline" p={p}>
@@ -423,8 +424,8 @@ function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: 
         </View>
       </>}
       <Field label="Estimated cost" value={estimate} onChange={setEstimate} p={p} placeholder="£0.00" />
-      <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: hazard }} onPress={() => setHazard(h => !h)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: hazard ? "#F6DEDA" : p.elevated }]}>
-        <Feather name={hazard ? "check-square" : "square"} size={20} color={hazard ? "#A63A32" : p.muted} />
+      <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: hazard }} onPress={() => setHazard(h => !h)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: hazard ? p.dangerWash : p.elevated }]}>
+        <Feather name={hazard ? "check-square" : "square"} size={20} color={hazard ? p.danger : p.muted} />
         <Text style={{ color: p.text, flex: 1 }}>This is a safety hazard</Text>
       </MotionPress>
       <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: urgent || hazard }} onPress={() => setUrgent(u => !u)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: urgent || hazard ? p.cautionWash : p.elevated }]}>

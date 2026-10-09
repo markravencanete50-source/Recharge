@@ -2,9 +2,10 @@ import type { WorkspaceAccount } from './workspace-account-policy';
 import { REPAIR_GUIDES } from './repair-guides';
 import { INSPECTION_CHECKS } from './onboarding-content';
 import { SCOTTISH_REGIONS } from './regions';
+import { workspaceDateKey } from './analytics';
 export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense'};
 export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls'|'finance';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string;workId?:string};
-export type JourneyView={propertyId:string;clientId:string;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string}};
+export type JourneyView={propertyId:string;clientId:string;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionOn?:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string}};
 export type OperationView={workId:string;propertyId:string;moduleId:string;title:string;kind:string;status:string;version:number;assigneeId:string|null;dueOn?:string|null;data:Record<string,unknown>};
 const field=(name:string,label:string,type:WorkflowField['type']='text',required=true):WorkflowField=>({name,label,type,required});
 const select=(name:string,label:string,values:string[]):WorkflowField=>({...field(name,label,'select'),options:values.map(value=>({value,label:value.replaceAll('_',' ')}))});
@@ -34,7 +35,7 @@ export function workflowValues(fields:WorkflowField[],raw:Record<string,unknown>
  return values;
 }
 export function newEnquiryForm():WorkflowForm{return {key:'enquiry',title:'Add a property enquiry',endpoint:'journeys',fields:[field('name','Property name'),field('address','Full property address','textarea'),{...field('region','Area','select'),options:SCOTTISH_REGIONS.map(value=>({value,label:value}))},field('propertyType','Property type'),field('bedrooms','Bedrooms','number'),field('bathrooms','Bathrooms','number')],build:v=>({action:'createEnquiry',...v})};}
-export function journeyForms(a:WorkspaceAccount,j:JourneyView):WorkflowForm[]{
+export function journeyForms(a:WorkspaceAccount,j:JourneyView,today=workspaceDateKey(Date.now())):WorkflowForm[]{
  if(!admin(a)&&!a.modules.includes('property-onboarding')&&!(a.role==='ready'&&a.modules.includes('new-property-inspection-board')))return [];
  const forms:WorkflowForm[]=[],team=admin(a)||a.role==='stays',owner=a.role==='client'&&a.userId===j.clientId;
  const add=(action:string,title:string,fields:WorkflowField[],transform=(v:Record<string,unknown>)=>v,endpoint:WorkflowForm['endpoint']='journeys')=>forms.push({key:action,title,endpoint,fields,build:v=>({action,propertyId:j.propertyId,version:j.version,...transform(v)})});
@@ -52,11 +53,18 @@ export function journeyForms(a:WorkspaceAccount,j:JourneyView):WorkflowForm[]{
   add('linkInvoice','Link the onboarding invoice',[field('invoiceId','Issued onboarding invoice','select')]);
  }
  if((team||a.role==='ready')&&j.stage==='inspection_to_book')add('bookInspection','Book the property inspection',[field('inspectionOn','Inspection date','date')]);
- if((team||a.role==='ready')&&j.stage==='inspection_booked')add('completeInspection','Submit the inspection report',[...INSPECTION_CHECKS.map(c=>field('check_'+c.key,c.label,'checkbox',false)),field('issues','Issues found (optional)','textarea',false),field('report','Findings and required work','textarea')],v=>({report:v.report,checks:Object.fromEntries(INSPECTION_CHECKS.map(c=>[c.key,v['check_'+c.key]===true])),...(typeof v.issues==='string'&&v.issues?{issues:v.issues}:{})}));
+ // The report opens on the booked inspection day; the database refuses it before then.
+ if((team||a.role==='ready')&&j.stage==='inspection_booked'&&!!j.inspectionOn&&j.inspectionOn<=today)add('completeInspection','Submit the inspection report',[...INSPECTION_CHECKS.map(c=>field('check_'+c.key,c.label,'checkbox',false)),field('issues','Issues found (optional)','textarea',false),field('report','Findings and required work','textarea')],v=>({report:v.report,checks:Object.fromEntries(INSPECTION_CHECKS.map(c=>[c.key,v['check_'+c.key]===true])),...(typeof v.issues==='string'&&v.issues?{issues:v.issues}:{})}));
  if((owner||team)&&j.stage!=='live')add('askQuestion',owner?'Ask Recharge a question':'Add a question to this onboarding',[field('question','Your question','textarea')]);
  if(team)for(const q of (j.questions??[]).filter(q=>!q.answeredAt))forms.push({key:'answer-'+q.id,title:'Answer: '+(q.question.length>60?q.question.slice(0,57)+'…':q.question),endpoint:'journeys',fields:[field('answer','Your answer','textarea')],build:v=>({action:'answerQuestion',propertyId:j.propertyId,version:j.version,questionId:q.id,answer:v.answer})});
  if(team&&j.stage==='inspection_complete')add('makeLive','Record the live listing',[select('platform','Platform',['Airbnb','Booking.com','Direct','Comfy Workers']),field('url','Live listing HTTPS address')],v=>({listingLinks:[v]}));
  return forms;
+}
+// Before the booked inspection day, the date the report can be filed from (for those who will file
+// it), shown where the form would be.
+export function inspectionReportFrom(a:WorkspaceAccount,j:JourneyView,today=workspaceDateKey(Date.now())):string|null{
+ if(j.stage!=='inspection_booked'||!j.inspectionOn||j.inspectionOn<=today)return null;
+ return journeyForms(a,j,j.inspectionOn).some(f=>f.key==='completeInspection')?j.inspectionOn:null;
 }
 export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[]{
  if(['completed','cancelled'].includes(w.status))return [];

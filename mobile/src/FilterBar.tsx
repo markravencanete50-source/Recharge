@@ -125,11 +125,14 @@ export function FilterBar({
                 );
               }}
               style={{
-                minHeight: 40,
+                minHeight: 44,
                 paddingHorizontal: 16,
                 alignItems: "center",
                 justifyContent: "center",
                 borderRadius: 999,
+                // Until the sliding pill has measured its place, the chosen item paints its own
+                // background so its label is never light text on the light track.
+                backgroundColor: !box && selected === value ? p.primary : "transparent",
               }}
             >
               <Text

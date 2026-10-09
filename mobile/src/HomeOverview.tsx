@@ -119,7 +119,7 @@ export function QuickOverview({
           style={[ui.row, { gap: 8, minHeight: 44, paddingLeft: 6, paddingRight: 12, borderRadius: 999, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }]}
         >
           <DimensionalIcon name="chart" size={32} />
-          <Text style={{ color: p.text, fontSize: 12, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase" }}>Reports</Text>
+          <Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>Reports</Text>
           <Feather name="chevron-right" size={16} color={p.muted} />
         </MotionPress>
       </View>
@@ -290,7 +290,7 @@ export function EnquirySheet({ palette: p, visible, onClose }: { palette: Palett
                 <Text style={[ui.small, { color: p.muted }]}>Tell us about the property and we will prepare an estimate.</Text>
               </View>
             </View>
-            <MotionPress accessibilityRole="button" accessibilityLabel="Close enquiry" onPress={close} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}>
+            <MotionPress accessibilityRole="button" accessibilityLabel="Close enquiry" onPress={close} style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}>
               <Feather name="x" size={18} color={p.text} />
             </MotionPress>
           </View>

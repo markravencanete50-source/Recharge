@@ -34,6 +34,16 @@ export function Button({ label, onPress, p, primary = false, disabled = false, i
     </MotionPress>
   );
 }
+// Pages reload on their own; this is the quiet manual reload, kept small beside the page's main action.
+export function RefreshButton({ p, loading = false, onPress }: { p: Palette; loading?: boolean; onPress: () => void }) {
+  return (
+    <MotionPress accessibilityRole="button" accessibilityLabel={loading ? "Refreshing" : "Refresh"} accessibilityState={{ disabled: loading, busy: loading }} disabled={loading} onPress={onPress}
+      style={[ui.row, { alignSelf: "flex-start", gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: p.border }]}>
+      <Feather name="refresh-cw" size={14} color={p.muted} />
+      <Text style={{ color: p.muted, fontSize: 13, fontWeight: "600" }}>{loading ? "Refreshing…" : "Refresh"}</Text>
+    </MotionPress>
+  );
+}
 export function Field({ label, value, onChange, p, multiline = false, placeholder, email = false }: { label: string; value: string; onChange: (v: string) => void; p: Palette; multiline?: boolean; placeholder?: string; email?: boolean }) {
   return (
     <View style={{ gap: 6 }}>
@@ -45,12 +55,17 @@ export function Field({ label, value, onChange, p, multiline = false, placeholde
   );
 }
 export function Tag({ label, tone, p }: { label: string; tone: "good" | "wait" | "bad" | "plain"; p: Palette }) {
-  const [bg, fg] = { good: [p.successWash, p.success], wait: [p.cautionWash, p.waiting], bad: ["#F6DEDA", "#A63A32"], plain: [p.wash, p.primary] }[tone];
+  const [bg, fg] = { good: [p.successWash, p.success], wait: [p.cautionWash, p.waiting], bad: [p.dangerWash, p.danger], plain: [p.wash, p.primary] }[tone];
   return <View style={{ alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: bg }}><Text style={{ color: fg, fontSize: 12, fontWeight: "700" }}>{label}</Text></View>;
 }
 // Messages slide in, and again whenever their wording changes, so a new result is noticed.
 export function Notice({ text, p, tone = "plain" }: { text: string; p: Palette; tone?: "plain" | "bad" }) {
-  return <SwapIn swapKey={text}><View style={{ padding: 12, borderRadius: 14, backgroundColor: tone === "bad" ? "#F6DEDA" : p.wash }}><Text accessibilityLiveRegion="polite" style={[ui.small, { color: tone === "bad" ? "#A63A32" : p.text }]}>{text}</Text></View></SwapIn>;
+  // A leading icon and a side rule keep notices reading as information, not as a button.
+  const bad = tone === "bad", ink = bad ? p.danger : p.primary;
+  return <SwapIn swapKey={text}><View style={[ui.row, { alignItems: "flex-start", gap: 10, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 10, borderLeftWidth: 3, borderLeftColor: ink, backgroundColor: bad ? p.dangerWash : p.background }]}>
+    <Feather name={bad ? "alert-circle" : "info"} size={16} color={ink} style={{ marginTop: 1 }} />
+    <Text accessibilityLiveRegion="polite" style={[ui.small, { flex: 1, color: bad ? p.danger : p.text }]}>{text}</Text>
+  </View></SwapIn>;
 }
 // Shimmering placeholder rows while a tool loads.
 export function Loading({ p, rows = 3 }: { p: Palette; rows?: number }) {
@@ -105,7 +120,7 @@ export function StatTile({ p, icon, tone, label, value, format = formatCount, de
       {typeof value === "number"
         ? <TweenNumber value={value} format={format} numberOfLines={1} adjustsFontSizeToFit style={figure} />
         : <SwapIn swapKey={value}><Text numberOfLines={1} adjustsFontSizeToFit style={{ ...figure, fontSize: compact ? 17 : 22 }}>{value}</Text></SwapIn>}
-      {compact ? <Feather name={icon} size={15} color={tone ? departmentColor(tone, p).ink : p.primary} /> : !!detail && <Text numberOfLines={1} style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{detail}</Text>}
+      {compact ? <Feather name={icon} size={15} color={tone ? departmentColor(tone, p).ink : p.primary} /> : !!detail && <Text numberOfLines={2} style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{detail}</Text>}
     </View>
   );
 }

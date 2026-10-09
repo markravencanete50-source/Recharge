@@ -68,11 +68,11 @@ export function EstimateExplorer({ palette: p, estimate, owner }: { palette: Pal
         {SCENARIOS.map(s => {
           const on = choices.scenario === s.id, rate = s.id === "low" ? published.lowRateMinor : s.id === "high" ? published.highRateMinor : published.mediumRateMinor;
           return (
-            <Pop key={s.id} active={on} style={{ flex: 1 }}>
+            <Pop key={s.id} active={on} style={{ flex: 1, minWidth: 0 }}>
               <MotionPress accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => set({ scenario: s.id })}
-                style={{ minHeight: 52, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingVertical: 6, backgroundColor: on ? p.surface : "transparent", borderWidth: on ? 1 : 0, borderColor: p.border }}>
-                <Text style={{ color: on ? p.text : p.muted, fontWeight: "700", fontSize: 13 }}>{s.label}</Text>
-                <Text style={{ color: on ? p.primary : p.muted, fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{pounds(rate)} a night</Text>
+                style={{ minHeight: 52, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingVertical: 6, paddingHorizontal: 4, backgroundColor: on ? p.surface : "transparent", borderWidth: on ? 1 : 0, borderColor: p.border }}>
+                <Text style={{ color: on ? p.text : p.muted, fontWeight: "700", fontSize: 13, textAlign: "center" }}>{s.label}</Text>
+                <Text style={{ color: on ? p.primary : p.muted, fontSize: 12, fontWeight: "600", textAlign: "center", fontVariant: ["tabular-nums"] }}>{pounds(rate)} a night</Text>
               </MotionPress>
             </Pop>
           );

@@ -9,7 +9,7 @@ import { MotionPress, Pop, Stagger, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { ui, type Palette } from "./theme";
-import { Button, Field, IconChip, london, message, Notice, Section, StatGrid, StatTile, Tag, useRequestId, useWorkFocus, Loading, type IconName, type Tone } from "./LiveKit";
+import { Button, Field, IconChip, london, message, Notice, Section, StatGrid, StatTile, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, type IconName, type Tone } from "./LiveKit";
 import { formatCount, formatMoney } from "../../lib/format";
 import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
@@ -19,6 +19,7 @@ import {
   reconciliationSchema, shiftMonth, statementMoves, statementsSchema, type Expense, type Job, type PayoutRow,
 } from "../../lib/accounts-live";
 import { poundsToMinor } from "../../lib/repairs-live";
+import { canStart } from "../../lib/home-tools";
 import { readableStage, type PropertyView } from "../../lib/workspace-view";
 import type { FinanceAction } from "../../lib/workspace-finance-policy";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -43,7 +44,7 @@ export function Pills<T extends string>({ p, values, value, onChange, label, wra
   const items = values.map(v => {
     const on = v === value;
     return (
-      <Pop key={v} active={on}><MotionPress accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(v)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
+      <Pop key={v} active={on}><MotionPress accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(v)} style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
         <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label ? label(v) : readableStage(v)}</Text>
       </MotionPress></Pop>
     );
@@ -524,8 +525,8 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
 
       {view === "expenses" && <>
         <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-          <Button label="New expense" icon="plus" primary p={p} onPress={() => setCreating(true)} />
-          <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
+          {canStart(account, "new-expense") && <Button label="New expense" icon="plus" primary p={p} onPress={() => setCreating(true)} />}
+          <RefreshButton p={p} loading={loading} onPress={() => void load()} />
         </View>
         {(overview?.overLimitCount ?? 0) > 0 && <Notice text={`${overview!.overLimitCount} expense${overview!.overLimitCount === 1 ? " is" : "s are"} above the approval limit and need${overview!.overLimitCount === 1 ? "s" : ""} management approval.`} p={p} />}
         {(overview?.draftCount ?? 0) > 0 && status !== "draft" && <MotionPress accessibilityRole="button" onPress={() => setStatus("draft")} style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}>
@@ -609,7 +610,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
                 <View style={{ height: 1, backgroundColor: p.border }} />
                 <Line p={p} label={st.payoutMinor < 0 ? "Owner owes" : "Due to owner"} value={pounds(Math.abs(st.payoutMinor))} />
                 {st.status === "paid" && <Text style={[ui.small, { color: p.muted }]}>Paid by bank transfer, reference {st.payoutReference}.</Text>}
-                <MotionPress accessibilityRole="button" onPress={() => setExpanded(expanded === st.id ? null : st.id)} style={[ui.row, { gap: 6 }]}><Feather name={expanded === st.id ? "chevron-up" : "chevron-down"} size={16} color={p.primary} /><Text style={{ color: p.primary, fontWeight: "600" }}>{expanded === st.id ? "Hide breakdown" : "Show breakdown"}</Text></MotionPress>
+                <MotionPress accessibilityRole="button" onPress={() => setExpanded(expanded === st.id ? null : st.id)} hitSlop={8} style={[ui.row, { gap: 6, minHeight: 44 }]}><Feather name={expanded === st.id ? "chevron-up" : "chevron-down"} size={16} color={p.primary} /><Text style={{ color: p.primary, fontWeight: "600" }}>{expanded === st.id ? "Hide breakdown" : "Show breakdown"}</Text></MotionPress>
                 {expanded === st.id && <View style={{ gap: 6 }}>
                   {st.detail.stays.map(x => <Line key={x.reference + x.checkIn} p={p} label={`${x.reference} · ${CHANNEL_LABEL[x.channel] ?? x.channel} · ${x.checkIn}`} value={pounds(x.amountMinor)} />)}
                   {st.detail.expenses.map(x => <Line key={x.reference} p={p} label={`${x.supplier} · ${x.reference}`} value={"−" + pounds(x.amountMinor)} />)}

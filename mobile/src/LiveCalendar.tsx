@@ -129,16 +129,16 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   const header = (
     <View style={[ui.between, { gap: 10, flexWrap: "wrap" }]}>
       <View style={[ui.row, { gap: 8, flexShrink: 1 }]}>
-        <MotionPress accessibilityRole="button" accessibilityLabel="Go to today" onPress={() => { setMonth(today.slice(0, 7)); setSelected(today); }} style={{ minHeight: 40, paddingHorizontal: 14, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
+        <MotionPress accessibilityRole="button" accessibilityLabel="Go to today" onPress={() => { setMonth(today.slice(0, 7)); setSelected(today); }} style={{ minHeight: 44, paddingHorizontal: 14, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
           <Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>Today</Text>
         </MotionPress>
-        <MotionPress accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => move(-1)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}><Feather name="chevron-left" size={18} color={p.text} /></MotionPress>
-        <MotionPress accessibilityRole="button" accessibilityLabel="Next month" onPress={() => move(1)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}><Feather name="chevron-right" size={18} color={p.text} /></MotionPress>
+        <MotionPress accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => move(-1)} style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}><Feather name="chevron-left" size={18} color={p.text} /></MotionPress>
+        <MotionPress accessibilityRole="button" accessibilityLabel="Next month" onPress={() => move(1)} style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}><Feather name="chevron-right" size={18} color={p.text} /></MotionPress>
         <SwapIn swapKey={month}><Text accessibilityRole="header" accessibilityLiveRegion="polite" numberOfLines={1} style={{ color: p.text, fontSize: 18, fontWeight: "700", marginLeft: 4 }}>{monthLabel(month)}</Text></SwapIn>
       </View>
       <View style={[ui.row, { gap: 8 }]}>
         {loading && <ActivityIndicator accessibilityLabel="Loading the calendar" color={p.primary} />}
-        <MotionPress accessibilityRole="button" accessibilityLabel="Refresh the calendar" disabled={loading} onPress={() => void load()} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}><Feather name="refresh-cw" size={16} color={p.text} /></MotionPress>
+        <MotionPress accessibilityRole="button" accessibilityLabel="Refresh the calendar" disabled={loading} onPress={() => void load()} style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}><Feather name="refresh-cw" size={16} color={p.text} /></MotionPress>
       </View>
     </View>
   );

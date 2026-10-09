@@ -65,10 +65,12 @@ const PLACES: Record<ModuleId, ToolPlace> = {
 
 export type Tool = { id: ModuleId; name: string; description: string; place: ToolPlace };
 // The person's tools, each with where it lives for their role. A Work view the role cannot open
-// falls back to All work.
+// falls back to All work. Accounts have no Properties tab (the portfolio read refuses them), so
+// tools that live there are left out for them.
 export function toolsFor(role: string, modules: readonly string[]): Tool[] {
   const views = workViewsFor(role);
-  return MODULES.filter(m => modules.includes(m.id)).map(m => {
+  const onPropertiesTab = (place: ToolPlace) => place.kind === 'tab' && place.tab === 'properties';
+  return MODULES.filter(m => modules.includes(m.id) && !(role === 'accounts' && onPropertiesTab(PLACES[m.id as ModuleId]))).map(m => {
     let place = PLACES[m.id as ModuleId];
     if (place.kind === 'work' && !views.includes(place.view)) place = role === 'client' && place.view !== 'all' ? work('owner', 'Work → Stays and statements') : work('all', 'Work → All work');
     return { id: m.id as ModuleId, name: m.name, description: m.description, place };

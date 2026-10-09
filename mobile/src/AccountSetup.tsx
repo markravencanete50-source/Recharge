@@ -378,7 +378,7 @@ export function AccountSetup({
               accessibilityLabel="Close account setup"
               disabled={busy}
               onPress={close}
-              style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
+              style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
             >
               <Feather name="x" size={18} color={p.text} />
             </Pressable>

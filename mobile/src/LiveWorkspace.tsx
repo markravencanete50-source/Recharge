@@ -46,10 +46,10 @@ import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSc
 import { workDetails } from "../../lib/work-details";
 import { AccountsWork } from "./LiveAccountsWork";
 import { CelebrateProvider } from "./Celebrate";
-import { AnchorRegistry, WorkFocusContext, type WorkFocus } from "./LiveKit";
+import { Anchor, AnchorRegistry, WorkFocusContext, dayLabel, type WorkFocus } from "./LiveKit";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
-import { workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
+import { inspectionReportFrom, workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 import { WorkPhotos } from "./Photos";
 import { NotificationsSetting, refreshNotificationLink } from "./Notifications";
 import { LiveChat, useGuestWaiting } from "./LiveChat";
@@ -321,6 +321,8 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
       setExportMessage(Platform.OS === "web" ? "Report download started." : "Report ready to save or share.");
     } catch (e) { setExportMessage(message(e)); } finally { setExporting(false); }
   }
+  // Updates marked read on Activity stop counting on Home straight away.
+  const markRead = useCallback((ids: number[]) => { const at = new Date().toISOString(); setNotices(list => list.map(n => ids.includes(n.id) ? { ...n, read_at: n.read_at ?? at } : n)); }, []);
   const finishWelcome = () => { setWelcome(null); try { globalThis.localStorage?.setItem("rc-welcomed", welcomeDay()); } catch { /* storage unavailable */ } };
 
   // Work: each role's views, the first opening by default.
@@ -336,8 +338,26 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
     if (node && content.current) node.measureLayout(content.current, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: !reduced }), () => undefined);
   };
   const names = new Map(properties.map(property => [property.id, property.name]));
+  // An inspection booked for a later day: say when the report can be filed instead of offering it.
+  const openJourney = openWork && !isDone(openWork.status) ? journeys.find(j => j.propertyId === openWork.propertyId && (j.workId === openWork.workId || openWork.kind === "inspection")) : undefined;
+  const reportFrom = openJourney ? inspectionReportFrom(account, openJourney) : null;
   const filtered = work.filter(item => workFilter === "All" || (workFilter === "Completed" ? isDone(item.status) : workFilter === "Waiting" ? isWaitingWork(item.status) : !isDone(item.status)));
   const todayKey = presetPeriod(1).to;
+  // Issued invoices and their payments: on Reports for admins, inside Work → Accounts for Accounts
+  // (their navigation has no Reports tab).
+  const invoiceList = (
+    <Anchor id="section-invoices"><View style={{ gap: 10 }}>
+      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Invoices</Text>
+      <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
+        {invoices.map((invoice, i) => (
+          <View key={invoice.id} style={[ui.between, { gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
+            <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text><Text style={[ui.small, { color: p.muted }]}>{names.get(invoice.property_id) ?? "Property"} · {invoice.currency === "GBP" ? formatMoney(invoice.amount_minor) : `${invoice.currency} ${(invoice.amount_minor / 100).toFixed(2)}`} · {readableStage(invoice.status)}</Text></View>
+            {invoice.status === "issued" && <MotionPress accessibilityRole="button" onPress={() => setForm({ key: "settle-" + invoice.id, title: "Confirm verified invoice payment", description: "Only confirm after checking the payment has actually settled.", endpoint: "workspace", fields: [{ name: "verified", label: "I have verified this invoice payment has settled", type: "checkbox", required: true }], build: () => ({ action: "setInvoiceStatus", invoiceId: invoice.id, version: invoice.version, status: "paid" }) })} style={[ui.button, { backgroundColor: p.wash, minHeight: 40 }]}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Record payment</Text></MotionPress>}
+          </View>
+        ))}
+      </View>
+    </View></Anchor>
+  );
   const workPage = (
     <>
       {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
@@ -349,7 +369,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
       {currentView === "owner" && account.modules.includes("client-furnishing") && <FurnishingCard palette={p} />}
       {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
       {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
-      {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} /></>}
+      {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
       {currentView === "all" && <>
         <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
         {policy && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch", gap: 12 }]}>
@@ -377,17 +397,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
       {snapshot ? <Reports snapshot={snapshot} period={period} role={account.role} palette={p} onDates={() => setDates(true)} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} /> : (
         <><PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." />{reportError ? <View style={{ gap: 12 }}><EmptyState palette={p} icon="activity" title="Reports could not be loaded" detail={reportError} /><SoftButton label="Try again" icon="refresh-cw" palette={p} onPress={() => void loadReport(period)} /></View> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View>}</>
       )}
-      {(isWorkspaceAdmin(account.role) || account.role === "accounts") && !!invoices.length && <View style={{ gap: 10 }}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Invoices</Text>
-        <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
-          {invoices.map((invoice, i) => (
-            <View key={invoice.id} style={[ui.between, { gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
-              <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text><Text style={[ui.small, { color: p.muted }]}>{names.get(invoice.property_id) ?? "Property"} · {invoice.currency === "GBP" ? formatMoney(invoice.amount_minor) : `${invoice.currency} ${(invoice.amount_minor / 100).toFixed(2)}`} · {readableStage(invoice.status)}</Text></View>
-              {invoice.status === "issued" && <MotionPress accessibilityRole="button" onPress={() => setForm({ key: "settle-" + invoice.id, title: "Confirm verified invoice payment", description: "Only confirm after checking the payment has actually settled.", endpoint: "workspace", fields: [{ name: "verified", label: "I have verified this invoice payment has settled", type: "checkbox", required: true }], build: () => ({ action: "setInvoiceStatus", invoiceId: invoice.id, version: invoice.version, status: "paid" }) })} style={[ui.button, { backgroundColor: p.wash, minHeight: 40 }]}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Record payment</Text></MotionPress>}
-            </View>
-          ))}
-        </View>
-      </View>}
+      {(isWorkspaceAdmin(account.role) || account.role === "accounts") && !!invoices.length && invoiceList}
     </>
   );
   const page = tab === "home"
@@ -397,7 +407,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
     : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} /> : reportsPage)
     : tab === "approvals" ? <LiveApprovals palette={p} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onForm={setForm} onRefresh={() => refresh()} onInbox={() => navigate("inbox")} onProperties={() => navigate("properties")} />
     : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
-    : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} />
+    : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} />
     : tab === "inbox" ? <LiveChat key={chatTarget?.nonce ?? 0} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} openConversation={chatTarget?.id} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view) => { setTab(next); if (view) setWorkView(view); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
@@ -497,7 +507,8 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
           <PriceNightsLink p={p} account={account} item={openWork} onOpen={target => { setOpenWork(null); openTool(target); }} />
           {workItemForms(account, openWork, journeys, work).map(f => <SoftButton key={f.key} label={f.title} icon="arrow-right" palette={p} disabled={f.key === "prepareQuote" && !policyConfirmed} onPress={() => { setOpenWork(null); setForm(f); }} />)}
           {openWork.kind === "direct_booking" && !policyConfirmed && <Text style={[ui.small, { color: p.muted }]}>The discount policy awaits confirmation.</Text>}
-          {!workItemForms(account, openWork, journeys, work).length && openWork.kind !== "pricing_gap" && <Text style={[ui.small, { color: p.muted }]}>Nothing needs your action on this item.</Text>}
+          {!!reportFrom && <Text style={[ui.small, { color: p.muted }]}>Report from {dayLabel(reportFrom)}</Text>}
+          {!workItemForms(account, openWork, journeys, work).length && openWork.kind !== "pricing_gap" && !reportFrom && <Text style={[ui.small, { color: p.muted }]}>Nothing needs your action on this item.</Text>}
           <WorkHistory key={openWork.workId} p={p} workId={openWork.workId} version={openWork.version} />
         </>}
       </Sheet>

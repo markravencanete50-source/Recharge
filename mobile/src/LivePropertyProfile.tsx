@@ -12,7 +12,8 @@ import { workspaceRequest } from "./backend/client";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { JourneyView } from "../../lib/workflow-forms";
 import { plural } from "../../lib/format";
-import { listingLinks, maskAccount, ownersSchema, payoutSchema, profileAccess, reservationsSchema, setupAnswers, stayLines, type Answer, type ListingLink, type Owner, type StayLine } from "../../lib/property-profile";
+import { StayEditSheet } from "./StayEditSheet";
+import { canEditStay, listingLinks, maskAccount, ownersSchema, payoutSchema, profileAccess, reservationsSchema, setupAnswers, stayLines, type Answer, type ListingLink, type Owner, type StayLine } from "../../lib/property-profile";
 
 // Everything about one property in one place: who owns it, where it is listed, who is staying,
 // what the owner told us at set-up, and (on request) where the payouts go.
@@ -55,13 +56,14 @@ function SetupAnswers({ p, answers }: { p: Palette; answers: Answer[] }) {
   );
 }
 
-function StayRow({ p, stay, first }: { p: Palette; stay: StayLine; first: boolean }) {
+function StayRow({ p, stay, first, onEdit }: { p: Palette; stay: StayLine; first: boolean; onEdit?: () => void }) {
   const tone = stay.when === "now" ? "good" : stay.when === "upcoming" ? "wait" : "plain";
   return (
     <View style={[ui.between, { gap: 12, paddingTop: first ? 0 : 10, borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <Text style={{ color: p.text, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{stay.dates}</Text>
         <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{plural(stay.nights, "night")} · {stay.reference} · {stay.source}{stay.status === "enquiry" ? " · Enquiry" : ""}</Text>
+        {!!onEdit && <MotionPress accessibilityRole="button" accessibilityLabel={"Edit or cancel the stay " + stay.reference} onPress={onEdit} style={{ alignSelf: "flex-start", minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Edit or cancel</Text></MotionPress>}
       </View>
       <Tag label={stay.when === "now" ? "Staying now" : stay.when === "upcoming" ? "Upcoming" : "Past"} tone={tone} p={p} />
     </View>
@@ -140,6 +142,7 @@ export function PropertyProfile({ palette: p, account, propertyId, journey }: { 
   const access = profileAccess(account);
   const [owners, setOwners] = useState<Owner[] | null>(null), [links, setLinks] = useState<ListingLink[] | null>(null), [stays, setStays] = useState<StayLine[] | null>(null);
   const [failed, setFailed] = useState<string[]>([]), [linkError, setLinkError] = useState(""), [editing, setEditing] = useState(false);
+  const [editingStay, setEditingStay] = useState<StayLine | null>(null), [staysKey, setStaysKey] = useState(0);
   const canEditListings = (account.role === "stays" || account.role === "admin" || account.role === "super_admin") && account.modules.includes("property-database");
   useEffect(() => {
     let active = true;
@@ -150,7 +153,7 @@ export function PropertyProfile({ palette: p, account, propertyId, journey }: { 
     if (access.stays) jobs.push(["stays", async () => { const parsed = reservationsSchema.safeParse(await read("/api/mobile/portfolio?" + new URLSearchParams({ section: "reservations", propertyId }))); if (active) setStays(stayLines(parsed.success ? parsed.data : [], london(new Date()))); }]);
     void Promise.allSettled(jobs.map(([, job]) => job())).then(results => { if (active) setFailed(jobs.filter((_, i) => results[i].status === "rejected").map(([name]) => name)); });
     return () => { active = false; };
-  }, [propertyId, access.owners, access.listings, access.stays]);
+  }, [propertyId, access.owners, access.listings, access.stays, staysKey]);
 
   const answers = setupAnswers(journey?.form);
   const panels: ReactNode[] = [];
@@ -181,8 +184,9 @@ export function PropertyProfile({ palette: p, account, propertyId, journey }: { 
   if (access.stays) panels.push(
     <Panel key="stays" p={p} icon="calendar" tone="stays" title="Stays" detail="Guests staying now, coming up, and recently.">
       {stays === null ? (failed.includes("stays") ? <Text style={[ui.small, { color: p.muted }]}>Stays could not be loaded.</Text> : <Loading p={p} rows={2} />)
-        : stays.length ? stays.map((s, i) => <StayRow key={s.id} p={p} stay={s} first={i === 0} />)
+        : stays.length ? stays.map((s, i) => <StayRow key={s.id} p={p} stay={s} first={i === 0} onEdit={canEditStay(account, s) ? () => setEditingStay(s) : undefined} />)
         : <Text style={[ui.small, { color: p.muted }]}>No stays recorded for this property yet.</Text>}
+      <StayEditSheet p={p} propertyId={propertyId} stay={editingStay} onClose={() => setEditingStay(null)} onSaved={() => setStaysKey(k => k + 1)} />
     </Panel>);
   if (answers.length) panels.push(
     <Panel key="setup" p={p} icon="clipboard" tone="ready" title="Property set-up" detail={account.role === "client" ? "What you told us in the set-up form." : "What the owner told us in the set-up form."}>

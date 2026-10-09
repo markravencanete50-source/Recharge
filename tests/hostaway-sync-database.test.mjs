@@ -179,7 +179,7 @@ test('admins and Stays see the sync status; failures are recorded without changi
   await sync({ trigger: 'manual', reservations: [] });
   await as(SUPER);
   status = hostawayStatusSchema.parse(await rpc('workspace_hostaway_status'));
-  assert.equal(status.lastError, null); assert.equal(status.canSync, true); assert.equal(status.lastTrigger, 'manual');
+  assert.equal(status.lastError, null); assert.equal(status.canSync, true); assert.equal(status.lastTrigger, 'manual'); assert.equal(status.paused, false);
   await as(CLEANER);
   await assert.rejects(rpc('workspace_hostaway_status'), /Admin access required/);
   await asBackend();
@@ -191,6 +191,8 @@ test('while paused, a sync is refused and a failed run records nothing', async (
   await sql('update private.workspace_hostaway_sync_state set paused=true where singleton');
   try {
     await assert.rejects(sync({ listings: [], reservations: [] }), /Hostaway sync is paused/);
+    await as(SUPER);
+    assert.equal(hostawayStatusSchema.parse(await rpc('workspace_hostaway_status')).paused, true, 'the card can say the sync is paused');
     await asBackend();
     await rpc('workspace_hostaway_sync_failed', [{ trigger: 'schedule', error: 'unreachable' }]);
     assert.deepEqual((await sql('select last_run_at::text, last_error from private.workspace_hostaway_sync_state where singleton'))[0], before);

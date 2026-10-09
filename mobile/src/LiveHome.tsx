@@ -20,7 +20,7 @@ import { todayColors, todayPresentation } from "../../lib/today-presentation";
 import { periodLabel, type AnalyticsPeriod, type AnalyticsSnapshot } from "../../lib/analytics";
 import type { WorkspaceSection } from "../../lib/workspace-map";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
-import type { NoticeView, PropertyView } from "../../lib/workspace-view";
+import { unreadNotices, type NoticeView, type PropertyView } from "../../lib/workspace-view";
 import type { JourneyView, OperationView } from "../../lib/workflow-forms";
 
 const SUBTITLE: Record<WorkspaceAccount["role"], string> = {
@@ -55,7 +55,7 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
     { key: "properties", icon: "house", value: loading ? null : properties.length, label: account.role === "client" ? "Your properties" : "Properties", hint: "Open properties", onPress: () => onNavigate("properties") },
     { key: "work", icon: "clipboard", value: loading ? null : open.length, label: WORK_LABEL[account.role] ?? "Open work", hint: "Open your work", onPress: () => onNavigate("work") },
     { key: "waiting", icon: "hourglass", value: today ? today.waiting : null, label: "Waiting", hint: "Open your work", onPress: () => onNavigate("work") },
-    { key: "updates", icon: "chat", value: loading ? null : notices.length, label: "Updates", hint: "Open recent activity", onPress: () => onNavigate("activity") },
+    { key: "updates", icon: "chat", value: loading ? null : unreadNotices(notices).length, label: "Updates", hint: "Open recent activity", onPress: () => onNavigate("activity") },
   ];
   const hero = (
     <Entrance sessionKey={"live:home:hero"} style={desktop ? { flex: 2, minWidth: 0 } : undefined}>

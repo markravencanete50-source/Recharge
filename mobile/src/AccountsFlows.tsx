@@ -31,7 +31,7 @@ function Pills({ values, selected, onSelect, palette: p }: { values: string[]; s
 }
 
 function Tag({ label, tone, palette: p }: { label: string; tone: "good" | "wait" | "bad" | "plain"; palette: Palette }) {
-  const colours = { good: [p.successWash, p.success], wait: [p.cautionWash, p.waiting], bad: ["#F6DEDA", "#A63A32"], plain: [p.wash, p.primary] }[tone];
+  const colours = { good: [p.successWash, p.success], wait: [p.cautionWash, p.waiting], bad: [p.dangerWash, p.danger], plain: [p.wash, p.primary] }[tone];
   return <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: colours[0], alignSelf: "flex-start" }}><Text style={{ color: colours[1], fontSize: 12, fontWeight: "700" }}>{label}</Text></View>;
 }
 

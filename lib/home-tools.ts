@@ -48,7 +48,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
   stays: [
     tool('inbox', 'Guest inbox', 'Guests waiting for a reply', 'chat', work('stays', { sub: 'inbox' }), ['guest-communication']),
     tool('checks', 'Daily checks', 'Listings live and reviewed', 'clipboard', work('stays', { section: 'Daily checks' }), ['listing-health']),
-    tool('pricing', 'Pricing', 'Empty nights this week', 'tag', work('stays', { section: 'Day by day' }), ['daily-pricing']),
+    tool('pricing', 'Pricing', 'Empty nights this week', 'tag', work('stays', { section: 'Daily checks' }), ['daily-pricing']),
     tool('signoff', 'Today’s sign-off', 'Close the day', 'signature', work('stays', { anchor: 'stays-signoff' }), ['listing-health']),
     tool('repairs', 'Repairs', 'Report and chase repairs', 'toolbox', work('repairs'), ['stays-maintenance-reporting', 'maintenance-reporting']),
     tool('cleans', 'Cleans', 'Cleans at your properties', 'spray', work('cleans'), ['cleaning-schedule', 'clean-reporting']),
@@ -95,7 +95,8 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('purchases', 'Purchases', 'Approve and order', 'cart', work('accounts', { section: 'Purchases' })),
     tool('cleaner-invoices', 'Cleaner invoices', 'Accepted cleans by cleaner', 'spray', work('accounts', { section: 'Cleaner invoices' })),
     tool('budget', 'Budget chart', 'Most each item should cost', 'coins', work('accounts', { section: 'Budget chart' })),
-    tool('invoices', 'Invoices', 'Payments and settled', 'chart', tab('analytics')),
+    // Issued invoices sit at the foot of Work → Accounts (Accounts have no Reports tab).
+    tool('invoices', 'Invoices', 'Payments and settled', 'chart', work('accounts', { section: 'Invoices' })),
     RESTOCK,
     TRAINING,
   ],
@@ -131,12 +132,15 @@ const ACTIONS: Record<HomeForm, Omit<HomeAction, 'key'>> = {
   'new-expense': { label: 'New expense', icon: 'plus', target: { kind: 'work', view: 'accounts', sub: 'expenses', open: 'new-expense' } },
   'new-routine': { label: 'New routine visit', icon: 'repeat', target: { kind: 'work', view: 'repairs', open: 'new-routine' } },
 };
+// The tools each form needs are the ones the database checks: recording a stay needs Direct
+// bookings, a repair report Stays repairs (owners: their repairs tool), a clean the Cleaning
+// schedule, an expense Maintenance reconciliation. Admins hold every tool.
 const ACTIONS_BY_ROLE: Record<string, [HomeForm, ModuleId[]?][]> = {
   admin: [['record-stay'], ['report-repair'], ['new-clean'], ['new-expense']],
-  stays: [['record-stay'], ['report-repair', ['stays-maintenance-reporting', 'maintenance-reporting']], ['new-clean', ['cleaning-schedule']], ['new-routine', ['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']]],
+  stays: [['record-stay', ['direct-bookings']], ['report-repair', ['stays-maintenance-reporting']], ['new-clean', ['cleaning-schedule']], ['new-routine', ['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']]],
   ready: [['new-routine', ['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']]],
-  cleaning_manager: [['new-clean']],
-  accounts: [['new-expense']],
+  cleaning_manager: [['new-clean', ['cleaning-schedule']]],
+  accounts: [['new-expense', ['maintenance-reconciliation']]],
   client: [['report-repair', ['client-property-maintenance']]],
 };
 ACTIONS_BY_ROLE.super_admin = ACTIONS_BY_ROLE.admin;
@@ -145,6 +149,12 @@ export function homeActionsFor(role: string, modules: readonly string[]): HomeAc
   return (ACTIONS_BY_ROLE[role] ?? []).filter(([key, needs]) => (!needs || needs.some(m => modules.includes(m))) && views.includes((ACTIONS[key].target as { view: WorkView }).view))
     .map(([key]) => ({ key, ...ACTIONS[key] }));
 }
+
+// Whether someone can start one of these forms. The Work views' own buttons (Record a stay,
+// Report a repair, New clean, New expense) follow the same grants as Home, so nobody fills in a
+// form the database will refuse.
+export const canStart = (account: { role: string; modules: readonly string[] }, form: HomeForm) =>
+  homeActionsFor(account.role, account.modules).some(a => a.key === form);
 
 // The illustrated icon for each tool in the full tools list.
 export const MODULE_ART: Record<ModuleId, ToolArt> = {

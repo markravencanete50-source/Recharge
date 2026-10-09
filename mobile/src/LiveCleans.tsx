@@ -7,7 +7,7 @@ import { z } from "zod";
 import { Text } from "./Typography";
 import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, StatGrid, StatTile } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { PhotoPicker, WorkPhotos } from "./Photos";
 import { DisputeSheet, type DisputeTarget } from "./CleanDisputes";
@@ -20,6 +20,7 @@ import { operationViewSchema, readableStage, type PropertyView } from "../../lib
 import { candidatesSchema, disputeFor, guestLine, monthPay, performanceSchema, problemsOf, scheduleSchema, type CleanerMonth } from "../../lib/cleans-live";
 import { repairTypeLabel } from "../../lib/repair-guides";
 import { formatDay, formatMoney } from "../../lib/format";
+import { canStart } from "../../lib/home-tools";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Live Cleans: the cleaner's own jobs and the cleaning team's schedule, reviews and
@@ -139,8 +140,8 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
 
       {manager && (
         <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-          <Button label="New clean" icon="plus" primary p={p} onPress={() => setCreating(true)} />
-          <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
+          {canStart(account, "new-clean") && <Button label="New clean" icon="plus" primary p={p} onPress={() => setCreating(true)} />}
+          <RefreshButton p={p} loading={loading} onPress={() => void load()} />
         </View>
       )}
 
@@ -266,7 +267,7 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
           </View>
         </Section>
       )}
-      {!manager && <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />}
+      {!manager && <RefreshButton p={p} loading={loading} onPress={() => void load()} />}
 
       <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
         onRespond={id => { setOpenJob(null); setStatementFor(id); }} onChanged={load} />
@@ -436,7 +437,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
           <WorkPhotos p={p} workId={op.workId} title="Photos from the clean" />
           <View style={{ flexDirection: "row", gap: 8 }}>
             <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true }} onPress={() => setAccepted(true)} style={[ui.button, { flex: 1, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? "#FFFFFF" : p.primary }]}>Accept</Text></MotionPress>
-            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === false }} onPress={() => setAccepted(false)} style={[ui.button, { flex: 1, backgroundColor: accepted === false ? "#A63A32" : p.wash }]}><Text style={[ui.buttonText, { color: accepted === false ? "#FFFFFF" : p.primary }]}>Reject</Text></MotionPress>
+            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === false }} onPress={() => setAccepted(false)} style={[ui.button, { flex: 1, backgroundColor: accepted === false ? p.danger : p.wash }]}><Text style={[ui.buttonText, { color: accepted === false ? p.onPrimary : p.primary }]}>Reject</Text></MotionPress>
           </View>
           <Field label="Guest feedback" value={guestFeedback} onChange={setGuestFeedback} p={p} multiline placeholder="What guests said, or 'No comments'" />
           <Field label="Your review" value={reviewNote} onChange={setReviewNote} p={p} multiline placeholder={accepted === false ? "What was not up to standard" : "What you checked"} />

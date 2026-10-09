@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Platform, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -13,6 +13,7 @@ import { HostawaySyncCard } from "./HostawaySyncCard";
 import { LiveTraining } from "./LiveTraining";
 import { MyContracts } from "./LiveOnboarding";
 import { PropertyAccess, ToolDirectory } from "./LiveTools";
+import { LocalEvents } from "./LocalEvents";
 import { PropertyProfile } from "./LivePropertyProfile";
 import { OnboardingPipeline, PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
 import { EstimateExplorer } from "./LiveEstimate";
@@ -24,21 +25,21 @@ import type { BudgetItem } from "../../lib/accounts-work";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
 import { formatCount, formatMoney } from "../../lib/format";
-import { StatGrid, StatTile, Tag, type IconName } from "./LiveKit";
+import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
 import { Calendar } from "./WorkspaceScreens";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
 import { Entrance, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
-import { workspaceRequest } from "./backend/client";
+import { workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
 import { weeklyReportDocument, weeklyReportFileName } from "../../lib/weekly-report";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import { faqsForAccess } from "../../lib/access-faq";
 import { dateKey, parseAnalyticsDate, periodError, periodLabel, presetPeriod, type AnalyticsPeriod } from "../../lib/analytics";
-import { estimateComparables, onboardingProgress, readableStage, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
-import { createOperationForms, journeyForms, newEnquiryForm, operationForms, workflowValues, type JourneyView, type OperationView, type WorkflowField, type WorkflowForm } from "../../lib/workflow-forms";
+import { estimateComparables, MARK_READ_PER_VISIT, onboardingProgress, readableStage, unreadNotices, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
+import { createOperationForms, inspectionReportFrom, journeyForms, newEnquiryForm, operationForms, workflowValues, type JourneyView, type OperationView, type WorkflowField, type WorkflowForm } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { PhotoPicker, WorkPhotos } from "./Photos";
 
@@ -212,7 +213,7 @@ function AgreementCopy({ j, p, propertyName }: { j: JourneyView; p: Palette; pro
 
 function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: JourneyView; p: Palette; account: WorkspaceAccount; propertyName: string; onForm: (f: WorkflowForm) => void; work: OperationView[] }) {
   const comparables = estimateComparables(j.estimate), [linkError, setLinkError] = useState("");
-  const progress = onboardingProgress(j.stage), linked = work.filter(w => w.propertyId === j.propertyId && w.workId !== j.workId);
+  const progress = onboardingProgress(j.stage), linked = work.filter(w => w.propertyId === j.propertyId && w.workId !== j.workId), reportFrom = inspectionReportFrom(account, j);
   return (
     <View style={{ gap: 14 }}>
       <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Onboarding</Text>
@@ -233,6 +234,7 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: Jour
       <JourneyQuestions palette={p} j={j} owner={account.role === "client"} />
       <JourneyPhotos j={j} p={p} account={account} />
       {journeyForms(account, j).map(f => <SoftButton key={f.key} label={f.title} icon={f.key === "askQuestion" ? "plus" : "arrow-right"} palette={p} onPress={() => onForm(f)} />)}
+      {!!reportFrom && <Text style={[ui.small, { color: p.muted }]}>Report from {dayLabel(reportFrom)}</Text>}
       {!!linked.length && <Text style={[ui.small, { color: p.muted }]}>{linked.length} connected team {linked.length === 1 ? "handover" : "handovers"}</Text>}
     </View>
   );
@@ -366,6 +368,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
             <SoftButton label={exporting ? "Preparing report…" : "Weekly report to read or print"} icon="external-link" palette={p} disabled={exporting} onPress={() => void downloadProperty("page")} />
             <SoftButton label="Spreadsheet (CSV)" icon="download" palette={p} disabled={exporting} onPress={() => void downloadProperty("csv")} />
             <Text style={[ui.small, { color: p.muted }]}>Pricing, listing checks and local events for {periodLabel(period)}. Choose up to 31 days in Reports.</Text>
+            {account.role !== "client" && <LocalEvents p={p} propertyId={selected.id} refreshKey={work} />}
             {account.role !== "client" && <SoftButton label="Add a local event" icon="calendar" palette={p} onPress={() => onForm(localEventForm(selected.id))} />}
             {!!exportMessage && <Text style={[ui.small, { color: p.text }]}>{exportMessage}</Text>}
           </View>}
@@ -387,7 +390,23 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   );
 }
 
-export function LiveActivity({ palette: p, notices, loading }: { palette: Palette; notices: NoticeView[]; loading: boolean }) {
+export function LiveActivity({ palette: p, notices, loading, onRead }: { palette: Palette; notices: NoticeView[]; loading: boolean; onRead?: (ids: number[]) => void }) {
+  // Opening Activity marks the listed updates read (one request each, newest first, never twice),
+  // so Home's Updates count only shows what is new.
+  const tried = useRef(new Set<number>());
+  useEffect(() => {
+    const ids = unreadNotices(notices).map(n => n.id).filter(id => !tried.current.has(id)).slice(0, MARK_READ_PER_VISIT);
+    if (!ids.length) return;
+    ids.forEach(id => tried.current.add(id));
+    void (async () => {
+      const read: number[] = [];
+      for (const id of ids) {
+        try { await writeControls({ action: "markNotificationRead", requestId: Crypto.randomUUID(), eventId: String(id) }); read.push(id); }
+        catch { break; /* offline or rate-limited: try again next visit */ }
+      }
+      if (read.length) onRead?.(read);
+    })();
+  }, [notices, onRead]);
   return (
     <>
       <PageHeading palette={p} title="Recent activity" subtitle="Updates on the work and properties within your access." />

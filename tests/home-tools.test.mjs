@@ -44,6 +44,10 @@ test('tools that need a module only show to people who hold it', () => {
   // Management and Accounts tools open a named tab inside the view.
   assert.deepEqual(homeToolsFor('admin', MODULE_IDS).find(t => t.key === 'people').target, { kind: 'work', view: 'management', sub: 'people' });
   assert.deepEqual(homeToolsFor('accounts', DEFAULT_ROLE_MODULES.accounts).find(t => t.key === 'payouts').target, { kind: 'work', view: 'accounts', sub: 'payouts' });
+  // Accounts' invoices open inside their own Work view (their bar has no Reports tab), and
+  // Stays' pricing opens the Daily checks where the pricing buttons are.
+  assert.deepEqual(homeToolsFor('accounts', DEFAULT_ROLE_MODULES.accounts).find(t => t.key === 'invoices').target, { kind: 'work', view: 'accounts', anchor: 'section-invoices' });
+  assert.deepEqual(homeToolsFor('stays', DEFAULT_ROLE_MODULES.stays).find(t => t.key === 'pricing').target, { kind: 'work', view: 'stays', anchor: 'section-daily-checks' });
 });
 
 test('every team role can open training from Home; admins land where courses are added', () => {

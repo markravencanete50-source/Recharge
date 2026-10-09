@@ -14,7 +14,7 @@ import { DisputeSheet } from "./CleanDisputes";
 import { DecisionsReport, QueueExtras } from "./LiveOversight";
 import { readFinance, readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
 import { DECISION_OUTCOMES, decisionAction, managementSchema, type Decision, type Management, type RepairApproval } from "../../lib/management-live";
-import { CostDecisionSheet, type CostDecision } from "./LiveApprovals";
+import { CostDecisionSheet, managementCostDecision, type CostDecision } from "./LiveApprovals";
 import { performanceSchema } from "../../lib/cleans-live";
 import { policySchema, pounds } from "../../lib/accounts-live";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -101,11 +101,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
     { label: "Owner approvals", value: queue?.stalledOwnerApprovals.length ?? 0, icon: "clock" as const, detail: "Waiting over 48 hours" },
     { label: "Repair costs", value: queue?.repairApprovals.length ?? 0, icon: "tool" as const, detail: "Above the management limit" },
   ];
-  const openRepair = (r: RepairApproval) => setRepair({
-    who: "management", workId: r.workId, version: r.version, propertyName: r.propertyName, issue: r.issue ?? r.title, repairType: r.repairType, urgent: r.urgent, hazard: r.hazard,
-    estimateMinor: r.estimatedCostMinor, previousEstimateMinor: r.previousEstimateMinor, quoteReason: r.quoteReason,
-    limitText: `Above the management limit${r.limitMinor !== null ? " of " + pounds(r.limitMinor) : ""}. ${r.ownerApprovedAt ? "The owner has approved it." : "It is within the owner’s own limit."} Once approved, it carries on with Stays and Ready.`,
-  });
+  const openRepair = (r: RepairApproval) => setRepair(managementCostDecision(r));
   const changeRepairLimit = () => repairPolicy && setAsk({ title: "Management approval for repairs", subtitle: "Repairs costing more than this also need an admin’s approval, after the owner’s", min: 0, confirm: "Save limit",
     amount: { label: "Limit (leave 0 to switch it off)", initial: repairPolicy.limit == null ? "0" : (repairPolicy.limit / 100).toFixed(2) },
     build: (_note, minor) => ({ action: "setRepairApprovalLimit", requestId: "", version: repairPolicy.version, managementRepairLimitMinor: minor ? minor : null }) });

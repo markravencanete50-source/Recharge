@@ -336,7 +336,7 @@ export function Calendar({
           accessibilityRole="button"
           accessibilityLabel="Previous month"
           onPress={() => moveMonth(-1)}
-          style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
+          style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
         >
           <Feather name="chevron-left" size={18} color={p.text} />
         </Pressable>
@@ -351,7 +351,7 @@ export function Calendar({
           accessibilityRole="button"
           accessibilityLabel="Next month"
           onPress={() => moveMonth(1)}
-          style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
+          style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}
         >
           <Feather name="chevron-right" size={18} color={p.text} />
         </Pressable>

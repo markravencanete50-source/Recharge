@@ -50,8 +50,21 @@ export function LiveWorkRow({ item, property, palette: p, onPress }: { item: Ope
   );
 }
 
+// Updates are named by area ("chat.message", "operations.updateOperation.bookRepair"), so each
+// area gets its own icon; repair steps inside operations read as repairs.
+const NOTICE_LOOKS: Record<string, { icon: DimensionalName; tone: DepartmentTone }> = {
+  chat: { icon: "chat", tone: "stays" }, message: { icon: "chat", tone: "stays" },
+  journey: { icon: "key", tone: "clients" }, onboarding: { icon: "key", tone: "clients" },
+  repairs: { icon: "hardhat", tone: "ready" }, routine: { icon: "hardhat", tone: "ready" },
+  cleaning: { icon: "spray", tone: "cleans" }, finance: { icon: "coins", tone: "accounts" },
+  reports: { icon: "chart", tone: "clients" }, reservation: { icon: "calendar", tone: "stays" },
+  stays: { icon: "calendar", tone: "stays" }, training: { icon: "medal", tone: "stays" },
+  handover: { icon: "people", tone: "stays" },
+};
 function noticeLook(type: string): { icon: DimensionalName; tone: DepartmentTone } {
-  return kindLook(type.split(".")[0] ?? "");
+  const [area = "", ...rest] = type.split(".");
+  if (area === "operations") return /reservation/i.test(type) ? NOTICE_LOOKS.reservation : kindLook(/cleaning/i.test(type) ? "clean" : "repair");
+  return NOTICE_LOOKS[area] ?? kindLook(rest.join("."));
 }
 export function LiveNoticeRow({ notice, palette: p }: { notice: NoticeView; palette: Palette }) {
   const look = noticeLook(notice.event_type);

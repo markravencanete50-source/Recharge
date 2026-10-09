@@ -175,17 +175,18 @@ function OtaAccountsList({ p, value }: { p: Palette; value: unknown }) {
 // inspections or the Ready schedule); not logins or finance.
 export const readyAccess = (account: WorkspaceAccount) => account.role === "ready" && ["maintenance-reporting", "new-property-inspection-board", "ready-schedule"].some(m => account.modules.includes(m as ModuleId));
 // Staff with the property database or OTA logins tools: entry details and platform logins.
+// Accounts never read entry details (the database grants them finance only), so they get no card.
 export function PropertyAccess({ palette: p, account, propertyId }: { palette: Palette; account: WorkspaceAccount; propertyId: string }) {
   // Entry instructions, platform logins and finance are separate sections, each with its own permission.
   const sections = [
-    ...(account.modules.includes("property-database") || readyAccess(account) ? ["access" as const] : []),
+    ...((account.modules.includes("property-database") && account.role !== "accounts") || readyAccess(account) ? ["access" as const] : []),
     ...(account.modules.includes("ota-logins") && account.role !== "cleaning_manager" ? ["ota" as const] : []),
     ...(account.modules.includes("owner-statements") ? ["finance" as const] : []),
   ];
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
-  if (!sections.length || ["client", "cleans"].includes(account.role)) return null;
+  if (!sections.length || ["client", "cleans", "accounts"].includes(account.role)) return null;
   async function show() {
     setOpen(true); setError("");
     const parts = await Promise.allSettled(sections.map(async section => (await (await workspaceRequest("/api/mobile/property-details?" + new URLSearchParams({ propertyId, section }))).json()).data as Record<string, unknown>));

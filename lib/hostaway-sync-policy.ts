@@ -107,5 +107,7 @@ export const hostawayStatusSchema = z.object({
   problems: z.array(z.object({ listingId: z.string().optional(), reservationId: z.string().optional(), problem: z.string() })),
   lastSummary: z.record(z.string(), z.number()).or(z.object({})),
   canSync: z.boolean(), linkedProperties: z.number(), upcomingStays: z.number(), unassignedCleans: z.number(),
+  // Paused while no channel manager is connected: the database refuses a sync.
+  paused: z.boolean().default(false),
 });
 export type HostawayStatus = z.infer<typeof hostawayStatusSchema>;

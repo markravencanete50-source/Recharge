@@ -11,6 +11,7 @@ import type { AdminAction } from '../../../lib/workspace-admin-policy';
 import type { ChatAction } from '../../../lib/workspace-chat-policy';
 import type { InboxAction } from '../../../lib/guest-inbox-policy';
 import type { OversightAction } from '../../../lib/oversight-policy';
+import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
@@ -129,6 +130,7 @@ export const downloadReport = async (period: AnalyticsPeriod) => (await workspac
 export const readOperations = async (propertyId?:string) => (await workspaceRequest('/api/mobile/operations'+(propertyId?'?propertyId='+encodeURIComponent(propertyId):''))).json();
 export const writeOperation = async (action:OperationsAction) => (await workspaceRequest('/api/mobile/operations',action)).json();
 export const readControls = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/controls?'+new URLSearchParams(query))).json();
+export const writeControls = async (action: ControlsAction) => (await workspaceRequest('/api/mobile/controls',action)).json();
 // Accounts: expenses, payout reconciliation and owner statements. Team: schedule, decisions, routines, training.
 export const readFinance = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/finance?'+new URLSearchParams(query))).json();
 export const writeFinance = async (action: FinanceAction) => (await workspaceRequest('/api/mobile/finance',action)).json();

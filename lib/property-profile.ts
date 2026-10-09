@@ -14,6 +14,9 @@ export function profileAccess(a: WorkspaceAccount) {
     payout: (admin(a) && has(a, 'owner-statements')) || (a.role === 'client' && has(a, 'client-dashboard')),
   };
 }
+// Stays recorded in the app can be corrected or cancelled by Stays and admins with Direct
+// bookings; those from the channel manager change there.
+export const canEditStay = (a: WorkspaceAccount, stay: Pick<StayLine, 'manual' | 'version'>) => (admin(a) || a.role === 'stays') && has(a, 'direct-bookings') && stay.manual && stay.version !== null;
 
 // Only a name and an email per owner ever leave the server.
 const ownerContactSchema = z.object({ name: z.string().max(200), email: z.string().max(320).nullable() });
@@ -72,7 +75,7 @@ export function setupAnswers(form: Record<string, unknown> | null | undefined): 
 export const reservationsSchema = z.array(z.object({ id: z.string(), reference: z.string(), check_in: z.string(), check_out: z.string(), status: z.string(), source: z.string() }).passthrough());
 export type Reservation = z.infer<typeof reservationsSchema>[number];
 const nightsBetween = (from: string, to: string) => Math.round((Date.parse(to.slice(0, 10) + 'T12:00:00Z') - Date.parse(from.slice(0, 10) + 'T12:00:00Z')) / 86_400_000);
-export type StayLine = { id: string; reference: string; dates: string; nights: number; source: string; status: string; when: 'now' | 'upcoming' | 'past' };
+export type StayLine = { id: string; reference: string; dates: string; nights: number; source: string; status: string; when: 'now' | 'upcoming' | 'past'; checkIn: string; checkOut: string; version: number | null; manual: boolean };
 // Stays at the property: in house and upcoming first (soonest first), then the most recent past ones.
 export function stayLines(rows: readonly Reservation[], today: string, limit = 8): StayLine[] {
   const line = (r: Reservation): StayLine => ({
@@ -80,6 +83,7 @@ export function stayLines(rows: readonly Reservation[], today: string, limit = 8
     dates: `${formatDay(r.check_in, new Date(today + 'T12:00:00Z'))} → ${formatDay(r.check_out, new Date(today + 'T12:00:00Z'))}`,
     source: r.source === 'hostaway' ? 'Channel manager' : 'Added in Recharge', status: r.status,
     when: r.check_in <= today && r.check_out > today ? 'now' : r.check_in > today ? 'upcoming' : 'past',
+    checkIn: r.check_in.slice(0, 10), checkOut: r.check_out.slice(0, 10), version: typeof r.version === 'number' ? r.version : null, manual: r.source === 'manual',
   });
   const active = rows.filter(r => r.status !== 'cancelled');
   const ahead = active.filter(r => r.check_out > today).sort((a, b) => a.check_in.localeCompare(b.check_in));

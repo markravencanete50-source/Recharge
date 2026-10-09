@@ -7,7 +7,7 @@ import { useCelebrate } from "./Celebrate";
 import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Tag, Loading } from "./LiveKit";
+import { Button, Field, message, Notice, Tag, Loading, RefreshButton } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { readInbox, writeInbox } from "./backend/client";
 import { CHANNEL_LABEL, GUEST_CHANNELS, INBOX_FILTERS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
@@ -19,9 +19,10 @@ import type { PropertyView } from "../../lib/workspace-view";
 // The channel manager fills it once connected. Until then staff log each guest message as it
 // arrives and record their reply, so reply times and bonuses already count.
 const FILTER_LABEL: Record<(typeof INBOX_FILTERS)[number], string> = { waiting: "Needs a reply", open: "Open", done: "Done", all: "All" };
+// Channel colours, darkened or given dark letters where needed so each letter reads at 4.5:1.
 const CHANNEL_STYLE: Record<GuestChannel, { bg: string; fg: string; letter: string }> = {
-  airbnb: { bg: "#FF5A5F", fg: "#FFFFFF", letter: "A" }, booking_com: { bg: "#003580", fg: "#FFFFFF", letter: "B." }, vrbo: { bg: "#245ABC", fg: "#FFFFFF", letter: "V" },
-  direct: { bg: "#1B3D37", fg: "#F1EADB", letter: "" }, whatsapp: { bg: "#25D366", fg: "#FFFFFF", letter: "W" }, email: { bg: "#6B7280", fg: "#FFFFFF", letter: "@" }, other: { bg: "#9CA3AF", fg: "#FFFFFF", letter: "•" },
+  airbnb: { bg: "#D0353B", fg: "#FFFFFF", letter: "A" }, booking_com: { bg: "#003580", fg: "#FFFFFF", letter: "B." }, vrbo: { bg: "#245ABC", fg: "#FFFFFF", letter: "V" },
+  direct: { bg: "#1B3D37", fg: "#F1EADB", letter: "" }, whatsapp: { bg: "#25D366", fg: "#0B3D22", letter: "W" }, email: { bg: "#6B7280", fg: "#FFFFFF", letter: "@" }, other: { bg: "#9CA3AF", fg: "#152D28", letter: "•" },
 };
 const GRADE_TONE = { green: "good", amber: "wait", red: "bad" } as const;
 
@@ -243,7 +244,7 @@ export function GuestInbox({ palette: p, properties, onChanged }: { palette: Pal
       </View>}
       <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
         <Button label="Log a guest message" icon="plus" primary p={p} onPress={() => setLogging(true)} />
-        <Button label="Refresh" icon="refresh-cw" p={p} onPress={() => void load()} />
+        <RefreshButton p={p} onPress={() => void load()} />
       </View>
       <Pills p={p} values={INBOX_FILTERS} value={filter} onChange={v => { setFilter(v); setData(null); }} label={v => FILTER_LABEL[v] + (v === "waiting" && data?.waiting ? ` (${data.waiting})` : "")} />
       {red > 0 && <Notice text={`${red} guest${red === 1 ? " has" : "s have"} waited longer than ${data?.targets.amberMinutes} minutes.`} p={p} tone="bad" />}

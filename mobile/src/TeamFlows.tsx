@@ -46,7 +46,7 @@ export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, chi
         <Animated.View {...(Platform.OS === "web" ? { dataSet: { overlay: "blur" } } : {})} style={[StyleSheet.absoluteFill, { backgroundColor: p.overlay, opacity: progress }]}>
           <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onClose} disabled={!visible} style={StyleSheet.absoluteFill} {...(Platform.OS === "web" ? { tabIndex: -1 } : {})} />
         </Animated.View>
-        <Animated.View accessibilityViewIsModal pointerEvents={visible ? "auto" : "none"} style={{ width: "100%", maxWidth: 560, maxHeight: wide ? "92%" : "90%", borderRadius: 28, borderBottomLeftRadius: wide ? 28 : 0, borderBottomRightRadius: wide ? 28 : 0, backgroundColor: p.surface, overflow: "hidden",
+        <Animated.View accessibilityViewIsModal pointerEvents={visible ? "auto" : "none"} style={{ width: "100%", maxWidth: Math.min(560, width), minWidth: 0, maxHeight: wide ? "92%" : "90%", borderRadius: 28, borderBottomLeftRadius: wide ? 28 : 0, borderBottomRightRadius: wide ? 28 : 0, backgroundColor: p.surface, overflow: "hidden",
           opacity: wide ? progress : progress.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 1, 1] }),
           transform: [{ translateY: lift }, { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [wide ? 0.97 : 1, 1] }) }] }}>
           {!wide && <View style={{ alignItems: "center", paddingTop: 8 }}><View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: p.border }} /></View>}
@@ -58,11 +58,11 @@ export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, chi
                 {!!content.subtitle && <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{content.subtitle}</Text>}
               </View>
             </View>
-            <MotionPress accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}>
+            <MotionPress accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={4} style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}>
               <Feather name="x" size={18} color={p.text} />
             </MotionPress>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 18, gap: 14 }} keyboardShouldPersistTaps="handled">
+          <ScrollView style={{ width: "100%" }} contentContainerStyle={{ padding: 18, gap: 14, minWidth: 0, maxWidth: "100%" }} keyboardShouldPersistTaps="handled">
             {shown && Children.toArray(content.children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
           </ScrollView>
         </Animated.View>
@@ -155,7 +155,7 @@ export function DailyRoutine({ palette: p, tools, onOpen }: { palette: Palette; 
         return (
           <View key={item.id} style={[ui.row, { gap: 8 }]}>
             <View style={{ flex: 1 }}><Check palette={p} checked={checked} label={item.label + (item.cadence === "Mondays" ? " (Mondays)" : "")} onToggle={() => setDone(checked ? done.filter(id => id !== item.id) : [...done, item.id])} /></View>
-            {tool && <MotionPress accessibilityRole="button" accessibilityLabel={"Open " + tool.name} onPress={() => onOpen(tool)} style={{ width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: p.background }}><Feather name="arrow-up-right" size={16} color={p.muted} /></MotionPress>}
+            {tool && <MotionPress accessibilityRole="button" accessibilityLabel={"Open " + tool.name} onPress={() => onOpen(tool)} style={{ width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: p.background }}><Feather name="arrow-up-right" size={16} color={p.muted} /></MotionPress>}
           </View>
         );
       })}

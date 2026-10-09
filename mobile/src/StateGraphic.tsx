@@ -1,5 +1,5 @@
 import { useEffect, useState, type ComponentProps } from "react";
-import { Animated, View } from "react-native";
+import { Animated, Platform, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import Feather from "@expo/vector-icons/Feather";
 import { useReducedMotion } from "./motion";
@@ -25,7 +25,7 @@ export function StateGraphic({
     const animation = Animated.timing(draw, {
       toValue: 1,
       duration: 280,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     });
     animation.start();
     return () => animation.stop();

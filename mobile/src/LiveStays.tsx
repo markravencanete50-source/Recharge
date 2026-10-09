@@ -7,7 +7,7 @@ import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Anchor, Loading, StatGrid, StatTile } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Anchor, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readOperations, readTeams, writeFinance, writeOperation, writeTeams, WorkspaceApiError } from "./backend/client";
 import { signoffSchema, type Signoff } from "../../lib/management-live";
@@ -16,6 +16,7 @@ import { plural } from "../../lib/format";
 import { scheduleSchema } from "../../lib/cleans-live";
 import { dailyChecks, recordedReservationSchema, vacantNights } from "../../lib/management-live";
 import { poundsToMinor } from "../../lib/repairs-live";
+import { canStart } from "../../lib/home-tools";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { GuestInbox } from "./LiveGuestInbox";
@@ -346,8 +347,8 @@ export function LiveStays({ palette: p, account, properties, onOpenRepairs, onOp
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
       <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-        <Button label="Record a stay" icon="plus" primary p={p} onPress={() => setRecording(true)} />
-        <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
+        {canStart(account, "record-stay") && <Button label="Record a stay" icon="plus" primary p={p} onPress={() => setRecording(true)} />}
+        <RefreshButton p={p} loading={loading} onPress={() => void load()} />
       </View>
       <SignOffCard p={p} refreshKey={refreshKey} />
       {toRefer > 0 && <MotionPress accessibilityRole="button" onPress={onOpenRepairs} style={[ui.row, { gap: 12, padding: 14, borderRadius: 18, backgroundColor: p.wash }]}>

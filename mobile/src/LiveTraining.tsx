@@ -63,7 +63,7 @@ function CourseFiles({ p, course, manage, onChanged }: { p: Palette; course: Cou
         <View key={f.id} style={{ gap: 8 }}>
           <View style={[ui.row, { gap: 10, padding: 10, borderRadius: 14, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
             <Feather name={FILE_ICON[fileKind(f.mime)]} size={18} color={p.primary} />
-            <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: p.text, fontWeight: "600" }}>{f.name}</Text><Text style={[ui.small, { color: p.muted }]}>{fileKind(f.mime)} · {fileSize(f.bytes)}</Text></View>
+            <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={2} style={{ color: p.text, fontWeight: "600" }}>{f.name}</Text><Text style={[ui.small, { color: p.muted }]}>{fileKind(f.mime)} · {fileSize(f.bytes)}</Text></View>
             <Button label={busy === f.id ? "Opening…" : fileKind(f.mime) === "video" ? "Play" : "Open"} p={p} disabled={!!busy} onPress={() => void open(f)} />
             {manage && <MotionPress accessibilityRole="button" accessibilityLabel={`Remove ${f.name}`} onPress={() => void remove(f.id)} style={{ padding: 8 }}><Feather name="trash-2" size={18} color={p.danger} /></MotionPress>}
           </View>
