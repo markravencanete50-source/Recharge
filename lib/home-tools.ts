@@ -105,7 +105,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('stays', 'Stays & statements', 'Bookings, earnings, money', 'calendar', tab('analytics')),
     tool('approvals', 'Approvals', 'Costs and steps to decide', 'hourglass', tab('approvals')),
     tool('repairs', 'Repairs', 'Request and approve', 'toolbox', work('repairs')),
-    tool('mailbox', 'Mailbox', 'Post at your properties', 'mail', work('owner', { section: 'Mailbox' }), ['client-mailbox']),
+    tool('mailbox', 'Mailbox', 'Post at your properties', 'mail', { kind: 'tab', tab: 'analytics', anchor: sectionAnchor('Mailbox') }, ['client-mailbox']),
     tool('furnishing', 'Furnishing calculator', 'What each room needs', 'sofa', { kind: 'calculator' }, ['client-furnishing']),
     { ...PROPERTIES, label: 'My properties', detail: 'Onboarding and details' },
     UPDATES,

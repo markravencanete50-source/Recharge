@@ -33,7 +33,10 @@ export type ChatAction = z.infer<typeof chatActionSchema>;
 export const conversationSchema = z.object({
   id: uuid, kind: z.enum(['direct', 'group', 'owner']), title: z.string(), subtitle: z.string().nullable(), propertyId: uuid.nullable(), workId: uuid.nullable(),
   propertyName: z.string().nullable(), lastMessageAt: z.string(), unread: z.number(),
-  last: z.object({ body: z.string(), authorName: z.string(), at: z.string() }).nullable(),
+  last: z.object({ body: z.string(), authorName: z.string(), at: z.string(), fromOwner: z.boolean().optional() }).nullable(),
+  // For the inbox chips: the reader's own conversation (a member, has written, or looks after the
+  // owner's property) and the properties it is about.
+  mine: z.boolean().optional(), propertyIds: z.array(uuid).default([]),
 });
 export type Conversation = z.infer<typeof conversationSchema>;
 export const messageSchema = z.object({ id: uuid, body: z.string(), at: z.string(), mine: z.boolean(), authorName: z.string(), fromOwner: z.boolean() });

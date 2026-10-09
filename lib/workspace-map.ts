@@ -85,6 +85,13 @@ export function navigationFor(role: WorkspaceRole) {
   ] as const;
 }
 
+// The owner's destinations, each once: Home, Properties, Inbox, Approvals and Reports (stays,
+// earnings, statements and mailbox), plus Tools in the sidebar on wide screens. Repairs and other
+// requests open from Home's tiles.
+export function ownerNavigation(wide = false) {
+  return [...navigationFor("client"), ...(wide ? [{ value: "help", label: "Tools", icon: "grid" }] as const : [])];
+}
+
 export function searchFeatureTitles<T extends Pick<(typeof MODULES)[number], "name">>(tools: T[], query: string) {
   const normalized = query.trim().toLocaleLowerCase();
   return tools.filter(tool => tool.name.toLocaleLowerCase().includes(normalized));

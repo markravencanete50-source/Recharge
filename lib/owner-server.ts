@@ -6,7 +6,9 @@ import { ownerReadSchema } from './owner-policy';
 // Owner reports are read only: the routes answer GET, and any update is refused.
 export const workspaceOwner = rpcRoute({
   readSchema: ownerReadSchema, actionSchema: z.unknown(), bodyLimit: 1024, unavailable: 'Owner reports are temporarily unavailable',
-  read: (client, input) => client.rpc('workspace_owner_bookings', { start_on: input.from, end_on: input.to }),
+  read: (client, input) => input.section === 'periods'
+    ? client.rpc('workspace_owner_periods', { start_month: input.from, end_month: input.to })
+    : client.rpc('workspace_owner_bookings', { start_on: input.from, end_on: input.to }),
   handle: () => Promise.resolve(businessResponse({ error: 'Owner reports are read only' }, 405)),
   action: 'workspace_owner_bookings',
 });

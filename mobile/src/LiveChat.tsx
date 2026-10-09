@@ -12,6 +12,8 @@ import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
 import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, threadSchema, type ChatMessage, type Conversation } from "../../lib/workspace-chat-policy";
 import { inboxListSchema } from "../../lib/guest-inbox-policy";
+import { ALL_PROPERTIES, CHAT_CHIPS, chipCounts, conversationFacts, emptyMessage, filterInbox, propertyChips } from "../../lib/inbox-filters";
+import { InboxChips } from "./InboxChips";
 import { ROLE_LABEL } from "../../lib/admin-live";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
@@ -233,8 +235,16 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
     picked.current = true;
     if (attention) queueMicrotask(() => setTab(attention));
   }, [attention]);
-  const choose = (t: Tab) => { picked.current = true; setTab(t); setOpen(null); };
-  const shown = (list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab);
+  // Quick filters inside the tab: Unread, Needs a reply, Mine, and a property when there are several.
+  const [chip, setChip] = useState<(typeof CHAT_CHIPS)[number]>("all"), [property, setProperty] = useState(ALL_PROPERTIES);
+  const choose = (t: Tab) => { picked.current = true; setTab(t); setOpen(null); setChip("all"); setProperty(ALL_PROPERTIES); };
+  const inTab = (list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab);
+  const facts = (c: Conversation) => conversationFacts(c, owner);
+  const names = new Map([...inTab.filter(c => c.propertyId && c.propertyName).map(c => [c.propertyId!, c.propertyName!] as const), ...properties.map(x => [x.id, x.name] as const)]);
+  const propertyOptions = propertyChips(inTab, facts, names, chip);
+  const where = propertyOptions.some(x => x.id === property) ? property : ALL_PROPERTIES;
+  // The conversation open beside the list stays listed while it is read, so it does not jump away.
+  const matching = filterInbox(inTab, facts, chip, where), shown = inTab.filter(c => matching.includes(c) || (desktop && c.id === open));
   const listView = (
     <View style={{ gap: 4, width: desktop ? 340 : "100%" }}>
       <View style={[ui.between, { paddingBottom: 6, gap: 12 }]}>
@@ -244,8 +254,9 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
           <Feather name="edit-3" size={15} color={p.onPrimary} /><Text style={{ color: p.onPrimary, fontWeight: "700" }}>New</Text>
         </MotionPress>
       </View>
+      {!!list?.length && !!inTab.length && <View style={{ paddingBottom: 8 }}><InboxChips p={p} chips={CHAT_CHIPS} chip={chip} counts={chipCounts(inTab, facts, CHAT_CHIPS, where)} onChip={setChip} properties={propertyOptions} property={where} onProperty={setProperty} /></View>}
       {!list ? <Loading p={p} /> : shown.length ? shown.map(c => <ConversationRow key={c.id} p={p} c={c} active={c.id === open} onPress={() => setOpen(c.id)} />)
-        : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{tab === "clients" && tabs.length > 1 ? "No owner conversations yet. Tap New to message an owner you look after." : "No conversations yet. Tap New to message someone on the team."}</Text>}
+        : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyMessage(inTab.length ? chip : "all", tab === "clients" && tabs.length > 1 ? "clients" : "team", where !== ALL_PROPERTIES ? names.get(where) : undefined)}</Text>}
     </View>
   );
   const tabBar = tabs.length > 1 && (

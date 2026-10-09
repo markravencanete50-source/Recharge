@@ -1,14 +1,17 @@
 import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
 
-// Owner reports: confirmed bookings, nights and payouts at the owner's own properties. Read only.
+// Owner reports: confirmed bookings, nights and payouts at the owner's own properties, and their
+// statement figures month by month (periods: up to 25 months, for a year against the year before).
+// Read only.
 const date = z.string().refine(value => Boolean(parseAnalyticsDate(value)), 'Choose a valid date');
 export const ownerReadSchema = z.object({
-  section: z.enum(['bookings']),
+  section: z.enum(['bookings', 'periods']),
   from: date.optional(), to: date.optional(),
 }).strict().superRefine((value, context) => {
+  const days = value.section === 'periods' ? 762 : 400;
   if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
-  else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 400 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 400 days' });
+  else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > days * 86400000) context.addIssue({ code: 'custom', message: value.section === 'periods' ? 'Choose up to 25 months' : 'Choose up to 400 days' });
 });
 export type OwnerRead = z.infer<typeof ownerReadSchema>;
 

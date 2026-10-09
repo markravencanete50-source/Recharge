@@ -1,24 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import { z } from "zod";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
-import { addDays, dayLabel, london, Notice, Section, Tag, Loading, StatGrid, StatTile } from "./LiveKit";
-import { formatDay, formatMoneyShort } from "../../lib/format";
-import { List, Pills, Row } from "./LiveAccounts";
-import { readFinance, readTeams, WorkspaceApiError } from "./backend/client";
+import { dayLabel, Tag } from "./LiveKit";
 import { StatementFiles } from "./AccountsFiles";
-import { scheduleSchema } from "../../lib/cleans-live";
-import { monthLabel, pounds, statementSchema, type Statement } from "../../lib/accounts-live";
-import type { PropertyView } from "../../lib/workspace-view";
+import { monthLabel, pounds, type Statement } from "../../lib/accounts-live";
 
-// Live owner view: the owner's confirmed stays and their issued and paid
-// statements, straight from the backend. Owners only see their own properties.
-type Schedule = z.infer<typeof scheduleSchema>;
-const nights = (from: string, to: string) => Math.round((Date.parse(to + "T12:00:00Z") - Date.parse(from + "T12:00:00Z")) / 86400000);
-
+// An owner's issued or paid statement, line by line, with every stay and cost behind it. Owners
+// see their stays, earnings and statements in one place: Reports.
 export function StatementCard({ p, s }: { p: Palette; s: Statement }) {
   const [open, setOpen] = useState(false);
   const line = (label: string, value: string, strong = false) => (
@@ -50,61 +41,6 @@ export function StatementCard({ p, s }: { p: Palette; s: Statement }) {
         {!s.detail.stays.length && !s.detail.expenses.length && <Text style={[ui.small, { color: p.muted }]}>No stays or costs this month.</Text>}
       </View>}
       <StatementFiles p={p} statement={s} audience="owner" />
-    </View>
-  );
-}
-
-export function LiveOwner({ palette: p, properties }: { palette: Palette; properties: PropertyView[] }) {
-  const [today] = useState(() => london(new Date()));
-  const [schedule, setSchedule] = useState<Schedule>({ work: [], stays: [] });
-  const [statements, setStatements] = useState<Statement[]>([]);
-  const [propertyId, setPropertyId] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
-    const [s, st] = await Promise.allSettled([readTeams({ section: "schedule", from: addDays(today, -14), to: addDays(today, 45) }), readFinance({ section: "statements" })]);
-    try {
-      if (s.status === "fulfilled") setSchedule(scheduleSchema.parse(s.value.data)); else throw s.reason;
-      if (st.status === "fulfilled") setStatements(z.array(statementSchema).parse(st.value.data)); else throw st.reason;
-    } catch (e) { setError(e instanceof WorkspaceApiError ? e.message : "Your stays and statements could not be loaded."); }
-    setLoading(false);
-  }, [today]);
-  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
-
-  const mine = (id: string) => propertyId === "all" || id === propertyId;
-  const stays = schedule.stays.filter(s => mine(s.propertyId));
-  const upcoming = stays.filter(s => s.checkOut >= today), recent = stays.filter(s => s.checkOut < today).reverse();
-  const shown = statements.filter(s => mine(s.propertyId));
-  const nextArrival = upcoming.find(s => s.checkIn >= today);
-  const bookedNights = upcoming.reduce((n, s) => n + nights(s.checkIn > today ? s.checkIn : today, s.checkOut), 0);
-
-  return (
-    <View style={{ gap: 20 }}>
-      <View style={{ gap: 4 }}>
-        <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Stays and statements</Text>
-        <Text style={[ui.body, { color: p.muted }]}>Who is staying, and what each month paid you.</Text>
-      </View>
-      {properties.length > 1 && <Pills p={p} values={["all", ...properties.map(x => x.id)]} value={propertyId} onChange={setPropertyId} label={v => v === "all" ? "All properties" : properties.find(x => x.id === v)?.name ?? "Property"} />}
-      <StatGrid>
-        <StatTile p={p} icon="calendar" tone="clients" label="Next arrival" value={nextArrival ? formatDay(nextArrival.checkIn) : "None booked"} />
-        <StatTile p={p} icon="moon" tone="clients" label="Nights booked ahead" value={bookedNights} />
-        <StatTile p={p} icon="credit-card" tone="clients" label="Latest payout" value={shown[0] ? formatMoneyShort(shown[0].payoutMinor) : "–"} />
-      </StatGrid>
-      {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && <Loading p={p} />}
-      <Section title="Upcoming stays" count={upcoming.length} p={p}>
-        <List p={p} empty="No stays booked in the next six weeks.">
-          {upcoming.map((s, i) => <Row key={s.reservationId} p={p} first={i === 0} icon="calendar" tone="clients" title={`${dayLabel(s.checkIn)} to ${dayLabel(s.checkOut)}`} detail={`${s.propertyName} · ${nights(s.checkIn, s.checkOut)} nights${s.guests ? ` · ${s.guests} guests` : ""}`} tags={[s.checkIn <= today ? ["Staying now", "good"] : ["Booked", "plain"]]} />)}
-        </List>
-      </Section>
-      {recent.length > 0 && <Section title="Recent stays" p={p}>
-        <List p={p} empty="">{recent.map((s, i) => <Row key={s.reservationId} p={p} first={i === 0} icon="check-circle" tone="clients" title={`${dayLabel(s.checkIn)} to ${dayLabel(s.checkOut)}`} detail={`${s.propertyName} · ${nights(s.checkIn, s.checkOut)} nights`} />)}</List>
-      </Section>}
-      <Section title="Statements" count={shown.length} p={p}>
-        {shown.map(s => <StatementCard key={s.id} p={p} s={s} />)}
-        {!shown.length && !loading && <Notice text="Your first statement appears here once the month is reconciled and issued." p={p} />}
-      </Section>
     </View>
   );
 }

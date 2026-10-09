@@ -9,6 +9,7 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, StatGrid, StatTile, Tag, useRequestId } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
 import { EmptyState, PageHeading, SoftButton } from "./LivePages";
+import { WorkPhotos } from "./Photos";
 import { writeOperation } from "./backend/client";
 import { formatMoney } from "../../lib/format";
 import { repairTypeLabel } from "../../lib/repair-guides";
@@ -41,6 +42,9 @@ export function ownerLimitText(r: Pick<RepairApproval, "limitMinor" | "anyAmount
   return r.limitMinor === null ? "No automatic repair budget is set, so every repair cost comes to you." : `Repairs up to ${formatMoney(r.limitMinor)} go ahead without asking you. This one is above that.`;
 }
 
+// One flow, top to bottom: what is wrong (with any photos), the amount (and the earlier quote if it
+// was re-quoted, and the limit it is above), the confirmation tick, then one "Approve £X". Decline is
+// the secondary choice and opens the reason field. Management decide in the same layout.
 export function CostDecisionSheet({ p, decision, start = "approve", onClose, onDone, onMessage }: { p: Palette; decision: CostDecision | null; start?: Choice; onClose: () => void; onDone: () => Promise<void>; onMessage?: () => void }) {
   const [choice, setChoice] = useState<Choice>(start);
   const [consent, setConsent] = useState(false);
@@ -50,10 +54,11 @@ export function CostDecisionSheet({ p, decision, start = "approve", onClose, onD
   const request = useRequestId(decision ? [decision.workId, decision.version, choice, text.trim()].join(":") : null);
   useEffect(() => { queueMicrotask(() => { setChoice(start); setConsent(false); setText(""); setError(""); }); }, [decision, start]);
   const owner = decision?.who === "owner", amount = formatMoney(decision?.estimateMinor);
+  const choose = (next: Choice) => { setChoice(next); setText(""); setError(""); };
   async function save() {
     if (!decision || busy) return;
     const reason = text.trim();
-    if (choice === "approve" && owner && !consent) { setError("Tick to approve the cost."); return; }
+    if (choice === "approve" && !consent) { setError("Tick to approve the cost."); return; }
     if (choice === "decline" && reason.length < 5) { setError("Say why you are declining (at least 5 characters). It is shared with the team."); return; }
     if (reason.length > 2000) { setError("Keep it under 2,000 characters."); return; }
     const step = choice === "approve" ? (owner ? "approveBudget" : "approveManagement") : (owner ? "declineBudget" : "declineManagement");
@@ -64,38 +69,58 @@ export function CostDecisionSheet({ p, decision, start = "approve", onClose, onD
       request.done(); onClose(); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
+  const label = { color: p.muted, fontSize: 13, fontWeight: "700" as const };
+  const tags = decision ? [
+    decision.repairType ? <Tag key="type" label={repairTypeLabel(decision.repairType)} tone="plain" p={p} /> : null,
+    decision.urgent ? <Tag key="urgent" label="Urgent" tone="bad" p={p} /> : null,
+    decision.hazard ? <Tag key="hazard" label="Safety hazard" tone="bad" p={p} /> : null,
+  ].filter(Boolean) : [];
+  // One block, so every part keeps the same 14px gap (the sheet staggers its direct children).
   return (
     <Sheet palette={p} visible={!!decision} onClose={onClose} title={decision?.propertyName ?? ""} subtitle={owner ? "A repair cost waiting for your approval" : "Above the management limit for repairs"} icon="hardhat">
-      {decision && <>
-        <Text style={[ui.body, { color: p.text }]}>{decision.issue}</Text>
-        <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-          {!!decision.repairType && <Tag label={repairTypeLabel(decision.repairType)} tone="plain" p={p} />}
-          {decision.urgent && <Tag label="Urgent" tone="bad" p={p} />}
-          {decision.hazard && <Tag label="Safety hazard" tone="bad" p={p} />}
+      {decision && <View style={{ gap: 14 }}>
+        {/* What is wrong, and where. */}
+        <View style={{ gap: 8 }}>
+          <Text style={label}>What’s wrong at {decision.propertyName}</Text>
+          <Text style={[ui.body, { color: p.text }]}>{decision.issue}</Text>
+          {!!tags.length && <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>{tags}</View>}
         </View>
-        <View style={{ gap: 2 }}>
-          <Text style={[ui.small, { color: p.muted }]}>{decision.previousEstimateMinor !== null ? "New quote" : "Quoted cost"}</Text>
-          <Text style={{ color: p.text, fontSize: 30, fontWeight: "700", letterSpacing: -1, fontVariant: ["tabular-nums"] }}>{amount}</Text>
+        <WorkPhotos key={decision.workId + ":" + decision.version} p={p} workId={decision.workId} title="Photos" />
+        {/* The amount, the earlier quote if it changed, and the limit it is above. */}
+        <View style={{ gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
+          <View style={{ gap: 2 }}>
+            <Text style={label}>{decision.previousEstimateMinor !== null ? "New quote" : "Quoted cost"}</Text>
+            <Text style={{ color: p.text, fontSize: 30, lineHeight: 36, fontWeight: "700", letterSpacing: -1, fontVariant: ["tabular-nums"] }}>{amount}</Text>
+          </View>
+          {decision.previousEstimateMinor !== null && <View style={{ gap: 2 }}>
+            <Text style={[ui.small, { color: p.text }]}>Earlier quote: <Text style={{ fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatMoney(decision.previousEstimateMinor)}</Text></Text>
+            {!!decision.quoteReason && <Text style={[ui.small, { color: p.muted }]}>Why it changed: {decision.quoteReason}</Text>}
+          </View>}
+          {!!decision.limitText && <Text style={[ui.small, { color: p.muted }]}>{decision.limitText}</Text>}
         </View>
-        {decision.previousEstimateMinor !== null && <Notice text={`The quote changed from ${formatMoney(decision.previousEstimateMinor)}${decision.quoteReason ? ": " + decision.quoteReason : "."}`} p={p} />}
-        {!!decision.limitText && <Text style={[ui.small, { color: p.muted }]}>{decision.limitText}</Text>}
-        <View style={[ui.row, { gap: 8 }]}>
-          <Button label="Approve" icon="check" primary={choice === "approve"} p={p} onPress={() => { setChoice("approve"); setError(""); }} />
-          <Button label="Decline" icon="x" primary={choice === "decline"} p={p} onPress={() => { setChoice("decline"); setError(""); }} />
-        </View>
-        {choice === "approve" && owner && (
-          <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: consent }} onPress={() => setConsent(c => !c)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: consent ? p.successWash : p.elevated }]}>
+        {choice === "approve" ? <>
+          {!owner && <Field label="Note for the team (optional)" value={text} onChange={setText} p={p} multiline placeholder="For example: agreed with the owner by phone" />}
+          <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: consent }} onPress={() => { setConsent(c => !c); setError(""); }}
+            style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, backgroundColor: consent ? p.successWash : p.elevated }]}>
             <Feather name={consent ? "check-square" : "square"} size={20} color={consent ? p.success : p.muted} />
-            <Text style={{ color: p.text, flex: 1 }}>I approve spending up to {amount} on this repair</Text>
+            <Text style={{ color: p.text, flex: 1 }}>{owner ? `I approve spending up to ${amount} on this repair` : `I approve ${amount} above the management limit`}</Text>
           </MotionPress>
-        )}
-        {choice === "approve" && !owner && <Field label="Note for the team (optional)" value={text} onChange={setText} p={p} multiline placeholder="For example: agreed with the owner by phone" />}
-        {choice === "decline" && <Field label={owner ? "Why you are declining" : "Why it is declined"} value={text} onChange={setText} p={p} multiline placeholder={owner ? "For example: please get a second quote first" : "For example: use the spare part in the store"} />}
-        {choice === "decline" && <Text style={[ui.small, { color: p.muted }]}>{owner ? "Recharge sees your reason on the repair and can get a new quote or close it." : "Stays see the reason on the repair and can re-quote or close it."}</Text>}
-        {!!error && <Notice text={error} p={p} tone="bad" />}
-        <Button label={busy ? "Saving…" : choice === "approve" ? `Approve ${amount}` : "Decline the cost"} icon={choice === "approve" ? "check" : "x"} primary p={p} disabled={busy} onPress={() => void save()} />
-        {owner && onMessage && <Button label="Ask Recharge a question" icon="message-circle" p={p} onPress={() => { onClose(); onMessage(); }} />}
-      </>}
+          {!!error && <Notice text={error} p={p} tone="bad" />}
+          <Button label={busy ? "Saving…" : `Approve ${amount}`} icon="check" primary p={p} disabled={busy || !consent} onPress={() => void save()} />
+          <Button label="Decline" icon="x" p={p} disabled={busy} onPress={() => choose("decline")} />
+        </> : <>
+          <Field label={owner ? "Why you are declining" : "Why it is declined"} value={text} onChange={setText} p={p} multiline placeholder={owner ? "For example: please get a second quote first" : "For example: use the spare part in the store"} />
+          <Text style={[ui.small, { color: p.muted }]}>{owner ? "Recharge sees your reason on the repair and can get a new quote or close it." : "Stays see the reason on the repair and can re-quote or close it."}</Text>
+          {!!error && <Notice text={error} p={p} tone="bad" />}
+          <Button label={busy ? "Saving…" : "Decline the cost"} icon="x" primary p={p} disabled={busy || text.trim().length < 5} onPress={() => void save()} />
+          <Button label="Back to approving" icon="arrow-left" p={p} disabled={busy} onPress={() => choose("approve")} />
+        </>}
+        {owner && onMessage && <MotionPress accessibilityRole="link" accessibilityLabel="Message Recharge about this repair" hitSlop={8} onPress={() => { onClose(); onMessage(); }}
+          style={[ui.row, { gap: 6, minHeight: 44, alignSelf: "center", paddingHorizontal: 10 }]}>
+          <Feather name="message-circle" size={15} color={p.primary} />
+          <Text style={{ color: p.primary, fontSize: 14, fontWeight: "600" }}>Message Recharge</Text>
+        </MotionPress>}
+      </View>}
     </Sheet>
   );
 }
