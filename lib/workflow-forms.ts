@@ -5,7 +5,7 @@ import { SCOTTISH_REGIONS } from './regions';
 import { workspaceDateKey } from './analytics';
 export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense'};
 export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls'|'finance';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string;workId?:string};
-export type JourneyView={propertyId:string;clientId:string;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionOn?:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string};enquiry?:EnquiryDetails;ownerAccount?:boolean;invoiceOutsideAt?:string|null;invoiceOutsideNote?:string};
+export type JourneyView={propertyId:string;clientId:string|null;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionOn?:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string};enquiry?:EnquiryDetails;ownerAccount?:boolean;invoiceOutsideAt?:string|null;invoiceOutsideNote?:string};
 export type EnquiryDetails={contactName?:string;companyName?:string;email?:string;phone?:string;existingClient?:boolean;wcs?:number;parking?:string;garden?:string;photoLink?:string;notes?:string};
 export type OperationView={workId:string;propertyId:string;moduleId:string;title:string;kind:string;status:string;version:number;assigneeId:string|null;dueOn?:string|null;data:Record<string,unknown>};
 const field=(name:string,label:string,type:WorkflowField['type']='text',required=true):WorkflowField=>({name,label,type,required});
@@ -82,6 +82,8 @@ export function inspectionReportFrom(a:WorkspaceAccount,j:JourneyView,today=work
  if(j.stage!=='inspection_booked'||!j.inspectionOn||j.inspectionOn<=today)return null;
  return journeyForms(a,j,j.inspectionOn).some(f=>f.key==='completeInspection')?j.inspectionOn:null;
 }
+// While owner accounts are off (team beta), Stays and admins act for the owner on repair costs.
+export const ownerByTeam=(a:WorkspaceAccount)=>a.teamOnly===true&&(admin(a)||a.role==='stays');
 export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[]{
  if(['completed','cancelled'].includes(w.status))return [];
  const forms:WorkflowForm[]=[],stays=admin(a)||a.role==='stays',ready=admin(a)||actorIs(a,'stays','ready');
@@ -116,6 +118,9 @@ export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[
  if(w.kind==='maintenance'){
   if(a.role==='client'&&w.data.phase==='owner_approval')add('approveBudget','Approve the quoted repair budget',[field('consent','I approve the estimated repair cost shown above','checkbox')]);
   if(a.role==='client'&&w.data.phase==='owner_approval')add('declineBudget','Decline the repair cost',[{...field('reason','Why you are declining','textarea'),help:'Shared with Recharge, who can get a new quote or close the repair.'}]);
+  // Team beta: owners have no accounts, so the team records the owner's answer.
+  if(ownerByTeam(a)&&w.data.phase==='owner_approval')add('approveBudget',"Record the owner's approval",[{...field('ownerAgreement','How the owner agreed','textarea'),help:'For example: by phone with the owner on 10 October.'},field('consent','The owner approved the estimated repair cost shown above','checkbox')]);
+  if(ownerByTeam(a)&&w.data.phase==='owner_approval')add('declineBudget',"Record that the owner declined",[{...field('reason','What the owner said','textarea'),help:'The repair can then be re-quoted or closed.'}]);
   if(admin(a)&&w.data.phase==='management_approval'){
    add('approveManagement','Approve the repair cost (management)',[field('note','Note for the team','textarea',false)],v=>typeof v.note==='string'&&v.note?{note:v.note}:{});
    add('declineManagement','Decline the repair cost (management)',[{...field('reason','Why it is declined','textarea'),help:'Shared with Stays, who can re-quote or close the repair.'}]);

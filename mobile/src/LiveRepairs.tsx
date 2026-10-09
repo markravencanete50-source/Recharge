@@ -64,7 +64,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
 
   const nameOf = useCallback((id: string) => properties.find(x => x.id === id)?.name ?? "Property", [properties]);
   const counts = useMemo(() => Object.fromEntries(REPAIR_STAGES.map(s => [s.phase, repairs.filter(r => repairStage(r.data) === s.phase).length])), [repairs]);
-  const mineToAct = repairs.filter(r => repairStep(account.role, String(r.data.phase)) || canCloseRepair(account.role, String(r.data.phase)));
+  const mineToAct = repairs.filter(r => repairStep(account.role, String(r.data.phase), account.teamOnly) || canCloseRepair(account.role, String(r.data.phase)));
   const shown = stage === "open" ? repairs.filter(r => !repairClosed(String(r.data.phase))) : stage === "action" ? mineToAct : repairs.filter(r => repairStage(r.data) === stage);
   // Visits are created a batch at a time; keep asking until none are left.
   async function createVisits() {
@@ -175,7 +175,9 @@ function RepairPhotos({ p, repair }: { p: Palette; repair: Operation }) {
 }
 
 function RepairSheet({ p, account, role, repair, propertyName, today, onClose, onDone }: { p: Palette; account: WorkspaceAccount; role: string; repair?: Operation; propertyName: string; today: string; onClose: () => void; onDone: () => Promise<void> }) {
-  const phase = String(repair?.data.phase ?? ""), step = repair ? repairStep(role, phase) : null;
+  const phase = String(repair?.data.phase ?? ""), step = repair ? repairStep(role, phase, account.teamOnly) : null;
+  // Team beta: Stays or an admin records the owner's answer, with how the owner gave it.
+  const forOwner = role !== "client" && phase === "owner_approval";
   const team = ["ready", "stays", "admin", "super_admin"].includes(role);
   const [afterIds, setAfterIds] = useState<string[]>([]), [uploading, setUploading] = useState(false), [addingBefore, setAddingBefore] = useState(false);
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -195,6 +197,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(repair?.data.urgent === true); setError(""); setQuoting(false); setAfterIds([]); setAddingBefore(false); setUploading(false); setDeclining(null); } }); return () => { active = false; }; }, [repair, today]);
 
   function build(): Record<string, unknown> | string {
+    if (step === "approveBudget" && forOwner) return consent && f("ownerAgreement").trim().length >= 5 ? { consent: true, ownerAgreement: f("ownerAgreement").trim().slice(0, 500) } : "Add how the owner agreed and tick to record their approval.";
     if (step === "approveBudget") return consent ? { consent: true } : "Tick to approve the cost.";
     if (step === "approveManagement") return f("managementNote").trim() ? { note: f("managementNote").trim() } : {};
     if (step === "referReady") {
@@ -239,7 +242,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
     if (!repair || !declining || busy) return;
     const text = f("declineReason").trim();
     if (text.length < 5 || text.length > 2000) { setError(declining === "close" ? "Say why the repair is closed (at least 5 characters)." : "Say why the cost is declined (at least 5 characters). The team sees it on the repair."); return; }
-    const step = declining === "close" ? "closeRepair" : role === "client" ? "declineBudget" : "declineManagement";
+    const step = declining === "close" ? "closeRepair" : role === "client" || forOwner ? "declineBudget" : "declineManagement";
     setBusy(true); setError("");
     try {
       await writeOperation({ action: "updateOperation", requestId: declineRequest.get(), workId: repair.workId, version: repair.version, step, data: declining === "close" ? { note: text } : { reason: text } } as Parameters<typeof writeOperation>[0]);
@@ -281,26 +284,28 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         {team && ["referred", "booked"].includes(phase) && (addingBefore
           ? <PhotoPicker p={p} workId={repair.workId} purpose="maintenance" label="Photos before the repair" hint="The problem as you found it. Each photo is saved as you add it." onChange={(_ids, loading) => setUploading(loading)} />
           : <Button label="Add before photos" icon="camera" p={p} onPress={() => setAddingBefore(true)} />)}
-        {step && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{STEP_TITLE[step]}</Text>}
+        {step && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{forOwner ? "Record the owner's approval" : STEP_TITLE[step]}</Text>}
+        {step === "approveBudget" && forOwner && !declining && <Field label="How the owner agreed" value={f("ownerAgreement")} onChange={set("ownerAgreement")} p={p} placeholder="For example: by phone with the owner on 10 October" />}
         {step === "approveBudget" && !declining && (
           <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: consent }} onPress={() => setConsent(c => !c)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: consent ? p.successWash : p.elevated }]}>
             <Feather name={consent ? "check-square" : "square"} size={20} color={consent ? p.success : p.muted} />
-            <Text style={{ color: p.text, flex: 1 }}>I approve spending up to {pounds(repair.data.estimatedCostMinor)} on this repair</Text>
+            <Text style={{ color: p.text, flex: 1 }}>{forOwner ? `The owner approved spending up to ${pounds(repair.data.estimatedCostMinor)} on this repair` : `I approve spending up to ${pounds(repair.data.estimatedCostMinor)} on this repair`}</Text>
           </MotionPress>
         )}
+        <Detail label="How the owner agreed" value={repair.data.ownerAgreement} p={p} />
         {step === "approveManagement" && !declining && <>
           <Text style={[ui.small, { color: p.muted }]}>This repair is above the management approval limit.{typeof repair.data.ownerApprovedAt === "string" ? " The owner has approved it." : " It is within the owner’s own limit."}</Text>
           <Field label="Note for the team (optional)" value={f("managementNote")} onChange={set("managementNote")} p={p} multiline />
         </>}
         {(step === "approveBudget" || step === "approveManagement" || closable) && (declining ? <View style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border }}>
-          <Text style={{ color: p.text, fontWeight: "700" }}>{declining === "close" ? "Close the repair" : "Decline the cost"}</Text>
-          <Text style={[ui.small, { color: p.muted }]}>{declining === "close" ? "The repair is closed without the work going ahead. The owner sees it in their updates." : role === "client" ? "Recharge sees your reason on the repair and can get a new quote or close it." : "Stays see the reason on the repair and can re-quote or close it."}</Text>
+          <Text style={{ color: p.text, fontWeight: "700" }}>{declining === "close" ? "Close the repair" : forOwner ? "The owner declined the cost" : "Decline the cost"}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{declining === "close" ? "The repair is closed without the work going ahead. The owner sees it in their updates." : role === "client" ? "Recharge sees your reason on the repair and can get a new quote or close it." : forOwner ? "Record what the owner said. The repair can then be re-quoted or closed." : "Stays see the reason on the repair and can re-quote or close it."}</Text>
           <Field label={declining === "close" ? "Why it is closed" : "Why"} value={f("declineReason")} onChange={set("declineReason")} p={p} multiline placeholder={declining === "close" ? "For example: the owner is arranging it themselves" : "For example: please get a second quote first"} />
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-            <Button label={busy ? "Saving…" : declining === "close" ? "Close the repair" : "Decline the cost"} primary p={p} disabled={busy} onPress={() => void decide()} />
+            <Button label={busy ? "Saving…" : declining === "close" ? "Close the repair" : forOwner ? "Record the decline" : "Decline the cost"} primary p={p} disabled={busy} onPress={() => void decide()} />
             <Button label="Cancel" p={p} onPress={() => setDeclining(null)} />
           </View>
-        </View> : <Button label={closable ? "Close the repair" : "Decline the cost"} icon="x" p={p} onPress={() => { setDeclining(closable ? "close" : "decline"); setError(""); }} />)}
+        </View> : <Button label={closable ? "Close the repair" : forOwner ? "The owner declined" : "Decline the cost"} icon="x" p={p} onPress={() => { setDeclining(closable ? "close" : "decline"); setError(""); }} />)}
         {step === "referReady" && <>
           <View style={{ gap: 8 }}>
             <Text style={{ color: p.text, fontWeight: "700" }}>{REPAIR_GUIDES[type].label}: go through these with the guest</Text>
@@ -351,7 +356,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         </View> : <Button label="Update the quote" icon="edit-3" p={p} onPress={() => setQuoting(true)} />)}
         {!step && <Notice text={phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will refer this to Ready." : "Nothing for you to do at this stage."} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
-        {step && !declining && <Button label={busy ? "Saving…" : uploading ? "Saving photos…" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading} onPress={() => void save()} />}
+        {step && !declining && <Button label={busy ? "Saving…" : uploading ? "Saving photos…" : forOwner ? "Record the owner's approval" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading} onPress={() => void save()} />}
         {role !== "client" && <PropertyTeamChatButton palette={p} propertyId={repair.propertyId} workId={repair.workId} />}
       </>}
     </Sheet>

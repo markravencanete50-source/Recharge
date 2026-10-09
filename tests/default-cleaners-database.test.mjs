@@ -8,7 +8,6 @@ import { createServer } from 'vite';
 // from a Hostaway stay), and nothing going to a cleaner who has lost access.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 const { teamsActionSchema, defaultCleanersSchema } = await vite.ssrLoadModule('/lib/workspace-teams-policy.ts');
-const { cleanConditionSchema, purchaseFromClean, repairFromClean, cleanAnswers } = await vite.ssrLoadModule('/lib/clean-report.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
 create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz);

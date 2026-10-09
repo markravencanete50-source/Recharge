@@ -45,8 +45,9 @@ const STAFF = ["stays", "admin", "super_admin"];
 const DECLINED = ["owner_declined", "management_declined"];
 // Finished repairs: done, or closed without the work going ahead.
 export const repairClosed = (phase: string) => phase === "completed" || phase === "closed";
-export function repairStep(role: string, phase: string): RepairStep | null {
-  if (phase === "owner_approval") return role === "client" ? "approveBudget" : null;
+// ownerByTeam: in the team beta, Stays and admins record the owner's answer on the cost.
+export function repairStep(role: string, phase: string, ownerByTeam = false): RepairStep | null {
+  if (phase === "owner_approval") return role === "client" || (ownerByTeam && STAFF.includes(role)) ? "approveBudget" : null;
   if (phase === "management_approval") return role === "admin" || role === "super_admin" ? "approveManagement" : null;
   if (phase === "triage") return STAFF.includes(role) ? "referReady" : null;
   if (phase === "referred") return role === "ready" || STAFF.includes(role) ? "bookRepair" : null;

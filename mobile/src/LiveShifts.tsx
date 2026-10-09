@@ -228,7 +228,8 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
           {data.unassigned.green + data.unassigned.amber + data.unassigned.red > 0 && <Notice p={p} tone="bad"
             text={`${plural(data.unassigned.green + data.unassigned.amber + data.unassigned.red, "guest message")} arrived while nobody was clocked in to guest relations (${formatCount(data.unassigned.red)} red).`} />}
         </Section>
-        {clients && <Section title="Owner reply times (client relations)" p={p}>
+        {/* Shown once owners message in the app; never during the team beta, when owners have no accounts. */}
+        {clients && (!!clients.ownerMessages || clients.people.length > 0) && <Section title="Owner reply times (client relations)" p={p}>
           <Text style={[ui.small, { color: p.muted }]}>Messages owners send Recharge in the app, with the same targets. Each one counts for whoever was clocked in to client relations when it arrived.</Text>
           {!clients.people.length && <Notice text={clients.ownerMessages ? "No owner messages were answered by someone on a client relations shift yet." : "No owner messages in this period."} p={p} />}
           <List p={p} empty="">

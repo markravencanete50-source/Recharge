@@ -27,7 +27,8 @@ export const operationsActionSchema=z.union([
  step('prepareQuote',{checkIn:date,checkOut:date,baseAmountMinor:money}),
  step('recordGuestAcceptance',{guestEvidence:text(2000).min(10)}),
  step('confirmBooking',{invoiceId:id,reference:text(120).min(1)}),
- step('approveBudget',{consent:z.literal(true)}),
+ // The owner's approval; in the team beta the team records it with how the owner agreed.
+ step('approveBudget',{consent:z.literal(true),ownerAgreement:text(500).min(5).optional()}),
  step('referReady',{troubleshooting:text(2000).min(5),warrantyContactEvidence:text(2000).optional(),guestUpdate:text(2000).min(5),urgent:z.boolean().optional()}),
  step('bookRepair',{repairOn:date,contractor:text(200).min(2),guestUpdate:text(2000).min(5)}),
  step('completeRepair',{report:text(3000).min(10),actualCostMinor:money,guestUpdate:text(2000).min(5),photoIds:z.array(id).max(30).optional()}),
