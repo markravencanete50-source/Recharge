@@ -2,7 +2,7 @@
 -- owner ("client"), by invite, by approval or by changing someone's role. A pending request is
 -- harmless, so sign-up itself is unchanged. The switch lives in one row: set team_only to false
 -- when owners are let in. It ships off so a fresh database behaves as before; the beta database
--- turns it on (docs/APPLY-2026-10-10.sql).
+-- turns it on with: update private.workspace_beta_mode set team_only = true;
 create table if not exists private.workspace_beta_mode (
  singleton boolean primary key default true check (singleton),
  team_only boolean not null default false
