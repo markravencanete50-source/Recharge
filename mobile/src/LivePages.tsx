@@ -225,6 +225,12 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: Jour
         </View>
       ))}</View>
       <Text style={[ui.body, { color: p.muted }]}>{progress.next}</Text>
+      {account.role !== "client" && <EnquiryContact palette={p} j={j} />}
+      {account.role !== "client" && (!!j.form?.gasElectricMeters || !!j.form?.operatingStatus) && <View style={{ gap: 4 }}>
+        {!!j.form?.gasElectricMeters && <Text style={[ui.body, { color: p.text }]}><Text style={{ fontWeight: "700" }}>Gas and electric: </Text>{String(j.form.gasElectricMeters)}</Text>}
+        {!!j.form?.operatingStatus && <Text style={[ui.body, { color: p.text }]}><Text style={{ fontWeight: "700" }}>Current operating status: </Text>{String(j.form.operatingStatus)}</Text>}
+      </View>}
+      {!!j.invoiceOutsideAt && <Text style={[ui.small, { color: p.muted }]}>Onboarding invoice handled outside the app: {j.invoiceOutsideNote}</Text>}
       {j.estimate && !readEstimate(j.estimate) && <View style={{ gap: 6 }}><Text style={{ color: p.text, fontWeight: "700" }}>Your estimate</Text>{[["Low nightly rate", "lowRateMinor"], ["Expected nightly rate", "mediumRateMinor"], ["High nightly rate", "highRateMinor"]].map(([label, key]) => <Text key={key} style={{ color: p.text }}>{label}: {money(j.estimate?.[key])}</Text>)}</View>}
       {j.estimate && typeof j.estimate.comments === "string" && !!j.estimate.comments.trim() && <View style={{ gap: 4 }}><Text style={{ color: p.text, fontWeight: "700" }}>{account.role === "client" ? "Notes from Recharge" : "Estimate notes"}</Text><Text style={[ui.body, { color: p.muted }]}>{j.estimate.comments}</Text></View>}
       {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
@@ -237,6 +243,27 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: Jour
       {journeyForms(account, j).map(f => <SoftButton key={f.key} label={f.title} icon={f.key === "askQuestion" ? "plus" : "arrow-right"} palette={p} onPress={() => onForm(f)} />)}
       {!!reportFrom && <Text style={[ui.small, { color: p.muted }]}>Report from {dayLabel(reportFrom)}</Text>}
       {!!linked.length && <Text style={[ui.small, { color: p.muted }]}>{linked.length} connected team {linked.length === 1 ? "handover" : "handovers"}</Text>}
+    </View>
+  );
+}
+
+// Who asked for the estimate, from the enquiry form. Owners with an account don't need it, and
+// older enquiries have none.
+function EnquiryContact({ palette: p, j }: { palette: Palette; j: JourneyView }) {
+  const e = j.enquiry ?? {}, [linkError, setLinkError] = useState("");
+  const rows = [
+    ["Contact", [e.contactName, e.companyName].filter(Boolean).join(", ")], ["Email", e.email], ["Phone", e.phone],
+    ["Existing client", e.existingClient === undefined ? "" : e.existingClient ? "Yes" : "No"], ["WCs", e.wcs === undefined ? "" : String(e.wcs)],
+    ["Parking", e.parking], ["Garden", e.garden], ["Notes", e.notes],
+  ].filter((r): r is [string, string] => !!r[1]);
+  if (!rows.length && !e.photoLink) return j.ownerAccount === false ? <Text style={[ui.small, { color: p.muted }]}>No owner account: the team records the owner's steps.</Text> : null;
+  return (
+    <View style={{ gap: 6, padding: 14, borderRadius: 16, backgroundColor: p.wash }}>
+      <Text style={{ color: p.text, fontWeight: "700" }}>From the enquiry</Text>
+      {rows.map(([label, value]) => <Text key={label} selectable style={[ui.body, { color: p.text }]}><Text style={{ color: p.muted }}>{label}: </Text>{value}</Text>)}
+      {!!e.photoLink && <SoftButton label="Open the photos and videos" icon="external-link" palette={p} onPress={() => void Linking.openURL(e.photoLink!).catch(() => setLinkError("The photo link could not be opened."))} />}
+      {!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}
+      {j.ownerAccount === false && <Text style={[ui.small, { color: p.muted }]}>No owner account: the team records the owner's steps.</Text>}
     </View>
   );
 }
@@ -322,7 +349,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   return (
     <>
       <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Properties"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
-      {account.role === "client" && account.modules.includes("property-onboarding") && <EnquiryCard palette={p} onStart={() => onForm(newEnquiryForm())} />}
+      {(account.role === "client" || staff) && account.modules.includes("property-onboarding") && <EnquiryCard palette={p} team={staff} onStart={() => onForm(newEnquiryForm(staff))} />}
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
       {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
       {staff && !loading && properties.length > 0 && account.modules.includes("property-database") && <PortfolioInsights palette={p} properties={properties} journeys={journeys} filter={filter} onFilter={f => { setFilter(f); setShown(24); }} onOwners={setOwnerCount} />}

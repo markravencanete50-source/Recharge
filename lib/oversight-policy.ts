@@ -59,7 +59,7 @@ const EVENT: Record<string, string> = {
   'cleaning.decision_supervised': 'Next cleans to be supervised', 'cleaning.decision_removed_from_rota': 'Removed from the rota',
   'repairs.owner_reminder': 'Reminder sent to the owner', 'journey.estimate_reminder': 'Estimate reminder sent to the owner',
   'journey.createEnquiry': 'Enquiry started', 'journey.publishEstimate': 'Estimate published', 'journey.decideEstimate': 'Owner decided on the estimate',
-  'journey.publishAgreement': 'Agreement published', 'journey.signAgreement': 'Agreement signed', 'journey.submitForm': 'Set-up form submitted', 'journey.linkInvoice': 'Onboarding invoice linked',
+  'journey.publishAgreement': 'Agreement published', 'journey.signAgreement': 'Agreement signed', 'journey.submitForm': 'Set-up form submitted', 'journey.linkInvoice': 'Onboarding invoice linked', 'journey.recordInvoiceOutside': 'Invoice handled outside the app',
   'journey.bookInspection': 'Inspection booked', 'journey.completeInspection': 'Inspection completed', 'journey.makeLive': 'Property made live',
   'journey.askQuestion': 'Question asked', 'journey.answerQuestion': 'Question answered',
 };

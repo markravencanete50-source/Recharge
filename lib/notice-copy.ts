@@ -17,6 +17,7 @@ const EXACT: Record<string, NoticeCopy> = {
   'journey.signAgreement': copy('Management agreement signed', 'The management agreement has been signed. The next step is the property set-up form.'),
   'journey.submitForm': copy('Set-up form received', 'The property set-up form has been completed. The onboarding invoice comes next.'),
   'journey.linkInvoice': copy('Onboarding invoice issued', 'The onboarding invoice for your property has been issued.'),
+  'journey.recordInvoiceOutside': copy('Onboarding invoice recorded', 'The onboarding invoice was handled outside the app.'),
   'journey.bookInspection': copy('Property inspection booked', 'The property inspection has been booked.'),
   'journey.completeInspection': copy('Property inspection completed', 'The property inspection is complete and the report is ready.'),
   'journey.makeLive': copy('Your property is live', 'Your property is now live and taking bookings.'),
