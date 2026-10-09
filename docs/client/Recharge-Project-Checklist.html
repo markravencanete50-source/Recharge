@@ -149,8 +149,22 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
   #costs td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; color: var(--muted); }
   #costs td:last-child { white-space: normal; text-align: right; max-width: 12em; }
 }
+/* All 76 requests: one collapsible list per video */
+details.group { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; }
+details.group > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding: 16px 18px; font-family: var(--display); font-weight: 700; font-size: 16px; border-radius: 20px; }
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary::before { content: "+"; display: inline-block; width: 1.1em; color: var(--accent); font-weight: 800; }
+details.group[open] > summary::before { content: "–"; }
+details.group > summary > span:first-child { flex: 1 1 14em; min-width: 0; }
+details.group .sum-count { font-family: var(--body); font-size: 13px; font-weight: 600; color: var(--muted); }
+details.group > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+details.group .rows { padding: 0 18px 6px; border-top: 1px solid var(--line); }
+details.group .item:first-child { border-top: 0; }
+.num { display: inline-block; min-width: 2.6em; font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--muted); }
+.role-head { margin-top: 6px; }
 @media print {
   :root { --bg: #FFFFFF; --surface: #FFFFFF; }
+  details.group > summary::before { content: ""; width: 0; }
   body { padding: 0; font-size: 12px; }
   .wrap { padding-block: 0; gap: 24px; }
   .copy { display: none; }
@@ -166,9 +180,9 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
 <body>
 <div class="wrap">
   <header class="hero">
-    <div class="eyebrow">Recharge · Project checklist · 8 October 2026</div>
+    <div class="eyebrow">Recharge · Project checklist · 9 October 2026</div>
     <h1>What is done, how it works, and what is next</h1>
-    <p>We went through your four feedback videos (Communication Centre, Property Management Database, Property Onboarding and the rest of Stays) and listed every request: 76 in all. This page shows what is now built and working, how it works, what is waiting on an outside service, and what we need from you to finish it. Items marked <span class="new" style="margin-left:0">New</span> were added in this round.</p>
+    <p>We went through your four feedback videos (Communication Centre, Property Management Database, Property Onboarding and the rest of Stays) and listed every request: 76 in all. This page shows what is now built and working, how it works, what is waiting on an outside service, and what we need from you to finish it. Items marked <span class="new" style="margin-left:0">New</span> were added in this round, after we went through the app role by role on 9 October.</p>
     <p>Recharge is a web application first. It runs in any browser on a computer, laptop, tablet or phone, with nothing to install. The App Store and Google Play versions are an extra way in, alongside the web app, not instead of it.</p>
     <div class="link-row">
       <a class="link-pill" id="app-link" href="https://recharge-backend.markravencanete50.workers.dev/workspace/live" target="_blank" rel="noopener">Open the Recharge web app ↗</a>
@@ -181,20 +195,20 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     <div class="eyebrow">Your feedback videos</div>
     <h2 id="progress-title">Progress on your 76 requests</h2>
     <div class="progress">
-      <div class="progress-head"><b>55 of 76</b><span>requests built and working in the live app today</span></div>
-      <div class="bar" role="img" aria-label="55 built, 11 partly built, 4 waiting on a service, 6 not built yet">
-        <i class="s-live" style="width: 72.37%"></i><i class="s-part" style="width: 14.47%"></i><i class="s-wait" style="width: 5.26%"></i><i class="s-todo" style="width: 7.89%"></i>
+      <div class="progress-head"><b>61 of 76</b><span>requests built and working in the live app today</span></div>
+      <div class="bar" role="img" aria-label="61 built, 10 partly built, none waiting on a service, 5 not built yet">
+        <i class="s-live" style="width: 80.26%"></i><i class="s-part" style="width: 13.16%"></i><i class="s-todo" style="width: 6.58%"></i>
       </div>
       <div class="legend">
-        <div class="live"><b>55</b><span>Built and working</span></div>
-        <div class="part"><b>11</b><span>Partly built; the rest needs a service or your decision</span></div>
-        <div class="wait"><b>4</b><span>Built, switches on when a service is connected</span></div>
-        <div class="todo"><b>6</b><span>Not built yet; each needs a service first</span></div>
+        <div class="live"><b>61</b><span>Built and working</span></div>
+        <div class="part"><b>10</b><span>Partly built; the rest needs an outside service</span></div>
+        <div class="wait"><b>0</b><span>Built, switches on when a service is connected</span></div>
+        <div class="todo"><b>5</b><span>Not built yet; each needs a service first</span></div>
       </div>
       <div class="videos" aria-label="Progress by video">
         <div class="video"><h3>Communication Centre</h3>
-          <div class="bar" role="img" aria-label="4 built, 1 partly, 4 waiting, 5 not built"><i class="s-live" style="width: 28.57%"></i><i class="s-part" style="width: 7.14%"></i><i class="s-wait" style="width: 28.57%"></i><i class="s-todo" style="width: 35.71%"></i></div>
-          <span class="count">4 of 14 built</span></div>
+          <div class="bar" role="img" aria-label="8 built, 2 partly, 4 not built"><i class="s-live" style="width: 57.14%"></i><i class="s-part" style="width: 14.29%"></i><i class="s-todo" style="width: 28.57%"></i></div>
+          <span class="count">8 of 14 built</span></div>
         <div class="video"><h3>Property Management Database</h3>
           <div class="bar" role="img" aria-label="8 built, 1 partly"><i class="s-live" style="width: 88.89%"></i><i class="s-part" style="width: 11.11%"></i></div>
           <span class="count">8 of 9 built</span></div>
@@ -202,19 +216,37 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
           <div class="bar" role="img" aria-label="24 built, 2 partly"><i class="s-live" style="width: 92.31%"></i><i class="s-part" style="width: 7.69%"></i></div>
           <span class="count">24 of 26 built</span></div>
         <div class="video"><h3>Remainder of Stays</h3>
-          <div class="bar" role="img" aria-label="19 built, 7 partly, 1 not built"><i class="s-live" style="width: 70.37%"></i><i class="s-part" style="width: 25.93%"></i><i class="s-todo" style="width: 3.70%"></i></div>
-          <span class="count">19 of 27 built</span></div>
+          <div class="bar" role="img" aria-label="21 built, 5 partly, 1 not built"><i class="s-live" style="width: 77.78%"></i><i class="s-part" style="width: 18.52%"></i><i class="s-todo" style="width: 3.70%"></i></div>
+          <span class="count">21 of 27 built</span></div>
       </div>
     </div>
-    <p class="lead">Everything that could be built without an outside account is now built. The Communication Centre is furthest behind because the guest inbox, WhatsApp and shared mailboxes all need their accounts connected before we can build them.</p>
+    <p class="lead">Everything that could be built without an outside account is now built. Six more requests are built and working since the last update, including reply times, bonus tiers and platform logins. The Communication Centre is still furthest behind because AI replies, WhatsApp and the shared mailboxes need their accounts connected before we can build them, and the guest inbox needs the channel manager to fill itself.</p>
   </section>
 
   <section id="checklist">
     <div class="eyebrow">Checklist</div>
     <h2>At a glance</h2>
-    <p class="lead">46 parts are done and working in the live app. 19 are built or partly built and switch on once an outside service is connected or you make a decision. Each one is explained in more detail further down.</p>
+    <p class="lead">68 parts are done and working in the live app, 18 of them from the feature audit on 9 October. 17 are partly built, waiting on an outside service, or need a decision from you. Each one is explained in more detail further down.</p>
     <div class="checks">
-      <div class="checkcol"><h3>Done and working <span class="count">46</span></h3><ul class="checklist">
+      <div class="checkcol"><h3>Done and working <span class="count">68</span></h3><ul class="checklist">
+<li><span class="box on" aria-hidden="true">✓</span><span><b>New sign-in screen, and invites that sign you straight in</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Owner Approvals page</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Owner Home and Reports with a stays calendar</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Owner reminders at 48 hours, team told at 96</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Admin Home: across the business, and decisions waiting</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Job history and the Decisions report</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Calendar for every team role</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>One inbox with Guests, Clients and Team tabs, and saved replies</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Message the property team</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Fair rejections and disputes decided by cleaning managers</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Cleaner pay rate and "Your month"</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Report a problem from inside a clean</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Expense photos, and draft expenses from finished repairs</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Record the supplier invoice on a delivery</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Statements as a spreadsheet or a printable page</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Ready Home and routine visits made automatically</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>"Today's routine" for Stays</b> <small>Built from the feature audit</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Direct-booking invoice visible to Stays</b> <small>Built from the feature audit</small></span></li>
 <li><span class="box on" aria-hidden="true">✓</span><span><b>Your tools on Home, for every role</b> <small>Easier to find, faster to open</small></span></li>
 <li><span class="box on" aria-hidden="true">✓</span><span><b>Shortcuts that open the form straight away</b> <small>Easier to find, faster to open</small></span></li>
 <li><span class="box on" aria-hidden="true">✓</span><span><b>Always up to date</b> <small>Easier to find, faster to open</small></span></li>
@@ -261,23 +293,25 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
 <li><span class="box on" aria-hidden="true">✓</span><span><b>Ready</b> <small>Cleans, Ready and Accounts</small></span></li>
 <li><span class="box on" aria-hidden="true">✓</span><span><b>Accounts</b> <small>Cleans, Ready and Accounts</small></span></li>
 <li><span class="box on" aria-hidden="true">✓</span><span><b>Access and data protection</b> <small>Security check</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Guest reply times and bonus tiers</b> <small>Staff onboarding, shifts and performance</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Daily Stays work counts towards bonuses</b> <small>Staff onboarding, shifts and performance</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Logins for each platform</b> <small>Listings, pricing, licensing and repairs</small></span></li>
+<li><span class="box on" aria-hidden="true">✓</span><span><b>Messages: chat built into Recharge</b> <small>Messages</small></span></li>
       </ul></div>
-      <div class="checkcol"><h3>Pending <span class="count">19</span></h3><ul class="checklist">
+      <div class="checkcol"><h3>Pending <span class="count">17</span></h3><ul class="checklist">
 <li><span class="box " aria-hidden="true"></span><span><b>Ready for the new channel manager</b> <small>The new business set-up</small> <span class="chip wait">Needs your choice</span></span></li>
 <li><span class="box " aria-hidden="true"></span><span><b>Linking each property to its listings</b> <small>The Property Management Database</small> <span class="chip part">Sync needs the channel manager</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>Emails and phone notifications at each stage</b> <small>Property onboarding and the owner app</small> <span class="chip part">Notifications working; email needs the service</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>Guest reply times and bonus tiers</b> <small>Staff onboarding, shifts and performance</small> <span class="chip wait">Built, waiting on the channel manager</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>Logins for each platform</b> <small>Listings, pricing, licensing and repairs</small> <span class="chip part">Your decision</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>Weekly owner report</b> <small>Listings, pricing, licensing and repairs</small> <span class="chip part">Email needs the service</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>Guest inbox for Airbnb, Booking.com and direct messages</b> <small>What needs a service before we can build it</small> <span class="chip todo">Channel manager</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>New reviews appearing automatically</b> <small>What needs a service before we can build it</small> <span class="chip todo">Channel manager</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>AI-suggested guest replies</b> <small>What needs a service before we can build it</small> <span class="chip todo">AI key</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>Team WhatsApp inbox</b> <small>What needs a service before we can build it</small> <span class="chip todo">Meta WhatsApp</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>Shared mailboxes, and each person's own email</b> <small>What needs a service before we can build it</small> <span class="chip todo">Google or Microsoft</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>Automatic weekly scan for local events</b> <small>What needs a service before we can build it</small> <span class="chip todo">Events data</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Guest messages arriving and replies sending by themselves</b> <small>Messages</small> <span class="chip part">Channel manager</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Emails at each onboarding stage</b> <small>Property onboarding and the owner app</small> <span class="chip part">Notifications working; email needs the service</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Weekly owner report by email</b> <small>Listings, pricing, licensing and repairs</small> <span class="chip part">Email needs the service</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Automatic weekly scan for local events</b> <small>Listings, pricing, licensing and repairs</small> <span class="chip part">Added by hand until events data</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>New reviews appearing automatically</b> <small>What needs a service</small> <span class="chip todo">Channel manager</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>AI-suggested guest replies</b> <small>What needs a service</small> <span class="chip todo">AI key</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Team WhatsApp inbox</b> <small>What needs a service</small> <span class="chip todo">Meta WhatsApp</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Shared mailboxes</b> <small>What needs a service</small> <span class="chip todo">Google or Microsoft</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Each person's own email</b> <small>What needs a service</small> <span class="chip todo">Google or Microsoft</span></span></li>
 <li><span class="box " aria-hidden="true"></span><span><b>Channel manager</b> <small>Decisions we need</small> <span class="chip decide">Decide</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>How daily Stays work counts towards bonuses</b> <small>Decisions we need</small> <span class="chip decide">Decide</span></span></li>
-<li><span class="box " aria-hidden="true"></span><span><b>Where platform passwords live</b> <small>Decisions we need</small> <span class="chip decide">Decide</span></span></li>
+<li><span class="box " aria-hidden="true"></span><span><b>Management spend limit for repairs</b> <small>Decisions we need</small> <span class="chip decide">Decide</span></span></li>
 <li><span class="box " aria-hidden="true"></span><span><b>Reply targets and bonus tiers</b> <small>Decisions we need</small> <span class="chip decide">Confirm</span></span></li>
 <li><span class="box " aria-hidden="true"></span><span><b>Staff contract wording and required training</b> <small>Decisions we need</small> <span class="chip decide">Send us</span></span></li>
 <li><span class="box " aria-hidden="true"></span><span><b>Owner-facing wording</b> <small>Decisions we need</small> <span class="chip decide">Review</span></span></li>
@@ -286,25 +320,293 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     </div>
   </section>
 
+  <section id="audit" aria-labelledby="audit-title">
+    <div class="eyebrow">New this round</div>
+    <h2 id="audit-title">Built from the feature audit (9 October 2026)</h2>
+    <p class="lead">We went through the app role by role and filled the gaps we found. Everything here is live today and needs no outside service. To try it yourself, use the role testing checklist that comes with this page.</p>
+    <h3 class="role-head">Signing in</h3>
+    <div class="area">
+      <div class="item"><h3>New sign-in screen<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Sign-in, password reset, choosing a password and invites now share one design: a forest-green panel with gentle motion (activity cards, a floating house and team chips) beside a bone-coloured card. It stays forest green in dark mode.</p></div>
+      <div class="item"><h3>See what you typed<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Every password box has an eye button to show or hide the password. Boxes no longer turn grey when the browser fills them in.</p></div>
+      <div class="item"><h3>Invites sign you straight in<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Choosing a password from an invite or reset link signs the person in and opens their workspace. The page shows which email the account is for, and checks the password as it is typed: 12 or more characters, and both boxes match.</p></div>
+    </div>
+    <h3 class="role-head">Owners</h3>
+    <div class="area">
+      <div class="item"><h3>A bottom bar made for owners<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Home, Properties, Inbox (the raised button in the middle, which opens Messages), Approvals and Reports. On a computer, the side bar adds Tools.</p></div>
+      <div class="item"><h3>Approvals<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Every repair waiting for the owner, with the property, what is wrong, the quote, any earlier quote and why it changed, and the owner's limit. They Approve, Decline (with a reason) or Message Recharge. Onboarding steps waiting for them (the estimate, the agreement, the set-up form) are listed too. When nothing is waiting it says "Nothing is waiting for you".</p></div>
+      <div class="item"><h3>When an owner declines a repair<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>The repair shows "Owner declined" with their reason, and Stays and admins are told. Stays or an admin can get a new quote, which goes back to the owner, or close the repair.</p></div>
+      <div class="item"><h3>Owner Home<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Tiles for what's waiting for them, new messages and this month's earnings; each property's onboarding progress with its next step; and Start a new enquiry.</p></div>
+      <div class="item"><h3>Reports with a stays calendar<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Earnings, occupancy and average nightly rate for any month. A month calendar shows each property's stays as coloured bars: tap a stay for its details, or a day for its arrivals and departures. Below are guests staying now, upcoming bookings, earnings by property, a 12-month earnings chart and statements.</p></div>
+      <div class="item"><h3>Reminders that keep things moving<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>If a repair or estimate has waited on the owner for 48 hours, they are reminded in the app. At 96 hours client relations (or admins) are told.</p></div>
+    </div>
+    <h3 class="role-head">Admins and management</h3>
+    <div class="area">
+      <div class="item"><h3>Admin Home: across the business<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Cards for Stays, Cleans, Ready and Accounts. Each line opens the right place in Work.</p></div>
+      <div class="item"><h3>Needs a management decision<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>One list on Admin Home: contested cleans (Uphold or Overturn), second quality warnings, quotes over the limit (Approve or Decline), unusual owner payouts (Approve or Hold), owner approvals that have stalled ("Remind the owner now", once a day) and sign-offs missed yesterday ("Mark as seen").</p></div>
+      <div class="item"><h3>Management spend limit<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>An optional limit for repairs, off to start, set in Accounts or Management. Above it, a repair also needs an admin's approval after the owner's.</p></div>
+      <div class="item"><h3>Unusual payouts flagged<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>An owner payout is flagged when it is negative, or more than half above or below that property's average over its last three statements.</p></div>
+      <div class="item"><h3>Missed sign-offs<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Each morning after 8am, any Stays sign-off or listing check missed the day before becomes a "Missed yesterday" item, and admins are told.</p></div>
+      <div class="item"><h3>History and the Decisions report<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Every job has a History: status changes, steps, reviews, overturns, expense decisions and escalations (owners don't see internal escalations). Management → Decisions lists the last 90 days of decisions, filtered by area, with a spreadsheet download.</p></div>
+      <div class="item"><h3>Training on Home<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Every team role has a Training tile on Home. For admins it opens the course uploads.</p></div>
+    </div>
+    <h3 class="role-head">Calendar and messages</h3>
+    <div class="area">
+      <div class="item"><h3>A calendar for every team role<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Work → Calendar for admins, Stays, cleaners, cleaning managers, Ready and Accounts. A month view with Today and arrows; each day lists departures, cleans, arrivals, repairs, routine visits, inspections and other dated work, plus payment runs for admins and Accounts. Admins and cleaning managers can pick a person. Tap an entry to open it, message the property team or open statements.</p></div>
+      <div class="item"><h3>One inbox with tabs<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Messages has Guests, Clients and Team tabs, each with a count, and opens on the tab that needs attention. The badge at the top counts guests waiting.</p></div>
+      <div class="item"><h3>Saved replies<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Ready-made replies for guests and owners, with the guest's name and the property filled in. Admins and Stays add, edit and remove them.</p></div>
+      <div class="item"><h3>Message the property team<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>A button on cleans, repairs, routine visits and calendar entries opens one group chat for the property or job, with the Stays and Ready staff, the cleaning managers and the person doing the job.</p></div>
+    </div>
+    <h3 class="role-head">Cleaners and cleaning managers</h3>
+    <div class="area">
+      <div class="item"><h3>A fair rejection rule<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>A cleaner goes to management review only after two upheld rejections in the same month. A rejection overturned on appeal doesn't count.</p></div>
+      <div class="item"><h3>Cleaners kept informed<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Cleaners are told when a clean is accepted or rejected and when a dispute is decided. The clean shows the reason, the decision and management's note, and "Give your side" while a dispute is open. Work → Cleans lists disputes decided this month.</p></div>
+      <div class="item"><h3>Disputes decided by cleaning managers<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Cleaning managers decide disputes for the properties they manage (admins for any). They see the report, checklist, photos, the reason, guest feedback and the cleaner's statement. There is a Disputes tool on the cleaning manager's Home.</p></div>
+      <div class="item"><h3>Pay rate and "Your month"<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Admins or the cleaner's cleaning manager set a pay rate per clean. The cleaner's Home shows their month: cleans accepted and rejected, any warning, and the amount so far (or "Rate not set yet"). Accounts see the amount on each cleaner's invoice, with the total filled in.</p></div>
+      <div class="item"><h3>Who's leaving and who's next<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Each clean shows how many guests are leaving, and the next arrival date and guest count (no names).</p></div>
+      <div class="item"><h3>Report a problem<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Inside an open clean, a cleaner can report a problem with photos. It becomes a repair for the Stays team, and the clean keeps its ticks, report and photos.</p></div>
+    </div>
+    <h3 class="role-head">Accounts and Ready</h3>
+    <div class="area">
+      <div class="item"><h3>Photo evidence on expenses<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Supplier invoices and before and after photos can be added to expenses and delivered purchases (pictures only; screenshot a PDF). An expense can be linked to a finished repair or delivered purchase with "Use the finished job as proof".</p></div>
+      <div class="item"><h3>Draft expenses from finished repairs<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>A completed repair makes a draft expense with the contractor, the actual cost, the report and the before and after photos. Accounts add the invoice number and send it for approval.</p></div>
+      <div class="item"><h3>Record the supplier invoice<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>On a delivered purchase, Accounts record the supplier invoice (amount, reference, photo, paid) and then reconcile and close it.</p></div>
+      <div class="item"><h3>Statements to download or print<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Owner statements as a spreadsheet (CSV) or a branded printable page, for Accounts and for the owner. The payout upload step has example Airbnb and Booking.com files.</p></div>
+      <div class="item"><h3>Ready Home<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Repairs by stage, from owner approval through to paid; tap a stage to open those repairs. This month's routine visits per property show as done, due or overdue.</p></div>
+      <div class="item"><h3>Routine visits made automatically<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Visits for this month and next are created by themselves, with a reminder three days before each is due. Ready can read the access instructions (not logins or finance) for their properties from "Access and logins".</p></div>
+    </div>
+    <h3 class="role-head">Stays</h3>
+    <div class="area">
+      <div class="item"><h3>Today's routine<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>A card at the top of Stays: listing checks done, empty nights to price, repairs to refer, today's cleans, open AirCover claims, open direct-booking offers, and the weekly reports on Mondays.</p></div>
+      <div class="item"><h3>Price these nights<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>An empty-nights ticket opens the pricing in Stays with one tap.</p></div>
+      <div class="item"><h3>Direct-booking invoice<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Stays with direct bookings can see that booking's invoice, to check it before confirming the booking.</p></div>
+    </div>
+  </section>
+
+  <section id="every-request" aria-labelledby="every-title">
+    <div class="eyebrow">Every request</div>
+    <h2 id="every-title">All 76 requests, one by one</h2>
+    <p class="lead">Each request from your videos with its number, where it stands and what is there. Tap a video to open its list.</p>
+    <details class="group">
+      <summary><span>Communication Centre</span><span class="sum-count">8 built, 2 partly, 4 not built</span></summary>
+      <div class="rows">
+        <div class="item"><h3><span class="num">C1</span>Guest inbox with new messages from Airbnb, Booking.com and direct (Recharge logo on direct)</h3><span class="chip part">Partly built</span>
+          <p>One inbox in Messages with Guests, Clients and Team tabs, each with a count; it opens on the tab that needs attention and the badge at the top counts guests waiting. Guest conversations show longest wait first, coloured green/amber/red, with the Recharge mark on direct. Saved replies fill in the guest's name and the property (admins and Stays add and edit them). Staff log guest messages and replies by hand for now; messages arrive by themselves and replies send once the channel manager is connected.</p></div>
+        <div class="item"><h3><span class="num">C2</span>AI-assisted guest replies</h3><span class="chip todo">Not built yet</span>
+          <p>No AI in the live app. Needs an AI key and building.</p></div>
+        <div class="item"><h3><span class="num">C3</span>Reply timing: green under 5 min, amber 5–10, red over 10</h3><span class="chip live">Built</span>
+          <p>Works from guest messages logged in the Guest inbox (targets editable). Automatic once the channel manager is connected.</p></div>
+        <div class="item"><h3><span class="num">C4</span>Every team member has their own login</h3><span class="chip live">Built</span>
+          <p>Sign-up, admin approval, roles.</p></div>
+        <div class="item"><h3><span class="num">C5</span>Guest relations and client relations teams</h3><span class="chip live">Built</span>
+          <p>Admins set each person's department and clock-in starts from it. Client relations is scored from owners' messages in the app's Messages: each owner message is timed green/amber/red and credited to whoever was on a client relations shift (Team performance → Owner reply times).</p></div>
+        <div class="item"><h3><span class="num">C6</span>Two shifts: 8am–3/4pm and 3pm–11pm</h3><span class="chip live">Built</span>
+          <p>Each person has a usual shift (early 8am–4pm, late 3pm–11pm, or both), shown on their shift card and in Team performance.</p></div>
+        <div class="item"><h3><span class="num">C7</span>Clock in and out on the site</h3><span class="chip live">Built</span>
+          <p>Shift card on Home; admins can close forgotten shifts.</p></div>
+        <div class="item"><h3><span class="num">C8</span>Each reply credited to whoever is clocked in</h3><span class="chip live">Built</span>
+          <p>Works from the Guest inbox. Open question for the client: in the 3–4pm overlap both people get credit.</p></div>
+        <div class="item"><h3><span class="num">C9</span>Per-person green/amber/red with a 90% pass mark (on/off track)</h3><span class="chip live">Built</span>
+          <p>Team performance → Scores and bonuses. The pass mark applies to the score (replies plus daily work).</p></div>
+        <div class="item"><h3><span class="num">C10</span>Bonus tiers at 95% and 100%</h3><span class="chip live">Built</span>
+          <p>Tiers editable, applied to the score. Shows the tier reached; no bonus amounts.</p></div>
+        <div class="item"><h3><span class="num">C11</span>Team WhatsApp via Meta</h3><span class="chip todo">Not built yet</span>
+          <p>Needs Meta WhatsApp Business set up, then building.</p></div>
+        <div class="item"><h3><span class="num">C12</span>Shared mailboxes: onboarding, enquiries, guest relations, client relations</h3><span class="chip todo">Not built yet</span>
+          <p>Needs Google Workspace or Microsoft 365 access, then building.</p></div>
+        <div class="item"><h3><span class="num">C13</span>Each person sees their own email</h3><span class="chip todo">Not built yet</span>
+          <p>As C12.</p></div>
+        <div class="item"><h3><span class="num">C14</span>AI insight / guest sentiment</h3><span class="chip part">Partly built</span>
+          <p>Staff tick a review's sentiment by hand on listing checks. No AI analysis.</p></div>
+      </div>
+    </details>
+    <details class="group">
+      <summary><span>Property Management Database</span><span class="sum-count">8 built, 1 partly</span></summary>
+      <div class="rows">
+        <div class="item"><h3><span class="num">D1</span>Call it "Property Management Database"</h3><span class="chip live">Built</span>
+          <p>The page and the tool carry the name. The bottom-bar tab stays "Properties" to fit.</p></div>
+        <div class="item"><h3><span class="num">D2</span>Clear the old properties; re-onboard everything through the new process</h3><span class="chip live">Built</span>
+          <p>Old Hostaway properties archived and cleared. Admins can still add a property directly, bypassing onboarding.</p></div>
+        <div class="item"><h3><span class="num">D3</span>All of a property's information in one place</h3><span class="chip live">Built</span>
+          <p>One page: owner (name, email), listings, stays (now, upcoming, recent), the owner's set-up answers, payout details (on request, account number masked), access and logins, onboarding, work and invoices. Each part only shows to people allowed to see it: Ready, for example, see the access instructions for their properties but not logins or finance. Guest names aren't stored yet; they come with the channel manager.</p></div>
+        <div class="item"><h3><span class="num">D4</span>See what stage every property is at</h3><span class="chip live">Built</span>
+          <p>"Where every property is": properties counted by stage (enquiry, estimate, agreement, set-up, invoice, inspection, live); tap a stage to filter the list.</p></div>
+        <div class="item"><h3><span class="num">D5</span>Client portfolio: number of clients, properties per client, portfolio size</h3><span class="chip live">Built</span>
+          <p>Every owner with their number of properties; tap an owner to see only theirs. The Owners total counts every owner, onboarded or added by an admin.</p></div>
+        <div class="item"><h3><span class="num">D6</span>Take the enquiry/onboarding strike rate out of this report</h3><span class="chip live">Built</span>
+          <p>Removed. (It isn't shown anywhere else yet.)</p></div>
+        <div class="item"><h3><span class="num">D7</span>Map, or properties per region of Scotland</h3><span class="chip live">Built</span>
+          <p>Properties counted by Scottish area, with spellings and towns grouped (Leith and Portobello count as Edinburgh). New enquiries choose from a fixed list of areas. A drawn map of Scotland shows a circle per area sized by its properties; tap one for the area. It uses the area counts, not exact addresses.</p></div>
+        <div class="item"><h3><span class="num">D8</span>General portfolio statistics</h3><span class="chip live">Built</span>
+          <p>Last 12 months: properties added, properties gone live, nights booked each month, and live properties now. Revenue across the portfolio will follow once payouts come in from the channel manager.</p></div>
+        <div class="item"><h3><span class="num">D9</span>Each property linked to its channel-manager listing so messages sync</h3><span class="chip part">Partly built</span>
+          <p>Each property's listings can be recorded and edited at any time: platform, link and the listing's ID on the platform or in the channel manager. Bookings and messages sync once the channel manager is connected.</p></div>
+      </div>
+    </details>
+    <details class="group">
+      <summary><span>Property Onboarding</span><span class="sum-count">24 built, 2 partly</span></summary>
+      <div class="rows">
+        <div class="item"><h3><span class="num">O1</span>Client logs in and fills in a new enquiry</h3><span class="chip live">Built</span></div>
+        <div class="item"><h3><span class="num">O2</span>Shows in the client's properties with the full journey stage by stage</h3><span class="chip live">Built</span>
+          <p>The owner's Home shows each property's onboarding progress and the next step, and Approvals lists any step waiting for them. The app refreshes itself every minute while open and when someone comes back to it, so a new stage shows without tapping refresh.</p></div>
+        <div class="item"><h3><span class="num">O3</span>Team writes the estimate (e.g. 110 / 120 / 130 a night) with comparables and publishes it</h3><span class="chip live">Built</span></div>
+        <div class="item"><h3><span class="num">O4</span>Email and app notification at every stage (WhatsApp a bonus)</h3><span class="chip part">Partly built</span>
+          <p>In-app notices at every stage, and phone/computer notifications through the browser (web push, no app store needed; on iPhone once Recharge is added to the Home Screen). If an estimate or repair waits on the owner for 48 hours they are reminded in the app; at 96 hours client relations (or admins) are told. Emails start once the Resend key is added. No WhatsApp.</p></div>
+        <div class="item"><h3><span class="num">O5</span>Estimate page explains the service, extra services and the onboarding process</h3><span class="chip live">Built</span>
+          <p>Alongside the estimate: "What Recharge does", "Extra services" and "How onboarding works". The wording lives in one file (lib/onboarding-content.ts) for Recharge to fine-tune.</p></div>
+        <div class="item"><h3><span class="num">O6</span>Client can change the occupancy level and see the estimate change</h3><span class="chip live">Built</span>
+          <p>"Explore your estimate" on the estimate: pick a quieter / expected / strong year and an occupancy, and earnings update as you go. Same sums as the team's estimate model.</p></div>
+        <div class="item"><h3><span class="num">O7</span>Client can toggle direct bookings vs Airbnb bookings</h3><span class="chip live">Built</span>
+          <p>"Booked direct" control: platform fees fall and the saving is spelled out. Shown once the team publishes the platform and management fees with the estimate.</p></div>
+        <div class="item"><h3><span class="num">O8</span>Links to the comparables</h3><span class="chip live">Built</span></div>
+        <div class="item"><h3><span class="num">O9</span>Approve and proceed / need more time (team check-in) / won't proceed (archived both sides) / ask questions</h3><span class="chip live">Built</span>
+          <p>Approve and proceed / I need more time (with a check-in date) / I won't proceed (archived both sides), also reached from the owner's Approvals page. "Ask Recharge a question" works at any stage; the team is told and answers on the same page.</p></div>
+        <div class="item"><h3><span class="num">O10</span>FAQ section on the estimate</h3><span class="chip live">Built</span>
+          <p>"Questions owners ask" on the estimate page, written for owners (estimate, more time, repairs, payouts, post).</p></div>
+        <div class="item"><h3><span class="num">O11</span>Sign the management agreement electronically, stored both sides</h3><span class="chip live">Built</span>
+          <p>Typed-name signature with consent and agreement version. The owner and the team can download a copy of the exact signed agreement (name, date and revision) to keep, print or save as a PDF.</p></div>
+        <div class="item"><h3><span class="num">O12</span>Onboarding form: access information</h3><span class="chip live">Built</span>
+          <p>Stored privately; staff see it under "Access and logins".</p></div>
+        <div class="item"><h3><span class="num">O13</span>Recharge mailbox choice (open and photograph post, or leave it safe); cleaners' post photos go to the client's mailbox</h3><span class="chip live">Built</span>
+          <p>Choice saved. When the owner asked for photos, the cleaner attaches photos of the post with the clean, and the owner sees them with the note in their Mailbox.</p></div>
+        <div class="item"><h3><span class="num">O14</span>Ready-team questions for getting the property ready to go live</h3><span class="chip live">Built</span>
+          <p>Answers show on the property page under "Getting ready to go live" for the team, Ready included.</p></div>
+        <div class="item"><h3><span class="num">O15</span>Needs a licensing compliance report → licensing ticket in Stays</h3><span class="chip live">Built</span></div>
+        <div class="item"><h3><span class="num">O16</span>Has a garden → Ready ticket for regular garden maintenance</h3><span class="chip live">Built</span>
+          <p>Creates a set-up ticket and a monthly "Garden and bins" routine for Ready (grass, weeds, leaves, bins, anything to repair).</p></div>
+        <div class="item"><h3><span class="num">O17</span>Warranty and repair contacts → "contact this person first" on repairs</h3><span class="chip live">Built</span>
+          <p>The owner's preferred repair contact and warranties show on every repair at that property, highlighted as "contact first", and warranty repairs need proof the provider was contacted.</p></div>
+        <div class="item"><h3><span class="num">O18</span>Auto-permission for repairs up to £X</h3><span class="chip live">Built</span>
+          <p>Under the limit goes straight ahead; over it goes to the owner.</p></div>
+        <div class="item"><h3><span class="num">O19</span>"Furnish it for me" → furnishing quote ticket for Ready; otherwise self-furnish</h3><span class="chip live">Built</span>
+          <p>Self-furnishers get the furnishing calculator.</p></div>
+        <div class="item"><h3><span class="num">O20</span>Submit the form with permissions and evidence</h3><span class="chip live">Built</span>
+          <p>Permissions checked. The owner adds photos and photos of documents (keys, meters, mailbox, certificates) on their onboarding page from the set-up form until the inspection is done.</p></div>
+        <div class="item"><h3><span class="num">O21</span>Once signed → Accounts ticket to send the onboarding invoice</h3><span class="chip live">Built</span>
+          <p>Sending itself is manual until Xero/email are connected.</p></div>
+        <div class="item"><h3><span class="num">O22</span>Invoice marked settled → ticked on client and team side</h3><span class="chip live">Built</span>
+          <p>The property page lists each invoice with a "Settled" tick for the client and the team.</p></div>
+        <div class="item"><h3><span class="num">O23</span>Access dates → Ready "new property inspection" ticket</h3><span class="chip live">Built</span>
+          <p>Ticket created automatically; the first access date shows on the property page.</p></div>
+        <div class="item"><h3><span class="num">O24</span>Ready books the inspection and fills in a detailed report</h3><span class="chip live">Built</span>
+          <p>Ready book the inspection and file it with a checklist, issues found and the report, and add inspection photos, which the owner can see.</p></div>
+        <div class="item"><h3><span class="num">O25</span>Ready notified straight away when something is needed</h3><span class="chip live">Built</span>
+          <p>Stays with the onboarding tool are put on every new enquiry and Ready on every new inspection, and are notified in the app and by web push where switched on.</p></div>
+        <div class="item"><h3><span class="num">O26</span>Whole onboarding automated, client always updated</h3><span class="chip part">Partly built</span>
+          <p>Stages, tickets, in-app notices and web push (where switched on) are automatic. Owners see what's waiting for them on Approvals, are reminded at 48 hours, and client relations (or admins) are told at 96 hours; admins can "Remind the owner now" from Admin Home. Emails aren't going out yet (needs Resend) and some steps, such as sending the onboarding invoice, are manual.</p></div>
+      </div>
+    </details>
+    <details class="group">
+      <summary><span>Remainder of Stays</span><span class="sum-count">21 built, 5 partly, 1 not built</span></summary>
+      <div class="rows">
+        <div class="item"><h3><span class="num">S1</span>Every new Airbnb / Booking.com review appears in Listing health</h3><span class="chip todo">Not built yet</span>
+          <p>Reviews aren't imported. Needs the channel manager and building.</p></div>
+        <div class="item"><h3><span class="num">S2</span>Staff acknowledge each review as good or bad</h3><span class="chip live">Built</span>
+          <p>"Log a review" on each property: platform, rating, good / mixed / bad, what the guest said and how it was handled. Reviews still have to be entered by hand until the channel manager feeds them in.</p></div>
+        <div class="item"><h3><span class="num">S3</span>Tag a really bad review "re-list" → re-listing ticket → complete</h3><span class="chip live">Built</span>
+          <p>Staff choose to re-list after a bad review (from the review or the listing check). Re-listings show on the Stays screen: to start → under way → re-listed.</p></div>
+        <div class="item"><h3><span class="num">S4</span>Suspension found → automatic re-list ticket</h3><span class="chip part">Partly built</span>
+          <p>Hidden or suspended listings go on the re-listing list automatically when a check records it. No automatic scan of the platforms (needs the channel manager).</p></div>
+        <div class="item"><h3><span class="num">S5</span>Daily check: all visible, no unhandled bad reviews, suspensions dealt with, re-listings done</h3><span class="chip live">Built</span>
+          <p>"Today's sign-off" on the Stays screen: all listings visible, bad reviews answered, suspensions dealt with, re-listings done or under way, with a note if any are still open. A "Today's routine" card at the top of Stays shows what's left (listing checks x/y, empty nights, repairs to refer, cleans, claims, offers). A sign-off missed yesterday shows on Admin Home after 8am as "Missed yesterday". Admins see the last 14 days in Team performance.</p></div>
+        <div class="item"><h3><span class="num">S6</span>Report of that daily work per person feeding performance and bonuses</h3><span class="chip live">Built</span>
+          <p>Daily work (sign-offs, listing checks, pricing decisions, reviews, against targets per Stays shift day) counts towards the score and bonus tiers; admins set how much it counts (40% to start).</p></div>
+        <div class="item"><h3><span class="num">S7</span>Gap nights in the next 7 days → ticket; staff change or hold the price with a reason</h3><span class="chip live">Built</span>
+          <p>Every live property with an empty night in the coming week gets a "Price the empty nights" ticket automatically, kept up to date and closed once every night is priced or booked; the ticket's "Price these nights in Stays" opens the pricing. Staff hold or change each price with a reason. Stays are entered by hand until the channel manager is connected.</p></div>
+        <div class="item"><h3><span class="num">S8</span>Pricing changes feed the weekly client report</h3><span class="chip live">Built</span></div>
+        <div class="item"><h3><span class="num">S9</span>Weekly scan for local events near each property</h3><span class="chip part">Partly built</span>
+          <p>Stays and admins add local events by hand (name, date, link, why it matters); they appear in the weekly report. No automatic scan (needs an events data provider).</p></div>
+        <div class="item"><h3><span class="num">S10</span>Weekly report downloaded and sent to the client; client report section</h3><span class="chip part">Partly built</span>
+          <p>The weekly report opens as a branded page to read, print or save as a PDF, with a spreadsheet download too; owners get an in-app notice (and web push) each Monday. Not emailed yet (needs Resend).</p></div>
+        <div class="item"><h3><span class="num">S11</span>Licensing tickets from onboarding worked through the full licensing process</h3><span class="chip live">Built</span>
+          <p>Licensing runs in stages: application submitted (council and reference) → safety checks (gas, electrical, alarms, legionella, EPC, insurance) → licence granted.</p></div>
+        <div class="item"><h3><span class="num">S12</span>Any booking of 7+ nights → direct-booking ticket</h3><span class="chip part">Partly built</span>
+          <p>Works for stays entered or edited in the app. Bookings from the channel manager don't create it yet.</p></div>
+        <div class="item"><h3><span class="num">S13</span>Recommended rate about 10% below, max £100 off</h3><span class="chip live">Built</span>
+          <p>The offer price is shown on the booking once prepared, alongside the original price, and the policy (e.g. 10% off, up to £100) is shown before preparing it. A super admin confirms the policy once.</p></div>
+        <div class="item"><h3><span class="num">S14</span>Track until yes/no → Accounts invoice → settled → booking confirmed → complete</h3><span class="chip live">Built</span>
+          <p>Yes route works end to end, and "The guest said no" closes the offer. Stays with direct bookings can now see the booking's invoice, to check it before confirming the booking.</p></div>
+        <div class="item"><h3><span class="num">S15</span>OTA logins database</h3><span class="chip live">Built</span>
+          <p>Each property lists its platform logins one row per platform: login, Recharge's or the owner's account, where the password is kept, who gets the security code. Passwords themselves are refused; they stay in a password manager.</p></div>
+        <div class="item"><h3><span class="num">S16</span>Maintenance ticket: choose property, link a reservation, choose repair type</h3><span class="chip live">Built</span>
+          <p>Repair type (heating, hot water, leak, toilet, electrics, appliance, Wi-Fi, locks, pests, damage, other), urgent flag, and the guest's stay can be linked. Cleaners can also "Report a problem" from inside a clean, which creates a repair for Stays with photos.</p></div>
+        <div class="item"><h3><span class="num">S17</span>Repair type → AI troubleshooting steps before passing on</h3><span class="chip part">Partly built</span>
+          <p>Each repair type has a guided checklist of safe checks to go through with the guest, ticked off and sent with the referral. No AI yet (needs an AI key).</p></div>
+        <div class="item"><h3><span class="num">S18</span>Refer (urgently) to Ready; ticket stays visible to Stays to chase</h3><span class="chip live">Built</span>
+          <p>"Urgent" can be set when reporting or referring; Stays keep seeing the repair to chase it.</p></div>
+        <div class="item"><h3><span class="num">S19</span>Ready books the repair → Stays told so they can tell the guest</h3><span class="chip live">Built</span>
+          <p>Ready on the property is notified when a repair is referred (admins if no Ready is assigned); the Stays person who referred it, and Stays on the property, are notified when it is booked and when it is done. Ready Home shows repairs by stage, and "Message the property team" on a repair opens a group chat with the Stays and Ready staff on it.</p></div>
+        <div class="item"><h3><span class="num">S20</span>Expensive work goes to the client for approval first</h3><span class="chip live">Built</span>
+          <p>Uses the estimate given when reporting. Above the owner's limit the repair waits on the owner's Approvals page, where they approve or decline with a reason; after a decline Stays or admins get a new quote (back to the owner) or close the repair. If the real quote changes, a higher quote above the owner's limit goes back to the owner. An optional management limit (off by default) also needs an admin's approval above it, after the owner's.</p></div>
+        <div class="item"><h3><span class="num">S21</span>Cleaner's end-of-clean report (broadband etc., photos)</h3><span class="chip live">Built</span>
+          <p>The cleaner ticks the checklist, writes the report and adds photos, which are stored in Recharge's own private photo storage; the manager sees the photos when reviewing. Each clean shows how many guests are leaving and the next arrival date and guest count (no names).</p></div>
+        <div class="item"><h3><span class="num">S22</span>Guest happy → clean complete → added to the cleaner's invoice</h3><span class="chip live">Built</span>
+          <p>Accepted cleans go on the cleaner's invoice, grouped by cleaner in Accounts, with the total filled in from the cleaner's pay rate per clean (set by admins or the cleaner's cleaning manager). Cleaners are told when a clean is accepted, and "Your month" on their Home shows cleans accepted and rejected and the amount for the month.</p></div>
+        <div class="item"><h3><span class="num">S23</span>Guest unhappy → management review ticket; cleaner not paid</h3><span class="chip live">Built</span>
+          <p>A rejected clean is not invoiced, and the cleaner is told why. To be fair, a cleaner goes to management review only after two upheld rejections in the same month (one overturned on dispute doesn't count). While a dispute is open the cleaner can "Give your side"; cleaning managers decide disputes for their properties (admins for any), seeing the report, checklist, photos, reason, guest feedback and the cleaner's statement. The cleaner is told the decision.</p></div>
+        <div class="item"><h3><span class="num">S24</span>Two or more complaints → warning / replace section; management decides</h3><span class="chip live">Built</span>
+          <p>Two upheld rejections in a month raise a warning for management to decide, and a second warning shows under "Needs a management decision" on Admin Home. "Remove from the rota" frees their cleans.</p></div>
+        <div class="item"><h3><span class="num">S25</span>Purchase request with what's needed and why</h3><span class="chip live">Built</span></div>
+        <div class="item"><h3><span class="num">S26</span>Accounts check against a budget chart and place the order</h3><span class="chip live">Built</span>
+          <p>Accounts are told about each purchase request, approve it against the budget chart (the most each item should cost, kept by Accounts), and record the order.</p></div>
+        <div class="item"><h3><span class="num">S27</span>Ready proves the items arrived before Accounts close it</h3><span class="chip live">Built</span>
+          <p>Ready's "Record delivery" takes photos of what arrived. Accounts then "Record the supplier invoice" on the delivered purchase (amount, reference, photo, paid tick), reconcile it against the delivery photos and close it.</p></div>
+      </div>
+    </details>
+  </section>
 
   <section>
     <div class="eyebrow">The app on your phone</div>
     <h2>Easier to find, faster to open</h2>
-    <p class="lead">This round focused on the app as people use it every day on their phones: getting to their tools in one tap, opening quickly, and feeling responsive.</p>
+    <p class="lead">The 8 October round focused on the app as people use it every day on their phones: getting to their tools in one tap, opening quickly, and feeling responsive.</p>
     <div class="area">
-      <div class="item"><h3>Your tools on Home, for every role<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Your tools on Home, for every role</h3><span class="chip live">Working</span>
         <p>Home now opens with a "Your tools" grid made for each person's role. One tap goes straight to the right screen, tab or section, so nobody has to search through menus. "All tools" lists everything else on their account.</p></div>
-      <div class="item"><h3>Shortcuts that open the form straight away<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Shortcuts that open the form straight away</h3><span class="chip live">Working</span>
         <p>Under the tools, each role has buttons for what they start most: Record a stay, Report a repair, New clean, New expense or New routine visit. One tap opens the form ready to fill in.</p></div>
-      <div class="item"><h3>Always up to date<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Always up to date</h3><span class="chip live">Working</span>
         <p>The app checks for changes every minute while it is open, and as soon as someone comes back to it. A new onboarding stage, task or update appears without anyone tapping refresh. It waits while someone is filling in a form.</p></div>
-      <div class="item"><h3>Illustrated icons for every tool<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Illustrated icons for every tool</h3><span class="chip live">Working</span>
         <p>Each tool has its own colour illustration in the Recharge palette: a price tag for pricing, a signed sheet for sign-off, a shield for AirCover, a parcel for restock requests and so on. The same icons appear in the full tools list.</p></div>
-      <div class="item"><h3>Opens much faster<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Opens much faster</h3><span class="chip live">Working</span>
         <p>What a phone downloads to open the app has dropped from about 6 MB to 2.7 MB: smaller logo and font files, and the old sample-data preview removed from the live app. After the first visit, the phone keeps these files, so later visits open almost straight away. The battery intro now plays once a day and has a Skip button, and the app loads underneath it.</p></div>
-      <div class="item"><h3>More motion and feedback<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>More motion and feedback</h3><span class="chip live">Working</span>
         <p>Every save now shows a short animated confirmation, such as "Saved", "Day signed off" or "Clocked in". Tool tiles lift when tapped, checklists tick with a small spring, the section a tool opens briefly glows, and screens slide in as you move between them. People who prefer less motion can turn it off in Profile and preferences.</p></div>
-      <div class="item"><h3>Fixes for small screens<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Fixes for small screens</h3><span class="chip live">Working</span>
         <p>Rows of buttons that ran off the edge of the screen now wrap onto a second line. Choices such as departments and tabs wrap so every option is visible without scrolling sideways. The round Help button no longer sits over Home or on screens whose bottom bar already has Help, and it slides out of the way while you scroll. The browser tab now says "Recharge".</p></div>
     </div>
     <p class="lead">We checked this on phone, narrow-phone and desktop screens, in light and dark mode, for every role. Unused code was removed, and all 347 automated checks pass.</p>
@@ -326,17 +628,17 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     <h2>The Property Management Database</h2>
     <p class="lead">The Properties tab now opens the Property Management Database: the whole portfolio at a glance, and one page per property.</p>
     <div class="area">
-      <div class="item"><h3>Everything about a property on one page<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Everything about a property on one page</h3><span class="chip live">Working</span>
         <p>Owner and contact details, listings, stays (now, upcoming and recent), the owner's set-up answers, payout details (the account number is masked and only shown on request), access and logins, onboarding progress, open work and invoices with a "Settled" tick. Each part only shows to the people allowed to see it.</p></div>
-      <div class="item"><h3>Where every property is<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Where every property is</h3><span class="chip live">Working</span>
         <p>Properties counted by stage: enquiry, estimate, agreement, set-up, invoice, inspection and live. Tap a stage to see only those properties. The onboarding strike rate has been taken out of this report, as you asked.</p></div>
-      <div class="item"><h3>Owners and their portfolios<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Owners and their portfolios</h3><span class="chip live">Working</span>
         <p>Every owner with their number of properties, and the total number of owners. Tap an owner to see only their properties.</p></div>
-      <div class="item"><h3>Properties by area of Scotland<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Properties by area of Scotland</h3><span class="chip live">Working</span>
         <p>A drawn map of Scotland shows a circle in each area, sized by how many properties are there; tap a circle to see the area. Towns are grouped sensibly (Leith and Portobello count as Edinburgh), and new enquiries pick their area from a fixed list so the counts stay clean.</p></div>
-      <div class="item"><h3>The last 12 months<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>The last 12 months</h3><span class="chip live">Working</span>
         <p>Properties added, properties gone live, nights booked each month and live properties now. Portfolio revenue joins this once payouts come in from the channel manager.</p></div>
-      <div class="item"><h3>Linking each property to its listings<span class="new">New</span></h3><span class="chip part">Sync needs the channel manager</span>
+      <div class="item"><h3>Linking each property to its listings</h3><span class="chip part">Sync needs the channel manager</span>
         <p>Stays and admins record each property's listings at any time: Airbnb, Booking.com, Vrbo, direct or the channel manager, with the link and the listing's ID. Once the channel manager is connected, its bookings and guest messages land on the right property straight away.</p></div>
     </div>
   </section>
@@ -351,28 +653,28 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     <div class="area">
       <div class="item"><h3>Estimates and the owner's decision</h3><span class="chip live">Working</span>
         <p>The team publishes an estimate with low, expected and high nightly rates and links to comparable listings. The owner approves, asks for more time (the team is reminded on the follow-up date), or declines (the property is archived on both sides).</p></div>
-      <div class="item"><h3>Explore your estimate<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Explore your estimate</h3><span class="chip live">Working</span>
         <p>Owners pick a quieter, expected or strong year and an occupancy level, and their earnings update as they go. A "Booked direct" switch shows how much they save in platform fees on direct bookings. The team sets the occupancy, direct-booking share, platform fee and management fee when publishing the estimate.</p></div>
-      <div class="item"><h3>What Recharge does, extra services and an FAQ<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>What Recharge does, extra services and an FAQ</h3><span class="chip live">Working</span>
         <p>Next to the estimate, owners read what Recharge does, the extra services, how onboarding works, and answers to the questions owners usually ask (the estimate, more time, repairs, payouts and post). The wording sits in one place, so we can change it to your exact words.</p></div>
-      <div class="item"><h3>Ask Recharge a question<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Ask Recharge a question</h3><span class="chip live">Working</span>
         <p>At any stage the owner can ask a question on their onboarding page. The team is told and answers on the same page.</p></div>
       <div class="item"><h3>Agreement and set-up form</h3><span class="chip live">Working</span>
         <p>The owner signs the management agreement in the app; their name, the date and the exact wording are kept. The set-up form captures bank details, access, utilities, mail preference, warranty and repair contacts, the repair amount Recharge can approve without asking, furnishing and licensing. Those answers create the follow-up tasks automatically, and the Ready team's answers show on the property page under "Getting ready to go live".</p></div>
-      <div class="item"><h3>A copy of the signed agreement<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>A copy of the signed agreement</h3><span class="chip live">Working</span>
         <p>Once the agreement is signed, the owner and the team can download a copy of the exact wording, with who signed it, when, and which revision. It opens in any browser to keep, print or save as a PDF.</p></div>
-      <div class="item"><h3>Garden care set up automatically<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Garden care set up automatically</h3><span class="chip live">Working</span>
         <p>When the owner says the property has a garden, Ready get a monthly "Garden and bins" routine (grass, weeds, leaves, bins and anything that needs a repair) as well as the set-up task.</p></div>
-      <div class="item"><h3>Onboarding invoice<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Onboarding invoice</h3><span class="chip live">Working</span>
         <p>Accounts get a task to raise the onboarding invoice. Once the payment is recorded, the invoice shows "Settled" for both the owner and the team, and the property moves on to the inspection.</p></div>
-      <div class="item"><h3>Inspection checklist<span class="new">New</span></h3><span class="chip live">Working</span>
-        <p>Ready book the inspection and file it with a checklist: keys and access, alarms, heating and hot water, appliances, Wi-Fi, damage, furnishing, safety items and guest-ready. They note any issues found and write the report. Inspection photos switch on with photo storage.</p></div>
-      <div class="item"><h3>The right team told straight away<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Inspection checklist</h3><span class="chip live">Working</span>
+        <p>Ready book the inspection and file it with a checklist: keys and access, alarms, heating and hot water, appliances, Wi-Fi, damage, furnishing, safety items and guest-ready. They note any issues found, write the report and add inspection photos, which the owner can see.</p></div>
+      <div class="item"><h3>The right team told straight away</h3><span class="chip live">Working</span>
         <p>Stays staff with the onboarding tool are put on every new enquiry, and Ready on every new inspection, so they see it in the app the moment it arrives.</p></div>
-      <div class="item"><h3>Post photos, and photos and documents from the owner<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Post photos, and photos and documents from the owner</h3><span class="chip live">Working</span>
         <p>When an owner asked for their post to be photographed, the cleaner adds photos of it with the clean and the owner sees them in their Mailbox. Owners add photos for their set-up (keys, meters, the mailbox, photos of certificates) on their onboarding page, and Ready add inspection photos the owner can see. Photos are kept in Recharge's own private storage, so no photo service is needed.</p></div>
       <div class="item"><h3>Emails and phone notifications at each stage</h3><span class="chip part">Notifications working; email needs the service</span>
-        <p>Every stage shows an update in the app with its own clear title, such as "Your estimate is ready". <strong>New:</strong> people can switch on notifications in Profile &amp; preferences, and every update then reaches their phone or computer even when Recharge is closed, with no app store needed (on iPhone, after adding Recharge to the Home Screen). Emails start once the email service is connected.</p></div>
+        <p>Every stage shows an update in the app with its own clear title, such as "Your estimate is ready". People can switch on notifications in Profile &amp; preferences, and every update then reaches their phone or computer even when Recharge is closed, with no app store needed (on iPhone, after adding Recharge to the Home Screen). If an estimate or repair waits on the owner for 48 hours they are reminded, and client relations are told at 96 hours. Emails start once the email service is connected.</p></div>
     </div>
   </section>
 
@@ -382,17 +684,17 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     <div class="area">
       <div class="item"><h3>Contract and training before access</h3><span class="chip live">Working</span>
         <p>New team members sign the staff contract for their role in the app and complete the training marked "required" before any tool opens.</p></div>
-      <div class="item"><h3>Access control for super admins<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Access control for super admins</h3><span class="chip live">Working</span>
         <p>One screen lists every account, with when each person last signed in and whether they are signed in now. A super admin can promote someone or move them to another role (for example from Cleaning manager to Admin). They then see exactly what everyone in that role sees, with the same Home, Work and tools, and their app switches over within a minute. Their properties move with them. A super admin can also switch individual tools on or off, sign them out of every device, revoke their password (they set a new one with "Forgot password"), block or unblock them, and delete the account. A deleted account with work history is closed rather than erased, so the record of who did what stays. Every change is logged with who made it. It is in Work → Management → Access control, and on a super admin's Home.</p></div>
-      <div class="item"><h3>Departments and shifts<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Departments and shifts</h3><span class="chip live">Working</span>
         <p>Admins give each person a department (guest relations, client relations, cleaning, Ready, Accounts or management) and their usual shift: early (8am to 4pm), late (3pm to 11pm) or both. Clock-in starts from their department, and both show on their shift card and in Team performance.</p></div>
       <div class="item"><h3>Clock in and clock out</h3><span class="chip live">Working</span>
         <p>Every team member clocks in and out from Home. Admins see who is on shift and can end a shift someone forgot to close.</p></div>
-      <div class="item"><h3>Team performance report<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Team performance report</h3><span class="chip live">Working</span>
         <p>For today, the last 7 or 30 days: each person's replies, hours, listing checks, reviews logged, pricing decisions and daily sign-offs, whether they are on track, and their bonus tier. Admins also see the last 14 days of Stays sign-offs.</p></div>
-      <div class="item"><h3>Guest reply times and bonus tiers</h3><span class="chip wait">Built, waiting on the channel manager</span>
-        <p>Every guest message is timed: green within 5 minutes, amber within 10, red after that, credited to whoever was clocked in to guest relations. 90% green is on track; 95% and 100% unlock the bonus tiers. The figures fill in as soon as guest messages flow in.</p></div>
-      <div class="item"><h3>Client relations score<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Guest reply times and bonus tiers</h3><span class="chip live">Working</span>
+        <p>Every guest message logged in the inbox is timed: green within 5 minutes, amber within 10, red after that, credited to whoever was clocked in to guest relations. The score blends reply times with daily work (listing checks, reviews, pricing decisions and sign-offs), which counts for 40% to start and admins can change. 90% is on track; 95% and 100% unlock the bonus tiers. Once the channel manager is connected, nobody needs to log messages by hand.</p></div>
+      <div class="item"><h3>Client relations score</h3><span class="chip live">Working</span>
         <p>Owners message Recharge in the app's new Messages. Each owner message is timed green, amber or red and credited to whoever was on a client relations shift, with the same targets and bonus tiers as guest replies (Team performance → Owner reply times). Owner emails join in once the shared mailboxes are connected.</p></div>
     </div>
   </section>
@@ -401,27 +703,27 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     <div class="eyebrow">Stays</div>
     <h2>Listings, pricing, licensing and repairs</h2>
     <div class="area">
-      <div class="item"><h3>Log a review<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Log a review</h3><span class="chip live">Working</span>
         <p>On each property, Stays log a guest review: platform, rating, good, mixed or bad, what the guest said and how it was handled. A really bad review can be marked "re-list". Until the channel manager feeds reviews in, they are entered by hand.</p></div>
-      <div class="item"><h3>Re-listings<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Re-listings</h3><span class="chip live">Working</span>
         <p>A review marked "re-list", or a listing check that finds a listing hidden or suspended, goes on the re-listing list on the Stays screen: to start, under way, then re-listed.</p></div>
-      <div class="item"><h3>Today's sign-off<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Today's sign-off</h3><span class="chip live">Working</span>
         <p>At the end of each day Stays sign off that all listings are visible, bad reviews are answered, suspensions are dealt with and re-listings are done or under way, with a note for anything still open. Sign-offs count in Team performance.</p></div>
-      <div class="item"><h3>Empty nights become tickets automatically<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Empty nights become tickets automatically</h3><span class="chip live">Working</span>
         <p>Every live property with an empty night in the coming week gets one "Price the empty nights" ticket. It updates itself as nights are booked or priced and closes once every night is covered. Staff hold or change each price with a reason, and those decisions feed the weekly owner report.</p></div>
-      <div class="item"><h3>Licensing in stages<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>Licensing in stages</h3><span class="chip live">Working</span>
         <p>Licensing tickets from onboarding run through the full process: application submitted (council and reference), safety checks (gas, electrical, alarms, legionella, EPC and insurance), then licence granted.</p></div>
       <div class="item"><h3>Direct bookings</h3><span class="chip live">Working</span>
-        <p>Stays of 7 nights or more get a direct-booking ticket. The offer shows next to the original price, with the 10% off, up to £100 policy. A yes goes to Accounts for the invoice, and "The guest said no" now closes the offer. Bookings from the channel manager will create these tickets once it is connected.</p></div>
-      <div class="item"><h3>Repairs with types and guided checks<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Stays of 7 nights or more get a direct-booking ticket. The offer shows next to the original price, with the 10% off, up to £100 policy. A yes goes to Accounts for the invoice, Stays can now see that invoice to confirm the booking, and "The guest said no" closes the offer. Bookings from the channel manager will create these tickets once it is connected.</p></div>
+      <div class="item"><h3>Repairs with types and guided checks</h3><span class="chip live">Working</span>
         <p>Stays choose the repair type (heating, hot water, leak, toilet, electrics, appliance, Wi-Fi, locks, pests, damage or other), link the guest's stay and mark it urgent. Each type has a checklist of safe checks to go through with the guest; the ticked checks travel with the referral to Ready. The owner's preferred repair contact and warranties show on every repair as "contact first".</p></div>
-      <div class="item"><h3>When a repair quote changes<span class="new">New</span></h3><span class="chip live">Working</span>
-        <p>If the real quote differs from the estimate, Ready or Stays update it with the reason. A higher quote above the owner's approval limit goes back to the owner first, and the repair carries on from where it was once they approve. A lower one needs nothing more.</p></div>
-      <div class="item"><h3>Everyone kept in the loop on repairs<span class="new">New</span></h3><span class="chip live">Working</span>
+      <div class="item"><h3>When a repair quote changes</h3><span class="chip live">Working</span>
+        <p>If the real quote differs from the estimate, Ready or Stays update it with the reason. A higher quote above the owner's approval limit goes back to the owner first, and the repair carries on from where it was once they approve. A lower one needs nothing more. Owners can also decline with a reason; Stays or an admin then get a new quote or close the repair.</p></div>
+      <div class="item"><h3>Everyone kept in the loop on repairs</h3><span class="chip live">Working</span>
         <p>Ready are told when a repair is referred. The Stays person who referred it is told when it is booked and when it is done, so they can update the guest. Work over the owner's limit still goes to the owner for approval first.</p></div>
-      <div class="item"><h3>Logins for each platform<span class="new">New</span></h3><span class="chip part">Your decision</span>
-        <p>Staff with the logins tool see each property's platform logins under "Access and logins". See the decision below on where passwords should live.</p></div>
-      <div class="item"><h3>Weekly owner report<span class="new">New</span></h3><span class="chip part">Email needs the service</span>
+      <div class="item"><h3>Logins for each platform</h3><span class="chip live">Working</span>
+        <p>Each property lists its platform logins, one row per platform: the login, whether it is Recharge's or the owner's account, where the password is kept and who gets the security code. Passwords themselves are refused; they stay in a shared password manager.</p></div>
+      <div class="item"><h3>Weekly owner report</h3><span class="chip part">Email needs the service</span>
         <p>The weekly report now opens as a branded page to read, print or save as a PDF (the spreadsheet is still there), with listing checks, every price change and why, and local events. Stays add local events by hand with a link and why they matter. Every Monday owners are told it is ready. Emailing it starts once the email service is connected.</p></div>
     </div>
   </section>
@@ -430,18 +732,18 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     <div class="eyebrow">Departments</div>
     <h2>Cleans, Ready and Accounts</h2>
     <div class="area">
-      <div class="item"><h3>Purchases and the budget chart<span class="new">New</span></h3><span class="chip live">Working</span>
-        <p>Accounts are told about every purchase request. They keep a budget chart (the most each item should cost) on the Accounts screen, approve each request against it, and record the order. Ready's delivery ticket closes itself once the delivery is recorded, and Accounts reconcile it against the paid invoice.</p></div>
+      <div class="item"><h3>Purchases and the budget chart</h3><span class="chip live">Working</span>
+        <p>Accounts are told about every purchase request. They keep a budget chart (the most each item should cost) on the Accounts screen, approve each request against it, and record the order. Ready's delivery ticket closes itself once the delivery is recorded with photos. Accounts then record the supplier invoice (amount, reference, photo, paid) and reconcile and close it.</p></div>
       <div class="item"><h3>Cleaner invoices</h3><span class="chip live">Working</span>
-        <p>Accepted cleans are grouped by cleaner in Accounts, so several cleans go on one invoice.</p></div>
-      <div class="item"><h3>Remove a cleaner from the rota<span class="new">New</span></h3><span class="chip live">Working</span>
+        <p>Accepted cleans are grouped by cleaner in Accounts, so several cleans go on one invoice, with the total filled in from the cleaner's pay rate per clean.</p></div>
+      <div class="item"><h3>Remove a cleaner from the rota</h3><span class="chip live">Working</span>
         <p>Removing a cleaner takes them off every property and frees their open cleans so they can be given to someone else.</p></div>
-      <div class="item"><h3>Cleans<span class="new">New</span></h3><span class="chip live">Working</span>
-        <p>Clean calendar, checklists, assigning cleaners, the end-of-clean report with photos, reviews where the manager sees the photos and guest feedback, complaints going to management and the two-strikes warning list. Cleaners can submit cleans now that photos are stored in Recharge itself.</p></div>
+      <div class="item"><h3>Cleans</h3><span class="chip live">Working</span>
+        <p>Clean calendar, checklists, assigning cleaners, the end-of-clean report with photos, reviews where the manager sees the photos and guest feedback, complaints going to management after two upheld rejections in a month, disputes decided by the cleaning manager, and the warning list. Cleaners are told every decision and see their month on Home.</p></div>
       <div class="item"><h3>Ready</h3><span class="chip live">Working</span>
-        <p>Repairs referred from Stays, booking and completing repairs, owner approval above the owner's limit, routine garden, bin and safety visits, inspections, furnishing quotes and purchase deliveries, with photos of what arrived for Accounts to check.</p></div>
+        <p>Repairs referred from Stays, booking and completing repairs with before and after photos, owner approval above the owner's limit, routine garden, bin and safety visits (now made automatically each month), inspections, furnishing quotes and purchase deliveries, with photos of what arrived for Accounts to check. Ready Home shows every repair by stage.</p></div>
       <div class="item"><h3>Accounts</h3><span class="chip live">Working</span>
-        <p>Expenses with evidence and approval limits, platform payout reconciliation, owner statements, invoices raised straight from tasks (cleans, repairs, direct bookings, onboarding) and payment recording.</p></div>
+        <p>Expenses with photo evidence and approval limits, draft expenses from finished repairs, platform payout reconciliation, owner statements (spreadsheet or printable page), invoices raised straight from tasks (cleans, repairs, direct bookings, onboarding) and payment recording.</p></div>
     </div>
   </section>
 
@@ -450,28 +752,28 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     <h2>Security check</h2>
     <div class="area">
       <div class="item"><h3>Access and data protection</h3><span class="chip live">Done</span>
-        <p>Everyone only sees the properties and tools they are given, owners never see staff-only information, sign-in is verified on every request, and nothing can be read without signing in. Every new part in this round follows the same rules: for example, owner contact details show only to admins and the staff whose tools need them, and bank details stay masked. All 347 automated checks pass.</p></div>
+        <p>Everyone only sees the properties and tools they are given, owners never see staff-only information, sign-in is verified on every request, and nothing can be read without signing in. Every new part, including the 9 October feature audit, follows the same rules: for example, owner contact details show only to admins and the staff whose tools need them, and bank details stay masked. All 347 automated checks pass.</p></div>
     </div>
   </section>
 
   <section>
     <div class="eyebrow">Not built yet</div>
     <h2>What needs a service before we can build it</h2>
-    <p class="lead">The 6 requests not built yet all need an account behind them first, because there is nothing to connect to until it exists.</p>
+    <p class="lead">The 5 requests not built yet all need an account behind them first, because there is nothing to connect to until it exists.</p>
     <div class="area">
-      <div class="item"><h3>Guest inbox for Airbnb, Booking.com and direct messages</h3><span class="chip todo">Channel manager</span></div>
-      <div class="item"><h3>New reviews appearing automatically</h3><span class="chip todo">Channel manager</span></div>
-      <div class="item"><h3>AI-suggested guest replies</h3><span class="chip todo">AI key</span></div>
-      <div class="item"><h3>Team WhatsApp inbox</h3><span class="chip todo">Meta WhatsApp</span></div>
-      <div class="item"><h3>Shared mailboxes, and each person's own email</h3><span class="chip todo">Google or Microsoft</span></div>
-      <div class="item"><h3>Automatic weekly scan for local events</h3><span class="chip todo">Events data</span><p>Until then, Stays add local events by hand and they appear in the weekly report.</p></div>
+      <div class="item"><h3><span class="num">S1</span>New reviews appearing automatically</h3><span class="chip todo">Channel manager</span><p>Until then, Stays log reviews by hand.</p></div>
+      <div class="item"><h3><span class="num">C2</span>AI-suggested guest replies</h3><span class="chip todo">AI key</span><p>Until then, saved replies cover the common answers.</p></div>
+      <div class="item"><h3><span class="num">C11</span>Team WhatsApp inbox</h3><span class="chip todo">Meta WhatsApp</span></div>
+      <div class="item"><h3><span class="num">C12</span>Shared mailboxes</h3><span class="chip todo">Google or Microsoft</span></div>
+      <div class="item"><h3><span class="num">C13</span>Each person's own email</h3><span class="chip todo">Google or Microsoft</span></div>
     </div>
   </section>
 
   <section>
-    <div class="eyebrow">New</div>
+    <div class="eyebrow">Messages</div>
     <h2>Messages: chat built into Recharge</h2>
     <p class="lead">The Messages button at the top of the app opens chat. Team members message each other one to one or in groups (optionally about a property), and each owner has one conversation with Recharge, answered by client relations, management, admins and the Stays team on their properties. Unread messages show on the button, open conversations update every few seconds, and people are notified once per conversation until they read it. It runs on the services Recharge already uses, so there is no chat provider to pay for.</p>
+    <p class="lead">For the team, Messages now has Guests, Clients and Team tabs with saved replies, and "Message the property team" opens a group chat about a property or job straight from a clean, repair, routine visit or calendar entry.</p>
   </section>
 
   <section id="costs">
@@ -546,15 +848,13 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     <div class="area">
       <div class="item"><h3>Channel manager</h3><span class="chip decide">Decide</span>
         <p>Uplisting (about £13 per listing, against about £25 with Hostaway) or a cheaper alternative. This unlocks the guest inbox, reply timing, review import and more.</p></div>
-      <div class="item"><h3>How daily Stays work counts towards bonuses<span class="new">New</span></h3><span class="chip decide">Decide</span>
-        <p>Team performance already shows listing checks, reviews logged, pricing decisions and daily sign-offs per person. Today the bonus tiers use guest reply times only. Tell us whether this daily work should count, and how much.</p></div>
-      <div class="item"><h3>Where platform passwords live<span class="new">New</span></h3><span class="chip decide">Decide</span>
-        <p>Each property has one logins box, edited by admins. We recommend keeping the actual passwords in a shared password manager (such as 1Password or Bitwarden) and using the app to note which account each listing uses. It is safer than storing passwords in the app.</p></div>
+      <div class="item"><h3>Management spend limit for repairs<span class="new">New</span></h3><span class="chip decide">Decide</span>
+        <p>It is off to start. If you switch it on (in Accounts or Management) and set an amount, any repair above it needs an admin's approval as well as the owner's. Tell us whether you want it, and at what amount.</p></div>
       <div class="item"><h3>Reply targets and bonus tiers</h3><span class="chip decide">Confirm</span>
-        <p>Green within 5 minutes, amber within 10, 90% to be on track, bonus tiers at 95% and 100%. Shifts overlap from 3pm to 4pm, and messages in that hour currently count for both people on shift; tell us if one person should own them instead.</p></div>
+        <p>Green within 5 minutes, amber within 10, 90% to be on track, bonus tiers at 95% and 100%. Shifts overlap from 3pm to 4pm, and messages in that hour currently count for both people on shift; tell us if one person should own them instead. Daily Stays work counts for 40% of the score to start; admins can change this in Team performance.</p></div>
       <div class="item"><h3>Staff contract wording and required training</h3><span class="chip decide">Send us</span>
         <p>The contract each role signs, and which courses every new team member must finish before starting. Admins can add both themselves under Work → Management → Onboarding &amp; training.</p></div>
-      <div class="item"><h3>Owner-facing wording<span class="new">New</span></h3><span class="chip decide">Review</span>
+      <div class="item"><h3>Owner-facing wording</h3><span class="chip decide">Review</span>
         <p>Read "What Recharge does", "Extra services", "How onboarding works" and "Questions owners ask" on an estimate, and send us any changes. We wrote them from your videos.</p></div>
       <div class="item"><h3>The first properties to onboard</h3><span class="chip decide">Plan</span>
         <p>Which owners and properties go through the new onboarding first, so we can follow them end to end with you.</p></div>
@@ -567,18 +867,19 @@ ul.checklist .chip { margin-top: 3px; font-size: 11px; white-space: normal; }
     <ol class="steps">
       <li>Open the web app link above on your computer or phone and sign in with your admin account.</li>
       <li>Add the staff contract and mark the required courses under Work → Management → Onboarding &amp; training.</li>
-      <li>Ask each team member to sign up in the app, approve them in People, give them their tools and properties, then set their department and usual shift in Team performance.</li>
-      <li>Ask Accounts to fill in the budget chart on the Accounts screen, so purchase requests can be checked against it.</li>
+      <li>Add each team member in Work → Management → Access control → Add a person, and send them the one-time set-password link yourself. They choose a password, using the eye button to check it, and land straight in the app. Then give them their properties and set their department and usual shift in Team performance.</li>
+      <li>Ask Accounts to fill in the budget chart on the Accounts screen, so purchase requests can be checked against it, and ask admins or cleaning managers to set each cleaner's pay rate per clean.</li>
       <li>Show each team member the "Your tools" grid at the top of Home. It is set up for their role, and "All tools" lists everything else on their account.</li>
       <li>Start the first owner enquiry from Properties, or ask the owner to sign up and start it themselves.</li>
       <li>Ask everyone to switch on notifications in Profile &amp; preferences. On iPhone, first add Recharge to the Home Screen (Share → Add to Home Screen) and open it from there.</li>
-      <li>Try Messages (the speech-bubble button at the top): message a colleague, and ask an owner to send Recharge a test message.</li>
+      <li>Try Messages (the speech-bubble button at the top): message a colleague, add a saved reply, and ask an owner to send Recharge a test message.</li>
+      <li>Work through the role testing checklist (<a href="Recharge-Role-Test-Checklist.html">Recharge Role Testing</a>) with one test account per role, and send us the copied results.</li>
       <li>Send us the accounts from the list above as they are ready, starting with the channel manager and the email service.</li>
     </ol>
     <p class="note">Every tool on someone's account is listed under Help → Your tools, with a button that opens it, so each person can see exactly what they have and where to find it.</p>
   </section>
 
-  <footer>Prepared 8 October 2026. Recharge is a web application. It works today in any browser on desktop, laptop, tablet or phone, and the App Store and Google Play versions will be added alongside it.</footer>
+  <footer>Prepared 8 October 2026, updated 9 October 2026. Recharge is a web application. It works today in any browser on desktop, laptop, tablet or phone, and the App Store and Google Play versions will be added alongside it.</footer>
 </div>
 
 <script>
@@ -588,6 +889,10 @@ document.getElementById('copy-link').addEventListener('click', function () {
   try {
     navigator.clipboard.writeText(url).then(function () { done('Copied'); }, function () { done('Select the link below'); });
   } catch (e) { done('Select the link below'); }
+});
+window.addEventListener('beforeprint', function () {
+  var groups = document.querySelectorAll('details.group');
+  for (var i = 0; i < groups.length; i++) groups[i].open = true;
 });
 </script>
 

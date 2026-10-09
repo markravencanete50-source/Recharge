@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recharge Role Testing</title>
+<meta name="description" content="A step-by-step checklist for testing the live Recharge app, one role at a time.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Same tokens and fonts as the Recharge project checklist: bone and forest, light and dark. */
+:root {
+  --bg: #F3EEE4;          /* bone */
+  --surface: #FBF8F2;
+  --ink: #17302A;         /* deep forest text */
+  --muted: #5B6B65;
+  --line: #DDD5C6;
+  --forest: #1D4038;      /* brand header */
+  --forest-ink: #F3EEE4;
+  --forest-muted: #B9C9C1;
+  --accent: #2F6B5A;
+  --live: #2E7D4F; --live-wash: #DDEFE3;
+  --part: #6B7A1F; --part-wash: #EBEFD2;
+  --wait: #9A5B0F; --wait-wash: #F6E7CF;
+  --todo: #8A3B3B; --todo-wash: #F3DEDB;
+  --display: "Montserrat", "Segoe UI", system-ui, sans-serif;
+  --body: "Montserrat", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1A17; --surface: #16241F; --ink: #E9E4D9; --muted: #A2B0AA; --line: #2A3B35;
+    --forest: #1F4A40; --forest-ink: #F3EEE4; --forest-muted: #B9C9C1; --accent: #7CC2A8;
+    --live: #7FD3A0; --live-wash: #1D3527; --part: #C9D77A; --part-wash: #2C3218;
+    --wait: #E9B467; --wait-wash: #3A2C16; --todo: #EC9A92; --todo-wash: #3B2220;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1A17; --surface: #16241F; --ink: #E9E4D9; --muted: #A2B0AA; --line: #2A3B35;
+  --forest: #1F4A40; --forest-ink: #F3EEE4; --forest-muted: #B9C9C1; --accent: #7CC2A8;
+  --live: #7FD3A0; --live-wash: #1D3527; --part: #C9D77A; --part-wash: #2C3218;
+  --wait: #E9B467; --wait-wash: #3A2C16; --todo: #EC9A92; --todo-wash: #3B2220;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 84px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6; padding: 0 16px; overflow-x: hidden; }
+.wrap { max-width: 860px; margin: 0 auto; padding-block: 28px 64px; display: flex; flex-direction: column; gap: 36px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; text-wrap: balance; margin: 0; }
+h2 { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--accent); font-weight: 600; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.lead { color: var(--muted); }
+
+.hero { background: var(--forest); color: var(--forest-ink); border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+.hero .eyebrow { color: var(--forest-muted); }
+.hero h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 800; letter-spacing: -0.02em; }
+.hero p { color: var(--forest-muted); }
+.link-pill { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; background: var(--forest-ink); color: var(--forest); padding: 10px 16px; border-radius: 999px; text-decoration: none; font-weight: 700; font-size: 14px; max-width: 100%; overflow-wrap: anywhere; }
+.mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+.tester { display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+.tester label { font-size: 13px; font-weight: 700; color: var(--forest-muted); }
+.tester input { font: 500 15px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--forest-muted); border-radius: 12px; padding: 10px 12px; width: 100%; }
+
+/* Sticky progress and actions */
+.toolbar { position: sticky; top: 0; z-index: 5; margin: 0 -16px; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.toolbar-inner { max-width: 860px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.overall { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.overall-text { font-size: 14px; color: var(--muted); }
+.overall-text b { color: var(--ink); font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.bar i, .minibar i { display: block; height: 100%; width: 0; background: var(--live); border-radius: 999px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { font: 700 14px var(--body); border-radius: 999px; padding: 9px 16px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.btn.primary { background: var(--forest); color: var(--forest-ink); border-color: var(--forest); }
+.btn.danger { background: var(--todo); color: var(--surface); border-color: var(--todo); }
+.panel { max-width: 860px; margin: 10px auto 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.panel[hidden] { display: none; }
+.panel textarea { width: 100%; min-height: 160px; font: 500 13px var(--mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; resize: vertical; }
+.status { font-size: 13px; color: var(--live); font-weight: 700; min-height: 1.2em; }
+
+.role-nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.role-pill { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700; }
+.role-pill b { font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.role-pill.complete { border-color: var(--live); }
+.role-pill.complete b { color: var(--live); }
+
+ol.steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; max-width: 68ch; }
+ol.steps li::marker { font-weight: 800; color: var(--accent); }
+.note-box { border-left: 4px solid var(--accent); background: var(--surface); padding: 14px 16px; border-radius: 0 14px 14px 0; }
+
+section { display: flex; flex-direction: column; gap: 14px; }
+.role-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 16px; }
+.role-count { font-size: 14px; color: var(--muted); }
+.role-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.minibar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+ol.steplist { list-style: none; margin: 0; padding: 6px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; }
+.step { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 6px 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+.step:first-child { border-top: 0; }
+.step .tick { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--live); cursor: pointer; }
+.step label { cursor: pointer; font-size: 15px; line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
+.step .n { display: inline-block; min-width: 1.6em; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.step .do { font-weight: 700; }
+.step .arrow { color: var(--accent); font-weight: 800; }
+.step .see { color: var(--muted); }
+.step.done .do { color: var(--live); }
+.step .note { grid-column: 2; width: 100%; min-width: 0; font: 500 13px var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; }
+.step .note::placeholder { color: var(--muted); }
+footer { color: var(--muted); font-size: 13px; }
+@media (max-width: 480px) {
+  .hero { padding: 22px 18px; border-radius: 22px; }
+  ol.steplist { padding: 4px 12px; }
+  .step { grid-template-columns: 24px minmax(0, 1fr); gap: 6px 10px; }
+  .btn { padding: 8px 13px; font-size: 13px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bar i, .minibar i { transition: width .25s ease; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Recharge · Role testing · 9 October 2026</div>
+    <h1>Test the live app, one role at a time</h1>
+    <p>Each step says what to do and what you should see. Tick it when it works, and add a note when something looks wrong or unclear. Your ticks and notes are kept in this browser on this device, so you can stop and come back. When you finish, press "Copy results" and paste them into your reply to us.</p>
+    <a class="link-pill" href="https://recharge-backend.markravencanete50.workers.dev/workspace" target="_blank" rel="noopener">Open the Recharge app ↗</a>
+    <p class="mono" style="color: var(--forest-muted);">recharge-backend.markravencanete50.workers.dev/workspace</p>
+    <div class="tester">
+      <label for="tester-name">Your name (goes at the top of your results)</label>
+      <input type="text" id="tester-name" autocomplete="name" placeholder="For example, Alex">
+    </div>
+  </header>
+
+  <div class="toolbar" role="region" aria-label="Progress and results">
+    <div class="toolbar-inner">
+      <div class="overall">
+        <span class="overall-text" aria-live="polite"><b id="overall-count">0 of 93</b> steps ticked</span>
+        <div class="bar" aria-hidden="true"><i id="overall-bar"></i></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="button" id="copy-results">Copy results</button>
+        <button class="btn" type="button" id="clear-ticks">Clear my ticks</button>
+      </div>
+    </div>
+    <div class="panel" id="confirm-panel" hidden>
+      <p><b>Clear every tick and note on this device?</b> This can't be undone. Your name stays.</p>
+      <div class="actions">
+        <button class="btn danger" type="button" id="confirm-yes">Yes, clear them</button>
+        <button class="btn" type="button" id="confirm-no">Keep them</button>
+      </div>
+    </div>
+    <div class="panel" id="copy-panel" hidden>
+      <p><b>Copy your results from here.</b> The text is selected: press Ctrl+C (or Cmd+C on a Mac), or press and hold on a phone and choose Copy.</p>
+      <textarea id="copy-text" readonly aria-label="Your results as text"></textarea>
+      <div class="actions"><button class="btn" type="button" id="copy-close">Close</button></div>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </div>
+
+  <nav class="role-nav" aria-label="Roles">
+      <a class="role-pill" href="#role-signin"><span>Sign-in and invites</span><b data-count="signin">0 of 10</b></a>
+      <a class="role-pill" href="#role-owner"><span>Owner (client)</span><b data-count="owner">0 of 14</b></a>
+      <a class="role-pill" href="#role-admin"><span>Super admin / Admin</span><b data-count="admin">0 of 14</b></a>
+      <a class="role-pill" href="#role-stays"><span>Stays</span><b data-count="stays">0 of 12</b></a>
+      <a class="role-pill" href="#role-cleaner"><span>Cleaner</span><b data-count="cleaner">0 of 10</b></a>
+      <a class="role-pill" href="#role-manager"><span>Cleaning manager</span><b data-count="manager">0 of 10</b></a>
+      <a class="role-pill" href="#role-ready"><span>Ready</span><b data-count="ready">0 of 12</b></a>
+      <a class="role-pill" href="#role-accounts"><span>Accounts</span><b data-count="accounts">0 of 11</b></a>
+  </nav>
+
+  <section id="before" aria-labelledby="before-title">
+    <div class="eyebrow">Set-up</div>
+    <h2 id="before-title">Before you start</h2>
+    <ol class="steps">
+      <li>The super admin makes one test account for each role: in the app, go to Work → Management → Access control → Add a person, enter the tester's name and email, choose the role (Owner, Admin, Stays, Cleaner, Cleaning manager, Ready or Accounts) and press "Add and make link".</li>
+      <li>The super admin copies the one-time set-password link and sends it to the tester privately. Each link works once and for a limited time; if it runs out, open the person in Access control and choose "Set-password link" for a new one.</li>
+      <li>The tester opens the link, presses "Choose my password", chooses a password of 12 or more characters (using the eye button to check what they typed) and lands straight in their workspace.</li>
+      <li>To sign in later, open the app's /workspace address (the button above) and sign in with your email and password.</li>
+      <li>Use a clearly fake test property and guest, for example "Test – Leith flat", so test work is easy to spot and tidy away afterwards.</li>
+      <li>To be signed in as two roles at once, use a different browser for each. Keep this checklist open in the same browser each time, because ticks are saved in that browser only.</li>
+    </ol>
+    <p class="note-box"><b>Please never send passwords or keys over WhatsApp or email.</b> Each tester chooses their own password from their link. If someone is locked out, the super admin makes them a new set-password link instead.</p>
+    <p class="lead">Suggested order: Sign-in and invites, Owner, Super admin / Admin, Stays, Cleaning manager, Cleaner, Ready, Accounts. Some steps need another role to act first; each section says which.</p>
+  </section>
+
+  <section class="role" id="role-signin" data-role="signin" data-name="Sign-in and invites" aria-labelledby="h-signin">
+    <div class="role-top">
+      <div>
+        <div class="eyebrow">Everyone</div>
+        <h2 id="h-signin">Sign-in and invites</h2>
+      </div>
+      <span class="role-count"><b data-count="signin">0 of 10</b> ticked</span>
+    </div>
+    <div class="minibar" aria-hidden="true"><i data-bar="signin"></i></div>
+    <p class="lead">Each tester does these once, with the link the super admin sent them.</p>
+    <ol class="steplist">
+        <li class="step" data-step="signin-1">
+          <input type="checkbox" id="t-signin-1" class="tick">
+          <label for="t-signin-1"><span class="n">1</span><span class="do">Open the set-password link the super admin sent you and press &quot;Choose my password&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the &quot;Choose your password&quot; page, showing the email address of your account</span></label>
+          <input type="text" class="note" id="n-signin-1" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 1" autocomplete="off">
+        </li>
+        <li class="step" data-step="signin-2">
+          <input type="checkbox" id="t-signin-2" class="tick">
+          <label for="t-signin-2"><span class="n">2</span><span class="do">Type a password shorter than 12 characters</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the &quot;At least 12 characters&quot; check stay unticked, so the password can&#x27;t be saved yet</span></label>
+          <input type="text" class="note" id="n-signin-2" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 2" autocomplete="off">
+        </li>
+        <li class="step" data-step="signin-3">
+          <input type="checkbox" id="t-signin-3" class="tick">
+          <label for="t-signin-3"><span class="n">3</span><span class="do">Press the eye button in a password box, then press it again</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see your password as plain text, then hidden again</span></label>
+          <input type="text" class="note" id="n-signin-3" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 3" autocomplete="off">
+        </li>
+        <li class="step" data-step="signin-4">
+          <input type="checkbox" id="t-signin-4" class="tick">
+          <label for="t-signin-4"><span class="n">4</span><span class="do">Type the same password of 12 or more characters in both boxes</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see both checks ticked: &quot;At least 12 characters&quot; and &quot;Both passwords match&quot;</span></label>
+          <input type="text" class="note" id="n-signin-4" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 4" autocomplete="off">
+        </li>
+        <li class="step" data-step="signin-5">
+          <input type="checkbox" id="t-signin-5" class="tick">
+          <label for="t-signin-5"><span class="n">5</span><span class="do">Press &quot;Save password and sign in&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should land straight in your Recharge workspace, on your Home, without signing in again</span></label>
+          <input type="text" class="note" id="n-signin-5" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 5" autocomplete="off">
+        </li>
+        <li class="step" data-step="signin-6">
+          <input type="checkbox" id="t-signin-6" class="tick">
+          <label for="t-signin-6"><span class="n">6</span><span class="do">Sign out, then open the app&#x27;s /workspace address on a computer</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the new sign-in screen: a forest-green panel with moving activity cards, a floating house and team chips, next to the sign-in card</span></label>
+          <input type="text" class="note" id="n-signin-6" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 6" autocomplete="off">
+        </li>
+        <li class="step" data-step="signin-7">
+          <input type="checkbox" id="t-signin-7" class="tick">
+          <label for="t-signin-7"><span class="n">7</span><span class="do">Let your browser fill in your saved email and password</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the boxes keep their normal colour, with no grey or yellow fill</span></label>
+          <input type="text" class="note" id="n-signin-7" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 7" autocomplete="off">
+        </li>
+        <li class="step" data-step="signin-8">
+          <input type="checkbox" id="t-signin-8" class="tick">
+          <label for="t-signin-8"><span class="n">8</span><span class="do">Switch your computer to dark mode and reload the sign-in page</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the brand panel stay forest green</span></label>
+          <input type="text" class="note" id="n-signin-8" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 8" autocomplete="off">
+        </li>
+        <li class="step" data-step="signin-9">
+          <input type="checkbox" id="t-signin-9" class="tick">
+          <label for="t-signin-9"><span class="n">9</span><span class="do">Sign in with your email and password, using the eye to check the password first</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should land on Home with the tools for your role</span></label>
+          <input type="text" class="note" id="n-signin-9" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 9" autocomplete="off">
+        </li>
+        <li class="step" data-step="signin-10">
+          <input type="checkbox" id="t-signin-10" class="tick">
+          <label for="t-signin-10"><span class="n">10</span><span class="do">Open the same set-password link again</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should find it doesn&#x27;t sign you in a second time: each link works once and for a limited time</span></label>
+          <input type="text" class="note" id="n-signin-10" placeholder="Note (optional)" aria-label="Note for Sign-in and invites step 10" autocomplete="off">
+        </li>
+    </ol>
+  </section>
+  <section class="role" id="role-owner" data-role="owner" data-name="Owner (client)" aria-labelledby="h-owner">
+    <div class="role-top">
+      <div>
+        <div class="eyebrow">Owner test account</div>
+        <h2 id="h-owner">Owner (client)</h2>
+      </div>
+      <span class="role-count"><b data-count="owner">0 of 14</b> ticked</span>
+    </div>
+    <div class="minibar" aria-hidden="true"><i data-bar="owner"></i></div>
+    <p class="lead">Sign in with the owner test account. Use a clearly fake test property, for example &quot;Test – Leith flat&quot;.</p>
+    <ol class="steplist">
+        <li class="step" data-step="owner-1">
+          <input type="checkbox" id="t-owner-1" class="tick">
+          <label for="t-owner-1"><span class="n">1</span><span class="do">Look at the bar along the bottom of the screen</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see Home, Properties, Inbox (the raised button in the middle), Approvals and Reports. On a computer, the side bar also has Tools</span></label>
+          <input type="text" class="note" id="n-owner-1" placeholder="Note (optional)" aria-label="Note for Owner (client) step 1" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-2">
+          <input type="checkbox" id="t-owner-2" class="tick">
+          <label for="t-owner-2"><span class="n">2</span><span class="do">On Home, press &quot;Start a new enquiry&quot;, fill it in and choose the area from the list</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the property in Properties at the Enquiry stage, and its onboarding progress and next step on Home</span></label>
+          <input type="text" class="note" id="n-owner-2" placeholder="Note (optional)" aria-label="Note for Owner (client) step 2" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-3">
+          <input type="checkbox" id="t-owner-3" class="tick">
+          <label for="t-owner-3"><span class="n">3</span><span class="do">When the team has published the estimate, open it</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see low, expected and high nightly rates, links to the comparables, and &quot;What Recharge does&quot;, &quot;Extra services&quot;, &quot;How onboarding works&quot; and &quot;Questions owners ask&quot;</span></label>
+          <input type="text" class="note" id="n-owner-3" placeholder="Note (optional)" aria-label="Note for Owner (client) step 3" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-4">
+          <input type="checkbox" id="t-owner-4" class="tick">
+          <label for="t-owner-4"><span class="n">4</span><span class="do">In &quot;Explore your estimate&quot;, change the year and the occupancy, then switch on &quot;Booked direct&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the earnings change as you go, and the platform-fee saving spelled out</span></label>
+          <input type="text" class="note" id="n-owner-4" placeholder="Note (optional)" aria-label="Note for Owner (client) step 4" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-5">
+          <input type="checkbox" id="t-owner-5" class="tick">
+          <label for="t-owner-5"><span class="n">5</span><span class="do">Open Approvals and approve the estimate (Approve and proceed)</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the property move on to the agreement, and the agreement listed under Approvals</span></label>
+          <input type="text" class="note" id="n-owner-5" placeholder="Note (optional)" aria-label="Note for Owner (client) step 5" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-6">
+          <input type="checkbox" id="t-owner-6" class="tick">
+          <label for="t-owner-6"><span class="n">6</span><span class="do">Sign the management agreement by typing your name, then press &quot;Download a copy of the signed agreement&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the exact wording with your name, the date and the revision, ready to keep, print or save as a PDF</span></label>
+          <input type="text" class="note" id="n-owner-6" placeholder="Note (optional)" aria-label="Note for Owner (client) step 6" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-7">
+          <input type="checkbox" id="t-owner-7" class="tick">
+          <label for="t-owner-7"><span class="n">7</span><span class="do">Fill in the set-up form (access, post, repair limit, garden, furnishing, licensing), add a photo and submit it</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the step leave Approvals and the property move on to the onboarding invoice</span></label>
+          <input type="text" class="note" id="n-owner-7" placeholder="Note (optional)" aria-label="Note for Owner (client) step 7" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-8">
+          <input type="checkbox" id="t-owner-8" class="tick">
+          <label for="t-owner-8"><span class="n">8</span><span class="do">When a repair is over your limit, open Approvals</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the property, what&#x27;s wrong, the quote, any earlier quote and why it changed, and your limit, with Approve, Decline and Message Recharge</span></label>
+          <input type="text" class="note" id="n-owner-8" placeholder="Note (optional)" aria-label="Note for Owner (client) step 8" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-9">
+          <input type="checkbox" id="t-owner-9" class="tick">
+          <label for="t-owner-9"><span class="n">9</span><span class="do">Press Decline on a repair</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should be asked for a reason; once sent, the repair shows &quot;Owner declined&quot; with your reason</span></label>
+          <input type="text" class="note" id="n-owner-9" placeholder="Note (optional)" aria-label="Note for Owner (client) step 9" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-10">
+          <input type="checkbox" id="t-owner-10" class="tick">
+          <label for="t-owner-10"><span class="n">10</span><span class="do">Approve the last thing waiting on Approvals</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see &quot;Nothing is waiting for you&quot;</span></label>
+          <input type="text" class="note" id="n-owner-10" placeholder="Note (optional)" aria-label="Note for Owner (client) step 10" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-11">
+          <input type="checkbox" id="t-owner-11" class="tick">
+          <label for="t-owner-11"><span class="n">11</span><span class="do">Leave a repair or estimate unanswered for 48 hours</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should get a reminder in the app</span></label>
+          <input type="text" class="note" id="n-owner-11" placeholder="Note (optional)" aria-label="Note for Owner (client) step 11" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-12">
+          <input type="checkbox" id="t-owner-12" class="tick">
+          <label for="t-owner-12"><span class="n">12</span><span class="do">Open Reports and pick a month</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see earnings, occupancy and average nightly rate, and a calendar with a coloured bar for each stay; tap a stay for its details and a day for its arrivals and departures</span></label>
+          <input type="text" class="note" id="n-owner-12" placeholder="Note (optional)" aria-label="Note for Owner (client) step 12" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-13">
+          <input type="checkbox" id="t-owner-13" class="tick">
+          <label for="t-owner-13"><span class="n">13</span><span class="do">Scroll down Reports and open a statement</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see guests staying now, upcoming bookings, earnings by property and a 12-month chart; the statement opens as a printable page and downloads as a spreadsheet</span></label>
+          <input type="text" class="note" id="n-owner-13" placeholder="Note (optional)" aria-label="Note for Owner (client) step 13" autocomplete="off">
+        </li>
+        <li class="step" data-step="owner-14">
+          <input type="checkbox" id="t-owner-14" class="tick">
+          <label for="t-owner-14"><span class="n">14</span><span class="do">Press Inbox and send Recharge a message</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see your message in the conversation, and the team&#x27;s reply arrive in the same place</span></label>
+          <input type="text" class="note" id="n-owner-14" placeholder="Note (optional)" aria-label="Note for Owner (client) step 14" autocomplete="off">
+        </li>
+    </ol>
+  </section>
+  <section class="role" id="role-admin" data-role="admin" data-name="Super admin / Admin" aria-labelledby="h-admin">
+    <div class="role-top">
+      <div>
+        <div class="eyebrow">Super admin or admin account</div>
+        <h2 id="h-admin">Super admin / Admin</h2>
+      </div>
+      <span class="role-count"><b data-count="admin">0 of 14</b> ticked</span>
+    </div>
+    <div class="minibar" aria-hidden="true"><i data-bar="admin"></i></div>
+    <p class="lead">Steps 1 and 2 need the super admin. The rest work for any admin.</p>
+    <ol class="steplist">
+        <li class="step" data-step="admin-1">
+          <input type="checkbox" id="t-admin-1" class="tick">
+          <label for="t-admin-1"><span class="n">1</span><span class="do">Super admin: go to Work → Management → Access control → Add a person, enter a name, email and role, and press &quot;Add and make link&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the person added, with a one-time set-password link and &quot;Copy message with link&quot; to send it privately</span></label>
+          <input type="text" class="note" id="n-admin-1" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 1" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-2">
+          <input type="checkbox" id="t-admin-2" class="tick">
+          <label for="t-admin-2"><span class="n">2</span><span class="do">Super admin: open someone&#x27;s account in Access control and choose &quot;Set-password link&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see a new one-time link, for someone who can&#x27;t get into their account</span></label>
+          <input type="text" class="note" id="n-admin-2" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 2" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-3">
+          <input type="checkbox" id="t-admin-3" class="tick">
+          <label for="t-admin-3"><span class="n">3</span><span class="do">Open Admin Home and tap a line in the Stays, Cleans, Ready or Accounts card</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should be taken to the right place in Work</span></label>
+          <input type="text" class="note" id="n-admin-3" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 3" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-4">
+          <input type="checkbox" id="t-admin-4" class="tick">
+          <label for="t-admin-4"><span class="n">4</span><span class="do">Look at &quot;Needs a management decision&quot; on Admin Home, and press &quot;Mark as seen&quot; on a sign-off missed yesterday</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see contested cleans, second quality warnings, quotes over the limit, unusual owner payouts and stalled owner approvals, and the missed sign-off leave the list</span></label>
+          <input type="text" class="note" id="n-admin-4" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 4" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-5">
+          <input type="checkbox" id="t-admin-5" class="tick">
+          <label for="t-admin-5"><span class="n">5</span><span class="do">On a stalled owner approval, press &quot;Remind the owner now&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the reminder sent, and the button unavailable for that item for 24 hours</span></label>
+          <input type="text" class="note" id="n-admin-5" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 5" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-6">
+          <input type="checkbox" id="t-admin-6" class="tick">
+          <label for="t-admin-6"><span class="n">6</span><span class="do">On a contested clean, choose Uphold or Overturn and add a note</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the item leave the list, and the cleaner&#x27;s clean show your decision and note</span></label>
+          <input type="text" class="note" id="n-admin-6" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 6" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-7">
+          <input type="checkbox" id="t-admin-7" class="tick">
+          <label for="t-admin-7"><span class="n">7</span><span class="do">Switch on the management spend limit for repairs (in Accounts or Management) and set an amount, then have the owner approve a repair above it</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the repair wait for an admin&#x27;s approval under &quot;Needs a management decision&quot;</span></label>
+          <input type="text" class="note" id="n-admin-7" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 7" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-8">
+          <input type="checkbox" id="t-admin-8" class="tick">
+          <label for="t-admin-8"><span class="n">8</span><span class="do">Open a repair the owner declined</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see &quot;Owner declined&quot; with the reason, and be able to get a new quote (which goes back to the owner) or close the repair</span></label>
+          <input type="text" class="note" id="n-admin-8" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 8" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-9">
+          <input type="checkbox" id="t-admin-9" class="tick">
+          <label for="t-admin-9"><span class="n">9</span><span class="do">Open any job and scroll to History</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see its status changes, steps, reviews and decisions, each with who and when</span></label>
+          <input type="text" class="note" id="n-admin-9" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 9" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-10">
+          <input type="checkbox" id="t-admin-10" class="tick">
+          <label for="t-admin-10"><span class="n">10</span><span class="do">Go to Work → Management → Decisions, filter by an area and press &quot;Download spreadsheet (CSV)&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should get a spreadsheet of the last 90 days of decisions</span></label>
+          <input type="text" class="note" id="n-admin-10" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 10" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-11">
+          <input type="checkbox" id="t-admin-11" class="tick">
+          <label for="t-admin-11"><span class="n">11</span><span class="do">Go to Work → Calendar, pick a person, tap a day and then an entry</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see that day&#x27;s departures, cleans, arrivals, repairs, visits and payment runs, and a sheet with Open, Message the property team and Open statements</span></label>
+          <input type="text" class="note" id="n-admin-11" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 11" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-12">
+          <input type="checkbox" id="t-admin-12" class="tick">
+          <label for="t-admin-12"><span class="n">12</span><span class="do">In Messages, press &quot;Add a saved reply&quot; using {guest} and {property}, then use it in a guest reply</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see Guests, Clients and Team tabs with counts, and the guest&#x27;s name and property filled in</span></label>
+          <input type="text" class="note" id="n-admin-12" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 12" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-13">
+          <input type="checkbox" id="t-admin-13" class="tick">
+          <label for="t-admin-13"><span class="n">13</span><span class="do">Write and publish the estimate on the owner tester&#x27;s enquiry</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the owner told, and the property move to Estimate in &quot;Where every property is&quot;</span></label>
+          <input type="text" class="note" id="n-admin-13" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 13" autocomplete="off">
+        </li>
+        <li class="step" data-step="admin-14">
+          <input type="checkbox" id="t-admin-14" class="tick">
+          <label for="t-admin-14"><span class="n">14</span><span class="do">Tap the Training tile on Home</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the course uploads open</span></label>
+          <input type="text" class="note" id="n-admin-14" placeholder="Note (optional)" aria-label="Note for Super admin / Admin step 14" autocomplete="off">
+        </li>
+    </ol>
+  </section>
+  <section class="role" id="role-stays" data-role="stays" data-name="Stays" aria-labelledby="h-stays">
+    <div class="role-top">
+      <div>
+        <div class="eyebrow">Stays test account</div>
+        <h2 id="h-stays">Stays</h2>
+      </div>
+      <span class="role-count"><b data-count="stays">0 of 12</b> ticked</span>
+    </div>
+    <div class="minibar" aria-hidden="true"><i data-bar="stays"></i></div>
+    <p class="lead">Give the Stays tester the test property before starting.</p>
+    <ol class="steplist">
+        <li class="step" data-step="stays-1">
+          <input type="checkbox" id="t-stays-1" class="tick">
+          <label for="t-stays-1"><span class="n">1</span><span class="do">Open Stays</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see &quot;Today&#x27;s routine&quot; at the top: listing checks done, empty nights to price, repairs to refer, today&#x27;s cleans, open AirCover claims and open direct-booking offers (and weekly reports on Mondays)</span></label>
+          <input type="text" class="note" id="n-stays-1" placeholder="Note (optional)" aria-label="Note for Stays step 1" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-2">
+          <input type="checkbox" id="t-stays-2" class="tick">
+          <label for="t-stays-2"><span class="n">2</span><span class="do">Open a &quot;Price the empty nights&quot; ticket and press &quot;Price these nights in Stays&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the pricing open, and be able to hold or change each night&#x27;s price with a reason</span></label>
+          <input type="text" class="note" id="n-stays-2" placeholder="Note (optional)" aria-label="Note for Stays step 2" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-3">
+          <input type="checkbox" id="t-stays-3" class="tick">
+          <label for="t-stays-3"><span class="n">3</span><span class="do">Press &quot;Report a repair&quot;: choose the property and repair type, link the guest&#x27;s stay and mark it urgent</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the guided checks for that repair type to tick off with the guest</span></label>
+          <input type="text" class="note" id="n-stays-3" placeholder="Note (optional)" aria-label="Note for Stays step 3" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-4">
+          <input type="checkbox" id="t-stays-4" class="tick">
+          <label for="t-stays-4"><span class="n">4</span><span class="do">Press &quot;Refer to Ready&quot; on the repair</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should still see the repair to chase it, and get notices when Ready book it and when it&#x27;s done</span></label>
+          <input type="text" class="note" id="n-stays-4" placeholder="Note (optional)" aria-label="Note for Stays step 4" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-5">
+          <input type="checkbox" id="t-stays-5" class="tick">
+          <label for="t-stays-5"><span class="n">5</span><span class="do">Open a repair the owner declined</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see &quot;Owner declined&quot; with the reason, and be able to get a new quote (back to the owner) or close the repair</span></label>
+          <input type="text" class="note" id="n-stays-5" placeholder="Note (optional)" aria-label="Note for Stays step 5" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-6">
+          <input type="checkbox" id="t-stays-6" class="tick">
+          <label for="t-stays-6"><span class="n">6</span><span class="do">In Messages → Guests, log a guest message, then reply using a saved reply</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the conversation coloured green, amber or red by how long it waited, and the guest&#x27;s name and property filled into the reply</span></label>
+          <input type="text" class="note" id="n-stays-6" placeholder="Note (optional)" aria-label="Note for Stays step 6" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-7">
+          <input type="checkbox" id="t-stays-7" class="tick">
+          <label for="t-stays-7"><span class="n">7</span><span class="do">Add or edit a saved reply</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it offered in guest replies and in owner conversations</span></label>
+          <input type="text" class="note" id="n-stays-7" placeholder="Note (optional)" aria-label="Note for Stays step 7" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-8">
+          <input type="checkbox" id="t-stays-8" class="tick">
+          <label for="t-stays-8"><span class="n">8</span><span class="do">On a repair or clean, press &quot;Message the property team&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see a group chat open with the Stays and Ready staff and cleaning managers for that property or job</span></label>
+          <input type="text" class="note" id="n-stays-8" placeholder="Note (optional)" aria-label="Note for Stays step 8" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-9">
+          <input type="checkbox" id="t-stays-9" class="tick">
+          <label for="t-stays-9"><span class="n">9</span><span class="do">Record a test stay of 7 nights or more, then prepare the direct-booking offer</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see a direct-booking ticket, with the offer price next to the original price and the discount policy</span></label>
+          <input type="text" class="note" id="n-stays-9" placeholder="Note (optional)" aria-label="Note for Stays step 9" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-10">
+          <input type="checkbox" id="t-stays-10" class="tick">
+          <label for="t-stays-10"><span class="n">10</span><span class="do">Once the guest says yes and Accounts raise the invoice, open the offer</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should be able to see the booking&#x27;s invoice, to check it before confirming the booking</span></label>
+          <input type="text" class="note" id="n-stays-10" placeholder="Note (optional)" aria-label="Note for Stays step 10" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-11">
+          <input type="checkbox" id="t-stays-11" class="tick">
+          <label for="t-stays-11"><span class="n">11</span><span class="do">Complete Today&#x27;s sign-off</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it recorded; a sign-off missed today shows to admins tomorrow after 8am as &quot;Missed yesterday&quot;</span></label>
+          <input type="text" class="note" id="n-stays-11" placeholder="Note (optional)" aria-label="Note for Stays step 11" autocomplete="off">
+        </li>
+        <li class="step" data-step="stays-12">
+          <input type="checkbox" id="t-stays-12" class="tick">
+          <label for="t-stays-12"><span class="n">12</span><span class="do">Go to Work → Calendar and tap a departure or clean</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see your properties&#x27; departures, cleans, arrivals and repairs, and a sheet with Open and Message the property team</span></label>
+          <input type="text" class="note" id="n-stays-12" placeholder="Note (optional)" aria-label="Note for Stays step 12" autocomplete="off">
+        </li>
+    </ol>
+  </section>
+  <section class="role" id="role-cleaner" data-role="cleaner" data-name="Cleaner" aria-labelledby="h-cleaner">
+    <div class="role-top">
+      <div>
+        <div class="eyebrow">Cleaner test account</div>
+        <h2 id="h-cleaner">Cleaner</h2>
+      </div>
+      <span class="role-count"><b data-count="cleaner">0 of 10</b> ticked</span>
+    </div>
+    <div class="minibar" aria-hidden="true"><i data-bar="cleaner"></i></div>
+    <p class="lead">The cleaning manager or an admin assigns a test clean to this account first.</p>
+    <ol class="steplist">
+        <li class="step" data-step="cleaner-1">
+          <input type="checkbox" id="t-cleaner-1" class="tick">
+          <label for="t-cleaner-1"><span class="n">1</span><span class="do">Look at &quot;Your month&quot; on Home</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see cleans accepted and rejected, any warning, and the amount for this month (or &quot;Rate not set yet&quot;)</span></label>
+          <input type="text" class="note" id="n-cleaner-1" placeholder="Note (optional)" aria-label="Note for Cleaner step 1" autocomplete="off">
+        </li>
+        <li class="step" data-step="cleaner-2">
+          <input type="checkbox" id="t-cleaner-2" class="tick">
+          <label for="t-cleaner-2"><span class="n">2</span><span class="do">Open the clean you were given</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see how many guests are leaving and the next arrival date and guest count (no names), with the checklist</span></label>
+          <input type="text" class="note" id="n-cleaner-2" placeholder="Note (optional)" aria-label="Note for Cleaner step 2" autocomplete="off">
+        </li>
+        <li class="step" data-step="cleaner-3">
+          <input type="checkbox" id="t-cleaner-3" class="tick">
+          <label for="t-cleaner-3"><span class="n">3</span><span class="do">Tick the checklist, write the report, add photos and press &quot;Submit clean for approval&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the clean marked as submitted</span></label>
+          <input type="text" class="note" id="n-cleaner-3" placeholder="Note (optional)" aria-label="Note for Cleaner step 3" autocomplete="off">
+        </li>
+        <li class="step" data-step="cleaner-4">
+          <input type="checkbox" id="t-cleaner-4" class="tick">
+          <label for="t-cleaner-4"><span class="n">4</span><span class="do">Wait for the manager to accept it</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should get a &quot;Clean accepted&quot; notice, and your month&#x27;s accepted count and amount go up</span></label>
+          <input type="text" class="note" id="n-cleaner-4" placeholder="Note (optional)" aria-label="Note for Cleaner step 4" autocomplete="off">
+        </li>
+        <li class="step" data-step="cleaner-5">
+          <input type="checkbox" id="t-cleaner-5" class="tick">
+          <label for="t-cleaner-5"><span class="n">5</span><span class="do">Wait for a clean to be rejected</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should get a notice, and the clean shows the reason</span></label>
+          <input type="text" class="note" id="n-cleaner-5" placeholder="Note (optional)" aria-label="Note for Cleaner step 5" autocomplete="off">
+        </li>
+        <li class="step" data-step="cleaner-6">
+          <input type="checkbox" id="t-cleaner-6" class="tick">
+          <label for="t-cleaner-6"><span class="n">6</span><span class="do">While a dispute on that clean is open, press &quot;Give your side&quot; and send your statement</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see your statement saved on the clean for whoever decides</span></label>
+          <input type="text" class="note" id="n-cleaner-6" placeholder="Note (optional)" aria-label="Note for Cleaner step 6" autocomplete="off">
+        </li>
+        <li class="step" data-step="cleaner-7">
+          <input type="checkbox" id="t-cleaner-7" class="tick">
+          <label for="t-cleaner-7"><span class="n">7</span><span class="do">Wait for the dispute to be decided, then open Work → Cleans</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should get a notice, the clean shows the decision and management&#x27;s note, and it&#x27;s listed under &quot;Disputes decided this month&quot;</span></label>
+          <input type="text" class="note" id="n-cleaner-7" placeholder="Note (optional)" aria-label="Note for Cleaner step 7" autocomplete="off">
+        </li>
+        <li class="step" data-step="cleaner-8">
+          <input type="checkbox" id="t-cleaner-8" class="tick">
+          <label for="t-cleaner-8"><span class="n">8</span><span class="do">Inside an open clean, press &quot;Report a problem&quot;, describe it and add a photo</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see a repair created for the Stays team, while your ticks, report and photos stay on the clean</span></label>
+          <input type="text" class="note" id="n-cleaner-8" placeholder="Note (optional)" aria-label="Note for Cleaner step 8" autocomplete="off">
+        </li>
+        <li class="step" data-step="cleaner-9">
+          <input type="checkbox" id="t-cleaner-9" class="tick">
+          <label for="t-cleaner-9"><span class="n">9</span><span class="do">On a clean, press &quot;Message the property team&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see a group chat with the Stays and Ready staff and cleaning managers for that property</span></label>
+          <input type="text" class="note" id="n-cleaner-9" placeholder="Note (optional)" aria-label="Note for Cleaner step 9" autocomplete="off">
+        </li>
+        <li class="step" data-step="cleaner-10">
+          <input type="checkbox" id="t-cleaner-10" class="tick">
+          <label for="t-cleaner-10"><span class="n">10</span><span class="do">Go to Work → Calendar</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see your cleans on their days; tap one to open it</span></label>
+          <input type="text" class="note" id="n-cleaner-10" placeholder="Note (optional)" aria-label="Note for Cleaner step 10" autocomplete="off">
+        </li>
+    </ol>
+  </section>
+  <section class="role" id="role-manager" data-role="manager" data-name="Cleaning manager" aria-labelledby="h-manager">
+    <div class="role-top">
+      <div>
+        <div class="eyebrow">Cleaning manager test account</div>
+        <h2 id="h-manager">Cleaning manager</h2>
+      </div>
+      <span class="role-count"><b data-count="manager">0 of 10</b> ticked</span>
+    </div>
+    <div class="minibar" aria-hidden="true"><i data-bar="manager"></i></div>
+    <p class="lead">Give this account the test property and the cleaner tester.</p>
+    <ol class="steplist">
+        <li class="step" data-step="manager-1">
+          <input type="checkbox" id="t-manager-1" class="tick">
+          <label for="t-manager-1"><span class="n">1</span><span class="do">Press &quot;New clean&quot; and &quot;Assign a cleaner&quot; to the cleaner tester</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the clean assigned, and the cleaner sees it as soon as you assign them</span></label>
+          <input type="text" class="note" id="n-manager-1" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 1" autocomplete="off">
+        </li>
+        <li class="step" data-step="manager-2">
+          <input type="checkbox" id="t-manager-2" class="tick">
+          <label for="t-manager-2"><span class="n">2</span><span class="do">Open a submitted clean to review it</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the report, checklist, photos and any guest feedback</span></label>
+          <input type="text" class="note" id="n-manager-2" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 2" autocomplete="off">
+        </li>
+        <li class="step" data-step="manager-3">
+          <input type="checkbox" id="t-manager-3" class="tick">
+          <label for="t-manager-3"><span class="n">3</span><span class="do">Accept the clean</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it go on the cleaner&#x27;s invoice in Accounts, and the cleaner is told</span></label>
+          <input type="text" class="note" id="n-manager-3" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 3" autocomplete="off">
+        </li>
+        <li class="step" data-step="manager-4">
+          <input type="checkbox" id="t-manager-4" class="tick">
+          <label for="t-manager-4"><span class="n">4</span><span class="do">Reject another clean with a reason</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it left off the invoice, and the cleaner is told the reason</span></label>
+          <input type="text" class="note" id="n-manager-4" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 4" autocomplete="off">
+        </li>
+        <li class="step" data-step="manager-5">
+          <input type="checkbox" id="t-manager-5" class="tick">
+          <label for="t-manager-5"><span class="n">5</span><span class="do">Have a second rejection for the same cleaner upheld in the same month</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see a management review and warning raised; with only one upheld rejection, or one overturned, there is none</span></label>
+          <input type="text" class="note" id="n-manager-5" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 5" autocomplete="off">
+        </li>
+        <li class="step" data-step="manager-6">
+          <input type="checkbox" id="t-manager-6" class="tick">
+          <label for="t-manager-6"><span class="n">6</span><span class="do">Open the Disputes tool on Home, then open a dispute</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see disputes for the properties you manage, each with the report, checklist, photos, reason, guest feedback and the cleaner&#x27;s statement</span></label>
+          <input type="text" class="note" id="n-manager-6" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 6" autocomplete="off">
+        </li>
+        <li class="step" data-step="manager-7">
+          <input type="checkbox" id="t-manager-7" class="tick">
+          <label for="t-manager-7"><span class="n">7</span><span class="do">Uphold or Overturn the dispute with a note</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it under &quot;Disputes decided this month&quot;, and the cleaner is told your decision and note</span></label>
+          <input type="text" class="note" id="n-manager-7" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 7" autocomplete="off">
+        </li>
+        <li class="step" data-step="manager-8">
+          <input type="checkbox" id="t-manager-8" class="tick">
+          <label for="t-manager-8"><span class="n">8</span><span class="do">In &quot;Cleaner performance this month&quot;, press &quot;Set pay rate&quot; for the cleaner and enter an amount per clean</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the rate on the cleaner&#x27;s row; the cleaner&#x27;s &quot;Your month&quot; shows an amount, and Accounts see the total on their invoice</span></label>
+          <input type="text" class="note" id="n-manager-8" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 8" autocomplete="off">
+        </li>
+        <li class="step" data-step="manager-9">
+          <input type="checkbox" id="t-manager-9" class="tick">
+          <label for="t-manager-9"><span class="n">9</span><span class="do">Go to Work → Calendar and pick the cleaner</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see that cleaner&#x27;s cleans on their days</span></label>
+          <input type="text" class="note" id="n-manager-9" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 9" autocomplete="off">
+        </li>
+        <li class="step" data-step="manager-10">
+          <input type="checkbox" id="t-manager-10" class="tick">
+          <label for="t-manager-10"><span class="n">10</span><span class="do">Open Messages → Team, and press &quot;Message the property team&quot; on a clean</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see your team conversations, and a group chat for that property or clean</span></label>
+          <input type="text" class="note" id="n-manager-10" placeholder="Note (optional)" aria-label="Note for Cleaning manager step 10" autocomplete="off">
+        </li>
+    </ol>
+  </section>
+  <section class="role" id="role-ready" data-role="ready" data-name="Ready" aria-labelledby="h-ready">
+    <div class="role-top">
+      <div>
+        <div class="eyebrow">Ready test account</div>
+        <h2 id="h-ready">Ready</h2>
+      </div>
+      <span class="role-count"><b data-count="ready">0 of 12</b> ticked</span>
+    </div>
+    <div class="minibar" aria-hidden="true"><i data-bar="ready"></i></div>
+    <p class="lead">Give this account the test property. The Stays tester refers a repair to it.</p>
+    <ol class="steplist">
+        <li class="step" data-step="ready-1">
+          <input type="checkbox" id="t-ready-1" class="tick">
+          <label for="t-ready-1"><span class="n">1</span><span class="do">Open Ready Home and tap a repair stage</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see repairs counted by stage, from owner approval through to paid, and Work → Repairs opens on that stage</span></label>
+          <input type="text" class="note" id="n-ready-1" placeholder="Note (optional)" aria-label="Note for Ready step 1" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-2">
+          <input type="checkbox" id="t-ready-2" class="tick">
+          <label for="t-ready-2"><span class="n">2</span><span class="do">Look at this month&#x27;s routine visits on Ready Home</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see each property&#x27;s visits marked done, due or overdue</span></label>
+          <input type="text" class="note" id="n-ready-2" placeholder="Note (optional)" aria-label="Note for Ready step 2" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-3">
+          <input type="checkbox" id="t-ready-3" class="tick">
+          <label for="t-ready-3"><span class="n">3</span><span class="do">Open the repair Stays referred and press &quot;Access and logins&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the access instructions for the property, but no platform logins or finance</span></label>
+          <input type="text" class="note" id="n-ready-3" placeholder="Note (optional)" aria-label="Note for Ready step 3" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-4">
+          <input type="checkbox" id="t-ready-4" class="tick">
+          <label for="t-ready-4"><span class="n">4</span><span class="do">Press &quot;Book the repair&quot; and choose a date</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it booked, and the Stays person who referred it is told</span></label>
+          <input type="text" class="note" id="n-ready-4" placeholder="Note (optional)" aria-label="Note for Ready step 4" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-5">
+          <input type="checkbox" id="t-ready-5" class="tick">
+          <label for="t-ready-5"><span class="n">5</span><span class="do">Update the quote to more than the owner&#x27;s limit, with a reason</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the repair go back to the owner, and wait on their Approvals</span></label>
+          <input type="text" class="note" id="n-ready-5" placeholder="Note (optional)" aria-label="Note for Ready step 5" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-6">
+          <input type="checkbox" id="t-ready-6" class="tick">
+          <label for="t-ready-6"><span class="n">6</span><span class="do">After the owner approves, press &quot;Complete the repair&quot; with the actual cost, the report and after photos</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it done; Stays are told and a draft expense appears in Accounts with your photos</span></label>
+          <input type="text" class="note" id="n-ready-6" placeholder="Note (optional)" aria-label="Note for Ready step 6" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-7">
+          <input type="checkbox" id="t-ready-7" class="tick">
+          <label for="t-ready-7"><span class="n">7</span><span class="do">Once Accounts have paid it, look at Ready Home</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the repair at Paid</span></label>
+          <input type="text" class="note" id="n-ready-7" placeholder="Note (optional)" aria-label="Note for Ready step 7" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-8">
+          <input type="checkbox" id="t-ready-8" class="tick">
+          <label for="t-ready-8"><span class="n">8</span><span class="do">Go to Work → Routine visits and press &quot;Create this month&#x27;s visits&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see every visit for this month made, without needing to press it again</span></label>
+          <input type="text" class="note" id="n-ready-8" placeholder="Note (optional)" aria-label="Note for Ready step 8" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-9">
+          <input type="checkbox" id="t-ready-9" class="tick">
+          <label for="t-ready-9"><span class="n">9</span><span class="do">Mark a routine visit as done</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it counted as done on Ready Home</span></label>
+          <input type="text" class="note" id="n-ready-9" placeholder="Note (optional)" aria-label="Note for Ready step 9" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-10">
+          <input type="checkbox" id="t-ready-10" class="tick">
+          <label for="t-ready-10"><span class="n">10</span><span class="do">On a purchase, record the delivery with photos of what arrived</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the delivery ticket close, and Accounts can see the photos</span></label>
+          <input type="text" class="note" id="n-ready-10" placeholder="Note (optional)" aria-label="Note for Ready step 10" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-11">
+          <input type="checkbox" id="t-ready-11" class="tick">
+          <label for="t-ready-11"><span class="n">11</span><span class="do">On a new property inspection, file the checklist, the report and photos</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the inspection filed; the owner tester can see the photos</span></label>
+          <input type="text" class="note" id="n-ready-11" placeholder="Note (optional)" aria-label="Note for Ready step 11" autocomplete="off">
+        </li>
+        <li class="step" data-step="ready-12">
+          <input type="checkbox" id="t-ready-12" class="tick">
+          <label for="t-ready-12"><span class="n">12</span><span class="do">On a repair or routine visit, press &quot;Message the property team&quot;, then open Work → Calendar</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see a group chat for that job, and your repairs, routine visits and inspections on the calendar</span></label>
+          <input type="text" class="note" id="n-ready-12" placeholder="Note (optional)" aria-label="Note for Ready step 12" autocomplete="off">
+        </li>
+    </ol>
+  </section>
+  <section class="role" id="role-accounts" data-role="accounts" data-name="Accounts" aria-labelledby="h-accounts">
+    <div class="role-top">
+      <div>
+        <div class="eyebrow">Accounts test account</div>
+        <h2 id="h-accounts">Accounts</h2>
+      </div>
+      <span class="role-count"><b data-count="accounts">0 of 11</b> ticked</span>
+    </div>
+    <div class="minibar" aria-hidden="true"><i data-bar="accounts"></i></div>
+    <p class="lead">Best done after the Ready tester completes the test repair.</p>
+    <ol class="steplist">
+        <li class="step" data-step="accounts-1">
+          <input type="checkbox" id="t-accounts-1" class="tick">
+          <label for="t-accounts-1"><span class="n">1</span><span class="do">Open the draft expense made by the completed test repair</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the contractor, actual cost, report and before and after photos</span></label>
+          <input type="text" class="note" id="n-accounts-1" placeholder="Note (optional)" aria-label="Note for Accounts step 1" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-2">
+          <input type="checkbox" id="t-accounts-2" class="tick">
+          <label for="t-accounts-2"><span class="n">2</span><span class="do">Add the invoice number and press &quot;Send for approval&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it move on for approval</span></label>
+          <input type="text" class="note" id="n-accounts-2" placeholder="Note (optional)" aria-label="Note for Accounts step 2" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-3">
+          <input type="checkbox" id="t-accounts-3" class="tick">
+          <label for="t-accounts-3"><span class="n">3</span><span class="do">Press &quot;New expense&quot;, add a photo of the invoice (screenshot a PDF) and use &quot;Use the finished job as proof&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see the expense linked to the finished repair or delivered purchase</span></label>
+          <input type="text" class="note" id="n-accounts-3" placeholder="Note (optional)" aria-label="Note for Accounts step 3" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-4">
+          <input type="checkbox" id="t-accounts-4" class="tick">
+          <label for="t-accounts-4"><span class="n">4</span><span class="do">Approve a purchase request against the budget chart and record the order</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it go to Ready for delivery</span></label>
+          <input type="text" class="note" id="n-accounts-4" placeholder="Note (optional)" aria-label="Note for Accounts step 4" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-5">
+          <input type="checkbox" id="t-accounts-5" class="tick">
+          <label for="t-accounts-5"><span class="n">5</span><span class="do">On a delivered purchase, press &quot;Record the supplier invoice&quot; (amount, reference, photo, paid), then reconcile it</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should be able to close the purchase</span></label>
+          <input type="text" class="note" id="n-accounts-5" placeholder="Note (optional)" aria-label="Note for Accounts step 5" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-6">
+          <input type="checkbox" id="t-accounts-6" class="tick">
+          <label for="t-accounts-6"><span class="n">6</span><span class="do">Open Cleaner invoices</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see accepted cleans grouped by cleaner, with &quot;x cleans at £y each&quot; and the total filled in (or a note that no pay rate is set yet)</span></label>
+          <input type="text" class="note" id="n-accounts-6" placeholder="Note (optional)" aria-label="Note for Accounts step 6" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-7">
+          <input type="checkbox" id="t-accounts-7" class="tick">
+          <label for="t-accounts-7"><span class="n">7</span><span class="do">In the payout upload step, open the example Airbnb and Booking.com files</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see what a payout file should look like before uploading one</span></label>
+          <input type="text" class="note" id="n-accounts-7" placeholder="Note (optional)" aria-label="Note for Accounts step 7" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-8">
+          <input type="checkbox" id="t-accounts-8" class="tick">
+          <label for="t-accounts-8"><span class="n">8</span><span class="do">Open a statement and press &quot;Printable statement&quot;, then &quot;Download CSV&quot;</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see a branded page to print or save as a PDF, and get a spreadsheet of the same statement</span></label>
+          <input type="text" class="note" id="n-accounts-8" placeholder="Note (optional)" aria-label="Note for Accounts step 8" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-9">
+          <input type="checkbox" id="t-accounts-9" class="tick">
+          <label for="t-accounts-9"><span class="n">9</span><span class="do">Record an owner payout that is negative, or far from that property&#x27;s usual</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it flagged for admins under &quot;Needs a management decision&quot; (Approve or Hold)</span></label>
+          <input type="text" class="note" id="n-accounts-9" placeholder="Note (optional)" aria-label="Note for Accounts step 9" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-10">
+          <input type="checkbox" id="t-accounts-10" class="tick">
+          <label for="t-accounts-10"><span class="n">10</span><span class="do">Raise the invoice for the test direct booking and mark it settled</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see it settled, and the Stays tester can see it to confirm the booking</span></label>
+          <input type="text" class="note" id="n-accounts-10" placeholder="Note (optional)" aria-label="Note for Accounts step 10" autocomplete="off">
+        </li>
+        <li class="step" data-step="accounts-11">
+          <input type="checkbox" id="t-accounts-11" class="tick">
+          <label for="t-accounts-11"><span class="n">11</span><span class="do">Go to Work → Calendar</span> <span class="arrow" aria-hidden="true">→</span> <span class="see">you should see payment runs on their days</span></label>
+          <input type="text" class="note" id="n-accounts-11" placeholder="Note (optional)" aria-label="Note for Accounts step 11" autocomplete="off">
+        </li>
+    </ol>
+  </section>
+
+  <footer>Recharge role testing checklist, 9 October 2026. It covers what is live today, including the feature audit built on 9 October. Guest messages, reviews and emails that need the channel manager or the email service are not part of this test.</footer>
+</div>
+
+<script>
+(function () {
+  var KEY = 'recharge-role-test-v1';
+  var state = { ticks: {}, notes: {}, name: '' };
+  function load() {
+    try {
+      var raw = window.localStorage.getItem(KEY);
+      if (raw) {
+        var saved = JSON.parse(raw);
+        if (saved && typeof saved === 'object') {
+          state.ticks = saved.ticks && typeof saved.ticks === 'object' ? saved.ticks : {};
+          state.notes = saved.notes && typeof saved.notes === 'object' ? saved.notes : {};
+          state.name = typeof saved.name === 'string' ? saved.name : '';
+        }
+      }
+    } catch (e) { /* storage unavailable: the page still works for this visit */ }
+  }
+  function save() {
+    try { window.localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  }
+
+  var roles = Array.prototype.slice.call(document.querySelectorAll('section.role'));
+  var steps = Array.prototype.slice.call(document.querySelectorAll('li.step'));
+  var statusEl = document.getElementById('status');
+  var statusTimer = null;
+  function say(text) {
+    statusEl.textContent = text;
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () { statusEl.textContent = ''; }, 4000);
+  }
+
+  function update() {
+    var all = 0, ticked = 0;
+    roles.forEach(function (role) {
+      var key = role.getAttribute('data-role');
+      var boxes = role.querySelectorAll('input.tick');
+      var done = 0;
+      for (var i = 0; i < boxes.length; i++) {
+        if (boxes[i].checked) done++;
+        boxes[i].closest('li.step').classList.toggle('done', boxes[i].checked);
+      }
+      all += boxes.length; ticked += done;
+      var text = done + ' of ' + boxes.length;
+      var counts = document.querySelectorAll('[data-count="' + key + '"]');
+      for (var j = 0; j < counts.length; j++) counts[j].textContent = text;
+      var bar = document.querySelector('[data-bar="' + key + '"]');
+      if (bar) bar.style.width = (boxes.length ? (done / boxes.length) * 100 : 0) + '%';
+      var pill = document.querySelector('.role-pill[href="#role-' + key + '"]');
+      if (pill) pill.classList.toggle('complete', done === boxes.length && boxes.length > 0);
+    });
+    document.getElementById('overall-count').textContent = ticked + ' of ' + all;
+    document.getElementById('overall-bar').style.width = (all ? (ticked / all) * 100 : 0) + '%';
+  }
+
+  function apply() {
+    steps.forEach(function (li) {
+      var id = li.getAttribute('data-step');
+      li.querySelector('input.tick').checked = !!state.ticks[id];
+      li.querySelector('input.note').value = state.notes[id] || '';
+    });
+    document.getElementById('tester-name').value = state.name || '';
+    update();
+  }
+
+  steps.forEach(function (li) {
+    var id = li.getAttribute('data-step');
+    li.querySelector('input.tick').addEventListener('change', function () {
+      if (this.checked) state.ticks[id] = true; else delete state.ticks[id];
+      save(); update();
+    });
+    li.querySelector('input.note').addEventListener('input', function () {
+      var v = this.value;
+      if (v.trim()) state.notes[id] = v; else delete state.notes[id];
+      save();
+    });
+  });
+  document.getElementById('tester-name').addEventListener('input', function () {
+    state.name = this.value; save();
+  });
+
+  function results() {
+    var lines = [];
+    var total = 0, ticked = 0;
+    steps.forEach(function (li) { total++; if (li.querySelector('input.tick').checked) ticked++; });
+    lines.push('Recharge role testing results');
+    var name = document.getElementById('tester-name').value.trim();
+    if (name) lines.push('Tester: ' + name);
+    lines.push('Date: ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }));
+    lines.push('Overall: ' + ticked + ' of ' + total + ' steps ticked');
+    roles.forEach(function (role) {
+      var items = role.querySelectorAll('li.step');
+      var done = 0;
+      for (var i = 0; i < items.length; i++) if (items[i].querySelector('input.tick').checked) done++;
+      lines.push('');
+      lines.push(role.getAttribute('data-name').toUpperCase() + ' (' + done + ' of ' + items.length + ')');
+      for (var k = 0; k < items.length; k++) {
+        var li = items[k];
+        var ok = li.querySelector('input.tick').checked;
+        var doText = li.querySelector('.do').textContent.trim();
+        var seeText = li.querySelector('.see').textContent.trim();
+        lines.push((ok ? '✓ ' : '✗ not ticked: ') + (k + 1) + '. ' + doText + ' → ' + seeText);
+        var note = li.querySelector('input.note').value.trim();
+        if (note) lines.push('    Note: ' + note);
+      }
+    });
+    return lines.join('\n');
+  }
+
+  var copyPanel = document.getElementById('copy-panel');
+  var confirmPanel = document.getElementById('confirm-panel');
+  function showFallback(text) {
+    var area = document.getElementById('copy-text');
+    area.value = text;
+    confirmPanel.hidden = true;
+    copyPanel.hidden = false;
+    area.focus();
+    area.select();
+    try { area.setSelectionRange(0, text.length); } catch (e) { /* ignore */ }
+  }
+  document.getElementById('copy-results').addEventListener('click', function () {
+    var text = results();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          copyPanel.hidden = true;
+          say('Results copied. Paste them into your reply to us.');
+        }, function () { showFallback(text); });
+      } else {
+        showFallback(text);
+      }
+    } catch (e) { showFallback(text); }
+  });
+  document.getElementById('copy-close').addEventListener('click', function () { copyPanel.hidden = true; });
+
+  document.getElementById('clear-ticks').addEventListener('click', function () {
+    copyPanel.hidden = true;
+    confirmPanel.hidden = false;
+    document.getElementById('confirm-no').focus();
+  });
+  document.getElementById('confirm-no').addEventListener('click', function () {
+    confirmPanel.hidden = true;
+    document.getElementById('clear-ticks').focus();
+  });
+  document.getElementById('confirm-yes').addEventListener('click', function () {
+    state.ticks = {}; state.notes = {};
+    save(); apply();
+    confirmPanel.hidden = true;
+    document.getElementById('clear-ticks').focus();
+    say('Ticks and notes cleared.');
+  });
+
+  load();
+  apply();
+})();
+</script>
+</body>
+</html>
