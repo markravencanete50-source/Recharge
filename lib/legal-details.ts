@@ -5,10 +5,10 @@ export const TO_BE_CONFIRMED = 'TO BE CONFIRMED';
 
 export const legalDetails = {
   // The registered company that runs Recharge, exactly as on Companies House.
-  legalName: TO_BE_CONFIRMED,
+  legalName: 'Recharge Stays Ltd',
   tradingName: 'Recharge',
-  registeredAddress: TO_BE_CONFIRMED,
-  companyNumber: TO_BE_CONFIRMED,
+  registeredAddress: '25 Bothwell Street, Glasgow, G2 6NL',
+  companyNumber: 'SC799955',
   // From the Information Commissioner's Office data protection fee register.
   icoRegistrationNumber: TO_BE_CONFIRMED,
   contactEmail: TO_BE_CONFIRMED,
