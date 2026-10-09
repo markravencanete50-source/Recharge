@@ -11,6 +11,7 @@ import type { AdminAction } from '../../../lib/workspace-admin-policy';
 import type { ChatAction } from '../../../lib/workspace-chat-policy';
 import type { InboxAction } from '../../../lib/guest-inbox-policy';
 import type { OversightAction } from '../../../lib/oversight-policy';
+import type { ChecklistAction } from '../../../lib/clean-checklist-policy';
 import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 
@@ -112,7 +113,7 @@ export async function accountStep(body: Record<string, unknown>, accessToken?: s
   return z.record(z.unknown()).parse(await (await call("/api/mobile/account", body, accessToken)).json());
 }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight|checklists)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (sameOriginWeb) return call(webWorkspacePath(path), body);
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);
@@ -143,9 +144,11 @@ export const requestPhoneReset = async (phone: string) => (await call('/api/mobi
 export const completePhoneReset = async (phone: string, code: string, password: string) => (await call('/api/mobile/recovery',{action:'verify',phone,code,password})).json();
 export type PhotoPurpose = 'cleaning'|'mailbox'|'delivery'|'licence'|'maintenance'|'inspection'|'setup'|'expense';
 // A photo goes on a work item, or (Accounts' invoice paperwork) on an expense.
-export async function uploadWorkPhoto(input: {requestId: string;workId?: string;expenseId?: string;purpose: PhotoPurpose}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
+export async function uploadWorkPhoto(input: {requestId: string;workId?: string;expenseId?: string;purpose: PhotoPurpose;checklistItem?: string}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
   const form = new FormData();
   form.append('requestId', input.requestId); form.append(input.expenseId ? 'expenseId' : 'workId', input.expenseId ?? input.workId ?? ''); form.append('purpose', input.purpose);
+  // A clean photo taken for one check on its checklist.
+  if (input.checklistItem) form.append('checklistItem', input.checklistItem);
   // React Native's multipart transport accepts a local file descriptor; a browser needs the file's bytes.
   // The server verifies bytes, size and permission either way.
   if (Platform.OS === 'web') form.append('photo', new File([await (await fetch(photo.uri)).blob()], photo.name, { type: photo.type }));
@@ -187,3 +190,6 @@ export const writeInbox = async (action: InboxAction) => (await workspaceRequest
 // Management oversight: the business overview, an item's history, the decisions report and management's reminders.
 export const readOversight = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/oversight?' + new URLSearchParams(query))).json();
 export const writeOversight = async (action: OversightAction) => (await workspaceRequest('/api/mobile/oversight', action)).json();
+// Clean checklists: the checklists to edit, the photo rules on one clean, and saving a checklist.
+export const readChecklists = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/checklists?' + new URLSearchParams(query))).json();
+export const writeChecklists = async (action: ChecklistAction) => (await workspaceRequest('/api/mobile/checklists', action)).json();

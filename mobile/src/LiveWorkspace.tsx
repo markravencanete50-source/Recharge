@@ -278,7 +278,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onAccoun
 
   // A Home tool opens its place: the Work view (and tab inside it), or another page, then the section.
   const openTool = (target: HomeToolTarget) => {
-    if (target.kind === "work") { setWorkView(target.view); setFocus({ sub: target.sub, anchor: target.anchor, open: target.open, nonce: Date.now() }); setTab("work"); }
+    if (target.kind === "work") { setWorkView(target.view); setFocus({ sub: target.sub, anchor: target.anchor, open: target.open, workId: target.workId, nonce: Date.now() }); setTab("work"); }
     else if (target.kind === "tab") { setFocus(target.anchor ? { anchor: target.anchor, nonce: Date.now() } : null); setTab(target.tab); }
   };
   useEffect(() => {

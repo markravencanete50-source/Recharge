@@ -40,8 +40,8 @@ export async function mediaRoute(request:Request,native=false) {
     while(true){const next=await reader.read();if(next.done)break;size+=next.value.length;if(size>MAX_PHOTO_BYTES+65536){await reader.cancel();return businessResponse({error:'Photo must be no larger than 8 MB'},413);}chunks.push(next.value);}
     const body=new Uint8Array(size);let offset=0;for(const chunk of chunks){body.set(chunk,offset);offset+=chunk.length;}
     const form=await new Response(body,{headers:{'Content-Type':request.headers.get('Content-Type')!}}).formData();
-    if([...form.keys()].some(k=>!['requestId','workId','expenseId','purpose','photo'].includes(k))||[...form.keys()].some(k=>form.getAll(k).length!==1))return businessResponse({error:'Unexpected upload fields'},400);
-    const parsed=mediaInputSchema.safeParse({requestId:form.get('requestId'),workId:form.get('workId')??undefined,expenseId:form.get('expenseId')??undefined,purpose:form.get('purpose')});
+    if([...form.keys()].some(k=>!['requestId','workId','expenseId','purpose','checklistItem','photo'].includes(k))||[...form.keys()].some(k=>form.getAll(k).length!==1))return businessResponse({error:'Unexpected upload fields'},400);
+    const parsed=mediaInputSchema.safeParse({requestId:form.get('requestId'),workId:form.get('workId')??undefined,expenseId:form.get('expenseId')??undefined,purpose:form.get('purpose'),checklistItem:form.get('checklistItem')??undefined});
     const photo=form.get('photo');if(!parsed.success||!(photo instanceof Blob))return businessResponse({error:'Check the photo and work details'},400);
     const bytes=new Uint8Array(await photo.arrayBuffer()),format=photoFormat(bytes);
     if(!format)return businessResponse({error:'Choose a JPEG, PNG or WebP photo up to 8 MB'},400);

@@ -22,8 +22,10 @@ export function photoFormat(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
 }
 export const MEDIA_PURPOSES = ['cleaning','mailbox','delivery','licence','maintenance','inspection','setup','expense'] as const;
 // A photo belongs to a work item, or (for Accounts' invoice paperwork) to an expense.
-export const mediaInputSchema = z.object({ requestId:z.string().uuid(),workId:z.string().uuid().optional(),expenseId:z.string().uuid().optional(),purpose:z.enum(MEDIA_PURPOSES) }).strict()
-  .refine(v => Boolean(v.workId) !== Boolean(v.expenseId) && (!v.expenseId || v.purpose === 'expense'), 'Choose a work item or an expense');
+// A clean photo can name the check on the clean's checklist it was taken for.
+export const mediaInputSchema = z.object({ requestId:z.string().uuid(),workId:z.string().uuid().optional(),expenseId:z.string().uuid().optional(),purpose:z.enum(MEDIA_PURPOSES),checklistItem:z.string().min(1).max(200).optional() }).strict()
+  .refine(v => Boolean(v.workId) !== Boolean(v.expenseId) && (!v.expenseId || v.purpose === 'expense'), 'Choose a work item or an expense')
+  .refine(v => !v.checklistItem || v.purpose === 'cleaning', 'Only clean photos belong to a checklist item');
 export const integrationActionSchema = z.discriminatedUnion('action',[
   z.object({action:z.literal('dispatchNotifications')}).strict(),
   z.object({action:z.literal('syncHostaway')}).strict(),

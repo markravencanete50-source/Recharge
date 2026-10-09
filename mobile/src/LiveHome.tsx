@@ -12,6 +12,8 @@ import { CleanerMonthCard } from "./CleanerPay";
 import { OwnerHome } from "./LiveOwnerHome";
 import { HomeTools } from "./HomeTools";
 import { ReadyHome } from "./ReadyHome";
+import { TodayBoard } from "./TodayBoard";
+import { boardRole } from "../../lib/today-board";
 import { AdminHome } from "./LiveOversight";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { ui, type Palette } from "./theme";
@@ -100,6 +102,8 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
   return (
     <>
       {!desktop && <WelcomeHeader palette={p} name={account.fullName || "there"} dateLabel={todayLabel()} subtitle={SUBTITLE[account.role]} onCalendar={() => onNavigate("work")} />}
+      {/* Cleaners, cleaning managers and Ready land on their day: Today, Tomorrow and Overdue. */}
+      {!!boardRole(account.role) && <TodayBoard palette={p} account={account} properties={properties} work={work} desktop={desktop} onTool={onTool} />}
       {(account.role === "admin" || account.role === "super_admin") && <AdminHome palette={p} desktop={desktop} onTool={onTool} />}
       {/* The tools for this person's role come first, so nobody has to look for them. */}
       <HomeTools palette={p} account={account} properties={properties} desktop={desktop} onOpen={onTool} onAll={() => onNavigate("help")} />

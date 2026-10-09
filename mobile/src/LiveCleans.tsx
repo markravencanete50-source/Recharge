@@ -9,11 +9,13 @@ import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
-import { PhotoPicker, WorkPhotos } from "./Photos";
+import { PhotoPicker } from "./Photos";
 import { DisputeSheet, type DisputeTarget } from "./CleanDisputes";
 import { RateSheet } from "./CleanerPay";
 import { ProblemForm } from "./CleanProblem";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
+import { CleanChecklist, ChecklistReview, type ChecklistState } from "./CleanChecklist";
+import { ChecklistTemplatesSheet, useChecklistTemplates } from "./ChecklistTemplates";
 import { ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, uploadWorkPhoto, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
@@ -21,6 +23,7 @@ import { candidatesSchema, disputeFor, guestLine, monthPay, performanceSchema, p
 import { repairTypeLabel } from "../../lib/repair-guides";
 import { formatDay, formatMoney } from "../../lib/format";
 import { canStart } from "../../lib/home-tools";
+import { checklistProgress, submitBlockers, templateFor, type ChecklistTemplate } from "../../lib/clean-checklist-policy";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Live Cleans: the cleaner's own jobs and the cleaning team's schedule, reviews and
@@ -49,10 +52,14 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
   const [cleaner, setCleaner] = useState("everyone");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [openJob, setOpenJob] = useState<string | null>(null);
   const focus = useWorkFocus();
+  // Home's Today board opens a clean straight away.
+  const [openJob, setOpenJob] = useState<string | null>(() => focus?.workId ?? null);
   const [creating, setCreating] = useState(() => focus?.open === "new-clean" && account.role !== "cleans");
   const [statementFor, setStatementFor] = useState<string | null>(null);
+  // Clean checklists with their photo rules, kept by admins and cleaning managers.
+  const templates = useChecklistTemplates(manager);
+  const [editingChecklists, setEditingChecklists] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -141,6 +148,7 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
       {manager && (
         <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
           {canStart(account, "new-clean") && <Button label="New clean" icon="plus" primary p={p} onPress={() => setCreating(true)} />}
+          {templates.data?.canEdit && <Button label="Checklists" icon="check-square" p={p} onPress={() => setEditingChecklists(true)} />}
           <RefreshButton p={p} loading={loading} onPress={() => void load()} />
         </View>
       )}
@@ -271,7 +279,8 @@ export function LiveCleans({ palette: p, account, properties }: { palette: Palet
 
       <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
         onRespond={id => { setOpenJob(null); setStatementFor(id); }} onChanged={load} />
-      <CreateSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={saved(async () => { setCreating(false); await load(); })} today={today} />
+      <CreateSheet p={p} visible={creating} properties={properties} templates={templates.data?.templates ?? []} onClose={() => setCreating(false)} onDone={saved(async () => { setCreating(false); await load(); })} today={today} />
+      <ChecklistTemplatesSheet p={p} visible={editingChecklists} properties={properties} state={templates} onClose={() => setEditingChecklists(false)} />
       <StatementSheet p={p} workId={statementFor} onClose={() => setStatementFor(null)} onDone={saved(async () => { setStatementFor(null); await load(); })} />
       <DisputeSheet p={p} target={dispute} onClose={() => setDispute(null)} onDone={saved(load)} />
       <RateSheet p={p} cleaner={rateFor} onClose={() => setRateFor(null)} onDone={saved(load)} />
@@ -299,6 +308,8 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   const onMailPhotos = useCallback((ids: string[], uploading: boolean) => setMailPhotos({ ids, uploading }), []);
   const mailPreference = typeof op?.data.mailPreference === "string" && op.data.mailPreference in MAIL_DONE ? op.data.mailPreference as keyof typeof MAIL_DONE : null;
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [list, setList] = useState<ChecklistState | null>(null);
+  const onList = useCallback((state: ChecklistState) => setList(state), []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState<boolean | null>(null);
@@ -315,7 +326,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   const workId = op?.workId;
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setPhotos([]); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
+    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setPhotos([]); setList(null); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
     return () => { active = false; };
   }, [workId]);
   useEffect(() => {
@@ -357,7 +368,11 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   }
   const verified = photos.filter(x => x.status === "verified" && x.id).map(x => x.id!);
   const postPhotos = mailDone && (mailPreference === "photograph" || mailPreference === "open_and_photograph");
-  const ready = ticked.length === checklist.length && checklist.length > 0 && report.trim().length >= 5 && verified.length > 0 && !photos.some(x => x.status === "uploading") && !(postPhotos && mailPhotos.uploading);
+  // Photos taken on checks count as photos of the clean, and go with it (up to 30).
+  const progress = list?.progress ?? checklistProgress(checklist, ticked, [], {});
+  const sent = [...new Set([...verified, ...(list?.photoIds ?? [])])].slice(0, 30);
+  const blockers = submitBlockers(progress, { report, savedPhotos: sent.length, uploading: photos.some(x => x.status === "uploading") || !!list?.uploading || (postPhotos && mailPhotos.uploading) });
+  const ready = !blockers.length;
 
   return (
     <Sheet palette={p} visible={!!op} onClose={onClose} title={propertyName} subtitle={op ? `${typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""} · ${phaseLabel[phase] ?? readableStage(op.status)}` : ""} icon="spray">
@@ -390,16 +405,8 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
           ))}
         </View>}
         {canSubmit && <>
-          <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Checklist</Text>
-          {checklist.map(item => {
-            const on = ticked.includes(item);
-            return (
-              <MotionPress key={item} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => setTicked(current => on ? current.filter(x => x !== item) : [...current, item])} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: on ? p.successWash : p.elevated }]}>
-                <Feather name={on ? "check-square" : "square"} size={20} color={on ? p.success : p.muted} />
-                <Text style={{ color: p.text, flex: 1 }}>{item}</Text>
-              </MotionPress>
-            );
-          })}
+          <CleanChecklist key={op.workId} p={p} workId={op.workId} checklist={checklist} ticked={ticked} onState={onList}
+            onToggle={item => setTicked(current => current.includes(item) ? current.filter(x => x !== item) : [...current, item])} />
           <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Photos</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {photos.map(photo => (
@@ -428,13 +435,13 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
             {postPhotos && <PhotoPicker key={op.workId} p={p} workId={op.workId} purpose="mailbox" label="Photos of the post" hint="The owner sees these in their Mailbox." onChange={onMailPhotos} />}
           </View>}
           <Button label={busy ? "Sending…" : "Submit clean"} icon="send" primary p={p} disabled={!ready || busy}
-            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: verified, mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}), ...(postPhotos && mailPhotos.ids.length ? { mailPhotoIds: mailPhotos.ids } : {}) } }))} />
-          {!ready && <Text style={[ui.small, { color: p.muted }]}>Tick every check, add at least one saved photo and a short report to submit.</Text>}
+            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: sent, mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}), ...(postPhotos && mailPhotos.ids.length ? { mailPhotoIds: mailPhotos.ids } : {}) } }))} />
+          {!ready && <View accessibilityLiveRegion="polite" style={{ gap: 2 }}>{blockers.map(b => <Text key={b} style={[ui.small, { color: p.muted }]}>{b}</Text>)}</View>}
         </>}
 
         {canReview && <>
           <Notice text={typeof op.data.report === "string" ? `Cleaner's report: ${op.data.report}` : "The cleaner has submitted this clean."} p={p} />
-          <WorkPhotos p={p} workId={op.workId} title="Photos from the clean" />
+          <ChecklistReview key={op.workId} p={p} workId={op.workId} checklist={checklist} />
           <View style={{ flexDirection: "row", gap: 8 }}>
             <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true }} onPress={() => setAccepted(true)} style={[ui.button, { flex: 1, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? "#FFFFFF" : p.primary }]}>Accept</Text></MotionPress>
             <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === false }} onPress={() => setAccepted(false)} style={[ui.button, { flex: 1, backgroundColor: accepted === false ? p.danger : p.wash }]}><Text style={[ui.buttonText, { color: accepted === false ? p.onPrimary : p.primary }]}>Reject</Text></MotionPress>
@@ -466,7 +473,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   );
 }
 
-function CreateSheet({ p, visible, properties, onClose, onDone, today }: { p: Palette; visible: boolean; properties: PropertyView[]; onClose: () => void; onDone: () => Promise<void>; today: string }) {
+function CreateSheet({ p, visible, properties, templates, onClose, onDone, today }: { p: Palette; visible: boolean; properties: PropertyView[]; templates: ChecklistTemplate[]; onClose: () => void; onDone: () => Promise<void>; today: string }) {
   const [propertyId, setPropertyId] = useState("");
   const [date, setDate] = useState(today);
   const [checks, setChecks] = useState("Kitchen\nBathrooms\nBedrooms and fresh linen\nWi-Fi and broadband working");
@@ -485,7 +492,7 @@ function CreateSheet({ p, visible, properties, onClose, onDone, today }: { p: Pa
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {properties.map(x => (
-          <MotionPress key={x.id} accessibilityRole="radio" accessibilityState={{ selected: propertyId === x.id }} onPress={() => setPropertyId(x.id)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: propertyId === x.id ? p.primary : p.surface, borderWidth: 1, borderColor: propertyId === x.id ? p.primary : p.border }}>
+          <MotionPress key={x.id} accessibilityRole="radio" accessibilityState={{ selected: propertyId === x.id }} onPress={() => { setPropertyId(x.id); const t = templateFor(templates, x.id); if (t) setChecks(t.items.map(i => i.label).join("\n")); }} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: propertyId === x.id ? p.primary : p.surface, borderWidth: 1, borderColor: propertyId === x.id ? p.primary : p.border }}>
             <Text style={{ color: propertyId === x.id ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{x.name}</Text>
           </MotionPress>
         ))}
