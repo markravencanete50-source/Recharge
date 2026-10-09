@@ -49,6 +49,6 @@ await cp(`${mobile}/web-static`, target, { recursive: true });
 // The studio page is a development aid for the sample preview; the live app never links to it.
 await rm(`${target}/studio.html`, { force: true });
 const page = await readFile(`${target}/index.html`, "utf8");
-const install = '<link rel="manifest" href="/workspace/manifest.webmanifest"><link rel="apple-touch-icon" href="/workspace/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Recharge"><meta name="apple-mobile-web-app-status-bar-style" content="default">';
+const install = '<link rel="icon" type="image/svg+xml" href="/workspace/favicon.svg"><link rel="manifest" href="/workspace/manifest.webmanifest"><link rel="apple-touch-icon" href="/workspace/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Recharge"><meta name="apple-mobile-web-app-status-bar-style" content="default">';
 if (!page.includes('rel="manifest"')) await writeFile(`${target}/index.html`, page.replace("</head>", install + "</head>"));
 console.log("Built the workspace app for the web: dist/client/workspace");
