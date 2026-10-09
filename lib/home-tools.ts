@@ -40,7 +40,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('performance', 'Performance', 'Shifts, replies and sign-offs', 'medal', work('management', { sub: 'performance' })),
     tool('stays', 'Stays', 'Checks, pricing and re-listings', 'building', work('stays')),
     tool('cleans', 'Cleans', 'Schedule, reviews and cleaners', 'spray', work('cleans')),
-    tool('repairs', 'Repairs', 'Reports, bookings and visits', 'toolbox', work('repairs')),
+    tool('repairs', 'Maintenance', 'Reactive and preventative', 'toolbox', work('repairs')),
     tool('accounts', 'Accounts', 'Expenses, payouts, statements', 'coins', work('accounts')),
     // Properties is always in the navigation, so its tile makes room for training.
     TRAINING_ADMIN,
@@ -50,7 +50,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('checks', 'Daily checks', 'Listings live and reviewed', 'clipboard', work('stays', { section: 'Daily checks' }), ['listing-health']),
     tool('pricing', 'Pricing', 'Empty nights this week', 'tag', work('stays', { section: 'Daily checks' }), ['daily-pricing']),
     tool('signoff', 'Today’s sign-off', 'Close the day', 'signature', work('stays', { anchor: 'stays-signoff' }), ['listing-health']),
-    tool('repairs', 'Repairs', 'Report and chase repairs', 'toolbox', work('repairs'), ['stays-maintenance-reporting', 'maintenance-reporting']),
+    tool('repairs', 'Reactive maintenance', 'Report and chase repairs', 'toolbox', work('repairs'), ['stays-maintenance-reporting', 'maintenance-reporting']),
     tool('cleans', 'Cleans', 'Cleans at your properties', 'spray', work('cleans'), ['cleaning-schedule', 'clean-reporting']),
     tool('bookings', 'Bookings & licences', 'Direct offers and licensing', 'calendar', work('all'), ['direct-bookings', 'licensing']),
     tool('aircover', 'AirCover claims', 'Add and close claims', 'shield', { kind: 'tracker', module: 'aircover-reporting' }, ['aircover-reporting']),
@@ -79,8 +79,8 @@ const BY_ROLE: Record<string, Candidate[]> = {
     TRAINING,
   ],
   ready: [
-    tool('pipeline', 'Repairs', 'Reported, booked and done', 'toolbox', work('repairs', { section: 'Pipeline' })),
-    tool('visits', 'Routine visits', 'Garden, bins and safety', 'sun', work('repairs', { section: 'Routine visits' })),
+    tool('pipeline', 'Reactive maintenance', 'Reported, booked and done', 'toolbox', work('repairs', { section: 'Reactive maintenance' })),
+    tool('visits', 'Preventative maintenance', 'Garden, bins and safety', 'sun', work('repairs', { section: 'Preventative maintenance' })),
     tool('inspections', 'Inspections', 'New properties to inspect', 'search', work('all'), ['new-property-inspection-board']),
     tool('purchases', 'Purchases', 'Orders and deliveries', 'cart', work('all'), ['purchase-order']),
     tool('furnishing', 'Furnishing quotes', 'Rooms to furnish', 'sofa', work('all'), ['property-furnishing-board']),
@@ -104,7 +104,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
     // Stays, earnings and statements live in Reports; decisions waiting for the owner in Approvals.
     tool('stays', 'Stays & statements', 'Bookings, earnings, money', 'calendar', tab('analytics')),
     tool('approvals', 'Approvals', 'Costs and steps to decide', 'hourglass', tab('approvals')),
-    tool('repairs', 'Repairs', 'Request and approve', 'toolbox', work('repairs')),
+    tool('repairs', 'Reactive maintenance', 'Request and approve', 'toolbox', work('repairs')),
     tool('mailbox', 'Mailbox', 'Post at your properties', 'mail', { kind: 'tab', tab: 'analytics', anchor: sectionAnchor('Mailbox') }, ['client-mailbox']),
     tool('furnishing', 'Furnishing calculator', 'What each room needs', 'sofa', { kind: 'calculator' }, ['client-furnishing']),
     { ...PROPERTIES, label: 'My properties', detail: 'Onboarding and details' },

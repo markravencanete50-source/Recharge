@@ -114,7 +114,7 @@ export const decisionSchema = z.object({
 });
 export const decisionsSchema = z.array(decisionSchema);
 export type DecisionRow = z.infer<typeof decisionSchema>;
-export const AREA_LABEL: Record<DecisionRow['area'], string> = { repairs: 'Repairs', work: 'Work', accounts: 'Accounts', cleans: 'Cleans' };
+export const AREA_LABEL: Record<DecisionRow['area'], string> = { repairs: 'Maintenance', work: 'Work', accounts: 'Accounts', cleans: 'Cleans' };
 const OUTCOME: Record<string, string> = {
   approved: 'Approved', declined: 'Declined', rejected: 'Rejected', upheld: 'Upheld', overturned: 'Overturned', no_action: 'No action', supervised: 'Supervised', removed_from_rota: 'Removed from the rota',
 };

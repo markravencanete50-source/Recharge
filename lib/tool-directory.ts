@@ -8,7 +8,7 @@ export type ToolPlace =
   | { kind: 'tracker'; where: string }
   | { kind: 'calculator'; where: string };
 
-export const WORK_VIEW_LABEL: Record<WorkView, string> = { management: 'Management', calendar: 'Calendar', stays: 'Stays', cleans: 'Cleans', repairs: 'Repairs', accounts: 'Accounts', all: 'All work' };
+export const WORK_VIEW_LABEL: Record<WorkView, string> = { management: 'Management', calendar: 'Calendar', stays: 'Stays', cleans: 'Cleans', repairs: 'Maintenance', accounts: 'Accounts', all: 'All work' };
 
 // The Work views each role can open, the first being the default. Team roles have the Calendar
 // second, after their main view. Owners' stays, earnings, statements and mailbox are in Reports
@@ -44,9 +44,9 @@ const PLACES: Record<ModuleId, ToolPlace> = {
   'maintenance-reporting': work('repairs', 'Work → Repairs'),
   'stays-maintenance-reporting': work('repairs', 'Work → Repairs'),
   'client-property-maintenance': work('repairs', 'Work → Repairs'),
-  'safety-maintenance': work('repairs', 'Work → Repairs → Routine visits'),
-  'routine-bin-garden-board': work('repairs', 'Work → Repairs → Routine visits'),
-  'ready-schedule': work('repairs', 'Work → Repairs → Routine visits'),
+  'safety-maintenance': work('repairs', 'Work → Maintenance → Preventative maintenance'),
+  'routine-bin-garden-board': work('repairs', 'Work → Maintenance → Preventative maintenance'),
+  'ready-schedule': work('repairs', 'Work → Maintenance → Preventative maintenance'),
   'licensing': work('all', 'Work → All work (licensing)'),
   'purchase-order': work('all', 'Work → All work (purchases)'),
   'purchase-order-requests': work('all', 'Properties → a property → Request a property purchase; progress in All work'),

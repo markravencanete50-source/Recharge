@@ -270,10 +270,10 @@ function departments(o: Overview): { tone: Tone; icon: IconName; title: string; 
       { label: "Disputed cleans", value: o.cleans.disputes, attention: o.cleans.disputes > 0, target: QUEUE },
     ] },
     { tone: "ready", icon: "tool", title: "Ready", target: work("repairs"), metrics: [
-      { label: "Repairs waiting for the owner", value: o.ready.ownerApproval, attention: o.ready.ownerApproval > 0, target: work("repairs", { section: "Pipeline" }) },
-      { label: "Repairs to refer to Ready", value: o.ready.toRefer, attention: o.ready.toRefer > 0, target: work("repairs", { section: "Pipeline" }) },
-      { label: "Repairs with Ready (to book or booked)", value: o.ready.referred + o.ready.booked, target: work("repairs", { section: "Pipeline" }) },
-      { label: "Routine visits due this month", value: o.ready.visitsDue, target: work("repairs", { section: "Routine visits" }) },
+      { label: "Repairs waiting for the owner", value: o.ready.ownerApproval, attention: o.ready.ownerApproval > 0, target: work("repairs", { section: "Reactive maintenance" }) },
+      { label: "Repairs to refer to Ready", value: o.ready.toRefer, attention: o.ready.toRefer > 0, target: work("repairs", { section: "Reactive maintenance" }) },
+      { label: "Repairs with Ready (to book or booked)", value: o.ready.referred + o.ready.booked, target: work("repairs", { section: "Reactive maintenance" }) },
+      { label: "Preventative maintenance due this month", value: o.ready.visitsDue, target: work("repairs", { section: "Preventative maintenance" }) },
     ] },
     { tone: "accounts", icon: "file-text", title: "Accounts", target: work("accounts"), metrics: [
       { label: o.accounts.overLimit ? `Expenses to approve (${formatCount(o.accounts.overLimit)} over the limit)` : "Expenses to approve", value: o.accounts.expensesToApprove, attention: o.accounts.expensesToApprove > 0, target: work("accounts", { sub: "expenses" }) },

@@ -22,7 +22,7 @@ export type CalendarPayment = CalendarSchedule['payments'][number];
 
 export const ENTRY_KINDS = ['check-out', 'clean', 'check-in', 'repair', 'routine', 'inspection', 'work', 'payment'] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];
-export const KIND_LABEL: Record<EntryKind, string> = { 'check-out': 'Departure', clean: 'Clean', 'check-in': 'Arrival', repair: 'Repair', routine: 'Routine visit', inspection: 'Inspection', work: 'Task', payment: 'Payment run' };
+export const KIND_LABEL: Record<EntryKind, string> = { 'check-out': 'Departure', clean: 'Clean', 'check-in': 'Arrival', repair: 'Reactive maintenance', routine: 'Preventative maintenance', inspection: 'Inspection', work: 'Task', payment: 'Payment run' };
 const PLURAL: Record<EntryKind, string> = { 'check-out': 'departures', clean: 'cleans', 'check-in': 'arrivals', repair: 'repairs', routine: 'routine visits', inspection: 'inspections', work: 'tasks', payment: 'payment runs' };
 export const kindCount = (kind: EntryKind, n: number) => `${n} ${n === 1 ? KIND_LABEL[kind].toLowerCase() : PLURAL[kind]}`;
 // The same colours as the calendar in the design, each with a lighter shade for dark mode.

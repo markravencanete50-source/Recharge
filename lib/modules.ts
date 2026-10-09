@@ -158,7 +158,7 @@ export const MODULES = [
     id: "safety-maintenance",
     stage: "04",
     name: "Routine Maintenance",
-    shortName: "Routine maintenance",
+    shortName: "Preventative maintenance",
     description:
       "Complete and log routine maintenance forms for safety inspections, gardening, bin collections and recurring property checks.",
     audience: "Internal team",

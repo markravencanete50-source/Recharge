@@ -91,7 +91,7 @@ function liveNavigation(role: Role): NavigationItem[] {
   const item = (value: WorkspaceSection, label: string, icon: NavigationItem["icon"]): NavigationItem => ({ value, label, icon });
   const home = item("home", "Home", "home"), properties = item("properties", "Properties", "key"), reports = item("analytics", "Reports", "bar-chart-2"), activity = item("activity", "Activity", "activity"), help = item("help", "Help", "help-circle");
   if (role === "cleans" || role === "cleaning_manager") return [home, item("work", "Cleans", "check-square"), properties, activity, help];
-  if (role === "ready") return [home, item("work", "Repairs", "tool"), properties, activity, help];
+  if (role === "ready") return [home, item("work", "Maintenance", "tool"), properties, activity, help];
   // Accounts: invoices and owner statements are the daily work (both in Work → Accounts).
   if (role === "accounts") return [home, item("work", "Invoices", "file-text"), item("statements", "Statements", "pie-chart"), item("inbox", "Inbox", "message-circle"), item("help", "Tools", "grid")];
   // Owners: messages in the centre; stays, earnings, statements and mailbox are in Reports (once).
@@ -102,7 +102,7 @@ const WORK_TITLE: Record<Role, [string, string]> = {
   super_admin: ["Work", "Management, repairs and accounts in one place."], admin: ["Work", "Management, repairs and accounts in one place."],
   stays: ["Your work", "Stays, guests and repairs for your properties."], client: ["Repairs and requests", "Repairs and other requests at your properties."],
   cleans: ["Your cleans", "Today's cleans, checklists and photos."], cleaning_manager: ["Cleans", "Your team's cleans, reviews and schedule."],
-  ready: ["Repairs", "Reports, quotes, bookings and routine visits."], accounts: ["Accounts", "Expenses, payouts and owner statements."],
+  ready: ["Maintenance", "Reactive repairs, quotes, bookings and preventative visits."], accounts: ["Accounts", "Expenses, payouts and owner statements."],
 };
 
 // The welcome intro plays once a day on each device (and after signing in), not on every visit.

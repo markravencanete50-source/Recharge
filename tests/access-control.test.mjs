@@ -50,7 +50,7 @@ test('changing a role shows what the person will see', async () => {
   for (const r of rolesFor('super_admin')) assert.ok(ROLE_SUMMARY[r], r + ' has a summary');
   const up = roleChange({ role: 'cleaning_manager', properties: 3 }, 'admin', [], label);
   assert.equal(up.promote, true); assert.equal(up.action, 'Promote to Admin');
-  assert.deepEqual(up.views, ['Management', 'Calendar', 'Stays', 'Cleans', 'Repairs', 'Accounts', 'All work'], 'the same Work views as every admin');
+  assert.deepEqual(up.views, ['Management', 'Calendar', 'Stays', 'Cleans', 'Maintenance', 'Accounts', 'All work'], 'the same Work views as every admin');
   assert.deepEqual(up.homeTools, homeToolsFor('admin', MODULE_IDS).map(t => t.label), 'the same Home tools as every admin');
   assert.equal(up.properties, 'They see every property.');
   const side = roleChange({ role: 'cleans', properties: 1 }, 'stays', toolsOnRoleChange('stays'), label);

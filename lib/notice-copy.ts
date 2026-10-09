@@ -84,8 +84,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'finance.payout_approved': copy('Owner payout approved', 'Management has checked and approved an unusual owner payout.'),
   // Team.
   'handover.created': copy('New task for your team', 'A new task has been handed to your team.'),
-  'routine.plan_saved': copy('Routine visits updated', 'A routine visit plan has been saved.'),
-  'routine.visit_due': copy('Routine visit due soon', 'A routine visit is due in the next three days.'),
+  'routine.plan_saved': copy('Preventative maintenance updated', 'A preventative maintenance plan has been saved.'),
+  'routine.visit_due': copy('Preventative maintenance due soon', 'A preventative maintenance visit is due in the next three days.'),
   'training.course_saved': copy('Training updated', 'A training course has been updated.'),
   'onboarding.contract_signed': copy('Staff contract signed', 'A staff contract has been signed.'),
   'onboarding.completed': copy('Onboarding finished', 'A new team member has signed their contract and finished their training. Their tools are open.'),

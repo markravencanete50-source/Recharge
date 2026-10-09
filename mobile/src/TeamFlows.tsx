@@ -329,7 +329,7 @@ export function RepairPipeline({ palette: p }: { palette: Palette }) {
           </View>
         ))}
       </View>
-      <SectionTitle palette={p} title="Routine maintenance" detail="One visit per assigned property each month" />
+      <SectionTitle palette={p} title="Preventative maintenance" detail="One visit per assigned property each month" />
       <View style={{ borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
         {ROUTINE_VISITS.map((visit, index) => (
           <View key={visit.property} style={[ui.row, { gap: 12, padding: 14, borderTopWidth: index ? 1 : 0, borderColor: p.border }]}>

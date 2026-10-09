@@ -20,7 +20,7 @@ import type { PropertyView } from "../../lib/workspace-view";
 // it where the work happens. Cleaning managers see their team's day, by cleaner.
 type Bucket = "today" | "tomorrow" | "overdue";
 const ICON: Record<BoardJob["type"], IconName> = { clean: "droplet", repair: "tool", visit: "repeat", other: "clipboard" };
-const TYPE_LABEL: Record<BoardJob["type"], string> = { clean: "Clean", repair: "Repair", visit: "Routine visit", other: "Job" };
+const TYPE_LABEL: Record<BoardJob["type"], string> = { clean: "Clean", repair: "Reactive maintenance", visit: "Preventative maintenance", other: "Job" };
 const STATUS: Record<string, [string, "good" | "wait" | "bad" | "plain"]> = { waiting: ["To do", "plain"], in_progress: ["In progress", "wait"], in_review: ["Submitted", "good"], approved: ["Done", "good"], completed: ["Done", "good"] };
 const statusOf = (job: BoardJob, manager: boolean): [string, "good" | "wait" | "bad" | "plain"] =>
   job.redo ? ["Redo", "bad"] : manager && !job.assigneeId && !job.done ? ["Needs a cleaner", "bad"] : STATUS[job.status] ?? [job.status.replace(/_/g, " "), "plain"];

@@ -21,7 +21,7 @@ export const KIND_LABEL: Record<ScheduleKind, string> = {
   "check-out": "Check-out",
   inspection: "Inspection",
   repair: "Repair",
-  routine: "Routine visit",
+  routine: "Preventative maintenance",
   payment: "Payment run",
   report: "Report",
 };

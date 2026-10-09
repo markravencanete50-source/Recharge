@@ -85,7 +85,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 4 }}>
-        <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Repairs</Text>
+        <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Maintenance</Text>
         <Text style={[ui.body, { color: p.muted }]}>{account.role === "client" ? "Repairs at your properties, and costs waiting for your approval." : "Every repair from report to completion, with routine visits."}</Text>
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
@@ -96,7 +96,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
         <RefreshButton p={p} loading={loading} onPress={() => void load()} />
       </View>
 
-      <Section title="Pipeline" p={p}>
+      <Section title="Reactive maintenance" p={p}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {[{ phase: "action", label: `Needs you · ${mineToAct.length}` }, { phase: "open", label: "All open" }, ...REPAIR_STAGES.map(s => ({ phase: s.phase, label: `${s.label} · ${counts[s.phase] ?? 0}` }))].map(chip => (
             <MotionPress key={chip.phase} accessibilityRole="button" accessibilityState={{ selected: stage === chip.phase }} onPress={() => setStage(chip.phase)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: stage === chip.phase ? p.primary : p.surface, borderWidth: 1, borderColor: stage === chip.phase ? p.primary : p.border }}>
@@ -127,7 +127,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
       </Section>
 
       {routines && (
-        <Section title="Routine visits" p={p}>
+        <Section title="Preventative maintenance" p={p}>
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <Button label="New routine" icon="repeat" p={p} onPress={() => setPlanning(true)} />
             <Button label="Create this month's visits" icon="calendar" p={p} disabled={!plans.length} onPress={() => void createVisits()} />

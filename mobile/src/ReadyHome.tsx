@@ -24,7 +24,7 @@ export function ReadyHome({ palette: p, desktop, onTool }: { palette: Palette; d
     queueMicrotask(() => void readTeams({ section: "readyHome" }).then(r => { if (active) setHome(readyHomeSchema.parse(r.data)); }).catch(e => { if (active) setError(message(e)); }));
     return () => { active = false; };
   }, []);
-  const open = (sub: string) => onTool({ kind: "work", view: "repairs", sub, anchor: sectionAnchor("Pipeline") });
+  const open = (sub: string) => onTool({ kind: "work", view: "repairs", sub, anchor: sectionAnchor("Reactive maintenance") });
   const total = home ? READY_STAGES.reduce((n, s) => n + (home.stages[s.phase] ?? 0), 0) : 0;
   return (
     <Entrance sessionKey="live:home:ready" style={{ gap: 20 }}>
@@ -60,8 +60,8 @@ export function ReadyHome({ palette: p, desktop, onTool }: { palette: Palette; d
 
       {home && <View style={{ gap: 10 }}>
         <View style={ui.between}>
-          <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Routine visits · {monthLabel(home.month)}</Text>
-          <MotionPress accessibilityRole="button" accessibilityLabel="Open routine visits" onPress={() => onTool({ kind: "work", view: "repairs", anchor: sectionAnchor("Routine visits") })} style={{ minHeight: 44, justifyContent: "center", paddingLeft: 12 }}><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>View all</Text></MotionPress>
+          <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Preventative maintenance · {monthLabel(home.month)}</Text>
+          <MotionPress accessibilityRole="button" accessibilityLabel="Open preventative maintenance" onPress={() => onTool({ kind: "work", view: "repairs", anchor: sectionAnchor("Preventative maintenance") })} style={{ minHeight: 44, justifyContent: "center", paddingLeft: 12 }}><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>View all</Text></MotionPress>
         </View>
         {!home.visits.length && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 10 }]}>
           <Text style={[ui.small, { color: p.muted }]}>No routine visits at your properties this month. Bins, garden and safety checks set up as a routine are created automatically each month.</Text>
@@ -79,7 +79,7 @@ export function ReadyHome({ palette: p, desktop, onTool }: { palette: Palette; d
                   </View>
                   {!!prop.items.length && <View style={[ui.row, { gap: 10 }]}><GrowBar share={sum.done / prop.items.length} color={p.success} track={p.wash} height={8} /><Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{sum.due} due</Text></View>}
                   {prop.items.map(v => (
-                    <MotionPress key={v.workId} accessibilityRole="button" accessibilityLabel={`${v.title}, ${STATUS[v.status]?.[0] ?? v.status}`} onPress={() => onTool({ kind: "work", view: "repairs", anchor: sectionAnchor("Routine visits") })} style={[ui.row, { gap: 10, minHeight: 44 }]}>
+                    <MotionPress key={v.workId} accessibilityRole="button" accessibilityLabel={`${v.title}, ${STATUS[v.status]?.[0] ?? v.status}`} onPress={() => onTool({ kind: "work", view: "repairs", anchor: sectionAnchor("Preventative maintenance") })} style={[ui.row, { gap: 10, minHeight: 44 }]}>
                       <Feather name={visitDone(v.status) ? "check-circle" : "circle"} size={16} color={visitDone(v.status) ? p.success : !!v.dueOn && v.dueOn < home.today ? p.danger : p.muted} />
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600" }}>{v.title}</Text>
