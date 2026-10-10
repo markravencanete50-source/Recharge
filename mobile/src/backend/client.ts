@@ -120,6 +120,8 @@ let viewOnly = "", viewing: string | null = null, viewEnded: (() => void) | null
 export function setViewOnly(message: string, person?: { userId: string; onEnded: () => void } | null) {
   viewOnly = message; viewing = message && person ? person.userId : null; viewEnded = message && person ? person.onEnded : null;
 }
+// Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
+export const viewMode = () => ({ readOnly: viewOnly !== "", person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
   if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   // While a super admin views the app as someone else nothing is saved (this device's own

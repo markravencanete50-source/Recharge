@@ -5,7 +5,7 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { PropertySelect } from "./SearchPicker";
+import { ListSearchBox, PropertySelect, useListSearch } from "./SearchPicker";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -66,7 +66,8 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   const nameOf = useCallback((id: string) => properties.find(x => x.id === id)?.name ?? "Property", [properties]);
   const counts = useMemo(() => Object.fromEntries(REPAIR_STAGES.map(s => [s.phase, repairs.filter(r => repairStage(r.data) === s.phase).length])), [repairs]);
   const mineToAct = repairs.filter(r => repairStep(account.role, String(r.data.phase), account.teamOnly) || canCloseRepair(account.role, String(r.data.phase)));
-  const shown = stage === "open" ? repairs.filter(r => !repairClosed(String(r.data.phase))) : stage === "action" ? mineToAct : repairs.filter(r => repairStage(r.data) === stage);
+  const inStage = stage === "open" ? repairs.filter(r => !repairClosed(String(r.data.phase))) : stage === "action" ? mineToAct : repairs.filter(r => repairStage(r.data) === stage);
+  const search = useListSearch(inStage, r => [nameOf(r.propertyId), r.title, r.data.issue, typeof r.data.repairType === "string" ? repairTypeLabel(r.data.repairType) : "", REPAIR_STAGES.find(s => s.phase === repairStage(r.data))?.label]), shown = search.shown;
   // Visits are created a batch at a time; keep asking until none are left.
   const [creatingVisits, setCreatingVisits] = useState(false), creating = useRef(false);
   async function createVisits() {
@@ -107,7 +108,8 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
             </MotionPress>
           ))}
         </ScrollView>
-        {shown.length ? shown.map(r => {
+        <ListSearchBox p={p} search={search} nouns="repairs" />
+        {search.missed ? null : shown.length ? shown.map(r => {
           const phase = String(r.data.phase), step = repairStep(account.role, phase), stageNow = repairStage(r.data), label = REPAIR_STAGES.find(s => s.phase === stageNow)?.label ?? phase;
           const declined = declineNote(r.data), followUp = canCloseRepair(account.role, phase);
           return (

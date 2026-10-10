@@ -3,12 +3,12 @@ import { AppState, Platform, ScrollView, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
-import { PropertySelect } from "./SearchPicker";
+import { ListSearchBox, PropertySelect, useListSearch } from "./SearchPicker";
 import { MotionPress, Pop, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
 import { ui, type Palette } from "./theme";
-import { readChat, readInbox, writeChat } from "./backend/client";
+import { readChat, readInbox, viewMode, writeChat } from "./backend/client";
 import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
 import { channelsFirst, chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, threadSchema, type ChatMessage, type Conversation } from "../../lib/workspace-chat-policy";
@@ -16,6 +16,7 @@ import { inboxListSchema } from "../../lib/guest-inbox-policy";
 import { ALL_PROPERTIES, CHAT_CHIPS, chipCounts, conversationFacts, emptyMessage, filterInbox, propertyChips } from "../../lib/inbox-filters";
 import { InboxChips } from "./InboxChips";
 import { ROLE_LABEL } from "../../lib/admin-live";
+import { previewHasConversation } from "../../lib/view-as";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
 import { z } from "zod";
@@ -209,18 +210,27 @@ function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette;
 
 export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, openConversation }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; openConversation?: string }) {
   const owner = account.role === "client", guests = hasGuestInbox(account);
+  // While a super admin views as someone nothing can be started or saved. A role preview (no person) reads the super admin's
+  // own Messages, so it keeps only what that role could have (lib/view-as.ts). The workspace remounts when the view changes.
+  const [mode] = useState(viewMode), preview = mode.readOnly && !mode.person ? account.role : null;
   const [list, setList] = useState<Conversation[] | null>(null), [open, setOpen] = useState<string | null>(openConversation ?? null), [creating, setCreating] = useState(false), [error, setError] = useState("");
   const loadList = useCallback(async () => {
-    try { setList(z.array(conversationSchema).parse((await readChat({ section: "list" })).data)); setError(""); } catch (e) { setError(message(e)); }
-  }, []);
+    try {
+      const all = z.array(conversationSchema).parse((await readChat({ section: "list" })).data);
+      setList(preview ? all.filter(c => previewHasConversation(preview, c)) : all); setError("");
+    } catch (e) { setError(message(e)); }
+  }, [preview]);
   // Owners go straight to their conversation with Recharge.
   useEffect(() => {
     queueMicrotask(() => {
       // The team channels are made the first time anyone on the team opens Messages.
-      if (owner) void loadList(); else writeChat({ action: "openTeams" }).catch(() => undefined).finally(() => void loadList());
-      if (owner) writeChat({ action: "startOwner" }).then(r => setOpen(conversationSchema.parse(r.data).id)).catch(e => setError(message(e)));
+      if (owner || mode.readOnly) void loadList(); else writeChat({ action: "openTeams" }).catch(() => undefined).finally(() => void loadList());
+      if (owner && !mode.readOnly) writeChat({ action: "startOwner" }).then(r => setOpen(conversationSchema.parse(r.data).id)).catch(e => setError(message(e)));
     });
-  }, [loadList, owner]);
+  }, [loadList, owner, mode.readOnly]);
+  // Viewing as an owner: open the conversation they already have with Recharge, if any (starting one would be a change).
+  const ownerThread = owner && mode.person ? list?.find(c => c.kind === "owner")?.id ?? null : null;
+  useEffect(() => { if (ownerThread && !open) queueMicrotask(() => setOpen(ownerThread)); }, [ownerThread, open]);
   useVisiblePoll(() => void loadList(), LIST_EVERY, !owner);
   const changed = useCallback(() => { void loadList(); onUnread(); }, [loadList, onUnread]);
   // The team's tabs: Clients for the people who answer owners, Guests for the guest inbox.
@@ -246,7 +256,8 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const propertyOptions = propertyChips(inTab, facts, names, chip);
   const where = propertyOptions.some(x => x.id === property) ? property : ALL_PROPERTIES;
   // The conversation open beside the list stays listed while it is read, so it does not jump away.
-  const matching = filterInbox(inTab, facts, chip, where), shown = channelsFirst(inTab.filter(c => matching.includes(c) || (desktop && c.id === open)));
+  const search = useListSearch(filterInbox(inTab, facts, chip, where), c => [c.title, c.subtitle, c.propertyName, c.last?.authorName, c.last?.body]);
+  const shown = channelsFirst(inTab.filter(c => search.shown.includes(c) || (desktop && c.id === open)));
   const listView = (
     <View style={{ gap: 4, width: desktop ? 340 : "100%" }}>
       <View style={[ui.between, { paddingBottom: 6, gap: 12 }]}>
@@ -257,7 +268,8 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
         </MotionPress>
       </View>
       {!!list?.length && !!inTab.length && <View style={{ paddingBottom: 8 }}><InboxChips p={p} chips={CHAT_CHIPS} chip={chip} counts={chipCounts(inTab, facts, CHAT_CHIPS, where)} onChip={setChip} properties={propertyOptions} property={where} onProperty={setProperty} /></View>}
-      {!list ? <Loading p={p} /> : shown.length ? shown.map(c => <ConversationRow key={c.id} p={p} c={c} active={c.id === open} onPress={() => setOpen(c.id)} />)
+      {!!list && <View style={{ paddingBottom: 8 }}><ListSearchBox p={p} search={search} nouns="conversations" /></View>}
+      {!list ? <Loading p={p} /> : search.missed && !shown.length ? null : shown.length ? shown.map(c => <ConversationRow key={c.id} p={p} c={c} active={c.id === open} onPress={() => setOpen(c.id)} />)
         : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyMessage(inTab.length ? chip : "all", tab === "clients" && tabs.length > 1 ? "clients" : "team", where !== ALL_PROPERTIES ? names.get(where) : undefined)}</Text>}
     </View>
   );
@@ -304,7 +316,9 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       {channelBar}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <SwapIn swapKey={owner ? "owner" : tab}>
-        {owner ? (open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View> : <Loading p={p} />)
+        {owner ? (open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View>
+          : mode.readOnly && (list || preview) ? <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{preview ? "An owner's Messages is their conversation with Recharge. Choose an owner under View as to see theirs." : "This owner has not messaged Recharge yet."}</Text>
+          : <Loading p={p} />)
           : tab === "guests" ? <GuestInbox palette={p} properties={properties} onChanged={onUnread} />
           : desktop ? (
             <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: "row", gap: 18, alignItems: "stretch" }]}>

@@ -59,7 +59,7 @@ export function viewAsFailure(error: unknown) {
   return error instanceof ViewAsEnded ? businessResponse({ error: VIEW_AS_ENDED }, 409) : null;
 }
 const reads: Record<z.infer<typeof businessReadSchema>["entity"], { table: string; columns: string }> = {
-  properties: { table: "workspace_properties", columns: "id,name,address,region,status,bedrooms,version,created_at,updated_at" },
+  properties: { table: "workspace_properties", columns: "id,name,address,region,status,bedrooms,latitude,longitude,version,created_at,updated_at" },
   work: { table: "workspace_work_items", columns: "id,property_id,module_id,title,description,status,priority,due_on,assignee_id,client_visible,requires_client_approval,created_by,version,created_at,updated_at,completed_at" },
   updates: { table: "workspace_work_updates", columns: "id,work_id,actor_id,previous_status,next_status,note,created_at" },
   invoices: { table: "workspace_invoices", columns: "id,property_id,work_id,module_id,recipient_id,reference,amount_minor,currency,status,issued_on,paid_at,version" },

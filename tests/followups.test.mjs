@@ -123,7 +123,16 @@ test('properties are placed by postcode district, on land, fanned out and never 
   ];
   const pts = propertyPoints(list);
   assert.deepEqual(pts.map(p => p.id).sort(), ['a', 'b', 'c', 'd', 'g'], 'archived and unplaceable properties are left out; an off-map saved spot falls back to the postcode');
-  assert.deepEqual(pts.find(p => p.id === 'd'), { id: 'd', name: 'Exact', region: 'Edinburgh', district: 'EH6', lat: 55.97, lon: -3.18, exact: true });
+  assert.deepEqual(pts.find(p => p.id === 'd'), { id: 'd', name: 'Exact', region: 'Edinburgh', district: 'EH6', lat: 55.97, lon: -3.18, exact: true, precision: 'exact' });
+  assert.ok(pts.filter(p => p.id !== 'd').every(p => p.precision === 'district'), 'without postcode positions, the district places them');
+  // With the postcodes' own positions, each goes to its street; two at one postcode sit about 40m apart, not on top of each other.
+  const spots = { 'EH6 5AB': [55.9705, -3.1735], 'EH6 5AA': [55.9705, -3.1735], 'EH6 4AA': [55.9768, -3.1932], 'EH6 1AA': [10, 10] };
+  const byPostcode = propertyPoints(list, spots);
+  assert.deepEqual(byPostcode.map(p => [p.id, p.precision]).sort(), [['a', 'postcode'], ['b', 'postcode'], ['c', 'postcode'], ['d', 'exact'], ['g', 'district']], 'an off-map postcode position falls back to the district');
+  assert.deepEqual([byPostcode.find(p => p.id === 'c').lat, byPostcode.find(p => p.id === 'c').lon], [55.9768, -3.1932]);
+  const [pa, pb] = ['a', 'b'].map(id => byPostcode.find(p => p.id === id));
+  const apart = Math.hypot((pa.lat - pb.lat) * 111000, (pa.lon - pb.lon) * 62000);
+  assert.ok(apart > 10 && apart < 100, `two properties at one postcode are ${Math.round(apart)}m apart`);
   const eh6 = pts.filter(p => p.district === 'EH6' && !p.exact);
   assert.equal(new Set(eh6.map(p => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`)).size, eh6.length, 'properties in one district do not stack');
   for (const p of eh6) assert.ok(Math.hypot((p.lat - POSTCODE_DISTRICTS.EH6[0]) * 111, (p.lon - POSTCODE_DISTRICTS.EH6[1]) * 62) < 2, 'stays within about 2 km of the district');

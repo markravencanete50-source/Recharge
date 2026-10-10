@@ -6,7 +6,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { router, useLocalSearchParams } from "expo-router";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { SearchBox } from "./SearchPicker";
+import { ListSearchBox, SearchBox, useListSearch } from "./SearchPicker";
 import { normalise } from "../../lib/search-options";
 import { CompanyLogo } from "./CompanyLogo";
 import { Avatar, type Profile } from "./AccountSetup";
@@ -138,6 +138,13 @@ function IconButton({ label, icon, onPress, palette: p }: { label: string; icon:
 function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p, theme, setTheme, onSignedOut, onDeleted, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; realAccount: WorkspaceAccount; viewAs: ViewAs | null; onViewAs: (view: ViewAs | null) => Promise<void>; notice: string; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onDeleted: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
+  // On narrow phones Refresh moves into Profile to make room: under 360px wide, and under 400px for a super admin, whose
+  // header has the View as button too (under 360px that one is in Profile only). The logo takes the room the buttons
+  // leave: 48px each and 8px apart, the profile picture 44px, inside 20px sides and a 12px gap.
+  const narrowHeader = !desktop && (width < 360 || (width < 400 && canViewAs(realAccount)));
+  const headerEye = canViewAs(realAccount) && (desktop || width >= 360);
+  const headerButtons = [account.role !== "client", headerEye, true, !narrowHeader, width >= 440].filter(Boolean).length;
+  const logoWidth = Math.max(88, Math.min(144, width - 52 - headerButtons * 56 - 44));
   const reduced = useReducedMotion(), motionPreference = useMotionPreference(), faqShortcut = useFaqShortcut();
   const { section } = useLocalSearchParams<{ section?: string }>();
   const tab: WorkspaceSection = SECTIONS.includes(section as WorkspaceSection) && (ROLE_SECTIONS[section as WorkspaceSection]?.includes(account.role) ?? true) ? section as WorkspaceSection : "home";
@@ -287,6 +294,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     return () => { clearInterval(timer); sub.remove(); };
   }, [refresh]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void loadReport(period); }); return () => { active = false; }; }, [loadReport, period]);
+  const refreshAll = () => { void refresh(); void loadReport(period); void loadUnread(); void loadWaiting(); };
 
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
@@ -412,17 +420,19 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const todayKey = presetPeriod(1).to;
   // Issued invoices and their payments: on Reports for admins, inside Work → Accounts for Accounts
   // (their navigation has no Reports tab).
+  const invoiceSearch = useListSearch(invoices, invoice => [invoice.reference, names.get(invoice.property_id), readableStage(invoice.status), formatMoney(invoice.amount_minor)]);
   const invoiceList = (
     <Anchor id="section-invoices"><View style={{ gap: 10 }}>
       <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Invoices</Text>
-      <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
-        {invoices.map((invoice, i) => (
+      <ListSearchBox p={p} search={invoiceSearch} nouns="invoices" />
+      {!invoiceSearch.missed && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
+        {invoiceSearch.shown.map((invoice, i) => (
           <View key={invoice.id} style={[ui.between, { gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
             <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text><Text style={[ui.small, { color: p.muted }]}>{names.get(invoice.property_id) ?? "Property"} · {invoice.currency === "GBP" ? formatMoney(invoice.amount_minor) : `${invoice.currency} ${(invoice.amount_minor / 100).toFixed(2)}`} · {readableStage(invoice.status)}</Text></View>
             {invoice.status === "issued" && <MotionPress accessibilityRole="button" onPress={() => setForm({ key: "settle-" + invoice.id, title: "Confirm verified invoice payment", description: "Only confirm after checking the payment has actually settled.", endpoint: "workspace", fields: [{ name: "verified", label: "I have verified this invoice payment has settled", type: "checkbox", required: true }], build: () => ({ action: "setInvoiceStatus", invoiceId: invoice.id, version: invoice.version, status: "paid" }) })} style={[ui.button, { backgroundColor: p.wash, minHeight: 40 }]}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Record payment</Text></MotionPress>}
           </View>
         ))}
-      </View>
+      </View>}
     </View></Anchor>
   );
   const workPage = (
@@ -500,17 +510,17 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
             <View style={[ui.between, { width: "100%", maxWidth: desktop ? undefined : 760, alignSelf: "center", paddingHorizontal: 20, paddingVertical: 16, gap: 12 }]}>
               <View style={[ui.row, { flex: 1, minWidth: 0, gap: 16 }]}>
                 {desktop && sidebarHidden && <CompanyLogo palette={header} width={144} />}
-                {desktop ? <Text numberOfLines={1} style={{ color: p.headerText, fontSize: 16, fontWeight: "600", flexShrink: 1, minWidth: 80 }}>{title}</Text> : <CompanyLogo palette={header} width={width < 360 ? 104 : 144} />}
+                {desktop ? <Text numberOfLines={1} style={{ color: p.headerText, fontSize: 16, fontWeight: "600", flexShrink: 1, minWidth: 80 }}>{title}</Text> : <CompanyLogo palette={header} width={logoWidth} />}
                 {desktop && team && <HeaderSearch palette={p} onOpen={() => setSearchOpen(true)} />}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 {!desktop && team && <IconButton label="Search" icon="search" palette={header} onPress={() => setSearchOpen(true)} />}
-                {canViewAs(realAccount) && (desktop || width >= 400) && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
+                {headerEye && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
                 <View>
                   <IconButton label={messagesBadge ? `Messages, ${[chatUnread ? `${chatUnread} unread` : "", guestWaiting ? `${guestWaiting} ${guestWaiting === 1 ? "guest" : "guests"} waiting` : ""].filter(Boolean).join(", ")}` : "Messages"} icon="message-circle" palette={header} onPress={() => { setChatTarget(null); navigate("inbox"); }} />
                   {messagesBadge > 0 && <View pointerEvents="none" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View>}
                 </View>
-                <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={() => { void refresh(); void loadReport(period); void loadUnread(); void loadWaiting(); }} />
+                {!narrowHeader && <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={refreshAll} />}
                 {(desktop || width >= 440) && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
                 <MotionPress accessibilityRole="button" accessibilityLabel={`Open profile and preferences, ${roleLabel}`} onPress={() => setSettings(true)} style={{ minHeight: 48, minWidth: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: desktop ? 14 : 0, borderRadius: 999, backgroundColor: desktop ? p.headerControl : "transparent", borderWidth: desktop ? 1 : 0, borderColor: p.headerBorder }}>
                   {desktop && <View style={{ maxWidth: 180 }}><Text numberOfLines={1} style={{ color: p.headerText, fontSize: 14, fontWeight: "600" }}>{profile.displayName}</Text><Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 11 }}>{roleLabel}</Text></View>}
@@ -570,6 +580,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           </View>
         </View>
         {canViewAs(realAccount) && <SoftButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}: change` : "View the app as someone else"} icon="arrow-right" palette={p} onPress={() => { setSettings(false); setViewAsOpen(true); }} />}
+        {narrowHeader && <SoftButton label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" palette={p} onPress={() => { setSettings(false); refreshAll(); }} />}
         <PrivacySection p={p} onDelete={() => { setSettings(false); setDeleting(true); }} />
         <SoftButton label="Your tools, help and training" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("help"); }} />
         {confirmOut ? <SignOutUploadsWarning p={p} busy={busy} onCancel={() => setConfirmOut(false)} onConfirm={() => void logout(true)} /> : <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={() => void logout()} />}
@@ -616,6 +627,10 @@ function Screen() {
       if (!active) return;
       let welcomed = false;
       try { welcomed = globalThis.localStorage?.getItem("rc-welcomed") === welcomeDay(); } catch { welcomed = false; }
+      // A view saved in this tab is read-only from the first screen, before it is picked up again below.
+      let saved: ViewAs | null = null;
+      try { saved = readSavedView(globalThis.sessionStorage?.getItem("rc-view-as")); } catch { saved = null; }
+      if (saved && value && canViewAs(value)) setViewOnly(viewOnlyMessage(saved));
       setWelcome(!welcomed); setAccount(value);
     }).catch(e => { if (active && !(e instanceof WorkspaceApiError && e.status === 401)) setError(message(e)); }).finally(() => { if (active) setChecking(false); });
     return () => { active = false; };

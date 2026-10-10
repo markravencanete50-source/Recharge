@@ -49,3 +49,16 @@ export function readSavedView(raw: string | null | undefined): ViewAs | null {
   if (!raw) return null;
   try { const parsed = savedSchema.safeParse(JSON.parse(raw)); return parsed.success ? parsed.data : null; } catch { return null; }
 }
+
+// In a role preview (no person chosen) Messages reads the super admin's own list. It keeps only what someone with
+// that role could have: the department channels the role is placed in when it has no rota department
+// (private.chat_in_channel), owner conversations for the roles that answer owners, and the super admin's own chats.
+const PREVIEW_CHANNELS: Partial<Record<WorkspaceRole, readonly string[]>> = {
+  cleans: ['cleaning'], cleaning_manager: ['cleaning'], ready: ['ready'], accounts: ['accounts'], stays: ['guest_relations', 'client_relations'],
+};
+export function previewHasConversation(role: WorkspaceRole, conversation: { kind: string; department: string | null }): boolean {
+  if (role === 'admin' || role === 'super_admin') return true;
+  if (role === 'client') return false;
+  if (conversation.department) return conversation.department === 'all' || (PREVIEW_CHANNELS[role] ?? []).includes(conversation.department);
+  return conversation.kind !== 'owner' || role === 'stays';
+}

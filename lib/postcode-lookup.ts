@@ -18,6 +18,11 @@ export function partialPostcode(text: string): string | null {
   const m = /\b([A-Z]{1,2}\d[A-Z\d]?(?:\s*\d[A-Z]?)?)\s*$/i.exec(text.trim());
   return m ? m[1].toUpperCase() : null;
 }
+// The address with the postcode being typed at its end replaced by the one picked: "…Leith EH6 5" and "EH6 5AB".
+export function completePostcode(text: string, postcode: string): string {
+  const trimmed = text.trimEnd(), partial = partialPostcode(trimmed);
+  return partial ? trimmed.replace(/\b([A-Z]{1,2}\d[A-Z\d]?(?:\s*\d[A-Z]?)?)\s*$/i, postcode) : `${trimmed}${trimmed ? ' ' : ''}${postcode}`;
+}
 // Councils whose names don't say which of Recharge's areas they are in.
 const COUNCILS: Record<string, string> = { 'Na h-Eileanan Siar': 'Scottish islands', Clackmannanshire: 'Stirling and Falkirk' };
 export function regionForCouncil(council: string, country: string): string {
@@ -44,4 +49,22 @@ export async function suggestPostcodes(partial: string, fetcher: Fetcher = fetch
   if (!res.ok) return [];
   const list = ((await res.json()) as { result?: unknown }).result;
   return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string').slice(0, 8) : [];
+}
+
+// Where many postcodes are, from postcodes.io's bulk lookup (up to 100 a request, free). Only the postcodes are sent.
+// Answers "EH6 5AB" -> [latitude, longitude] for each postcode found; one that is not found is left out.
+type Poster = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string }) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+export async function postcodePositions(postcodes: string[], post: Poster = fetch): Promise<Record<string, [number, number]>> {
+  const wanted = [...new Set(postcodes.map(findPostcode).filter((x): x is string => !!x))], out: Record<string, [number, number]> = {};
+  for (let i = 0; i < wanted.length; i += 100) {
+    const res = await post(API.slice(0, -1), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ postcodes: wanted.slice(i, i + 100) }) });
+    if (!res.ok) throw new Error('The postcodes could not be checked just now.');
+    const list = ((await res.json()) as { result?: unknown }).result;
+    if (!Array.isArray(list)) continue;
+    for (const item of list as { query?: unknown; result?: { latitude?: unknown; longitude?: unknown } | null }[]) {
+      const code = typeof item?.query === 'string' ? findPostcode(item.query) : null, r = item?.result;
+      if (code && r && typeof r.latitude === 'number' && typeof r.longitude === 'number') out[code] = [r.latitude, r.longitude];
+    }
+  }
+  return out;
 }

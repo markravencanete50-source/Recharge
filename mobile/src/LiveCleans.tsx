@@ -3,7 +3,7 @@ import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { PropertySelect, SearchPicker } from "./SearchPicker";
+import { ListSearchBox, PropertySelect, SearchPicker, useListSearch } from "./SearchPicker";
 import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
@@ -97,6 +97,8 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   const jobRow = openJob ? schedule.work.find(w => w.workId === openJob) : undefined;
   const guests = useMemo(() => new Map((schedule.cleanGuests ?? []).map(g => [g.workId, g])), [schedule.cleanGuests]);
   const propertyName = (id: string) => properties.find(x => x.id === id)?.name ?? schedule.work.find(w => w.propertyId === id)?.propertyName ?? "Property";
+  const reviewSearch = useListSearch(toReview, op => [propertyName(op.propertyId), op.title, op.data.report]);
+  const unassignedSearch = useListSearch(unassigned, op => [propertyName(op.propertyId), op.title, typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""]);
   const cleanerName = (id: unknown) => performance.find(r => r.cleanerId === id)?.fullName ?? cleaners.find(([cid]) => cid === id)?.[1] ?? "Cleaner";
   const decided = !manager ? (mine?.decidedComplaints ?? []) : [];
 
@@ -218,7 +220,8 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       {manager && (
         <>
           <Section title="Waiting for your review" count={toReview.length} p={p}>
-            {toReview.length ? toReview.map(op => (
+            <ListSearchBox p={p} search={reviewSearch} nouns="cleans to review" />
+            {reviewSearch.missed ? null : toReview.length ? reviewSearch.shown.map(op => (
               <MotionPress key={op.workId} accessibilityRole="button" onPress={() => setOpenJob(op.workId)} style={[ui.card, { gap: 6, backgroundColor: p.surface, borderColor: p.border }]}>
                 <Text style={{ color: p.text, fontWeight: "700" }}>{properties.find(x => x.id === op.propertyId)?.name ?? op.title}</Text>
                 <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{typeof op.data.report === "string" ? op.data.report : "Report submitted"}</Text>
@@ -244,7 +247,8 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
             </Section>
           )}
           <Section title="Not yet assigned" count={unassigned.length} p={p}>
-            {unassigned.length ? unassigned.map(op => (
+            <ListSearchBox p={p} search={unassignedSearch} nouns="unassigned cleans" />
+            {unassignedSearch.missed ? null : unassigned.length ? unassignedSearch.shown.map(op => (
               <MotionPress key={op.workId} accessibilityRole="button" onPress={() => setOpenJob(op.workId)} style={[ui.card, { gap: 6, backgroundColor: p.surface, borderColor: p.border }]}>
                 <Text style={{ color: p.text, fontWeight: "700" }}>{properties.find(x => x.id === op.propertyId)?.name ?? op.title}</Text>
                 <Text style={[ui.small, { color: p.muted }]}>{typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : "No date"} · tap to assign a cleaner</Text>

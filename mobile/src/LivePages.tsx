@@ -28,6 +28,8 @@ import { propertyPoints } from "../../lib/property-points";
 import { formatCount, formatMoney } from "../../lib/format";
 import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
+import { ListSearchBox, useListSearch } from "./SearchPicker";
+import { noticeCopy } from "../../lib/notice-copy";
 import { Calendar } from "./WorkspaceScreens";
 import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
@@ -38,6 +40,10 @@ import { workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
 import { weeklyReportDocument, weeklyReportFileName } from "../../lib/weekly-report";
 import { isWorkspaceAdmin } from "../../lib/modules";
+import { completePostcode, findPostcode, lookupPostcode, partialPostcode, postcodePositions, suggestPostcodes, type PostcodePlace } from "../../lib/postcode-lookup";
+import { fillAlso, type Suggestion } from "../../lib/property-listing";
+import { matchesSearch, normalise } from "../../lib/search-options";
+import { SCOTTISH_REGIONS } from "../../lib/regions";
 import { faqsForAccess } from "../../lib/access-faq";
 import { dateKey, parseAnalyticsDate, periodError, periodLabel, presetPeriod, type AnalyticsPeriod } from "../../lib/analytics";
 import { estimateComparables, MARK_READ_PER_VISIT, onboardingProgress, readableStage, unreadNotices, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
@@ -83,7 +89,75 @@ export function EmptyState({ title, detail, palette: p, icon = "check-circle" }:
   );
 }
 
-function Field({ field: f, value, onChange, p, disabled }: { field: WorkflowField; value: unknown; onChange: (value: unknown) => void; p: Palette; disabled?: boolean }) {
+// Quick picks under a field: tapping one fills the field, and any other fields the pick implies (a studio has no bedrooms).
+function Suggestions({ p, label, items, value, disabled, onPick }: { p: Palette; label: string; items: Suggestion[]; value: string; disabled?: boolean; onPick: (item: Suggestion) => void }) {
+  const current = value.trim().toLowerCase();
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel={`Suggestions for ${label}`} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {items.map(s => {
+        const on = current === s.value.toLowerCase();
+        return (
+          <MotionPress key={s.value} disabled={disabled} accessibilityRole="radio" accessibilityLabel={`${label}: ${s.label}`} accessibilityState={{ selected: on, disabled }} onPress={() => onPick(s)}
+            style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.primary : p.surface }}>
+            <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{s.label}</Text>
+          </MotionPress>
+        );
+      })}
+    </View>
+  );
+}
+
+// Under an address: once a full postcode is typed, where it is (from postcodes.io, free; only the postcode is sent), and the
+// area is filled in if nobody chose one. While a postcode is part-typed at the end, the full postcodes it could be.
+function PostcodeLookup({ p, text, disabled, onComplete, onFound }: { p: Palette; text: string; disabled?: boolean; onComplete: (text: string) => void; onFound: (place: PostcodePlace) => void }) {
+  const full = findPostcode(text), partial = full ? null : partialPostcode(text);
+  const [place, setPlace] = useState<{ postcode: string; found: PostcodePlace | null; error: string } | null>(null);
+  const [options, setOptions] = useState<{ partial: string; list: string[] }>({ partial: "", list: [] });
+  const found = useRef(onFound);
+  useEffect(() => { found.current = onFound; });
+  useEffect(() => {
+    if (!full) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      lookupPostcode(full).then(result => { if (!active) return; setPlace({ postcode: full, found: result, error: "" }); if (result) found.current(result); })
+        .catch(e => { if (active) setPlace({ postcode: full, found: null, error: e instanceof Error ? e.message : "The postcode could not be checked just now." }); });
+    }, 500);
+    return () => { active = false; clearTimeout(timer); };
+  }, [full]);
+  useEffect(() => {
+    if (!partial || partial.replace(/\s/g, "").length < 3) return;
+    let active = true;
+    const timer = setTimeout(() => { suggestPostcodes(partial).then(list => { if (active) setOptions({ partial, list }); }).catch(() => undefined); }, 400);
+    return () => { active = false; clearTimeout(timer); };
+  }, [partial]);
+  if (full) {
+    const done = place?.postcode === full ? place : null;
+    const line = !done ? "Checking the postcode…" : done.found ? [done.found.ward, done.found.council].filter(Boolean).join(", ") + (done.found.region ? `. Area: ${done.found.region}` : "")
+      : done.error || "That postcode was not found. Check it, or choose the area below.";
+    return (
+      <View accessibilityLiveRegion="polite" style={[ui.row, { gap: 8 }]}>
+        <Feather name={done && !done.found ? "alert-circle" : "map-pin"} size={15} color={done && !done.found ? p.waiting : p.primary} />
+        <Text style={[ui.small, { color: done && !done.found ? p.text : p.muted, flex: 1 }]}>{line}</Text>
+      </View>
+    );
+  }
+  if (!partial || options.partial !== partial || !options.list.length) return null;
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={[ui.small, { color: p.muted }]}>Finish the postcode</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {options.list.map(code => (
+          <MotionPress key={code} disabled={disabled} accessibilityRole="button" accessibilityLabel={`Use postcode ${code}`} onPress={() => onComplete(completePostcode(text, code))}
+            style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
+            <Text style={{ color: p.text, fontSize: 13, fontWeight: "600" }}>{code}</Text>
+          </MotionPress>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: WorkflowField; value: unknown; onChange: (value: unknown) => void; onAlso?: (values: Record<string, string>, onlyIfEmpty?: boolean) => void; p: Palette; disabled?: boolean }) {
   const [calendar, setCalendar] = useState(false);
   if (f.type === "checkbox") return (
     <MotionPress disabled={disabled} accessibilityRole="checkbox" accessibilityState={{ checked: value === true, disabled }} onPress={() => onChange(value !== true)} style={[ui.row, { gap: 12, minHeight: 48, paddingVertical: 10, alignItems: "flex-start" }]}>
@@ -124,6 +198,9 @@ function Field({ field: f, value, onChange, p, disabled }: { field: WorkflowFiel
         <TextInput accessibilityLabel={f.label} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
           style={{ borderWidth: 1, borderRadius: 14, padding: 13, minHeight: f.type === "textarea" ? 110 : 50, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: p.background, color: p.text, borderColor: p.controlBorder, textAlignVertical: "top" }} />
       )}
+      {!!f.suggestions?.length && <Suggestions p={p} label={f.label} items={f.suggestions} value={String(value ?? "")} disabled={disabled} onPick={s => { onChange(s.value); if (s.also) onAlso?.(s.also); }} />}
+      {f.lookup === "postcode" && <PostcodeLookup p={p} text={String(value ?? "")} disabled={disabled} onComplete={onChange}
+        onFound={place => { if ((SCOTTISH_REGIONS as readonly string[]).includes(place.region)) onAlso?.({ region: place.region }, true); }} />}
       {f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}
     </View>
   );
@@ -158,7 +235,7 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;
   return (
     <>
-      {spec.fields.map((f, n) => f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues(current => ({ ...current, [f.name]: v }))} p={p} disabled={busy} /></Stagger>)}
+      {spec.fields.map((f, n) => f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues(current => ({ ...current, [f.name]: v }))} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} /></Stagger>)}
       {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}><Text style={[ui.small, { color: p.text }]}>{error}</Text></View>}
       <SoftButton label={busy ? "Saving…" : uploading ? "Saving photos…" : "Save and continue"} icon="check" primary disabled={busy || uploading} onPress={() => void save()} palette={p} />
     </>
@@ -294,9 +371,27 @@ function PropertyCard({ property, index, palette: p, onPress }: { property: Prop
   );
 }
 
+// Postcode positions already looked up, kept for the session so the map does not ask again.
+const knownPostcodes: Record<string, [number, number]> = {};
+// The postcodes on the map whose position is not known yet: the properties with no saved position.
+function usePostcodePositions(properties: PropertyView[]) {
+  const [positions, setPositions] = useState<Record<string, [number, number]>>(() => ({ ...knownPostcodes }));
+  const wanted = useMemo(() => [...new Set(properties.filter(x => x.status !== "archived" && typeof x.latitude !== "number").map(x => findPostcode(x.address)).filter((x): x is string => !!x))].sort().join("|"), [properties]);
+  useEffect(() => {
+    const missing = wanted ? wanted.split("|").filter(code => !(code in knownPostcodes)) : [];
+    if (!missing.length) return;
+    let active = true;
+    // If postcodes.io cannot be reached, the dots stay in their postcode districts.
+    postcodePositions(missing).then(found => { Object.assign(knownPostcodes, found); if (active) setPositions({ ...knownPostcodes }); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [wanted]);
+  return positions;
+}
+
 // The portfolio at a glance for the team: live, onboarding, owners, and properties per region.
 function PortfolioCard({ palette: p, summary, properties, onOpen }: { palette: Palette; summary: PortfolioSummary; properties: PropertyView[]; onOpen: (property: PropertyView) => void }) {
-  const points = useMemo(() => propertyPoints(properties), [properties]);
+  const positions = usePostcodePositions(properties);
+  const points = useMemo(() => propertyPoints(properties, positions), [properties, positions]);
   const top = summary.regions[0]?.count || 1, wide = useWindowDimensions().width >= 700;
   const stats: [string, number, IconName][] = [["Properties", summary.total, "home"], ["Live", summary.live, "check-circle"], ["Onboarding", summary.onboarding, "key"], ["Owners", summary.owners, "users"]];
   return (
@@ -336,7 +431,8 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   }
   const [filter, setFilter] = useState<PropertyFilter>(null), [ownerCount, setOwnerCount] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
-  const visible = properties.filter(property => (!filter || filter.ids.includes(property.id)) && (property.name + " " + property.region + " " + property.address).toLowerCase().includes(query.trim().toLowerCase()));
+  // Every word typed must appear in the name, area or address, in any order ("pitt lower" finds "39 (Lower) Pitt").
+  const visible = properties.filter(property => (!filter || filter.ids.includes(property.id)) && matchesSearch(normalise(property.name + " " + property.region + " " + property.address), query));
   const staff = isWorkspaceAdmin(account.role) || account.role === "stays";
   const journey = selected ? journeys.find(j => j.propertyId === selected.id) : undefined;
   const propertyWork = selected ? work.filter(w => w.propertyId === selected.id) : [];
@@ -370,7 +466,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       </MotionPress>}
       <View {...(Platform.OS === "web" ? { dataSet: { searchShell: "true" } } : {})} style={[ui.row, { borderRadius: 14, minHeight: 50, borderWidth: 1, borderColor: p.controlBorder, paddingHorizontal: 14, backgroundColor: p.surface, gap: 10 }]}>
         <Feather name="search" size={18} color={p.muted} />
-        <TextInput accessibilityLabel="Search properties" placeholder="Search by name or area" placeholderTextColor={p.muted} value={query} onChangeText={value => { setQuery(value); setShown(24); }} autoCorrect={false} style={{ flex: 1, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular", minHeight: 48 }} />
+        <TextInput accessibilityLabel="Search properties" placeholder="Search by name, street, area or postcode" placeholderTextColor={p.muted} value={query} onChangeText={value => { setQuery(value); setShown(24); }} autoCorrect={false} style={{ flex: 1, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular", minHeight: 48 }} />
         {!!query && <MotionPress accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery("")} style={{ width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={18} color={p.text} /></MotionPress>}
       </View>
       {visible.length ? (
@@ -447,11 +543,13 @@ export function LiveActivity({ palette: p, notices, loading, onRead }: { palette
       if (read.length) onRead?.(read);
     })();
   }, [notices, onRead]);
+  const search = useListSearch(notices, n => [noticeCopy(n.event_type).title, new Date(n.created_at).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" })]);
   return (
     <>
       <PageHeading palette={p} title="Recent activity" subtitle="Updates on the work and properties within your access." />
-      {notices.length ? (
-        <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 6, gap: 0 }]}>{notices.map((notice, i) => <View key={notice.id} style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}><LiveNoticeRow notice={notice} palette={p} /></View>)}</View>
+      <ListSearchBox p={p} search={search} nouns="updates" />
+      {search.missed ? null : notices.length ? (
+        <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 6, gap: 0 }]}>{search.shown.map((notice, i) => <View key={notice.id} style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}><LiveNoticeRow notice={notice} palette={p} /></View>)}</View>
       ) : <EmptyState palette={p} icon="activity" title={loading ? "Loading updates…" : "No updates yet"} detail="Changes to your work and properties appear here." />}
       <Text style={[ui.small, { color: p.muted }]}>Email and push notifications start once they are switched on.</Text>
     </>
@@ -461,12 +559,14 @@ export function LiveActivity({ palette: p, notices, loading, onRead }: { palette
 export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy, onOpen }: { palette: Palette; account: WorkspaceAccount; properties?: PropertyView[]; onSignOut: () => void; busy: boolean; onOpen?: (tab: "home" | "work" | "properties" | "analytics", view?: WorkView) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const faq = faqsForAccess(account.role, account.modules).filter(f => f.id !== "communication-centre");
+  const search = useListSearch(faq, f => [f.question, f.answer]);
   return (
     <>
       <PageHeading palette={p} title="Help" subtitle={"Your tools and answers for your role: " + readableStage(account.role) + "."} />
       {onOpen && <ToolDirectory palette={p} account={account} properties={properties} onOpen={onOpen} />}
-      <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
-        {faq.map((f, i) => (
+      <ListSearchBox p={p} search={search} nouns="questions" />
+      {!search.missed && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
+        {search.shown.map((f, i) => (
           <View key={f.id} style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}>
             <MotionPress accessibilityRole="button" accessibilityState={{ expanded: open === f.id }} onPress={() => setOpen(open === f.id ? null : f.id)} style={[ui.between, { gap: 12, minHeight: 56, paddingVertical: 12 }]}>
               <Text style={{ color: p.text, fontSize: 15, fontWeight: "600", flex: 1 }}>{f.question}</Text>
@@ -475,7 +575,7 @@ export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy
             {open === f.id && <SwapIn swapKey={f.id}><Text style={[ui.body, { color: p.muted, paddingBottom: 14 }]}>{f.answer}</Text></SwapIn>}
           </View>
         ))}
-      </View>
+      </View>}
       <LiveTraining palette={p} />
       <MyContracts palette={p} account={account} />
       <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={onSignOut} />

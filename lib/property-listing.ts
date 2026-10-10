@@ -30,3 +30,10 @@ export function placeOf(address: string, region: string): string {
   const town = parts.length > 1 ? parts[parts.length - 1] : '';
   return town && !/^\d/.test(town) ? town : region && region !== 'Outside Scotland' ? region : '';
 }
+// What a quick pick also fills, for the fields this form has. With onlyIfEmpty a choice already made is kept
+// (the area found from a postcode never replaces an area somebody picked).
+export function fillAlso(values: Record<string, unknown>, also: Record<string, string>, onlyIfEmpty = false): Record<string, unknown> {
+  const next = { ...values };
+  for (const [name, value] of Object.entries(also)) if (name in values && (!onlyIfEmpty || values[name] === '' || values[name] == null)) next[name] = value;
+  return next;
+}

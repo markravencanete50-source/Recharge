@@ -4,7 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Text } from "./Typography";
-import { PropertySelect } from "./SearchPicker";
+import { ListSearchBox, PropertySelect, useListSearch } from "./SearchPicker";
 import { useCelebrate } from "./Celebrate";
 import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -267,7 +267,7 @@ export function GuestInbox({ palette: p, properties, onChanged }: { palette: Pal
   const names = new Map([...threads.filter(t => t.propertyId && t.propertyName).map(t => [t.propertyId!, t.propertyName!] as const), ...properties.map(x => [x.id, x.name] as const)]);
   const propertyOptions = propertyChips(threads, facts, names, chip);
   const where = propertyOptions.some(x => x.id === property) ? property : ALL_PROPERTIES;
-  const shown = filterInbox(threads, facts, chip, where);
+  const search = useListSearch(filterInbox(threads, facts, chip, where), t => [t.guestName, t.propertyName, t.reservationRef, CHANNEL_LABEL[t.channel], t.preview]), shown = search.shown;
   return (
     <View style={{ gap: 16 }}>
       {data && !data.connected && <View style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.wash, alignItems: "flex-start" }]}>
@@ -281,7 +281,8 @@ export function GuestInbox({ palette: p, properties, onChanged }: { palette: Pal
       {data && <InboxChips p={p} chips={GUEST_CHIPS} chip={chip} counts={chipCounts(threads, facts, GUEST_CHIPS, where)} onChip={setChip} properties={propertyOptions} property={where} onProperty={setProperty} />}
       {red > 0 && <Notice text={`${red} guest${red === 1 ? " has" : "s have"} waited longer than ${data?.targets.amberMinutes} minutes.`} p={p} tone="bad" />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {!data && !error ? <Loading p={p} /> : data && (
+      {data && <ListSearchBox p={p} search={search} nouns="conversations" />}
+      {!data && !error ? <Loading p={p} /> : data && !search.missed && (
         <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
           {shown.length ? shown.map((t, i) => <Pop key={t.id} active={t.id === openId}><ThreadRow p={p} t={t} targets={data.targets} unread={facts(t).unread} first={i === 0} onPress={() => open(t.id)} /></Pop>)
             : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyMessage(chip, "guests", where !== ALL_PROPERTIES ? names.get(where) : undefined)}</Text>}

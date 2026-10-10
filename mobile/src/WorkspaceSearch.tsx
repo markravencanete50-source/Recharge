@@ -171,7 +171,7 @@ export function FavoritesPage({ palette: p, desktop, entries, onOpen, onSearch }
         <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30, gap: 10 }]}>
           <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><FilledStar size={30} color={p.primary} /></View>
           <Text style={[ui.sectionTitle, { color: p.text, textAlign: "center" }]}>Nothing saved yet</Text>
-          <Text style={[ui.body, { color: p.muted, textAlign: "center", maxWidth: 460 }]}>Search for anything and tap its star: a tool, a page, a property or a job. It is kept here, in the left panel on a computer and in the bottom bar on your phone.</Text>
+          <Text style={[ui.body, { color: p.muted, textAlign: "center", maxWidth: 460 }]}>Search for anything and tap its star: a tool, a page, a property or a job. It is kept here: in the left panel on a computer, and behind the star button above Help on your phone.</Text>
         </View>
       ) : rows.map((row, r) => (
         <View key={r} style={{ flexDirection: "row", gap: 10 }}>

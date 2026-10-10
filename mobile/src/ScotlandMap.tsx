@@ -253,7 +253,7 @@ function MapBody({ palette: p, regions, points = [], onOpenProperty, addressOf, 
         {chosen ? `${chosen.region} · ${plural(chosen.count, "property", "properties")}` : bubbles.length ? (web ? "Drag to move, Ctrl + scroll or double-click to zoom. Tap a ring or a dot." : "Drag to move, pinch to zoom. Tap a ring or a dot.") : "Properties appear here once their area is set"}
       </Text>
       {!full && offMap > 0 && <Text style={[ui.small, { color: p.muted, textAlign: "center" }]}>{plural(offMap, "property", "properties")} outside Scotland or without an area</Text>}
-      {!full && placed.some(d => !d.pt.exact) && <Text style={[ui.small, { color: p.muted, fontSize: 11, textAlign: "center" }]}>Dots are placed by postcode district, so they show the area, not the exact door.</Text>}
+      {!full && placed.some(d => !d.pt.exact) && <Text style={[ui.small, { color: p.muted, fontSize: 11, textAlign: "center" }]}>{placed.some(d => d.pt.precision === "district") ? "Some dots are placed by postcode district, so they show the area, not the exact door." : "Dots are placed by postcode, so they show the street, not the exact door."}</Text>}
       <Text style={[ui.small, { color: p.muted, fontSize: 10, textAlign: "center" }]}>Map data: Natural Earth</Text>
     </Entrance>
   );

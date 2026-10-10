@@ -81,3 +81,21 @@ export function PropertySelect({ p, properties, value, onChange, fixed, clearabl
 export const SEARCH_LIST_ABOVE = SHOW_SEARCH_ABOVE;
 export const searchTextOf = (row: ReactNode | Record<string, unknown>) => normalise(textOfRow(row));
 export { matchesSearch };
+
+// The same for lists a screen lays out itself: `textOf` gives the words a row is found by (a
+// string, or the values it shows). The box only appears past eight rows.
+export function useListSearch<T>(rows: readonly T[], textOf: (row: T) => unknown) {
+  const [query, setQuery] = useState("");
+  const searchable = rows.length > SEARCH_LIST_ABOVE, typed = searchable ? query.trim() : "";
+  const shown = typed ? rows.filter(row => matchesSearch(normalise(textOfRow(textOf(row))), typed)) : rows;
+  return { query, setQuery, searchable, total: rows.length, shown, missed: !!typed && !shown.length };
+}
+export function ListSearchBox({ p, search, nouns }: { p: Palette; search: { query: string; setQuery: (v: string) => void; searchable: boolean; total: number; missed: boolean }; nouns: string }) {
+  if (!search.searchable) return null;
+  return (
+    <View style={{ gap: 8 }}>
+      <SearchBox p={p} value={search.query} onChange={search.setQuery} placeholder={`Search ${search.total} ${nouns}`} />
+      {search.missed && <Text style={[ui.small, { color: p.muted }]}>Nothing matches “{search.query.trim()}”.</Text>}
+    </View>
+  );
+}
