@@ -102,7 +102,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
   const focus = useWorkFocus();
   const [view, setView] = useState<ManagementView>(() => MANAGEMENT_VIEWS.find(v => v === focus?.sub) ?? "queue");
   const [decision, setDecision] = useState<Decision | null>(null);
-  const [productivityTab, setProductivityTab] = useState<"weeks" | "changes">("weeks");
+  const [productivityTab, setProductivityTab] = useState<"days" | "changes">("days");
   const [expense, setExpense] = useState<string | null>(null);
   const [ask, setAsk] = useState<NoteAsk | null>(null);
   // Repairs above the company-wide management limit, and the limit itself.

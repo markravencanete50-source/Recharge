@@ -1,5 +1,5 @@
-import type { Productivity, ProductivityPerson, ShiftChange } from './workspace-teams-policy';
-import { dayLabel, londonClock, mondayOf } from './team-time';
+import type { Productivity, ProductivityPerson, ShiftChange, Timesheet, TimesheetPerson } from './workspace-teams-policy';
+import { dayLabel, londonClock, mondayOf, timesheetRows, type TimesheetRow } from './team-time';
 import { DEPARTMENT_LABEL } from './hub';
 
 // The Productivity Tool's sums and labels: hours per person by week (each from its Monday) and by
@@ -64,4 +64,41 @@ export function productivityCsv(data: Productivity, by: 'month' | 'week', column
     rows.push([person.fullName, person.department ? DEPARTMENT_LABEL[person.department] ?? person.department : '', ...cells, (total / 60).toFixed(2), person.shifts, person.days]);
   }
   return '﻿' + rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+}
+
+// ---------------------------------------------------------------- the calendar (one day at a time)
+// The weeks (Monday to Sunday) that show a month on a calendar.
+export function calendarWeeks(month: string): string[][] {
+  return weeksOfMonth(month).map(monday => Array.from({ length: 7 }, (_, i) => addDays(monday, i)));
+}
+// When each rota shift is planned, in hours of the day (lib/team-time.ts ROTA_HOURS).
+export const ROTA_SPAN = { early: [8, 16], late: [15, 23], both: [8, 23] } as const;
+// An instant as hours of its UK day (13:30 is 13.5).
+export const ukHours = (iso: string) => { const [h, m] = londonClock(iso).split(':').map(Number); return h + m / 60; };
+
+type Sheet = Timesheet;
+export type DayTotal = { minutes: number; people: number; shifts: number; missed: number; waiting: number; open: number };
+// Every day of a timesheet: hours, who worked, shifts, planned days with nothing clocked (once
+// passed), changes waiting for a super admin, and shifts still running.
+export function dayTotals(sheet: Sheet, today: string): Map<string, DayTotal> {
+  const days = new Map<string, DayTotal>();
+  const at = (day: string) => days.get(day) ?? (days.set(day, { minutes: 0, people: 0, shifts: 0, missed: 0, waiting: 0, open: 0 }), days.get(day)!);
+  for (const person of sheet.people) for (const row of timesheetRows(person, today)) {
+    const t = at(row.day);
+    t.minutes += row.minutes; t.shifts += row.shifts.length; if (row.shifts.length) t.people += 1;
+    if (row.missed) t.missed += 1; if (row.open) t.open += 1;
+  }
+  for (const change of sheet.pending) at(ukDay(change.clockedInAt)).waiting += 1;
+  return days;
+}
+export type DayPerson = { person: TimesheetPerson; row: TimesheetRow | null; waiting: Sheet['pending'] };
+const start = (x: DayPerson) => x.row?.shifts[0] ? Date.parse(x.row.shifts[0].clockedInAt) : Infinity;
+// Who worked or was planned on a day, earliest clock-in first, then those planned but not clocked.
+export function dayPeople(sheet: Sheet, day: string, today: string): DayPerson[] {
+  return sheet.people.flatMap(person => {
+    const row = timesheetRows(person, today).find(r => r.day === day) ?? null;
+    const waiting = sheet.pending.filter(c => c.userId === person.userId && ukDay(c.clockedInAt) === day);
+    const working = !!row && (row.shifts.length > 0 || (!!row.planned && row.planned.shift !== 'off'));
+    return working || waiting.length ? [{ person, row, waiting }] : [];
+  }).sort((a, b) => start(a) - start(b) || a.person.fullName.localeCompare(b.person.fullName));
 }

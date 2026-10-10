@@ -300,6 +300,13 @@ database tool can run it, and it is safe to run more than once.
   the super admin's updates, favorites or unread count. Screens that load their own records (Cleans,
   Hub…) still read as the super admin; to see exactly what a person sees, pick the person.
 
+## Left panel icons (10 October 2026)
+
+- Each link's icon sits on a small tile in its own colour (`linkHue` in `lib/role-panel.ts`): the
+  departments in theirs, everything else in one of the panel hues (`navHueTokens` in
+  `lib/design-tokens.ts`, CSS variables `--rc-hue-*` on the web). The open place's tile fills with its
+  colour and a soft glow; on hover the tile lifts and the icon turns a little.
+
 ## Design system pass (10 October 2026)
 
 - **Depth** (`depthTokens` in `lib/design-tokens.ts`, `depth` in `mobile/src/theme.ts`): resting cards
@@ -352,7 +359,9 @@ database tool can run it, and it is safe to run more than once.
   records the super admin. Notifications: `team.shift_change_requested` (super admins),
   `team.shift_change_approved` / `_declined` (the admin), `team.shift_corrected` (the person).
 - **App:** Management → **Productivity** (left panel and search; `mobile/src/LiveProductivity.tsx`):
-  By week, By month (heat cells and rising columns), Clock-ins (every shift with its date and year),
+  By day (a month calendar shaded by hours, with dots for changes waiting and planned days not
+  clocked; pick a day to see each person's shifts on a 6am–midnight timeline over their planned rota
+  hours, and tap a shift to correct it), By week, By month (heat cells and rising columns), Clock-ins (every shift with its date and year),
   Approvals (approve, decline with a reason, or withdraw). Spreadsheets download from each view.
   The Waiting on you queue lists changes waiting; the Hub timesheet and Team performance send admins'
   changes for approval. Sums: `lib/productivity.ts`. Tests: `tests/productivity*.test.mjs`.

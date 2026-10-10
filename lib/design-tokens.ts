@@ -136,6 +136,21 @@ export const departmentTokens = {
     accounts: { ink: "#EDAAA1", wash: "#3A201D" },
   },
 };
+// The left panel's icon tiles: one hue for each kind of place, muted to sit with bone and forest
+// (departments keep their own colours above).
+export const navHueTokens = {
+  light: {
+    forest: { ink: "#1F5F55", wash: "#DCEAE4" }, ocean: { ink: "#2E5A86", wash: "#DFE6EF" }, plum: { ink: "#674A96", wash: "#E8E1F1" },
+    amber: { ink: "#8F5D14", wash: "#F4E7CE" }, rose: { ink: "#A13F4C", wash: "#F3DFE0" }, sky: { ink: "#21708A", wash: "#D9EAEE" },
+    sage: { ink: "#3F6A2A", wash: "#E3ECD7" }, slate: { ink: "#4E6259", wash: "#E5E2D8" },
+  },
+  dark: {
+    forest: { ink: "#8FD3C2", wash: "#173A33" }, ocean: { ink: "#9CC3EA", wash: "#1B2E42" }, plum: { ink: "#C9B2F0", wash: "#2C2442" },
+    amber: { ink: "#E8C27D", wash: "#3A2C15" }, rose: { ink: "#F0A8B2", wash: "#3D2126" }, sky: { ink: "#8FD0DD", wash: "#173540" },
+    sage: { ink: "#B7DA92", wash: "#22341A" }, slate: { ink: "#C7CBBE", wash: "#2A332F" },
+  },
+};
+export type NavHue = keyof typeof navHueTokens.light;
 const variables = (mode: "light" | "dark") =>
   Object.entries(designTokens[mode])
     .map(([key, value]) => `--rc-${key}:${value};`)
@@ -148,6 +163,9 @@ const variables = (mode: "light" | "dark") =>
       ([key, value]) =>
         `--rc-${key}-ink:${value.ink};--rc-${key}-wash:${value.wash};`,
     )
+    .join("") +
+  Object.entries(navHueTokens[mode])
+    .map(([key, value]) => `--rc-hue-${key}-ink:${value.ink};--rc-hue-${key}-wash:${value.wash};`)
     .join("");
 const aliases = `--background:var(--rc-background);--foreground:var(--rc-text);--card:var(--rc-surface);--card-foreground:var(--rc-text);--popover:var(--rc-elevated);--popover-foreground:var(--rc-text);--muted:var(--rc-elevated);--muted-foreground:var(--rc-muted);--border:var(--rc-border);--input:var(--rc-muted);--ring:var(--rc-primary);--primary:var(--rc-primary);--primary-foreground:var(--rc-onPrimary);--secondary:var(--rc-elevated);--secondary-foreground:var(--rc-text);--accent:var(--rc-wash);--accent-foreground:var(--rc-text);--chart-1:var(--rc-bright);--chart-2:var(--rc-chart);--chart-3:var(--rc-waiting);`;
 // Reveal one opaque palette over the other instead of blending both screenshots.

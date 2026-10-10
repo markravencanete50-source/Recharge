@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import * as Crypto from "expo-crypto";
-import { Animated, Platform, View } from "react-native";
+import { Animated, Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import { Text } from "./Typography";
-import { Entrance, SwapIn, motionTokens, useReducedMotion } from "./motion";
+import { Entrance, MotionPress, Pop, SwapIn, motionTokens, useReducedMotion } from "./motion";
 import { Button, Field, Loading, Notice, StatGrid, StatTile, Tag, addDays, london, message, useRequestId } from "./LiveKit";
 import { Initials } from "./LiveAccounts";
 import { Segmented } from "./Segmented";
@@ -13,14 +13,14 @@ import { SheetTable, cellText } from "./SheetTable";
 import { ShiftSheet, WeekNav, type ShiftTarget } from "./LiveTeamTime";
 import { useCelebrate } from "./Celebrate";
 import { exportReport } from "./exportReport";
-import { depth, ui, web, type Palette } from "./theme";
+import { depth, primaryFill, ui, web, type Palette } from "./theme";
 import { readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL } from "../../lib/hub";
 import { ROLE_LABEL } from "../../lib/admin-live";
-import { londonClock, minutesLabel, mondayOf, shiftWeek, timesheetCsv } from "../../lib/team-time";
+import { ROTA_HOURS, ROTA_LABEL, londonClock, minutesLabel, mondayOf, shiftWeek, timesheetCsv } from "../../lib/team-time";
 import {
   CHANGE_KIND, CHANGE_STATUS, averageWeek, dayWithYear, describeChange, hoursShort, minutesDelta, monthLabel, monthMinutes, monthsOf, moveMonth,
-  productivityCsv, teamMonth, teamWeek, weekLabel, weekMinutes, weeksOfMonth,
+  productivityCsv, teamMonth, teamWeek, weekLabel, weekMinutes, weeksOfMonth, calendarWeeks, dayPeople, dayTotals, monthEnd, ROTA_SPAN, ukHours, type DayTotal,
 } from "../../lib/productivity";
 import {
   productivitySchema, shiftChangesSchema, timesheetSchema,
@@ -31,7 +31,7 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 // The Productivity Tool: every clock in and clock out, with hours that add up by week and by month.
 // Clock in and out is locked: the team only clocks in and out, a super admin can change anyone's
 // hours, and an admin's change waits for a super admin's approval before it counts anywhere.
-type View_ = "weeks" | "months" | "log" | "changes";
+type View_ = "days" | "weeks" | "months" | "log" | "changes";
 const since = (iso: string) => {
   const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
   return minutes < 1 ? "just now" : minutes < 60 ? `${minutes} min ago` : minutes < 48 * 60 ? `${Math.round(minutes / 60)} h ago` : `${Math.round(minutes / 1440)} days ago`;
@@ -44,7 +44,7 @@ const tint = (hex: string, share: number) => {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a.toFixed(3)})`;
 };
 
-export function LiveProductivity({ palette: p, account, initial = "weeks" }: { palette: Palette; account: WorkspaceAccount; initial?: View_ }) {
+export function LiveProductivity({ palette: p, account, initial = "days" }: { palette: Palette; account: WorkspaceAccount; initial?: View_ }) {
   const today = london(new Date());
   const [view, setView] = useState<View_>(initial);
   const [year, setYear] = useState(Number(today.slice(0, 4)));
@@ -85,11 +85,12 @@ export function LiveProductivity({ palette: p, account, initial = "weeks" }: { p
           detail={pending ? data?.canApprove ? "Changes for you to decide" : "With a super admin" : "No changes waiting"} />
       </StatGrid>
       <Segmented p={p} label="Productivity views" value={view} onChange={setView} items={[
-        { key: "weeks", label: "By week" }, { key: "months", label: "By month" }, { key: "log", label: "Clock-ins" },
+        { key: "days", label: "By day" }, { key: "weeks", label: "By week" }, { key: "months", label: "By month" }, { key: "log", label: "Clock-ins" },
         { key: "changes", label: "Approvals", count: pending || undefined, alert: !!data?.canApprove && pending > 0 },
       ]} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <SwapIn swapKey={view}>
+        {view === "days" && <DayView p={p} account={account} today={today} onChanged={reload} />}
         {view === "weeks" && <WeekTotals p={p} data={data} month={month} today={today} onMonth={goMonth} onPerson={setPerson} />}
         {view === "months" && <MonthTotals p={p} data={data} year={year} today={today} onYear={goYear} onPerson={setPerson} />}
         {view === "log" && <ClockLog p={p} account={account} today={today} onChanged={reload} />}
@@ -442,3 +443,201 @@ function DeclineSheet({ p, change, onClose, onDone }: { p: Palette; change: Shif
   );
 }
 
+
+// ---------------------------------------------------------------- by day: a calendar and the day's clock-ins
+const TIMELINE_START = 6, TIMELINE_END = 24;
+const along = (hours: number) => Math.max(0, Math.min(1, (hours - TIMELINE_START) / (TIMELINE_END - TIMELINE_START))) * 100;
+// The calendar's shade for a day's hours: a fresh green that deepens with them.
+const heat = (p: Palette, share: number) => `rgba(${p.isDark ? "143,211,194" : "47,143,111"},${(0.1 + Math.min(1, share) * (p.isDark ? 0.34 : 0.4)).toFixed(3)})`;
+const longDay = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+function DayView({ p, account, today, onChanged }: { p: Palette; account: WorkspaceAccount; today: string; onChanged: () => void }) {
+  const celebrate = useCelebrate();
+  const { width } = useWindowDimensions();
+  const wide = width >= 1180;
+  const [month, setMonth] = useState(today.slice(0, 7));
+  const [day, setDay] = useState(today);
+  const [sheet, setSheet] = useState<Timesheet | null>(null);
+  const [error, setError] = useState("");
+  const [editing, setEditing] = useState<ShiftTarget | null>(null);
+  const load = useCallback(async () => {
+    try { setSheet(timesheetSchema.parse((await readTeams({ section: "timesheet", from: month + "-01", to: monthEnd(month) })).data)); setError(""); }
+    catch (e) { setError(message(e)); }
+  }, [month]);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setSheet(null); void load(); } }); return () => { active = false; }; }, [load]);
+  const totals = useMemo(() => sheet ? dayTotals(sheet, today) : new Map<string, DayTotal>(), [sheet, today]);
+  // Moving the month keeps a day selected: today in this month, otherwise its 1st.
+  const goMonth = (next: string) => { setMonth(next); setDay(next === today.slice(0, 7) ? today : next + "-01"); };
+  const pick = (next: string) => { if (next.slice(0, 7) !== month) setMonth(next.slice(0, 7)); setDay(next); };
+  const calendar = (
+    <View style={{ gap: 12, width: wide ? 470 : "100%", flexShrink: 0 }}>
+      <WeekNav p={p} label={monthLabel(month, "long")} onMove={step => goMonth(moveMonth(month, step))} onToday={() => { setMonth(today.slice(0, 7)); setDay(today); }} />
+      <MonthCalendar p={p} month={month} day={day} today={today} totals={totals} loading={!sheet} onPick={pick} />
+      <View style={[ui.row, { gap: 14, flexWrap: "wrap", paddingHorizontal: 4 }]}>
+        {[["Hours worked", heat(p, 1)], ["Change waiting", p.waiting], ["Planned, not clocked", p.danger]].map(([label, color]) => (
+          <View key={label} style={[ui.row, { gap: 6 }]}><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} /><Text style={{ color: p.muted, fontSize: 12 }}>{label}</Text></View>
+        ))}
+      </View>
+    </View>
+  );
+  return (
+    <View style={{ gap: 16 }}>
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <View style={{ flexDirection: wide ? "row" : "column", gap: 18, alignItems: "flex-start" }}>
+        {calendar}
+        <View style={{ flex: 1, minWidth: 0, width: wide ? undefined : "100%" }}>
+          {sheet ? <DayDetail p={p} sheet={sheet} day={day} today={today} total={totals.get(day)} wide={width >= 700} canEdit={sheet.canEdit}
+            onShift={(person, shift) => setEditing({ person, shift, day })} onAdd={() => setEditing({ day })} direct={account.role === "super_admin"} /> : !error && <Loading p={p} />}
+        </View>
+      </View>
+      <ShiftSheet p={p} target={editing} today={today} direct={account.role === "super_admin"} people={sheet?.people ?? []} pending={sheet?.pending ?? []}
+        onClose={() => setEditing(null)} onSaved={async status => { setEditing(null); celebrate(status === "pending" ? "Sent for approval" : "Saved"); await load(); onChanged(); }} />
+    </View>
+  );
+}
+
+// The month: each day shaded by the team's hours, the chosen day filled, today ringed, with a dot for
+// a change waiting for a super admin and one for someone planned who didn't clock in.
+function MonthCalendar({ p, month, day, today, totals, loading, onPick }: { p: Palette; month: string; day: string; today: string; totals: Map<string, DayTotal>; loading: boolean; onPick: (day: string) => void }) {
+  const { width } = useWindowDimensions();
+  const compact = width < 600;
+  const max = Math.max(60, ...[...totals.values()].map(t => t.minutes));
+  return (
+    <View accessibilityLabel={`${monthLabel(month, "long")} calendar`} style={{ padding: compact ? 8 : 12, gap: compact ? 4 : 6, borderRadius: 22, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, ...depth.card }}>
+      <View style={{ flexDirection: "row", gap: compact ? 4 : 6 }}>
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => <Text key={d} style={{ flex: 1, textAlign: "center", color: p.muted, fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", paddingVertical: 4 }}>{compact ? d.slice(0, 1) : d}</Text>)}
+      </View>
+      {calendarWeeks(month).map(week => (
+        <View key={week[0]} style={{ flexDirection: "row", gap: compact ? 4 : 6 }}>
+          {week.map(d => {
+            const t = totals.get(d), inMonth = d.slice(0, 7) === month, on = d === day, isToday = d === today, future = d > today;
+            const share = t ? t.minutes / max : 0;
+            return (
+              <Pop key={d} active={on} style={{ flex: 1 }}>
+                <MotionPress {...(Platform.OS === "web" && !on ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${longDay(d)}${t?.minutes ? `, ${minutesLabel(t.minutes)} worked by ${t.people}` : ""}${t?.waiting ? `, ${t.waiting} change waiting` : ""}${t?.missed ? `, ${t.missed} not clocked` : ""}`}
+                  onPress={() => onPick(d)}
+                  style={[{ minHeight: compact ? 50 : 66, borderRadius: compact ? 12 : 14, padding: compact ? 5 : 8, justifyContent: "space-between", opacity: inMonth ? 1 : 0.38,
+                    backgroundColor: on ? undefined : share > 0 ? heat(p, share) : future ? "transparent" : p.background, borderWidth: isToday && !on ? 1.5 : 0, borderColor: p.primary }, on ? primaryFill(p) : null]}>
+                  <View style={[ui.between, { gap: 2 }]}>
+                    <Text style={{ color: on ? p.onPrimary : p.text, fontSize: compact ? 12 : 14, fontWeight: isToday || on ? "800" : "600", fontVariant: ["tabular-nums"] }}>{Number(d.slice(8))}</Text>
+                    <View style={[ui.row, { gap: 3 }]}>
+                      {!!t?.waiting && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: p.waiting }} />}
+                      {!!t?.missed && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: p.danger }} />}
+                    </View>
+                  </View>
+                  {!loading && !!t?.minutes && <Text numberOfLines={1} style={{ color: on ? p.onPrimary : p.text, fontSize: compact ? 10 : 12, fontWeight: "700", fontVariant: ["tabular-nums"], opacity: on ? 0.95 : 0.85 }}>{Math.round(t.minutes / 60)}h</Text>}
+                </MotionPress>
+              </Pop>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// The chosen day: its figures, then each person on a timeline from 6am to midnight, with the rota's
+// planned hours behind their clocked shifts.
+function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift, onAdd }: {
+  p: Palette; sheet: Timesheet; day: string; today: string; total?: DayTotal; wide: boolean; canEdit: boolean; direct: boolean;
+  onShift: (person: TimesheetPerson, shift: TimesheetPerson["days"][number]["shifts"][number]) => void; onAdd: () => void;
+}) {
+  const reduced = useReducedMotion();
+  const [grow] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (reduced) { grow.setValue(1); return; }
+    grow.setValue(0);
+    const a = Animated.timing(grow, { toValue: 1, duration: motionTokens.reveal + 260, easing: motionTokens.entrance, useNativeDriver: false });
+    a.start(); return () => a.stop();
+  }, [day, reduced, grow]);
+  const people = dayPeople(sheet, day, today);
+  const figures: [string, string][] = [
+    ["Hours", total?.minutes ? minutesLabel(total.minutes) : "0h"], ["People", String(total?.people ?? 0)],
+    ["Shifts", String(total?.shifts ?? 0)], ["Not clocked", String(total?.missed ?? 0)],
+  ];
+  const ticks = [6, 9, 12, 15, 18, 21, 24];
+  return (
+    <SwapIn swapKey={day} style={{ gap: 14 }}>
+      <View style={{ padding: wide ? 20 : 16, gap: 14, borderRadius: 22, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, ...depth.card }}>
+        <View style={[ui.between, { gap: 10, flexWrap: "wrap" }]}>
+          <View style={{ gap: 2 }}>
+            <Text style={[ui.label, { color: p.muted }]}>{day === today ? "Today" : day > today ? "Coming up" : "Day"}</Text>
+            <Text accessibilityRole="header" style={{ color: p.text, fontSize: wide ? 22 : 18, fontWeight: "800", letterSpacing: -0.5 }}>{longDay(day)}</Text>
+          </View>
+          {canEdit && day <= today && <Button label={direct ? "Add a shift" : "Ask to add a shift"} icon="plus" p={p} onPress={onAdd} />}
+        </View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          {figures.map(([label, value]) => (
+            <View key={label} style={{ flexGrow: 1, flexBasis: 110, padding: 12, borderRadius: 16, backgroundColor: label === "Not clocked" && value !== "0" ? p.dangerWash : p.wash, gap: 2 }}>
+              <Text style={[ui.label, { color: p.muted }]}>{label}</Text>
+              <Text style={{ color: p.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.4, fontVariant: ["tabular-nums"] }}>{value}</Text>
+            </View>
+          ))}
+        </View>
+        {!people.length ? <Notice text={day > today ? "Nobody is on the rota for this day yet." : "Nobody clocked in or was on the rota this day."} p={p} /> : <>
+          {/* The hours along the top. */}
+          <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 4 }}>
+            {wide && <View style={{ width: 176 }} />}
+            <View style={{ flex: 1, height: 16 }}>
+              {ticks.map(h => <Text key={h} style={{ position: "absolute", left: `${along(h)}%`, transform: [{ translateX: h === 24 ? -14 : h === 6 ? 0 : -7 }], color: p.muted, fontSize: 10, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{String(h).padStart(2, "0")}</Text>)}
+            </View>
+            {wide && <View style={{ width: 128 }} />}
+          </View>
+          {people.map(({ person, row, waiting }) => {
+            const shifts = row?.shifts ?? [], planned = row?.planned && row.planned.shift !== "off" ? ROTA_SPAN[row.planned.shift] : null;
+            const status = waiting.length ? ["Change waiting", "wait"] as const : row?.missed ? ["Not clocked", "bad"] as const : row?.open ? ["On shift", "good"] as const
+              : row?.edited ? ["Corrected", "plain"] as const : null;
+            const name = (
+              <View style={[ui.row, { gap: 10, width: wide ? 176 : undefined, flex: wide ? undefined : 1, minWidth: 0 }]}>
+                <Initials p={p} name={person.fullName || "Team member"} size={32} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>{person.fullName || "Team member"}</Text>
+                  <Text numberOfLines={1} style={{ color: p.muted, fontSize: 11 }}>{row?.planned && row.planned.shift !== "off" ? `${ROTA_LABEL[row.planned.shift]} · ${ROTA_HOURS[row.planned.shift]}` : person.department ? DEPARTMENT_LABEL[person.department] : "Not on the rota"}</Text>
+                </View>
+              </View>
+            );
+            const figure = (
+              <View style={{ width: wide ? 128 : undefined, alignItems: "flex-end", gap: 4 }}>
+                <Text style={{ color: p.text, fontSize: 14, fontWeight: "800", fontVariant: ["tabular-nums"] }}>{row?.minutes ? minutesLabel(row.minutes) : "–"}</Text>
+                {status && <Tag label={status[0]} tone={status[1]} p={p} />}
+              </View>
+            );
+            const track = (
+              <View style={{ flex: wide ? 1 : undefined, alignSelf: wide ? undefined : "stretch", height: 34, borderRadius: 10, backgroundColor: p.wash, overflow: "hidden" }}>
+                {ticks.slice(1, -1).map(h => <View key={h} style={{ position: "absolute", left: `${along(h)}%`, top: 0, bottom: 0, width: 1, backgroundColor: p.border, opacity: 0.7 }} />)}
+                {planned && <View style={{ position: "absolute", left: `${along(planned[0])}%`, width: `${along(planned[1]) - along(planned[0])}%`, top: 4, bottom: 4, borderRadius: 7, borderWidth: 1, borderStyle: "dashed", borderColor: tint(p.chart, 1), backgroundColor: tint(p.chart, 0.35) }} />}
+                {waiting.map(c => { const from = ukHours(c.clockedInAt), to = c.clockedOutAt ? from + (Date.parse(c.clockedOutAt) - Date.parse(c.clockedInAt)) / 3600000 : from + 1; return (
+                  <View key={c.id} style={{ position: "absolute", left: `${along(from)}%`, width: `${Math.max(1, along(to) - along(from))}%`, top: 3, bottom: 3, borderRadius: 7, borderWidth: 1.5, borderColor: p.waiting }} />); })}
+                {shifts.map(s => {
+                  const from = ukHours(s.clockedInAt), to = from + s.minutes / 60, w = Math.max(1.2, along(to) - along(from));
+                  return (
+                    <Animated.View key={s.id} style={{ position: "absolute", left: `${along(from)}%`, top: 8, bottom: 8, borderRadius: 6, overflow: "hidden", width: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${w}%`] }),
+                      backgroundColor: s.clockedOutAt ? p.primary : p.success, ...web({ backgroundImage: "linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0))", boxShadow: "0 4px 10px -6px rgba(21,45,40,.55)" }) }}>
+                      {w > 14 && <Text numberOfLines={1} style={{ color: p.onPrimary, fontSize: 10, fontWeight: "700", paddingHorizontal: 6, lineHeight: 18, fontVariant: ["tabular-nums"] }}>{londonClock(s.clockedInAt)}–{s.clockedOutAt ? londonClock(s.clockedOutAt) : "now"}</Text>}
+                    </Animated.View>
+                  );
+                })}
+              </View>
+            );
+            const first = shifts[0];
+            return (
+              <MotionPress key={person.userId} {...(Platform.OS === "web" && canEdit && first ? { dataSet: { hover: "tint" } } : {})} disabled={!canEdit || !first} accessibilityRole={canEdit && first ? "button" : undefined}
+                accessibilityLabel={`${person.fullName}: ${shifts.map(s => `${londonClock(s.clockedInAt)} to ${s.clockedOutAt ? londonClock(s.clockedOutAt) : "now"}`).join(", ") || "nothing clocked"}`}
+                onPress={() => first && onShift(person, first)} style={{ borderRadius: 14, paddingVertical: 6, paddingHorizontal: 4 }}>
+                {wide ? <View style={[ui.row, { gap: 10 }]}>{name}{track}{figure}</View>
+                  : <View style={{ gap: 8 }}><View style={[ui.row, { gap: 10 }]}>{name}{figure}</View>{track}</View>}
+              </MotionPress>
+            );
+          })}
+          <View style={[ui.row, { gap: 14, flexWrap: "wrap" }]}>
+            {[["Clocked", p.primary, false], ["On shift now", p.success, false], ["Planned on the rota", tint(p.chart, 0.6), true]].map(([label, color, dashed]) => (
+              <View key={String(label)} style={[ui.row, { gap: 6 }]}><View style={{ width: 16, height: 8, borderRadius: 3, backgroundColor: String(color), ...(dashed ? { borderWidth: 1, borderStyle: "dashed", borderColor: tint(p.chart, 1) } : {}) }} /><Text style={{ color: p.muted, fontSize: 12 }}>{String(label)}</Text></View>
+            ))}
+            {canEdit && <Text style={{ color: p.muted, fontSize: 12 }}>Tap someone to {direct ? "correct" : "ask to correct"} their shift.</Text>}
+          </View>
+        </>}
+      </View>
+    </SwapIn>
+  );
+}

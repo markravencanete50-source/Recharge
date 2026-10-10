@@ -34,6 +34,26 @@ const ART_ICON: Record<ToolArt, PanelIcon> = {
   receipt: 'file-text', wallet: 'credit-card', pie: 'pie-chart', cart: 'shopping-cart', sofa: 'grid', search: 'search', mail: 'mail', star: 'book-open',
 };
 
+// Tools whose picture would repeat another's in the panel (Waiting on you is the clock).
+const TOOL_ICON: Record<string, PanelIcon> = { productivity: 'activity', performance: 'award', month: 'trending-up' };
+
+// The colour of each link's icon tile: departments in their own colours, everything else in one of
+// the panel hues (lib/design-tokens.ts navHueTokens), so similar places look alike across roles.
+export type PanelHue = 'forest' | 'ocean' | 'plum' | 'amber' | 'rose' | 'sky' | 'sage' | 'slate' | 'stays' | 'cleans' | 'ready' | 'accounts' | 'clients';
+const AREA_HUE: Record<WorkView, PanelHue> = { management: 'forest', hub: 'sky', calendar: 'ocean', stays: 'stays', cleans: 'cleans', repairs: 'ready', accounts: 'accounts', all: 'slate' };
+const KEY_HUE: Record<string, PanelHue> = {
+  'page:home': 'forest', 'page:favorites': 'amber', 'page:inbox': 'ocean', 'page:analytics': 'plum', 'page:activity': 'amber', 'page:help': 'slate',
+  'page:properties': 'forest', 'page:approvals': 'rose', 'page:statements': 'accounts', 'page:enquiries': 'sky',
+  'tool:queue': 'rose', 'tool:people': 'ocean', 'tool:productivity': 'sage', 'tool:performance': 'amber', 'tool:access': 'rose', 'tool:training': 'plum',
+  'tool:inbox': 'ocean', 'tool:checks': 'sage', 'tool:pricing': 'amber', 'tool:signoff': 'plum', 'tool:bookings': 'ocean', 'tool:aircover': 'rose',
+  'tool:today': 'forest', 'tool:respond': 'rose', 'tool:month': 'plum', 'tool:restock': 'amber', 'tool:schedule': 'ocean', 'tool:review': 'sage',
+  'tool:disputes': 'rose', 'tool:unassigned': 'amber', 'tool:cleaners': 'plum', 'tool:setups': 'sky', 'tool:invoices': 'accounts', 'tool:pipeline': 'ocean',
+  'tool:visits': 'sage', 'tool:inspections': 'sky', 'tool:purchases': 'amber', 'tool:furnishing': 'plum', 'tool:expenses': 'rose', 'tool:payouts': 'sage',
+  'tool:budget': 'amber', 'tool:cleaner-invoices': 'cleans', 'tool:mailbox': 'ocean',
+};
+export const linkHue = (link: PanelLink): PanelHue =>
+  link.kind === 'area' ? AREA_HUE[link.view] : link.kind === 'start' ? 'forest' : KEY_HUE[link.key] ?? 'slate';
+
 // page:<page>[=label], area:<view>[=label], tool:<home tool key>[=label], start (the role's "start something" forms),
 // same:<home tool key> (a tool another link in the panel already opens).
 type Layout = { title: string; tagline: string; icon: PanelIcon; groups: [string, string[]][] };
@@ -122,7 +142,7 @@ export function rolePanel(role: string, modules: readonly string[]): RolePanel {
     const view = plainArea(t.target);
     if (view) return area(view, label ?? t.label);
     if (t.target.kind === 'tab' && !t.target.anchor) return page(t.target.tab, label ?? t.label);
-    return { key: 'tool:' + t.key, kind: 'tool', label: label ?? t.label, icon: ART_ICON[t.art], target: t.target };
+    return { key: 'tool:' + t.key, kind: 'tool', label: label ?? t.label, icon: TOOL_ICON[t.key] ?? ART_ICON[t.art], target: t.target };
   };
   const page = (name: Page, label?: string): PanelLink | null =>
     PAGE_ROLES[name] && !PAGE_ROLES[name]!.includes(role) ? null : { key: 'page:' + name, kind: 'page', label: label ?? PAGE[name][0], icon: PAGE[name][1], section: name };

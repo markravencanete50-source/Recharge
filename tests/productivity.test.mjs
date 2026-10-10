@@ -4,10 +4,10 @@ import { createServer } from 'vite';
 
 // The Productivity Tool's sums and wording (lib/productivity.ts) and where the tool lives.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
-const { weeksOfMonth, monthsOf, describeChange, hoursShort, minutesDelta, productivityCsv, teamWeek, teamMonth, averageWeek } = await vite.ssrLoadModule('/lib/productivity.ts');
+const { weeksOfMonth, monthsOf, describeChange, hoursShort, minutesDelta, productivityCsv, teamWeek, teamMonth, averageWeek, calendarWeeks, dayTotals, dayPeople, ukHours } = await vite.ssrLoadModule('/lib/productivity.ts');
 const { homeToolsFor, panelToolsFor } = await vite.ssrLoadModule('/lib/home-tools.ts');
 const { rolePanel } = await vite.ssrLoadModule('/lib/role-panel.ts');
-const { productivitySchema } = await vite.ssrLoadModule('/lib/workspace-teams-policy.ts');
+const { productivitySchema, timesheetSchema } = await vite.ssrLoadModule('/lib/workspace-teams-policy.ts');
 after(() => vite.close());
 
 const person = (name, weeks, months, extra = {}) => ({ userId: crypto.randomUUID(), fullName: name, role: 'stays', department: 'guest_relations', active: true, onShift: false,
@@ -59,4 +59,22 @@ test('Productivity is a management tool in the left panel and search, not a Home
     assert.ok(management.links.some(l => l.key === 'tool:productivity'), role);
   }
   for (const role of ['stays', 'cleans', 'accounts', 'client']) assert.deepEqual(panelToolsFor(role, []), [], role);
+});
+
+test('the calendar: whole weeks, and each day\'s hours, people, missed days and changes waiting', () => {
+  const weeks = calendarWeeks('2026-10');
+  assert.equal(weeks.length, 5);
+  assert.deepEqual([weeks[0][0], weeks[0][6], weeks[4][6]], ['2026-09-28', '2026-10-04', '2026-11-01']);
+  assert.equal(ukHours('2026-10-08T07:30:00.000Z'), 8.5, 'BST: 07:30 UTC is 08:30 in the UK');
+  const person = (name, days) => ({ userId: crypto.randomUUID(), fullName: name, role: 'stays', department: 'guest_relations', active: true, totalMinutes: 0, days });
+  const shift = (from, to, minutes) => ({ id: crypto.randomUUID(), department: 'guest_relations', clockedInAt: from, clockedOutAt: to, minutes, edited: false, editNote: '' });
+  const fiona = person('Fiona', [{ day: '2026-10-08', planned: { shift: 'early', department: 'guest_relations', note: '' }, minutes: 480, shifts: [shift('2026-10-08T07:00:00Z', '2026-10-08T15:00:00Z', 480)] }]);
+  const callum = person('Callum', [{ day: '2026-10-08', planned: { shift: 'late', department: 'guest_relations', note: '' }, minutes: 0, shifts: [] }]);
+  const isla = person('Isla', [{ day: '2026-10-09', planned: null, minutes: 60, shifts: [shift('2026-10-09T08:00:00Z', null, 60)] }]);
+  const sheet = timesheetSchema.parse({ from: '2026-10-01', to: '2026-10-31', canEdit: true, people: [callum, fiona, isla], pending: [] });
+  const totals = dayTotals(sheet, '2026-10-10');
+  assert.deepEqual(totals.get('2026-10-08'), { minutes: 480, people: 1, shifts: 1, missed: 1, waiting: 0, open: 0 });
+  assert.deepEqual(totals.get('2026-10-09'), { minutes: 60, people: 1, shifts: 1, missed: 0, waiting: 0, open: 1 });
+  assert.deepEqual(dayPeople(sheet, '2026-10-08', '2026-10-10').map(x => x.person.fullName), ['Fiona', 'Callum'], 'who clocked in first, then who was planned but did not');
+  assert.deepEqual(dayPeople(sheet, '2026-10-11', '2026-10-10'), []);
 });

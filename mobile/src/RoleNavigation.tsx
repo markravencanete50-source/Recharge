@@ -4,13 +4,27 @@ import Feather from '@expo/vector-icons/Feather';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { MotionPress, motionTokens, useReducedMotion } from './motion';
 import { Text } from './Typography';
-import { depth, ui, web, type Palette } from './theme';
+import { depth, departmentColor, navHue, ui, web, type Palette } from './theme';
 import { CompanyLogo } from './CompanyLogo';
-import type { PanelGroup, PanelLink, RolePanel } from '../../lib/role-panel';
+import { linkHue, type PanelGroup, type PanelHue, type PanelLink, type RolePanel } from '../../lib/role-panel';
 
 type Icon = keyof typeof Feather.glyphMap;
 const hover=Platform.OS==='web'?{dataSet:{hover:'tint'}}:{};
 const native=Platform.OS!=='web';
+// The hover lift and the icon's little turn (lib/design-tokens.ts hoverCss) on the web.
+const tile=Platform.OS==='web'?{dataSet:{glyphTile:''}}:{};
+const mark=Platform.OS==='web'?{dataSet:{glyphMark:''}}:{};
+const hueOf=(hue:PanelHue,p:Palette)=>hue==='stays'||hue==='cleans'||hue==='ready'||hue==='accounts'||hue==='clients'?departmentColor(hue,p):navHue(hue,p);
+// A link's icon on a tile of its colour: a soft wash at rest, filled (with a lift of light and a
+// coloured glow on the web) when it is the place open now.
+function IconTile({link,on,palette:p}:{link:PanelLink;on:boolean;palette:Palette}) {
+  const hue=hueOf(linkHue(link),p);
+  return <View {...tile} style={{width:30,height:30,borderRadius:10,alignItems:'center',justifyContent:'center',backgroundColor:on?hue.ink:hue.wash,
+    ...(on?web({backgroundImage:'linear-gradient(160deg,rgba(255,255,255,.26),rgba(255,255,255,0) 62%)',boxShadow:`0 8px 16px -8px color-mix(in srgb,${hue.ink} 75%,transparent),inset 0 1px 0 rgba(255,255,255,.28)`})
+      :web({boxShadow:`inset 0 0 0 1px color-mix(in srgb,${hue.ink} 16%,transparent)`}))}}>
+    <View {...mark}><Feather name={link.icon as Icon} size={15} color={on?(p.isDark?'#10241F':'#FFFFFF'):hue.ink}/></View>
+  </View>;
+}
 
 // One group of links. The highlight glides from link to link inside the group, and fades across
 // when the selection moves to another group.
@@ -18,6 +32,7 @@ function Group({group,selected,palette:p,badges,onOpen}:{group:PanelGroup;select
   const reduced=useReducedMotion();
   const [boxes,setBoxes]=useState<Record<string,{y:number;h:number}>>({});
   const box=boxes[selected];
+  const selectedLink=group.links.find(l=>l.key===selected);
   const [y]=useState(()=>new Animated.Value(0)),[h]=useState(()=>new Animated.Value(40)),[shown]=useState(()=>new Animated.Value(0));
   const visible=useRef(false);
   useEffect(()=>{
@@ -34,16 +49,14 @@ function Group({group,selected,palette:p,badges,onOpen}:{group:PanelGroup;select
     </View>
     <View style={{gap:2}}>
       <Animated.View pointerEvents="none" style={{position:'absolute',left:0,right:0,top:y,height:h,borderRadius:12,backgroundColor:p.wash,opacity:shown,...web({boxShadow:'inset 0 1px 0 rgba(255,255,255,.5)'})}}>
-        <View style={{position:'absolute',left:-14,top:9,bottom:9,width:4,borderTopRightRadius:4,borderBottomRightRadius:4,backgroundColor:p.primary}}/>
+        <View style={{position:'absolute',left:-14,top:9,bottom:9,width:4,borderTopRightRadius:4,borderBottomRightRadius:4,backgroundColor:selectedLink?hueOf(linkHue(selectedLink),p).ink:p.primary}}/>
       </Animated.View>
       {group.links.map(link=>{
         const on=link.key===selected,count=badges[link.key]??0,start=link.kind==='start';
         return <MotionPress key={link.key} {...(on?{}:hover)} onLayout={event=>{const {y:top,height}=event.nativeEvent.layout;setBoxes(b=>b[link.key]?.y===top&&b[link.key]?.h===height?b:{...b,[link.key]:{y:top,h:height}});}}
           accessibilityRole="button" accessibilityLabel={link.label+(count?`, ${count} new`:'')} accessibilityState={{selected:on}} onPress={()=>onOpen(link)}
           style={[ui.row,{minHeight:40,gap:12,paddingHorizontal:12,borderRadius:12}]}>
-          <View style={{width:28,height:28,borderRadius:9,alignItems:'center',justifyContent:'center',backgroundColor:on?p.surface:start?p.wash:'transparent',...(on?web({boxShadow:'0 4px 10px -6px rgba(21,45,40,.45)'}):{})}}>
-            <Feather name={link.icon as Icon} size={15} color={on||start?p.primary:p.muted}/>
-          </View>
+          <IconTile link={link} on={on} palette={p}/>
           <Text numberOfLines={1} style={{flex:1,fontSize:13,fontWeight:on?'700':'500',color:on||start?p.primary:p.text}}>{link.label}</Text>
           {count>0&&<View style={{minWidth:22,height:20,paddingHorizontal:6,borderRadius:10,backgroundColor:p.badge,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:11,fontWeight:'800',color:p.onBadge}}>{count>99?'99+':count}</Text></View>}
         </MotionPress>;
