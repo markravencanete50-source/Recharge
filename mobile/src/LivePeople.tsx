@@ -8,7 +8,7 @@ import { useSaved } from "./Celebrate";
 import { ExpandChevron, MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Section, Tag, Loading } from "./LiveKit";
+import { Button, Field, message, Notice, Section, Tag, Loading, type Tone } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { HostawaySyncCard } from "./HostawaySyncCard";
 import { readAdmin, workspaceRequest, writeAdmin, writeWorkspace, WorkspaceApiError } from "./backend/client";
@@ -19,6 +19,8 @@ import { blankOtaAccount, HOLDER_LABEL, looksLikePassword, OTA_PLATFORMS, type O
 
 // Live administration: approve and manage people, and create, edit and staff
 // properties. Admins only; the database enforces the role hierarchy.
+// Each person's initials take their department's colour.
+const ROLE_TONE: Partial<Record<string, Tone>> = { client: "clients", stays: "stays", cleans: "cleans", cleaning_manager: "cleans", ready: "ready", accounts: "accounts" };
 const STATUS_TAG: Record<Person["status"], [string, "good" | "wait" | "bad" | "plain"]> = { pending: ["Waiting for approval", "wait"], active: ["Active", "good"], revoked: ["Revoked", "bad"] };
 const PROPERTY_TAG: Record<AdminProperty["status"], [string, "good" | "wait" | "bad" | "plain"]> = { onboarding: ["Onboarding", "wait"], active: ["Live", "good"], archived: ["Archived", "plain"] };
 const roleLabel = (role: string) => ROLE_LABEL[role as WorkspaceRole] ?? role;
@@ -312,9 +314,9 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
       <Search p={p} value={query} onChange={setQuery} placeholder={view === "people" ? "Search people" : "Search properties"} />
       {view === "people" && <>
         <Pills p={p} values={["pending", "active", "revoked", "all"] as const} value={shownFilter} onChange={setPersonFilter} label={v => ({ pending: `Waiting (${pending})`, active: "Active", revoked: "Revoked", all: "Everyone" })[v]} />
-        <List p={p} empty={shownFilter === "pending" ? "Nobody is waiting for approval." : "No people match."}>
+        <List p={p} search={false} empty={shownFilter === "pending" ? "Nobody is waiting for approval." : "No people match."}>
           {shownPeople.map((x, i) => (
-            <Row key={x.userId} p={p} first={i === 0} icon={x.status === "pending" ? "user-plus" : x.status === "revoked" ? "user-x" : "user"} title={x.fullName || x.email || "New account"} detail={`${roleLabel(x.role)} · ${x.email ?? "phone sign-up"}${!isWorkspaceAdmin(x.role) ? ` · ${x.assignments.length} propert${x.assignments.length === 1 ? "y" : "ies"}` : ""}`}
+            <Row key={x.userId} p={p} first={i === 0} avatar={x.fullName || x.email || "?"} tone={ROLE_TONE[x.role]} title={x.fullName || x.email || "New account"} detail={`${roleLabel(x.role)} · ${x.email ?? "phone sign-up"}${!isWorkspaceAdmin(x.role) ? ` · ${x.assignments.length} propert${x.assignments.length === 1 ? "y" : "ies"}` : ""}`}
               tags={[STATUS_TAG[x.status], ...(!x.emailVerified ? [["Email not verified", "wait"] as [string, "wait"]] : [])]} onPress={() => setOpenPerson(x.userId)} />
           ))}
         </List>
@@ -324,7 +326,7 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
         <HostawaySyncCard p={p} onSynced={() => void load()} />
         <Button label="New property" icon="plus" primary p={p} onPress={() => setCreating(true)} />
         <Pills p={p} values={["all", "active", "onboarding", "archived"] as const} value={propertyFilter} onChange={setPropertyFilter} label={v => ({ all: "Current", active: "Live", onboarding: "Onboarding", archived: "Archived" })[v]} />
-        <List p={p} empty="No properties match.">
+        <List p={p} search={false} empty="No properties match.">
           {shownProperties.map((x, i) => {
             const owners = x.people.filter(y => y.assignment === "client").map(y => y.fullName);
             return <Row key={x.id} p={p} first={i === 0} icon="home" tone="stays" title={x.name} detail={`${x.region || "No region"} · ${x.bedrooms} bed · ${owners.length ? "Owner " + owners.join(", ") : "No owner assigned"} · ${x.people.length} people`}

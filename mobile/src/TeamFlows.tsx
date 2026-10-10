@@ -7,6 +7,7 @@ import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { Entrance, MotionPress, Stagger, usePresence, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
 import { depth, ui, web, type Palette } from "./theme";
+import { InSheet } from "./LiveKit";
 import { WORKSPACE_MAP } from "../../lib/workspace-map";
 import type { Tool, WorkspaceRole } from "./model";
 import {
@@ -79,7 +80,7 @@ export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, chi
             </View>
           </View>
           <ScrollView style={{ width: "100%" }} contentContainerStyle={{ padding: 20, gap: 16, minWidth: 0, maxWidth: "100%" }} keyboardShouldPersistTaps="handled">
-            {shown && Children.toArray(content.children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
+            <InSheet.Provider value>{shown && Children.toArray(content.children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}</InSheet.Provider>
           </ScrollView>
         </Animated.View>
       </View>

@@ -9,7 +9,7 @@ import { useSaved } from "./Celebrate";
 import { ExpandChevron, MotionPress, Pop, Stagger, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
-import { primaryFill, ui, type Palette } from "./theme";
+import { departmentColor, primaryFill, ui, type Palette } from "./theme";
 import { Button, Field, IconChip, london, message, Notice, Section, StatGrid, StatTile, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, type IconName, type Tone } from "./LiveKit";
 import { formatCount, formatMoney } from "../../lib/format";
 import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
@@ -58,10 +58,18 @@ export function Pills<T extends string>({ p, values, value, onChange, label, wra
 // A list row: optional icon, title, supporting line and status tags, with any amount
 // right-aligned in lining figures so columns of money line up. A row that opens something takes a quiet wash on hover
 // and a bar on keyboard focus (lib/design-tokens.ts), not the box other pressables get.
-export function Row({ p, title, detail, amount, tags, onPress, first, icon, tone, art }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean; icon?: IconName; tone?: Tone; art?: DimensionalName }) {
+// A person's initials in a soft circle of their department's colour.
+export function Initials({ p, name, tone, size = 42 }: { p: Palette; name: string; tone?: Tone; size?: number }) {
+  const colour = tone ? departmentColor(tone, p) : { ink: p.primary, wash: p.wash };
+  const letters = name.trim().split(/[\s@.]+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+  return <View style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center", backgroundColor: colour.wash, borderWidth: 1.5, borderColor: p.surface }}>
+    <Text style={{ color: colour.ink, fontSize: Math.round(size * 0.36), fontWeight: "800", letterSpacing: 0.3 }}>{letters}</Text>
+  </View>;
+}
+export function Row({ p, title, detail, amount, tags, onPress, first, icon, tone, art, avatar }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean; icon?: IconName; tone?: Tone; art?: DimensionalName; avatar?: string }) {
   return (
     <MotionPress {...(Platform.OS === "web" && onPress ? { dataSet: { hover: "row" } } : {})} accessibilityRole={onPress ? "button" : undefined} disabled={!onPress} accessibilityLabel={[title, amount, ...(tags ?? []).map(t => t[0])].filter(Boolean).join(", ")} onPress={onPress} style={[ui.row, { gap: 14, paddingVertical: 14, alignItems: tags?.length ? "flex-start" : "center", borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
-      {art ? <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}><DimensionalIcon name={art} size={34} /></View> : !!icon && <IconChip icon={icon} tone={tone} p={p} />}
+      {avatar !== undefined ? <Initials p={p} name={avatar} tone={tone} /> : art ? <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}><DimensionalIcon name={art} size={34} /></View> : !!icon && <IconChip icon={icon} tone={tone} p={p} />}
       <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{title}</Text>
         <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{detail}</Text>
@@ -74,10 +82,11 @@ export function Row({ p, title, detail, amount, tags, onPress, first, icon, tone
 }
 
 // Rows arrive one after another; new rows added later slide in on their own.
-export function List({ p, empty, children }: { p: Palette; empty: string; children: ReactNode[] }) {
+export function List({ p, empty, children, search = true }: { p: Palette; empty: string; children: ReactNode[]; search?: boolean }) {
   const all = Children.toArray(children);
   const [query, setQuery] = useState("");
-  const searchable = all.length > SEARCH_LIST_ABOVE;
+  // Lists under a page's own search box don't add a second one.
+  const searchable = search && all.length > SEARCH_LIST_ABOVE;
   const items = searchable && query.trim() ? all.filter(child => matchesSearch(searchTextOf(child), query)) : all;
   const card = <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>{items.length ? items.map((child, i) => <Stagger key={isValidElement(child) && child.key != null ? child.key : i} index={i}>{child}</Stagger>) : <SwapIn swapKey={empty}><Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{empty}</Text></SwapIn>}</View>;
   if (!searchable) return card;

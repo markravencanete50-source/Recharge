@@ -406,16 +406,22 @@ function PortfolioCard({ palette: p, summary, properties, onOpen }: { palette: P
       <StatGrid>
         {stats.map(([label, value, icon]) => <StatTile key={label} p={p} icon={icon} tone="stays" label={label} value={value} />)}
       </StatGrid>
-      <View style={{ flexDirection: wide ? "row" : "column", gap: 18, alignItems: wide ? "center" : "stretch" }}>
+      <View style={{ flexDirection: wide ? "row" : "column", gap: 20, alignItems: wide ? "flex-start" : "stretch" }}>
         <View style={{ flex: wide ? 1 : undefined, minWidth: 0 }}><ScotlandMap palette={p} regions={summary.regions} points={points} addressOf={id => properties.find(x => x.id === id)?.address || undefined} onOpenProperty={id => { const x = properties.find(y => y.id === id); if (x) onOpen(x); }} /></View>
-        <View style={{ gap: 8, flex: wide ? 1.3 : undefined, minWidth: 0 }}>
-          <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>By region</Text>
-          {summary.regions.slice(0, 8).map(r => (
-            <View key={r.region} accessibilityLabel={`${r.region}: ${r.count}`} style={[ui.row, { gap: 10 }]}>
-              <Text numberOfLines={1} style={{ color: p.text, width: 130, fontSize: 13 }}>{r.region}</Text>
-              <GrowBar share={Math.max(0.06, r.count / top)} color={p.primary} track={p.wash} />
-              <Text style={{ color: p.text, minWidth: 32, textAlign: "right", fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatCount(r.count)}</Text>
-            </View>
+        {/* Regions, largest first: the name and count above a bar that grows to its share. */}
+        <View style={{ gap: 14, flex: wide ? 1 : undefined, minWidth: 0, padding: 18, borderRadius: 20, backgroundColor: p.background, borderWidth: 1, borderColor: p.border }}>
+          <View style={[ui.between, { gap: 8 }]}>
+            <Text style={[ui.label, { color: p.muted }]}>By region</Text>
+            <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{summary.regions.length} {summary.regions.length === 1 ? "region" : "regions"}</Text>
+          </View>
+          {summary.regions.slice(0, 8).map((r, i) => (
+            <Stagger key={r.region} index={i}><View accessibilityLabel={`${r.region}: ${r.count}`} style={{ gap: 7 }}>
+              <View style={[ui.between, { gap: 10 }]}>
+                <Text numberOfLines={1} style={{ color: p.text, flex: 1, fontSize: 14, fontWeight: i === 0 ? "700" : "500" }}>{r.region}</Text>
+                <Text style={{ color: p.text, fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatCount(r.count)}</Text>
+              </View>
+              <GrowBar share={Math.max(0.06, r.count / top)} color={i === 0 ? p.primary : p.chart} track={p.elevated} height={8} />
+            </View></Stagger>
           ))}
         </View>
       </View>

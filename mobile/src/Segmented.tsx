@@ -21,7 +21,7 @@ export function Segmented<T extends string>({ p, items, value, onChange, stretch
   }, [index, segment, reduced, x]);
   return (
     <View accessibilityRole="tablist" accessibilityLabel={label} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
-      style={{ flexDirection: "row", gap, padding: pad, borderRadius: 999, backgroundColor: p.wash, alignSelf: stretch ? "stretch" : "flex-start", minWidth: stretch ? undefined : items.length * 124 }}>
+      style={{ flexDirection: "row", gap, padding: pad, borderRadius: 999, backgroundColor: p.wash, alignSelf: stretch ? "stretch" : "flex-start", minWidth: stretch ? undefined : items.length * 152 }}>
       {!!segment && <Animated.View pointerEvents="none" style={[{ position: "absolute", left: pad, top: pad, bottom: pad, width: segment, borderRadius: 999, transform: [{ translateX: x }] }, primaryFill(p)]} />}
       {items.map(item => {
         const on = item.key === value;

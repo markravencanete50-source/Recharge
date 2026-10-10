@@ -29,13 +29,17 @@ export const london = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZon
 export const addDays = (iso: string, days: number) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 export const dayLabel = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 // The primary action is forest with a lift of light and a sheen that passes on hover; the others
-// are a quiet mint wash that deepens on hover.
+// are a quiet mint wash that deepens on hover. On phones and inside sheets buttons span the width;
+// on a computer's page they size to their label, so a lone action doesn't stretch across the screen.
 const sheen = Platform.OS === "web" ? { dataSet: { sheen: "" } } : {};
+export const InSheet = createContext(false);
 export function Button({ label, onPress, p, primary = false, disabled = false, icon }: { label: string; onPress: () => void; p: Palette; primary?: boolean; disabled?: boolean; icon?: ComponentProps<typeof Feather>["name"] }) {
   const ink = disabled ? p.muted : primary ? p.onPrimary : p.primary;
+  const { width } = useWindowDimensions(), sheet = useContext(InSheet);
+  const hug = width >= 900 && !sheet;
   return (
     <MotionPress {...(primary && !disabled ? sheen : Platform.OS === "web" && !disabled ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-      style={[ui.button, { flexGrow: 1 }, disabled ? { backgroundColor: p.elevated } : primary ? primaryFill(p) : { backgroundColor: p.wash, borderWidth: 1, borderColor: "transparent" }]}>
+      style={[ui.button, hug ? { flexGrow: 0, alignSelf: "flex-start", minWidth: 180, paddingHorizontal: 22 } : { flexGrow: 1 }, disabled ? { backgroundColor: p.elevated } : primary ? primaryFill(p) : { backgroundColor: p.wash, borderWidth: 1, borderColor: "transparent" }]}>
       {!!icon && <Feather name={icon} size={16} color={ink} />}
       <Text style={[ui.buttonText, { color: ink, letterSpacing: 0.1 }]}>{label}</Text>
     </MotionPress>

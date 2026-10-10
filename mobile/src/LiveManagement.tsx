@@ -163,7 +163,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
         <Section title="Cleaners this month" p={p}>
           <List p={p} empty="No active cleaners yet.">
             {team.map((c, i) => (
-              <Row key={c.cleanerId} p={p} first={i === 0} icon="user" tone="cleans" title={c.fullName} detail={`${c.accepted} accepted · ${c.rejected} rejected · ${c.overturned} overturned`}
+              <Row key={c.cleanerId} p={p} first={i === 0} avatar={c.fullName} tone="cleans" title={c.fullName} detail={`${c.accepted} accepted · ${c.rejected} rejected · ${c.overturned} overturned`}
                 tags={c.warning ? [["Warning", "bad"]] : c.openComplaints.length ? [[`${c.openComplaints.length} open complaint${c.openComplaints.length === 1 ? "" : "s"}`, "wait"]] : [["On track", "good"]]} />
             ))}
           </List>

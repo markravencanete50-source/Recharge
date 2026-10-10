@@ -381,7 +381,7 @@ export function StaffContracts({ p }: { p: Palette }) {
         {viewing && <>
           <Button label="Edit contract" icon="edit-3" primary p={p} onPress={() => { const c = viewing; setViewing(null); setEditing(c); }} />
           {viewing.active && !!unsigned(viewing).length && <Section title="Still to sign this wording" count={unsigned(viewing).length} p={p}>
-            <List p={p} empty="">{unsigned(viewing).map((x, i) => <Row key={x.userId} p={p} first={i === 0} icon="user" title={x.fullName || "Team member"} detail={ROLE_LABEL[x.role] ?? x.role} tags={[["To sign", "wait"]]} />)}</List>
+            <List p={p} empty="">{unsigned(viewing).map((x, i) => <Row key={x.userId} p={p} first={i === 0} avatar={x.fullName || "Team member"} title={x.fullName || "Team member"} detail={ROLE_LABEL[x.role] ?? x.role} tags={[["To sign", "wait"]]} />)}</List>
           </Section>}
           <Section title="Signatures" count={undefined} p={p}>
             <List p={p} empty="Nobody has signed yet.">
