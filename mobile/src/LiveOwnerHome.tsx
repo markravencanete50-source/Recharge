@@ -41,7 +41,7 @@ export function OwnerHome({ palette: p, desktop, account, properties, journeys, 
         {tiles.map((tile, i) => (
           <Stagger key={tile.key} index={i} style={{ flexBasis: desktop ? "30%" : "46%", flexGrow: 1, minWidth: 0 }}>
             <MotionPress {...hover} accessibilityRole="button" accessibilityLabel={`${tile.value === null ? "Unavailable" : tile.money ? formatMoneyShort(tile.value) : formatCount(tile.value)} ${tile.label}. ${tile.hint}`} onPress={tile.onPress}
-              style={{ padding: 16, gap: 12, borderRadius: 24, backgroundColor: tile.attention ? p.wash : p.surface, borderWidth: 1, borderColor: tile.attention ? p.primary : p.border, ...(Platform.OS === "web" ? { boxShadow: "0 14px 30px -24px rgba(21, 45, 40, 0.45)" } : { elevation: 2 }) }}>
+              style={{ padding: 16, gap: 12, borderRadius: 24, backgroundColor: tile.attention ? p.wash : p.surface, borderWidth: 1, borderColor: tile.attention ? p.primary : p.border, ...(Platform.OS === "web" ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" } : { elevation: 2 }) }}>
               <View style={[ui.between, { alignItems: "flex-start" }]}>
                 <View style={{ width: 54, height: 54, borderRadius: 18, backgroundColor: tile.attention ? p.surface : p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={tile.icon} size={42} /></View>
                 <Feather name="chevron-right" size={18} color={p.muted} />

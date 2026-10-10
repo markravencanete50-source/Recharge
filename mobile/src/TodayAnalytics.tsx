@@ -1,9 +1,10 @@
 import { DimensionalIcon } from './DimensionalIcon';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
-import Svg, {Circle,Defs,Filter,FeGaussianBlur,Line,LinearGradient,Path,Polyline,RadialGradient,Rect,Stop,Text as SvgText} from 'react-native-svg';
+import Svg, {Circle,Defs,Filter,FeGaussianBlur,Line,LinearGradient,Path,RadialGradient,Rect,Stop,Text as SvgText} from 'react-native-svg';
 import Feather from '@expo/vector-icons/Feather';
 import { todayColors, type todayPresentation } from '../../lib/today-presentation';
+import { pathLength, smoothArea, smoothPath } from '../../lib/report-graphs';
 import { Text } from './Typography';
 import { MotionPress, useMotionPreference, useReducedMotion } from './motion';
 import { ui, type Palette } from './theme';
@@ -36,7 +37,6 @@ export function HeroGlow({palette:p}:{palette:Palette}) {
   </View>;
 }
 const AnimatedCircle=Animated.createAnimatedComponent(Circle);
-const AnimatedPolyline=Animated.createAnimatedComponent(Polyline);
 const AnimatedPath=Animated.createAnimatedComponent(Path);
 
 export function TodayRing({completed,total,motionKey,size=88,palette:p}:{completed:number;total:number;motionKey:string;size?:number;palette:Palette}) {
@@ -72,8 +72,8 @@ export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today
   const max=Math.max(2,Math.ceil(Math.max(0,...values)/2)*2),height=wide?180:150;
   const x=(i:number)=>28+(i+0.5)/values.length*(width-28);
   const y=(value:number)=>height-12-value/max*(height-36);
-  const points=values.map((value,i)=>`${x(i)},${y(value)}`).join(' ');
-  const length=values.reduce((sum,value,i)=>i?sum+Math.hypot(x(i)-x(i-1),y(value)-y(values[i-1])):sum,0);
+  const pts=values.map((value,i)=>({x:x(i),y:y(value)}));
+  const length=pathLength(pts);
   const found=data.days.findIndex(day=>day.date===selectedDate);
   const selected=found<0?data.days.length-1:found;
   const day=data.days[selected];
@@ -98,8 +98,8 @@ export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today
           <Defs><LinearGradient id="today-open-area" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={tone.spark} stopOpacity={0.3}/><Stop offset="1" stopColor={tone.spark} stopOpacity={0}/></LinearGradient></Defs>
           {[0,max/2,max].map(value=><Line key={'grid-'+value} x1={28} x2={width} y1={y(value)} y2={y(value)} stroke={tone.grid} strokeOpacity={tone.gridOpacity} strokeDasharray="3 5"/>)}
           {[0,max/2,max].map(value=><SvgText key={'label-'+value} x={0} y={y(value)+4} fill={tone.heroText} fontSize={12} fontFamily="Montserrat_500Medium">{value}</SvgText>)}
-          <AnimatedPath d={`M${x(0)} ${height-12} L${points.split(' ').join(' L')} L${x(values.length-1)} ${height-12} Z`} fill="url(#today-open-area)" opacity={draw}/>
-          <AnimatedPolyline points={points} fill="none" stroke={tone.spark} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={length||1} strokeDashoffset={draw.interpolate({inputRange:[0,1],outputRange:[length||1,0]})}/>
+          <AnimatedPath d={smoothArea(pts,height-12)} fill="url(#today-open-area)" opacity={draw}/>
+          <AnimatedPath d={smoothPath(pts)} fill="none" stroke={tone.spark} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={length||1} strokeDashoffset={draw.interpolate({inputRange:[0,1],outputRange:[length||1,0]})}/>
           {values.map((value,i)=><Circle key={data.days[i].date} cx={x(i)} cy={y(value)} r={3} fill={tone.spark}/>)}
           <Line x1={x(selected)} x2={x(selected)} y1={18} y2={height-12} stroke={tone.selectionLine} strokeOpacity={0.6} strokeDasharray="3 4"/>
           <Circle cx={x(selected)} cy={y(day.value)} r={8} fill={tone.spark} fillOpacity={0.3}/><Circle cx={x(selected)} cy={y(day.value)} r={4} fill={tone.dot}/>

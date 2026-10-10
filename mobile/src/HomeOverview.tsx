@@ -141,7 +141,7 @@ export function QuickOverview({
                 backgroundColor: p.surface,
                 borderWidth: 1,
                 borderColor: p.border,
-                ...(Platform.OS === "web" ? { boxShadow: "0 14px 30px -24px rgba(21, 45, 40, 0.45)" } : { elevation: 2 }),
+                ...(Platform.OS === "web" ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" } : { elevation: 2 }),
               }}
             >
               <View style={[ui.between, { alignItems: "flex-start" }]}>

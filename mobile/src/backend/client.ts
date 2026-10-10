@@ -16,6 +16,7 @@ import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import type { DeleteAccountInput } from '../../../lib/privacy-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 import { VIEW_AS_ENDED, VIEW_AS_HEADER, viewAsPeopleSchema } from '../../../lib/view-as';
+import { DEMO_SAVE_MESSAGE, demoAnswer, demoDataSchema, demoPeople, type DemoData, type DemoRole } from '../../../lib/demo-data';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -120,10 +121,37 @@ let viewOnly = "", viewing: string | null = null, viewEnded: (() => void) | null
 export function setViewOnly(message: string, person?: { userId: string; onEnded: () => void } | null) {
   viewOnly = message; viewing = message && person ? person.userId : null; viewEnded = message && person ? person.onEnded : null;
 }
+// Demo mode (lib/demo-data.ts): a super admin's switch that answers every read from the recorded
+// sample business, as the persona being shown, and sends nothing to be saved.
+let demo: { data: DemoData; role: DemoRole } | null = null;
+export function setDemo(next: { data: DemoData; role: DemoRole } | null) { demo = next; }
+export const demoMode = () => demo;
+// The sample business is a static file next to the app (mobile/web-static/demo-data.json), fetched
+// only when demo mode is switched on, so nobody else downloads it.
+export async function loadDemoData(): Promise<DemoData> {
+  const origin = sameOriginWeb ? globalThis.location?.origin : liveApiOrigin();
+  if (!origin) throw new WorkspaceApiError("The demo business is not available yet.", 503);
+  const response = await fetch(origin + "/workspace/demo-data.json", { credentials: "omit", cache: "no-cache" });
+  if (!response.ok) throw new WorkspaceApiError("The demo business could not be loaded. Try again.", response.status);
+  return demoDataSchema.parse(await response.json());
+}
+const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+function demoResponse(path: string, body: unknown) {
+  const { data, role } = demo!;
+  // This device's notification link and the app's own housekeeping need no answer in the demo.
+  if (path.startsWith("/api/mobile/devices")) return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+  if (body !== undefined) throw new WorkspaceApiError(DEMO_SAVE_MESSAGE, 423);
+  const answer = demoAnswer(data, role, path, londonToday());
+  if (answer === null) throw new WorkspaceApiError("This part isn't in the demo business.", 404);
+  return typeof answer === "string"
+    ? new Response(answer, { status: 200, headers: { "content-type": "text/csv" } })
+    : new Response(JSON.stringify(answer), { status: 200, headers: { "content-type": "application/json" } });
+}
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
-export const viewMode = () => ({ readOnly: viewOnly !== "", person: viewing });
+export const viewMode = () => ({ readOnly: viewOnly !== "" || demo !== null, person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
   if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (demo) return demoResponse(path, body);
   // While a super admin views the app as someone else nothing is saved (this device's own
   // notification link aside), so trying the screens never changes the business's records.
   if (viewOnly && body !== undefined && !options.asSelf && !path.startsWith("/api/mobile/devices")) throw new WorkspaceApiError(viewOnly, 423);
@@ -158,7 +186,8 @@ export const readTeams = async (query: Record<string,string>) => (await workspac
 export const writeTeams = async (action: TeamsAction) => (await workspaceRequest('/api/mobile/teams',action)).json();
 // Administration: people and properties (admins only).
 // View as: who can be viewed, and starting or ending a view. These always go as the super admin.
-export const readViewAsPeople = async () => viewAsPeopleSchema.parse((await (await workspaceRequest('/api/mobile/teams?section=viewAsPeople', undefined, { asSelf: true })).json()).data);
+// In demo mode the people are the sample business's, one per role.
+export const readViewAsPeople = async () => demo ? demoPeople(demo.data) : viewAsPeopleSchema.parse((await (await workspaceRequest('/api/mobile/teams?section=viewAsPeople', undefined, { asSelf: true })).json()).data);
 export const startViewAs = async (userId: string) => workspaceAccountSchema.parse((await (await workspaceRequest('/api/mobile/teams', { action: 'startViewAs', userId }, { asSelf: true })).json()).data);
 export const stopViewAs = async () => { await workspaceRequest('/api/mobile/teams', { action: 'stopViewAs' }, { asSelf: true }); };
 export const readAdmin = async (section: 'people' | 'properties' | 'accessControl' | 'accessHistory') => (await workspaceRequest('/api/mobile/admin?section='+section)).json();

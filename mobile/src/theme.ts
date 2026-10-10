@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, type ViewStyle } from "react-native";
 import type { DepartmentTone } from "../../lib/workspace-map";
 import { Platform } from "react-native";
 import { designTokens, departmentTokens } from "../../lib/design-tokens";
@@ -30,6 +30,20 @@ export function departmentColor(tone: DepartmentTone, palette: Palette) {
     art: Platform.OS === "web" ? "var(--rc-" + tone + "-wash)" : values.wash,
   };
 }
+// Styles that only exist in the browser (gradients, layered shadows, blur); nothing elsewhere.
+export const web = (style: Record<string, unknown>): ViewStyle => (Platform.OS === "web" ? style : {}) as ViewStyle;
+// Depth (lib/design-tokens.ts depthTokens): resting cards, raised cards and floating sheets. The web
+// uses the layered CSS shadows with a hairline top highlight; phones use one soft native shadow.
+const shadow = (opacity: number, radius: number, y: number, elevation: number) => ({ shadowColor: "#0B1F1A", shadowOpacity: opacity, shadowRadius: radius, shadowOffset: { width: 0, height: y }, elevation });
+export const depth = {
+  card: Platform.OS === "web" ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" } : shadow(0.07, 14, 6, 2),
+  raised: Platform.OS === "web" ? { boxShadow: "var(--rc-elev-2),var(--rc-sheen)" } : shadow(0.12, 20, 10, 5),
+  floating: Platform.OS === "web" ? { boxShadow: "var(--rc-elev-3)" } : shadow(0.2, 32, 16, 12),
+};
+// The primary action: forest with a soft lift of light from the top (web), and a coloured shadow.
+export const primaryFill = (p: { primary: string; isDark: boolean }) => Platform.OS === "web"
+  ? { backgroundColor: p.primary, backgroundImage: p.isDark ? "linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,0) 60%)" : "linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 55%)", boxShadow: p.isDark ? "0 10px 24px -14px rgba(167,217,193,.55),inset 0 1px 0 rgba(255,255,255,.25)" : "0 10px 22px -12px rgba(21,45,40,.55),inset 0 1px 0 rgba(255,255,255,.18)" }
+  : { backgroundColor: p.primary };
 export const ui = StyleSheet.create({
   fill: { flex: 1 },
   row: { flexDirection: "row", alignItems: "center" },
@@ -50,9 +64,17 @@ export const ui = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: "700",
-    letterSpacing: -1.2,
+    letterSpacing: -1.3,
     lineHeight: 40,
     paddingRight: 3,
+  },
+  // Small uppercase labels above figures and groups.
+  label: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    lineHeight: 16,
+    textTransform: "uppercase",
   },
   eyebrow: {
     fontSize: 13,
@@ -70,12 +92,12 @@ export const ui = StyleSheet.create({
   },
   card: {
     borderWidth: 1,
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 24,
+    padding: 18,
     gap: 12,
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 2px 8px var(--rc-shadow)" }
-      : {}),
+      ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" }
+      : { shadowColor: "#0B1F1A", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 1 }),
   },
   button: {
     minHeight: 48,

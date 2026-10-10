@@ -34,8 +34,8 @@ import { Calendar } from "./WorkspaceScreens";
 import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
-import { Entrance, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
-import { departmentColor, ui, type Palette } from "./theme";
+import { Entrance, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
+import { departmentColor, primaryFill, ui, web, type Palette } from "./theme";
 import { workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
 import { weeklyReportDocument, weeklyReportFileName } from "../../lib/weekly-report";
@@ -51,8 +51,9 @@ import { createOperationForms, inspectionReportFrom, journeyForms, newEnquiryFor
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { PhotoPicker, WorkPhotos } from "./Photos";
 import { LegalLinks } from "./LivePrivacy";
+import { readableError } from "../../lib/error-copy";
 
-export const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+export const message = (error: unknown) => readableError(error);
 const money = (n: unknown) => formatMoney(Number(n));
 const hoverLift = Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {};
 export async function liveApi(path: string, body?: Record<string, unknown>) {
@@ -60,12 +61,15 @@ export async function liveApi(path: string, body?: Record<string, unknown>) {
   return z.object({ data: z.unknown().optional() }).passthrough().parse(await response.json());
 }
 
+// A page's title, what it is for, and its main action. The title settles in with a short accent
+// line beneath it.
 export function PageHeading({ title, subtitle, palette: p, action }: { title: string; subtitle: string; palette: Palette; action?: ReactNode }) {
   return (
     <View style={[ui.between, { gap: 16, alignItems: "flex-end", flexWrap: "wrap" }]}>
-      <View style={{ gap: 6, flexShrink: 1, minWidth: 220 }}>
+      <View style={{ gap: 8, flexShrink: 1, minWidth: 220 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{title}</Text>
-        <Text style={[ui.body, { color: p.muted }]}>{subtitle}</Text>
+        <View style={{ width: 40, height: 3, borderRadius: 2, backgroundColor: p.primary, opacity: 0.85, ...web({ backgroundImage: "linear-gradient(90deg,var(--rc-primary),var(--rc-heroGlow))" }) }} />
+        <Text style={[ui.body, { color: p.muted, maxWidth: 680 }]}>{subtitle}</Text>
       </View>
       {action}
     </View>
@@ -73,18 +77,19 @@ export function PageHeading({ title, subtitle, palette: p, action }: { title: st
 }
 export function SoftButton({ label, icon, onPress, palette: p, primary = false, disabled = false }: { label: string; icon?: "plus" | "download" | "refresh-cw" | "arrow-right" | "log-out" | "check" | "external-link" | "calendar"; onPress: () => void; palette: Palette; primary?: boolean; disabled?: boolean }) {
   return (
-    <MotionPress accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[ui.button, { backgroundColor: primary ? p.primary : p.wash, opacity: disabled ? 0.5 : 1 }]}>
+    <MotionPress {...(Platform.OS === "web" && !disabled ? { dataSet: primary ? { sheen: "" } : { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[ui.button, primary ? primaryFill(p) : { backgroundColor: p.wash }, { opacity: disabled ? 0.5 : 1 }]}>
       {!!icon && <Feather name={icon} size={16} color={primary ? p.onPrimary : p.primary} />}
       <Text style={[ui.buttonText, { color: primary ? p.onPrimary : p.primary }]}>{label}</Text>
     </MotionPress>
   );
 }
+// Nothing here yet: a floating illustration over a soft pool of light, and a short explanation.
 export function EmptyState({ title, detail, palette: p, icon = "check-circle" }: { title: string; detail: string; palette: Palette; icon?: "check-circle" | "home" | "inbox" | "activity" }) {
   return (
-    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}>
-      <StateGraphic palette={p} success={icon === "check-circle"} icon={icon} />
+    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 34, gap: 10, overflow: "hidden" }, web({ backgroundImage: "radial-gradient(420px 220px at 50% 0%,var(--rc-canvas-a),transparent 70%)" })]}>
+      <Float distance={5}><StateGraphic palette={p} success={icon === "check-circle"} icon={icon} /></Float>
       <Text style={[ui.sectionTitle, { color: p.text, textAlign: "center" }]}>{title}</Text>
-      <Text style={[ui.body, { color: p.muted, textAlign: "center" }]}>{detail}</Text>
+      <Text style={[ui.body, { color: p.muted, textAlign: "center", maxWidth: 520 }]}>{detail}</Text>
     </View>
   );
 }

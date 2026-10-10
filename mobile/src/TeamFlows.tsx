@@ -1,12 +1,12 @@
-import { Children, isValidElement, useState, type ReactNode } from "react";
-import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
+import { Children, isValidElement, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Animated, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as ImagePicker from "expo-image-picker";
 import { Artwork } from "./Artwork";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
-import { Entrance, MotionPress, Stagger, usePresence } from "./motion";
+import { Entrance, MotionPress, Stagger, usePresence, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
-import { ui, type Palette } from "./theme";
+import { depth, ui, web, type Palette } from "./theme";
 import { WORKSPACE_MAP } from "../../lib/workspace-map";
 import type { Tool, WorkspaceRole } from "./model";
 import {
@@ -32,37 +32,53 @@ function SectionTitle({ palette: p, title, detail, action }: { palette: Palette;
 export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, children }: { palette: Palette; visible: boolean; onClose: () => void; title: string; subtitle?: string; icon?: DimensionalName; children: ReactNode }) {
   const { width, height } = useWindowDimensions();
   const wide = width >= 768;
-  // The backdrop fades while the panel rises from the bottom (phones) or settles in the middle
-  // (larger screens), and both run back out on close before the panel is removed.
-  const { shown, progress } = usePresence(visible, wide ? 240 : 300, 200);
+  const reduced = useReducedMotion();
+  // The backdrop fades and blurs while the panel rises from the bottom (phones) or settles in the
+  // middle (larger screens), and both run back out on close before the panel is removed.
+  const { shown, progress } = usePresence(visible, wide ? 300 : 380, 200);
   // While closing, keep showing what was there: callers often clear the content as they close.
   const [kept, setKept] = useState({ title, subtitle, icon, children });
   if (visible && (kept.title !== title || kept.subtitle !== subtitle || kept.icon !== icon || kept.children !== children)) setKept({ title, subtitle, icon, children });
   const content = visible ? { title, subtitle, icon, children } : kept;
-  const lift = progress.interpolate({ inputRange: [0, 1], outputRange: [wide ? 14 : Math.min(560, height * 0.6), 0] });
+  const lift = progress.interpolate({ inputRange: [0, 1], outputRange: [wide ? 18 : Math.min(560, height * 0.6), 0] });
+  // On phones the sheet follows a finger pulling its top edge down, and closes past a short pull.
+  const [drag] = useState(() => new Animated.Value(0));
+  useEffect(() => { if (visible) drag.setValue(0); }, [visible, drag]);
+  const pull = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+    onPanResponderMove: (_e, g) => drag.setValue(Math.max(0, g.dy)),
+    onPanResponderRelease: (_e, g) => {
+      if (g.dy > 110 || g.vy > 1.1) onClose();
+      else Animated.spring(drag, { toValue: 0, speed: 18, bounciness: 6, useNativeDriver: Platform.OS !== "web" }).start();
+    },
+    onPanResponderTerminate: () => Animated.spring(drag, { toValue: 0, useNativeDriver: Platform.OS !== "web" }).start(),
+  }), [drag, onClose]);
   return (
     <Modal visible={shown} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1, justifyContent: wide ? "center" : "flex-end", alignItems: "center", padding: wide ? 16 : 0 }}>
+      <View style={{ flex: 1, justifyContent: wide ? "center" : "flex-end", alignItems: "center", padding: wide ? 24 : 0 }}>
         <Animated.View {...(Platform.OS === "web" ? { dataSet: { overlay: "blur" } } : {})} style={[StyleSheet.absoluteFill, { backgroundColor: p.overlay, opacity: progress }]}>
           <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onClose} disabled={!visible} style={StyleSheet.absoluteFill} {...(Platform.OS === "web" ? { tabIndex: -1 } : {})} />
         </Animated.View>
-        <Animated.View accessibilityViewIsModal pointerEvents={visible ? "auto" : "none"} style={{ width: "100%", maxWidth: Math.min(560, width), minWidth: 0, maxHeight: wide ? "92%" : "90%", borderRadius: 28, borderBottomLeftRadius: wide ? 28 : 0, borderBottomRightRadius: wide ? 28 : 0, backgroundColor: p.surface, overflow: "hidden",
-          opacity: wide ? progress : progress.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 1, 1] }),
-          transform: [{ translateY: lift }, { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [wide ? 0.97 : 1, 1] }) }] }}>
-          {!wide && <View style={{ alignItems: "center", paddingTop: 8 }}><View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: p.border }} /></View>}
-          <View style={[ui.between, { gap: 12, padding: 18, paddingTop: wide ? 18 : 10, borderBottomWidth: 1, borderColor: p.border }]}>
-            <View style={[ui.row, { gap: 12, flex: 1 }]}>
-              {!!content.icon && <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={content.icon} size={34} /></View>}
-              <View style={{ flex: 1 }}>
-                <Text accessibilityRole="header" numberOfLines={2} style={{ color: p.text, fontSize: 17, fontWeight: "700" }}>{content.title}</Text>
-                {!!content.subtitle && <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{content.subtitle}</Text>}
+        <Animated.View accessibilityViewIsModal pointerEvents={visible ? "auto" : "none"} style={{ width: "100%", maxWidth: Math.min(580, width), minWidth: 0, maxHeight: wide ? "92%" : "92%", borderRadius: 30, borderBottomLeftRadius: wide ? 30 : 0, borderBottomRightRadius: wide ? 30 : 0, backgroundColor: p.surface, overflow: "hidden", ...depth.floating,
+          ...web({ backgroundImage: "radial-gradient(520px 180px at 0% 0%,var(--rc-canvas-a),transparent 70%)" }),
+          opacity: wide ? progress : progress.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 1, 1] }),
+          transform: [{ translateY: wide || reduced ? lift : Animated.add(lift, drag) }, { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [wide ? 0.96 : 1, 1] }) }] }}>
+          <View {...(wide ? {} : pull.panHandlers)}>
+            {!wide && <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 2 }}><View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: p.controlBorder, opacity: 0.45 }} /></View>}
+            <View style={[ui.between, { gap: 12, paddingHorizontal: 20, paddingVertical: 16, paddingTop: wide ? 20 : 10, borderBottomWidth: 1, borderColor: p.border }]}>
+              <View style={[ui.row, { gap: 14, flex: 1 }]}>
+                {!!content.icon && <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center", ...web({ backgroundImage: "linear-gradient(160deg,rgba(255,255,255,.6),rgba(255,255,255,0) 60%)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.6),0 8px 18px -12px rgba(21,45,40,.45)" }) }}><DimensionalIcon name={content.icon} size={36} /></View>}
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text accessibilityRole="header" numberOfLines={2} style={{ color: p.text, fontSize: 18, lineHeight: 24, fontWeight: "700", letterSpacing: -0.3 }}>{content.title}</Text>
+                  {!!content.subtitle && <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{content.subtitle}</Text>}
+                </View>
               </View>
+              <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={4} style={{ width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}>
+                <Feather name="x" size={18} color={p.text} />
+              </MotionPress>
             </View>
-            <MotionPress accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={4} style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: p.elevated }}>
-              <Feather name="x" size={18} color={p.text} />
-            </MotionPress>
           </View>
-          <ScrollView style={{ width: "100%" }} contentContainerStyle={{ padding: 18, gap: 14, minWidth: 0, maxWidth: "100%" }} keyboardShouldPersistTaps="handled">
+          <ScrollView style={{ width: "100%" }} contentContainerStyle={{ padding: 20, gap: 16, minWidth: 0, maxWidth: "100%" }} keyboardShouldPersistTaps="handled">
             {shown && Children.toArray(content.children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
           </ScrollView>
         </Animated.View>

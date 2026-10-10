@@ -13,7 +13,7 @@ import { ownerStatement, readPayoutReport, reconcile, type MatchRow, type Payout
 import { exportReport } from "./exportReport";
 
 const pence = (minor: number) => "£" + (minor / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const shadow = Platform.OS === "web" ? { boxShadow: "0 14px 30px -24px rgba(21, 45, 40, 0.45)" } : { elevation: 2 };
+const shadow = Platform.OS === "web" ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" } : { elevation: 2 };
 
 function Pills({ values, selected, onSelect, palette: p }: { values: string[]; selected: string; onSelect: (value: string) => void; palette: Palette }) {
   return (

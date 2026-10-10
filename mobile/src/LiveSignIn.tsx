@@ -13,8 +13,9 @@ import { accountStep, liveApiOrigin, registrationOpen, signIn } from "./backend/
 import { LegalConsent } from "./LivePrivacy";
 import { darkBrandCanvas, designTokens } from "../../lib/design-tokens";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { readableError } from "../../lib/error-copy";
 
-const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+const message = (error: unknown) => readableError(error);
 
 type Kind = "email" | "password" | "new-password" | "name" | "code";
 const KIND: Record<Kind, { icon: "mail" | "lock" | "user" | "hash"; placeholder: string; autoComplete: "email" | "current-password" | "new-password" | "name" | "one-time-code" }> = {

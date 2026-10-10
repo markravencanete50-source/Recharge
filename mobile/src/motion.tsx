@@ -26,6 +26,25 @@ export function MotionProvider({ children }: {children: ReactNode}) {
   }, []);
   const reduced = system || preference;
   useEffect(() => { if (Platform.OS === 'web') document.documentElement.dataset.reduceMotion = String(reduced); }, [reduced]);
+  // The light on cards that lift follows the pointer (lib/design-tokens.ts premiumCss): one listener,
+  // at most one update a frame, and only for the card under the pointer.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || reduced) return;
+    let frame = 0, last: PointerEvent | null = null;
+    const update = () => {
+      frame = 0;
+      const target = last?.target;
+      if (!last || !(target instanceof Element)) return;
+      const card = target.closest('[data-hover="lift"]');
+      if (!(card instanceof HTMLElement)) return;
+      const box = card.getBoundingClientRect();
+      card.style.setProperty('--mx', Math.round(last.clientX - box.left) + 'px');
+      card.style.setProperty('--my', Math.round(last.clientY - box.top) + 'px');
+    };
+    const move = (event: PointerEvent) => { last = event; if (!frame) frame = requestAnimationFrame(update); };
+    document.addEventListener('pointermove', move, { passive: true });
+    return () => { document.removeEventListener('pointermove', move); if (frame) cancelAnimationFrame(frame); };
+  }, [reduced]);
   return <Motion.Provider value={{ reduced, ready, system, preference, seen, setPreference: value => { setPreference(value); void AsyncStorage.setItem('recharge:reduce-motion', String(value)).catch(() => {}); } }}>{children}</Motion.Provider>;
 }
 export const useReducedMotion = () => useContext(Motion).reduced;
@@ -60,19 +79,25 @@ export function useReveal(key: string, delay = 0, duration = motionTokens.page) 
 }
 export function Entrance({ children, style, delay = 0, trigger = '', sessionKey, nativeID }: {children:ReactNode;style?:StyleProp<ViewStyle>;delay?:number;trigger?:string;sessionKey?:string;nativeID?:string}) {
   const instance = useState(()=>'entrance-' + Math.random())[0];
-  const progress = useReveal(sessionKey || instance + trigger, delay);
-  return <Animated.View nativeID={nativeID} style={[style,{opacity:progress,transform:[{translateY:progress.interpolate({inputRange:[0,1],outputRange:[8,0]})}]}]}>{children}</Animated.View>;
+  const progress = useReveal(sessionKey || instance + trigger, delay, 420);
+  return <Animated.View nativeID={nativeID} style={[style,{opacity:progress,transform:[{translateY:progress.interpolate({inputRange:[0,1],outputRange:[14,0]})}]}]}>{children}</Animated.View>;
 }
-export function CountUp({value, sessionKey, ...props}: ComponentProps<typeof Text> & {value:number;sessionKey:string}) {
+// Runs fn(t) every frame for `duration` ms with t easing from 0 to 1 (expo-out), then stops.
+function tween(duration: number, fn: (t: number) => void) {
+  const start = Date.now(); let frame = 0;
+  const step = () => { const t = Math.min(1, (Date.now() - start) / duration); fn(t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)); if (t < 1) frame = requestAnimationFrame(step); };
+  frame = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(frame);
+}
+export function CountUp({value, sessionKey, format = (n: number) => String(n), ...props}: ComponentProps<typeof Text> & {value:number;sessionKey:string;format?:(n:number)=>string}) {
   const {reduced,ready,seen} = useContext(Motion);
   const [shown,setShown] = useState(value);
   useEffect(() => {
     if (!ready || reduced || seen.has('count:'+sessionKey)) { queueMicrotask(()=>setShown(value)); return; }
     seen.add('count:'+sessionKey);
-    const start = Date.now(); const timer = setInterval(() => { const t = Math.min(1,(Date.now()-start)/motionTokens.reveal); setShown(Math.round(value*(1-Math.pow(1-t,3)))); if(t===1) clearInterval(timer); },32);
-    return () => clearInterval(timer);
+    return tween(900, t => setShown(t >= 1 ? value : Math.round(value * t)));
   },[value,sessionKey,reduced,ready,seen]);
-  return <Text {...props} accessibilityLabel={String(value)}>{shown}</Text>;
+  return <Text {...props} accessibilityLabel={format(value)}>{format(shown)}</Text>;
 }
 const FILLED:string[]=['home','grid','bar-chart-2','check-square','calendar','key','check-circle','message-circle','star'];
 export function NavSymbol({name,active,color}: {name:ComponentProps<typeof Feather>['name'];active:boolean;color:string}) {
@@ -94,7 +119,22 @@ export function SwapIn({ children, swapKey, style }: { children: ReactNode; swap
     const animation = Animated.timing(progress, {toValue:1,duration:motionTokens.page,easing:motionTokens.entrance,useNativeDriver:nativeDriver});
     animation.start(); return () => { animation.stop(); progress.setValue(1); };
   }, [swapKey, progress, ready, reduced]);
-  return <Animated.View style={[style,{opacity:progress,transform:[{translateY:progress.interpolate({inputRange:[0,1],outputRange:[6,0]})}]}]}>{children}</Animated.View>;
+  const focus = Platform.OS === 'web' ? { filter: progress.interpolate({ inputRange: [0, 1], outputRange: ['blur(6px)', 'blur(0px)'] }) } : {};
+  return <Animated.View style={[style,{opacity:progress,transform:[{translateY:progress.interpolate({inputRange:[0,1],outputRange:[10,0]})},{scale:progress.interpolate({inputRange:[0,1],outputRange:[0.995,1]})}]},focus as object]}>{children}</Animated.View>;
+}
+// A gentle float for illustrations (empty states, heroes): a slow bob and a hint of tilt.
+export function Float({ children, style, distance = 4, duration = 3200, delay = 0 }: { children: ReactNode; style?: StyleProp<ViewStyle>; distance?: number; duration?: number; delay?: number }) {
+  const reduced = useReducedMotion(), drift = useState(() => new Animated.Value(0))[0];
+  useEffect(() => {
+    if (reduced) { drift.setValue(0); return; }
+    const ease = Easing.inOut(Easing.sin);
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(drift, { toValue: 1, duration, delay, easing: ease, useNativeDriver: nativeDriver }),
+      Animated.timing(drift, { toValue: 0, duration, easing: ease, useNativeDriver: nativeDriver }),
+    ]));
+    loop.start(); return () => loop.stop();
+  }, [drift, reduced, duration, delay]);
+  return <Animated.View style={[style, { transform: [{ translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -distance] }) }, { rotate: drift.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-2deg'] }) }] }]}>{children}</Animated.View>;
 }
 // Mount and unmount with an animation both ways, for panels and overlays: `shown` stays true
 // until the exit has finished, and `progress` runs 0 → 1 on the way in and back on the way out.
@@ -121,18 +161,15 @@ export function Stagger({ children, index, style }: { children: ReactNode; index
   return <Entrance delay={Math.min(index, 12) * motionTokens.stagger} style={style}>{children}</Entrance>;
 }
 // A number that glides to each new value, for totals that change as people type or tap.
+// The first time it appears it counts up from zero; after that it glides between values.
 export function TweenNumber({ value, format = (n: number) => String(n), ...props }: ComponentProps<typeof Text> & { value: number; format?: (n: number) => string }) {
   const reduced = useReducedMotion();
-  const [shown, setShown] = useState(value);
-  const fromRef = useRef(value);
+  const [shown, setShown] = useState(reduced ? value : 0);
+  const fromRef = useRef(reduced ? value : 0);
   useEffect(() => {
     if (reduced || fromRef.current === value) { fromRef.current = value; queueMicrotask(() => setShown(value)); return; }
-    const start = Date.now(), begin = fromRef.current;
-    const timer = setInterval(() => {
-      const t = Math.min(1, (Date.now() - start) / 420), next = Math.round(begin + (value - begin) * (1 - Math.pow(1 - t, 3)));
-      fromRef.current = next; setShown(next); if (t === 1) clearInterval(timer);
-    }, 24);
-    return () => clearInterval(timer);
+    const begin = fromRef.current, first = begin === 0;
+    return tween(first ? 900 : 480, t => { const next = t >= 1 ? value : Math.round(begin + (value - begin) * t); fromRef.current = next; setShown(next); });
   }, [value, reduced]);
   return <Text {...props} accessibilityLabel={format(value)}>{format(shown)}</Text>;
 }
@@ -167,9 +204,10 @@ export function Shimmer({ rows = 3, color, highlight }: { rows?: number; color: 
     ]));
     loop.start(); return () => loop.stop();
   }, [reduced, pulse]);
-  return <Animated.View accessibilityLabel="Loading" accessibilityRole="progressbar" style={{ gap: 10, opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }) }}>
+  const sweep = Platform.OS === 'web' ? { dataSet: { shimmer: '' } } : {};
+  return <Animated.View accessibilityLabel="Loading" accessibilityRole="progressbar" style={{ gap: 10, opacity: Platform.OS === 'web' ? 1 : pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }) }}>
     {Array.from({ length: rows }, (_, i) => (
-      <Animated.View key={i} style={{ flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: 16, backgroundColor: color }}>
+      <Animated.View key={i} {...sweep} style={{ flexDirection: 'row', gap: 12, alignItems: 'center', padding: 14, borderRadius: 18, backgroundColor: color, overflow: 'hidden' }}>
         <Animated.View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: highlight }} />
         <Animated.View style={{ flex: 1, gap: 8 }}>
           <Animated.View style={{ height: 12, width: `${70 - i * 12}%`, borderRadius: 6, backgroundColor: highlight }} />

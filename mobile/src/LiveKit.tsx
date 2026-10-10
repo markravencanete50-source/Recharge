@@ -1,12 +1,13 @@
-import { Children, createContext, isValidElement, useContext, useRef, type ComponentProps, type ReactNode } from "react";
-import { TextInput, View, useWindowDimensions } from "react-native";
+import { Children, createContext, isValidElement, useContext, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { Platform, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { Entrance, MotionPress, Shimmer, Stagger, SwapIn, TweenNumber } from "./motion";
-import { departmentColor, ui, type Palette } from "./theme";
+import { departmentColor, depth, primaryFill, ui, web, type Palette } from "./theme";
 import { formatCount } from "../../lib/format";
 import { sectionAnchor } from "../../lib/home-tools";
+import { readableError } from "../../lib/error-copy";
 
 // Where a Home tool asked to land: a tab inside a Work view (sub) and a section to scroll to (anchor).
 // The nonce changes on every tap, so tapping the same tool again lands again.
@@ -23,15 +24,20 @@ export function Anchor({ id, children }: { id: string; children: ReactNode }) {
 }
 
 // Shared building blocks for the live (backend-connected) screens.
-export const message = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+export const message = (error: unknown) => readableError(error);
 export const london = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 export const addDays = (iso: string, days: number) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 export const dayLabel = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+// The primary action is forest with a lift of light and a sheen that passes on hover; the others
+// are a quiet mint wash that deepens on hover.
+const sheen = Platform.OS === "web" ? { dataSet: { sheen: "" } } : {};
 export function Button({ label, onPress, p, primary = false, disabled = false, icon }: { label: string; onPress: () => void; p: Palette; primary?: boolean; disabled?: boolean; icon?: ComponentProps<typeof Feather>["name"] }) {
+  const ink = disabled ? p.muted : primary ? p.onPrimary : p.primary;
   return (
-    <MotionPress accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[ui.button, { backgroundColor: disabled ? p.elevated : primary ? p.primary : p.wash, flexGrow: 1 }]}>
-      {!!icon && <Feather name={icon} size={16} color={disabled ? p.muted : primary ? p.onPrimary : p.primary} />}
-      <Text style={[ui.buttonText, { color: disabled ? p.muted : primary ? p.onPrimary : p.primary }]}>{label}</Text>
+    <MotionPress {...(primary && !disabled ? sheen : Platform.OS === "web" && !disabled ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+      style={[ui.button, { flexGrow: 1 }, disabled ? { backgroundColor: p.elevated } : primary ? primaryFill(p) : { backgroundColor: p.wash, borderWidth: 1, borderColor: "transparent" }]}>
+      {!!icon && <Feather name={icon} size={16} color={ink} />}
+      <Text style={[ui.buttonText, { color: ink, letterSpacing: 0.1 }]}>{label}</Text>
     </MotionPress>
   );
 }
@@ -45,27 +51,33 @@ export function RefreshButton({ p, loading = false, onPress }: { p: Palette; loa
     </MotionPress>
   );
 }
+// The label sits above; the field brightens and takes the brand colour while you type in it.
 export function Field({ label, value, onChange, p, multiline = false, placeholder, email = false }: { label: string; value: string; onChange: (v: string) => void; p: Palette; multiline?: boolean; placeholder?: string; email?: boolean }) {
+  const [focused, setFocused] = useState(false);
   return (
-    <View style={{ gap: 6 }}>
-      <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text>
-      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={p.muted} multiline={multiline} accessibilityLabel={label}
+    <View style={{ gap: 7 }}>
+      <Text style={[ui.small, { color: focused ? p.primary : p.muted, fontWeight: "600" }]}>{label}</Text>
+      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={p.muted} multiline={multiline} accessibilityLabel={label} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         {...(email ? { autoCapitalize: "none" as const, autoCorrect: false, keyboardType: "email-address" as const, autoComplete: "email" as const } : {})}
-        style={{ minHeight: multiline ? 88 : 48, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, color: p.text, backgroundColor: p.background, textAlignVertical: multiline ? "top" : "center", fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
+        style={{ minHeight: multiline ? 96 : 50, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: focused ? p.primary : p.controlBorder, color: p.text, backgroundColor: focused ? p.surface : p.background, textAlignVertical: multiline ? "top" : "center", fontFamily: "Montserrat_500Medium", fontSize: 14, ...web({ transition: "border-color 160ms ease, background-color 160ms ease, box-shadow 200ms ease" }) }} />
     </View>
   );
 }
+// A status pill with a dot in its colour, so the state reads before the word does.
 export function Tag({ label, tone, p }: { label: string; tone: "good" | "wait" | "bad" | "plain"; p: Palette }) {
   const [bg, fg] = { good: [p.successWash, p.success], wait: [p.cautionWash, p.waiting], bad: [p.dangerWash, p.danger], plain: [p.wash, p.primary] }[tone];
-  return <View style={{ alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: bg }}><Text style={{ color: fg, fontSize: 12, fontWeight: "700" }}>{label}</Text></View>;
+  return <View style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 8, paddingRight: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: bg }}>
+    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: fg }} />
+    <Text style={{ color: fg, fontSize: 12, lineHeight: 16, fontWeight: "700" }}>{label}</Text>
+  </View>;
 }
 // Messages slide in, and again whenever their wording changes, so a new result is noticed.
 export function Notice({ text, p, tone = "plain" }: { text: string; p: Palette; tone?: "plain" | "bad" }) {
   // A leading icon and a side rule keep notices reading as information, not as a button.
   const bad = tone === "bad", ink = bad ? p.danger : p.primary;
-  return <SwapIn swapKey={text}><View style={[ui.row, { alignItems: "flex-start", gap: 10, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 10, borderLeftWidth: 3, borderLeftColor: ink, backgroundColor: bad ? p.dangerWash : p.background }]}>
-    <Feather name={bad ? "alert-circle" : "info"} size={16} color={ink} style={{ marginTop: 1 }} />
-    <Text accessibilityLiveRegion="polite" style={[ui.small, { flex: 1, color: bad ? p.danger : p.text }]}>{text}</Text>
+  return <SwapIn swapKey={text}><View style={[ui.row, { alignItems: "flex-start", gap: 10, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: bad ? "transparent" : p.border, backgroundColor: bad ? p.dangerWash : p.background }]}>
+    <View style={{ width: 24, height: 24, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: bad ? p.surface : p.wash }}><Feather name={bad ? "alert-circle" : "info"} size={14} color={ink} /></View>
+    <Text accessibilityLiveRegion="polite" style={[ui.small, { flex: 1, color: bad ? p.danger : p.text, paddingTop: 2 }]}>{text}</Text>
   </View></SwapIn>;
 }
 // Shimmering placeholder rows while a tool loads.
@@ -76,7 +88,13 @@ export function Section({ title, count, p, children }: { title: string; count?: 
   // Each section can be opened directly from a Home tool by its heading (section-daily-checks).
   return (
     <Anchor id={sectionAnchor(title)}><Entrance style={{ gap: 10 }}>
-      <View style={ui.between}><Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>{title}</Text>{count !== undefined && <Tag label={String(count)} tone={count ? "wait" : "good"} p={p} />}</View>
+      <View style={[ui.between, { gap: 12 }]}>
+        <View style={[ui.row, { gap: 10, flexShrink: 1 }]}>
+          <View style={{ width: 4, height: 18, borderRadius: 2, backgroundColor: p.primary, opacity: 0.85 }} />
+          <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, flexShrink: 1 }]}>{title}</Text>
+        </View>
+        {count !== undefined && <Tag label={String(count)} tone={count ? "wait" : "good"} p={p} />}
+      </View>
       {/* Cards and rows inside a section arrive one after another. */}
       {Children.toArray(children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
     </Entrance></Anchor>
@@ -97,9 +115,13 @@ export function useRequestId(key: string | null) {
 // A small coloured icon tile: department colour behind a line icon. Used on rows and stats.
 export type IconName = ComponentProps<typeof Feather>["name"];
 export type Tone = "cleans" | "ready" | "stays" | "clients" | "accounts";
+// A soft tile with a highlight along its top edge, so icons read as objects rather than flat marks.
 export function IconChip({ icon, tone, p, size = 40 }: { icon: IconName; tone?: Tone; p: Palette; size?: number }) {
   const colour = tone ? departmentColor(tone, p) : { ink: p.primary, wash: p.wash };
-  return <View style={{ width: size, height: size, borderRadius: size * 0.32, alignItems: "center", justifyContent: "center", backgroundColor: colour.wash }}><Feather name={icon} size={Math.round(size * 0.45)} color={colour.ink} /></View>;
+  return <View style={{ width: size, height: size, borderRadius: size * 0.34, alignItems: "center", justifyContent: "center", backgroundColor: colour.wash,
+    ...web({ backgroundImage: "linear-gradient(160deg,rgba(255,255,255,.55),rgba(255,255,255,0) 60%)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.6),inset 0 0 0 1px rgba(255,255,255,.12)" }) }}>
+    <Feather name={icon} size={Math.round(size * 0.45)} color={colour.ink} />
+  </View>;
 }
 
 // Headline figures: label, a value that glides, and a supporting line. Laid out in a grid that
@@ -110,13 +132,16 @@ export function StatTile({ p, icon, tone, label, value, format = formatCount, de
 }) {
   // Phones show three compact tiles across (label, figure, icon); wider screens add the supporting line.
   const compact = useContext(StatCompact);
-  const figure = { color: p.text, fontSize: compact ? 24 : 28, lineHeight: compact ? 28 : 32, fontWeight: "700" as const, letterSpacing: -0.5, fontVariant: ["tabular-nums" as const] };
+  const figure = { color: p.text, fontSize: compact ? 24 : 30, lineHeight: compact ? 28 : 36, fontWeight: "700" as const, letterSpacing: compact ? -0.6 : -1, fontVariant: ["tabular-nums" as const] };
+  const ink = tone ? departmentColor(tone, p).ink : p.primary;
   return (
-    <View accessibilityLabel={[label, typeof value === "number" ? format(value) : value, detail].filter(Boolean).join(", ")}
-      style={{ flex: 1, minWidth: 0, padding: compact ? 12 : 16, gap: compact ? 6 : 10, borderRadius: compact ? 18 : 20, borderWidth: 1, borderColor: attention ? p.primary : p.border, backgroundColor: attention ? p.wash : p.surface }}>
+    <View {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityLabel={[label, typeof value === "number" ? format(value) : value, detail].filter(Boolean).join(", ")}
+      style={{ flex: 1, minWidth: 0, padding: compact ? 12 : 18, gap: compact ? 6 : 10, borderRadius: compact ? 18 : 22, borderWidth: 1, borderColor: attention ? p.primary : p.border, backgroundColor: attention ? p.wash : p.surface, overflow: "hidden", ...depth.card }}>
+      {/* A thread of the tile's colour along its top edge. */}
+      {!compact && <View pointerEvents="none" style={{ position: "absolute", left: 18, right: 18, top: 0, height: 2, borderBottomLeftRadius: 2, borderBottomRightRadius: 2, backgroundColor: ink, opacity: attention ? 0.9 : 0.35 }} />}
       <View style={[ui.between, { gap: 6, alignItems: "flex-start" }]}>
-        <Text numberOfLines={2} style={{ color: p.muted, fontSize: compact ? 11 : 12, lineHeight: compact ? 14 : 16, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase", flex: 1 }}>{label}</Text>
-        {!compact && <IconChip icon={icon} tone={tone} p={p} size={32} />}
+        <Text numberOfLines={2} style={{ color: p.muted, fontSize: compact ? 11 : 11, lineHeight: compact ? 14 : 16, fontWeight: "700", letterSpacing: compact ? 0.4 : 1, textTransform: "uppercase", flex: 1 }}>{label}</Text>
+        {!compact && <IconChip icon={icon} tone={tone} p={p} size={34} />}
       </View>
       {typeof value === "number"
         ? <TweenNumber value={value} format={format} numberOfLines={1} adjustsFontSizeToFit style={figure} />

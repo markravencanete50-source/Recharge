@@ -9,7 +9,7 @@ import { useSaved } from "./Celebrate";
 import { MotionPress, Pop, Stagger, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
-import { ui, type Palette } from "./theme";
+import { primaryFill, ui, type Palette } from "./theme";
 import { Button, Field, IconChip, london, message, Notice, Section, StatGrid, StatTile, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, type IconName, type Tone } from "./LiveKit";
 import { formatCount, formatMoney } from "../../lib/format";
 import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
@@ -45,7 +45,7 @@ export function Pills<T extends string>({ p, values, value, onChange, label, wra
   const items = values.map(v => {
     const on = v === value;
     return (
-      <Pop key={v} active={on}><MotionPress accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(v)} style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
+      <Pop key={v} active={on}><MotionPress {...(Platform.OS === "web" && !on ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(v)} style={[{ minHeight: 42, paddingHorizontal: 16, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: on ? p.primary : p.border }, on ? primaryFill(p) : { backgroundColor: p.surface }]}>
         <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label ? label(v) : readableStage(v)}</Text>
       </MotionPress></Pop>
     );

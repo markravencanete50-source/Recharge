@@ -20,9 +20,9 @@ function ToolTile({ tool, palette: p, compact, onPress }: { tool: HomeTool; pale
   const press = (to: number) => { if (reduced) return; Animated.spring(lift, { toValue: to, speed: 26, bounciness: to ? 4 : 12, useNativeDriver: native }).start(); };
   const icon = compact ? 38 : 44;
   return (
-    <MotionPress accessibilityRole="button" accessibilityLabel={`${tool.label}. ${tool.detail}`} onPress={onPress} onPressIn={() => press(1)} onPressOut={() => press(0)}
+    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={`${tool.label}. ${tool.detail}`} onPress={onPress} onPressIn={() => press(1)} onPressOut={() => press(0)} onHoverIn={() => press(1)} onHoverOut={() => press(0)}
       style={{ flex: 1, minWidth: 0, minHeight: compact ? 112 : 132, padding: compact ? 10 : 14, gap: compact ? 8 : 10, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, alignItems: compact ? "center" : "flex-start",
-        ...(Platform.OS === "web" ? { boxShadow: "0 12px 26px -22px rgba(21, 45, 40, 0.5)" } : { elevation: 1 }) }}>
+        ...(Platform.OS === "web" ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" } : { elevation: 1 }) }}>
       <Animated.View style={{ width: icon + 14, height: icon + 14, borderRadius: 18, backgroundColor: p.wash, alignItems: "center", justifyContent: "center",
         transform: [{ translateY: lift.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }, { scale: lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }, { rotate: lift.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "-6deg"] }) }] }}>
         <DimensionalIcon name={tool.art} size={icon} />
