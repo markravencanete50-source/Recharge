@@ -1,16 +1,21 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { Notice } from "./LiveKit";
+import { matchesSearch, SEARCH_LIST_ABOVE, SearchBox, searchTextOf } from "./SearchPicker";
 import { ui, type Palette } from "./theme";
 
 // Rows laid out like a sheet you can tap into, and the round choice chips used with them.
 export type Column<T> = { label: string; width: number; cell: (row: T) => ReactNode };
 
-export function SheetTable<T>({ p, columns, rows, keyOf, onRow, empty }: { p: Palette; columns: Column<T>[]; rows: T[]; keyOf: (row: T) => string; onRow?: (row: T) => void; empty: string }) {
-  if (!rows.length) return <Notice text={empty} p={p} />;
-  return (
+export function SheetTable<T>({ p, columns, rows: all, keyOf, onRow, empty }: { p: Palette; columns: Column<T>[]; rows: T[]; keyOf: (row: T) => string; onRow?: (row: T) => void; empty: string }) {
+  const [query, setQuery] = useState("");
+  if (!all.length) return <Notice text={empty} p={p} />;
+  const searchable = all.length > SEARCH_LIST_ABOVE;
+  // A row matches on its own values and on what its cells show.
+  const rows = searchable && query.trim() ? all.filter(row => matchesSearch(searchTextOf(row as Record<string, unknown>) + " " + searchTextOf(columns.map(c => c.cell(row))), query)) : all;
+  const table = (
     <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: "100%" }}>
       <View style={{ borderWidth: 1, borderColor: p.border, borderRadius: 14, overflow: "hidden", backgroundColor: p.surface, minWidth: "100%" }}>
         <View style={{ flexDirection: "row", backgroundColor: p.wash }}>
@@ -24,6 +29,13 @@ export function SheetTable<T>({ p, columns, rows, keyOf, onRow, empty }: { p: Pa
         ))}
       </View>
     </ScrollView>
+  );
+  if (!searchable) return table;
+  return (
+    <View style={{ gap: 8 }}>
+      <SearchBox p={p} value={query} onChange={setQuery} placeholder={`Search this list (${all.length})`} />
+      {rows.length ? table : <Text style={[ui.small, { color: p.muted }]}>Nothing matches “{query.trim()}”.</Text>}
+    </View>
   );
 }
 

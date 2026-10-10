@@ -1,5 +1,6 @@
 import { View } from "react-native";
 import { Pills } from "./LiveAccounts";
+import { SearchPicker } from "./SearchPicker";
 import type { Palette } from "./theme";
 import { ALL_PROPERTIES, INBOX_CHIP_LABEL, type InboxChip } from "../../lib/inbox-filters";
 
@@ -12,8 +13,8 @@ export function InboxChips<C extends InboxChip>({ p, chips, chip, counts, onChip
   return (
     <View style={{ gap: 8 }}>
       <Pills p={p} values={chips} value={chip} onChange={onChip} label={c => `${INBOX_CHIP_LABEL[c]} (${counts[c] ?? 0})`} />
-      {properties.length > 1 && <Pills p={p} values={[ALL_PROPERTIES, ...properties.map(x => x.id)]} value={property} onChange={onProperty}
-        label={id => { const x = properties.find(y => y.id === id); return x ? `${x.name} (${x.count})` : "All properties"; }} />}
+      {properties.length > 1 && <SearchPicker p={p} options={properties.map(x => ({ id: x.id, label: `${x.name} (${x.count})`, keywords: x.name }))} value={property} onChange={onProperty}
+        fixed={[{ id: ALL_PROPERTIES, label: "All properties" }]} placeholder="Search properties" nouns="properties" />}
     </View>
   );
 }

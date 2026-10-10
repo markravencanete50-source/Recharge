@@ -5,6 +5,7 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { PropertySelect } from "./SearchPicker";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -368,16 +369,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
 }
 
 function PropertyChips({ p, properties, value, onChange }: { p: Palette; properties: PropertyView[]; value: string; onChange: (id: string) => void }) {
-  return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-      {properties.map(x => (
-        <MotionPress key={x.id} accessibilityRole="radio" accessibilityState={{ selected: value === x.id }} onPress={() => onChange(x.id)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: value === x.id ? p.primary : p.surface, borderWidth: 1, borderColor: value === x.id ? p.primary : p.border }}>
-          <Text style={{ color: value === x.id ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{x.name}</Text>
-        </MotionPress>
-      ))}
-      {!properties.length && <Notice text="No properties are assigned to you yet." p={p} />}
-    </View>
-  );
+  return <PropertySelect p={p} properties={properties} value={value} onChange={onChange} />;
 }
 
 function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: Palette; account: WorkspaceAccount; visible: boolean; properties: PropertyView[]; onClose: () => void; onDone: () => Promise<void> }) {

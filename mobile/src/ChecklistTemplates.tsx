@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, TextInput, View } from "react-native";
+import { TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { SearchPicker } from "./SearchPicker";
+import { propertyOption } from "../../lib/search-options";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Button, Loading, message, Notice, useRequestId } from "./LiveKit";
@@ -78,17 +80,8 @@ export function ChecklistTemplatesSheet({ p, visible, properties, state, onClose
       {!state.data && !state.error && <Loading p={p} rows={2} />}
       {!!state.error && <Notice text={state.error} p={p} tone="bad" />}
       {state.data && <>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {[[ALL, "Every property"] as const, ...properties.map(x => [x.id, x.name] as const)].map(([id, name]) => {
-            const on = scope === id, has = templates.some(t => (t.propertyId ?? ALL) === id);
-            return (
-              <MotionPress key={id} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={`${name}${has ? ", has its own checklist" : ""}`} onPress={() => setScope(id)} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }]}>
-                {has && id !== ALL && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: on ? p.onPrimary : p.primary }} />}
-                <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{name}</Text>
-              </MotionPress>
-            );
-          })}
-        </ScrollView>
+        <SearchPicker p={p} value={scope} onChange={setScope} fixed={[{ id: ALL, label: "Every property" }]} placeholder="Search properties by name, street or postcode" nouns="properties"
+          options={properties.map(x => ({ ...propertyOption(x), label: templates.some(t => t.propertyId === x.id) ? `${x.name} · own checklist` : x.name }))} />
         <Text style={[ui.small, { color: p.muted }]}>
           {own ? `Cleans at ${scopeName} use this checklist.` : scope === ALL ? "No checklist is set yet. Cleans use the standard checks, with no photo rules." : fallback ? `${scopeName} uses the checklist for every property. Save to give it its own.` : `${scopeName} uses the standard checks. Save to give it its own.`}
           {" "}New cleans get these checks. Photo rules also apply to cleans already scheduled with the same checks.

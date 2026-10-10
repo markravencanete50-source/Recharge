@@ -3,6 +3,7 @@ import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { PropertySelect } from "./SearchPicker";
 import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -32,8 +33,7 @@ const PLATFORMS = ["Airbnb", "Booking.com", "Direct", "Comfy Workers"] as const;
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v + "T12:00:00Z"));
 
 function PropertyPills({ p, properties, value, onChange }: { p: Palette; properties: PropertyView[]; value: string; onChange: (id: string) => void }) {
-  if (!properties.length) return <Notice text="No properties are assigned to you yet." p={p} />;
-  return <Pills p={p} values={properties.map(x => x.id)} value={value} onChange={onChange} label={id => properties.find(x => x.id === id)?.name ?? "Property"} />;
+  return <PropertySelect p={p} properties={properties} value={value} onChange={onChange} />;
 }
 function Check({ p, label, value, onChange }: { p: Palette; label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (

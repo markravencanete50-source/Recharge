@@ -66,6 +66,15 @@ export function hostawaySyncErrorMessage(error: unknown) {
   return `The sync stopped on an unexpected error (${detail}). The next sync will try again.`;
 }
 
+export function hostawayCancelErrorMessage(error: unknown) {
+  if (error instanceof HostawayApiError) {
+    if (error.step === "sign-in" || error.status === 401 || error.status === 403) return "Hostaway did not accept the saved API key. Add a fresh Hostaway API key, then try again.";
+    if (error.status === 429) return "Hostaway is limiting requests. Wait a minute and try again.";
+    return `Hostaway refused the cancellation (HTTP ${error.status}: ${withoutCredentials(error.message)}). Cancel it in the Hostaway dashboard instead.`;
+  }
+  return "Hostaway could not be reached. Nothing was cancelled; try again in a minute.";
+}
+
 export function hostawayPropertyErrorMessage(error: unknown) {
   if (error instanceof HostawayApiError) {
     if (error.status === 401 || error.status === 403) {
@@ -317,6 +326,18 @@ export async function fetchHostawayReservations(departureFrom: string): Promise<
 export async function fetchHostawayReservation(id: string): Promise<unknown> {
   if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
   return hostawayRequest<unknown>(`/reservations/${encodeURIComponent(id)}`);
+}
+
+// Cancels a booking in Hostaway (it then tells the channel where it can: direct and Vrbo bookings).
+// Airbnb and Booking.com bookings can only be cancelled on the channel itself.
+export async function cancelHostawayReservation(id: string): Promise<void> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  if (!/^\d{1,20}$/.test(id)) throw new HostawayApiError("Invalid Hostaway reservation", 400);
+  await hostawayRequest<unknown>(`/reservations/${id}/statuses/cancelled`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ cancelledBy: "host" }),
+  });
 }
 
 export async function fetchHostawayListing(id: string): Promise<unknown> {

@@ -111,3 +111,24 @@ export const hostawayStatusSchema = z.object({
   paused: z.boolean().default(false),
 });
 export type HostawayStatus = z.infer<typeof hostawayStatusSchema>;
+
+// Double bookings: confirmed Hostaway stays that overlap another at the same property. Admins can
+// cancel one from Recharge when Hostaway can (direct and Vrbo bookings); Airbnb and Booking.com
+// bookings are cancelled on the channel, and the sync then brings the change in.
+export const doubleBookingSchema = z.object({
+  reservationId: z.string().uuid(), reference: z.string(), channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).nullable(),
+  checkIn: z.string(), checkOut: z.string(), guests: z.number().nullable(), payoutMinor: z.number().nullable(),
+  propertyId: z.string().uuid(), propertyName: z.string(), canCancelInHostaway: z.boolean(), overlaps: z.array(z.string()).nullable(),
+});
+export type DoubleBooking = z.infer<typeof doubleBookingSchema>;
+export const CHANNEL_NAMES: Record<string, string> = { airbnb: 'Airbnb', booking_com: 'Booking.com', vrbo: 'Vrbo', direct: 'Direct', other: 'Other channel' };
+// Where to cancel a booking Hostaway cannot cancel.
+export const CANCEL_ON_CHANNEL: Record<string, { label: string; url: string }> = {
+  airbnb: { label: 'Airbnb reservations', url: 'https://www.airbnb.co.uk/hosting/reservations' },
+  booking_com: { label: 'the Booking.com extranet', url: 'https://admin.booking.com' },
+  other: { label: 'the Hostaway dashboard', url: 'https://dashboard.hostaway.com' },
+};
+export function cancelElsewhereMessage(channel: string | null) {
+  const where = CANCEL_ON_CHANNEL[channel ?? 'other'] ?? CANCEL_ON_CHANNEL.other;
+  return `${CHANNEL_NAMES[channel ?? 'other'] ?? 'This'} bookings can only be cancelled on the channel itself. Cancel it in ${where.label}; Recharge picks up the change at the next sync (within 15 minutes).`;
+}

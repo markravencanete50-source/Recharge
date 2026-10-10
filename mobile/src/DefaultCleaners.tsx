@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { SearchBox } from "./SearchPicker";
+import { normalise } from "../../lib/search-options";
 import { MotionPress } from "./motion";
 import * as Crypto from "expo-crypto";
 import { Loading, message, Notice, Tag } from "./LiveKit";
@@ -18,6 +20,7 @@ export function DefaultCleanersSheet({ p, visible, admin, onClose, onChanged }: 
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  const [query, setQuery] = useState("");
   const load = useCallback(async () => {
     try { setData(defaultCleanersSchema.parse((await readTeams({ section: "defaultCleaners" })).data)); } catch (e) { setError(message(e)); }
   }, []);
@@ -37,13 +40,19 @@ export function DefaultCleanersSheet({ p, visible, admin, onClose, onChanged }: 
     } catch (e) { setError(message(e)); } finally { setBusy(""); }
   }
 
+  // Every word typed must appear in the property's name or its usual cleaner's name.
+  const words = normalise(query).split(" ").filter(Boolean);
+  const shown = (data?.properties ?? []).filter(row => { const text = normalise(`${row.propertyName} ${row.cleanerName ?? ""}`); return words.every(w => text.includes(w)); });
+
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="Property cleaners" subtitle="Who usually cleans each property. Their cleans are assigned automatically." icon="people">
       {!data && !error && <Loading p={p} />}
       {!!note && <Notice text={note} p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {data && !data.properties.length && <Notice text="No properties to show yet." p={p} />}
-      {data?.properties.map(row => {
+      {data && data.properties.length > 8 && <SearchBox p={p} value={query} onChange={setQuery} placeholder="Search properties or cleaners" />}
+      {data && !!query.trim() && !shown.length && <Text style={[ui.small, { color: p.muted }]}>Nothing matches “{query.trim()}”.</Text>}
+      {data && shown.map(row => {
         // A cleaning manager chooses from cleaners already on the property; an admin from every cleaner.
         const choices = data.cleaners.filter(c => admin || c.propertyIds.includes(row.propertyId));
         const expanded = open === row.propertyId;

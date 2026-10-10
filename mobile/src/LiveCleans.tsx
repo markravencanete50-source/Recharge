@@ -3,6 +3,7 @@ import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { PropertySelect, SearchPicker } from "./SearchPicker";
 import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
@@ -444,10 +445,10 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
 
         {canAssign && <>
           <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{op.assigneeId ? "Reassign this clean" : "Assign a cleaner"}</Text>
-          {candidates.length ? candidates.map(c => (
-            <Button key={c.userId} label={c.fullName + (c.userId === op.assigneeId ? " · assigned" : "")} icon="user" p={p} disabled={busy || c.userId === op.assigneeId}
-              onPress={() => void run(() => writeWorkspace({ action: "assignWork", workId: op.workId, version: op.version, userId: c.userId }))} />
-          )) : <Notice text="No cleaner can take this clean yet. In Work, Management, People, open a cleaner and give them this property, or every property." p={p} />}
+          {candidates.length ? <SearchPicker p={p} value={op.assigneeId ?? ""} placeholder="Search cleaners by name" nouns="cleaners"
+            options={candidates.map(c => ({ id: c.userId, label: c.fullName + (c.userId === op.assigneeId ? " · assigned" : "") }))}
+            onChange={id => { if (!busy && id !== op.assigneeId) void run(() => writeWorkspace({ action: "assignWork", workId: op.workId, version: op.version, userId: id })); }} />
+          : <Notice text="No cleaner can take this clean yet. In Work, Management, People, open a cleaner and give them this property, or every property." p={p} />}
         </>}
 
         {!canSubmit && !canReview && !canAssign && <Notice text={phase === "accepted" ? "This clean has been accepted." : phase === "review" ? "Submitted. Waiting for the cleaning manager's review." : "Nothing to do on this clean right now."} p={p} />}
@@ -479,14 +480,7 @@ function CreateSheet({ p, visible, properties, templates, onClose, onDone, today
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="New clean" subtitle="The cleaner sees it as soon as you assign them" icon="calendar">
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {properties.map(x => (
-          <MotionPress key={x.id} accessibilityRole="radio" accessibilityState={{ selected: propertyId === x.id }} onPress={() => { setPropertyId(x.id); const t = templateFor(templates, x.id); if (t) setChecks(t.items.map(i => i.label).join("\n")); }} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: propertyId === x.id ? p.primary : p.surface, borderWidth: 1, borderColor: propertyId === x.id ? p.primary : p.border }}>
-            <Text style={{ color: propertyId === x.id ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{x.name}</Text>
-          </MotionPress>
-        ))}
-        {!properties.length && <Notice text="No properties are assigned to you yet." p={p} />}
-      </View>
+      <PropertySelect p={p} properties={properties} value={propertyId} onChange={id => { setPropertyId(id); const t = templateFor(templates, id); if (t) setChecks(t.items.map(i => i.label).join("\n")); }} />
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
         <Button label="Today" p={p} onPress={() => setDate(today)} />
         <Button label="Tomorrow" p={p} onPress={() => setDate(addDays(today, 1))} />

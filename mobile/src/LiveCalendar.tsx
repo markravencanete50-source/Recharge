@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { ActivityIndicator, Platform, ScrollView, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { SearchPicker } from "./SearchPicker";
 import { MotionPress, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, london, message, Notice, Tag, useRequestId } from "./LiveKit";
@@ -244,20 +245,8 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
     <View style={{ gap: 16 }}>
       <PageHeading palette={p} title="Calendar" subtitle="Tap a day to see what is happening, then an entry for its details." />
       {teams.length > 1 && <Pills p={p} values={["all", ...teams] as (Team | "all")[]} value={team} onChange={setTeam} label={v => v === "all" ? "All teams" : TEAM_LABEL[v]} />}
-      {people.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {[{ id: "", name: "Everyone" }, ...people.map(([id, name]) => ({ id, name }))].map(x => {
-            const on = (person?.id ?? "") === x.id;
-            return (
-              <MotionPress key={x.id || "everyone"} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={x.id ? `${x.name}’s schedule` : "Everyone’s schedule"} onPress={() => setPerson(x.id ? x : null)}
-                style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }]}>
-                <Feather name={x.id ? "user" : "users"} size={14} color={on ? p.onPrimary : p.muted} />
-                <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{x.name}</Text>
-              </MotionPress>
-            );
-          })}
-        </ScrollView>
-      )}
+      {people.length > 0 && <SearchPicker p={p} value={person?.id ?? ""} onChange={id => setPerson(id ? { id, name: people.find(([x]) => x === id)?.[1] ?? "" } : null)}
+        fixed={[{ id: "", label: "Everyone" }]} options={people.map(([id, name]) => ({ id, label: name }))} placeholder="Search the team by name" nouns="people" />}
       {header}
       {!!error && <View style={{ gap: 8 }}><Notice text={error} p={p} tone="bad" /><Button label="Try again" icon="refresh-cw" p={p} onPress={() => void load()} /></View>}
       {desktop ? (

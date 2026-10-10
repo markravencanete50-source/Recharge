@@ -4,12 +4,13 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { PropertySelect } from "./SearchPicker";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { FurnishingSheet } from "./LiveFurnishing";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
-import { List, Pills, Row } from "./LiveAccounts";
+import { List, Row } from "./LiveAccounts";
 import { readTeams, readWorkspace, workspaceRequest, writeWorkspace } from "./backend/client";
 import { toolsFor, type Tool, type WorkView } from "../../lib/tool-directory";
 import { MODULE_ART } from "../../lib/home-tools";
@@ -87,7 +88,7 @@ export function TrackerSheet({ palette: p, tool, properties, onClose }: { palett
       {!adding && <Button label="Add" icon="plus" primary p={p} onPress={() => { setAdding(true); setProperty(properties[0]?.id ?? ""); }} />}
       {adding && <View style={{ gap: 10 }}>
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property</Text>
-        {properties.length ? <Pills p={p} values={properties.slice(0, 60).map(x => x.id)} value={property} onChange={setProperty} label={id => names.get(id) ?? "Property"} /> : <Notice text="No properties within your access yet." p={p} />}
+        <PropertySelect p={p} properties={properties} value={property} onChange={setProperty} empty="No properties within your access yet." />
         <Field label="Title" value={title} onChange={setTitle} p={p} />
         <Field label="Details (optional)" value={detail} onChange={setDetail} p={p} multiline />
         <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>

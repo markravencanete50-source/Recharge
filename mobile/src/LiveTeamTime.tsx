@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { SearchPicker } from "./SearchPicker";
 import { MotionPress } from "./motion";
 import { Button, Field, Loading, message, Notice, Tag, london, useRequestId } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
@@ -126,9 +127,11 @@ function ResponsibilitySheet({ p, data, target, onClose, onSaved }: { p: Palette
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>How often</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{RESPONSIBILITY_FREQUENCIES.map(f => <Chip key={f} p={p} label={FREQUENCY_LABEL[f]} on={frequency === f} onPress={() => setFrequency(f)} />)}</View>
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Who owns it</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{people.map(x => <Chip key={x.userId} p={p} label={x.fullName || "Team member"} on={owner === x.userId} onPress={() => { setOwner(owner === x.userId ? "" : x.userId); if (backup === x.userId) setBackup(""); }} />)}</View>
+        <SearchPicker p={p} value={owner} onChange={id => { setOwner(id); if (backup === id) setBackup(""); }} clearable placeholder="Search the team by name" nouns="people"
+          options={people.map(x => ({ id: x.userId, label: x.fullName || "Team member" }))} />
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Backup (optional)</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{people.filter(x => x.userId !== owner).map(x => <Chip key={x.userId} p={p} label={x.fullName || "Team member"} on={backup === x.userId} onPress={() => setBackup(backup === x.userId ? "" : x.userId)} />)}</View>
+        <SearchPicker p={p} value={backup} onChange={setBackup} clearable placeholder="Search the team by name" nouns="people"
+          options={people.filter(x => x.userId !== owner).map(x => ({ id: x.userId, label: x.fullName || "Team member" }))} />
         {!!error && <Notice text={error} p={p} tone="bad" />}
         <Button label={busy ? "Saving…" : item ? "Save changes" : "Add to the register"} icon="check" primary p={p} disabled={busy} onPress={() => void save()} />
         {item && (confirm

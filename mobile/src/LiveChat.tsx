@@ -3,6 +3,7 @@ import { AppState, Platform, ScrollView, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
+import { PropertySelect } from "./SearchPicker";
 import { MotionPress, Pop, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
@@ -189,11 +190,7 @@ function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette;
         <Field label="Group name" value={title} onChange={setTitle} p={p} placeholder="For example: Weekend changeovers" />
         {!!properties.length && <View style={{ gap: 6 }}>
           <Text style={[ui.small, { color: p.muted, fontWeight: "700" }]}>About a property (optional)</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-            {properties.slice(0, 30).map(x => <MotionPress key={x.id} accessibilityRole="radio" accessibilityState={{ selected: propertyId === x.id }} onPress={() => setPropertyId(propertyId === x.id ? "" : x.id)}
-              style={{ paddingHorizontal: 12, minHeight: 36, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: propertyId === x.id ? p.primary : p.border, backgroundColor: propertyId === x.id ? p.wash : p.surface }}>
-              <Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>{x.name}</Text></MotionPress>)}
-          </View>
+          <PropertySelect p={p} properties={properties} value={propertyId} onChange={setPropertyId} clearable empty="" />
         </View>}
       </>}
       {!!picked.length && <Button label={busy ? "Starting…" : group ? `Start group with ${picked.length} people` : "Start conversation"} icon="message-circle" primary p={p} disabled={busy || (group && title.trim().length < 2)}

@@ -4,6 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import { Text } from "./Typography";
+import { matchesSearch, PropertySelect, SEARCH_LIST_ABOVE, SearchBox, searchTextOf } from "./SearchPicker";
 import { useSaved } from "./Celebrate";
 import { MotionPress, Pop, Stagger, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -73,8 +74,18 @@ export function Row({ p, title, detail, amount, tags, onPress, first, icon, tone
 
 // Rows arrive one after another; new rows added later slide in on their own.
 export function List({ p, empty, children }: { p: Palette; empty: string; children: ReactNode[] }) {
-  const items = Children.toArray(children);
-  return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>{items.length ? items.map((child, i) => <Stagger key={isValidElement(child) && child.key != null ? child.key : i} index={i}>{child}</Stagger>) : <SwapIn swapKey={empty}><Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{empty}</Text></SwapIn>}</View>;
+  const all = Children.toArray(children);
+  const [query, setQuery] = useState("");
+  const searchable = all.length > SEARCH_LIST_ABOVE;
+  const items = searchable && query.trim() ? all.filter(child => matchesSearch(searchTextOf(child), query)) : all;
+  const card = <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>{items.length ? items.map((child, i) => <Stagger key={isValidElement(child) && child.key != null ? child.key : i} index={i}>{child}</Stagger>) : <SwapIn swapKey={empty}><Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{empty}</Text></SwapIn>}</View>;
+  if (!searchable) return card;
+  return (
+    <View style={{ gap: 8 }}>
+      <SearchBox p={p} value={query} onChange={setQuery} placeholder={`Search this list (${all.length})`} />
+      {items.length ? card : <Text style={[ui.small, { color: p.muted }]}>Nothing matches “{query.trim()}”.</Text>}
+    </View>
+  );
 }
 
 export function Line({ p, label, value }: { p: Palette; label: string; value: string }) {
@@ -324,7 +335,7 @@ function NewExpenseSheet({ p, visible, properties, onClose, onDone }: { p: Palet
   }
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="New expense" subtitle="Add the invoice and proof next, then approve" icon="coins">
-      <Pills p={p} values={properties.map(x => x.id)} value={propertyId} onChange={id => { setPropertyId(id); setJob(null); }} label={id => properties.find(x => x.id === id)?.name ?? "Property"} />
+      <PropertySelect p={p} properties={properties} value={propertyId} onChange={id => { setPropertyId(id); setJob(null); }} />
       {!properties.length && <Notice text="No properties are available to you yet." p={p} />}
       {!!propertyId && <View style={{ gap: 8 }}>
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Which job is this for? (optional)</Text>

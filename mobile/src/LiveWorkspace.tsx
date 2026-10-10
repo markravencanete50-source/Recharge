@@ -6,6 +6,8 @@ import Feather from "@expo/vector-icons/Feather";
 import { router, useLocalSearchParams } from "expo-router";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { SearchBox } from "./SearchPicker";
+import { normalise } from "../../lib/search-options";
 import { CompanyLogo } from "./CompanyLogo";
 import { Avatar, type Profile } from "./AccountSetup";
 import { FeatureTile } from "./Artwork";
@@ -137,7 +139,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
   const [period, setPeriod] = useState<AnalyticsPeriod>(() => presetPeriod(30)), [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null), [reportError, setReportError] = useState(""), [dates, setDates] = useState(false);
   const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
   const [form, setForm] = useState<WorkflowForm | null>(null), [openWork, setOpenWork] = useState<OperationView | null>(null);
-  const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active");
+  const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active"), [workQuery, setWorkQuery] = useState("");
   // The bottom bar and sidebar open each page at its start, not where a Home tool last pointed.
   // Accounts' Invoices opens Work → Accounts on its expenses.
   const navigate = (value: WorkspaceSection) => {
@@ -348,7 +350,11 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
   // An inspection booked for a later day: say when the report can be filed instead of offering it.
   const openJourney = openWork && !isDone(openWork.status) ? journeys.find(j => j.propertyId === openWork.propertyId && (j.workId === openWork.workId || openWork.kind === "inspection")) : undefined;
   const reportFrom = openJourney ? inspectionReportFrom(account, openJourney) : null;
-  const filtered = work.filter(item => workFilter === "All" || (workFilter === "Completed" ? isDone(item.status) : workFilter === "Waiting" ? isWaitingWork(item.status) : !isDone(item.status)));
+  // Every word typed must appear in the title, the property (name or street) or the stage.
+  const workWords = normalise(workQuery).split(" ").filter(Boolean);
+  const places = new Map(properties.map(property => [property.id, `${property.name} ${property.address ?? ""} ${property.region ?? ""}`]));
+  const filtered = work.filter(item => workFilter === "All" || (workFilter === "Completed" ? isDone(item.status) : workFilter === "Waiting" ? isWaitingWork(item.status) : !isDone(item.status)))
+    .filter(item => { if (!workWords.length) return true; const text = normalise(`${item.title} ${places.get(item.propertyId) ?? ""} ${readableStage(item.status)}`); return workWords.every(w => text.includes(w)); });
   const todayKey = presetPeriod(1).to;
   // Issued invoices and their payments: on Reports for admins, inside Work → Accounts for Accounts
   // (their navigation has no Reports tab).
@@ -385,6 +391,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
           {account.role === "super_admin" && <SoftButton label={policy.confirmed ? "Change policy" : "Review and confirm"} icon="check" primary={!policy.confirmed} palette={p} onPress={() => setForm(bookingPolicyForm(policy))} />}
         </View>}
         <FilterBar values={["Active", "Waiting", "Completed", "All"]} selected={workFilter} onSelect={setWorkFilter} palette={p} />
+        <SearchBox p={p} value={workQuery} onChange={setWorkQuery} placeholder="Search work by title, property or street" />
         <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>{filtered.length} {filtered.length === 1 ? "item" : "items"} within your access</Text>
         {filtered.length ? (() => {
           const due = workFilter === "Active" ? filtered.filter(item => (workDate(item) || "9999") <= todayKey) : [], rest = workFilter === "Active" ? filtered.filter(item => (workDate(item) || "9999") > todayKey) : filtered;
@@ -393,7 +400,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
             {!!due.length && <View style={{ gap: 8 }}><Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Due today or overdue · {due.length}</Text>{list(due)}</View>}
             {!!rest.length && <View style={{ gap: 8 }}>{workFilter === "Active" && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Ongoing · {rest.length}</Text>}{list(rest)}</View>}
           </>;
-        })() : <EmptyState palette={p} title={loading ? "Loading your work…" : "No work in this view"} detail="Try another status, or create work from a property." />}
+        })() : <EmptyState palette={p} title={loading ? "Loading your work…" : "No work in this view"} detail={workQuery.trim() ? "Nothing matches that search. Try part of the title or the property name." : "Try another status, or create work from a property."} />}
       </>}
     </>
   );

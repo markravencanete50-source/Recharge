@@ -5,7 +5,8 @@ import { boundedJson,isSameOrigin } from './auth-security-policy';
 import { isNativeRequest } from './native-request-policy';
 import { integrationActionSchema,integrationConfiguration,IntegrationSettings,DeliveryJob,ProviderFailure,normalizeHostawayReservation } from './integration-policy';
 import { deliverNotification } from './integration-providers';
-import { listHostawayReservations } from './hostaway';
+import { cancelHostawayReservation,hostawayCancelErrorMessage,isHostawayConfigured,listHostawayReservations } from './hostaway';
+import { cancelElsewhereMessage,CANCEL_ON_CHANNEL } from './hostaway-sync-policy';
 import { hostawaySyncConfigured,runHostawaySync } from './hostaway-sync';
 
 export function integrationSettings():IntegrationSettings {
@@ -41,7 +42,9 @@ export async function integrationRoute(request:Request,native=false) {
       const result=admin?await session.client.rpc('workspace_integration_status'):{data:null,error:null};
       if(result.error)return databaseFailure(result.error);
       const hostaway=hostawaySyncConfigured()&&(admin||session.account.role==='stays')?await session.client.rpc('workspace_hostaway_status'):null;
-      return businessResponse({configuration,data:result.data,hostaway:hostaway&&!hostaway.error?{configured:hostawaySyncConfigured(),...hostaway.data}:null});
+      // Admins also see double bookings, to cancel one of each.
+      const doubles=hostaway&&!hostaway.error&&admin?await session.client.rpc('workspace_hostaway_double_bookings'):null;
+      return businessResponse({configuration,data:result.data,hostaway:hostaway&&!hostaway.error?{configured:hostawaySyncConfigured(),...hostaway.data,doubleBookings:doubles&&!doubles.error?doubles.data:[]}:null});
     }
     const quota=await requestQuota(request,'integrations-user',6,60,session.account.userId);
     if(!quota.allowed){const response=businessResponse({error:'Too many integration requests'},429);response.headers.set('Retry-After',String(quota.retryAfter||60));return response;}
@@ -56,6 +59,20 @@ export async function integrationRoute(request:Request,native=false) {
       if(!hostawaySyncConfigured())return businessResponse({error:'The Hostaway sync is switched off',mode:'unconfigured'},503);
       try {return businessResponse(await runHostawaySync('manual'));}
       catch {return businessResponse({error:'Hostaway could not be synced just now. The error is shown on the sync card.'},502);}
+    }
+    if(parsed.data.action==='cancelHostawayReservation') {
+      if(!['admin','super_admin'].includes(session.account.role))return businessResponse({error:'Admin access required'},403);
+      if(!isHostawayConfigured())return businessResponse({error:'Hostaway is not connected',mode:'unconfigured'},503);
+      const check=await session.client.rpc('workspace_hostaway_cancel_check',{target:parsed.data.reservationId});
+      if(check.error)return databaseFailure(check.error);
+      const stay=check.data as {hostawayId:string;channel:string|null;canCancelInHostaway:boolean};
+      // Airbnb and Booking.com only accept cancellations on their own sites.
+      if(!stay.canCancelInHostaway)return businessResponse({error:cancelElsewhereMessage(stay.channel),cancelOn:CANCEL_ON_CHANNEL[stay.channel??'other']??CANCEL_ON_CHANNEL.other},409);
+      try {await cancelHostawayReservation(stay.hostawayId);}
+      catch(error){return businessResponse({error:hostawayCancelErrorMessage(error)},502);}
+      // Hostaway has cancelled it: record that now (the stay and its unstarted clean), not at the next sync.
+      try {return businessResponse({ok:true,...await securityRpc<{cancelledCleans:number}>('integration_hostaway_cancelled',{target:parsed.data.reservationId,actor:session.account.userId})});}
+      catch {return businessResponse({ok:true,cancelledCleans:0,note:'Cancelled in Hostaway. Recharge will show it at the next sync.'});}
     }
     if(!['admin','super_admin','stays'].includes(session.account.role)||!session.account.modules.includes('direct-bookings'))return businessResponse({error:'Reservation import access required'},403);
     if(!configuration.reservations)return businessResponse({error:'Hostaway import is awaiting configuration',mode:'unconfigured'},503);

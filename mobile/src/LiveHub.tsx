@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { PropertySelect, SearchPicker } from "./SearchPicker";
 import { MotionPress } from "./motion";
 import { Chip, SheetTable, cellText } from "./SheetTable";
 import { ResponsibilitiesTab, RotaTab, TimesheetTab } from "./LiveTeamTime";
@@ -78,12 +79,9 @@ export function LiveHub({ palette: p, account, properties, journeys, work, onFor
         <FilterBar values={labels} selected={labels[tabs.indexOf(current)] ?? labels[0]} onSelect={label => setTab(tabs[labels.indexOf(label)] ?? "todos")} palette={p} />
 
         {current === "todos" && <>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {[["mine", "Mine"], ...(hub.department ? [["department", DEPARTMENT_LABEL[hub.department]]] : []), ...(admin ? [["everyone", "Everyone"]] : [])].map(([key, label]) => (
-              <Chip key={key} p={p} label={label} on={who === key} onPress={() => setWho(key)} />
-            ))}
-            {admin && hub.people.filter(x => x.userId !== account.userId).map(x => <Chip key={x.userId} p={p} label={x.fullName || "Team member"} on={who === x.userId} onPress={() => setWho(x.userId)} />)}
-          </View>
+          <SearchPicker p={p} value={who} onChange={setWho} placeholder="Search the team by name" nouns="people"
+            fixed={[["mine", "Mine"], ...(hub.department ? [["department", DEPARTMENT_LABEL[hub.department]]] : []), ...(admin ? [["everyone", "Everyone"]] : [])].map(([id, label]) => ({ id, label }))}
+            options={admin ? hub.people.filter(x => x.userId !== account.userId).map(x => ({ id: x.userId, label: x.fullName || "Team member" })) : []} />
           <Button label="Add a to-do" icon="plus" primary p={p} onPress={() => setEditing({ kind: "todo" })} />
           <SheetTable p={p} rows={todoRows(items, { userId: account.userId, department: hub.department, who })} keyOf={r => r.id} onRow={r => setEditing({ kind: "todo", item: r })} empty="Nothing on this list."
             columns={[
@@ -205,10 +203,7 @@ export function LiveHub({ palette: p, account, properties, journeys, work, onFor
 function PropertyPicker({ p, properties, title, visible, onClose, onPick }: { p: Palette; properties: PropertyView[]; title: string; visible: boolean; onClose: () => void; onPick: (id: string) => void }) {
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title={title} subtitle="Which property is it for?" icon="house">
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {properties.map(x => <Chip key={x.id} p={p} label={x.name} on={false} onPress={() => onPick(x.id)} />)}
-      </View>
-      {!properties.length && <Notice text="No properties yet." p={p} />}
+      <PropertySelect p={p} properties={properties} value="" onChange={id => { if (id) onPick(id); }} empty="No properties yet." />
     </Sheet>
   );
 }
@@ -279,9 +274,8 @@ function HubItemSheet({ p, hub, account, properties, target, onClose, onSaved }:
         <Field label="Details (optional)" value={f.details ?? ""} onChange={set("details")} p={p} multiline />
         {kind === "todo" && hub && <>
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>For</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {hub.people.map(x => <Chip key={x.userId} p={p} label={x.userId === account.userId ? "Me" : x.fullName || "Team member"} on={f.assigneeId === x.userId} onPress={() => setF(v => ({ ...v, assigneeId: v.assigneeId === x.userId ? "" : x.userId }))} />)}
-          </View>
+          <SearchPicker p={p} options={hub.people.map(x => ({ id: x.userId, label: x.userId === account.userId ? "Me" : x.fullName || "Team member" }))} value={f.assigneeId ?? ""}
+            onChange={id => setF(v => ({ ...v, assigneeId: id }))} clearable placeholder="Search the team by name" nouns="people" />
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Or a whole department</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {DEPARTMENTS.map(d => <Chip key={d} p={p} label={DEPARTMENT_LABEL[d]} on={f.department === d} onPress={() => setF(v => ({ ...v, department: v.department === d ? "" : d }))} />)}
@@ -292,9 +286,7 @@ function HubItemSheet({ p, hub, account, properties, target, onClose, onSaved }:
         {kind === "aircover" && <Field label="Reservation code (optional)" value={f.reference ?? ""} onChange={set("reference")} p={p} placeholder="HMABCD1234" />}
         {(kind === "aircover" || kind === "invoice") && <Field label={kind === "invoice" ? "Invoice link (optional)" : "Claim link (optional)"} value={f.link ?? ""} onChange={set("link")} p={p} placeholder="https://" />}
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property (optional)</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {properties.map(x => <Chip key={x.id} p={p} label={x.name} on={f.propertyId === x.id} onPress={() => setF(v => ({ ...v, propertyId: v.propertyId === x.id ? "" : x.id }))} />)}
-        </View>
+        <PropertySelect p={p} properties={properties} value={f.propertyId ?? ""} onChange={id => setF(v => ({ ...v, propertyId: id }))} clearable empty="" />
         <Button label={busy ? "Saving…" : item ? "Save changes" : "Add"} primary p={p} disabled={busy} onPress={() => void save()} />
       </> : item && <View style={{ gap: 6 }}>
         {!!item.details && <Text style={{ color: p.text }}>{item.details}</Text>}

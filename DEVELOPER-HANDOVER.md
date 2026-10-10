@@ -180,6 +180,21 @@ Migration `20261010230000_sweep_fixes` (applied live) and app fixes:
 - Duplicate migration versions were renamed (`…120001`, `…130001`); the one-off `docs/APPLY-*.sql`
   scripts were removed.
 
+## Search everywhere, and cancelling a double booking (10 October 2026)
+
+- **Search:** `mobile/src/SearchPicker.tsx` holds the shared pickers (`PropertySelect`,
+  `SearchPicker`, `SearchBox`); ranking lives in `lib/search-options.ts`. Above eight options a
+  search box appears (name, street, area or postcode for properties) with the best 12 matches. All
+  property and people chip lists use it. The shared `List` (`LiveAccounts.tsx`) and `SheetTable`
+  get a search box automatically above eight rows, matching what each row shows
+  (`textOfRow`). "All work" and "Property cleaners" have their own search.
+- **Double bookings:** migration `20261010240000_hostaway_cancel` (applied live). The Hostaway
+  card lists overlapping confirmed stays for admins. Direct and Vrbo bookings are cancelled through
+  the Hostaway API (`PUT /v1/reservations/{id}/statuses/cancelled`, action
+  `cancelHostawayReservation`), then recorded at once with `integration_hostaway_cancelled`
+  (stay, unstarted clean, activity). Airbnb and Booking.com bookings show a link to cancel them on
+  the channel. The Hostaway API key needs write access.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

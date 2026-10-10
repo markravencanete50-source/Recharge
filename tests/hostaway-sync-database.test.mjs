@@ -9,7 +9,7 @@ import { createServer } from 'vite';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const vite = await createServer({ configFile: false, root, resolve: { alias: { '@': root } }, server: { middlewareMode: true, hmr: false } });
 const { scheduleSchema } = await vite.ssrLoadModule('/lib/cleans-live.ts');
-const { hostawayStatusSchema } = await vite.ssrLoadModule('/lib/hostaway-sync-policy.ts');
+const { doubleBookingSchema, hostawayStatusSchema } = await vite.ssrLoadModule('/lib/hostaway-sync-policy.ts');
 
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -230,4 +230,39 @@ test('while paused, a sync is refused and a failed run records nothing', async (
   } finally {
     await sql('update private.workspace_hostaway_sync_state set paused=false where singleton');
   }
+});
+
+test('a double booking is listed for admins, and the one cancelled from Recharge takes its clean with it', async () => {
+  const [inDay, outDay] = [await day(60), await day(62)];
+  // The direct booking arrives first, so it carries the clean.
+  await sync({ reservations: [stay('9702', inDay, outDay, { listingId: '502', channel: 'direct', payoutMinor: 33000 }), stay('9701', inDay, outDay, { listingId: '502', channel: 'booking_com', payoutMinor: 25301 })] });
+  assert.equal((await cleanFor('9702')).length, 1);
+  assert.equal((await cleanFor('9701')).length, 0, 'one clean for the two stays');
+
+  await as(STAYS);
+  await assert.rejects(rpc('workspace_hostaway_double_bookings'), /Admin access required/);
+  await as(SUPER);
+  const doubles = (await rpc('workspace_hostaway_double_bookings')).map(x => doubleBookingSchema.parse(x)).filter(x => ['HA:9701', 'HA:9702'].includes(x.reference));
+  assert.deepEqual(doubles.map(x => [x.reference, x.channel, x.canCancelInHostaway, x.overlaps]), [['HA:9702', 'direct', true, ['HA:9701']], ['HA:9701', 'booking_com', false, ['HA:9702']]]);
+
+  // Booking.com bookings are cancelled on Booking.com; direct ones through Hostaway.
+  const [direct, booking] = doubles;
+  assert.equal((await rpc('workspace_hostaway_cancel_check', [booking.reservationId])).canCancelInHostaway, false);
+  assert.deepEqual(await rpc('workspace_hostaway_cancel_check', [direct.reservationId]), { hostawayId: '9702', channel: 'direct', canCancelInHostaway: true, checkIn: inDay, checkOut: outDay });
+  await assert.rejects(rpc('integration_hostaway_cancelled', [direct.reservationId, users[SUPER]]), /permission denied/);
+
+  // Only the backend records it, and only for an active admin.
+  await asBackend();
+  await assert.rejects(rpc('integration_hostaway_cancelled', [direct.reservationId, users[STAYS]]), /Admin access required/);
+  assert.deepEqual(await rpc('integration_hostaway_cancelled', [direct.reservationId, users[SUPER]]), { cancelledCleans: 1 });
+  assert.equal((await sql("select status from private.workspace_reservations where reference='HA:9702'"))[0].status, 'cancelled');
+  assert.deepEqual((await cleanFor('9702')).map(x => [x.status, x.data.cancelledBecause]), [['cancelled', 'The stay was cancelled from Recharge']]);
+  assert.equal((await sql("select count(*)::int n from public.workspace_activity where event_type='reservation.cancelled' and actor_id=$1", [users[SUPER]]))[0].n, 1);
+  await as(SUPER);
+  await assert.rejects(rpc('workspace_hostaway_cancel_check', [direct.reservationId]), /already cancelled/);
+  assert.ok(!(await rpc('workspace_hostaway_double_bookings')).some(x => ['HA:9701', 'HA:9702'].includes(x.reference)), 'no longer a double booking');
+
+  // The next sync (Hostaway now says cancelled) gives the remaining stay its clean.
+  await sync({ reservations: [stay('9701', inDay, outDay, { listingId: '502', channel: 'booking_com', payoutMinor: 25301 }), stay('9702', inDay, outDay, { listingId: '502', channel: 'direct', status: 'cancelled' })] });
+  assert.equal((await cleanFor('9701')).filter(x => x.status !== 'cancelled').length, 1);
 });

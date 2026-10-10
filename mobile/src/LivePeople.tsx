@@ -3,6 +3,7 @@ import { TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
+import { PropertySelect, SearchPicker } from "./SearchPicker";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -124,9 +125,7 @@ function PersonSheet({ p, actorRole, person, properties, onClose, onDone }: { p:
         {editable && person.status === "active" && available.length > 0 && <>
           {person.role !== "client" && <Button label={busy ? "Saving…" : `Give every property (${available.length} more)`} icon="plus" p={p} disabled={busy} onPress={() => void assignEverything()} />}
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Add a property</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {available.map(x => <MotionPress key={x.id} accessibilityRole="button" onPress={() => void assignment(x.id, true)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, flexDirection: "row", alignItems: "center", gap: 6 }}><Feather name="plus" size={14} color={p.primary} /><Text style={{ color: p.text, fontSize: 13, fontWeight: "600" }}>{x.name}</Text></MotionPress>)}
-          </View>
+          <PropertySelect p={p} properties={available} value="" onChange={id => void assignment(id, true)} />
         </>}
         {editable && person.status !== "active" && <Text style={[ui.small, { color: p.muted }]}>Approve access before assigning properties.</Text>}
       </Section>}
@@ -265,9 +264,9 @@ function PropertySheet({ p, property, creating, people, onClose, onDone }: { p: 
         {!property.people.length && <Text style={[ui.small, { color: p.muted }]}>Nobody is assigned yet. Add the owner and the team who look after it.</Text>}
         {candidates.length > 0 && <>
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Add someone</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {candidates.map(x => <MotionPress key={x.userId} accessibilityRole="button" onPress={() => void assignment(x, true)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, flexDirection: "row", alignItems: "center", gap: 6 }}><Feather name="plus" size={14} color={p.primary} /><Text style={{ color: p.text, fontSize: 13, fontWeight: "600" }}>{x.fullName} · {roleLabel(x.role)}</Text></MotionPress>)}
-          </View>
+          <SearchPicker p={p} value="" placeholder="Search people by name" nouns="people"
+            options={candidates.map(x => ({ id: x.userId, label: `${x.fullName} · ${roleLabel(x.role)}`, keywords: x.email ?? "" }))}
+            onChange={id => { const x = candidates.find(c => c.userId === id); if (x) void assignment(x, true); }} />
         </>}
       </Section>}
     </Sheet>

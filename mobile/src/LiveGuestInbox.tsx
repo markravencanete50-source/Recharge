@@ -4,6 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Text } from "./Typography";
+import { PropertySelect } from "./SearchPicker";
 import { useCelebrate } from "./Celebrate";
 import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -79,18 +80,11 @@ function PropertyPicker({ p, properties, value, onChange }: { p: Palette; proper
   return (
     <View style={{ gap: 6 }}>
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-        {[{ id: null as string | null, name: "Not sure yet" }, ...properties.map(x => ({ id: x.id as string | null, name: x.name }))].map(x => {
-          const on = x.id === value;
-          return <MotionPress key={x.id ?? "none"} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => onChange(x.id)}
-            style={{ paddingHorizontal: 14, minHeight: 40, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.wash : p.surface }}>
-            <Text style={{ color: on ? p.primary : p.text, fontWeight: on ? "700" : "500", fontSize: 13 }}>{x.name}</Text>
-          </MotionPress>;
-        })}
-      </ScrollView>
+      <PropertySelect p={p} properties={properties} value={value ?? NOT_SURE} onChange={id => onChange(id === NOT_SURE ? null : id)} fixed={[{ id: NOT_SURE, label: "Not sure yet" }]} />
     </View>
   );
 }
+const NOT_SURE = "not-sure";
 
 // "When it arrived": now, or a few minutes ago, so a message noticed late is still timed fairly.
 const AGO = ["0", "5", "15", "30", "60"] as const;
