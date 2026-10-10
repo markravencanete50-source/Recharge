@@ -2,9 +2,10 @@ import { ownerContacts } from "./property-profile";
 import { storedOtaAccountsSchema } from './ota-accounts';
 import { NextResponse } from "next/server";
 import { type SupabaseClient } from "@supabase/supabase-js";
-import { verifiedWorkspaceUser, workspaceSupabase } from "./supabase-server";
-import { isNativeRequest } from "./native-request-policy";
-import { nativeWorkspace, workspaceAccountSchema } from "./native-session";
+import { verifiedWorkspaceUser, workspaceSupabase, workspaceSupabaseViewing } from "./supabase-server";
+import { bearerToken, isNativeRequest } from "./native-request-policy";
+import { nativeProvider, nativeWorkspace, workspaceAccountSchema } from "./native-session";
+import { VIEW_AS_ENDED, VIEW_AS_HEADER, VIEW_ONLY_ERROR } from "./view-as";
 import { boundedJson, isSameOrigin, securityHeaders } from "./auth-security-policy";
 import { authSecurityConfiguration, requestQuota } from "./auth-security";
 import { businessReadSchema, businessWriteSchema, businessRpc } from "./business-policy";
@@ -14,6 +15,10 @@ export function businessResponse(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { ...securityHeaders, Vary: "Cookie, Authorization" } });
 }
 export async function businessContext(request: Request, native: boolean) {
+  const own = await ownContext(request, native);
+  return own ? viewingContext(request, native, own) : null;
+}
+async function ownContext(request: Request, native: boolean) {
   if (native) return isNativeRequest(request) ? nativeWorkspace(request) : null;
   if (!await verifiedWorkspaceUser()) return null;
   const client = await workspaceSupabase();
@@ -21,6 +26,20 @@ export async function businessContext(request: Request, native: boolean) {
   const result = await client.rpc("workspace_account");
   const account = workspaceAccountSchema.safeParse(result.data);
   return result.error || !account.success ? null : { client, account: account.data };
+}
+// "View as": a super admin's reads carry the person's id, and the database answers them as that
+// person (read-only, and only after the super admin started viewing them). Anything sent is
+// always done as the super admin themselves, which the app switches off while viewing anyway.
+export class ViewAsEnded extends Error {}
+async function viewingContext(request: Request, native: boolean, own: { client: SupabaseClient; account: z.infer<typeof workspaceAccountSchema> }) {
+  const target = request.headers.get(VIEW_AS_HEADER);
+  if (!target || request.method !== "GET") return own;
+  if (own.account.role !== "super_admin" || !z.string().uuid().safeParse(target).success) throw new ViewAsEnded();
+  const client = native ? nativeProvider(bearerToken(request) ?? undefined, { [VIEW_AS_HEADER]: target }) : await workspaceSupabaseViewing(target);
+  const result = await client?.rpc("workspace_account");
+  const account = workspaceAccountSchema.safeParse(result?.data);
+  if (!client || result?.error || !account.success) throw new ViewAsEnded();
+  return { client, account: account.data };
 }
 // The workspace functions raise plain-English reasons ("Choose a month", "Another reviewer must
 // approve this work"); show those. Built-in database errors keep a generic message.
@@ -31,8 +50,13 @@ export function databaseFailure(error: { code?: string; message?: string }) {
   if (error.code === "22023" || error.code === "P0001") return businessResponse({ error: readable(error.message) || "Check the record details and assigned access" }, 400);
   if (error.code === "40001" || error.code === "23505") return businessResponse({ error: "This record changed or already exists. Refresh and try again." }, 409);
   if (error.code === "P0002") return businessResponse({ error: "Record not found" }, 404);
+  if (error.code === "25006") return businessResponse({ error: VIEW_ONLY_ERROR }, 423);
   if (error.code?.startsWith("22") || error.code?.startsWith("23")) return businessResponse({ error: "Check the record details and assigned access" }, 400);
   return businessResponse({ error: "The workspace connection is temporarily unavailable" }, 503);
+}
+// A read sent while viewing as someone after that view ended (or by someone who may not).
+export function viewAsFailure(error: unknown) {
+  return error instanceof ViewAsEnded ? businessResponse({ error: VIEW_AS_ENDED }, 409) : null;
 }
 const reads: Record<z.infer<typeof businessReadSchema>["entity"], { table: string; columns: string }> = {
   properties: { table: "workspace_properties", columns: "id,name,address,region,status,bedrooms,version,created_at,updated_at" },
@@ -68,7 +92,7 @@ export async function businessRead(request: Request, native = false) {
     const rows = (result.data || []) as unknown as { id: string }[];
     const more = rows.length > input.limit;
     return businessResponse({ data: rows.slice(0, input.limit), nextCursor: more ? rows[input.limit - 1].id : null, account: session.account, mode: "live" });
-  } catch { return businessResponse({ error: "The workspace connection is temporarily unavailable" }, 503); }
+  } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: "The workspace connection is temporarily unavailable" }, 503); }
 }
 export async function businessWrite(request: Request, native = false) {
   const config = authSecurityConfiguration();
@@ -85,7 +109,7 @@ export async function businessWrite(request: Request, native = false) {
     const call = businessRpc(parsed.data);
     const result = await session.client.rpc(call.name, call.args);
     return result.error ? databaseFailure(result.error) : businessResponse({ ok: true, id: result.data });
-  } catch { return businessResponse({ error: "The workspace connection is temporarily unavailable" }, 503); }
+  } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: "The workspace connection is temporarily unavailable" }, 503); }
 }
 export async function scopedPropertyDetails(client: SupabaseClient, input: unknown) {
   const parsed = z.object({ propertyId: z.string().uuid(), section: z.enum(["access", "ota", "finance", "owner"]) }).strict().safeParse(input);

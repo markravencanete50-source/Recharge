@@ -17,7 +17,7 @@ const https = z.string().url().max(1000).refine(value => {
 
 export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
-    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites']),
+    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -64,6 +64,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('removeResponsibility'), requestId: id, id, version }).strict(),
   // Each person's own Favorites (saved pages, tools, properties and work), in their order.
   z.object({ action: z.literal('saveFavorites'), items: z.array(favoriteItemSchema).max(40) }).strict(),
+  z.object({ action: z.literal('startViewAs'), userId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal('stopViewAs') }).strict(),
   // The rota by date (a null shift clears the day), and corrected or forgotten shifts.
   z.object({ action: z.literal('planRota'), requestId: id, userId: id, days: z.array(z.object({ day: date, shift: z.enum(ROTA_SHIFTS).nullable(),
     department: z.enum(DEPARTMENTS).optional(), note: z.string().trim().max(300).optional() }).strict()).min(1).max(31) }).strict(),

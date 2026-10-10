@@ -1,4 +1,4 @@
-import { businessContext,businessResponse,databaseFailure } from './business-server';
+import { businessContext,businessResponse,databaseFailure,viewAsFailure } from './business-server';
 import { portfolioReadSchema,portfolioActionSchema } from './portfolio-policy';
 import { weeklyReportCsv } from './weekly-report';
 import { authSecurityConfiguration,requestQuota } from './auth-security';
@@ -23,5 +23,5 @@ export async function portfolioRoute(request:Request,native=false){
   const parsed=portfolioActionSchema.safeParse(await boundedJson(request));
   if(!parsed.success)return businessResponse({error:'Check the property details'},400);
   const result=await session.client.rpc('workspace_portfolio_action',{input:parsed.data});return result.error?databaseFailure(result.error):businessResponse({data:result.data,ok:true});
- }catch{return businessResponse({error:'The property portfolio is temporarily unavailable'},503);}
+ }catch(error){return viewAsFailure(error)??businessResponse({error:'The property portfolio is temporarily unavailable'},503);}
 }

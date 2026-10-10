@@ -6,11 +6,11 @@ import { workspaceAccountSchema } from "./workspace-account-policy";
 import { confirmedContact } from './registration-policy';
 export { workspaceAccountSchema } from "./workspace-account-policy";
 
-export function nativeProvider(accessToken?: string) {
+export function nativeProvider(accessToken?: string, headers?: Record<string, string>) {
   const config = supabaseConfiguration();
   return config ? createClient(config.url, config.key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    ...(accessToken ? { global: { headers: { Authorization: `Bearer ${accessToken}` } } } : {}),
+    ...(accessToken ? { global: { headers: { ...headers, Authorization: `Bearer ${accessToken}` } } } : {}),
   }) : null;
 }
 export async function nativeIdentity(client: SupabaseClient, token: string) {

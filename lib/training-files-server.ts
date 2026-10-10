@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { authSecurityConfiguration, requestQuota } from './auth-security';
 import { boundedJson, isSameOrigin } from './auth-security-policy';
-import { businessContext, businessResponse, databaseFailure } from './business-server';
+import { businessContext, businessResponse, databaseFailure, viewAsFailure } from './business-server';
 import { isNativeRequest } from './native-request-policy';
 import { MAX_TRAINING_FILE_BYTES, trainingFileType } from './training-files';
 
@@ -72,5 +72,5 @@ export async function trainingFilesRoute(request: Request, native = false) {
     const saved = await session.client.rpc('workspace_course_file_action', { input: { action: 'addFile', fileId, courseId: courseId.data, name, mime: type.mime, bytes: bytes.length, path } });
     if (saved.error) { await storage.remove([path]).catch(() => undefined); return databaseFailure(saved.error); }
     return businessResponse({ ok: true, data: saved.data });
-  } catch { return businessResponse({ error: 'Course files are temporarily unavailable' }, 503); }
+  } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: 'Course files are temporarily unavailable' }, 503); }
 }

@@ -71,8 +71,11 @@ import { TrackerSheet } from "./LiveTools";
 import { FurnishingSheet } from "./LiveFurnishing";
 import { buildSearchIndex, type SearchEntry } from "../../lib/workspace-search";
 import { toolsFor, type Tool } from "../../lib/tool-directory";
-import { VIEW_AS_ROLES, canViewAs, previewAccount, viewAsLabel, viewOnlyMessage } from "../../lib/view-as";
-import { setViewOnly } from "./backend/client";
+import { canViewAs, previewAccount, readSavedView, viewAsKey, viewAsName, viewOnlyMessage, VIEW_AS_ENDED, type ViewAs } from "../../lib/view-as";
+import { setViewOnly, startViewAs, stopViewAs } from "./backend/client";
+import { ViewAsBanner, ViewAsSheet } from "./ViewAs";
+import { STAFF_ROLES } from "./LiveOnboarding";
+import { onboardingSchema } from "../../lib/management-live";
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
@@ -132,7 +135,7 @@ function IconButton({ label, icon, onPress, palette: p }: { label: string; icon:
   );
 }
 
-function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, setTheme, onSignedOut, onDeleted, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; realAccount: WorkspaceAccount; viewAs: Role | null; onViewAs: (role: Role | null) => void; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onDeleted: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
+function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p, theme, setTheme, onSignedOut, onDeleted, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; realAccount: WorkspaceAccount; viewAs: ViewAs | null; onViewAs: (view: ViewAs | null) => Promise<void>; notice: string; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onDeleted: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
   const reduced = useReducedMotion(), motionPreference = useMotionPreference(), faqShortcut = useFaqShortcut();
@@ -204,7 +207,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
   const accountKey = (a: WorkspaceAccount) => [a.role, a.status, a.fullName, [...a.modules].sort().join()].join("|");
   // (While a super admin views as another role, this follows their own account, not the preview.)
   const shownAccount = useRef(realAccount);
-  const [accessNote, setAccessNote] = useState("");
+  const [accessNote, setAccessNote] = useState(notice);
   useEffect(() => {
     const before = shownAccount.current;
     shownAccount.current = realAccount;
@@ -307,6 +310,17 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
   // Search and Favorites: one list of everything this person can open, from what is already loaded.
   const team = account.role !== "client";
   const favorites = useFavoritesStore(team, viewAs ? viewOnlyMessage(viewAs) : "");
+  // Viewing as a team member who hasn't finished their start-up checklist: say why their tools are empty.
+  const [viewNote, setViewNote] = useState("");
+  useEffect(() => {
+    if (!viewAs?.person || !STAFF_ROLES.includes(account.role)) return;
+    let active = true;
+    readTeams({ section: "onboarding" }).then(result => {
+      const status = onboardingSchema.safeParse(result.data);
+      if (active && status.success && status.data.required && !status.data.complete) setViewNote("They haven't finished their start-up checklist, so until they do they see that instead of these tools.");
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [viewAs, account.role]);
   const entries = useMemo(() => buildSearchIndex({ role: account.role, modules: account.modules, properties, work, invoices }), [account.role, account.modules, properties, work, invoices]);
   const openEntry = (entry: SearchEntry) => {
     const t = entry.target;
@@ -491,7 +505,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 {!desktop && team && <IconButton label="Search" icon="search" palette={header} onPress={() => setSearchOpen(true)} />}
-                {canViewAs(realAccount) && (desktop || width >= 400) && <IconButton label={viewAs ? `Viewing as ${viewAsLabel(viewAs)}. Change view` : "View as another role"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
+                {canViewAs(realAccount) && (desktop || width >= 400) && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
                 <View>
                   <IconButton label={messagesBadge ? `Messages, ${[chatUnread ? `${chatUnread} unread` : "", guestWaiting ? `${guestWaiting} ${guestWaiting === 1 ? "guest" : "guests"} waiting` : ""].filter(Boolean).join(", ")}` : "Messages"} icon="message-circle" palette={header} onPress={() => { setChatTarget(null); navigate("inbox"); }} />
                   {messagesBadge > 0 && <View pointerEvents="none" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View>}
@@ -507,15 +521,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
           </View>
           <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, (showFaq || showFavorites) && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
-              {!!viewAs && <View accessibilityRole="alert" style={[ui.row, { gap: 12, padding: 12, paddingLeft: 14, borderRadius: 16, backgroundColor: p.header, flexWrap: "wrap" }]}>
-                <Feather name="eye" size={18} color={p.headerText} />
-                <View style={{ flex: 1, minWidth: 180, gap: 2 }}>
-                  <Text style={{ color: p.headerText, fontSize: 14, fontWeight: "700" }}>Viewing as {viewAsLabel(viewAs)}</Text>
-                  <Text style={{ color: p.headerMuted, fontSize: 12, lineHeight: 17 }}>Their Home, menus and tools. Lists still show the whole business, and nothing is saved while you look around.</Text>
-                </View>
-                <MotionPress accessibilityRole="button" onPress={() => setViewAsOpen(true)} style={{ minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: p.headerBorder }}><Text style={{ color: p.headerText, fontSize: 13, fontWeight: "700" }}>Change</Text></MotionPress>
-                <MotionPress accessibilityRole="button" onPress={() => onViewAs(null)} style={{ minHeight: 40, justifyContent: "center", paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.headerText }}><Text style={{ color: p.header, fontSize: 13, fontWeight: "700" }}>Back to my view</Text></MotionPress>
-              </View>}
+              {!!viewAs && <ViewAsBanner palette={p} view={viewAs} note={viewNote} onChange={() => setViewAsOpen(true)} onBack={() => void onViewAs(null)} />}
               {!!accessNote && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.wash }]}><Feather name="shield" size={16} color={p.primary} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{accessNote}</Text><MotionPress accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setAccessNote("")} style={{ minHeight: 36, minWidth: 36, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={p.muted} /></MotionPress></View>}
               <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}><WorkJumpContext.Provider value={jump}><OwnerActions.Provider value={ownerActions}>{animatedPage}</OwnerActions.Provider></WorkJumpContext.Provider></WorkFocusContext.Provider></AnchorRegistry.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
@@ -563,7 +569,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
             </View>
           </View>
         </View>
-        {canViewAs(realAccount) && <SoftButton label={viewAs ? `Viewing as ${viewAsLabel(viewAs)}: change` : "View the app as another role"} icon="arrow-right" palette={p} onPress={() => { setSettings(false); setViewAsOpen(true); }} />}
+        {canViewAs(realAccount) && <SoftButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}: change` : "View the app as someone else"} icon="arrow-right" palette={p} onPress={() => { setSettings(false); setViewAsOpen(true); }} />}
         <PrivacySection p={p} onDelete={() => { setSettings(false); setDeleting(true); }} />
         <SoftButton label="Your tools, help and training" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("help"); }} />
         {confirmOut ? <SignOutUploadsWarning p={p} busy={busy} onCancel={() => setConfirmOut(false)} onConfirm={() => void logout(true)} /> : <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={() => void logout()} />}
@@ -590,22 +596,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
       <SearchPanel visible={searchOpen} onClose={() => setSearchOpen(false)} palette={p} entries={entries} onOpen={openEntry} />
       <TrackerSheet palette={p} tool={tracker} properties={properties} onClose={() => setTracker(null)} />
       <FurnishingSheet palette={p} visible={calculator} onClose={() => setCalculator(false)} />
-      {canViewAs(realAccount) && <Sheet palette={p} visible={viewAsOpen} onClose={() => setViewAsOpen(false)} title="View as another role" subtitle="See each team member's point of view" icon="people">
-        <Text style={[ui.small, { color: p.muted }]}>You see that role&apos;s Home, menus, Work views and tools, exactly as they do. Lists still show the whole business, because the database knows it&apos;s you, and nothing is saved until you switch back. Only super admins can do this.</Text>
-        <View style={{ gap: 8 }}>
-          {[{ role: null, label: "Myself", detail: "Super admin, everything" }, ...VIEW_AS_ROLES].map(option => {
-            const on = (option.role ?? null) === viewAs;
-            return (
-              <MotionPress key={option.label} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => { setViewAsOpen(false); if (!on) onViewAs(option.role); }}
-                style={[ui.row, { gap: 12, minHeight: 56, paddingHorizontal: 14, borderRadius: 16, borderWidth: on ? 2 : 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.wash : p.background }]}>
-                <Feather name={option.role ? "eye" : "user"} size={18} color={on ? p.primary : p.muted} />
-                <View style={{ flex: 1, gap: 1 }}><Text style={{ color: p.text, fontSize: 14, fontWeight: "700" }}>{option.label}</Text><Text style={{ color: p.muted, fontSize: 12 }}>{option.detail}</Text></View>
-                {on && <Feather name="check" size={18} color={p.primary} />}
-              </MotionPress>
-            );
-          })}
-        </View>
-      </Sheet>}
+      {canViewAs(realAccount) && <ViewAsSheet palette={p} visible={viewAsOpen} current={viewAs} onClose={() => setViewAsOpen(false)} onChoose={onViewAs} />}
       <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
       {welcome === "splash" && <RechargeSplash palette={p} onDone={() => setWelcome("greeting")} />}
       </OpenMessagesContext.Provider></CelebrateProvider></FavoritesContext.Provider>
@@ -629,19 +620,30 @@ function Screen() {
     }).catch(e => { if (active && !(e instanceof WorkspaceApiError && e.status === 401)) setError(message(e)); }).finally(() => { if (active) setChecking(false); });
     return () => { active = false; };
   }, []);
-  // A super admin's "View as": the role they are looking through, kept for this browser tab only.
-  const [viewAs, setViewAsState] = useState<Role | null>(() => {
-    try { const saved = globalThis.sessionStorage?.getItem("rc-view-as"); return VIEW_AS_ROLES.some(r => r.role === saved) ? saved as Role : null; } catch { return null; }
-  });
+  // A super admin's "View as" (lib/view-as.ts), kept for this browser tab only. Viewing a person
+  // starts a recorded view on the server, which answers with the account the app then shows.
+  const [viewAs, setViewAsState] = useState<ViewAs | null>(() => { try { return readSavedView(globalThis.sessionStorage?.getItem("rc-view-as")); } catch { return null; } });
+  const [person, setPerson] = useState<WorkspaceAccount | null>(null), [viewNotice, setViewNotice] = useState("");
   const viewing = account && canViewAs(account) ? viewAs : null;
-  const shown = useMemo(() => account ? previewAccount(account, viewing) : null, [account, viewing]);
-  useEffect(() => { setViewOnly(viewing ? viewOnlyMessage(viewing) : ""); }, [viewing]);
-  const changeView = useCallback((role: Role | null) => {
-    try { if (role) globalThis.sessionStorage?.setItem("rc-view-as", role); else globalThis.sessionStorage?.removeItem("rc-view-as"); } catch { /* storage unavailable */ }
-    // Nothing may be saved from the moment a preview starts.
-    setViewOnly(role ? viewOnlyMessage(role) : "");
-    setWelcome(false); router.setParams({ section: "home" }); setViewAsState(role);
-  }, []);
+  const shown = useMemo(() => !account || !viewing ? account : viewing.person ? (person?.userId === viewing.person.userId ? person : null) : previewAccount(account, viewing.role), [account, viewing, person]);
+  const changeView = useCallback(async (next: ViewAs | null, quiet = false) => {
+    // Nothing may be saved from the moment a view starts; the start itself is sent as the super admin.
+    const shownNext = next?.person ? await startViewAs(next.person.userId) : null;
+    if (viewAs?.person && !next?.person) void stopViewAs().catch(() => undefined);
+    try { if (next) globalThis.sessionStorage?.setItem("rc-view-as", JSON.stringify(next)); else globalThis.sessionStorage?.removeItem("rc-view-as"); } catch { /* storage unavailable */ }
+    const ended = () => { setViewOnly(""); setViewAsState(null); setPerson(null); setViewNotice(VIEW_AS_ENDED.replace("Choose them again to carry on.", "You're back in your own view.")); try { globalThis.sessionStorage?.removeItem("rc-view-as"); } catch { /* storage unavailable */ } };
+    setViewOnly(next ? viewOnlyMessage(next) : "", next?.person ? { userId: next.person.userId, onEnded: ended } : null);
+    setPerson(shownNext); setViewNotice("");
+    if (!quiet) { setWelcome(false); router.setParams({ section: "home" }); }
+    setViewAsState(next);
+  }, [viewAs]);
+  // After a refresh, a person view picks up again (and is recorded again); if it can't, back to your own view.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current || !account || !canViewAs(account) || !viewAs) return;
+    resumed.current = true;
+    changeView(viewAs, true).catch(() => { setViewOnly(""); setViewAsState(null); try { globalThis.sessionStorage?.removeItem("rc-view-as"); } catch { /* storage unavailable */ } });
+  }, [account, viewAs, changeView]);
   const signedOut = useCallback(() => { setViewOnly(""); setAccount(null); }, []);
   // After deleting their account the person lands on sign-in with a confirmation.
   const deleted = useCallback(() => { setNotice(ACCOUNT_DELETED); setAccount(null); }, []);
@@ -652,7 +654,8 @@ function Screen() {
   // New team members sign their contract and finish required training first.
   return (
     <OnboardingGate key={account.userId} account={account} palette={p} onSignOut={() => { void unlinkNotifications().then(() => signOut()).catch(() => undefined).finally(() => setAccount(null)); }}>
-      <Workspace key={viewing ?? "self"} account={shown ?? account} realAccount={account} viewAs={viewing} onViewAs={changeView} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onDeleted={deleted} onAccount={setAccount} welcomeOnOpen={welcome} />
+      {shown ? <Workspace key={viewAsKey(viewing)} account={shown} realAccount={account} viewAs={viewing} onViewAs={changeView} notice={viewNotice} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onDeleted={deleted} onAccount={setAccount} welcomeOnOpen={welcome} />
+        : <View style={[ui.fill, { backgroundColor: p.background, alignItems: "center", justifyContent: "center" }]}><ActivityIndicator accessibilityLabel="Opening the view" color={p.primary} /></View>}
     </OnboardingGate>
   );
 }

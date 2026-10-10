@@ -6,7 +6,7 @@ const state = {}; globalThis.__financeHttp = state;
 const mocks = {
   'business-server': `const s=globalThis.__financeHttp; export const businessContext=async()=>s.session;
   export const businessResponse=(body,status=200)=>Response.json(body,{status});
-  export const databaseFailure=e=>Response.json({error:'Denied by database'},{status:e.code==='42501'?403:400});`,
+  export const databaseFailure=e=>Response.json({error:'Denied by database'},{status:e.code==='42501'?403:400}); export const viewAsFailure=()=>null;`,
   'auth-security': `const s=globalThis.__financeHttp; export const authSecurityConfiguration=()=>({origin:'https://recharge.example'}); export const requestQuota=async()=>s.quota;`,
 };
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, plugins: [{

@@ -16,10 +16,12 @@ export const workspaceTeams = rpcRoute({
   readSchema: teamsReadSchema, actionSchema: teamsActionSchema, bodyLimit: 300_000, unavailable: 'Team tools are temporarily unavailable',
   read: (client, input) => input.section === 'readyHome' ? client.rpc('workspace_ready_home')
     : input.section === 'favorites' ? client.rpc('workspace_favorites')
+    : input.section === 'viewAsPeople' ? client.rpc('workspace_view_as_people')
     : client.rpc('workspace_teams_read', { section: input.section, start_on: input.from || null, end_on: input.to || null, target_property: input.propertyId || null, target_user: input.userId || null }),
   action: 'workspace_teams_action',
-  // Favorites belong to the person alone and have their own database function.
-  actionFor: input => input.action === 'saveFavorites' ? 'workspace_save_favorites' : 'workspace_teams_action',
+  // Favorites and View as have their own database functions.
+  actionFor: input => input.action === 'saveFavorites' ? 'workspace_save_favorites' : input.action === 'startViewAs' ? 'workspace_view_as_start'
+    : input.action === 'stopViewAs' ? 'workspace_view_as_stop' : 'workspace_teams_action',
 });
 
 export const workspaceAdmin = rpcRoute({

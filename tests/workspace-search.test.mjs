@@ -4,7 +4,7 @@ import {createServer} from 'vite';
 
 const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false}});
 const search=await vite.ssrLoadModule('/lib/workspace-search.ts');
-const {previewAccount,canViewAs,VIEW_AS_ROLES,viewOnlyMessage}=await vite.ssrLoadModule('/lib/view-as.ts');
+const {previewAccount,canViewAs,VIEW_AS_ROLES,viewOnlyMessage,viewAsGroups,viewAsKey,readSavedView,viewAsPeopleSchema}=await vite.ssrLoadModule('/lib/view-as.ts');
 const {DEFAULT_ROLE_MODULES,MODULE_IDS}=await vite.ssrLoadModule('/lib/modules.ts');
 const {teamsActionSchema,teamsReadSchema}=await vite.ssrLoadModule('/lib/workspace-teams-policy.ts');
 await vite.close();
@@ -83,5 +83,21 @@ test('only a super admin can view as another role, with that role’s tools',()=
  const adminAccount={...me,role:'admin'};
  assert.ok(!canViewAs(adminAccount));assert.equal(previewAccount(adminAccount,'cleans'),adminAccount,'an admin cannot preview');
  assert.ok(!VIEW_AS_ROLES.some(r=>r.role==='super_admin'));
- assert.match(viewOnlyMessage('ready'),/viewing as Ready, so nothing is saved/);
+ assert.match(viewOnlyMessage({role:'ready',person:null}),/viewing as the Ready role, so nothing is saved/);
+ assert.match(viewOnlyMessage({role:'cleans',person:{userId:me.userId,fullName:'Ana Ruiz'}}),/viewing as Ana Ruiz \(Cleaner\)/);
+});
+
+test('View as lists people under their role and remembers the view for the tab',()=>{
+ const id=n=>`70000000-0000-4000-8000-00000000000${n}`;
+ const people=viewAsPeopleSchema.parse([{userId:id(1),fullName:'Zoe',role:'cleans'},{userId:id(2),fullName:'Ana',role:'cleans'},{userId:id(3),fullName:'Bo',role:'client'}]);
+ const groups=viewAsGroups(people);
+ assert.deepEqual(groups.map(g=>g.role),VIEW_AS_ROLES.map(r=>r.role));
+ assert.deepEqual(groups.find(g=>g.role==='cleans').people.map(p=>p.fullName),['Ana','Zoe']);
+ assert.equal(groups.find(g=>g.role==='stays').people.length,0,'a role nobody has is still offered');
+ assert.throws(()=>viewAsPeopleSchema.parse([{userId:id(4),fullName:'Me',role:'super_admin'}]),'super admins are never offered');
+ assert.equal(viewAsKey(null),'self');assert.equal(viewAsKey({role:'stays',person:null}),'role:stays');assert.equal(viewAsKey({role:'cleans',person:{userId:id(1),fullName:'Zoe'}}),id(1));
+ assert.deepEqual(readSavedView(JSON.stringify({role:'cleans',person:{userId:id(1),fullName:'Zoe'}})),{role:'cleans',person:{userId:id(1),fullName:'Zoe'}});
+ assert.equal(readSavedView('cleans'),null,'the older saved form is ignored');
+ assert.equal(readSavedView(JSON.stringify({role:'super_admin',person:null})),null);
+ assert.equal(readSavedView(null),null);
 });

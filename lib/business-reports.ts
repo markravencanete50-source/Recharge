@@ -3,7 +3,7 @@ import type { AnalyticsSnapshot } from "./analytics";
 import { parseAnalyticsDate, presetPeriod } from "./analytics";
 import { analyticsCsv, analyticsFilename } from "./analytics-export";
 import { isWorkspaceAdmin } from "./modules";
-import { businessContext, businessResponse, databaseFailure } from "./business-server";
+import { businessContext, businessResponse, databaseFailure, viewAsFailure } from "./business-server";
 import { reportPeriodSchema } from "./business-policy";
 
 const reportSchema = z.object({
@@ -36,5 +36,5 @@ export async function businessReport(request: Request, native = false, exportRep
     };
     if (exportReport) return new Response(analyticsCsv(snapshot, period.data), { headers: { "Cache-Control": "private, no-store", Vary: "Cookie, Authorization", "X-Content-Type-Options": "nosniff", "Content-Type": "text/csv;charset=utf-8", "Content-Disposition": `attachment; filename="${analyticsFilename(period.data)}"` } });
     return businessResponse({ data: snapshot, period: period.data, mode: "live" });
-  } catch { return businessResponse({ error: "Reports are temporarily unavailable" }, 503); }
+  } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: "Reports are temporarily unavailable" }, 503); }
 }

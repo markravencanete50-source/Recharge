@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createServer} from 'vite';
 const state={env:{}};globalThis.__integrationHttp=state;
 const mocks={
- 'business-server':`const s=globalThis.__integrationHttp;export const businessContext=async()=>s.session;export const businessResponse=(body,status=200)=>Response.json(body,{status});export const databaseFailure=()=>Response.json({error:'denied'},{status:403});`,
+ 'business-server':`const s=globalThis.__integrationHttp;export const businessContext=async()=>s.session;export const businessResponse=(body,status=200)=>Response.json(body,{status});export const databaseFailure=()=>Response.json({error:'denied'},{status:403});export const viewAsFailure=()=>null;`,
  'auth-security':`const s=globalThis.__integrationHttp;export const authSecurityConfiguration=()=>({origin:'https://recharge.example'});export const requestQuota=async()=>s.quota;export const securityRpc=async(name,args)=>{s.calls.push({name,args});return 'verified-evidence';};`,
  'hostaway':`export const listHostawayReservations=async()=>{globalThis.__integrationHttp.providerCalls++;return [];};`,
  'integration-providers':`export const uploadPrivatePhoto=async(settings,publicId,bytes,format)=>{globalThis.__integrationHttp.providerCalls++;return {assetId:'verified',publicId,version:1,bytes:bytes.length,format};};export const deliverNotification=async()=>{throw Error('Unexpected delivery');};export const downloadPrivatePhoto=async()=>new Uint8Array([255,216,255,...Array(13).fill(0)]);`,

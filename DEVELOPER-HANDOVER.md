@@ -211,12 +211,29 @@ Migration `20261010230000_sweep_fixes` (applied live) and app fixes:
   "Favorites" link in the desktop sidebar, and on phones a round star button floating above the
   Help button (`FavoritesShortcut`, it shrinks away while scrolling); the bottom bar is unchanged.
   Search is in the header only (no second bar on Home). State lives in `mobile/src/Favorites.tsx`.
-- **View as (super admins):** the eye button in the header, or Profile → "View the app as another
-  role". The app shows that role's Home, menus, Work views and tools (`lib/view-as.ts`,
-  `previewAccount`). The database still knows who is signed in, so lists show the whole business.
-  While viewing, `setViewOnly` in `mobile/src/backend/client.ts` refuses every write except this
-  device's notification link, so trying screens never changes records. The choice lasts for the
-  browser tab, and a banner offers "Back to my view".
+- **View as (super admins):** the eye button in the header, or Profile → "View the app as someone
+  else" (`mobile/src/ViewAs.tsx`, `lib/view-as.ts`). The picker lists each role with its people.
+  - **A person** shows exactly what they see. `startViewAs` (teams route → `workspace_view_as_start`)
+    records the view in `private.workspace_view_as_sessions` and Access history ("Viewed as"), and
+    returns their account. Every read then carries `x-recharge-view-as: <their id>`
+    (`workspaceRequest` in `mobile/src/backend/client.ts`). On the server, `businessContext` in
+    `lib/business-server.ts` builds a client with that header, for GET requests from active super
+    admins only; POSTs always run as the super admin.
+  - **In the database** (migration `20261010270000_view_as_person`, applied live),
+    `public.workspace_request_check()` is the Data API's `pgrst.db_pre_request` and runs before
+    every request. Without the header it returns at once. With it, it checks the caller is an active
+    super admin with a view of that person started in the last 12 hours and not ended. It then
+    swaps `auth.uid()` (the JWT `sub`) and the cached role for that one request, and makes the
+    transaction read-only. Every RLS policy and function therefore answers as the person, with no
+    change to them. While viewing, `workspace_chat_read` only shows conversations the super admin
+    could open themselves, and `workspace_privacy_read` is refused. An ended view answers 409 and the
+    app goes back to the super admin's own view.
+  - **To switch it off:** `alter role authenticator reset pgrst.db_pre_request; notify pgrst,
+    'reload config';`.
+  - **A role nobody has yet** ("… screens only") shows that role's menus and tools with the super
+    admin's own records (`previewAccount`).
+  - **Either way**, `setViewOnly` refuses every write except this device's notification link. The
+    choice lasts for the browser tab, and a banner offers "Back to my view".
 - **Role change brings the role's tools:** migration `20261010250000_role_tools` (applied live).
   `private.workspace_role_tools` matches `DEFAULT_ROLE_MODULES` (a test checks this).
 - **Messages** shows the department channels on every tab. **The Properties map** pans, zooms

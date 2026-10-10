@@ -11,11 +11,17 @@ export function supabaseConfiguration() {
   return url && key ? { url, key } : null;
 }
 
-export const workspaceSupabase = cache(async () => {
+export const workspaceSupabase = cache(() => webClient());
+// A super admin's "View as" read: the same web session, with the person's id for the database's
+// request check (supabase/migrations/20261010270000_view_as_person.sql).
+export const workspaceSupabaseViewing = (target: string) => webClient({ "x-recharge-view-as": target });
+
+async function webClient(headers?: Record<string, string>) {
   const config = supabaseConfiguration();
   if (!config) return null;
   const store = await cookies();
   return createServerClient(config.url, config.key, {
+    ...(headers ? { global: { headers } } : {}),
     cookieOptions: { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/" },
     cookies: {
       getAll: () => store.getAll(),
@@ -25,7 +31,7 @@ export const workspaceSupabase = cache(async () => {
       },
     },
   });
-});
+}
 
 export const verifiedWorkspaceUser = cache(async () => {
   const client = await workspaceSupabase();

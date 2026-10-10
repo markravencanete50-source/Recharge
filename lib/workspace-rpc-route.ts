@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { z } from 'zod';
 import { authSecurityConfiguration, requestQuota } from './auth-security';
 import { boundedJson, isSameOrigin } from './auth-security-policy';
-import { businessContext, businessResponse, databaseFailure } from './business-server';
+import { businessContext, businessResponse, databaseFailure, viewAsFailure } from './business-server';
 import { isNativeRequest } from './native-request-policy';
 
 // Shared transport for checked database read/action pairs. Authority lives in the
@@ -49,6 +49,6 @@ export function rpcRoute<R extends z.ZodTypeAny, A extends z.ZodTypeAny>(spec: R
       if ('error' in prepared) return businessResponse({ error: prepared.error }, 400);
       const result = await session.client.rpc(spec.actionFor?.(input.data) ?? spec.action, { input: prepared.input });
       return result.error ? databaseFailure(result.error) : businessResponse({ data: result.data, ok: true });
-    } catch { return businessResponse({ error: spec.unavailable }, 503); }
+    } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: spec.unavailable }, 503); }
   };
 }

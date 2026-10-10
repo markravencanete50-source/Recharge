@@ -15,6 +15,7 @@ import type { ChecklistAction } from '../../../lib/clean-checklist-policy';
 import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import type { DeleteAccountInput } from '../../../lib/privacy-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
+import { VIEW_AS_ENDED, VIEW_AS_HEADER, viewAsPeopleSchema } from '../../../lib/view-as';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -42,7 +43,7 @@ export function liveApiOrigin(): string | null {
     return url.protocol === "https:" && !url.username && !url.password && url.pathname === "/" && !url.search && !url.hash ? url.origin : null;
   } catch { return null; }
 }
-async function call(path: string, body?: unknown, accessToken?: string) {
+async function call(path: string, body?: unknown, accessToken?: string, viewAs?: string) {
   const origin = liveApiOrigin();
   if (!origin) throw new WorkspaceApiError("The live mobile backend is awaiting configuration.", 503);
   const multipart = body instanceof FormData;
@@ -52,7 +53,7 @@ async function call(path: string, body?: unknown, accessToken?: string) {
   try {
     const response = await fetch(sameOriginWeb ? path : origin + path, {
       method: body === undefined ? "GET" : "POST", credentials: sameOriginWeb ? "same-origin" : "omit", redirect: sameOriginWeb ? "manual" : "error", signal: controller.signal,
-      headers: { ...(sameOriginWeb ? {} : { "X-Recharge-Client": "native" }), ...(body === undefined || multipart ? {} : { "Content-Type": "application/json" }), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+      headers: { ...(sameOriginWeb ? {} : { "X-Recharge-Client": "native" }), ...(body === undefined || multipart ? {} : { "Content-Type": "application/json" }), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...(viewAs ? { [VIEW_AS_HEADER]: viewAs } : {}) },
       ...(body === undefined ? {} : { body: multipart ? body : JSON.stringify(body) }),
     });
     if (!response.ok) {
@@ -113,16 +114,26 @@ export async function registrationOpen() {
 export async function accountStep(body: Record<string, unknown>, accessToken?: string) {
   return z.record(z.unknown()).parse(await (await call("/api/mobile/account", body, accessToken)).json());
 }
-let viewOnly = "";
-export function setViewOnly(message: string) { viewOnly = message; }
-export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
+// A super admin's "View as" (lib/view-as.ts): while it is on nothing is saved, and when it is a
+// person, every read carries their id so the database answers as them.
+let viewOnly = "", viewing: string | null = null, viewEnded: (() => void) | null = null;
+export function setViewOnly(message: string, person?: { userId: string; onEnded: () => void } | null) {
+  viewOnly = message; viewing = message && person ? person.userId : null; viewEnded = message && person ? person.onEnded : null;
+}
+export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
   if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
-  // While a super admin views the app as another role nothing is saved (this device's own
+  // While a super admin views the app as someone else nothing is saved (this device's own
   // notification link aside), so trying the screens never changes the business's records.
-  if (viewOnly && body !== undefined && !path.startsWith("/api/mobile/devices")) throw new WorkspaceApiError(viewOnly, 423);
-  if (sameOriginWeb) return call(webWorkspacePath(path), body);
-  if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
-  return call(path, body, session!.accessToken);
+  if (viewOnly && body !== undefined && !options.asSelf && !path.startsWith("/api/mobile/devices")) throw new WorkspaceApiError(viewOnly, 423);
+  const as = body === undefined && !options.asSelf && !path.startsWith("/api/mobile/devices") ? viewing ?? undefined : undefined;
+  try {
+    if (sameOriginWeb) return await call(webWorkspacePath(path), body, undefined, as);
+    if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
+    return await call(path, body, session!.accessToken, as);
+  } catch (error) {
+    if (as && error instanceof WorkspaceApiError && error.status === 409 && error.message === VIEW_AS_ENDED) viewEnded?.();
+    throw error;
+  }
 }
 export async function signOut() {
   // The web sign-out answers with a redirect to the sign-in page, which manual mode reports as status 0.
@@ -144,6 +155,10 @@ export const writeFinance = async (action: FinanceAction) => (await workspaceReq
 export const readTeams = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/teams?'+new URLSearchParams(query))).json();
 export const writeTeams = async (action: TeamsAction) => (await workspaceRequest('/api/mobile/teams',action)).json();
 // Administration: people and properties (admins only).
+// View as: who can be viewed, and starting or ending a view. These always go as the super admin.
+export const readViewAsPeople = async () => viewAsPeopleSchema.parse((await (await workspaceRequest('/api/mobile/teams?section=viewAsPeople', undefined, { asSelf: true })).json()).data);
+export const startViewAs = async (userId: string) => workspaceAccountSchema.parse((await (await workspaceRequest('/api/mobile/teams', { action: 'startViewAs', userId }, { asSelf: true })).json()).data);
+export const stopViewAs = async () => { await workspaceRequest('/api/mobile/teams', { action: 'stopViewAs' }, { asSelf: true }); };
 export const readAdmin = async (section: 'people' | 'properties' | 'accessControl' | 'accessHistory') => (await workspaceRequest('/api/mobile/admin?section='+section)).json();
 export const writeAdmin = async (action: AdminAction) => (await workspaceRequest('/api/mobile/admin',action)).json();
 export const requestPhoneReset = async (phone: string) => (await call('/api/mobile/recovery',{action:'request',phone})).json();

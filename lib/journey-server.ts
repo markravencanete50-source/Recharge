@@ -1,7 +1,7 @@
 import { authSecurityConfiguration,requestQuota } from './auth-security';
 import { boundedJson,isSameOrigin } from './auth-security-policy';
 import { isNativeRequest } from './native-request-policy';
-import { businessContext,businessResponse,databaseFailure } from './business-server';
+import { businessContext,businessResponse,databaseFailure,viewAsFailure } from './business-server';
 import { journeyReadSchema,journeyActionSchema } from './journey-policy';
 import { operationsActionSchema, validationReason } from './operations-policy';
 export const journeyRoute=(request:Request,native=false)=>workflowRoute(request,native,'journey');
@@ -25,5 +25,5 @@ async function workflowRoute(request:Request,native:boolean,kind:'journey'|'oper
   if(!parsed.success)return businessResponse({error:validationReason(parsed.error)},400);
   const result=await session.client.rpc(kind==='journey'?'workspace_journey_action':'workspace_operations_action',{input:parsed.data});
   return result.error?databaseFailure(result.error):businessResponse({data:result.data,ok:true});
- }catch{return businessResponse({error:'The property journey is temporarily unavailable'},503);}
+ }catch(error){return viewAsFailure(error)??businessResponse({error:'The property journey is temporarily unavailable'},503);}
 }

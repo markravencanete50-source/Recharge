@@ -294,7 +294,7 @@ function HistoryRow({ p, e, first }: { p: Palette; e: AccessEvent; first: boolea
   const when = new Date(e.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
   return (
     <View style={[ui.row, { gap: 12, paddingVertical: 10, borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
-      <Feather name={e.event === "account_blocked" || e.event === "account_deleted" ? "slash" : e.event === "password_revoked" ? "key" : e.event === "signed_out_everywhere" ? "log-out" : e.event === "role_changed" ? "trending-up" : "sliders"} size={16} color={p.muted} />
+      <Feather name={e.event === "account_blocked" || e.event === "account_deleted" ? "slash" : e.event === "password_revoked" ? "key" : e.event === "signed_out_everywhere" ? "log-out" : e.event === "role_changed" ? "trending-up" : e.event === "viewed_as" ? "eye" : "sliders"} size={16} color={p.muted} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 14 }}>{eventLabel(e.event)} · {e.target}{e.event === "role_changed" && typeof e.detail.from === "string" && typeof e.detail.role === "string" ? ` (${roleLabel(e.detail.from)} → ${roleLabel(e.detail.role)})` : ""}</Text>
         <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>By {e.actor} · {when}</Text>

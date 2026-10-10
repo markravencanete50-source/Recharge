@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { authSecurityConfiguration, requestQuota } from "./auth-security";
 import { boundedJson, isSameOrigin } from "./auth-security-policy";
-import { businessContext, businessResponse, databaseFailure, scopedPropertyDetails } from "./business-server";
+import { businessContext, businessResponse, databaseFailure, scopedPropertyDetails, viewAsFailure } from "./business-server";
 import { isNativeRequest } from "./native-request-policy";
 import { otaAccountsSchema } from "./ota-accounts";
 
@@ -47,5 +47,5 @@ export async function propertyDetails(request: Request, native = false) {
     if (!input.success) return businessResponse({ error: reason || "Check the property details" }, 400);
     const result = await session.client.rpc("workspace_save_property_details", { target_property: input.data.propertyId, expected_version: input.data.version, section: input.data.section, input: input.data.input });
     return result.error ? databaseFailure(result.error) : businessResponse({ ok: true });
-  } catch { return businessResponse({ error: "Property details are temporarily unavailable" }, 503); }
+  } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: "Property details are temporarily unavailable" }, 503); }
 }

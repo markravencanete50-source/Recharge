@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { businessContext,businessResponse,databaseFailure } from './business-server';
+import { businessContext,businessResponse,databaseFailure,viewAsFailure } from './business-server';
 import { authSecurityConfiguration,requestQuota,securityRpc } from './auth-security';
 import { boundedJson,isSameOrigin } from './auth-security-policy';
 import { isNativeRequest } from './native-request-policy';
@@ -95,5 +95,5 @@ export async function integrationRoute(request:Request,native=false) {
     }
     if(rows.length>offset+10)summary.nextOffset=offset+10;
     return businessResponse(summary);
-  } catch {return businessResponse({error:'The integration connection is temporarily unavailable'},503);}
+  } catch (error) {return viewAsFailure(error)??businessResponse({error:'The integration connection is temporarily unavailable'},503);}
 }
