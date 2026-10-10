@@ -34,6 +34,9 @@ const eslintConfig = defineConfig([
     "mobile/dist-web/**",
     "mobile/dist-workspace/**",
     "preview-dist/**",
+    "scripts/demo/harness/**",
+    "scripts/demo/storage/**",
+    "dist-review/**",
   ]),
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],

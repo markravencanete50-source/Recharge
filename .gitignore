@@ -47,3 +47,10 @@ next-env.d.ts
 *.tsbuildinfo
 /supabase/.temp/
 /supabase/.branches/
+
+# the local review backend's cache, files and built form page (scripts/demo)
+/scripts/demo/seed.tar.gz
+/scripts/demo/seed.meta.json
+/scripts/demo/storage/
+/scripts/demo/harness/
+dist-review/

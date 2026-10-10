@@ -36,6 +36,8 @@ const since = (iso: string) => {
   const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
   return minutes < 1 ? "just now" : minutes < 60 ? `${minutes} min ago` : minutes < 48 * 60 ? `${Math.round(minutes / 60)} h ago` : `${Math.round(minutes / 1440)} days ago`;
 };
+// Big totals in whole hours ("340h"), so they fit a tile on a phone.
+const hoursTile = (minutes: number) => minutes >= 6000 ? `${Math.round(minutes / 60).toLocaleString("en-GB")}h` : hoursShort(minutes);
 // A tint of the chart colour for heat-map cells (0 to 1).
 const tint = (hex: string, share: number) => {
   const n = parseInt(hex.replace("#", ""), 16), a = Math.max(0, Math.min(1, share)) * 0.32;
@@ -71,11 +73,11 @@ export function LiveProductivity({ palette: p, account, initial = "weeks" }: { p
       <StatGrid>
         {current
           ? [
-            <StatTile key="week" p={p} icon="clock" tone="stays" label="Hours this week" value={data ? teamWeek(data, mondayOf(today)) : 0} format={hoursShort} detail="The whole team, from Monday" />,
-            <StatTile key="month" p={p} icon="calendar" tone="clients" label="Hours this month" value={data ? teamMonth(data, today.slice(0, 7)) : 0} format={hoursShort} detail={monthLabel(today.slice(0, 7), "long")} />,
+            <StatTile key="week" p={p} icon="clock" tone="stays" label="Hours this week" value={data ? teamWeek(data, mondayOf(today)) : 0} format={hoursTile} detail="The whole team, from Monday" />,
+            <StatTile key="month" p={p} icon="calendar" tone="clients" label="Hours this month" value={data ? teamMonth(data, today.slice(0, 7)) : 0} format={hoursTile} detail={monthLabel(today.slice(0, 7), "long")} />,
           ]
           : [
-            <StatTile key="year" p={p} icon="calendar" tone="stays" label={`Hours in ${year}`} value={yearMinutes} format={hoursShort} detail="The whole team" />,
+            <StatTile key="year" p={p} icon="calendar" tone="stays" label={`Hours in ${year}`} value={yearMinutes} format={hoursTile} detail="The whole team" />,
             <StatTile key="busiest" p={p} icon="trending-up" tone="clients" label="Busiest month" value={data ? monthLabel(busiest, "long") : "–"} detail={data ? hoursShort(teamMonth(data, busiest)) : undefined} />,
           ]}
         <StatTile p={p} icon="activity" tone="cleans" label="On shift now" value={onShift.length} detail={onShift.length ? onShift.slice(0, 3).map(x => x.fullName.split(" ")[0]).join(", ") + (onShift.length > 3 ? "…" : "") : "Nobody is clocked in"} />
