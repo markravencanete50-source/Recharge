@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Platform, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -24,6 +24,7 @@ import { agreementDocument, agreementFileName } from "../../lib/agreement-copy";
 import type { BudgetItem } from "../../lib/accounts-work";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
+import { propertyPoints } from "../../lib/property-points";
 import { formatCount, formatMoney } from "../../lib/format";
 import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
@@ -292,7 +293,8 @@ function PropertyCard({ property, index, palette: p, onPress }: { property: Prop
 }
 
 // The portfolio at a glance for the team: live, onboarding, owners, and properties per region.
-function PortfolioCard({ palette: p, summary }: { palette: Palette; summary: PortfolioSummary }) {
+function PortfolioCard({ palette: p, summary, properties }: { palette: Palette; summary: PortfolioSummary; properties: PropertyView[] }) {
+  const points = useMemo(() => propertyPoints(properties), [properties]);
   const top = summary.regions[0]?.count || 1, wide = useWindowDimensions().width >= 700;
   const stats: [string, number, IconName][] = [["Properties", summary.total, "home"], ["Live", summary.live, "check-circle"], ["Onboarding", summary.onboarding, "key"], ["Owners", summary.owners, "users"]];
   return (
@@ -302,7 +304,7 @@ function PortfolioCard({ palette: p, summary }: { palette: Palette; summary: Por
         {stats.map(([label, value, icon]) => <StatTile key={label} p={p} icon={icon} tone="stays" label={label} value={value} />)}
       </StatGrid>
       <View style={{ flexDirection: wide ? "row" : "column", gap: 18, alignItems: wide ? "center" : "stretch" }}>
-        <View style={{ flex: wide ? 1 : undefined, minWidth: 0 }}><ScotlandMap palette={p} regions={summary.regions} /></View>
+        <View style={{ flex: wide ? 1 : undefined, minWidth: 0 }}><ScotlandMap palette={p} regions={summary.regions} points={points} /></View>
         <View style={{ gap: 8, flex: wide ? 1.3 : undefined, minWidth: 0 }}>
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>By region</Text>
           {summary.regions.slice(0, 8).map(r => (
@@ -351,7 +353,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Properties"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
       {(account.role === "client" || staff) && account.modules.includes("property-onboarding") && <EnquiryCard palette={p} team={staff} onStart={() => onForm(newEnquiryForm(staff))} />}
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
-      {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
+      {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} properties={properties} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
       {staff && !loading && properties.length > 0 && account.modules.includes("property-database") && <PortfolioInsights palette={p} properties={properties} journeys={journeys} filter={filter} onFilter={f => { setFilter(f); setShown(24); }} onOwners={setOwnerCount} />}
       {staff && !loading && account.modules.includes("property-onboarding") && <OnboardingPipeline palette={p} properties={properties} journeys={journeys} onOpen={setSelected} />}
       {!!filter && <MotionPress accessibilityRole="button" onPress={() => setFilter(null)} style={[ui.row, { gap: 8, alignSelf: "flex-start", maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.wash }]}>

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AuthScene } from "./auth-scene";
 import { CompanyLogo } from "./company-logo";
 
 // The frame for every page someone sees before they are signed in: a forest brand panel (the
@@ -16,6 +17,7 @@ export function AuthShell({ eyebrow = "Recharge workspace", title, intro, welcom
           <p className="auth-brand-title">{welcome}</p>
           <p className="auth-brand-text">Your properties, stays, cleans and repairs, together in one place.</p>
         </div>
+        <AuthScene />
         <p className="auth-brand-note">Recharge Property Management · Scotland</p>
       </aside>
       <section className="auth-main">

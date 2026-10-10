@@ -8,7 +8,10 @@ import { createServer } from 'vite';
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 const { noticeCopy } = await vite.ssrLoadModule('/lib/notice-copy.ts');
 const { agreementDocument, agreementFileName } = await vite.ssrLoadModule('/lib/agreement-copy.ts');
-const { mapBubbles, MAP_WIDTH, MAP_HEIGHT, AREA_CENTRES, MAPPED_REGIONS, LAND_PATHS } = await vite.ssrLoadModule('/lib/scotland-map.ts');
+const { mapBubbles, MAP_WIDTH, MAP_HEIGHT, AREA_CENTRES, MAPPED_REGIONS, LAND_PATHS, viewFor, FULL_VIEW, project, scaleBar } = await vite.ssrLoadModule('/lib/scotland-map.ts');
+const { COUNCIL_AREAS, REGION_VIEW, TOWNS } = await vite.ssrLoadModule('/lib/scotland-geo.ts');
+const { propertyPoints, postcodeDistrict } = await vite.ssrLoadModule('/lib/property-points.ts');
+const { POSTCODE_DISTRICTS } = await vite.ssrLoadModule('/lib/postcode-districts.ts');
 const { homeActionsFor } = await vite.ssrLoadModule('/lib/home-tools.ts');
 const { DEFAULT_ROLE_MODULES, MODULE_IDS } = await vite.ssrLoadModule('/lib/modules.ts');
 const { canReviseQuote } = await vite.ssrLoadModule('/lib/repairs-live.ts');
@@ -67,6 +70,66 @@ test('the map has every area, and circles never overlap or leave the map', () =>
     assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= a.r + b.r - 0.5, `${a.region} and ${b.region} overlap`);
   }
   assert.deepEqual(mapBubbles([]), []);
+});
+
+// Points of a compact path ("M x y l dx dy …" with relative steps), enough to test a pin is inside an area.
+function ringPoints(d) {
+  const rings = [];
+  for (const part of d.split('M').filter(Boolean)) {
+    const [start, rest = ''] = part.split(/[lL]/), nums = (t) => t.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+    const [x0, y0] = nums(start); const pts = [[x0, y0]]; let x = x0, y = y0;
+    const steps = nums(rest.replace(/z/gi, ''));
+    for (let i = 0; i + 1 < steps.length; i += 2) { x += steps[i]; y += steps[i + 1]; pts.push([x, y]); }
+    rings.push(pts);
+  }
+  return rings;
+}
+const inRing = (pts, [px, py]) => { let inside = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside; } return inside; };
+
+test('the real map: every area has a pin on its own land, and the views and towns fit the sheet', () => {
+  assert.equal(COUNCIL_AREAS.length, 32);
+  assert.ok(LAND_PATHS.length >= 5);
+  for (const r of MAPPED_REGIONS) {
+    assert.ok(REGION_VIEW[r], r + ' has a view');
+    const [x, y] = project(AREA_CENTRES[r]);
+    const rings = COUNCIL_AREAS.filter(a => a.region === r).flatMap(a => ringPoints(a.d));
+    assert.ok(rings.length > 0, r + ' has land');
+    assert.ok(rings.some(ring => inRing(ring, [x, y])), `${r}'s pin sits on its own land`);
+    const v = viewFor(r);
+    assert.ok(v.x >= 0 && v.y >= 0 && v.x + v.w <= MAP_WIDTH + 0.01 && v.y + v.h <= MAP_HEIGHT + 0.01 && Math.abs(v.h / v.w - MAP_HEIGHT / MAP_WIDTH) < 0.001, r + ' view fits the sheet');
+  }
+  assert.deepEqual(viewFor(null), FULL_VIEW); assert.deepEqual(viewFor('Scottish islands'), FULL_VIEW);
+  for (const t of TOWNS) { const [x, y] = project([t.lat, t.lon]); assert.ok(x > 0 && x < MAP_WIDTH && y > 0 && y < MAP_HEIGHT, t.name); }
+  const bar = scaleBar(0.5); assert.ok(bar.miles > 0 && bar.pixels > 0 && bar.pixels <= 120);
+});
+
+test('properties are placed by postcode district, on land, fanned out and never by exact address', () => {
+  assert.equal(postcodeDistrict('12 Leith Walk, Edinburgh, EH6 5AB'), 'EH6');
+  assert.equal(postcodeDistrict('Flat 2, 4 Union St, Aberdeen AB10 1BB'), 'AB10');
+  assert.equal(postcodeDistrict('3 High St, Glasgow g12 8qq'), 'G12');
+  assert.equal(postcodeDistrict('No postcode here'), null);
+  const land = COUNCIL_AREAS.flatMap(a => ringPoints(a.d));
+  const districts = ['TD9', 'EH54', 'EH6', 'G33', 'EH7', 'AB10', 'G83', 'PA2', 'DD10', 'IV51', 'KA22', 'KY11', 'FK2', 'ML2', 'G21', 'EH12'];
+  for (const d of districts) {
+    assert.ok(POSTCODE_DISTRICTS[d], d + ' is in the table');
+    const [x, y] = project(POSTCODE_DISTRICTS[d]);
+    assert.ok(land.some(r => inRing(r, [x, y])), d + ' sits on land');
+  }
+  const base = { status: 'active', region: 'Edinburgh' };
+  const list = [
+    { ...base, id: 'b', name: 'B', address: '2 Leith Walk, Edinburgh, EH6 5AB' }, { ...base, id: 'a', name: 'A', address: '1 Leith Walk, Edinburgh, EH6 5AA' },
+    { ...base, id: 'c', name: 'C', address: '9 Ferry Rd, Edinburgh, EH6 4AA' }, { ...base, id: 'd', name: 'Exact', address: '1 X St, EH6 1AA', latitude: 55.97, longitude: -3.18 },
+    { ...base, id: 'e', name: 'Old', status: 'archived', address: '1 Y St, EH6 1AA' }, { ...base, id: 'f', name: 'No code', address: 'Somewhere' }, { ...base, id: 'g', name: 'Far', address: '1 Z St, EH6 1AA', latitude: 10, longitude: 10 },
+  ];
+  const pts = propertyPoints(list);
+  assert.deepEqual(pts.map(p => p.id).sort(), ['a', 'b', 'c', 'd', 'g'], 'archived and unplaceable properties are left out; an off-map saved spot falls back to the postcode');
+  assert.deepEqual(pts.find(p => p.id === 'd'), { id: 'd', name: 'Exact', region: 'Edinburgh', district: 'EH6', lat: 55.97, lon: -3.18, exact: true });
+  const eh6 = pts.filter(p => p.district === 'EH6' && !p.exact);
+  assert.equal(new Set(eh6.map(p => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`)).size, eh6.length, 'properties in one district do not stack');
+  for (const p of eh6) assert.ok(Math.hypot((p.lat - POSTCODE_DISTRICTS.EH6[0]) * 111, (p.lon - POSTCODE_DISTRICTS.EH6[1]) * 62) < 2, 'stays within about 2 km of the district');
+  assert.deepEqual(propertyPoints(list.slice().reverse()), pts, 'the same places whatever the order');
+  const [first, second] = [viewFor('Edinburgh', pts.map(p => project([p.lat, p.lon]))), viewFor('Edinburgh')];
+  assert.ok(first.w < second.w && first.w >= 60, 'zoom fits the properties, tighter than the whole area');
 });
 
 test('Home shortcuts open the forms each role can use', () => {

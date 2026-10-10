@@ -529,6 +529,30 @@ input {
   .auth-title { font-size: 2.1rem; }
 }
 @media (prefers-reduced-motion: reduce) { .auth-card, .auth-alert { animation: none; } .auth-submit, .auth-submit svg, .auth-control { transition: none; } }
+/* The street of houses at the foot of the brand panel: windows light up in turn, smoke rises, clouds
+   drift and the bolt pulses. Everything is lit and still for people who ask for reduced motion. */
+.auth-scene { display: block; width: 100%; height: auto; margin: -12px 0 -28px; overflow: visible; }
+.auth-brand::after { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .auth-win { animation: auth-window 14s ease-in-out var(--d, 0s) infinite backwards; }
+  .auth-star { animation: auth-twinkle 3.6s ease-in-out var(--d, 0s) infinite; }
+  .auth-smoke { transform-box: fill-box; transform-origin: center; animation: auth-smoke 4s ease-out var(--d, 0s) infinite; opacity: 0; }
+  .auth-cloud { animation: auth-cloud var(--t, 60s) linear var(--d, 0s) infinite; }
+  .auth-lamp { animation: auth-glow 5s ease-in-out infinite; }
+  .auth-bolt { animation: auth-bob 3.2s ease-in-out infinite; }
+  .auth-bolt-ring { transform-box: fill-box; transform-origin: center; animation: auth-ring 2.4s ease-out infinite; }
+}
+@keyframes auth-window { 0%, 6% { opacity: .1; } 14%, 86% { opacity: 1; } 96%, 100% { opacity: .1; } }
+@keyframes auth-twinkle { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@keyframes auth-smoke { 0% { transform: translateY(0) scale(.6); opacity: 0; } 15% { opacity: .55; } 100% { transform: translateY(-24px) translateX(6px) scale(1.7); opacity: 0; } }
+@keyframes auth-cloud { from { transform: translateX(-60px); } to { transform: translateX(470px); } }
+@keyframes auth-glow { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+@keyframes auth-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -3px; } }
+@keyframes auth-ring { 0% { transform: scale(.85); opacity: .9; } 100% { transform: scale(1.7); opacity: 0; } }
+@media (min-width: 960px) {
+  .auth-scene { margin: 0 -48px -48px; width: calc(100% + 96px); max-width: none; }
+  .auth-brand-note { position: absolute; left: 48px; bottom: 18px; z-index: 1; }
+}
 /* Consent line under the sign-in and choose-password forms, and the privacy, terms and
    account-deletion pages: the same card, wider, for reading. */
 .auth-consent { margin-top: 16px; font-size: 0.8rem; line-height: 1.5; color: var(--rc-muted); }
