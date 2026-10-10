@@ -292,7 +292,8 @@ database tool can run it, and it is safe to run more than once.
   shows the viewed person's or role's panel, marked "view only", with a "Back to my view" button.
   `tests/role-panel.test.mjs` checks every role's Work areas, Home tools and quick starts are in its
   panel, nothing is listed twice, and admin-only places stay with admins. `DesktopNavigation` is now
-  used only by the sample preview. Phones keep their bottom bar.
+  used only by the sample preview. Phones keep their bottom bar. While the panel shows, Work has no row
+  of area tabs above it (the panel lists the areas); on phones, or with the panel hidden, the row is back.
 - **Role preview (View as a role, no person):** the reads still go as the super admin, so
   `previewKeeps` (`lib/view-as.ts`) cuts what is shown down to that role: work from the role's tools,
   invoices only for Accounts and owners, onboarding journeys only for roles in onboarding, none of

@@ -456,7 +456,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   );
   const workPage = (
     <>
-      {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
+      {/* The Work areas are listed in the left panel on desktop, so the row of tabs shows only without it (phones, or the panel hidden). */}
+      {workViews.length > 1 && !(desktop && !sidebarHidden) && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
       {currentView === "hub" && <LiveHub palette={p} account={account} properties={properties} journeys={journeys} work={work} onForm={setForm} onOpenWork={setOpenWork} />}
       {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} onOpenWork={setOpenWork} onOpenView={(view, sub) => { setFocus(sub ? { sub, nonce: Date.now() } : null); setWorkView(view); }} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} />}
