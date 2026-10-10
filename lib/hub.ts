@@ -15,8 +15,10 @@ export function hubTabsFor(role: string, keeps: readonly string[]): HubTab[] {
   if (admin || ['stays', 'ready', 'accounts'].includes(role)) tabs.push('purchases');
   if (admin || ['stays', 'ready'].includes(role)) tabs.push('preventative');
   if (admin || role === 'stays') tabs.push('daily');
-  if (keeps.includes('aircover')) tabs.push('aircover');
-  if (keeps.includes('invoice')) tabs.push('invoices');
+  // AirCover and invoices follow the role as well as the database's answer, so a super admin
+  // previewing another role's screens (whose hub read is their own) sees only that role's.
+  if (keeps.includes('aircover') && (admin || ['stays', 'accounts'].includes(role))) tabs.push('aircover');
+  if (keeps.includes('invoice') && (admin || role === 'accounts')) tabs.push('invoices');
   if (admin || role === 'stays') tabs.push('onboarding');
   // Everyone on the team reads who does what and the rota, and their own timesheet.
   tabs.push('responsibilities', 'rota', 'timesheets');

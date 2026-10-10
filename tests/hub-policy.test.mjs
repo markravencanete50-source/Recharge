@@ -20,6 +20,9 @@ test('every team role has the Hub; each sees the trackers for their work', () =>
   assert.deepEqual(hubTabsFor('admin', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'invoices', 'onboarding', 'responsibilities', 'rota', 'timesheets']);
   assert.deepEqual(hubTabsFor('cleans', ['todo', 'approval']), ['todos', 'approvals', 'responsibilities', 'rota', 'timesheets']);
   assert.deepEqual(hubTabsFor('accounts', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'aircover', 'invoices', 'responsibilities', 'rota', 'timesheets']);
+  // A super admin previewing Ready gets the database's answer for themselves (all four kinds), but only Ready's trackers show.
+  assert.deepEqual(hubTabsFor('ready', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'responsibilities', 'rota', 'timesheets']);
+  assert.deepEqual(hubTabsFor('stays', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'onboarding', 'responsibilities', 'rota', 'timesheets']);
   assert.ok(teamsReadSchema.safeParse({ section: 'hub' }).success);
 });
 
