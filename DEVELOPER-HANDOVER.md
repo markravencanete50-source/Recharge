@@ -337,6 +337,52 @@ database tool can run it, and it is safe to run more than once.
   in `scripts/demo/requests.json` and writes the file. `tests/demo-data.test.mjs` checks it parses and
   covers every role.
 
+## Productivity Tool: clock in and out are locked (10 October 2026)
+
+- **Rule:** the team only clocks in and out; nobody edits their own hours. A **super admin** changes
+  anyone's hours directly (correct a shift, add a forgotten one, close one left open). An **admin's**
+  change becomes a request that waits for a super admin; it reaches the timesheet, hours,
+  productivity and Team performance only once approved. Declined or withdrawn requests never do.
+  Every change is kept with who asked, who decided, the hours before and after, and why.
+- **Database** (`supabase/migrations/20261010290000_productivity.sql`): `private.workspace_shift_changes`
+  (status pending / approved / declined / withdrawn / direct), `workspace_shift_change_action`
+  (`editShift`, `addShift`, `closeShift`, `decideShiftChange`, `withdrawShiftChange`; routed from
+  `workspace_teams_action`), reads `productivity` (hours per person by week and by month, up to a
+  year) and `shiftChanges`; the timesheet read lists changes waiting. `workspace_shifts.approved_by`
+  records the super admin. Notifications: `team.shift_change_requested` (super admins),
+  `team.shift_change_approved` / `_declined` (the admin), `team.shift_corrected` (the person).
+- **App:** Management → **Productivity** (left panel and search; `mobile/src/LiveProductivity.tsx`):
+  By week, By month (heat cells and rising columns), Clock-ins (every shift with its date and year),
+  Approvals (approve, decline with a reason, or withdraw). Spreadsheets download from each view.
+  The Waiting on you queue lists changes waiting; the Hub timesheet and Team performance send admins'
+  changes for approval. Sums: `lib/productivity.ts`. Tests: `tests/productivity*.test.mjs`.
+
+## Client Enquiries (10 October 2026)
+
+- **Flow:** the team (admins, super admins, Stays with property onboarding) writes an email in
+  **Client enquiries** and sends the landlord a private link to the **New Property Enquiry Form**
+  (`/enquiry?t=…`, no account). The landlord's answers, photos and videos come back to the list with
+  the status *New: ready to value*. **Start valuing** makes the property and its onboarding journey
+  from the answers (exactly like adding an enquiry by hand), so the estimate is published from the
+  property as before. Statuses: Form sent → Form opened → New → Valuing → Estimate sent → Onboarding
+  (or Declined, Closed, Link expired after 30 days; *Send a new link* replaces it).
+- **Email:** sent through Resend when `NOTIFICATION_EMAIL_ENABLED=true`, `RESEND_API_KEY` and
+  `NOTIFICATION_FROM_EMAIL` are set (the same settings as notification emails). Without them the
+  team makes the link and sends it from their own email (copy, or open the email app filled in).
+  Links are built from `APP_ORIGIN`.
+- **Database** (`supabase/migrations/20261010300000_client_enquiries.sql`):
+  `private.workspace_client_enquiries` keeps only a hash of each link's token. The landlord's side is
+  `workspace_enquiry_public` (open, addFile, removeFile, submit), callable only with the service key
+  from the site's server. Files go to the private **enquiry-files** bucket (created by the migration;
+  pictures and videos up to 25 MB, 15 per form); the team opens them by 10-minute links.
+- **Code:** form `app/enquiry/`, routes `app/api/enquiry/` (submit, upload) and
+  `app/api/{workspace,mobile}/enquiry-files/`, server `lib/client-enquiry-server.ts`, shared
+  `lib/client-enquiry.ts`, app `mobile/src/LiveEnquiries.tsx`. The new paths are on the backend
+  allowlist (`worker/backend-route-policy.ts`). Test: `tests/client-enquiries-database.test.mjs`.
+- **To confirm with the business:** the choices for *How would you best describe your enquiry?*,
+  *Property type* and *When would you like to get started?* (`lib/client-enquiry.ts`) were not
+  visible in the ClickUp screenshots and are sensible placeholders.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

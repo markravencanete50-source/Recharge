@@ -580,3 +580,67 @@ input {
 @media (min-width: 640px) {
   .legal-details div, .legal-retention div { grid-template-columns: minmax(0, 13rem) minmax(0, 1fr); gap: 12px; }
 }
+
+/* The New Property Enquiry Form (app/enquiry): numbered sections, paired fields on wider screens,
+   yes/no pills, and a drop area for photos and videos with live upload progress. */
+.enquiry-form { gap: 26px; }
+/* Grid items and fieldsets otherwise grow to their widest content (a long choice in a select). */
+.enquiry-form > *, .enquiry-section > *, .enquiry-pair > *, .enquiry-trio > * { min-width: 0; }
+fieldset.enquiry-field { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.auth-control select { width: 100%; text-overflow: ellipsis; }
+@media (min-width: 960px) { .auth-brand { position: sticky; top: 0; height: 100vh; align-self: start; } }
+.enquiry-section { display: grid; gap: 16px; padding: 22px 18px; border-radius: 22px; border: 1px solid var(--rc-border); background: color-mix(in srgb, var(--rc-background) 55%, var(--rc-surface)); animation: auth-rise 520ms cubic-bezier(.22, 1, .36, 1) both; }
+.enquiry-section:nth-of-type(2) { animation-delay: 80ms; }
+.enquiry-section:nth-of-type(3) { animation-delay: 160ms; }
+.enquiry-section h2 { display: flex; align-items: center; gap: 10px; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; color: var(--rc-text); }
+.enquiry-section h2 span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--rc-primary); color: var(--rc-onPrimary); font-size: 0.8rem; }
+.enquiry-field > legend, .enquiry-field > label { font-size: 0.875rem; font-weight: 600; color: var(--rc-text); }
+.enquiry-field > legend { margin-bottom: 8px; }
+.enquiry-required { color: var(--rc-danger, #A63A32); }
+.enquiry-help { margin-top: -4px; font-size: 0.8rem; line-height: 1.45; color: var(--rc-muted); }
+.enquiry-help a { color: var(--rc-primary); text-decoration: underline; text-underline-offset: 3px; }
+.enquiry-error { font-size: 0.8rem; font-weight: 600; color: var(--rc-danger, #A63A32); animation: auth-rise 240ms cubic-bezier(.22, 1, .36, 1) both; }
+.enquiry-field[data-invalid] .auth-control { border-color: var(--rc-danger, #A63A32); }
+.auth-control textarea, .auth-control select { flex: 1; min-width: 0; min-height: 50px; padding: 13px 14px 13px 0; border: 0; outline: none; background: transparent; color: var(--rc-text); font: inherit; font-size: 0.95rem; resize: vertical; }
+.auth-control select { appearance: none; cursor: pointer; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, var(--rc-muted) 50%), linear-gradient(135deg, var(--rc-muted) 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 15px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.auth-control textarea { align-self: stretch; line-height: 1.5; }
+.auth-control:has(textarea) { align-items: flex-start; }
+.auth-control:has(textarea) .auth-control-icon { margin-top: 16px; }
+.enquiry-pair, .enquiry-trio { display: grid; gap: 16px; }
+.enquiry-choice { display: flex; flex-wrap: wrap; gap: 8px; }
+.enquiry-pill { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 92px; justify-content: center; padding: 0 18px; border-radius: 999px; border: 1px solid var(--rc-controlBorder); background: var(--rc-background); color: var(--rc-text); font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, scale 200ms cubic-bezier(.2, 0, 0, 1); }
+.enquiry-pill input { position: absolute; opacity: 0; pointer-events: none; }
+.enquiry-pill:has(input:focus-visible) { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc-primary) 25%, transparent); }
+.enquiry-pill[data-on] { background: var(--rc-primary); border-color: var(--rc-primary); color: var(--rc-onPrimary); }
+.enquiry-pill:active { scale: .97; }
+.enquiry-drop { display: grid; justify-items: center; gap: 6px; padding: 26px 16px; border-radius: 18px; border: 1.5px dashed var(--rc-controlBorder); background: var(--rc-background); text-align: center; color: var(--rc-muted); cursor: pointer; transition: border-color 180ms ease, background-color 180ms ease, translate 200ms ease; }
+.enquiry-drop strong { color: var(--rc-text); font-size: 0.95rem; }
+.enquiry-drop span { font-size: 0.8rem; }
+.enquiry-drop svg { color: var(--rc-primary); transition: translate 260ms cubic-bezier(.2, 0, 0, 1); }
+.enquiry-drop:hover svg, .enquiry-drop.is-dragging svg { translate: 0 -3px; }
+.enquiry-drop.is-dragging, .enquiry-drop:hover { border-color: var(--rc-primary); background: var(--rc-wash); }
+.enquiry-drop:focus-visible { outline: 2px solid var(--rc-primary); outline-offset: 3px; }
+.enquiry-files { display: grid; gap: 8px; }
+.enquiry-files li { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 8px; border-radius: 14px; border: 1px solid var(--rc-border); background: var(--rc-surface); animation: auth-rise 300ms cubic-bezier(.22, 1, .36, 1) both; }
+.enquiry-files li[data-error] { border-color: var(--rc-danger, #A63A32); }
+.enquiry-thumb { flex-shrink: 0; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 10px; overflow: hidden; background: var(--rc-wash); color: var(--rc-primary); }
+.enquiry-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.enquiry-file-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.enquiry-file-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; color: var(--rc-text); }
+.enquiry-file-text small { font-size: 0.75rem; color: var(--rc-muted); }
+.enquiry-files li[data-error] small { color: var(--rc-danger, #A63A32); }
+.enquiry-progress { height: 4px; border-radius: 2px; background: var(--rc-wash); overflow: hidden; }
+.enquiry-progress span { display: block; height: 100%; border-radius: 2px; background: var(--rc-primary); transition: width 200ms ease; }
+.enquiry-remove { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: var(--rc-muted); transition: color 140ms ease, background-color 140ms ease; }
+.enquiry-remove:hover { color: var(--rc-danger, #A63A32); background: var(--rc-wash); }
+.enquiry-done { display: grid; justify-items: start; gap: 12px; margin-top: 22px; padding: 26px 22px; border-radius: 22px; background: var(--rc-successWash); animation: auth-rise 520ms cubic-bezier(.22, 1, .36, 1) both; }
+.enquiry-done h2 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; color: var(--rc-text); }
+.enquiry-done p { font-size: 0.95rem; line-height: 1.55; color: var(--rc-text); }
+.enquiry-done-mark { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 20px; background: var(--rc-success); color: #fff; animation: enquiry-pop 700ms cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes enquiry-pop { from { scale: .4; opacity: 0; rotate: -12deg; } to { scale: 1; opacity: 1; rotate: 0deg; } }
+@media (min-width: 720px) {
+  .enquiry-section { padding: 26px 24px; }
+  .enquiry-pair { grid-template-columns: 1fr 1fr; }
+  .enquiry-trio { grid-template-columns: repeat(3, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .enquiry-section, .enquiry-files li, .enquiry-done, .enquiry-done-mark, .enquiry-error { animation: none; } }

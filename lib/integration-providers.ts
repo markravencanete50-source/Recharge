@@ -67,6 +67,14 @@ export async function deliverNotification(settings:IntegrationSettings,job:Deliv
   const error=(data?.details as Record<string,unknown>)?.error;
   throw new ProviderFailure(error==='DeviceNotRegistered'?'device_removed':error==='MessageRateExceeded'?'retryable':'rejected');
 }
+// A one-off email the team wrote (Client Enquiries), sent now. The key makes a retried send
+// the same email.
+export async function sendEmail(settings:IntegrationSettings,email:{to:string;subject:string;text:string;html:string;idempotencyKey:string}) {
+  const result=await jsonRequest('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${settings.RESEND_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':email.idempotencyKey},
+    body:JSON.stringify({from:settings.NOTIFICATION_FROM_EMAIL,to:[email.to],subject:email.subject,text:email.text,html:email.html})});
+  if(typeof result.id!=='string'||!result.id)throw new ProviderFailure('uncertain');
+  return result.id;
+}
 export async function downloadPrivatePhoto(settings:IntegrationSettings,asset:{providerAssetId:string;format:string;bytes:number}) {
   const now=Math.floor(Date.now()/1000);
   const parameters={asset_id:asset.providerAssetId,timestamp:String(now),expires_at:String(now+60)};

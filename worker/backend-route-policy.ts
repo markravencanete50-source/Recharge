@@ -22,6 +22,8 @@ const endpoints = new Set([
   "/api/hostaway/webhook", "/api/workspace/account", "/api/workspace/notifications",
   "/api/workspace/oversight", "/api/mobile/oversight",
   "/api/workspace/checklists", "/api/mobile/checklists",
+  // Client Enquiries: the landlord's form (no account), and the team opening the files sent with it.
+  "/enquiry", "/api/enquiry", "/api/enquiry/upload", "/api/workspace/enquiry-files", "/api/mobile/enquiry-files",
   "/privacy", "/terms", "/delete-account", "/api/session/delete-account", "/api/workspace/privacy", "/api/mobile/privacy",
   "/workspace", "/favicon.svg", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);

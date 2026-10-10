@@ -14,12 +14,15 @@ import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, rotaListSch
 import { DAILY_WORK, DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { formatCount, formatDay, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { londonInstant, validClock } from "../../lib/team-time";
 
 // Clocking in and out, and the team's guest reply times. Guest relations replies are timed:
 // green within the green limit, amber within the amber limit, red after that.
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
 const sinceMinutes = (iso: string) => Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
 const londonDay = (offset = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(Date.now() + offset * 86400000));
+const londonDayOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(iso));
+const addDays = (iso: string, n: number) => new Date(Date.parse(iso + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 
 // Home: the person's own shift, with clock in and out.
 export function ShiftCard({ palette: p, account }: { palette: Palette; account: WorkspaceAccount }) {
@@ -158,8 +161,10 @@ const clientRelationsSchema = z.object({
   ownerMessages: z.number().nullable(), overall: z.object({ green: z.number(), amber: z.number(), red: z.number() }).nullable(),
   people: z.array(z.object({ userId: z.string(), fullName: z.string(), green: z.number(), amber: z.number(), red: z.number(), percentGreen: z.number().nullable(), onTrack: z.boolean().nullable(), bonusTier: z.number().nullable() })),
 });
-export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
-  const saved = useSaved();
+export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; role: string }) {
+  const saved = useSaved(), celebrate = useCelebrate();
+  // Hours are locked: a super admin's change applies at once, an admin's waits for a super admin.
+  const direct = role === "super_admin";
   const [range, setRange] = useState<"today" | "week" | "month">("week");
   const [data, setData] = useState<TeamPerformance | null>(null);
   const [signoffs, setSignoffs] = useState<Signoff["recent"]>([]);
@@ -168,8 +173,9 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
   const [targets, setTargets] = useState(false);
   const [clients, setClients] = useState<z.infer<typeof clientRelationsSchema> | null>(null);
   const [closing, setClosing] = useState<Shift | null>(null);
-  const [busy, setBusy] = useState(false);
-  const request = useRequestId(closing ? "close:" + closing.id : null);
+  const [busy, setBusy] = useState(false), [closeError, setCloseError] = useState("");
+  const [stopped, setStopped] = useState(""), [why, setWhy] = useState("");
+  const request = useRequestId(closing ? ["close", closing.id, stopped, why].join(":") : null);
   const load = useCallback(async () => {
     setLoading(true); setError("");
     const from = londonDay(range === "today" ? 0 : range === "week" ? -6 : -29);
@@ -183,11 +189,19 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
     setLoading(false);
   }, [range]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  const openClose = (s: Shift) => { setClosing(s); setStopped(time(new Date().toISOString())); setWhy(""); setCloseError(""); };
   async function close() {
     if (!closing || busy) return;
-    setBusy(true); setError("");
-    try { await writeTeams({ action: "closeShift", requestId: request.get(), shiftId: closing.id, endedAt: new Date().toISOString() }); request.done(); setClosing(null); await load(); }
-    catch (e) { setError(message(e)); } finally { setBusy(false); }
+    if (!validClock(stopped)) { setCloseError("Enter the time as HH:MM, for example 17:30."); return; }
+    // The day they stopped: the day they started, or the next one for a time earlier than the start.
+    const started = londonDayOf(closing.clockedInAt), endedAt = londonInstant(stopped <= time(closing.clockedInAt) ? addDays(started, 1) : started, stopped);
+    if (Date.parse(endedAt) > Date.now()) { setCloseError("That time hasn’t happened yet."); return; }
+    setBusy(true); setCloseError("");
+    try {
+      await writeTeams({ action: "closeShift", requestId: request.get(), shiftId: closing.id, endedAt, ...(why.trim().length >= 3 ? { note: why.trim() } : {}) });
+      request.done(); setClosing(null); celebrate(direct ? "Shift ended" : "Sent for approval"); await load();
+    }
+    catch (e) { setCloseError(message(e)); } finally { setBusy(false); }
   }
   const t = data?.targets;
   return (
@@ -200,7 +214,7 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
         <Section title="On shift now" count={data.onShift.length} p={p}>
           <List p={p} empty="Nobody is clocked in.">
             {data.onShift.map((s, i) => <Row key={s.id} p={p} first={i === 0} icon="clock" tone="stays" title={s.fullName ?? "Team member"} detail={`${DEPARTMENT_LABEL[s.department] ?? s.department} · since ${time(s.clockedInAt)} · ${hoursLabel(sinceMinutes(s.clockedInAt))}`}
-              tags={[[shiftName(s.clockedInAt), "plain"]]} onPress={() => setClosing(s)} />)}
+              tags={[[shiftName(s.clockedInAt), "plain"]]} onPress={() => openClose(s)} />)}
           </List>
         </Section>
         <Section title="Scores and bonuses" p={p}>
@@ -252,9 +266,13 @@ export function LiveTeamPerformance({ palette: p }: { palette: Palette }) {
         <TargetsSheet key={t.version} p={p} targets={t} visible={targets} onClose={() => setTargets(false)} onDone={saved(load)} />
       </>}
       <Sheet palette={p} visible={!!closing} onClose={() => setClosing(null)} title={closing?.fullName ?? ""} subtitle={closing ? `Clocked in at ${time(closing.clockedInAt)}` : undefined} icon="hourglass">
-        <Text style={[ui.body, { color: p.text }]}>End this shift now if they forgot to clock out.</Text>
+        <Text style={[ui.body, { color: p.text }]}>If they forgot to clock out, set when they actually stopped.</Text>
         <Tag label={closing ? `${hoursLabel(sinceMinutes(closing.clockedInAt))} so far` : ""} tone="plain" p={p} />
-        <Button label={busy ? "Saving…" : "End the shift now"} icon="log-out" primary p={p} disabled={busy} onPress={() => void close()} />
+        <Field label="Stopped work at (HH:MM, UK time)" value={stopped} onChange={setStopped} p={p} placeholder="17:30" />
+        <Field label="Why (optional)" value={why} onChange={setWhy} p={p} placeholder="Forgot to clock out" />
+        {!direct && <Notice text="Clock in and out is locked. This goes to a super admin, and the shift ends only once they approve it." p={p} />}
+        {!!closeError && <Notice text={closeError} p={p} tone="bad" />}
+        <Button label={busy ? "Saving…" : direct ? "End the shift" : "Send for approval"} icon={direct ? "log-out" : "send"} primary p={p} disabled={busy} onPress={() => void close()} />
       </Sheet>
     </View>
   );

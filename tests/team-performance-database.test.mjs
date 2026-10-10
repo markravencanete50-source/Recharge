@@ -132,12 +132,14 @@ test('guest replies are graded and credited to whoever was on guest relations', 
   await act({ action: 'saveTargets', version: latest, greenMinutes: 8, amberMinutes: 15, passPercent: 90, bonusPercents: [95, 100], workWeight: 0 });
   await assert.rejects(act({ action: 'saveTargets', version: report.targets.version, greenMinutes: 5, amberMinutes: 10, passPercent: 90, bonusPercents: [95, 100] }), /Targets changed/);
 
-  // Team members see only their own line; admins close a forgotten shift.
+  // Team members see only their own line; an admin asks to close a forgotten shift, which stays
+  // open until a super admin approves (tests/productivity-database.test.mjs).
   await as(BEN);
   assert.deepEqual(teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today)).people.map(x => x.fullName), ['Ben']);
   await assert.rejects(act({ action: 'closeShift', shiftId: report.onShift[0].id, endedAt: new Date().toISOString() }), /Management access required/);
   await as(ADMIN);
-  await act({ action: 'closeShift', shiftId: report.onShift[0].id, endedAt: new Date().toISOString() });
-  assert.deepEqual(teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today)).onShift, []);
+  const close = await act({ action: 'closeShift', shiftId: report.onShift[0].id, endedAt: new Date().toISOString() });
+  assert.equal(close.status, 'pending');
+  assert.equal(teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today)).onShift.length, 1);
   await assert.rejects(read('teamPerformance', today, null), /Choose up to 92 days/);
 });

@@ -10,6 +10,9 @@ import { ExpenseSheet, List, NoteSheet, Pills, Row, type NoteAsk } from "./LiveA
 import { LiveTraining } from "./LiveTraining";
 import { LivePeople } from "./LivePeople";
 import { LiveTeamPerformance } from "./LiveShifts";
+import { LiveProductivity } from "./LiveProductivity";
+import { shiftChangesSchema, type ShiftChanges } from "../../lib/workspace-teams-policy";
+import { describeChange, minutesDelta } from "../../lib/productivity";
 import { DisputeSheet } from "./CleanDisputes";
 import { DecisionsReport, QueueExtras } from "./LiveOversight";
 import { readFinance, readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
@@ -65,7 +68,29 @@ function DecisionSheet({ p, decision, onClose, onDone }: { p: Palette; decision:
   );
 }
 
-const MANAGEMENT_VIEWS = ["queue", "people", "properties", "performance", "team", "training", "decisions", "access"] as const;
+// Changes to people's hours waiting for a super admin (the Productivity Tool's approvals).
+function ShiftChangesWaiting({ p, onOpen }: { p: Palette; onOpen: () => void }) {
+  const [changes, setChanges] = useState<ShiftChanges | null>(null);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { void readTeams({ section: "shiftChanges" }).then(r => { if (active) setChanges(shiftChangesSchema.parse(r.data)); }).catch(() => undefined); });
+    return () => { active = false; };
+  }, []);
+  if (!changes) return null;
+  return (
+    <Section title={changes.canApprove ? "Timesheet changes to approve" : "Timesheet changes with a super admin"} count={changes.pending.length} p={p}>
+      <List p={p} empty="No changes to anyone's hours waiting." search={false}>
+        {changes.pending.map((c, i) => {
+          const d = describeChange(c);
+          return <Row key={c.id} p={p} first={i === 0} avatar={c.fullName ?? "Team member"} title={c.fullName ?? "Team member"} detail={`${d.day} · ${d.before ? d.before + " → " : ""}${d.after} · asked by ${c.requestedByName ?? "an admin"}`}
+            tags={[[minutesDelta(d.delta), d.delta >= 0 ? "good" : "bad"]]} onPress={onOpen} />;
+        })}
+      </List>
+    </Section>
+  );
+}
+
+const MANAGEMENT_VIEWS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "decisions", "access"] as const;
 type ManagementView = (typeof MANAGEMENT_VIEWS)[number];
 export function LiveManagement({ palette: p, account }: { palette: Palette; account: WorkspaceAccount }) {
   const saved = useSaved();
@@ -77,6 +102,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
   const focus = useWorkFocus();
   const [view, setView] = useState<ManagementView>(() => MANAGEMENT_VIEWS.find(v => v === focus?.sub) ?? "queue");
   const [decision, setDecision] = useState<Decision | null>(null);
+  const [productivityTab, setProductivityTab] = useState<"weeks" | "changes">("weeks");
   const [expense, setExpense] = useState<string | null>(null);
   const [ask, setAsk] = useState<NoteAsk | null>(null);
   // Repairs above the company-wide management limit, and the limit itself.
@@ -111,12 +137,13 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Management</Text>
         <Text style={[ui.body, { color: p.muted }]}>Everything waiting on a management decision, in one place.</Text>
       </View>
-      <StatGrid>
+      {/* The queue's figures belong to the queue; the other tabs bring their own. */}
+      {view === "queue" && <StatGrid>
         {tiles.map(tile => <StatTile key={tile.label} p={p} icon={tile.icon} label={tile.label} value={tile.value} detail={tile.detail} attention={tile.value > 0} />)}
-      </StatGrid>
+      </StatGrid>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && <Loading p={p} />}
-      <Pills p={p} values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", access: "Access control" })[v]} />
+      {loading && (view === "queue" || view === "team") && <Loading p={p} />}
+      <Pills p={p} values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", productivity: "Productivity", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", access: "Access control" })[v]} />
 
       {view === "access" && <AccessControl palette={p} account={account} />}
       {view === "queue" && queue && <>
@@ -149,6 +176,7 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
         </Section>
         {/* Owner approvals with reminders, unusual payouts and yesterday's missed Stays checks. */}
         <QueueExtras p={p} queue={queue} onDone={load} />
+        <ShiftChangesWaiting p={p} onOpen={() => { setProductivityTab("changes"); setView("productivity"); }} />
         <Section title="Owners who owe a balance" count={queue.ownerBalancesDue.length} p={p}>
           <List p={p} empty="No owner balances due.">
             {queue.ownerBalancesDue.map((s, i) => (
@@ -172,10 +200,11 @@ export function LiveManagement({ palette: p, account }: { palette: Palette; acco
 
       {view === "training" && <LiveTraining palette={p} manage />}
       {view === "decisions" && <DecisionsReport palette={p} />}
-      {view === "performance" && <LiveTeamPerformance palette={p} />}
+      {view === "productivity" && <LiveProductivity key={productivityTab} palette={p} account={account} initial={productivityTab} />}
+      {view === "performance" && <LiveTeamPerformance palette={p} role={account.role} />}
       {(view === "people" || view === "properties") && <LivePeople palette={p} account={account} view={view} />}
 
-      <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />
+      {(view === "queue" || view === "team") && <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />}
       <DecisionSheet p={p} decision={decision?.kind === "cleaning_complaint" ? null : decision} onClose={() => setDecision(null)} onDone={saved(load)} />
       <DisputeSheet p={p} target={decision?.kind === "cleaning_complaint" ? decision : null} onClose={() => setDecision(null)} onDone={saved(load)} />
       <ExpenseSheet p={p} role={account.role} id={expense} limit={limit} onClose={() => setExpense(null)} onAsk={a => { setExpense(null); setAsk(a); }} onDone={saved(load)} />

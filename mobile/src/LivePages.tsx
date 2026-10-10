@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Platform, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -9,6 +9,7 @@ import { Text } from "./Typography";
 import { useCelebrate } from "./Celebrate";
 import { BuildingGlyph } from "./BuildingGlyph";
 import { EnquiryCard } from "./HomeOverview";
+import { WorkJumpContext } from "./WorkJump";
 import { HostawaySyncCard } from "./HostawaySyncCard";
 import { LiveTraining } from "./LiveTraining";
 import { MyContracts } from "./LiveOnboarding";
@@ -446,6 +447,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   // Every word typed must appear in the name, area or address, in any order ("pitt lower" finds "39 (Lower) Pitt").
   const visible = properties.filter(property => (!filter || filter.ids.includes(property.id)) && matchesSearch(normalise(property.name + " " + property.region + " " + property.address), query));
   const staff = isWorkspaceAdmin(account.role) || account.role === "stays";
+  const jump = useContext(WorkJumpContext);
   const journey = selected ? journeys.find(j => j.propertyId === selected.id) : undefined;
   const propertyWork = selected ? work.filter(w => w.propertyId === selected.id) : [];
   async function downloadProperty(kind: "page" | "csv") {
@@ -469,6 +471,8 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
     <>
       <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Properties"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
       {(account.role === "client" || staff) && account.modules.includes("property-onboarding") && <EnquiryCard palette={p} team={staff} onStart={() => onForm(newEnquiryForm(staff))} />}
+      {/* Client Enquiries: the landlord fills the form in themselves (on phones this is the way in). */}
+      {staff && account.modules.includes("property-onboarding") && jump && <SoftButton label="Client enquiries: send the form to a landlord" icon="arrow-right" palette={p} onPress={() => jump({ kind: "tab", tab: "enquiries" })} />}
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
       {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} properties={properties} onOpen={setSelected} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
       {staff && !loading && properties.length > 0 && account.modules.includes("property-database") && <PortfolioInsights palette={p} properties={properties} journeys={journeys} filter={filter} onFilter={f => { setFilter(f); setShown(24); }} onOwners={setOwnerCount} />}

@@ -2,6 +2,7 @@ import { rpcRoute } from './workspace-rpc-route';
 import { ACCOUNTS_ACTIONS, ACCOUNTS_SECTIONS, financeActionSchema, financeReadSchema, prepareFinanceAction } from './workspace-finance-policy';
 import { teamsActionSchema, teamsReadSchema } from './workspace-teams-policy';
 import { adminActionSchema, adminReadSchema } from './workspace-admin-policy';
+import { integrationConfiguration } from './integration-policy';
 
 export const workspaceFinance = rpcRoute({
   readSchema: financeReadSchema, actionSchema: financeActionSchema, bodyLimit: 300_000, unavailable: 'Accounts is temporarily unavailable',
@@ -17,8 +18,13 @@ export const workspaceTeams = rpcRoute({
   read: (client, input) => input.section === 'readyHome' ? client.rpc('workspace_ready_home')
     : input.section === 'favorites' ? client.rpc('workspace_favorites')
     : input.section === 'viewAsPeople' ? client.rpc('workspace_view_as_people')
+    // Client enquiries also say whether the email service is set up (or the team copies the link).
+    : input.section === 'clientEnquiries' ? Promise.all([client.rpc('workspace_teams_read', { section: input.section }),
+      import('./integration-server').then(m => integrationConfiguration(m.integrationSettings()).email, () => false)]).then(([r, email]) => r.error ? r : { ...r, data: { ...(r.data as object), emailReady: email } })
     : client.rpc('workspace_teams_read', { section: input.section, start_on: input.from || null, end_on: input.to || null, target_property: input.propertyId || null, target_user: input.userId || null }),
   action: 'workspace_teams_action',
+  // Sending the enquiry form makes its link and sends the email on the server.
+  handle: (context, input) => input.action === 'inviteEnquiry' || input.action === 'resendEnquiry' ? import('./client-enquiry-server').then(m => m.sendEnquiryForm(context, input)) : null,
   // Favorites and View as have their own database functions.
   actionFor: input => input.action === 'saveFavorites' ? 'workspace_save_favorites' : input.action === 'startViewAs' ? 'workspace_view_as_start'
     : input.action === 'stopViewAs' ? 'workspace_view_as_stop' : 'workspace_teams_action',

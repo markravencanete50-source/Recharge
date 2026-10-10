@@ -6,8 +6,8 @@ import { CompanyLogo } from "./company-logo";
 // same in both themes, so the logo artwork sits flush on its own canvas) beside a bone card.
 // On phones the panel becomes a short band above the card. Pages that ask someone to go ahead
 // (sign in, choose a password) show the consent line; the policy pages use a wider card.
-export function AuthShell({ eyebrow = "Recharge workspace", title, intro, welcome = "Welcome back.", children, footer, consent = false, wide = false }: {
-  eyebrow?: string; title: string; intro: ReactNode; welcome?: string; children: ReactNode; footer?: ReactNode; consent?: boolean; wide?: boolean;
+export function AuthShell({ eyebrow = "Recharge workspace", title, intro, welcome = "Welcome back.", brandText = "Your properties, stays, cleans and repairs, together in one place.", children, footer, consent = false, wide = false }: {
+  eyebrow?: string; title: string; intro: ReactNode; welcome?: string; brandText?: string; children: ReactNode; footer?: ReactNode; consent?: boolean; wide?: boolean;
 }) {
   return (
     <main className="auth-page">
@@ -15,7 +15,7 @@ export function AuthShell({ eyebrow = "Recharge workspace", title, intro, welcom
         <CompanyLogo width={168} variant="dark" />
         <div className="auth-brand-copy">
           <p className="auth-brand-title">{welcome}</p>
-          <p className="auth-brand-text">Your properties, stays, cleans and repairs, together in one place.</p>
+          <p className="auth-brand-text">{brandText}</p>
         </div>
         <AuthScene />
         <p className="auth-brand-note">Recharge Property Management · Scotland</p>

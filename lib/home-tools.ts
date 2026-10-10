@@ -9,7 +9,7 @@ export type ToolArt =
   | 'tag' | 'relist' | 'signature' | 'shield' | 'box' | 'bell' | 'receipt' | 'wallet' | 'pie' | 'cart' | 'sofa' | 'search' | 'mail' | 'star';
 export type HomeToolTarget =
   | { kind: 'work'; view: WorkView; sub?: string; anchor?: string; open?: HomeForm; workId?: string }
-  | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals'; anchor?: string }
+  | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals' | 'enquiries'; anchor?: string }
   | { kind: 'tracker'; module: ModuleId }
   | { kind: 'calculator' };
 // Forms a Home shortcut can open straight away, inside their Work view.
@@ -115,12 +115,28 @@ const BY_ROLE: Record<string, Candidate[]> = {
 // Super admins also manage who can sign in and what they can use.
 BY_ROLE.super_admin = [...BY_ROLE.admin, tool('access', 'Access control', 'People, tools and security', 'shield', work('management', { sub: 'access', anchor: 'access-control' }))];
 
-export function homeToolsFor(role: string, modules: readonly string[]): HomeTool[] {
+// Tools that live in the desktop left panel and in search, not on Home's tiles (Home keeps to three
+// rows). On a phone they open from their own tab inside the Work area.
+const PANEL_ONLY: Record<string, Candidate[]> = {
+  admin: [
+    tool('productivity', 'Productivity', 'Clock in and out, hours by week and month', 'hourglass', work('management', { sub: 'productivity' })),
+    tool('enquiries', 'Client enquiries', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }),
+  ],
+  stays: [tool('enquiries', 'Client enquiries', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }, ['property-onboarding'])],
+};
+PANEL_ONLY.super_admin = PANEL_ONLY.admin;
+
+const allowed = (role: string, modules: readonly string[], list: Candidate[]): HomeTool[] => {
   const views = workViewsFor(role);
-  return (BY_ROLE[role] ?? []).filter(t =>
+  return list.filter(t =>
     (!t.needs || t.needs.some(m => modules.includes(m))) &&
     (t.target.kind !== 'work' || views.includes(t.target.view)),
   ).map(({ needs, ...t }) => { void needs; return t; });
+};
+export const panelToolsFor = (role: string, modules: readonly string[]): HomeTool[] => allowed(role, modules, PANEL_ONLY[role] ?? []);
+
+export function homeToolsFor(role: string, modules: readonly string[]): HomeTool[] {
+  return allowed(role, modules, BY_ROLE[role] ?? []);
 }
 
 // Shortcuts under the tools that open a form straight away, for the things each role starts most.

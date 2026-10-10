@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
+import { enquiryInviteSchema } from './client-enquiry';
+import { enquiryDetailsSchema } from './journey-policy';
 
 const id = z.string().uuid();
 export const DEPARTMENTS = ['guest_relations', 'client_relations', 'cleaning', 'ready', 'accounts', 'management'] as const;
@@ -17,7 +19,7 @@ const https = z.string().url().max(1000).refine(value => {
 
 export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
-    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople']),
+    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople', 'productivity', 'shiftChanges', 'clientEnquiries']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -27,6 +29,10 @@ export const teamsReadSchema = z.object({
   if (value.section === 'rotaPlan' || value.section === 'timesheet') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 31 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 31 days' });
+  }
+  if (value.section === 'productivity') {
+    if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
+    else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 366 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to a year' });
   }
   if (value.section === 'teamPerformance') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
@@ -71,6 +77,17 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
     department: z.enum(DEPARTMENTS).optional(), note: z.string().trim().max(300).optional() }).strict()).min(1).max(31) }).strict(),
   z.object({ action: z.literal('editShift'), requestId: id, shiftId: id, clockedInAt: moment, clockedOutAt: moment.nullable(), department: z.enum(DEPARTMENTS).optional(), note: text(3, 500) }).strict(),
   z.object({ action: z.literal('addShift'), requestId: id, userId: id, clockedInAt: moment, clockedOutAt: moment, department: z.enum(DEPARTMENTS), note: text(3, 500) }).strict(),
+  // An admin's change to someone's hours waits for a super admin, who approves or declines it (with
+  // a reason); the admin who asked can withdraw it while it waits.
+  z.object({ action: z.literal('decideShiftChange'), requestId: id, changeId: id, decision: z.enum(['approve', 'decline']), note: z.string().trim().max(500).optional() }).strict(),
+  z.object({ action: z.literal('withdrawShiftChange'), requestId: id, changeId: id }).strict(),
+  // Client Enquiries: send the property form (the server adds the link and sends the email), send a
+  // fresh link, value the property from the answers, or close the enquiry.
+  enquiryInviteSchema.extend({ action: z.literal('inviteEnquiry'), requestId: id }).strict(),
+  enquiryInviteSchema.omit({ name: true, email: true }).extend({ action: z.literal('resendEnquiry'), requestId: id, enquiryId: id, version }).strict(),
+  z.object({ action: z.literal('startValuing'), requestId: id, enquiryId: id, version, name: text(2, 200), address: text(5, 1000), region: z.string().trim().max(200).default(''),
+    propertyType: text(2, 120), bedrooms: z.number().int().min(0).max(40), bathrooms: z.number().int().min(0).max(40), enquiry: enquiryDetailsSchema }).strict(),
+  z.object({ action: z.literal('closeEnquiry'), requestId: id, enquiryId: id, version, note: text(3, 500) }).strict(),
   // The day and time of a piece of work on the calendar (no start time: any time that day).
   z.object({ action: z.literal('setWorkTime'), requestId: id, workId: id, version, dueOn: date, startTime: clockTime.nullable(), endTime: clockTime.nullable() }).strict(),
   // A property's usual cleaner, who gets its cleans automatically (null clears it).
@@ -98,7 +115,7 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('removeBudgetItem'), requestId: id, id, version }).strict(),
   z.object({ action: z.literal('signOffDay'), requestId: id, allVisible: z.literal(true), reviewsHandled: z.literal(true), suspensionsHandled: z.literal(true), relistingsDone: z.literal(true), note: z.string().trim().max(2000).default('') }).strict(),
   z.object({ action: z.literal('clockOut'), requestId: id }).strict(),
-  z.object({ action: z.literal('closeShift'), requestId: id, shiftId: id, endedAt: z.string().datetime({ offset: true }) }).strict(),
+  z.object({ action: z.literal('closeShift'), requestId: id, shiftId: id, endedAt: z.string().datetime({ offset: true }), note: text(3, 500).optional() }).strict(),
   z.object({ action: z.literal('saveTargets'), requestId: id, version, greenMinutes: z.number().int().min(1).max(120), amberMinutes: z.number().int().min(2).max(240),
     passPercent: z.number().int().min(1).max(100), bonusPercents: z.array(z.number().int().min(1).max(100)).max(5),
     // How much daily work counts in the score (0-100%), and what's expected on each Stays shift day.
@@ -113,6 +130,7 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   if (value.action === 'saveResponsibility' && value.ownerId && value.ownerId === value.backupId) context.addIssue({ code: 'custom', message: 'The backup must be someone else' });
   if (value.action === 'setWorkTime' && value.endTime && (!value.startTime || value.endTime <= value.startTime)) context.addIssue({ code: 'custom', message: 'The end time must be after the start time' });
   if ((value.action === 'editShift' || value.action === 'addShift') && value.clockedOutAt && Date.parse(value.clockedOutAt) <= Date.parse(value.clockedInAt)) context.addIssue({ code: 'custom', message: 'The shift must end after it starts' });
+  if (value.action === 'decideShiftChange' && value.decision === 'decline' && (value.note ?? '').length < 3) context.addIssue({ code: 'custom', message: 'Say why it is declined' });
   if (value.action === 'saveCourse' && Boolean(value.courseId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a course needs its current version' });
   if (value.action === 'saveTargets' && value.amberMinutes <= value.greenMinutes) context.addIssue({ code: 'custom', message: 'Amber must be longer than green' });
   if (value.action === 'saveContract' && Boolean(value.contractId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a contract needs its current version' });
@@ -156,8 +174,32 @@ export const rotaPlanSchema = z.object({
 });
 export type RotaPlan = z.infer<typeof rotaPlanSchema>;
 
+// A change to someone's hours: asked for by an admin and waiting for a super admin (pending),
+// approved, declined, withdrawn, or made by a super admin directly (direct).
+export const SHIFT_CHANGE_STATUSES = ['pending', 'approved', 'declined', 'withdrawn', 'direct'] as const;
+const hours = { clockedInAt: z.string(), clockedOutAt: z.string().nullable(), department: z.enum(DEPARTMENTS) };
+export const shiftChangeSchema = z.object({
+  id, kind: z.enum(['edit', 'add', 'close']), status: z.enum(SHIFT_CHANGE_STATUSES), shiftId: id.nullable(), userId: id, fullName: z.string().nullable(),
+  ...hours, before: z.object(hours).nullable(), note: z.string(),
+  requestedBy: id, requestedByName: z.string().nullable(), requestedAt: z.string(),
+  decidedBy: id.nullable(), decidedByName: z.string().nullable(), decidedAt: z.string().nullable(), decisionNote: z.string(),
+});
+export type ShiftChange = z.infer<typeof shiftChangeSchema>;
+export const shiftChangesSchema = z.object({ canApprove: z.boolean(), me: id, pending: z.array(shiftChangeSchema), recent: z.array(shiftChangeSchema) });
+export type ShiftChanges = z.infer<typeof shiftChangesSchema>;
+
+// Hours per person for a period, by week (each starting on its Monday) and by month (YYYY-MM).
+const tally = { minutes: z.number(), shifts: z.number(), days: z.number() };
+export const productivitySchema = z.object({
+  from: z.string(), to: z.string(), canEdit: z.boolean(), canApprove: z.boolean(), pending: z.number(),
+  people: z.array(z.object({ ...person, active: z.boolean(), onShift: z.boolean(), ...tally,
+    weeks: z.array(z.object({ start: z.string(), ...tally })), months: z.array(z.object({ month: z.string(), ...tally })) })),
+});
+export type Productivity = z.infer<typeof productivitySchema>;
+export type ProductivityPerson = Productivity['people'][number];
+
 export const timesheetSchema = z.object({
-  from: z.string(), to: z.string(), canEdit: z.boolean(),
+  from: z.string(), to: z.string(), canEdit: z.boolean(), canApprove: z.boolean().default(false), pending: z.array(shiftChangeSchema).default([]),
   people: z.array(z.object({ ...person, active: z.boolean(), totalMinutes: z.number(),
     days: z.array(z.object({ day: z.string(), planned: rotaDay.omit({ day: true }).nullable(), minutes: z.number(),
       shifts: z.array(z.object({ id, department: z.enum(DEPARTMENTS), clockedInAt: z.string(), clockedOutAt: z.string().nullable(), minutes: z.number(), edited: z.boolean(), editNote: z.string() })) })) })),

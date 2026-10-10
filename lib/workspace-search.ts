@@ -1,5 +1,5 @@
 import { normalise } from './search-options';
-import { homeActionsFor, homeToolsFor, MODULE_ART, type HomeToolTarget, type ToolArt } from './home-tools';
+import { homeActionsFor, homeToolsFor, MODULE_ART, panelToolsFor, type HomeToolTarget, type ToolArt } from './home-tools';
 import { toolsFor, workViewsFor, WORK_VIEW_LABEL, type ToolPlace, type WorkView } from './tool-directory';
 import { formatMoney } from './format';
 import type { WorkspaceSection } from './workspace-map';
@@ -79,7 +79,7 @@ export function buildSearchIndex({ role, modules, properties, work = [], invoice
     art: view === 'cleans' ? 'spray' : view === 'repairs' ? 'toolbox' : view === 'accounts' ? 'coins' : view === 'calendar' ? 'calendar' : view === 'stays' ? 'building' : view === 'management' ? 'hourglass' : 'clipboard',
     target: { kind: 'tool', target: { kind: 'work', view } },
   }));
-  const tools: SearchEntry[] = homeToolsFor(role, modules).map(t => ({ key: 'tool:' + t.key, label: t.label, detail: t.detail, group: 'Tools', art: t.art, target: { kind: 'tool', target: t.target } }));
+  const tools: SearchEntry[] = [...homeToolsFor(role, modules), ...panelToolsFor(role, modules)].map(t => ({ key: 'tool:' + t.key, label: t.label, detail: t.detail, group: 'Tools', art: t.art, target: { kind: 'tool', target: t.target } }));
   const moduleTools: SearchEntry[] = toolsFor(role, modules).flatMap(t => {
     const target = placeTarget(t.place, t.id);
     return target ? [{ key: 'module:' + t.id, label: t.name, detail: t.place.where, group: 'Tools' as const, art: MODULE_ART[t.id], keywords: t.description, target: { kind: 'tool' as const, target } }] : [];

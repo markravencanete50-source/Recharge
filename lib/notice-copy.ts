@@ -103,6 +103,10 @@ const EXACT: Record<string, NoticeCopy> = {
   'team.responsibility_given': copy('A responsibility is yours', 'You have been made responsible for something, or its backup, in the responsibilities register.'),
   'team.rota_planned': copy('Your rota has changed', 'Management has planned or changed your shifts. Check the rota for your days.'),
   'team.shift_corrected': copy('Your timesheet was corrected', 'Management has corrected or added one of your shifts, with a note of why.'),
+  'enquiry.received': copy('A client enquiry is back', 'A landlord has filled in the property enquiry form. Their details are in Client enquiries, ready to value.'),
+  'team.shift_change_requested': copy('Timesheet change to approve', 'An admin has asked to change someone\'s clock in or clock out. It reaches their hours only once you approve it.'),
+  'team.shift_change_approved': copy('Timesheet change approved', 'A super admin has approved your change to someone\'s hours. It now counts in their timesheet and productivity.'),
+  'team.shift_change_declined': copy('Timesheet change declined', 'A super admin has declined your change to someone\'s hours and said why. Their hours stay as they were.'),
   // People who delete their own account (admins are told).
   'account.owner_deleted': copy('An owner deleted their account', 'An owner has deleted their Recharge account. Their properties stay with the business, no longer linked to a login. Check whether their management agreement should end.'),
   'account.staff_deleted': copy('A team member deleted their account', 'A team member has deleted their Recharge account. Their access has been removed and their work stays on record as “Deleted user”.'),

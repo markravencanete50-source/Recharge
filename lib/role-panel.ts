@@ -1,4 +1,4 @@
-import { homeActionsFor, homeToolsFor, type HomeTool, type HomeToolTarget, type ToolArt } from './home-tools';
+import { homeActionsFor, homeToolsFor, panelToolsFor, type HomeTool, type HomeToolTarget, type ToolArt } from './home-tools';
 import { WORK_VIEW_LABEL, workViewsFor, type WorkView } from './tool-directory';
 import type { WorkspaceSection } from './workspace-map';
 
@@ -18,11 +18,11 @@ export type PanelLink =
 export type PanelGroup = { title: string; links: PanelLink[] };
 export type RolePanel = { title: string; tagline: string; icon: PanelIcon; groups: PanelGroup[] };
 
-type Page = 'home' | 'favorites' | 'properties' | 'analytics' | 'activity' | 'inbox' | 'help' | 'approvals' | 'statements';
+type Page = 'home' | 'favorites' | 'properties' | 'analytics' | 'activity' | 'inbox' | 'help' | 'approvals' | 'statements' | 'enquiries';
 const PAGE: Record<Page, [string, PanelIcon]> = {
   home: ['Home', 'home'], favorites: ['Favorites', 'star'], properties: ['Properties', 'key'], analytics: ['Reports', 'bar-chart-2'],
   activity: ['Updates', 'bell'], inbox: ['Messages', 'message-circle'], help: ['Help & training', 'help-circle'],
-  approvals: ['Approvals', 'check-circle'], statements: ['Owner statements', 'pie-chart'],
+  approvals: ['Approvals', 'check-circle'], statements: ['Owner statements', 'pie-chart'], enquiries: ['Client enquiries', 'mail'],
 };
 const AREA_ICON: Record<WorkView, PanelIcon> = {
   management: 'briefcase', hub: 'layers', calendar: 'calendar', stays: 'moon', cleans: 'check-square', repairs: 'tool', accounts: 'pie-chart', all: 'list',
@@ -38,9 +38,9 @@ const ART_ICON: Record<ToolArt, PanelIcon> = {
 // same:<home tool key> (a tool another link in the panel already opens).
 type Layout = { title: string; tagline: string; icon: PanelIcon; groups: [string, string[]][] };
 const MANAGEMENT_GROUPS: [string, string[]][] = [
-  ['Overview', ['page:home', 'page:favorites', 'tool:queue', 'page:inbox', 'page:analytics', 'page:activity']],
+  ['Overview', ['page:home', 'page:favorites', 'tool:queue', 'tool:enquiries', 'page:inbox', 'page:analytics', 'page:activity']],
   ['Departments', ['area:stays', 'area:cleans', 'area:repairs', 'area:accounts']],
-  ['Management', ['area:management=Management centre', 'tool:people', 'tool:performance', 'tool:access', 'tool:training']],
+  ['Management', ['area:management=Management centre', 'tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:training']],
   ['Planning', ['area:hub', 'area:calendar', 'page:properties', 'page:statements', 'area:all']],
   ['Start something', ['start']],
 ];
@@ -50,7 +50,7 @@ const LAYOUTS: Record<string, Layout> = {
   stays: {
     title: 'Stays', tagline: 'Guests, listings and bookings', icon: 'moon', groups: [
       ['Today', ['page:home', 'tool:inbox', 'tool:checks', 'tool:pricing', 'tool:signoff']],
-      ['Guests & listings', ['area:stays=Stays', 'tool:bookings', 'tool:aircover', 'page:properties']],
+      ['Guests & listings', ['area:stays=Stays', 'tool:enquiries', 'tool:bookings', 'tool:aircover', 'page:properties']],
       ['Operations', ['area:cleans', 'area:repairs=Reactive maintenance', 'area:hub', 'area:calendar', 'area:all']],
       ['Team', ['page:favorites', 'page:inbox', 'page:analytics', 'page:activity', 'tool:training']],
       ['Start something', ['start']],
@@ -103,7 +103,7 @@ const LAYOUTS: Record<string, Layout> = {
 // Pages only some roles have (the workspace refuses the others).
 const PAGE_ROLES: Partial<Record<Page, string[]>> = {
   favorites: ['super_admin', 'admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts'],
-  approvals: ['client'], statements: ['accounts', 'admin', 'super_admin'],
+  approvals: ['client'], statements: ['accounts', 'admin', 'super_admin'], enquiries: ['admin', 'super_admin', 'stays'],
 };
 
 // A Home tool that opens a Work area at its top is that area. (Tools kept in All work, such as
@@ -114,7 +114,7 @@ const plainArea = (target: HomeToolTarget): WorkView | null =>
 export function rolePanel(role: string, modules: readonly string[]): RolePanel {
   const layout = LAYOUTS[role];
   if (!layout) return { title: role, tagline: '', icon: 'user', groups: [] };
-  const views = workViewsFor(role), tools = homeToolsFor(role, modules), actions = homeActionsFor(role, modules);
+  const views = workViewsFor(role), tools = [...homeToolsFor(role, modules), ...panelToolsFor(role, modules)], actions = homeActionsFor(role, modules);
   const used = new Set<string>();
   const area = (view: WorkView, label?: string): PanelLink | null =>
     views.includes(view) ? { key: 'area:' + view, kind: 'area', label: label ?? WORK_VIEW_LABEL[view], icon: AREA_ICON[view], view } : null;

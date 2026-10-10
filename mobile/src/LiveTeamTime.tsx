@@ -7,15 +7,16 @@ import { MotionPress } from "./motion";
 import { Button, Field, Loading, message, Notice, Tag, london, useRequestId } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { Chip, SheetTable, cellText } from "./SheetTable";
-import { useSaved } from "./Celebrate";
+import { useCelebrate, useSaved } from "./Celebrate";
 import { exportReport } from "./exportReport";
 import { ui, type Palette } from "./theme";
 import { readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL } from "../../lib/hub";
 import {
   DEPARTMENTS, RESPONSIBILITY_FREQUENCIES, ROTA_SHIFTS, responsibilitiesSchema, rotaPlanSchema, timesheetSchema,
-  type Responsibilities, type Responsibility, type RotaPlan, type Timesheet, type TimesheetPerson,
+  type Responsibilities, type Responsibility, type RotaPlan, type ShiftChange, type Timesheet, type TimesheetPerson,
 } from "../../lib/workspace-teams-policy";
+import { describeChange } from "../../lib/productivity";
 import {
   FREQUENCY_LABEL, ROTA_HOURS, ROTA_LABEL, dayLabel, londonClock, londonInstant, minutesLabel, mondayOf, rotaCell, shiftWeek, timesheetCsv, timesheetRows,
   timesheetSummary, validClock, weekOf, type TimesheetRow,
@@ -29,7 +30,7 @@ type RotaShift = (typeof ROTA_SHIFTS)[number];
 const isAdmin = (role: string) => role === "admin" || role === "super_admin";
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 
-function WeekNav({ p, label, onMove, onToday }: { p: Palette; label: string; onMove: (step: number) => void; onToday: () => void }) {
+export function WeekNav({ p, label, onMove, onToday }: { p: Palette; label: string; onMove: (step: number) => void; onToday: () => void }) {
   const round = { width: 44, height: 44, borderRadius: 22, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: p.elevated };
   return (
     <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
@@ -227,10 +228,11 @@ function RotaWeekSheet({ p, person, days, onClose, onSaved }: { p: Palette; pers
 const monthStart = (iso: string) => iso.slice(0, 7) + "-01";
 const monthEnd = (first: string) => { const d = new Date(first + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + 1, 0); return d.toISOString().slice(0, 10); };
 const moveMonth = (first: string, step: number) => { const d = new Date(first + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() + step, 1); return d.toISOString().slice(0, 10); };
-type ShiftTarget = { person: TimesheetPerson; shift?: TimesheetPerson["days"][number]["shifts"][number]; day?: string };
+// A shift to correct, or (no shift) one to add; with no person yet, the sheet asks who it is for.
+export type ShiftTarget = { person?: TimesheetPerson; shift?: TimesheetPerson["days"][number]["shifts"][number]; day?: string };
 
 export function TimesheetTab({ p, account }: { p: Palette; account: WorkspaceAccount }) {
-  const saved = useSaved();
+  const celebrate = useCelebrate();
   const today = london(new Date());
   const [span, setSpan] = useState<"week" | "month">("week");
   const [start, setStart] = useState(mondayOf(today));
@@ -253,7 +255,7 @@ export function TimesheetTab({ p, account }: { p: Palette; account: WorkspaceAcc
   }
   return (
     <View style={{ gap: 12 }}>
-      <Text style={[ui.small, { color: p.muted }]}>Hours clocked in and out each day, next to the rota.{admin ? " Tap someone to see their days, correct a shift or add one they forgot." : ""}</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Hours clocked in and out each day, next to the rota.{admin ? account.role === "super_admin" ? " Tap someone to see their days, correct a shift or add one they forgot." : " Tap someone to see their days. Corrections go to a super admin for approval." : " Only management can change your hours."}</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <Chip p={p} label="Week" on={span === "week"} onPress={() => { setSpan("week"); setStart(mondayOf(today)); }} />
         <Chip p={p} label="Month" on={span === "month"} onPress={() => { setSpan("month"); setStart(monthStart(today)); }} />
@@ -278,16 +280,18 @@ export function TimesheetTab({ p, account }: { p: Palette; account: WorkspaceAcc
         {!admin && !chosen && <Notice text="Nothing clocked or planned in this period." p={p} />}
       </>}
       <Sheet palette={p} visible={admin && !!chosen && !editing} onClose={() => setPerson(null)} title={chosen?.fullName || "Team member"} subtitle={chosen ? `${minutesLabel(chosen.totalMinutes)} · ${span === "week" ? weekLabel(start) : "this month"}` : undefined} icon="hourglass">
-        {chosen && <PersonDays p={p} person={chosen} today={today} onShift={(shift, day) => setEditing({ person: chosen, shift, day })} />}
+        {chosen && <PersonDays p={p} person={chosen} today={today} pending={sheet?.pending ?? []} onShift={(shift, day) => setEditing({ person: chosen, shift, day })} />}
         {chosen && <Button label="Add a shift they forgot" icon="plus" p={p} onPress={() => setEditing({ person: chosen })} />}
       </Sheet>
       {/* One sheet at a time: their days step aside while a shift is corrected, then come back. */}
-      <ShiftSheet p={p} target={editing} today={today} onClose={() => setEditing(null)} onSaved={saved(async () => { setEditing(null); await load(); })} />
+      <ShiftSheet p={p} target={editing} today={today} direct={account.role === "super_admin"} pending={sheet?.pending ?? []} onClose={() => setEditing(null)}
+        onSaved={async status => { setEditing(null); celebrate(status === "pending" ? "Sent for approval" : "Saved"); await load(); }} />
     </View>
   );
 }
 
-function PersonDays({ p, person, today, onShift }: { p: Palette; person: TimesheetPerson; today: string; onShift?: (shift: TimesheetPerson["days"][number]["shifts"][number], day: string) => void }) {
+export function PersonDays({ p, person, today, pending = [], onShift }: { p: Palette; person: TimesheetPerson; today: string; pending?: ShiftChange[]; onShift?: (shift: TimesheetPerson["days"][number]["shifts"][number], day: string) => void }) {
+  const waiting = new Set(pending.map(c => c.shiftId));
   type Shift = TimesheetPerson["days"][number]["shifts"][number];
   const rows = timesheetRows(person, today).flatMap((d): { key: string; d: TimesheetRow; s: Shift | null; first: boolean }[] =>
     d.shifts.length ? d.shifts.map((s, i) => ({ key: s.id, d, s, first: i === 0 })) : [{ key: d.day, d, s: null, first: true }]);
@@ -300,7 +304,7 @@ function PersonDays({ p, person, today, onShift }: { p: Palette; person: Timeshe
           { label: "In", width: 60, cell: r => cellText(p, r.s ? londonClock(r.s.clockedInAt) : null) },
           { label: "Out", width: 60, cell: r => cellText(p, r.s ? (r.s.clockedOutAt ? londonClock(r.s.clockedOutAt) : "On shift") : null) },
           { label: "Hours", width: 80, cell: r => cellText(p, r.s ? minutesLabel(r.s.minutes) : null) },
-          { label: "", width: 120, cell: r => r.d.missed ? <Tag label="Not clocked" tone="bad" p={p} /> : r.s?.edited ? <Tag label="Corrected" tone="wait" p={p} /> : r.first && r.d.unplanned ? <Tag label="Not on rota" tone="plain" p={p} /> : null },
+          { label: "", width: 140, cell: r => r.s && waiting.has(r.s.id) ? <Tag label="Change waiting" tone="wait" p={p} /> : r.d.missed ? <Tag label="Not clocked" tone="bad" p={p} /> : r.s?.edited ? <Tag label="Corrected" tone="plain" p={p} /> : r.first && r.d.unplanned ? <Tag label="Not on rota" tone="plain" p={p} /> : null },
         ]} />
       <Text style={[ui.small, { color: p.text, fontWeight: "700" }]}>Total {minutesLabel(person.totalMinutes)}</Text>
     </View>
@@ -308,23 +312,32 @@ function PersonDays({ p, person, today, onShift }: { p: Palette; person: Timeshe
 }
 
 // Correcting a shift (or adding a forgotten one): UK times; an end before the start means after midnight.
-function ShiftSheet({ p, target, today, onClose, onSaved }: { p: Palette; target: ShiftTarget | null; today: string; onClose: () => void; onSaved: () => Promise<void> }) {
+// Hours are locked: a super admin's change applies at once (direct); an admin's waits for a super
+// admin's approval and reaches the hours only then.
+export function ShiftSheet({ p, target, today, direct, people = [], pending = [], onClose, onSaved }: {
+  p: Palette; target: ShiftTarget | null; today: string; direct: boolean; people?: TimesheetPerson[]; pending?: ShiftChange[];
+  onClose: () => void; onSaved: (status: "pending" | "direct") => Promise<void>;
+}) {
   const shift = target?.shift;
+  const [who, setWho] = useState("");
   const [day, setDay] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState("");
   const [department, setDepartment] = useState<Department>("guest_relations"), [why, setWhy] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const request = useRequestId(target ? [shift?.id ?? "add:" + target.person.userId, day, from, to, department, why].join(":") : null);
+  const person = target?.person ?? people.find(x => x.userId === who);
+  const waiting = shift ? pending.find(c => c.shiftId === shift.id) : undefined;
+  const request = useRequestId(target ? [shift?.id ?? "add:" + (person?.userId ?? ""), day, from, to, department, why].join(":") : null);
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
       if (!active || !target) return;
-      setDay(target.day ?? today); setFrom(shift ? londonClock(shift.clockedInAt) : ""); setTo(shift?.clockedOutAt ? londonClock(shift.clockedOutAt) : "");
-      setDepartment((shift?.department ?? target.person.department ?? "guest_relations") as Department); setWhy(""); setError("");
+      setWho(""); setDay(target.day ?? today); setFrom(shift ? londonClock(shift.clockedInAt) : ""); setTo(shift?.clockedOutAt ? londonClock(shift.clockedOutAt) : "");
+      setDepartment((shift?.department ?? target.person?.department ?? "guest_relations") as Department); setWhy(""); setError("");
     });
     return () => { active = false; };
   }, [target, shift, today]);
   async function save() {
     if (!target || busy) return;
+    if (!person) { setError("Choose who the shift is for."); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) { setError("Enter the date as YYYY-MM-DD."); return; }
     if (!validClock(from) || (to && !validClock(to))) { setError("Enter times as HH:MM, for example 08:00."); return; }
     if (!to && !(shift && !shift.clockedOutAt)) { setError("Add when the shift ended."); return; }
@@ -333,23 +346,35 @@ function ShiftSheet({ p, target, today, onClose, onSaved }: { p: Palette; target
     const clockedOutAt = to ? londonInstant(to <= from ? addDays(day, 1) : day, to) : null;
     setBusy(true); setError("");
     try {
-      if (shift) await writeTeams({ action: "editShift", requestId: request.get(), shiftId: shift.id, clockedInAt, clockedOutAt, department, note: why.trim() });
-      else await writeTeams({ action: "addShift", requestId: request.get(), userId: target.person.userId, clockedInAt, clockedOutAt: clockedOutAt!, department, note: why.trim() });
-      request.done(); await onSaved();
+      const result = shift
+        ? await writeTeams({ action: "editShift", requestId: request.get(), shiftId: shift.id, clockedInAt, clockedOutAt, department, note: why.trim() })
+        : await writeTeams({ action: "addShift", requestId: request.get(), userId: person.userId, clockedInAt, clockedOutAt: clockedOutAt!, department, note: why.trim() });
+      request.done();
+      await onSaved((result.data as { status?: string } | null)?.status === "pending" ? "pending" : "direct");
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
+  const changed = waiting ? describeChange(waiting) : null;
   return (
-    <Sheet palette={p} visible={!!target} onClose={onClose} title={shift ? "Correct this shift" : "Add a shift"} subtitle={target?.person.fullName || undefined} icon="hourglass">
-      {!!shift?.editNote && <Notice text={`Changed before: ${shift.editNote}`} p={p} />}
-      <Field label="Date (YYYY-MM-DD)" value={day} onChange={setDay} p={p} placeholder={today} />
-      <Field label="Clocked in (HH:MM)" value={from} onChange={setFrom} p={p} placeholder="08:00" />
-      <Field label={shift && !shift.clockedOutAt ? "Clocked out (HH:MM, leave empty if still on shift)" : "Clocked out (HH:MM)"} value={to} onChange={setTo} p={p} placeholder="16:00" />
-      <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Department</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{DEPARTMENTS.map(d => <Chip key={d} p={p} label={DEPARTMENT_LABEL[d]} on={department === d} onPress={() => setDepartment(d)} />)}</View>
-      <Field label="Why it changed" value={why} onChange={setWhy} p={p} placeholder="Forgot to clock out" />
-      <Text style={[ui.small, { color: p.muted }]}>UK time. An end time earlier than the start counts as after midnight. They are told their timesheet was corrected.</Text>
-      {!!error && <Notice text={error} p={p} tone="bad" />}
-      <Button label={busy ? "Saving…" : shift ? "Save the correction" : "Add the shift"} icon="check" primary p={p} disabled={busy} onPress={() => void save()} />
+    <Sheet palette={p} visible={!!target} onClose={onClose} title={shift ? (direct ? "Correct this shift" : "Ask to correct this shift") : direct ? "Add a shift" : "Ask to add a shift"} subtitle={person?.fullName || undefined} icon="hourglass">
+      {waiting && changed ? <>
+        <Notice text={`A change is already waiting for a super admin: ${changed.before ?? "no shift"} → ${changed.after}, asked by ${waiting.requestedByName ?? "an admin"} (“${waiting.note}”). Approve, decline or withdraw it in Productivity → Approvals.`} p={p} />
+      </> : <>
+        {!target?.person && <>
+          <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Who is it for?</Text>
+          <SearchPicker p={p} options={people.map(x => ({ id: x.userId, label: x.fullName || "Team member", keywords: x.department ? DEPARTMENT_LABEL[x.department] : undefined }))} value={who} onChange={setWho} placeholder="Search the team" nouns="people" />
+        </>}
+        {!!shift?.editNote && <Notice text={`Changed before: ${shift.editNote}`} p={p} />}
+        <Field label="Date (YYYY-MM-DD)" value={day} onChange={setDay} p={p} placeholder={today} />
+        <Field label="Clocked in (HH:MM)" value={from} onChange={setFrom} p={p} placeholder="08:00" />
+        <Field label={shift && !shift.clockedOutAt ? "Clocked out (HH:MM, leave empty if still on shift)" : "Clocked out (HH:MM)"} value={to} onChange={setTo} p={p} placeholder="16:00" />
+        <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Department</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{DEPARTMENTS.map(d => <Chip key={d} p={p} label={DEPARTMENT_LABEL[d]} on={department === d} onPress={() => setDepartment(d)} />)}</View>
+        <Field label="Why it changed" value={why} onChange={setWhy} p={p} placeholder="Forgot to clock out" />
+        <Text style={[ui.small, { color: p.muted }]}>UK time. An end time earlier than the start counts as after midnight.{direct ? " It applies straight away, and they are told their timesheet was corrected." : ""}</Text>
+        {!direct && <Notice text="Clock in and out is locked. This goes to a super admin; their hours, productivity and performance change only once it is approved." p={p} />}
+        {!!error && <Notice text={error} p={p} tone="bad" />}
+        <Button label={busy ? "Saving…" : direct ? (shift ? "Save the correction" : "Add the shift") : "Send for approval"} icon={direct ? "check" : "send"} primary p={p} disabled={busy} onPress={() => void save()} />
+      </>}
     </Sheet>
   );
 }

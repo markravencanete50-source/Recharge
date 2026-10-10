@@ -150,7 +150,7 @@ function demoResponse(path: string, body: unknown) {
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
 export const viewMode = () => ({ readOnly: viewOnly !== "" || demo !== null, person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (demo) return demoResponse(path, body);
   // While a super admin views the app as someone else nothing is saved (this device's own
   // notification link aside), so trying the screens never changes the business's records.
@@ -245,6 +245,8 @@ export async function uploadCourseFile(courseId: string, file: { uri: string; na
 }
 export const removeCourseFile = async (fileId: string) => (await workspaceRequest('/api/mobile/training-files', { action: 'remove', fileId })).json();
 export const courseFileLink = async (fileId: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) }).parse(await (await workspaceRequest('/api/mobile/training-files?fileId=' + encodeURIComponent(fileId))).json()).data;
+// Photos and videos landlords sent with the enquiry form, opened by a short link.
+export const enquiryFileLink = async (enquiryId: string, fileId: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) }).parse(await (await workspaceRequest('/api/mobile/enquiry-files?' + new URLSearchParams({ enquiryId, fileId }))).json()).data;
 export const readInbox = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/guest-inbox?' + new URLSearchParams(query))).json();
 // Owner reports: confirmed bookings, nights and payouts at the owner's properties, and statement figures by month (read only).
 export const readOwner = async (query: { section: 'bookings' | 'periods'; from: string; to: string }) => (await workspaceRequest('/api/mobile/owner?' + new URLSearchParams(query))).json();
