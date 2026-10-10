@@ -276,10 +276,32 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       })}
     </View>
   );
+  // Every department channel the reader is in, on every tab, one tap from anywhere in Messages.
+  const channels = owner ? [] : channelsFirst((list ?? []).filter(c => c.department));
+  const openChannel = (c: Conversation) => { picked.current = true; setTab("team"); setChip("all"); setProperty(ALL_PROPERTIES); setOpen(c.id); };
+  const channelBar = channels.length > 0 && (
+    <View style={{ gap: 6 }}>
+      <Text style={[ui.small, { color: p.muted, fontWeight: "700", letterSpacing: 0.3 }]}>Departments</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {channels.map(c => {
+          const on = tab === "team" && open === c.id;
+          return (
+            <MotionPress key={c.id} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${c.title} channel${c.unread ? `, ${c.unread} unread` : ""}`} onPress={() => openChannel(c)}
+              style={[ui.row, { gap: 6, minHeight: 38, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.wash : p.surface }]}>
+              <Feather name="hash" size={13} color={on ? p.primary : p.muted} />
+              <Text style={{ color: p.text, fontWeight: "600", fontSize: 13 }}>{c.title}</Text>
+              {c.unread > 0 && <View style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, alignItems: "center", justifyContent: "center", backgroundColor: p.primary }}><Text style={{ color: p.onPrimary, fontSize: 11, fontWeight: "700" }}>{c.unread}</Text></View>}
+            </MotionPress>
+          );
+        })}
+      </View>
+    </View>
+  );
   const thread = (id: string, back?: () => void) => <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} />;
   return (
     <View style={{ gap: 12 }}>
       {tabBar}
+      {channelBar}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <SwapIn swapKey={owner ? "owner" : tab}>
         {owner ? (open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View> : <Loading p={p} />)

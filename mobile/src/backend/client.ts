@@ -113,8 +113,13 @@ export async function registrationOpen() {
 export async function accountStep(body: Record<string, unknown>, accessToken?: string) {
   return z.record(z.unknown()).parse(await (await call("/api/mobile/account", body, accessToken)).json());
 }
+let viewOnly = "";
+export function setViewOnly(message: string) { viewOnly = message; }
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData) {
   if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  // While a super admin views the app as another role nothing is saved (this device's own
+  // notification link aside), so trying the screens never changes the business's records.
+  if (viewOnly && body !== undefined && !path.startsWith("/api/mobile/devices")) throw new WorkspaceApiError(viewOnly, 423);
   if (sameOriginWeb) return call(webWorkspacePath(path), body);
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
   return call(path, body, session!.accessToken);

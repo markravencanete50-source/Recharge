@@ -195,6 +195,35 @@ Migration `20261010230000_sweep_fixes` (applied live) and app fixes:
   (stay, unstarted clean, activity). Airbnb and Booking.com bookings show a link to cancel them on
   the channel. The Hostaway API key needs write access.
 
+## Workspace search, Favorites, View as, and more (10 October 2026)
+
+- **Workspace search** (team roles): the header field on desktop (Ctrl/⌘ K or "/"), a search
+  button in the phone header, and a search bar first on Home. One index
+  (`lib/workspace-search.ts`, `buildSearchIndex`) covers pages, Work views, Home tools, every tool
+  the person holds, quick actions, properties (name, street, postcode), work and invoices, all from
+  data the app has already loaded, so it only finds what the person can open. `ALSO` adds everyday
+  words ("chat", "money", "fix"). The UI is `mobile/src/WorkspaceSearch.tsx` (`SearchPanel`).
+- **Favorites:** the star in search, on property and work sheets, and on the Favorites page saves
+  a place. They are stored per person in `private.workspace_favorites` (migration
+  `20261010260000_favorites`, applied live) through the teams route (`section=favorites`, action
+  `saveFavorites` → `workspace_save_favorites`), so the same list appears on every device: up to
+  40 keys such as `tool:queue` or `property:<id>`, each with a label. The desktop sidebar lists them
+  under the pages ("Your favorites"); on phones Favorites is the raised centre button (Activity is
+  reached from Home, Messages from the header). State lives in `mobile/src/Favorites.tsx`.
+- **View as (super admins):** the eye button in the header, or Profile → "View the app as another
+  role". The app shows that role's Home, menus, Work views and tools (`lib/view-as.ts`,
+  `previewAccount`). The database still knows who is signed in, so lists show the whole business.
+  While viewing, `setViewOnly` in `mobile/src/backend/client.ts` refuses every write except this
+  device's notification link, so trying screens never changes records. The choice lasts for the
+  browser tab, and a banner offers "Back to my view".
+- **Role change brings the role's tools:** migration `20261010250000_role_tools` (applied live).
+  `private.workspace_role_tools` matches `DEFAULT_ROLE_MODULES` (a test checks this).
+- **Messages** shows the department channels on every tab. **The Properties map** pans, zooms
+  (pinch, Ctrl + scroll, buttons), opens full screen, and links each pin to Google Maps.
+- **In progress:** `lib/postcode-lookup.ts` (postcodes.io, free) and `lib/property-listing.ts`
+  (property type and room suggestions, listing titles) for the enquiry form and a listing-style
+  property view. They are not wired into the screens yet.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

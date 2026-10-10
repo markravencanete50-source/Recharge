@@ -86,8 +86,8 @@ function PersonSheet({ p, actorRole, person, properties, onClose, onDone }: { p:
         <Field label="Full name" value={fullName} onChange={setFullName} p={p} />
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Role</Text>
         <Pills p={p} values={roles} value={role} onChange={r => { setRole(r); setModules(toolsOnRoleChange(r)); }} label={roleLabel} />
-        {role !== person.role && <Text style={[ui.small, { color: p.muted }]}>Changing the role resets the tools to that role’s usual set. Property assignments stay; check they still fit.</Text>}
-        {!admin && <>
+        {role !== person.role && <Text style={[ui.small, { color: p.muted }]}>A new role brings that role’s usual tools{admin ? " (admins have every tool)" : `: ${modules.length} tools`}. Switch single tools on or off after saving. Property assignments stay; check they still fit.</Text>}
+        {!admin && role === person.role && <>
           <MotionPress accessibilityRole="button" onPress={() => setShowTools(v => !v)} style={[ui.row, { gap: 8, minHeight: 44 }]}>
             <Feather name={showTools ? "chevron-up" : "chevron-down"} size={18} color={p.primary} />
             <Text style={{ color: p.primary, fontWeight: "600", flex: 1 }}>Tools: {modules.length} selected</Text>

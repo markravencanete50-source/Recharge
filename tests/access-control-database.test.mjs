@@ -2,6 +2,10 @@ import test,{beforeEach} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
+import {createServer} from 'vite';
+const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false}});
+const {DEFAULT_ROLE_MODULES}=await vite.ssrLoadModule('/lib/modules.ts');
+await vite.close();
 
 // Super admin access control: see everyone, change role and tools, sign out, revoke a password,
 // block and unblock, and delete (fully, or closed when the account has history).
@@ -39,11 +43,28 @@ test('only a super admin sees access control, with every account',async()=>{
 
 test('a super admin changes role and tools',async()=>{
  await as(0);
- const after=await act({action:'setAccess',userId:users[2],role:'ready',modules:['maintenance-reporting','ready-schedule']});
- assert.equal(after.role,'ready');assert.deepEqual(after.modules,['maintenance-reporting','ready-schedule']);
- const removed=await act({action:'setAccess',userId:users[2],role:'ready',modules:['maintenance-reporting']});
- assert.deepEqual(removed.modules,['maintenance-reporting'],'a tool can be taken away');
+ // A new role brings exactly that role's usual tools, whatever the app sent.
+ const after=await act({action:'setAccess',userId:users[2],role:'ready',modules:['maintenance-reporting']});
+ assert.equal(after.role,'ready');assert.deepEqual([...after.modules].sort(),[...DEFAULT_ROLE_MODULES.ready].sort());
+ // With the role unchanged, tools are fine-tuned one by one.
+ const removed=await act({action:'setAccess',userId:users[2],role:'ready',modules:['maintenance-reporting','ready-schedule']});
+ assert.deepEqual([...removed.modules].sort(),['maintenance-reporting','ready-schedule'],'a tool can be taken away');
  const history=await read('accessHistory');assert.ok(history.some(h=>h.event==='tool_access_changed'&&h.target==='Person 2'));
+ // Promoted to admin: every tool by role, no grants kept. Moved back: the usual tools again.
+ const promoted=await act({action:'setAccess',userId:users[2],role:'admin',modules:[]});
+ assert.equal(promoted.role,'admin');
+ await db.exec('reset role');assert.equal((await db.query('select count(*)::int n from public.workspace_module_grants where user_id=$1',[users[2]])).rows[0].n,0);
+ await as(0);
+ const back=await act({action:'setAccess',userId:users[2],role:'stays',modules:['cleaning-schedule']});
+ assert.deepEqual([...back.modules].sort(),[...DEFAULT_ROLE_MODULES.stays].sort());
+});
+
+test('the database gives each role the same usual tools as the app',async()=>{
+ await db.exec('reset role');
+ for(const role of Object.keys(DEFAULT_ROLE_MODULES)){
+  const tools=(await db.query('select private.workspace_role_tools($1) t',[role])).rows[0].t;
+  assert.deepEqual([...tools].sort(),['admin','super_admin'].includes(role)?[]:[...DEFAULT_ROLE_MODULES[role]].sort(),role);
+ }
 });
 
 test('a new role brings its properties along, and is recorded',async()=>{

@@ -29,6 +29,7 @@ import { formatCount, formatMoney } from "../../lib/format";
 import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
 import { Calendar } from "./WorkspaceScreens";
+import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
 import { Entrance, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
@@ -294,7 +295,7 @@ function PropertyCard({ property, index, palette: p, onPress }: { property: Prop
 }
 
 // The portfolio at a glance for the team: live, onboarding, owners, and properties per region.
-function PortfolioCard({ palette: p, summary, properties }: { palette: Palette; summary: PortfolioSummary; properties: PropertyView[] }) {
+function PortfolioCard({ palette: p, summary, properties, onOpen }: { palette: Palette; summary: PortfolioSummary; properties: PropertyView[]; onOpen: (property: PropertyView) => void }) {
   const points = useMemo(() => propertyPoints(properties), [properties]);
   const top = summary.regions[0]?.count || 1, wide = useWindowDimensions().width >= 700;
   const stats: [string, number, IconName][] = [["Properties", summary.total, "home"], ["Live", summary.live, "check-circle"], ["Onboarding", summary.onboarding, "key"], ["Owners", summary.owners, "users"]];
@@ -305,7 +306,7 @@ function PortfolioCard({ palette: p, summary, properties }: { palette: Palette; 
         {stats.map(([label, value, icon]) => <StatTile key={label} p={p} icon={icon} tone="stays" label={label} value={value} />)}
       </StatGrid>
       <View style={{ flexDirection: wide ? "row" : "column", gap: 18, alignItems: wide ? "center" : "stretch" }}>
-        <View style={{ flex: wide ? 1 : undefined, minWidth: 0 }}><ScotlandMap palette={p} regions={summary.regions} points={points} /></View>
+        <View style={{ flex: wide ? 1 : undefined, minWidth: 0 }}><ScotlandMap palette={p} regions={summary.regions} points={points} addressOf={id => properties.find(x => x.id === id)?.address || undefined} onOpenProperty={id => { const x = properties.find(y => y.id === id); if (x) onOpen(x); }} /></View>
         <View style={{ gap: 8, flex: wide ? 1.3 : undefined, minWidth: 0 }}>
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>By region</Text>
           {summary.regions.slice(0, 8).map(r => (
@@ -321,11 +322,18 @@ function PortfolioCard({ palette: p, summary, properties }: { palette: Palette; 
   );
 }
 
-export function LiveProperties({ palette: p, desktop, account, properties, journeys, work, invoices, period, loading, onForm, onOpenWork, onRefresh }: {
+export function LiveProperties({ palette: p, desktop, account, properties, journeys, work, invoices, period, loading, onForm, onOpenWork, onRefresh, focusProperty }: {
   palette: Palette; desktop: boolean; account: WorkspaceAccount; properties: PropertyView[]; journeys: JourneyView[]; work: OperationView[]; invoices: InvoiceView[];
   period: AnalyticsPeriod; loading: boolean; onForm: (form: WorkflowForm) => void; onOpenWork?: (item: OperationView) => void; onRefresh: () => void;
+  // A property chosen in search or Favorites opens straight away (once the list has loaded).
+  focusProperty?: { id: string; nonce: number } | null;
 }) {
   const [query, setQuery] = useState(""), [shown, setShown] = useState(24), [selected, setSelected] = useState<PropertyView | null>(null);
+  const [focused, setFocused] = useState(0);
+  if (focusProperty && focusProperty.nonce !== focused && properties.length) {
+    setFocused(focusProperty.nonce);
+    setSelected(properties.find(x => x.id === focusProperty.id) ?? null);
+  }
   const [filter, setFilter] = useState<PropertyFilter>(null), [ownerCount, setOwnerCount] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
   const visible = properties.filter(property => (!filter || filter.ids.includes(property.id)) && (property.name + " " + property.region + " " + property.address).toLowerCase().includes(query.trim().toLowerCase()));
@@ -354,7 +362,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Properties"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
       {(account.role === "client" || staff) && account.modules.includes("property-onboarding") && <EnquiryCard palette={p} team={staff} onStart={() => onForm(newEnquiryForm(staff))} />}
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
-      {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} properties={properties} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
+      {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} properties={properties} onOpen={setSelected} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
       {staff && !loading && properties.length > 0 && account.modules.includes("property-database") && <PortfolioInsights palette={p} properties={properties} journeys={journeys} filter={filter} onFilter={f => { setFilter(f); setShown(24); }} onOwners={setOwnerCount} />}
       {staff && !loading && account.modules.includes("property-onboarding") && <OnboardingPipeline palette={p} properties={properties} journeys={journeys} onOpen={setSelected} />}
       {!!filter && <MotionPress accessibilityRole="button" onPress={() => setFilter(null)} style={[ui.row, { gap: 8, alignSelf: "flex-start", maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.wash }]}>
@@ -380,6 +388,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
           <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
             <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: selected.status === "active" ? p.successWash : p.cautionWash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.status === "active" ? "Live" : readableStage(selected.status)}</Text></View>
             {!!selected.bedrooms && <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: p.wash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.bedrooms} {selected.bedrooms === 1 ? "bedroom" : "bedrooms"}</Text></View>}
+            {account.role !== "client" && <FavoriteButton entryKey={"property:" + selected.id} label={selected.name} palette={p} />}
           </View>
           {journey && selected.status !== "active" && <JourneyDetails j={journey} p={p} account={account} propertyName={selected.name} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
           <PropertyProfile palette={p} account={account} propertyId={selected.id} journey={journey} />

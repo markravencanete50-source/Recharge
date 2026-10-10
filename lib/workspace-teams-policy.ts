@@ -17,7 +17,7 @@ const https = z.string().url().max(1000).refine(value => {
 
 export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
-    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet']),
+    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -42,6 +42,10 @@ const moment = z.string().datetime({ offset: true });
 export const DAILY_WORK = { signOffs: 'Daily sign-off', listingChecks: 'Listing checks', pricingDecisions: 'Pricing decisions', reviewsLogged: 'Reviews logged' } as const;
 const perDay = z.number().int().min(0).max(99);
 export const dailyTargetsSchema = z.object({ signOffs: perDay, listingChecks: perDay, pricingDecisions: perDay, reviewsLogged: perDay }).strict();
+// A saved place: the key the app opens it by ("tool:queue", "property:<id>") and its label.
+export const favoriteItemSchema = z.object({ key: z.string().min(3).max(160).regex(/^[a-z]+:[A-Za-z0-9_.:-]+$/), label: z.string().trim().min(1).max(120) }).strict();
+export const favoritesSchema = z.array(favoriteItemSchema).max(40);
+export type FavoriteItem = z.infer<typeof favoriteItemSchema>;
 export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('decideComplaint'), requestId: id, workId: id, version, outcome: z.enum(['upheld', 'overturned']), note }).strict(),
   z.object({ action: z.literal('decideCleanerReview'), requestId: id, workId: id, version, outcome: z.enum(['no_action', 'supervised', 'removed_from_rota']), note }).strict(),
@@ -58,6 +62,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('saveResponsibility'), requestId: id, id: id.optional(), version: version.optional(), department: z.enum(DEPARTMENTS), title: text(2, 200),
     details: z.string().trim().max(3000).optional(), ownerId: id.nullable(), backupId: id.nullable(), frequency: z.enum(RESPONSIBILITY_FREQUENCIES) }).strict(),
   z.object({ action: z.literal('removeResponsibility'), requestId: id, id, version }).strict(),
+  // Each person's own Favorites (saved pages, tools, properties and work), in their order.
+  z.object({ action: z.literal('saveFavorites'), items: z.array(favoriteItemSchema).max(40) }).strict(),
   // The rota by date (a null shift clears the day), and corrected or forgotten shifts.
   z.object({ action: z.literal('planRota'), requestId: id, userId: id, days: z.array(z.object({ day: date, shift: z.enum(ROTA_SHIFTS).nullable(),
     department: z.enum(DEPARTMENTS).optional(), note: z.string().trim().max(300).optional() }).strict()).min(1).max(31) }).strict(),
@@ -97,6 +103,7 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
     workWeight: z.number().int().min(0).max(100).optional(), dailyTargets: dailyTargetsSchema.optional() }).strict(),
   z.object({ action: z.literal('signContract'), requestId: id, contractId: id, version, signedName: text(2, 200), agree: z.literal(true, { errorMap: () => ({ message: 'Tick the box to agree to the contract' }) }) }).strict(),
 ]).superRefine((value, context) => {
+  if (value.action === 'saveFavorites' && new Set(value.items.map(i => i.key)).size !== value.items.length) context.addIssue({ code: 'custom', message: 'Each favorite once' });
   if (value.action === 'saveRoutinePlan' && Boolean(value.planId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a plan needs its current version' });
   if (value.action === 'saveHubItem' && Boolean(value.id) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing needs the current version' });
   if (value.action === 'saveHubItem' && value.kind === 'approval' && value.amountMinor == null) context.addIssue({ code: 'custom', message: 'Add the amount to approve' });

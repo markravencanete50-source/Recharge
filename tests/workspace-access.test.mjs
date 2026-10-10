@@ -61,7 +61,8 @@ test('access hierarchy, RLS and session revocation execute in PostgreSQL', async
   });
   await t.test('invalid grants roll back both the account and audit writes', async () => {
     await asUser(owner, ownerSession);
-    await assert.rejects(save('staff@example.com','client','active',['invented-module']), /check constraint/);
+    // Same role, so the tools sent are checked (a new role brings that role's usual tools instead).
+    await assert.rejects(save('staff@example.com','stays','active',['invented-module']), /check constraint/);
     await asUser(staff, staffSession);
     assert.equal((await db.query('select public.workspace_account() account')).rows[0].account.role, 'stays');
   });

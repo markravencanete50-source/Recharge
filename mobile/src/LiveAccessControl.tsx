@@ -138,7 +138,17 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
           {preview("refresh-cw", "When", "Their app switches over within a minute. They don’t need to sign in again.")}
         </View></SwapIn>}
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Tools{admin ? "" : ` · ${modules.filter(m => allowed.has(m)).length} on`}</Text>
-        {admin ? <Text style={[ui.small, { color: p.muted }]}>Admins and super admins have every tool.</Text> : <>
+        {admin ? <Text style={[ui.small, { color: p.muted }]}>Admins and super admins have every tool.</Text> : !change.same ? <View style={{ gap: 6 }}>
+          {/* A new role brings exactly its usual tools (the database sets them); fine-tune after saving. */}
+          <Text style={[ui.small, { color: p.muted }]}>{firstName} gets the tools every {roleLabel(role)} has. You can switch single tools on or off after saving.</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            {toolGroups().flatMap(g => g.tools).filter(t => modules.includes(t.id) && allowed.has(t.id)).map(t => (
+              <View key={t.id} style={[ui.row, { gap: 5, paddingHorizontal: 10, minHeight: 30, borderRadius: 999, backgroundColor: p.wash }]}>
+                <Feather name="check" size={12} color={p.primary} /><Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>{t.name}</Text>
+              </View>
+            ))}
+          </View>
+        </View> : <>
           {toolGroups().map(g => {
             const tools = g.tools.filter(t => allowed.has(t.id));
             if (!tools.length) return null;

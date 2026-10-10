@@ -65,12 +65,20 @@ import { DeleteAccountButton, DeleteAccountSheet, PrivacySection } from "./LiveP
 import { ACCOUNT_DELETED } from "../../lib/privacy-policy";
 import { PriceNightsLink, WorkHistory } from "./WorkHistory";
 import { WorkJumpContext } from "./WorkJump";
+import { FavoritesPage, HeaderSearch, HomeSearch, SearchPanel, SidebarFavorites } from "./WorkspaceSearch";
+import { FavoriteButton, FavoritesContext, useFavoritesStore } from "./Favorites";
+import { TrackerSheet } from "./LiveTools";
+import { FurnishingSheet } from "./LiveFurnishing";
+import { buildSearchIndex, type SearchEntry } from "../../lib/workspace-search";
+import { toolsFor, type Tool } from "../../lib/tool-directory";
+import { VIEW_AS_ROLES, canViewAs, previewAccount, viewAsLabel, viewOnlyMessage } from "../../lib/view-as";
+import { setViewOnly } from "./backend/client";
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
-const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help", "inbox", "approvals", "statements"];
+const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help", "inbox", "approvals", "statements", "favorites"];
 // Pages only some roles have.
-const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"] };
+const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"], favorites: ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"] };
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
 type BookingPolicy = z.infer<typeof bookingPolicySchema>;
 // Direct-booking offers use this discount policy; only a super admin can set and confirm it.
@@ -88,18 +96,24 @@ function bookingPolicyForm(policy: BookingPolicy): WorkflowForm {
   };
 }
 
-// The live workspace's destinations for each role. Five items, so the middle one
-// is the raised action on phones, as in the redesign.
-function liveNavigation(role: Role): NavigationItem[] {
+// The live workspace's destinations for each role. On phones five items, with Favorites as the
+// raised centre action for the team (Activity is on Home and Messages in the header). The desktop
+// sidebar has room for every page, Favorites second.
+function liveNavigation(role: Role, desktop = false): NavigationItem[] {
   const item = (value: WorkspaceSection, label: string, icon: NavigationItem["icon"]): NavigationItem => ({ value, label, icon });
   const home = item("home", "Home", "home"), properties = item("properties", "Properties", "key"), reports = item("analytics", "Reports", "bar-chart-2"), activity = item("activity", "Activity", "activity"), help = item("help", "Help", "help-circle");
-  if (role === "cleans" || role === "cleaning_manager") return [home, item("work", "Cleans", "check-square"), properties, activity, help];
-  if (role === "ready") return [home, item("work", "Maintenance", "tool"), properties, activity, help];
-  // Accounts: invoices and owner statements are the daily work (both in Work → Accounts).
-  if (role === "accounts") return [home, item("work", "Invoices", "file-text"), item("statements", "Statements", "pie-chart"), item("inbox", "Inbox", "message-circle"), item("help", "Tools", "grid")];
+  const favorites = item("favorites", "Favorites", "star");
   // Owners: messages in the centre; stays, earnings, statements and mailbox are in Reports (once).
   if (role === "client") return [...ownerNavigation()];
-  return [home, item("work", "Work", "check-square"), properties, reports, activity];
+  const [work, ...rest]: NavigationItem[] =
+    role === "cleans" || role === "cleaning_manager" ? [item("work", "Cleans", "check-square"), properties, activity, help]
+    : role === "ready" ? [item("work", "Maintenance", "tool"), properties, activity, help]
+    // Accounts: invoices and owner statements are the daily work (both in Work → Accounts).
+    : role === "accounts" ? [item("work", "Invoices", "file-text"), item("statements", "Statements", "pie-chart"), item("inbox", "Inbox", "message-circle"), item("help", "Tools", "grid")]
+    : [item("work", "Work", "check-square"), properties, reports, activity];
+  if (desktop) return [home, favorites, work, ...rest];
+  const phone = rest.filter(x => x.value !== "activity" && x.value !== "inbox");
+  return [home, work, favorites, ...phone].slice(0, 5);
 }
 const WORK_TITLE: Record<Role, [string, string]> = {
   super_admin: ["Work", "Management, repairs and accounts in one place."], admin: ["Work", "Management, repairs and accounts in one place."],
@@ -119,7 +133,7 @@ function IconButton({ label, icon, onPress, palette: p }: { label: string; icon:
   );
 }
 
-function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDeleted, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onDeleted: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
+function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, setTheme, onSignedOut, onDeleted, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; realAccount: WorkspaceAccount; viewAs: Role | null; onViewAs: (role: Role | null) => void; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onDeleted: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
   const reduced = useReducedMotion(), motionPreference = useMotionPreference(), faqShortcut = useFaqShortcut();
@@ -128,7 +142,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
   const setTab = (value: WorkspaceSection) => router.setParams({ section: value });
   const nav = useMemo(() => liveNavigation(account.role), [account.role]);
   // Owners on a wide screen also get Tools (Help and the tools directory) in the sidebar.
-  const sideNav = useMemo(() => account.role === "client" ? [...ownerNavigation(true)] : nav, [account.role, nav]);
+  const sideNav = useMemo(() => account.role === "client" ? [...ownerNavigation(true)] : liveNavigation(account.role, true), [account.role]);
   const [focus, setFocus] = useState<WorkFocus | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false), [deleting, setDeleting] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
@@ -189,16 +203,17 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
   // A super admin can change someone's role or tools while they are signed in. Every read carries
   // the current account, so the app switches to the new role's Home, Work and tools on the next refresh.
   const accountKey = (a: WorkspaceAccount) => [a.role, a.status, a.fullName, [...a.modules].sort().join()].join("|");
-  const shownAccount = useRef(account);
+  // (While a super admin views as another role, this follows their own account, not the preview.)
+  const shownAccount = useRef(realAccount);
   const [accessNote, setAccessNote] = useState("");
   useEffect(() => {
     const before = shownAccount.current;
-    shownAccount.current = account;
-    if (accountKey(before) === accountKey(account)) return;
-    queueMicrotask(() => setAccessNote(before.role !== account.role
-      ? `Your role has changed to ${ROLE_LABEL[account.role]}. Your Home, Work and tools now match.`
+    shownAccount.current = realAccount;
+    if (accountKey(before) === accountKey(realAccount)) return;
+    queueMicrotask(() => setAccessNote(before.role !== realAccount.role
+      ? `Your role has changed to ${ROLE_LABEL[realAccount.role]}. Your Home, Work and tools now match.`
       : "Your tools have been updated."));
-  }, [account]);
+  }, [realAccount]);
   // A quiet refresh (every minute, and when someone comes back to the app) keeps what is on screen
   // and its messages; only a failed sign-in is acted on.
   const refresh = useCallback(async (quiet = false) => {
@@ -281,11 +296,37 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
     return () => animation.stop();
   }, [tab, fade, reduced]);
 
+  const [searchOpen, setSearchOpen] = useState(false), [propertyFocus, setPropertyFocus] = useState<{ id: string; nonce: number } | null>(null);
+  const [tracker, setTracker] = useState<Tool | null>(null), [calculator, setCalculator] = useState(false), [viewAsOpen, setViewAsOpen] = useState(false);
   // A Home tool opens its place: the Work view (and tab inside it), or another page, then the section.
   const openTool = (target: HomeToolTarget) => {
     if (target.kind === "work") { setWorkView(target.view); setFocus({ sub: target.sub, anchor: target.anchor, open: target.open, workId: target.workId, nonce: Date.now() }); setTab("work"); }
     else if (target.kind === "tab") { setFocus(target.anchor ? { anchor: target.anchor, nonce: Date.now() } : null); setTab(target.tab); }
+    else if (target.kind === "tracker") setTracker(toolsFor(account.role, account.modules).find(t => t.id === target.module) ?? null);
+    else if (target.kind === "calculator") setCalculator(true);
   };
+  // Search and Favorites: one list of everything this person can open, from what is already loaded.
+  const team = account.role !== "client";
+  const favorites = useFavoritesStore(team, viewAs ? viewOnlyMessage(viewAs) : "");
+  const entries = useMemo(() => buildSearchIndex({ role: account.role, modules: account.modules, properties, work, invoices }), [account.role, account.modules, properties, work, invoices]);
+  const openEntry = (entry: SearchEntry) => {
+    const t = entry.target;
+    if (t.kind === "section") navigate(t.section);
+    else if (t.kind === "tool") openTool(t.target);
+    else if (t.kind === "property") { setPropertyFocus({ id: t.propertyId, nonce: Date.now() }); setFocus(null); setTab("properties"); }
+    else if (t.kind === "work") { const item = work.find(w => w.workId === t.workId); if (item) setOpenWork(item); }
+    else openTool(account.role === "accounts" ? { kind: "work", view: "accounts", anchor: "section-invoices" } : { kind: "tab", tab: "analytics", anchor: "section-invoices" });
+  };
+  // Ctrl+K (⌘K on a Mac), or "/" when not typing, opens search from anywhere on the web.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    const keydown = (event: KeyboardEvent) => {
+      const typing = event.target instanceof HTMLElement && (event.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName));
+      if (((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") || (event.key === "/" && !typing)) { event.preventDefault(); setSearchOpen(true); }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => document.removeEventListener("keydown", keydown);
+  }, []);
   useEffect(() => {
     if (!focus?.anchor) return;
     // Sections appear once their data has loaded, so look for a few seconds, then bring it into view
@@ -413,9 +454,11 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
     </>
   );
   const page = tab === "home"
-    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} onTool={openTool} />
+    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} onTool={openTool}
+        search={team ? <HomeSearch palette={p} entries={entries} onSearch={() => setSearchOpen(true)} onOpen={openEntry} onFavorites={() => navigate("favorites")} /> : undefined} />
+    : tab === "favorites" ? <FavoritesPage palette={p} desktop={desktop} entries={entries} onOpen={openEntry} onSearch={() => setSearchOpen(true)} />
     : tab === "work" ? workPage
-    : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} />
+    : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} focusProperty={propertyFocus} />
     : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} mailbox={account.modules.includes("client-mailbox")} /> : reportsPage)
     : tab === "approvals" ? <LiveApprovals palette={p} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onForm={setForm} onRefresh={() => refresh()} onInbox={() => navigate("inbox")} onProperties={() => navigate("properties")} />
     : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
@@ -426,15 +469,16 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;
   const header = headerPalette(p);
   const ownerActions = { unread: chatUnread, openForm: setForm };
-  const title = nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
+  const title = sideNav.find(item => item.value === tab)?.label ?? nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
   // The floating Help button; the page leaves room under its last item while it shows.
   const showFaq = !faqShortcut.hidden && tab !== "help" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help")));
   return (
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
-      <CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
+      <FavoritesContext.Provider value={team ? favorites : null}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
-        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={sideNav} section={tab} palette={p} onNavigate={navigate} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme and sign out" />}
+        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={sideNav} section={tab} palette={p} onNavigate={navigate} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme and sign out"
+          extra={team ? <SidebarFavorites palette={p} entries={entries} onOpen={openEntry} onAll={() => navigate("favorites")} /> : undefined} />}
         {desktop && sidebarHidden && <View style={{ width: 64, backgroundColor: p.isDark ? p.surface : p.background, borderRightWidth: 1, borderColor: p.border }}><View style={{ height: 81, alignItems: "center", justifyContent: "center", backgroundColor: p.header }}><IconButton label="Show left panel" icon="chevrons-right" palette={header} onPress={() => setSidebarHidden(false)} /></View></View>}
         <View style={[ui.fill, { minWidth: 0 }]}>
           {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Photos are saved on this device; other changes will fail until you reconnect.</Text></View>}
@@ -443,15 +487,18 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
             <View style={[ui.between, { width: "100%", maxWidth: desktop ? undefined : 760, alignSelf: "center", paddingHorizontal: 20, paddingVertical: 16, gap: 12 }]}>
               <View style={[ui.row, { flex: 1, minWidth: 0, gap: 16 }]}>
                 {desktop && sidebarHidden && <CompanyLogo palette={header} width={144} />}
-                {desktop ? <Text style={{ color: p.headerText, fontSize: 16, fontWeight: "600", flexShrink: 1 }}>{title}</Text> : <CompanyLogo palette={header} width={width < 360 ? 104 : 144} />}
+                {desktop ? <Text numberOfLines={1} style={{ color: p.headerText, fontSize: 16, fontWeight: "600", flexShrink: 1, minWidth: 80 }}>{title}</Text> : <CompanyLogo palette={header} width={width < 360 ? 104 : 144} />}
+                {desktop && team && <HeaderSearch palette={p} onOpen={() => setSearchOpen(true)} />}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
+                {!desktop && team && <IconButton label="Search" icon="search" palette={header} onPress={() => setSearchOpen(true)} />}
+                {canViewAs(realAccount) && (desktop || width >= 400) && <IconButton label={viewAs ? `Viewing as ${viewAsLabel(viewAs)}. Change view` : "View as another role"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
                 <View>
                   <IconButton label={messagesBadge ? `Messages, ${[chatUnread ? `${chatUnread} unread` : "", guestWaiting ? `${guestWaiting} ${guestWaiting === 1 ? "guest" : "guests"} waiting` : ""].filter(Boolean).join(", ")}` : "Messages"} icon="message-circle" palette={header} onPress={() => { setChatTarget(null); navigate("inbox"); }} />
                   {messagesBadge > 0 && <View pointerEvents="none" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View>}
                 </View>
                 <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={() => { void refresh(); void loadReport(period); void loadUnread(); void loadWaiting(); }} />
-                {(desktop || width >= 400) && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
+                {(desktop || width >= 440) && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
                 <MotionPress accessibilityRole="button" accessibilityLabel={`Open profile and preferences, ${roleLabel}`} onPress={() => setSettings(true)} style={{ minHeight: 48, minWidth: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: desktop ? 14 : 0, borderRadius: 999, backgroundColor: desktop ? p.headerControl : "transparent", borderWidth: desktop ? 1 : 0, borderColor: p.headerBorder }}>
                   {desktop && <View style={{ maxWidth: 180 }}><Text numberOfLines={1} style={{ color: p.headerText, fontSize: 14, fontWeight: "600" }}>{profile.displayName}</Text><Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 11 }}>{roleLabel}</Text></View>}
                   <Avatar profile={profile} backgroundColor={desktop ? undefined : p.headerControl} textColor={desktop ? "#FFFFFF" : p.headerControlText} />
@@ -461,6 +508,15 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
           </View>
           <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, showFaq && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
+              {!!viewAs && <View accessibilityRole="alert" style={[ui.row, { gap: 12, padding: 12, paddingLeft: 14, borderRadius: 16, backgroundColor: p.header, flexWrap: "wrap" }]}>
+                <Feather name="eye" size={18} color={p.headerText} />
+                <View style={{ flex: 1, minWidth: 180, gap: 2 }}>
+                  <Text style={{ color: p.headerText, fontSize: 14, fontWeight: "700" }}>Viewing as {viewAsLabel(viewAs)}</Text>
+                  <Text style={{ color: p.headerMuted, fontSize: 12, lineHeight: 17 }}>Their Home, menus and tools. Lists still show the whole business, and nothing is saved while you look around.</Text>
+                </View>
+                <MotionPress accessibilityRole="button" onPress={() => setViewAsOpen(true)} style={{ minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: p.headerBorder }}><Text style={{ color: p.headerText, fontSize: 13, fontWeight: "700" }}>Change</Text></MotionPress>
+                <MotionPress accessibilityRole="button" onPress={() => onViewAs(null)} style={{ minHeight: 40, justifyContent: "center", paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.headerText }}><Text style={{ color: p.header, fontSize: 13, fontWeight: "700" }}>Back to my view</Text></MotionPress>
+              </View>}
               {!!accessNote && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.wash }]}><Feather name="shield" size={16} color={p.primary} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{accessNote}</Text><MotionPress accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setAccessNote("")} style={{ minHeight: 36, minWidth: 36, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={p.muted} /></MotionPress></View>}
               <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}><WorkJumpContext.Provider value={jump}><OwnerActions.Provider value={ownerActions}>{animatedPage}</OwnerActions.Provider></WorkJumpContext.Provider></WorkFocusContext.Provider></AnchorRegistry.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
@@ -507,6 +563,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
             </View>
           </View>
         </View>
+        {canViewAs(realAccount) && <SoftButton label={viewAs ? `Viewing as ${viewAsLabel(viewAs)}: change` : "View the app as another role"} icon="arrow-right" palette={p} onPress={() => { setSettings(false); setViewAsOpen(true); }} />}
         <PrivacySection p={p} onDelete={() => { setSettings(false); setDeleting(true); }} />
         <SoftButton label="Your tools, help and training" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("help"); }} />
         {confirmOut ? <SignOutUploadsWarning p={p} busy={busy} onCancel={() => setConfirmOut(false)} onConfirm={() => void logout(true)} /> : <SoftButton label={busy ? "Signing out…" : "Sign out"} icon="log-out" palette={p} disabled={busy} onPress={() => void logout()} />}
@@ -519,6 +576,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
           {openWork.kind === "direct_booking" && openWork.data.phase === "follow_up" && policy?.confirmed && <Text style={[ui.small, { color: p.muted }]}>Offer the guest {formatBps(policy.discount_bps).replace(".0%", "%")} off, up to {formatMoney(policy.discount_cap_minor)} off. The offer price is worked out when you prepare it.</Text>}
           {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
           {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: {formatMoney(Number(openWork.data.estimatedCostMinor))}</Text>}
+          {team && <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />}
           <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
           {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}
           <PriceNightsLink p={p} account={account} item={openWork} onOpen={target => { setOpenWork(null); openTool(target); }} />
@@ -529,9 +587,28 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
           <WorkHistory key={openWork.workId} p={p} workId={openWork.workId} version={openWork.version} />
         </>}
       </Sheet>
+      <SearchPanel visible={searchOpen} onClose={() => setSearchOpen(false)} palette={p} entries={entries} onOpen={openEntry} />
+      <TrackerSheet palette={p} tool={tracker} properties={properties} onClose={() => setTracker(null)} />
+      <FurnishingSheet palette={p} visible={calculator} onClose={() => setCalculator(false)} />
+      {canViewAs(realAccount) && <Sheet palette={p} visible={viewAsOpen} onClose={() => setViewAsOpen(false)} title="View as another role" subtitle="See each team member's point of view" icon="people">
+        <Text style={[ui.small, { color: p.muted }]}>You see that role&apos;s Home, menus, Work views and tools, exactly as they do. Lists still show the whole business, because the database knows it&apos;s you, and nothing is saved until you switch back. Only super admins can do this.</Text>
+        <View style={{ gap: 8 }}>
+          {[{ role: null, label: "Myself", detail: "Super admin, everything" }, ...VIEW_AS_ROLES].map(option => {
+            const on = (option.role ?? null) === viewAs;
+            return (
+              <MotionPress key={option.label} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => { setViewAsOpen(false); if (!on) onViewAs(option.role); }}
+                style={[ui.row, { gap: 12, minHeight: 56, paddingHorizontal: 14, borderRadius: 16, borderWidth: on ? 2 : 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.wash : p.background }]}>
+                <Feather name={option.role ? "eye" : "user"} size={18} color={on ? p.primary : p.muted} />
+                <View style={{ flex: 1, gap: 1 }}><Text style={{ color: p.text, fontSize: 14, fontWeight: "700" }}>{option.label}</Text><Text style={{ color: p.muted, fontSize: 12 }}>{option.detail}</Text></View>
+                {on && <Feather name="check" size={18} color={p.primary} />}
+              </MotionPress>
+            );
+          })}
+        </View>
+      </Sheet>}
       <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
       {welcome === "splash" && <RechargeSplash palette={p} onDone={() => setWelcome("greeting")} />}
-      </OpenMessagesContext.Provider></CelebrateProvider>
+      </OpenMessagesContext.Provider></CelebrateProvider></FavoritesContext.Provider>
       {welcome === "greeting" && <GreetingCard palette={p} profile={profile} openTasks={work.filter(item => !isDone(item.status)).length} waiting={work.filter(item => isWaitingWork(item.status)).length} onClose={finishWelcome} onWork={() => { finishWelcome(); setTab("work"); }} />}
     </SafeAreaView>
   );
@@ -552,7 +629,20 @@ function Screen() {
     }).catch(e => { if (active && !(e instanceof WorkspaceApiError && e.status === 401)) setError(message(e)); }).finally(() => { if (active) setChecking(false); });
     return () => { active = false; };
   }, []);
-  const signedOut = useCallback(() => setAccount(null), []);
+  // A super admin's "View as": the role they are looking through, kept for this browser tab only.
+  const [viewAs, setViewAsState] = useState<Role | null>(() => {
+    try { const saved = globalThis.sessionStorage?.getItem("rc-view-as"); return VIEW_AS_ROLES.some(r => r.role === saved) ? saved as Role : null; } catch { return null; }
+  });
+  const viewing = account && canViewAs(account) ? viewAs : null;
+  const shown = useMemo(() => account ? previewAccount(account, viewing) : null, [account, viewing]);
+  useEffect(() => { setViewOnly(viewing ? viewOnlyMessage(viewing) : ""); }, [viewing]);
+  const changeView = useCallback((role: Role | null) => {
+    try { if (role) globalThis.sessionStorage?.setItem("rc-view-as", role); else globalThis.sessionStorage?.removeItem("rc-view-as"); } catch { /* storage unavailable */ }
+    // Nothing may be saved from the moment a preview starts.
+    setViewOnly(role ? viewOnlyMessage(role) : "");
+    setWelcome(false); router.setParams({ section: "home" }); setViewAsState(role);
+  }, []);
+  const signedOut = useCallback(() => { setViewOnly(""); setAccount(null); }, []);
   // After deleting their account the person lands on sign-in with a confirmation.
   const deleted = useCallback(() => { setNotice(ACCOUNT_DELETED); setAccount(null); }, []);
   if (checking) return <View style={[ui.fill, { backgroundColor: p.header, alignItems: "center", justifyContent: "center", gap: 20 }]}><CompanyLogo palette={headerPalette(p)} width={180} /><ActivityIndicator accessibilityLabel="Restoring your session" color={p.headerText} /></View>;
@@ -562,7 +652,7 @@ function Screen() {
   // New team members sign their contract and finish required training first.
   return (
     <OnboardingGate key={account.userId} account={account} palette={p} onSignOut={() => { void unlinkNotifications().then(() => signOut()).catch(() => undefined).finally(() => setAccount(null)); }}>
-      <Workspace account={account} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onDeleted={deleted} onAccount={setAccount} welcomeOnOpen={welcome} />
+      <Workspace key={viewing ?? "self"} account={shown ?? account} realAccount={account} viewAs={viewing} onViewAs={changeView} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onDeleted={deleted} onAccount={setAccount} welcomeOnOpen={welcome} />
     </OnboardingGate>
   );
 }

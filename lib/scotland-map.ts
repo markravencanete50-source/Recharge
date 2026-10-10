@@ -58,3 +58,38 @@ export function scaleBar(milesPerPixel: number, target = 90): { miles: number; p
   const miles = [...steps].reverse().find(s => s <= raw) ?? 1;
   return { miles, pixels: miles / milesPerPixel };
 }
+
+// Moving around the map like any online map: drag to pan, pinch or scroll to zoom about the point
+// under the finger or pointer. `aspect` is the height over the width of the box the map is drawn in
+// (a full-screen map on a wide screen is wider than Scotland, so the sea fills the sides). The view
+// never wanders off the map; the closest zoom shows about 8 miles across (dots are placed by postcode
+// district, so closer adds nothing).
+export const MIN_VIEW_WIDTH = 16;
+const MAP_ASPECT = MAP_HEIGHT / MAP_WIDTH;
+const between = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+export function clampView(v: MapView, aspect = MAP_ASPECT): MapView {
+  const w = between(v.w, MIN_VIEW_WIDTH, Math.max(MAP_WIDTH, MAP_HEIGHT / aspect)), h = w * aspect;
+  return { x: w >= MAP_WIDTH ? (MAP_WIDTH - w) / 2 : between(v.x, 0, MAP_WIDTH - w), y: h >= MAP_HEIGHT ? (MAP_HEIGHT - h) / 2 : between(v.y, 0, MAP_HEIGHT - h), w, h };
+}
+// All of Scotland in a box of this shape.
+export const wholeView = (aspect = MAP_ASPECT) => clampView({ x: 0, y: 0, w: Math.max(MAP_WIDTH, MAP_HEIGHT / aspect), h: 0 }, aspect);
+// A view made for the map's own shape (an area's view), fitted to a box of another shape, same centre.
+export function fitView(v: MapView, aspect = MAP_ASPECT): MapView {
+  const w = Math.max(v.w, v.h / aspect);
+  return clampView({ x: v.x + v.w / 2 - w / 2, y: v.y + v.h / 2 - (w * aspect) / 2, w, h: w * aspect }, aspect);
+}
+// `factor` above 1 zooms in. (fx, fy) is the point to keep still, as a share of the view (0 to 1).
+export function zoomAt(v: MapView, factor: number, fx = 0.5, fy = 0.5, aspect = MAP_ASPECT): MapView {
+  const w = clampView({ ...v, w: v.w / factor }, aspect).w, h = w * aspect;
+  return clampView({ x: v.x + fx * v.w - fx * w, y: v.y + fy * v.h - fy * h, w, h }, aspect);
+}
+// Dragging by (dx, dy) screen pixels on a map drawn `widthPx` wide moves the map with the finger.
+export function panBy(v: MapView, dx: number, dy: number, widthPx: number, aspect = MAP_ASPECT): MapView {
+  const k = v.w / Math.max(1, widthPx);
+  return clampView({ ...v, x: v.x - dx * k, y: v.y - dy * k }, aspect);
+}
+// A link that opens the place in Google Maps (only when someone taps it): the address if there is one.
+export function googleMapsLink(place: { lat: number; lon: number; address?: string | null }): string {
+  const query = place.address?.trim() ? place.address.trim() : `${place.lat.toFixed(5)},${place.lon.toFixed(5)}`;
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
+}
