@@ -10,8 +10,8 @@ import { viewAsGroups, viewAsKey, viewAsLabel, viewAsName, type ViewAs, type Vie
 
 // The super admin's "View as" picker: each role, with the people in it. Picking a person shows
 // exactly what they see; a role nobody has yet can still be previewed with its screens and tools.
-export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose }: {
-  palette: Palette; visible: boolean; current: ViewAs | null; onClose: () => void; onChoose: (view: ViewAs | null) => Promise<void>;
+export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose, demo = false }: {
+  palette: Palette; visible: boolean; current: ViewAs | null; onClose: () => void; onChoose: (view: ViewAs | null) => Promise<void>; demo?: boolean;
 }) {
   const [people, setPeople] = useState<ViewAsPerson[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState("");
   useEffect(() => {
@@ -34,7 +34,9 @@ export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose }:
     return (
       <MotionPress key={key} accessibilityRole="radio" accessibilityState={{ selected: on, busy: busy === key }} accessibilityLabel={`${label}. ${detail}`} onPress={() => void choose(view)}
         style={[ui.row, { gap: 12, minHeight: 52, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, borderWidth: on ? 2 : 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.wash : p.background }]}>
-        <Feather name={icon} size={17} color={on ? p.primary : p.muted} />
+        {icon === "eye"
+          ? <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: on ? p.primary : p.wash }}><Text style={{ color: on ? p.onPrimary : p.primary, fontSize: 12, fontWeight: "800" }}>{label.split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase()}</Text></View>
+          : <View style={{ width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}><Feather name={icon} size={16} color={on ? p.onPrimary : p.muted} /></View>}
         <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
           <Text numberOfLines={1} style={{ color: p.text, fontSize: 14, fontWeight: "700" }}>{label}</Text>
           <Text style={{ color: p.muted, fontSize: 12, lineHeight: 16 }}>{detail}</Text>
@@ -45,9 +47,11 @@ export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose }:
   };
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="View as someone else" subtitle="See exactly what each person sees" icon="people">
-      <Text style={[ui.small, { color: p.muted }]}>Pick a person to see the app exactly as they do: their Home, tools, properties, work and messages. Nothing can be changed while you look, private chats stay hidden, and each view is recorded in Access history.</Text>
+      <Text style={[ui.small, { color: p.muted }]}>{demo
+        ? "Pick one of the demo business's people to see the demo as they would: their Home, tools, properties, work and messages. Nothing is saved."
+        : "Pick a person to see the app exactly as they do: their Home, tools, properties, work and messages. Nothing can be changed while you look, private chats stay hidden, and each view is recorded in Access history."}</Text>
       {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text></View>}
-      {option(null, "Myself", "Super admin, everything", "user")}
+      {option(null, demo ? "The demo's super admin" : "Myself", "Super admin, everything", "user")}
       {!people ? <View style={{ paddingVertical: 20, alignItems: "center" }}><ActivityIndicator accessibilityLabel="Loading people" color={p.primary} /></View> : viewAsGroups(people).map(group => (
         <View key={group.role} style={{ gap: 6 }}>
           <View style={[ui.row, { gap: 8, paddingTop: 6 }]}>

@@ -6,7 +6,7 @@ import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { Sheet } from "./TeamFlows";
 import { Entrance, MotionPress, TweenNumber } from "./motion";
-import { departmentColor, ui, type Palette } from "./theme";
+import { departmentColor, ui, web, type Palette } from "./theme";
 import { Button, Field, IconChip, Loading, Notice, Section, Tag, dayLabel, london, message, useRequestId, type IconName, type Tone } from "./LiveKit";
 import { List, Pills } from "./LiveAccounts";
 import { StateGraphic } from "./StateGraphic";
@@ -233,21 +233,28 @@ type Metric = { label: string; value: number | string; attention?: boolean; targ
 function DepartmentCard({ p, tone, icon, title, metrics, onOpen, target }: { p: Palette; tone: Tone; icon: IconName; title: string; metrics: Metric[]; onOpen: (t: HomeToolTarget) => void; target: HomeToolTarget }) {
   const colour = departmentColor(tone, p);
   return (
-    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 4, paddingVertical: 14, flex: 1 }]}>
-      <MotionPress accessibilityRole="button" accessibilityLabel={`Open ${title}`} onPress={() => onOpen(target)} style={[ui.between, { gap: 10, minHeight: 44 }]}>
-        <View style={[ui.row, { gap: 10, flex: 1, minWidth: 0 }]}>
-          <IconChip icon={icon} tone={tone} p={p} size={34} />
-          <Text numberOfLines={1} style={{ color: p.text, fontSize: 16, fontWeight: "700", flexShrink: 1 }}>{title}</Text>
+    // Each department card carries its colour: a thread along the top and a faint wash behind its heading.
+    <View {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 2, paddingVertical: 16, flex: 1, overflow: "hidden" }, web({ backgroundImage: `linear-gradient(180deg,${colour.wash} 0%,transparent 38%)` })]}>
+      <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 3, backgroundColor: colour.ink, opacity: 0.75 }} />
+      <MotionPress accessibilityRole="button" accessibilityLabel={`Open ${title}`} onPress={() => onOpen(target)} style={[ui.between, { gap: 10, minHeight: 48, marginBottom: 4 }]}>
+        <View style={[ui.row, { gap: 12, flex: 1, minWidth: 0 }]}>
+          <IconChip icon={icon} tone={tone} p={p} size={40} />
+          <Text numberOfLines={1} style={{ color: p.text, fontSize: 17, fontWeight: "700", letterSpacing: -0.3, flexShrink: 1 }}>{title}</Text>
         </View>
-        <Feather name="chevron-right" size={18} color={p.muted} />
+        <View style={{ width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: p.background }}><Feather name="arrow-up-right" size={15} color={colour.ink} /></View>
       </MotionPress>
       {metrics.map((m, i) => (
-        <MotionPress key={m.label} accessibilityRole="button" accessibilityLabel={`${m.label}: ${typeof m.value === "number" ? formatCount(m.value) : m.value}`} onPress={() => onOpen(m.target)}
-          style={[ui.row, { gap: 12, minHeight: 44, paddingVertical: 6, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
-          {typeof m.value === "number"
-            ? <TweenNumber value={m.value} format={formatCount} style={{ minWidth: 36, color: m.attention ? colour.ink : p.text, fontSize: 20, fontWeight: "700", fontVariant: ["tabular-nums"] }} />
-            : <Text style={{ minWidth: 36, color: m.attention ? colour.ink : p.text, fontSize: 20, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{m.value}</Text>}
-          <Text numberOfLines={2} style={[ui.small, { color: p.muted, flex: 1 }]}>{m.label}</Text>
+        <MotionPress key={m.label} {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={`${m.label}: ${typeof m.value === "number" ? formatCount(m.value) : m.value}`} onPress={() => onOpen(m.target)}
+          style={[ui.row, { gap: 12, minHeight: 46, paddingVertical: 6, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
+          <View style={{ minWidth: 44, alignItems: "flex-start" }}>
+            <View style={{ paddingHorizontal: m.attention ? 9 : 0, paddingVertical: m.attention ? 2 : 0, borderRadius: 999, backgroundColor: m.attention ? colour.wash : "transparent" }}>
+              {typeof m.value === "number"
+                ? <TweenNumber value={m.value} format={formatCount} style={{ color: m.attention ? colour.ink : p.text, fontSize: 20, lineHeight: 26, fontWeight: "700", letterSpacing: -0.4, fontVariant: ["tabular-nums"] }} />
+                : <Text style={{ color: m.attention ? colour.ink : p.text, fontSize: 20, lineHeight: 26, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{m.value}</Text>}
+            </View>
+          </View>
+          <Text numberOfLines={2} style={[ui.small, { color: m.attention ? p.text : p.muted, flex: 1 }]}>{m.label}</Text>
+          {m.attention && <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colour.ink }} />}
         </MotionPress>
       ))}
     </View>

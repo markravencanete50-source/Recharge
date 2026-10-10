@@ -40,6 +40,7 @@ const WORK_LABEL: Partial<Record<WorkspaceAccount["role"], string>> = { cleans: 
 const greeting = () => { const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hourCycle: "h23" }).format(new Date())); return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"; };
 const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 const todayLabel = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
+const longToday = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" });
 
 export function LiveHome({ palette: p, desktop, account, snapshot, period, properties, journeys = [], work, notices, loading, onNavigate, onTool }: {
   palette: Palette; desktop: boolean; account: WorkspaceAccount; snapshot: AnalyticsSnapshot | null; period: AnalyticsPeriod;
@@ -66,7 +67,7 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
         <HeroGlow palette={p} />
         {desktop && <>
           <View style={[ui.between, { gap: 12 }]}>
-            <Text style={{ color: tone.heroMuted, fontSize: 13, fontWeight: "500", flex: 1 }}>{greeting()}, {firstName}</Text>
+            <Text style={{ color: tone.heroMuted, fontSize: 12, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", flex: 1 }}>Today at a glance</Text>
             <MotionPress accessibilityRole="button" accessibilityLabel="Open your work" onPress={() => onNavigate("work")} style={[ui.row, { minHeight: 40, gap: 7, paddingHorizontal: 12, borderRadius: 999, backgroundColor: tone.chipBg, borderWidth: 1, borderColor: tone.heroBorder }]}>
               <Feather name="calendar" size={14} color={tone.heroText} />
               <Text style={{ color: tone.heroText, fontSize: 13, fontWeight: "600" }}>{todayLabel()}</Text>
@@ -103,6 +104,12 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
   return (
     <>
       {!desktop && <WelcomeHeader palette={p} name={account.fullName || "there"} dateLabel={todayLabel()} subtitle={SUBTITLE[account.role]} onCalendar={() => onNavigate("work")} />}
+      {/* Desktop opens on a greeting: the day, the person, and what this page is for. */}
+      {desktop && <Entrance sessionKey="live:home:greeting" style={{ gap: 6 }}>
+        <Text style={[ui.label, { color: p.primary }]}>{longToday()}</Text>
+        <Text accessibilityRole="header" style={[ui.title, { color: p.text, fontSize: 34, lineHeight: 42 }]}>{greeting()}, {firstName}</Text>
+        <Text style={[ui.body, { color: p.muted }]}>{SUBTITLE[account.role]}</Text>
+      </Entrance>}
       {/* Cleaners, cleaning managers and Ready land on their day: Today, Tomorrow and Overdue. */}
       {!!boardRole(account.role) && <TodayBoard palette={p} account={account} properties={properties} work={work} desktop={desktop} onTool={onTool} />}
       {(account.role === "admin" || account.role === "super_admin") && <AdminHome palette={p} desktop={desktop} onTool={onTool} />}

@@ -3,7 +3,7 @@ import { Platform, Share, Switch, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { useCelebrate } from "./Celebrate";
-import { MotionPress, Pop, SwapIn } from "./motion";
+import { ExpandChevron, MotionPress, Pop, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { departmentColor, ui, type Palette } from "./theme";
 import { Anchor, Button, Field, Loading, message, Notice, Section, StatGrid, StatTile, Tag } from "./LiveKit";
@@ -186,7 +186,7 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
                 style={[ui.row, { gap: 12, minHeight: 52, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, borderColor: deleting ? p.danger : p.border, backgroundColor: open ? (deleting ? p.cautionWash : p.wash) : p.surface }]}>
                 <Feather name={DANGER[d].icon} size={18} color={deleting ? p.danger : p.primary} />
                 <Text style={{ color: deleting ? p.danger : p.text, fontWeight: "700", flex: 1 }}>{DANGER[d].label}</Text>
-                <Feather name={open ? "chevron-up" : "chevron-down"} size={18} color={p.muted} />
+                <ExpandChevron open={open} size={18} color={p.muted} />
               </MotionPress>
               {open && <SwapIn swapKey={d}><View style={{ gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.background }}>
                 <Text style={[ui.small, { color: p.text }]}>{DANGER[d].explain}</Text>

@@ -4,8 +4,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { DimensionalIcon } from "./DimensionalIcon";
-import { MotionPress, Stagger, useReducedMotion } from "./motion";
-import { ui, type Palette } from "./theme";
+import { MotionPress, Stagger, SwapIn, useReducedMotion } from "./motion";
+import { depth, ui, type Palette } from "./theme";
 import { FavoriteStar, FavoritesMessage, FilledStar, useFavorites } from "./Favorites";
 import { PageHeading } from "./LivePages";
 import { titleParts } from "../../lib/tool-finder";
@@ -66,9 +66,9 @@ export function SearchPanel({ visible, onClose, palette: p, entries, onOpen }: {
   let index = -1;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
-      <View style={{ flex: 1, backgroundColor: "rgba(10, 26, 21, 0.45)", alignItems: "center", paddingTop: wide ? 72 : 0 }}>
+      <View {...(isWeb ? { dataSet: { overlay: "blur" } } : {})} style={{ flex: 1, backgroundColor: p.overlay, alignItems: "center", paddingTop: wide ? 72 : 0 }}>
         <MotionPress accessibilityLabel="Close search" onPress={close} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
-        <View accessibilityViewIsModal style={{ width: "100%", maxWidth: wide ? 680 : undefined, flex: wide ? undefined : 1, maxHeight: wide ? "80%" : undefined, backgroundColor: p.surface, borderRadius: wide ? 26 : 0, borderWidth: wide ? 1 : 0, borderColor: p.border, paddingTop: wide ? 16 : insets.top + 12, paddingHorizontal: 16, paddingBottom: wide ? 12 : insets.bottom + 8, gap: 10, overflow: "hidden", ...(isWeb ? { boxShadow: "0 40px 80px -30px rgba(10, 26, 21, 0.55)" } : { elevation: 12 }) }}>
+        <SwapIn swapKey={visible ? "open" : "closed"} style={{ width: "100%", maxWidth: wide ? 680 : undefined, flex: wide ? undefined : 1, alignItems: "center" }}><View accessibilityViewIsModal style={{ width: "100%", maxWidth: wide ? 680 : undefined, flex: wide ? undefined : 1, maxHeight: wide ? "80%" : undefined, backgroundColor: p.surface, borderRadius: wide ? 28 : 0, ...(wide ? depth.floating : {}), borderWidth: wide ? 1 : 0, borderColor: p.border, paddingTop: wide ? 16 : insets.top + 12, paddingHorizontal: 16, paddingBottom: wide ? 12 : insets.bottom + 8, gap: 10, overflow: "hidden", ...(isWeb ? { boxShadow: "0 40px 80px -30px rgba(10, 26, 21, 0.55)" } : { elevation: 12 }) }}>
           <View style={[ui.row, { gap: 10 }]}>
             <View style={[ui.row, { flex: 1, minWidth: 0, gap: 10, borderWidth: 2, borderColor: p.primary, borderRadius: 18, paddingHorizontal: 14, backgroundColor: p.background }]}>
               <Feather name="search" size={20} color={p.primary} />
@@ -109,7 +109,7 @@ export function SearchPanel({ visible, onClose, palette: p, entries, onOpen }: {
             ))}
           </ScrollView>
           {wide && isWeb && <View style={[ui.row, { gap: 14, flexWrap: "wrap", paddingTop: 2, paddingHorizontal: 4 }]}>{[["↑ ↓", "move"], ["Enter", "open"], ["Esc", "close"], [SEARCH_SHORTCUT, "search from anywhere"]].map(([key, label]) => <View key={key} style={[ui.row, { gap: 6 }]}><View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}><Text style={{ fontSize: 11, fontWeight: "600", color: p.text }}>{key}</Text></View><Text style={{ fontSize: 12, color: p.muted }}>{label}</Text></View>)}</View>}
-        </View>
+        </View></SwapIn>
       </View>
     </Modal>
   );

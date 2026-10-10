@@ -7,7 +7,7 @@ import { isWorkspaceAdmin, type WorkspaceRole } from '../../lib/modules';
 import { LineChart, StatusChart, QueueChart, MetricSparkline, ReportSymbol } from './Charts';
 import { CountUp, Entrance, MotionPress } from './motion';
 import { Text } from './Typography';
-import { ui, type Palette } from './theme';
+import { primaryFill, ui, type Palette } from './theme';
 export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporting,exportMessage}:{snapshot:AnalyticsSnapshot;period:AnalyticsPeriod;role:WorkspaceRole;palette:Palette;onDates:()=>void;onExport:()=>void;exporting:boolean;exportMessage:string}) {
   const report=useMemo(()=>reportPresentation(snapshot,period),[snapshot,period]);
   const {width}=useWindowDimensions(),desktop=width>=1024;
@@ -22,7 +22,7 @@ export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporti
     <Entrance sessionKey={'reports:'+role+':heading'}><View style={{gap:8}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>{snapshot.title}</Text><Text style={[ui.body,{color:p.muted}]}>{snapshot.description}</Text></View></Entrance>
     <View style={[ui.row,{gap:12,flexWrap:'wrap'}]}>
       <MotionPress accessibilityRole="button" accessibilityLabel="Choose analytics date range" onPress={onDates} style={[ui.button,card,{borderWidth:1,flexGrow:desktop?0:1,gap:10}]}><Feather name="calendar" size={18} color={p.primary}/><Text style={[ui.small,{color:p.text,flexShrink:1,fontWeight:'600'}]}>{periodLabel(period)}</Text><Feather name="chevron-down" size={16} color={p.muted}/></MotionPress>
-      {isWorkspaceAdmin(role)&&<MotionPress accessibilityRole="button" accessibilityLabel="Export analytics CSV" accessibilityState={{busy:exporting,disabled:exporting}} disabled={exporting} onPress={onExport} style={[ui.button,{backgroundColor:p.primary,flexGrow:desktop?0:1}]}>{exporting?<ActivityIndicator color={p.onPrimary}/>:<Feather name="download" size={18} color={p.onPrimary}/>}<Text style={[ui.buttonText,{color:p.onPrimary}]}>{exporting?'Preparing report...':'Export CSV report'}</Text></MotionPress>}
+      {isWorkspaceAdmin(role)&&<MotionPress accessibilityRole="button" accessibilityLabel="Export analytics CSV" accessibilityState={{busy:exporting,disabled:exporting}} disabled={exporting} onPress={onExport} {...(Platform.OS==='web'?{dataSet:{sheen:''}}:{})} style={[ui.button,primaryFill(p),{flexGrow:desktop?0:1}]}>{exporting?<ActivityIndicator color={p.onPrimary}/>:<Feather name="download" size={18} color={p.onPrimary}/>}<Text style={[ui.buttonText,{color:p.onPrimary}]}>{exporting?'Preparing report...':'Export CSV report'}</Text></MotionPress>}
     </View>
     {!!exportMessage&&isWorkspaceAdmin(role)&&<Text accessibilityLiveRegion="polite" style={[ui.small,{color:p.text}]}>{exportMessage}</Text>}
     <Entrance sessionKey={'reports:'+role+':summary'} delay={55}><View style={{gap:18}}>
@@ -32,7 +32,15 @@ export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporti
         {item.value===null?<Text style={[ui.statValue,{color:p.text}]}>-</Text>:<CountUp value={item.value} sessionKey={'reports:'+role+':'+item.label} style={[ui.statValue,{color:p.text}]}/>}
         {item.metric==='property'?<Text style={[ui.small,{color:p.muted}]}>{report.propertyAvailable?'As of today':'Property data unavailable'}</Text>:<>
           <MetricSparkline report={report} metric={item.metric} color={item.color} palette={p} motionKey={'reports:'+role+':spark:'+item.metric}/>
-          <View style={[ui.row,{gap:6,alignItems:'flex-start'}]}><Feather name={report.comparisons[item.metric].direction==='up'?'arrow-up':report.comparisons[item.metric].direction==='down'?'arrow-down':'minus'} size={14} color={p.muted} style={{marginTop:3}}/><Text style={[ui.small,{color:p.muted,flex:1}]}>{report.deltas[item.metric]}</Text></View>
+          {(()=>{
+            // Up is good for completed work, bad for waiting work, and neither for the total.
+            const direction=report.comparisons[item.metric].direction,good=item.metric==='complete'?direction==='up':item.metric==='waiting'?direction==='down':null;
+            const tone=direction==='same'||good===null?{ink:p.muted,wash:p.elevated}:good?{ink:p.success,wash:p.successWash}:{ink:p.danger,wash:p.dangerWash};
+            return <View style={[ui.row,{gap:8,alignItems:'flex-start'}]}>
+              <View style={{width:22,height:22,borderRadius:11,alignItems:'center',justifyContent:'center',backgroundColor:tone.wash}}><Feather name={direction==='up'?'trending-up':direction==='down'?'trending-down':'minus'} size={13} color={tone.ink}/></View>
+              <Text style={[ui.small,{color:p.muted,flex:1}]}>{report.deltas[item.metric]}</Text>
+            </View>;
+          })()}
         </>}
       </View>)}</View>
     </View></Entrance>

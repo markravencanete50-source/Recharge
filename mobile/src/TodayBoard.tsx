@@ -3,6 +3,7 @@ import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { Entrance, GrowBar, MotionPress, Stagger } from "./motion";
+import { Segmented } from "./Segmented";
 import { dayLabel, IconChip, Loading, message, Notice, Tag, type IconName } from "./LiveKit";
 import { PropertyAccess } from "./LiveTools";
 import { ui, type Palette } from "./theme";
@@ -73,20 +74,8 @@ export function TodayBoard({ palette: p, account, properties, work, desktop, onT
           <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>{dayLabel(today)}</Text>
         </MotionPress>
       </View>
-      <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 4, padding: 4, borderRadius: 999, backgroundColor: p.wash, alignSelf: desktop ? "flex-start" : "stretch" }}>
-        {segments.map(([key, label, count]) => {
-          const on = active === key, late = key === "overdue";
-          return (
-            <MotionPress key={key} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={`${label}, ${plural(count, "job")}`} onPress={() => setBucket(key)}
-              style={[ui.row, { flexGrow: 1, flexBasis: 0, minWidth: desktop ? 120 : 0, justifyContent: "center", gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, backgroundColor: on ? p.primary : "transparent" }]}>
-              <Text numberOfLines={1} style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "700" }}>{label}</Text>
-              <View style={{ minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: late ? p.danger : on ? p.onPrimary : p.surface }}>
-                <Text style={{ color: late ? p.onPrimary : p.primary, fontSize: 11, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{count}</Text>
-              </View>
-            </MotionPress>
-          );
-        })}
-      </View>
+      <Segmented p={p} label={manager ? "Your team's day" : "Your day"} stretch={!desktop} value={active} onChange={setBucket}
+        items={segments.map(([key, label, count]) => ({ key, label, count, alert: key === "overdue" }))} />
       {!buckets && !error && <Loading p={p} rows={2} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {buckets && <>

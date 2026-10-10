@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
-import { MotionPress, SwapIn } from "./motion";
+import { ExpandChevron, MotionPress, SwapIn } from "./motion";
 import { ui, type Palette } from "./theme";
 import { IconChip, type IconName } from "./LiveKit";
 import { EXTRAS, INSPECTION_CHECKS, OWNER_FAQ, PROCESS, SERVICES } from "../../lib/onboarding-content";
@@ -18,7 +18,7 @@ function Fold({ p, title, icon, open: start = false, children }: { p: Palette; t
       <MotionPress accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={[ui.row, { gap: 12, minHeight: 40 }]}>
         <IconChip icon={icon} tone="clients" p={p} size={34} />
         <Text style={{ color: p.text, fontWeight: "700", flex: 1, fontSize: 15 }}>{title}</Text>
-        <Feather name={open ? "chevron-up" : "chevron-down"} size={18} color={p.muted} />
+        <ExpandChevron open={open} size={18} color={p.muted} />
       </MotionPress>
       {open && <SwapIn swapKey={title} style={{ gap: 10 }}>{children}</SwapIn>}
     </View>

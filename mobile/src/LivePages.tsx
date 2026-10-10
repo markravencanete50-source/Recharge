@@ -34,7 +34,7 @@ import { Calendar } from "./WorkspaceScreens";
 import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
-import { Entrance, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
+import { DrawLine, Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
 import { departmentColor, primaryFill, ui, web, type Palette } from "./theme";
 import { workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
@@ -68,7 +68,7 @@ export function PageHeading({ title, subtitle, palette: p, action }: { title: st
     <View style={[ui.between, { gap: 16, alignItems: "flex-end", flexWrap: "wrap" }]}>
       <View style={{ gap: 8, flexShrink: 1, minWidth: 220 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{title}</Text>
-        <View style={{ width: 40, height: 3, borderRadius: 2, backgroundColor: p.primary, opacity: 0.85, ...web({ backgroundImage: "linear-gradient(90deg,var(--rc-primary),var(--rc-heroGlow))" }) }} />
+        <DrawLine width={40} color={p.primary} sessionKey={"heading:" + title} style={{ opacity: 0.85, ...web({ backgroundImage: "linear-gradient(90deg,var(--rc-primary),var(--rc-heroGlow))" }) }} />
         <Text style={[ui.body, { color: p.muted, maxWidth: 680 }]}>{subtitle}</Text>
       </View>
       {action}
@@ -357,11 +357,12 @@ function PropertyCard({ property, index, palette: p, onPress }: { property: Prop
   const live = property.status === "active";
   return (
     <MotionPress {...hoverLift} accessibilityRole="button" accessibilityLabel={"Open " + property.name} onPress={onPress} style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, padding: 0, overflow: "hidden", borderRadius: 26, gap: 0 }]}>
-      <View style={{ minHeight: 132, alignItems: "center", justifyContent: "center", backgroundColor: departmentColor(index % 2 ? "clients" : "stays", p).wash }}>
-        <View style={{ width: 80, height: 88, backgroundColor: p.surface, borderRadius: 22, borderWidth: 1, borderColor: p.border, alignItems: "center", justifyContent: "center" }}><BuildingGlyph palette={p} variant={index} /></View>
-        <View style={[ui.row, { position: "absolute", left: 14, top: 14, backgroundColor: p.surface, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, gap: 6 }]}>
-          <Feather name={live ? "check-circle" : "clock"} size={13} color={live ? p.success : p.waiting} />
-          <Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>{live ? "Live" : readableStage(property.status)}</Text>
+      {/* The property's "photo": its building on a soft wash with a pool of light, the status pinned on top. */}
+      <View style={[{ minHeight: 140, alignItems: "center", justifyContent: "center", backgroundColor: departmentColor(index % 2 ? "clients" : "stays", p).wash }, web({ backgroundImage: `radial-gradient(260px 140px at 70% 10%,rgba(255,255,255,.55),transparent 70%),linear-gradient(160deg,transparent 40%,color-mix(in srgb,${departmentColor(index % 2 ? "clients" : "stays", p).ink} 9%,transparent) 100%)` })]}>
+        <Float distance={3} duration={3600} delay={(index % 4) * 400}><View style={{ width: 82, height: 90, backgroundColor: p.surface, borderRadius: 22, borderWidth: 1, borderColor: p.border, alignItems: "center", justifyContent: "center", ...web({ boxShadow: "0 16px 28px -18px rgba(21,45,40,.55)" }) }}><BuildingGlyph palette={p} variant={index} /></View></Float>
+        <View style={[ui.row, { position: "absolute", left: 14, top: 14, backgroundColor: p.surface, borderRadius: 999, paddingLeft: 9, paddingRight: 11, paddingVertical: 5, gap: 6, ...web({ boxShadow: "0 6px 14px -10px rgba(21,45,40,.5)" }) }]}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: live ? p.success : p.waiting }} />
+          <Text style={[ui.small, { color: p.text, fontWeight: "700", fontSize: 12 }]}>{live ? "Live" : readableStage(property.status)}</Text>
         </View>
       </View>
       <View style={{ padding: 18, gap: 10 }}>
@@ -531,6 +532,18 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   );
 }
 
+// Updates in day groups, in London time: "Today", "Yesterday", then "Friday 9 October".
+function dayGroups(notices: readonly NoticeView[]): [string, NoticeView[]][] {
+  const day = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(iso));
+  const today = day(new Date().toISOString()), yesterday = day(new Date(Date.now() - 86_400_000).toISOString());
+  const groups = new Map<string, NoticeView[]>();
+  for (const n of notices) {
+    const key = day(n.created_at);
+    const label = key === today ? "Today" : key === yesterday ? "Yesterday" : new Date(n.created_at).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" });
+    groups.set(label, [...(groups.get(label) ?? []), n]);
+  }
+  return [...groups];
+}
 export function LiveActivity({ palette: p, notices, loading, onRead }: { palette: Palette; notices: NoticeView[]; loading: boolean; onRead?: (ids: number[]) => void }) {
   // Opening Activity marks the listed updates read (one request each, newest first, never twice),
   // so Home's Updates count only shows what is new.
@@ -554,7 +567,17 @@ export function LiveActivity({ palette: p, notices, loading, onRead }: { palette
       <PageHeading palette={p} title="Recent activity" subtitle="Updates on the work and properties within your access." />
       <ListSearchBox p={p} search={search} nouns="updates" />
       {search.missed ? null : notices.length ? (
-        <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 6, gap: 0 }]}>{search.shown.map((notice, i) => <View key={notice.id} style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}><LiveNoticeRow notice={notice} palette={p} /></View>)}</View>
+        // Grouped by day (Today, Yesterday, then the date), newest first, each row easing in.
+        dayGroups(search.shown).map(([day, list], g) => (
+          <View key={day} style={{ gap: 8 }}>
+            <View style={[ui.row, { gap: 10, paddingHorizontal: 4 }]}>
+              <Text style={[ui.label, { color: g === 0 ? p.primary : p.muted }]}>{day}</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: p.border }} />
+              <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{list.length}</Text>
+            </View>
+            <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 6, gap: 0 }]}>{list.map((notice, i) => <Stagger key={notice.id} index={i}><View style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}><LiveNoticeRow notice={notice} palette={p} /></View></Stagger>)}</View>
+          </View>
+        ))
       ) : <EmptyState palette={p} icon="activity" title={loading ? "Loading updates…" : "No updates yet"} detail="Changes to your work and properties appear here." />}
       <Text style={[ui.small, { color: p.muted }]}>Email and push notifications start once they are switched on.</Text>
     </>
@@ -575,7 +598,7 @@ export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy
           <View key={f.id} style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}>
             <MotionPress accessibilityRole="button" accessibilityState={{ expanded: open === f.id }} onPress={() => setOpen(open === f.id ? null : f.id)} style={[ui.between, { gap: 12, minHeight: 56, paddingVertical: 12 }]}>
               <Text style={{ color: p.text, fontSize: 15, fontWeight: "600", flex: 1 }}>{f.question}</Text>
-              <Feather name={open === f.id ? "chevron-up" : "chevron-down"} size={18} color={p.muted} />
+              <ExpandChevron open={open === f.id} color={p.muted} />
             </MotionPress>
             {open === f.id && <SwapIn swapKey={f.id}><Text style={[ui.body, { color: p.muted, paddingBottom: 14 }]}>{f.answer}</Text></SwapIn>}
           </View>

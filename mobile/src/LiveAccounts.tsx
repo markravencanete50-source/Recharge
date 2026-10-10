@@ -6,7 +6,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { Text } from "./Typography";
 import { matchesSearch, PropertySelect, SEARCH_LIST_ABOVE, SearchBox, searchTextOf } from "./SearchPicker";
 import { useSaved } from "./Celebrate";
-import { MotionPress, Pop, Stagger, SwapIn } from "./motion";
+import { ExpandChevron, MotionPress, Pop, Stagger, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { primaryFill, ui, type Palette } from "./theme";
@@ -624,7 +624,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
                 <View style={{ height: 1, backgroundColor: p.border }} />
                 <Line p={p} label={st.payoutMinor < 0 ? "Owner owes" : "Due to owner"} value={pounds(Math.abs(st.payoutMinor))} />
                 {st.status === "paid" && <Text style={[ui.small, { color: p.muted }]}>Paid by bank transfer, reference {st.payoutReference}.</Text>}
-                <MotionPress accessibilityRole="button" onPress={() => setExpanded(expanded === st.id ? null : st.id)} hitSlop={8} style={[ui.row, { gap: 6, minHeight: 44 }]}><Feather name={expanded === st.id ? "chevron-up" : "chevron-down"} size={16} color={p.primary} /><Text style={{ color: p.primary, fontWeight: "600" }}>{expanded === st.id ? "Hide breakdown" : "Show breakdown"}</Text></MotionPress>
+                <MotionPress accessibilityRole="button" onPress={() => setExpanded(expanded === st.id ? null : st.id)} hitSlop={8} style={[ui.row, { gap: 6, minHeight: 44 }]}><ExpandChevron open={expanded === st.id} size={16} color={p.primary} /><Text style={{ color: p.primary, fontWeight: "600" }}>{expanded === st.id ? "Hide breakdown" : "Show breakdown"}</Text></MotionPress>
                 {expanded === st.id && <View style={{ gap: 6 }}>
                   {st.detail.stays.map(x => <Line key={x.reference + x.checkIn} p={p} label={`${x.reference} · ${CHANNEL_LABEL[x.channel] ?? x.channel} · ${x.checkIn}`} value={pounds(x.amountMinor)} />)}
                   {st.detail.expenses.map(x => <Line key={x.reference} p={p} label={`${x.supplier} · ${x.reference}`} value={"−" + pounds(x.amountMinor)} />)}

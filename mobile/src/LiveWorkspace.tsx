@@ -20,7 +20,7 @@ import { RechargeSplash } from "./RechargeSplash";
 import { GreetingCard } from "./WelcomeMoment";
 import { Reports } from "./Reports";
 import { Sheet } from "./TeamFlows";
-import { MotionPress, MotionProvider, Stagger, SwapIn, useMotionPreference, useReducedMotion } from "./motion";
+import { Bump, MotionPress, MotionProvider, Stagger, SwapIn, useMotionPreference, useReducedMotion } from "./motion";
 import { headerPalette, themes, ui, web, type Palette } from "./theme";
 import { useThemePreference } from "./usePreviewPreferences";
 import { exportReport } from "./exportReport";
@@ -541,7 +541,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
                 {headerEye && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
                 <View>
                   <IconButton label={messagesBadge ? `Messages, ${[chatUnread ? `${chatUnread} unread` : "", guestWaiting ? `${guestWaiting} ${guestWaiting === 1 ? "guest" : "guests"} waiting` : ""].filter(Boolean).join(", ")}` : "Messages"} icon="message-circle" palette={header} onPress={() => { setChatTarget(null); navigate("inbox"); }} />
-                  {messagesBadge > 0 && <View pointerEvents="none" style={{ position: "absolute", top: -4, right: -4, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View>}
+                  {messagesBadge > 0 && <Bump value={messagesBadge} pointerEvents="none" style={{ position: "absolute", top: -4, right: -4 }}><View pointerEvents="none" style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View></Bump>}
                 </View>
                 {!narrowHeader && <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={refreshAll} />}
                 {(desktop || width >= 440) && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
@@ -632,7 +632,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <SearchPanel visible={searchOpen} onClose={() => setSearchOpen(false)} palette={p} entries={entries} onOpen={openEntry} />
       <TrackerSheet palette={p} tool={tracker} properties={properties} onClose={() => setTracker(null)} />
       <FurnishingSheet palette={p} visible={calculator} onClose={() => setCalculator(false)} />
-      {canViewAs(realAccount) && <ViewAsSheet palette={p} visible={viewAsOpen} current={viewAs} onClose={() => setViewAsOpen(false)} onChoose={onViewAs} />}
+      {canViewAs(realAccount) && <ViewAsSheet palette={p} visible={viewAsOpen} current={viewAs} onClose={() => setViewAsOpen(false)} onChoose={onViewAs} demo={demo} />}
       <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
       {welcome === "splash" && <RechargeSplash palette={p} onDone={() => setWelcome("greeting")} />}
       </OpenMessagesContext.Provider></CelebrateProvider></FavoritesContext.Provider>

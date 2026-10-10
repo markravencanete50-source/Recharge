@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { View } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
-import { MotionPress } from "./motion";
+import { ExpandChevron, MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
 import { dayLabel, Tag } from "./LiveKit";
 import { StatementFiles } from "./AccountsFiles";
@@ -33,7 +32,7 @@ export function StatementCard({ p, s }: { p: Palette; s: Statement }) {
       {s.status === "paid" && <Text style={[ui.small, { color: p.muted }]}>Paid by bank transfer{s.paidAt ? ` on ${new Date(s.paidAt).toLocaleDateString("en-GB")}` : ""}, reference {s.payoutReference}.</Text>}
       {s.status === "issued" && s.payoutMinor >= 0 && <Text style={[ui.small, { color: p.muted }]}>Your payout is being prepared.</Text>}
       <MotionPress accessibilityRole="button" onPress={() => setOpen(v => !v)} style={[ui.row, { gap: 6 }]}>
-        <Feather name={open ? "chevron-up" : "chevron-down"} size={16} color={p.primary} /><Text style={{ color: p.primary, fontWeight: "600" }}>{open ? "Hide the detail" : "See every stay and cost"}</Text>
+        <ExpandChevron open={open} size={16} color={p.primary} /><Text style={{ color: p.primary, fontWeight: "600" }}>{open ? "Hide the detail" : "See every stay and cost"}</Text>
       </MotionPress>
       {open && <View style={{ gap: 6 }}>
         {s.detail.stays.map(x => line(`${dayLabel(x.checkIn)} to ${dayLabel(x.checkOut)}`, pounds(x.amountMinor)))}

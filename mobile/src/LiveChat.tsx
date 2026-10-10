@@ -4,10 +4,10 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { ListSearchBox, PropertySelect, useListSearch } from "./SearchPicker";
-import { MotionPress, Pop, SwapIn } from "./motion";
+import { Entrance, MotionPress, Pop, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
-import { ui, type Palette } from "./theme";
+import { depth, primaryFill, ui, type Palette } from "./theme";
 import { readChat, readInbox, viewMode, writeChat } from "./backend/client";
 import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
@@ -89,13 +89,14 @@ function ConversationRow({ p, c, active, onPress }: { p: Palette; c: Conversatio
 
 function Bubble({ p, m, showName }: { p: Palette; m: ChatMessage; showName: boolean }) {
   return (
-    <View style={{ alignItems: m.mine ? "flex-end" : "flex-start", gap: 2 }}>
+    // Each message rises in once, the first time it appears.
+    <Entrance sessionKey={"chat:" + m.id} style={{ alignItems: m.mine ? "flex-end" : "flex-start", gap: 3 }}>
       {showName && !m.mine && <Text style={[ui.small, { color: p.muted, fontWeight: "700", marginLeft: 6 }]}>{m.authorName}</Text>}
-      <View style={{ maxWidth: "82%", paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, borderBottomRightRadius: m.mine ? 6 : 18, borderBottomLeftRadius: m.mine ? 18 : 6, backgroundColor: m.mine ? p.primary : p.surface, borderWidth: m.mine ? 0 : 1, borderColor: p.border }}>
-        <Text selectable style={{ color: m.mine ? p.surface : p.text, fontSize: 15, lineHeight: 21 }}>{m.body}</Text>
+      <View style={[{ maxWidth: "82%", paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, borderBottomRightRadius: m.mine ? 6 : 20, borderBottomLeftRadius: m.mine ? 20 : 6, borderWidth: m.mine ? 0 : 1, borderColor: p.border }, m.mine ? primaryFill(p) : { backgroundColor: p.surface, ...depth.card }]}>
+        <Text selectable style={{ color: m.mine ? p.onPrimary : p.text, fontSize: 15, lineHeight: 21 }}>{m.body}</Text>
       </View>
       <Text style={{ color: p.muted, fontSize: 11, marginHorizontal: 6 }}>{chatTime(m.at)}</Text>
-    </View>
+    </Entrance>
   );
 }
 
@@ -150,8 +151,8 @@ function Thread({ p, id, onBack, onChanged, savedReplies = false }: { p: Palette
           onKeyPress={e => { const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean }; if (Platform.OS === "web" && key.key === "Enter" && !key.shiftKey) { (e as unknown as { preventDefault: () => void }).preventDefault(); void send(); } }}
           style={{ flex: 1, minHeight: 46, maxHeight: 140, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 18, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 15 }} />
         <MotionPress accessibilityRole="button" accessibilityLabel="Send" disabled={!text.trim() || sending} onPress={() => void send()}
-          style={{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: text.trim() ? p.primary : p.wash }}>
-          <Feather name="send" size={19} color={text.trim() ? p.surface : p.muted} />
+          style={[{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" }, text.trim() ? primaryFill(p) : { backgroundColor: p.wash }]}>
+          <Feather name="send" size={19} color={text.trim() ? p.onPrimary : p.muted} />
         </MotionPress>
       </View>
     </View>

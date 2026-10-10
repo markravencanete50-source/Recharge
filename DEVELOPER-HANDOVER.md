@@ -300,6 +300,43 @@ database tool can run it, and it is safe to run more than once.
   the super admin's updates, favorites or unread count. Screens that load their own records (Cleans,
   Hub…) still read as the super admin; to see exactly what a person sees, pick the person.
 
+## Design system pass (10 October 2026)
+
+- **Depth** (`depthTokens` in `lib/design-tokens.ts`, `depth` in `mobile/src/theme.ts`): resting cards
+  (`elev-1`), raised and hovered (`elev-2`), floating sheets (`elev-3`), each with a hairline highlight
+  along the top edge (`sheen`). `ui.card` uses it, so most cards picked it up. Card borders are a softer
+  hairline (`border`), cards a touch brighter (`surface`). `primaryFill(p)` is the primary action's
+  forest fill with a lift of light; `web({...})` holds browser-only styles.
+- **Web finishing layer** (`premiumCss`): cards marked `dataSet={{ hover: "lift" }}` lift on hover and
+  carry a soft light that follows the pointer (`MotionProvider` sets `--mx`/`--my`); `dataSet={{ sheen:
+  "" }}` buttons catch a sheen; `dataSet={{ shimmer: "" }}` placeholders sweep; focused inputs and
+  controls glow; the workspace canvas (`dataSet={{ canvas: "" }}`) has two faint light pools. All of it
+  stops with reduced motion.
+- **Motion** (`mobile/src/motion.tsx`): `SwapIn` brings pages into focus from a soft blur on the web;
+  `TweenNumber` counts up the first time a figure appears, then glides; `Float` (illustrations), `Bump`
+  (badge counts), `DrawLine` (page title accents). Sheets (`Sheet` in `TeamFlows.tsx`) rise with a spring
+  and can be pulled down to close on phones. `Segmented` slides a thumb between segments.
+- **Charts** (`mobile/src/Charts.tsx`, `smoothPath`/`smoothArea`/`pathLength` in `lib/report-graphs.ts`):
+  monotone curves that draw in, a hover or tap guide with figures, a status ring that sweeps round, bars
+  that grow. Home's trend uses the same curves.
+- **Errors** (`lib/error-copy.ts`): server reasons pass through; technical text never reaches the screen.
+
+## Demo mode (10 October 2026)
+
+- **What it is:** a super admin's Live / Demo switch (header on wide screens, and Profile). Demo shows a
+  sample business on every screen; the real database is never read or written for it, and nothing
+  saves (every send answers "Demo mode: nothing is saved…"). View as works inside the demo with its
+  sample people. A banner and the left panel say it is on, with Switch to Live. It lasts for the tab.
+- **How:** `workspaceRequest` (`mobile/src/backend/client.ts`) answers reads from the recording while
+  `setDemo` is set (`demoAnswer` in `lib/demo-data.ts`): requests are matched with their dates made
+  relative to the day of recording, and every date in the answers is moved to today, so the sample
+  stays current. The recording is `mobile/web-static/demo-data.json`, served at
+  `/workspace/demo-data.json` and fetched only when someone switches demo on.
+- **Recording it again** (after schema or screen changes): run the local review backend with the sample
+  business (`scripts/demo/`), then `node scripts/build-demo-data.mjs`. It replays the reads listed per role
+  in `scripts/demo/requests.json` and writes the file. `tests/demo-data.test.mjs` checks it parses and
+  covers every role.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

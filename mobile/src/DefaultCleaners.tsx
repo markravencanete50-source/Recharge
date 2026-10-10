@@ -4,7 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { SearchBox } from "./SearchPicker";
 import { normalise } from "../../lib/search-options";
-import { MotionPress } from "./motion";
+import { ExpandChevron, MotionPress } from "./motion";
 import * as Crypto from "expo-crypto";
 import { Loading, message, Notice, Tag } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
@@ -63,7 +63,7 @@ export function DefaultCleanersSheet({ p, visible, admin, onClose, onChanged }: 
                 <Text numberOfLines={1} style={{ color: p.text, fontWeight: "700" }}>{row.propertyName}</Text>
                 <Text style={[ui.small, { color: p.muted }]}>{row.cleanerName ?? "No usual cleaner"}</Text>
               </View>
-              {row.canEdit ? <Feather name={expanded ? "chevron-up" : "chevron-down"} size={18} color={p.muted} /> : <Tag label={row.cleanerName ? "Set" : "Not set"} tone={row.cleanerName ? "good" : "wait"} p={p} />}
+              {row.canEdit ? <ExpandChevron open={expanded} size={18} color={p.muted} /> : <Tag label={row.cleanerName ? "Set" : "Not set"} tone={row.cleanerName ? "good" : "wait"} p={p} />}
             </MotionPress>
             {expanded && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {choices.map(c => {

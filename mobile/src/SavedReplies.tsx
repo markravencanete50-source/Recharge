@@ -3,7 +3,7 @@ import { TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { MotionPress, SwapIn } from "./motion";
+import { ExpandChevron, MotionPress, SwapIn } from "./motion";
 import { Button, Field, Loading, message, Notice, Tag } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { readChat, writeChat } from "./backend/client";
@@ -66,7 +66,7 @@ export function SavedReplies({ p, audience, fill, onInsert }: { p: Palette; audi
         style={[ui.row, { alignSelf: "flex-start", gap: 6, minHeight: 36, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: open ? p.primary : p.border, backgroundColor: open ? p.wash : p.surface }]}>
         <Feather name="bookmark" size={14} color={p.primary} />
         <Text style={{ color: p.primary, fontSize: 13, fontWeight: "700" }}>Saved replies</Text>
-        <Feather name={open ? "chevron-up" : "chevron-down"} size={14} color={p.primary} />
+        <ExpandChevron open={open} size={14} color={p.primary} />
       </MotionPress>
       {open && (
         <SwapIn swapKey={managing ? "manage" + (editing === "new" ? "new" : editing?.id ?? "") : "pick"} style={{ gap: 8, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>

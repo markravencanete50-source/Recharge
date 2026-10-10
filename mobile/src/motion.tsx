@@ -217,3 +217,31 @@ export function Shimmer({ rows = 3, color, highlight }: { rows?: number; color: 
     ))}
   </Animated.View>;
 }
+// A small spring whenever a value changes (a badge count going up), so the change is noticed.
+export function Bump({ value, children, style, pointerEvents }: { value: string | number; children: ReactNode; style?: StyleProp<ViewStyle>; pointerEvents?: 'none' | 'auto' | 'box-none' }) {
+  const reduced = useReducedMotion(), scale = useState(() => new Animated.Value(1))[0];
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (reduced) return;
+    scale.setValue(1.28);
+    const a = Animated.spring(scale, { toValue: 1, speed: 14, bounciness: 12, useNativeDriver: nativeDriver });
+    a.start(); return () => a.stop();
+  }, [value, reduced, scale]);
+  return <Animated.View pointerEvents={pointerEvents} style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>;
+}
+// A line that draws itself across from the left when it first appears (page title accents).
+export function DrawLine({ width, height = 3, color, sessionKey, style }: { width: number; height?: number; color: string; sessionKey: string; style?: StyleProp<ViewStyle> }) {
+  const progress = useReveal('line:' + sessionKey, 120, 700);
+  return <Animated.View style={[style, { width, height, borderRadius: height, backgroundColor: color, transformOrigin: 'left', transform: [{ scaleX: progress }] } as object]} />;
+}
+// A chevron that turns to point the way a section opens or closes.
+export function ExpandChevron({ open, color, size = 18 }: { open: boolean; color: string; size?: number }) {
+  const reduced = useReducedMotion(), turn = useState(() => new Animated.Value(open ? 1 : 0))[0];
+  useEffect(() => {
+    if (reduced) { turn.setValue(open ? 1 : 0); return; }
+    const a = Animated.spring(turn, { toValue: open ? 1 : 0, speed: 20, bounciness: 4, useNativeDriver: nativeDriver });
+    a.start(); return () => a.stop();
+  }, [open, reduced, turn]);
+  return <Animated.View style={{ transform: [{ rotate: turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] }) }] }}><Feather name="chevron-down" size={size} color={color} /></Animated.View>;
+}

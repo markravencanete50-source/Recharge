@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
-import { MotionPress, SwapIn } from "./motion";
+import { ExpandChevron, MotionPress, SwapIn } from "./motion";
 import { ui, type Palette } from "./theme";
 import { Button, Loading, Notice, Tag, message } from "./LiveKit";
 import { readOversight } from "./backend/client";
@@ -54,7 +53,7 @@ export function WorkHistory({ p, workId, version }: { p: Palette; workId: string
       {!!rows && rows.length > SHOWN && (
         <MotionPress accessibilityRole="button" accessibilityState={{ expanded: all }} onPress={() => setAll(!all)} style={[ui.row, { gap: 6, minHeight: 44, alignSelf: "flex-start" }]}>
           <Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>{all ? "Show less" : `Show all ${rows.length}`}</Text>
-          <Feather name={all ? "chevron-up" : "chevron-down"} size={16} color={p.primary} />
+          <ExpandChevron open={all} size={16} color={p.primary} />
         </MotionPress>
       )}
     </View>

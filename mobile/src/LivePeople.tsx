@@ -5,7 +5,7 @@ import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { PropertySelect, SearchPicker } from "./SearchPicker";
 import { useSaved } from "./Celebrate";
-import { MotionPress } from "./motion";
+import { ExpandChevron, MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, Loading } from "./LiveKit";
@@ -89,7 +89,7 @@ function PersonSheet({ p, actorRole, person, properties, onClose, onDone }: { p:
         {role !== person.role && <Text style={[ui.small, { color: p.muted }]}>A new role brings that role’s usual tools{admin ? " (admins have every tool)" : `: ${modules.length} tools`}. Switch single tools on or off after saving. Property assignments stay; check they still fit.</Text>}
         {!admin && role === person.role && <>
           <MotionPress accessibilityRole="button" onPress={() => setShowTools(v => !v)} style={[ui.row, { gap: 8, minHeight: 44 }]}>
-            <Feather name={showTools ? "chevron-up" : "chevron-down"} size={18} color={p.primary} />
+            <ExpandChevron open={showTools} size={18} color={p.primary} />
             <Text style={{ color: p.primary, fontWeight: "600", flex: 1 }}>Tools: {modules.length} selected</Text>
           </MotionPress>
           {showTools && <View style={{ gap: 2 }}>
