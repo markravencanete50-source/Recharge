@@ -11,7 +11,8 @@ import { normalise } from "../../lib/search-options";
 import { CompanyLogo } from "./CompanyLogo";
 import { Avatar, type Profile } from "./AccountSetup";
 import { FeatureTile } from "./Artwork";
-import { DesktopNavigation } from "./DesktopNavigation";
+import { RoleNavigation } from "./RoleNavigation";
+import { rolePanel, type PanelLink } from "../../lib/role-panel";
 import { NavigationBar, type NavigationItem } from "./NavigationBar";
 import { FaqShortcut, useFaqShortcut } from "./FaqShortcut";
 import { FilterBar } from "./FilterBar";
@@ -71,7 +72,7 @@ import { TrackerSheet } from "./LiveTools";
 import { FurnishingSheet } from "./LiveFurnishing";
 import { buildSearchIndex, type SearchEntry } from "../../lib/workspace-search";
 import { toolsFor, type Tool } from "../../lib/tool-directory";
-import { canViewAs, previewAccount, readSavedView, viewAsKey, viewAsLabel, viewAsName, viewOnlyMessage, VIEW_AS_ENDED, type ViewAs } from "../../lib/view-as";
+import { canViewAs, previewAccount, previewKeeps, readSavedView, viewAsKey, viewAsLabel, viewAsName, viewOnlyMessage, VIEW_AS_ENDED, type ViewAs } from "../../lib/view-as";
 import { setViewOnly, startViewAs, stopViewAs } from "./backend/client";
 import { ViewAsBanner, ViewAsSheet } from "./ViewAs";
 import { STAFF_ROLES } from "./LiveOnboarding";
@@ -99,13 +100,11 @@ function bookingPolicyForm(policy: BookingPolicy): WorkflowForm {
   };
 }
 
-// The live workspace's destinations for each role. Five items on phones, where the middle one is the
-// raised action. The desktop sidebar has room for Favorites too, second; on phones Favorites is a
-// floating button next to Help instead.
-function liveNavigation(role: Role, desktop = false): NavigationItem[] {
+// The live workspace's bottom bar on phones for each role: five items, the middle one the raised
+// action. (Favorites is a floating button next to Help there; desktop has the role's left panel.)
+function liveNavigation(role: Role): NavigationItem[] {
   const item = (value: WorkspaceSection, label: string, icon: NavigationItem["icon"]): NavigationItem => ({ value, label, icon });
   const home = item("home", "Home", "home"), properties = item("properties", "Properties", "key"), reports = item("analytics", "Reports", "bar-chart-2"), activity = item("activity", "Activity", "activity"), help = item("help", "Help", "help-circle");
-  const favorites = item("favorites", "Favorites", "star");
   // Owners: messages in the centre; stays, earnings, statements and mailbox are in Reports (once).
   if (role === "client") return [...ownerNavigation()];
   const [work, ...rest]: NavigationItem[] =
@@ -114,12 +113,8 @@ function liveNavigation(role: Role, desktop = false): NavigationItem[] {
     // Accounts: invoices and owner statements are the daily work (both in Work → Accounts).
     : role === "accounts" ? [item("work", "Invoices", "file-text"), item("statements", "Statements", "pie-chart"), item("inbox", "Inbox", "message-circle"), item("help", "Tools", "grid")]
     : [item("work", "Work", "check-square"), properties, reports, activity];
-  if (desktop) return [home, favorites, work, ...rest];
   return [home, work, ...rest];
 }
-const WORK_AREA_ICON: Record<WorkView, "briefcase" | "layers" | "calendar" | "moon" | "check-square" | "tool" | "pie-chart" | "list"> = {
-  management: "briefcase", hub: "layers", calendar: "calendar", stays: "moon", cleans: "check-square", repairs: "tool", accounts: "pie-chart", all: "list",
-};
 const WORK_TITLE: Record<Role, [string, string]> = {
   super_admin: ["Work", "Management, repairs and accounts in one place."], admin: ["Work", "Management, repairs and accounts in one place."],
   stays: ["Your work", "Stays, guests and repairs for your properties."], client: ["Repairs and requests", "Repairs and other requests at your properties."],
@@ -153,9 +148,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const tab: WorkspaceSection = SECTIONS.includes(section as WorkspaceSection) && (ROLE_SECTIONS[section as WorkspaceSection]?.includes(account.role) ?? true) ? section as WorkspaceSection : "home";
   const setTab = (value: WorkspaceSection) => router.setParams({ section: value });
   const nav = useMemo(() => liveNavigation(account.role), [account.role]);
-  // Owners on a wide screen also get Tools (Help and the tools directory) in the sidebar.
-  // On desktop the team's Work entry is replaced by its work areas, listed under "Your work" in the panel.
-  const sideNav = useMemo(() => account.role === "client" ? [...ownerNavigation(true)] : liveNavigation(account.role, true).filter(item => item.value !== "work"), [account.role]);
+  // On desktop the left panel is the role's own (lib/role-panel.ts): its heading, groups and everyday
+  // tools. It follows the account shown, so View as shows the viewed person's or role's panel.
+  const panel = useMemo(() => rolePanel(account.role, account.modules), [account.role, account.modules]);
   const [focus, setFocus] = useState<WorkFocus | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false), [deleting, setDeleting] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
@@ -196,11 +191,15 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   }, []);
 
   useEffect(() => { void refreshNotificationLink(); }, [account.userId]);
+  // A role preview (View as a role, no person) reads the super admin's records; keep only what that role could be shown.
+  const rolePreview = viewAs && !viewAs.person ? viewAs.role : null;
   // Unread messages for the badge on the Messages button, checked every 30 seconds while open.
+  // (Not in a role preview: the count would be the super admin's own.)
   const [chatUnread, setChatUnread] = useState(0);
   const loadUnread = useCallback(async () => {
+    if (rolePreview) return;
     try { setChatUnread(z.number().int().min(0).parse((await readChat({ section: "unread" })).data)); } catch { /* the badge simply stays as it was */ }
-  }, []);
+  }, [rolePreview]);
   useEffect(() => {
     queueMicrotask(() => void loadUnread());
     const timer = setInterval(() => { if (AppState.currentState === "active") void loadUnread(); }, 30_000);
@@ -231,6 +230,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // and its messages; only a failed sign-in is acted on.
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) { setLoading(true); setError(""); }
+    const keep = rolePreview ? previewKeeps(rolePreview, account.modules) : null;
     // Properties and invoices come a page of 100 at a time; read every page.
     const readAll = async (entity: "properties" | "invoices") => {
       const rows: unknown[] = [];
@@ -265,10 +265,10 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       try {
         const data = result.value.data;
         if (key === "properties") setProperties(z.array(propertyViewSchema).parse(data).sort((x, y) => x.name.localeCompare(y.name)));
-        if (key === "journeys") setJourneys(z.array(journeyViewSchema).parse(data));
-        if (key === "work") setWork(z.array(operationViewSchema).parse(data));
-        if (key === "invoices") setInvoices(z.array(invoiceViewSchema).parse(data));
-        if (key === "notices") setNotices(z.array(noticeViewSchema).parse(data));
+        if (key === "journeys") setJourneys(keep && !keep.journeys ? [] : z.array(journeyViewSchema).parse(data));
+        if (key === "work") setWork(z.array(operationViewSchema).parse(data).filter(item => !keep || keep.work(item.moduleId)));
+        if (key === "invoices") setInvoices(keep && !keep.invoices ? [] : z.array(invoiceViewSchema).parse(data));
+        if (key === "notices") setNotices(keep && !keep.notices ? [] : z.array(noticeViewSchema).parse(data));
       } catch { if (!quiet) setError("Unexpected response. Refresh to try again."); }
     });
     // The budget chart (for approving purchases) and the direct-booking policy, read alongside the rest.
@@ -280,7 +280,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     }
     lastRefresh.current = Date.now();
     if (!quiet) setLoading(false);
-  }, [account.role, onSignedOut, onAccount]);
+  }, [account.role, account.modules, rolePreview, onSignedOut, onAccount]);
   const loadReport = useCallback(async (range: AnalyticsPeriod) => {
     if (periodError(range)) return;
     setReportError("");
@@ -321,7 +321,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   };
   // Search and Favorites: one list of everything this person can open, from what is already loaded.
   const team = account.role !== "client";
-  const favorites = useFavoritesStore(team, viewAs ? viewOnlyMessage(viewAs) : "");
+  // A role preview has nobody's favorites (not the super admin's own); a person view shows theirs.
+  const favorites = useFavoritesStore(team && !(viewAs && !viewAs.person), viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
   // Viewing as a team member who hasn't finished their start-up checklist: say why their tools are empty.
   const [viewNote, setViewNote] = useState("");
   useEffect(() => {
@@ -404,12 +405,20 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // Every team role also has All work, where each task's steps (onboarding, inspections, invoices, purchases) live.
   const workViews: WorkView[] = workViewsFor(account.role);
   const currentView: WorkView | "" = workViews.includes(workView as WorkView) ? workView as WorkView : (workViews[0] ?? "");
-  // The left panel lists this role's work areas, so it changes with the role (and with View as).
-  const workAreas = workViews.map(view => ({ value: view, label: WORK_VIEW_LABEL[view], icon: WORK_AREA_ICON[view] }));
-  const openWorkArea = (view: string) => { setFocus(null); setWorkView(view as WorkView); setTab("work"); };
-  const sideBadge = viewAs
-    ? { label: viewAs.person ? viewAs.person.fullName : `${viewAsLabel(viewAs.role)} preview`, detail: `${viewAsLabel(viewAs.role)} · view only`, previewing: true }
-    : { label: account.role === "super_admin" ? "Super admin" : viewAsLabel(account.role), detail: "Your view", previewing: false };
+  // The panel link last used stays highlighted while its place is open; otherwise the page or Work area open now is.
+  const [panelPick, setPanelPick] = useState<{ key: string; tab: WorkspaceSection; view: WorkView | "" } | null>(null);
+  const openPanel = (link: PanelLink) => {
+    if (link.kind === "page") { navigate(link.section); setPanelPick({ key: link.key, tab: link.section, view: "" }); return; }
+    if (link.kind === "area") { setFocus(null); setWorkView(link.view); setTab("work"); setPanelPick({ key: link.key, tab: "work", view: link.view }); return; }
+    openTool(link.target);
+    const t = link.target;
+    if (t.kind === "work") setPanelPick({ key: link.key, tab: "work", view: t.view });
+    else if (t.kind === "tab") setPanelPick({ key: link.key, tab: t.tab, view: "" });
+  };
+  const panelSelected = panelPick && panelPick.tab === tab && (tab !== "work" || panelPick.view === currentView) ? panelPick.key : tab === "work" ? "area:" + currentView : "page:" + tab;
+  const panelViewing = viewAs ? viewAs.person
+    ? { name: `Viewing as ${viewAs.person.fullName}`, detail: `Exactly what this ${viewAsLabel(viewAs.role).toLowerCase()} sees. Nothing can be changed.` }
+    : { name: `${viewAsLabel(viewAs.role)} preview`, detail: `The ${viewAsLabel(viewAs.role)} menus and tools only. Nothing can be changed.` } : null;
   // Cards inside a page (Stays' routine) open another place, or scroll to a section on the same page.
   const jump = (target: HomeToolTarget) => {
     const here = target.kind === "work" && tab === "work" && target.view === currentView && !target.sub && !target.open ? target.anchor : undefined;
@@ -501,7 +510,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;
   const header = headerPalette(p);
   const ownerActions = { unread: chatUnread, openForm: setForm };
-  const title = tab === "work" && currentView ? WORK_VIEW_LABEL[currentView] : sideNav.find(item => item.value === tab)?.label ?? nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
+  const title = tab === "work" && currentView ? WORK_VIEW_LABEL[currentView] : panel.groups.flatMap(g => g.links).find(l => l.kind === "page" && l.section === tab)?.label ?? nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
   // The floating Help button; the page leaves room under its last item while it shows.
   const showFaq = !faqShortcut.hidden && tab !== "help" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help")));
   // On phones the team's Favorites button floats just above Help (or where Help would be).
@@ -511,7 +520,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <FavoritesContext.Provider value={team ? favorites : null}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
-        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={sideNav} section={tab} palette={p} onNavigate={navigate} workAreas={account.role === "client" ? undefined : workAreas} workArea={currentView} onWorkArea={openWorkArea} badge={sideBadge} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme and sign out" />}
+        {desktop && !sidebarHidden && <RoleNavigation panel={panel} selected={panelSelected} palette={p} onOpen={openPanel} badges={{ "page:inbox": messagesBadge }} viewing={panelViewing} onBack={viewAs ? () => void onViewAs(null) : undefined} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} />}
         {desktop && sidebarHidden && <View style={{ width: 64, backgroundColor: p.isDark ? p.surface : p.background, borderRightWidth: 1, borderColor: p.border }}><View style={{ height: 81, alignItems: "center", justifyContent: "center", backgroundColor: p.header }}><IconButton label="Show left panel" icon="chevrons-right" palette={header} onPress={() => setSidebarHidden(false)} /></View></View>}
         <View style={[ui.fill, { minWidth: 0 }]}>
           {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Photos are saved on this device; other changes will fail until you reconnect.</Text></View>}

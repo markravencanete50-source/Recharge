@@ -19,8 +19,9 @@ export type Favorites = {
 export const FavoritesContext = createContext<Favorites | null>(null);
 export const useFavorites = () => useContext(FavoritesContext);
 
-export function useFavoritesStore(enabled: boolean, readOnly: string): Favorites {
-  const [items, setItems] = useState<FavoriteItem[]>([]), [loaded, setLoaded] = useState(false), [message, setMessage] = useState("");
+// `blank`: start empty instead of reading the saved list (a View as role preview belongs to nobody).
+export function useFavoritesStore(enabled: boolean, readOnly: string, blank = false): Favorites {
+  const [items, setItems] = useState<FavoriteItem[]>([]), [loaded, setLoaded] = useState(blank), [message, setMessage] = useState("");
   const saved = useRef<FavoriteItem[]>([]), queue = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     if (!enabled) return;

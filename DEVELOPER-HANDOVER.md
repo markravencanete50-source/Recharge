@@ -281,6 +281,24 @@ database tool can run it, and it is safe to run more than once.
 - **More detail:** `docs/BACKEND-FINANCE-AND-TEAMS-2026-10-07.md`, under Payouts and Approving
   payouts in bulk.
 
+## Each role has its own left panel; View as switches completely (10 October 2026)
+
+- **Left panel (desktop):** `lib/role-panel.ts` (`rolePanel(role, modules)`) defines each role's panel:
+  its heading and tagline ("Cleaning: your cleans, checklists and pay", "Ready: repairs, visits and
+  purchases"…), its groups in its own words (a cleaner has My day / My work / Me; Accounts has Money /
+  Costs; admins have Overview / Departments / Management / Planning) and the links in them: pages,
+  Work areas, the role's Home tools (only the ones the person holds) and its "start something" forms.
+  `mobile/src/RoleNavigation.tsx` draws it; `LiveWorkspace` passes the account it shows, so View as
+  shows the viewed person's or role's panel, marked "view only", with a "Back to my view" button.
+  `tests/role-panel.test.mjs` checks every role's Work areas, Home tools and quick starts are in its
+  panel, nothing is listed twice, and admin-only places stay with admins. `DesktopNavigation` is now
+  used only by the sample preview. Phones keep their bottom bar.
+- **Role preview (View as a role, no person):** the reads still go as the super admin, so
+  `previewKeeps` (`lib/view-as.ts`) cuts what is shown down to that role: work from the role's tools,
+  invoices only for Accounts and owners, onboarding journeys only for roles in onboarding, none of
+  the super admin's updates, favorites or unread count. Screens that load their own records (Cleans,
+  Hub…) still read as the super admin; to see exactly what a person sees, pick the person.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

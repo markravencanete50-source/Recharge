@@ -5,8 +5,9 @@ import type { WorkspaceAccount } from './workspace-account-policy';
 // "View as": a super admin sees the app as one of their people does, to check each role's point of
 // view. Picking a person shows exactly what they see: the app sends their id with every read and
 // the database answers as them (supabase/migrations/20261010270000_view_as_person.sql), read-only,
-// with private chats hidden. For a role nobody has yet, the app shows that role's screens and
-// tools with the super admin's own records. Either way nothing is saved while viewing.
+// with private chats hidden. For a role nobody has yet, the app shows that role's screens, tools and
+// left panel, with the super admin's records cut down to what that role could be shown
+// (previewKeeps). Either way nothing is saved while viewing.
 export const VIEW_AS_HEADER = 'x-recharge-view-as';
 export const VIEW_AS_ENDED = 'Viewing as this person has ended. Choose them again to carry on.';
 export const VIEW_ONLY_ERROR = "Nothing can be changed while you view as someone else.";
@@ -61,4 +62,19 @@ export function previewHasConversation(role: WorkspaceRole, conversation: { kind
   if (role === 'client') return false;
   if (conversation.department) return conversation.department === 'all' || (PREVIEW_CHANNELS[role] ?? []).includes(conversation.department);
   return conversation.kind !== 'owner' || role === 'stays';
+}
+
+// In a role preview (no person chosen) the records come from the super admin's own reads, which cover
+// the whole business. Keep only what someone in that role could be shown, so the preview switches
+// completely: work from the role's own tools, invoices only for the roles that handle them, onboarding
+// journeys only for the roles that take part in them, and none of the super admin's own updates.
+const JOURNEY_TOOLS = ['property-onboarding', 'new-property-inspection-board', 'clean-property-onboarding', 'onboarding-invoices'];
+export function previewKeeps(role: WorkspaceRole, modules: readonly string[]) {
+  const all = role === 'admin' || role === 'super_admin';
+  return {
+    work: (moduleId: string) => all || modules.includes(moduleId),
+    invoices: all || role === 'accounts' || role === 'client',
+    journeys: all || role === 'client' || modules.some(m => JOURNEY_TOOLS.includes(m)),
+    notices: all,
+  };
 }

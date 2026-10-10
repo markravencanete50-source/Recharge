@@ -56,7 +56,7 @@ export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose }:
           </View>
           {group.people.map(person => option({ role: group.role, person: { userId: person.userId, fullName: person.fullName } }, person.fullName, `Exactly what ${person.fullName.split(" ")[0]} sees`, "eye"))}
           {option({ role: group.role, person: null }, group.people.length ? `${group.label} screens only` : "Nobody has this role yet",
-            `Preview the ${group.label} menus and tools with your own records${group.people.length ? "" : ". Add someone in People to see their exact view"}.`, "layout")}
+            `Preview the ${group.label} menus, tools and records only, without your own${group.people.length ? "" : ". Add someone in People to see their exact view"}.`, "layout")}
         </View>
       ))}
     </Sheet>
@@ -72,7 +72,7 @@ export function ViewAsBanner({ palette: p, view, note, onChange, onBack }: { pal
         <Text style={{ color: p.headerText, fontSize: 14, fontWeight: "700" }}>{view.person ? `Viewing as ${viewAsName(view)}` : `Previewing ${viewAsLabel(view.role)} screens`}</Text>
         <Text style={{ color: p.headerMuted, fontSize: 12, lineHeight: 17 }}>
           {view.person ? "Exactly what they see: their tools, properties, work and messages. Their private chats stay hidden, and nothing can be changed while you look around."
-            : `${viewAsLabel(view.role)} menus and tools, filled with your own records because nobody has this role yet. Nothing is saved while you look around.`}
+            : `Only the ${viewAsLabel(view.role)} menus, tools and records: work from the ${viewAsLabel(view.role)} tools, none of your own updates or favorites. Pick a person in this role to see exactly what they see. Nothing is saved while you look around.`}
           {note ? " " + note : ""}
         </Text>
       </View>
