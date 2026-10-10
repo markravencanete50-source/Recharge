@@ -85,6 +85,7 @@ export default function Privacy() {
           <li><strong>Cloudflare</strong>: hosting for the website and the app’s server, security and scheduled jobs.</li>
           <li><strong>Your browser’s push service</strong> (for example Google, Mozilla, Apple or Microsoft), only if you switch on browser notifications. It carries a short notice with no property names, addresses, money or codes.</li>
         </ul>
+        <p>The team’s app also looks up property postcodes with <strong>postcodes.io</strong>, a free service built on open UK postcode data, to show a property’s area and place it on the map. Only the postcode is sent, never the rest of the address or anyone’s name.</p>
         <p>When we connect them, these also process data for us:</p>
         <ul>
           <li><strong>Hostaway</strong> (channel manager): bookings, guest names and guest messages.</li>
