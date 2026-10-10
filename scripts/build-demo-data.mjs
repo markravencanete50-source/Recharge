@@ -11,6 +11,7 @@
 //
 // To record screens added later, crawl the app on the local backend and add the new requests to
 // scripts/demo/requests.json (the crawl keeps each request path exactly as the browser sent it).
+import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
@@ -28,25 +29,29 @@ const get = async (role, path) => {
   const type = response.headers.get("content-type") ?? "";
   return { ok: response.ok, status: response.status, body: type.includes("json") ? await response.json() : await response.text() };
 };
+// Every distinct answer is kept once and referred to by a short hash of its text.
+const answers = {};
+const keep = body => { const text = JSON.stringify(body), id = createHash("sha256").update(text).digest("base64url").slice(0, 12); answers[id] = body; return id; };
 const personas = {};
 for (const role of DEMO_ROLES) {
-  const list = requests[role] ?? [];
+  // Photo files themselves are left out (the demo shows their placeholders); the lists of photos stay.
+  const list = (requests[role] ?? []).filter(path => !/[?&]assetId=/.test(path));
   const account = await get(role, "/api/workspace/account");
   if (!account.ok) throw new Error(`${role}: the local backend did not answer /api/workspace/account (${account.status}). Is scripts/demo/server.mjs running?`);
   const responses = {}, loose = {}, failed = [];
   for (const path of list) {
     const answer = await get(role, path);
     if (!answer.ok) { failed.push(`${answer.status} ${path}`); continue; }
-    const asked = mobilePath(path);
-    responses[demoKey(asked, today)] = answer.body;
+    const asked = mobilePath(path), id = keep(answer.body);
+    responses[demoKey(asked, today)] = id;
     // The first answer for each looser key stands in for questions the recording doesn't have.
     const fallback = demoLooseKey(asked);
-    if (!(fallback in loose)) loose[fallback] = answer.body;
+    if (!(fallback in loose)) loose[fallback] = id;
   }
   personas[role] = { account: account.body.account, responses, loose };
   console.log(`${role}: ${Object.keys(responses).length} answers${failed.length ? `, ${failed.length} failed:\n  ${failed.join("\n  ")}` : ""}`);
 }
-const data = demoDataSchema.parse({ version: 1, capturedOn: today, personas });
+const data = demoDataSchema.parse({ version: 2, capturedOn: today, answers, personas });
 const out = new URL("../mobile/web-static/demo-data.json", import.meta.url);
 await writeFile(out, JSON.stringify(data));
 console.log(`Wrote ${fileURLToPath(out)} (${Math.round(JSON.stringify(data).length / 1024)} KB)`);

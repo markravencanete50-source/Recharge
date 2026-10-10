@@ -211,7 +211,17 @@ export async function uploadWorkPhoto(input: {requestId: string;workId?: string;
 // Photos already saved on a work item, and where to load each one from. In the browser the
 // web session cookie goes with the image request; the phone app sends its access token.
 export const readWorkMedia = async (workId: string) => (await workspaceRequest('/api/mobile/media?workId=' + encodeURIComponent(workId))).json();
+// In demo mode photos are sample pictures drawn here (the demo has no photo files): a soft scene in
+// one of four colours, picked by the photo's id so each keeps its look.
+const DEMO_TINTS = [['#DCEAE4', '#1F5F55'], ['#F3E7CF', '#875A1C'], ['#E4EDD8', '#3F6A2A'], ['#DFE7E8', '#3B5866']];
+function demoPhoto(assetId: string) {
+  const [wash, ink] = DEMO_TINTS[[...assetId].reduce((n, c) => n + c.charCodeAt(0), 0) % DEMO_TINTS.length];
+  if (Platform.OS !== 'web') return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGO48+oJAAVQAqur8NI4AAAAAElFTkSuQmCC'; // one pixel of mint wash
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${wash}"/><stop offset="1" stop-color="#FCFAF5"/></linearGradient></defs><rect width="400" height="300" fill="url(#g)"/><circle cx="310" cy="70" r="26" fill="${ink}" opacity=".18"/><path d="M0 230 L120 150 L200 205 L280 140 L400 225 L400 300 L0 300Z" fill="${ink}" opacity=".16"/><path d="M150 205 L200 165 L250 205 L250 255 L150 255Z" fill="${ink}" opacity=".55"/><rect x="188" y="222" width="24" height="33" rx="3" fill="#FCFAF5"/><text x="200" y="285" text-anchor="middle" font-family="Montserrat,Arial" font-size="15" font-weight="600" fill="${ink}" opacity=".7">Sample photo</text></svg>`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
 export async function photoSource(assetId: string): Promise<{ uri: string; headers?: Record<string, string> }> {
+  if (demo) return { uri: demoPhoto(assetId) };
   const path = '/api/mobile/media?assetId=' + encodeURIComponent(assetId);
   if (sameOriginWeb) return { uri: webWorkspacePath(path) };
   if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();

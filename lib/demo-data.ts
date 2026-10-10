@@ -13,13 +13,15 @@ export const DEMO_SAVE_MESSAGE = "Demo mode: nothing is saved. Switch to Live to
 
 const personaSchema = z.object({
   account: workspaceAccountSchema,
-  // Recorded answers by request key (demoKey), and by the looser key (demoLooseKey) as a fallback.
-  responses: z.record(z.unknown()),
-  loose: z.record(z.unknown()).default({}),
+  // Each read's answer, by request key (demoKey) and by the looser key (demoLooseKey) as a fallback.
+  // Both point into the shared `answers`, so an answer two roles both see is kept once.
+  responses: z.record(z.string()),
+  loose: z.record(z.string()).default({}),
 });
 export const demoDataSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   capturedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  answers: z.record(z.unknown()),
   personas: z.record(z.enum(DEMO_ROLES), personaSchema),
 });
 export type DemoData = z.infer<typeof demoDataSchema>;
@@ -76,8 +78,8 @@ export function shiftDates<T>(value: T, days: number): T {
 export function demoAnswer(data: DemoData, role: DemoRole, path: string, today: string): unknown | null {
   const persona = data.personas[role];
   if (!persona) return null;
-  const exact = persona.responses[demoKey(path, today)];
-  const found = exact !== undefined ? exact : persona.loose[demoLooseKey(path)];
+  const id = persona.responses[demoKey(path, today)] ?? persona.loose[demoLooseKey(path)];
+  const found = id === undefined ? undefined : data.answers[id];
   return found === undefined ? null : shiftDates(found, daysBetween(data.capturedOn, today));
 }
 // The people a super admin can "view as" inside the demo: one per role the sample has.

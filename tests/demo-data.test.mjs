@@ -35,9 +35,10 @@ test('answers move to the current day: dates, timestamps and months, nothing els
 
 const account = role => ({ userId: '00000000-0000-4000-8000-00000000000' + (role === 'cleans' ? '2' : '1'), email: null, fullName: role === 'cleans' ? 'Jamie Cleaner' : 'Sam Taylor', responsibilities: '', role, status: 'active', modules: [] });
 const data = {
-  version: 1, capturedOn: '2026-10-10',
+  version: 2, capturedOn: '2026-10-10',
+  answers: { a: { data: { day: '2026-10-10' } }, b: { data: { day: '2026-10-01' } } },
   personas: {
-    super_admin: { account: account('super_admin'), responses: { '/api/mobile/teams?from=@0&section=schedule': { data: { day: '2026-10-10' } } }, loose: { '/api/mobile/teams?section=schedule': { data: { day: '2026-10-01' } } } },
+    super_admin: { account: account('super_admin'), responses: { '/api/mobile/teams?from=@0&section=schedule': 'a' }, loose: { '/api/mobile/teams?section=schedule': 'b' } },
     cleans: { account: account('cleans'), responses: {}, loose: {} },
   },
 };
@@ -57,5 +58,6 @@ test('the shipped sample business parses and covers every role', { skip: !exists
   for (const [role, persona] of Object.entries(shipped.personas)) {
     assert.equal(persona.account.role, role);
     assert.ok(Object.keys(persona.responses).length > 5, role + ' has recorded answers');
+    for (const id of [...Object.values(persona.responses), ...Object.values(persona.loose)]) assert.ok(id in shipped.answers, `${role}: answer ${id} is in the file`);
   }
 });
