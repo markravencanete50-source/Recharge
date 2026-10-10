@@ -78,8 +78,8 @@ planned.
   records the old and new role. The person's app reads the account returned with every refresh and
   switches to the new role without signing in again.
 - **Applying it live:** migration `20261008280000_access_control.sql` removes sign-in sessions, so the
-  database tool asks for confirmation. Run `docs/APPLY-ACCESS-CONTROL.sql` in the Supabase SQL editor
-  if it isn't applied yet.
+  database tool asks for confirmation. It is applied; the one-off paste scripts in `docs/` were
+  removed because running them again would put back older versions of functions.
 
 ## Built without outside services (9 October 2026)
 
@@ -99,8 +99,7 @@ planned.
 - **Weekly report page** (`weeklyReportDocument` in `lib/weekly-report.ts`) and **local events**
   added by hand (`recordLocalEvent`).
 - **Listings** per property with links and IDs (`saveListingLinks`, migration `20261009120000`).
-- **Applying it live:** run `docs/APPLY-2026-10-09.sql` in the Supabase SQL editor (it avoids
-  `select … into`, which the editor misreads).
+- **Applying it live:** applied (the migrations in `supabase/migrations` are the record).
 
 ## Adding people and signing up (8 October 2026)
 
@@ -145,8 +144,7 @@ Migration `20261009140000_daily_work_logins_inbox` (applied live).
 
 ## Staff onboarding completed (9 October 2026)
 
-Migration `20261009150000_staff_onboarding_complete` (paste `docs/APPLY-2026-10-09-ONBOARDING.sql`
-in the SQL editor; the database tool refuses it because it contains deletes). See
+Migration `20261009150000_staff_onboarding_complete` (applied). See
 `docs/STAFF-ONBOARDING.md` for the process.
 - `private.workspace_onboarding_done` records who has full access. `workspace_onboarding_progress`
   (after a signature or a completed course) and `workspace_onboarding_refresh` (after an admin
@@ -163,6 +161,24 @@ in the SQL editor; the database tool refuses it because it contains deletes). Se
 - UI: `mobile/src/LiveOnboarding.tsx` (guide, role coverage and preview, person sheet, retry and
   "You're all set" screens, `MyContracts`), `LiveTraining.tsx` (files, redo, who has done it),
   `LiveAccessControl.tsx` (what the new person's role is asked for).
+
+## End-to-end sweep (10 October 2026)
+
+Migration `20261010230000_sweep_fixes` (applied live) and app fixes:
+- **Names:** a name in someone's sign-in details reaches their profile only at sign-up (or while it
+  is empty); later names change only through Access control. Control and right-to-left characters
+  are stripped. Passwords can no longer be the person's email address or phone number.
+- **Who sees what:** hub to-dos for another department, staff training (never owners), owner chats
+  (never via a leftover rota row), "Download my data" (statements and payout details only for
+  properties owned now). Invoice and handover tasks close only through their own action.
+- **Web push** goes only to the browsers' push services (checked in the app, the database and the
+  sender).
+- **Hostaway:** a clean cancelled by hand is not re-created; a double booking gets one clean.
+- **Limits:** long contracts and courses save; hub amounts are capped at £100,000 in the app too.
+- **App:** retries reuse their request ID (chat, guest replies, cleaner invoices, property details),
+  sign-out works on the web and unlinks this browser's notifications, the greeting uses UK time.
+- Duplicate migration versions were renamed (`…120001`, `…130001`); the one-off `docs/APPLY-*.sql`
+  scripts were removed.
 
 ## Runtime requirements
 

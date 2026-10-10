@@ -104,7 +104,7 @@ function Thread({ p, id, onBack, onChanged, savedReplies = false }: { p: Palette
   const load = useCallback(async () => {
     try {
       const parsed = threadSchema.parse((await readChat({ section: "messages", conversationId: id })).data);
-      setThread(parsed);
+      setThread(parsed); setError("");
       const newest = parsed.messages.at(-1)?.id ?? "";
       if (newest !== lastSeen.current) {
         lastSeen.current = newest;
@@ -115,12 +115,16 @@ function Thread({ p, id, onBack, onChanged, savedReplies = false }: { p: Palette
   }, [id, onChanged]);
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
   useVisiblePoll(() => void load(), THREAD_EVERY, true);
+  // A ref (not state) guards against a second tap or Enter in the same instant, and the request id is
+  // kept until the message is sent, so a retry after a timeout never posts it twice.
+  const inFlight = useRef(false), pending = useRef<{ body: string; requestId: string } | null>(null);
   async function send() {
     const body = text.trim();
-    if (!body || sending) return;
-    setSending(true); setError("");
-    try { await writeChat({ action: "send", requestId: Crypto.randomUUID(), conversationId: id, body }); setText(""); await load(); onChanged(); }
-    catch (e) { setError(message(e)); } finally { setSending(false); }
+    if (!body || inFlight.current) return;
+    inFlight.current = true; setSending(true); setError("");
+    if (pending.current?.body !== body) pending.current = { body, requestId: Crypto.randomUUID() };
+    try { await writeChat({ action: "send", requestId: pending.current.requestId, conversationId: id, body }); pending.current = null; setText(""); await load(); onChanged(); }
+    catch (e) { setError(message(e)); } finally { inFlight.current = false; setSending(false); }
   }
   const c = thread?.conversation;
   return (

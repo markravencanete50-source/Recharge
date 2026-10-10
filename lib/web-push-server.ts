@@ -3,12 +3,12 @@ import { authSecurityConfiguration, requestQuota, securityRpc } from './auth-sec
 import { boundedJson, isSameOrigin } from './auth-security-policy';
 import { businessContext, businessResponse, databaseFailure } from './business-server';
 import { integrationSettings } from './integration-server';
-import { dispatchWebPush, webPushKeys } from './web-push';
+import { dispatchWebPush, PUSH_SERVICE, webPushKeys } from './web-push';
 
 // The browser app's notification switch: GET gives Recharge's public key (or null while web push
 // is not set up); POST adds or removes this browser for the signed-in person.
 const inputSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('subscribe'), endpoint: z.string().url().max(1000).startsWith('https://'), p256dh: z.string().regex(/^[A-Za-z0-9_-]{86,88}$/), auth: z.string().regex(/^[A-Za-z0-9_-]{20,24}$/) }).strict(),
+  z.object({ action: z.literal('subscribe'), endpoint: z.string().url().max(1000).regex(PUSH_SERVICE), p256dh: z.string().regex(/^[A-Za-z0-9_-]{86,88}$/), auth: z.string().regex(/^[A-Za-z0-9_-]{20,24}$/) }).strict(),
   z.object({ action: z.literal('unsubscribe'), endpoint: z.string().url().max(1000) }).strict(),
 ]);
 export async function webPushRoute(request: Request) {

@@ -50,10 +50,10 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   // The hub's rows: to-dos, approval tickets, AirCover claims and invoices to send.
   z.object({ action: z.literal('saveHubItem'), requestId: id, id: id.optional(), version: version.optional(), kind: z.enum(HUB_KINDS), title: text(2, 200),
     details: z.string().trim().max(3000).optional(), propertyId: id.nullable().optional(), assigneeId: id.nullable().optional(), department: z.enum(DEPARTMENTS).nullable().optional(),
-    dueOn: date.nullable().optional(), amountMinor: z.number().int().min(0).max(100000000).nullable().optional(), link: https.nullable().optional(),
+    dueOn: date.nullable().optional(), amountMinor: z.number().int().min(0).max(10000000).nullable().optional(), link: https.nullable().optional(),
     reference: z.string().trim().max(120).optional() }).strict(),
   z.object({ action: z.literal('moveHubItem'), requestId: id, id, version, status: z.enum(HUB_STATUSES), note: z.string().trim().max(2000).optional(),
-    settledMinor: z.number().int().min(0).max(100000000).optional() }).strict(),
+    settledMinor: z.number().int().min(0).max(10000000).optional() }).strict(),
   // The responsibilities register, kept by admins.
   z.object({ action: z.literal('saveResponsibility'), requestId: id, id: id.optional(), version: version.optional(), department: z.enum(DEPARTMENTS), title: text(2, 200),
     details: z.string().trim().max(3000).optional(), ownerId: id.nullable(), backupId: id.nullable(), frequency: z.enum(RESPONSIBILITY_FREQUENCIES) }).strict(),

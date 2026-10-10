@@ -148,16 +148,21 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
     return () => { active = false; clearInterval(timer); };
   }, [load]);
   const t = data?.thread;
-  async function run(body: Parameters<typeof writeInbox>[0], done: string, after?: () => void) {
-    if (busy) return;
+  // Returns whether the write was saved, so nothing after it claims success when it failed.
+  async function run(body: Parameters<typeof writeInbox>[0], done: string, after?: () => void): Promise<boolean> {
+    if (busy) return false;
     setBusy(true); setError(""); setNote("");
-    try { await writeInbox(body); celebrate(done); after?.(); await load(); onChanged(); }
-    catch (e) { setError(message(e)); } finally { setBusy(false); }
+    try { await writeInbox(body); celebrate(done); after?.(); await load(); onChanged(); return true; }
+    catch (e) { setError(message(e)); return false; } finally { setBusy(false); }
   }
+  // One request id per reply text, kept until it is saved, so trying again never records it twice.
+  const replyId = useRef<{ text: string; id: string } | null>(null);
   async function sendReply(outside: boolean) {
     const text = outside ? "" : reply.trim();
     if (!outside && !text) { setError("Write the reply, or choose “I replied on the platform”."); return; }
-    await run({ action: "reply", requestId: Crypto.randomUUID(), threadId, body: text }, "Reply recorded", () => setReply(""));
+    if (replyId.current?.text !== text) replyId.current = { text, id: Crypto.randomUUID() };
+    if (!(await run({ action: "reply", requestId: replyId.current.id, threadId, body: text }, "Reply recorded", () => setReply("")))) return;
+    replyId.current = null;
     // Until the channel manager sends replies, copy it so it can be pasted into the platform.
     if (text && t && t.source === "manual" && Platform.OS === "web" && globalThis.navigator?.clipboard) {
       try { await globalThis.navigator.clipboard.writeText(text); setNote(`Reply copied. Paste it into ${CHANNEL_LABEL[t.channel]} to send it to the guest.`); } catch { /* copying is a convenience */ }

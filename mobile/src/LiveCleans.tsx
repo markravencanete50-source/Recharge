@@ -405,9 +405,9 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
           ))}
         </View>}
         {canSubmit && <>
-          <CleanChecklist key={op.workId} p={p} workId={op.workId} checklist={checklist} ticked={ticked} onState={onList}
+          <CleanChecklist key={"list:" + op.workId} p={p} workId={op.workId} checklist={checklist} ticked={ticked} onState={onList}
             onToggle={item => setTicked(current => current.includes(item) ? current.filter(x => x !== item) : [...current, item])} />
-          <PhotoPicker key={op.workId} p={p} workId={op.workId} purpose="cleaning" label="Photos" max={50} onChange={onCleanPhotos} />
+          <PhotoPicker key={"photos:" + op.workId} p={p} workId={op.workId} purpose="cleaning" label="Photos" max={30} onChange={onCleanPhotos} />
           <Field label="Report" value={report} onChange={setReport} p={p} multiline placeholder="What you cleaned, anything broken or missing, Wi-Fi checked" />
           <CleanCheckForm p={p} answers={answers} items={items} onAnswers={setAnswers} onItems={setItems} />
           {/* The owner's mailbox permission from onboarding: the cleaner records doing exactly that. */}

@@ -23,7 +23,7 @@ const endpoints = new Set([
   "/api/workspace/oversight", "/api/mobile/oversight",
   "/api/workspace/checklists", "/api/mobile/checklists",
   "/privacy", "/terms", "/delete-account", "/api/session/delete-account", "/api/workspace/privacy", "/api/mobile/privacy",
-  "/workspace", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
+  "/workspace", "/favicon.svg", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);
 // The app's browser build is served from /workspace/ (scripts/build-workspace-web.mjs).
 export const isWorkspaceApp = (path: string) => path === "/workspace" || path.startsWith("/workspace/");

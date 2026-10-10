@@ -52,7 +52,7 @@ import { inspectionReportFrom, workItemForms, type JourneyView, type OperationVi
 import { WorkPhotos } from "./Photos";
 import { SignOutUploadsWarning, UploadBanner } from "./UploadStatus";
 import { pendingUploadCount } from "./uploadQueue";
-import { NotificationsSetting, refreshNotificationLink } from "./Notifications";
+import { NotificationsSetting, refreshNotificationLink, unlinkNotifications } from "./Notifications";
 import { LiveChat, useGuestWaiting } from "./LiveChat";
 import { LiveCalendar } from "./LiveCalendar";
 import { OpenMessagesContext } from "./PropertyTeamChat";
@@ -314,6 +314,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
   async function logout(anyway = false) {
     if (!anyway && pendingUploadCount() > 0) { setConfirmOut(true); setSettings(true); return; }
     setConfirmOut(false); setBusy(true);
+    await unlinkNotifications();
     try { await signOut(); } catch { /* signed out on this device either way */ }
     try { globalThis.localStorage?.removeItem("rc-welcomed"); } catch { /* storage unavailable */ }
     setBusy(false); setSettings(false); onSignedOut();
@@ -368,7 +369,7 @@ function Workspace({ account, palette: p, theme, setTheme, onSignedOut, onDelete
     <>
       {workViews.length > 1 && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
       {currentView === "hub" && <LiveHub palette={p} account={account} properties={properties} journeys={journeys} work={work} onForm={setForm} onOpenWork={setOpenWork} />}
-      {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} onOpenWork={setOpenWork} onOpenView={setWorkView} />}
+      {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} onOpenWork={setOpenWork} onOpenView={(view, sub) => { setFocus(sub ? { sub, nonce: Date.now() } : null); setWorkView(view); }} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} />}
       {currentView === "stays" && <LiveStays key={"stays:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}
       {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onForm={setForm} />}
@@ -553,7 +554,7 @@ function Screen() {
   if (account.status !== "active") return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center", gap: 16 }]}><EmptyState palette={p} icon="inbox" title={account.status === "pending" ? "Your access is being reviewed" : "Your access has been removed"} detail={account.status === "pending" ? "An administrator will approve your account and choose your tools. You'll then see your workspace here." : "Ask an administrator if you think this is a mistake."} /><SoftButton label="Sign out" icon="log-out" palette={p} onPress={() => { void signOut().finally(() => setAccount(null)); }} /><DeleteAccountButton p={p} onDeleted={deleted} /></View>;
   // New team members sign their contract and finish required training first.
   return (
-    <OnboardingGate key={account.userId} account={account} palette={p} onSignOut={() => { void signOut().finally(() => setAccount(null)); }}>
+    <OnboardingGate key={account.userId} account={account} palette={p} onSignOut={() => { void unlinkNotifications().then(() => signOut()).catch(() => undefined).finally(() => setAccount(null)); }}>
       <Workspace account={account} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onDeleted={deleted} onAccount={setAccount} welcomeOnOpen={welcome} />
     </OnboardingGate>
   );

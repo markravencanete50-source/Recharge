@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { NextResponse } from 'next/server';
-import { boundedJson, isSameOrigin, newPasswordSchema, phoneSchema, securityHeaders, uuidSchema } from './auth-security-policy';
+import { boundedJson, isSameOrigin, newPasswordSchema, PASSWORD_IS_CONTACT, passwordIsContact, phoneSchema, securityHeaders, uuidSchema } from './auth-security-policy';
 import { recoveryPhase, requestQuota, securityHash } from './auth-security';
 import { confirmedContact } from './registration-policy';
 import { registrationConfiguration, registrationProvider } from './registration-provider';
@@ -21,6 +21,7 @@ export async function phoneRecovery(request: Request, native = false) {
   try {
     const input = phoneRecoverySchema.safeParse(await boundedJson(request));
     if (!input.success) return response({ error: 'Check your phone number, verification code and password' }, 400);
+    if (input.data.action === 'verify' && passwordIsContact(input.data.password, input.data.phone)) return response({ error: PASSWORD_IS_CONTACT }, 400);
     const ipQuota = await requestQuota(request, 'phone-recovery-ip', 20, 3600);
     const contactQuota = ipQuota.allowed ? await requestQuota(request, 'phone-recovery-' + input.data.action, input.data.action === 'request' ? 3 : 5, input.data.action === 'request' ? 3600 : 600, input.data.phone) : ipQuota;
     if (!contactQuota.allowed) {

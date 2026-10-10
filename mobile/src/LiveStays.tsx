@@ -197,7 +197,8 @@ function ReviewSheet({ p, property, onClose, onDone }: { p: Palette; property: P
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const request = useRequestId(property ? ["review", property.id, platform, summary.trim()].join(":") : null);
-  const scale = (n: 5 | 10) => { setOutOf(n); setPlatform(n === 10 ? "Booking.com" : platform === "Booking.com" ? "Airbnb" : platform); setRating(r => Math.min(r, n)); };
+  // Booking.com rates out of 10, the rest out of 5. The platform just picked is kept as it is.
+  const scale = (n: 5 | 10) => { setOutOf(n); setRating(r => Math.min(r, n)); };
   async function save() {
     if (!property || busy) return;
     if (summary.trim().length < 5) { setError("Add what the guest said (at least 5 characters)."); return; }

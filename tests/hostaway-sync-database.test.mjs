@@ -133,6 +133,37 @@ test('date changes move the clean, a same-day arrival makes it urgent, cancellin
   void outA;
 });
 
+test('a clean cancelled by hand stays cancelled; one the sync cancelled returns; a double booking gets one clean', async () => {
+  const at = (id, a, b, extra = {}) => stay(id, a, b, { listingId: '502', ...extra });
+  const [a1, b1, a2, b2, a3, b3] = await Promise.all([day(20), day(22), day(30), day(32), day(40), day(42)]);
+  // Someone cancels the clean by hand (the owner is cleaning it themselves): later syncs leave it.
+  await sync({ reservations: [at('9101', a1, b1)] });
+  let [clean] = await cleanFor('9101');
+  await sql(`update private.workspace_domain_details set data=data||'{"workStatus":"cancelled"}' where work_id=$1`, [clean.id]);
+  await sql("update public.workspace_work_items set status='cancelled' where id=$1", [clean.id]);
+  let result = await sync({ reservations: [at('9101', a1, b1)] });
+  assert.equal(result.newCleans, 0);
+  assert.deepEqual((await cleanFor('9101')).map(c => c.status), ['cancelled']);
+
+  // A stay cancelled and then re-confirmed in Hostaway gets its clean back.
+  await sync({ reservations: [at('9102', a2, b2)] });
+  result = await sync({ reservations: [at('9102', a2, b2, { status: 'cancelled' })] });
+  assert.equal(result.cancelledCleans, 1);
+  result = await sync({ reservations: [at('9102', a2, b2)] });
+  assert.equal(result.newCleans, 1);
+  assert.deepEqual((await cleanFor('9102')).map(c => c.status), ['waiting', 'cancelled']);
+
+  // Two stays ending the same day (a double booking): reported, and only one clean.
+  result = await sync({ reservations: [at('9103', a3, b3), at('9104', a3, b3)] });
+  assert.equal(result.newCleans, 1);
+  assert.match(JSON.stringify(result.problems), /Overlaps another stay/);
+  // The stay with the clean is cancelled: the next sync gives the other stay its clean.
+  const [first] = (await cleanFor('9103')).length ? ['9103', '9104'] : ['9104', '9103'];
+  const other = first === '9103' ? '9104' : '9103';
+  await sync({ reservations: [at(first, a3, b3, { status: 'cancelled' }), at(other, a3, b3)] });
+  assert.equal((await cleanFor(other)).filter(c => c.status === 'waiting').length, 1);
+});
+
 test('a blank in Hostaway never wipes what Accounts filled in; overlaps are reported', async () => {
   const [inA, outB] = await Promise.all([day(3), day(7)]);
   await sync({ reservations: [stay('9001', inA, outB, { payoutMinor: null, channelReference: '', guests: null })] });

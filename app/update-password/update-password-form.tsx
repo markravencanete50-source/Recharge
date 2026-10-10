@@ -1,16 +1,18 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Check } from "lucide-react";
-import { authResponseMessage } from "@/lib/auth-security-policy";
+import { authResponseMessage, PASSWORD_IS_CONTACT, passwordIsContact } from "@/lib/auth-security-policy";
 import { PasswordField } from "@/components/password-field";
 const bytes = (value: string) => new TextEncoder().encode(value).byteLength;
 export function UpdatePasswordForm({ available, email }: { available: boolean; email: string }) {
   const [error, setError] = useState(""); const [saving, setSaving] = useState(false);
   const [password, setPassword] = useState(""); const [confirmation, setConfirmation] = useState("");
   const long = password.length >= 12 && bytes(password) <= 72, same = password.length > 0 && password === confirmation;
+  const own = password.length > 0 && !passwordIsContact(password, email);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
     if (!long) { setError("Use at least 12 characters."); return; }
+    if (!own) { setError(PASSWORD_IS_CONTACT); return; }
     if (!same) { setError("The passwords do not match. Press the eye to check what you typed."); return; }
     setSaving(true);
     try {
@@ -32,6 +34,7 @@ export function UpdatePasswordForm({ available, email }: { available: boolean; e
     <PasswordField label="Confirm password" name="confirmation" autoComplete="new-password" minLength={12} maxLength={72} disabled={!available} value={confirmation} onChange={setConfirmation} />
     <ul className="auth-checks" aria-label="Password checks">
       <li data-met={long}><Check aria-hidden size={14} />At least 12 characters</li>
+      <li data-met={own}><Check aria-hidden size={14} />Not your email address</li>
       <li data-met={same}><Check aria-hidden size={14} />Both passwords match</li>
     </ul>
     {error && <p role="alert" className="auth-alert">{error}</p>}

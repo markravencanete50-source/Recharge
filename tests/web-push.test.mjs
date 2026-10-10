@@ -44,7 +44,7 @@ test('keys are only used when complete and well formed',async()=>{
 test('only the browser it is for can read the message, and the request is signed by Recharge',async()=>{
  const {pair,settings}=await vapidKeys(),keys=push.webPushKeys(settings);
  const ua=await subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']),auth=crypto.getRandomValues(new Uint8Array(16));
- const job={endpoint:'https://push.example.com/send/abc',p256dh:push.b64url(new Uint8Array(await subtle.exportKey('raw',ua.publicKey))),auth:push.b64url(auth),eventType:'journey.publishEstimate'};
+ const job={endpoint:'https://fcm.googleapis.com/fcm/send/abc',p256dh:push.b64url(new Uint8Array(await subtle.exportKey('raw',ua.publicKey))),auth:push.b64url(auth),eventType:'journey.publishEstimate'};
  let seen;globalThis.fetch=async(url,init)=>{seen={url,init};return new Response('',{status:201});};
  assert.equal(await push.sendWebPush(job,keys),'sent');
  assert.equal(seen.url,job.endpoint);assert.equal(seen.init.headers['Content-Encoding'],'aes128gcm');assert.equal(seen.init.redirect,'manual');
@@ -57,9 +57,12 @@ test('only the browser it is for can read the message, and the request is signed
  const [h,c,s]=token.split('.');
  assert.ok(await subtle.verify({name:'ECDSA',hash:'SHA-256'},pair.publicKey,push.fromB64url(s),enc.encode(h+'.'+c)));
  const claims=JSON.parse(new TextDecoder().decode(push.fromB64url(c)));
- assert.equal(claims.aud,'https://push.example.com');assert.equal(claims.sub,'https://recharge.example');assert.ok(claims.exp-Date.now()/1000<=12*3600+5);
+ assert.equal(claims.aud,'https://fcm.googleapis.com');assert.equal(claims.sub,'https://recharge.example');assert.ok(claims.exp-Date.now()/1000<=12*3600+5);
  globalThis.fetch=async()=>new Response('',{status:410});assert.equal(await push.sendWebPush(job,keys),'gone');
  globalThis.fetch=async()=>{throw new Error('offline');};assert.equal(await push.sendWebPush(job,keys),'failed');
+ // Anything but a browser push service is never contacted.
+ let called=false;globalThis.fetch=async()=>{called=true;return new Response('',{status:201});};
+ assert.equal(await push.sendWebPush({...job,endpoint:'https://169.254.169.254/latest'},keys),'gone');assert.equal(called,false);
 });
 
 test('each notice goes once to each browser of its person, and only while they have access',async()=>{
@@ -80,16 +83,17 @@ test('each notice goes once to each browser of its person, and only while they h
  }
  const as=async i=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(i==='service'?{}:{sub:users[i],session_id:session(i)})]);await db.exec(i==='service'?'set role service_role':'set role authenticated');};
  const q=async(sql,args=[])=>(await db.query(sql,args)).rows[0]?.r;
- const sub=n=>({endpoint:`https://push.example.com/${n}`,p256dh:'B'+'a'.repeat(86),auth:'a'.repeat(22)});
+ const sub=n=>({endpoint:`https://fcm.googleapis.com/fcm/send/${n}`,p256dh:'B'+'a'.repeat(86),auth:'a'.repeat(22)});
  await as(1);await q('select public.workspace_web_push_subscribe($1) r',[sub('one')]);
  await assert.rejects(q('select public.workspace_web_push_subscribe($1) r',[{...sub('bad'),endpoint:'http://insecure.example/x'}]),/Check the notification/);
+ await assert.rejects(q('select public.workspace_web_push_subscribe($1) r',[{...sub('bad'),endpoint:'https://attacker.example/x'}]),/Check the notification/,'only browser push services');
  await assert.rejects(q('select public.integration_claim_web_push() r'),/permission denied/,'people cannot claim notices');
  await assert.rejects(db.query('select * from private.workspace_web_push'),/permission denied/);
  // A notice for person 1, and one for person 2 who has no browser switched on.
  await db.exec('reset role');
  for(const i of [1,2]){const ev=(await db.query("insert into public.workspace_activity(event_type) values('reports.weekly_ready') returning id")).rows[0].id;await db.query('insert into private.workspace_notification_outbox(user_id,event_id) values($1,$2)',[users[i],ev]);}
  await as('service');const first=await q('select public.integration_claim_web_push() r');
- assert.deepEqual(first.map(j=>[j.endpoint,j.eventType]),[['https://push.example.com/one','reports.weekly_ready']]);
+ assert.deepEqual(first.map(j=>[j.endpoint,j.eventType]),[['https://fcm.googleapis.com/fcm/send/one','reports.weekly_ready']]);
  assert.deepEqual(await q('select public.integration_claim_web_push() r'),[],'never sent twice');
  // The same browser signed in as someone else now belongs to them.
  await as(2);await q('select public.workspace_web_push_subscribe($1) r',[sub('one')]);
@@ -98,7 +102,7 @@ test('each notice goes once to each browser of its person, and only while they h
  await db.query("update public.workspace_profiles set status='revoked' where user_id=$1",[users[2]]);
  const ev=(await db.query("insert into public.workspace_activity(event_type) values('reports.weekly_ready') returning id")).rows[0].id;await db.query('insert into private.workspace_notification_outbox(user_id,event_id) values($1,$2)',[users[2],ev]);
  await as('service');assert.deepEqual(await q('select public.integration_claim_web_push() r'),[]);
- await q("select public.integration_remove_web_push('https://push.example.com/one')::text r");
+ await q("select public.integration_remove_web_push('https://fcm.googleapis.com/fcm/send/one')::text r");
  await db.exec('reset role');assert.equal((await db.query('select count(*)::int n from private.workspace_web_push')).rows[0].n,0);
  await db.close();
 });

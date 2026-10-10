@@ -23,6 +23,13 @@ async function save(subscription: PushSubscription) {
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("This browser did not give a notification address.");
   await writeNotifications({ action: "subscribe", endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
 }
+// Before signing out: this browser stops receiving the person's notices (on a shared computer the next
+// person would otherwise see them). The browser permission stays, so whoever signs in next is linked again.
+export async function unlinkNotifications() {
+  if (!supported()) return;
+  const subscription = await currentSubscription().catch(() => null);
+  if (subscription) await writeNotifications({ action: "unsubscribe", endpoint: subscription.endpoint }).catch(() => undefined);
+}
 // When the app opens: a browser that already allowed notifications is kept linked to whoever is signed in now.
 export async function refreshNotificationLink() {
   if (!supported() || Notification.permission !== "granted") return;

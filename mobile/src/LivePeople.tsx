@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
@@ -189,25 +189,36 @@ function PropertySheet({ p, property, creating, people, onClose, onDone }: { p: 
     return () => { active = false; };
   }, [propertyId]);
 
+  // What a part-finished save already wrote, so trying again carries on from the property's new version
+  // instead of failing with "changed by someone else".
+  const written = useRef<{ id: string; key: string; version: number; sections: string[] } | null>(null);
   async function save() {
     if (busy) return;
     const beds = Number(bedrooms);
     if (name.trim().length < 2 || !Number.isInteger(beds) || beds < 0 || beds > 100) { setError("Add a name (at least 2 characters) and the number of bedrooms."); return; }
     setBusy(true); setError("");
     try {
-      const fields = { name: name.trim(), address: address.trim(), region: region.trim(), bedrooms: beds, status };
-      await writeWorkspace({ action: "saveProperty", input: property ? { id: property.id, version: property.version, ...fields } : { requestId, ...fields } });
+      const fields = { name: name.trim(), address: address.trim(), region: region.trim(), bedrooms: beds, status }, key = JSON.stringify(fields);
+      const resume = property && written.current?.id === property.id && written.current.key === key ? written.current : null;
+      if (!resume) await writeWorkspace({ action: "saveProperty", input: property ? { id: property.id, version: property.version, ...fields } : { requestId, ...fields } });
       // Each detail section saved bumps the property's version, so carry it forward.
       if (property && details && draft) {
-        let version = property.version + 1;
+        let version = resume ? resume.version : property.version + 1;
+        const done = resume ? resume.sections : [];
+        written.current = { id: property.id, key, version, sections: done };
         const changes: [string, Record<string, unknown>][] = [];
         if (draft.access !== details.access) changes.push(["access", { accessInstructions: draft.access }]);
         if (draft.ota !== details.ota) changes.push(["ota", { otaInstructions: draft.ota }]);
         const accounts = draft.accounts.map(x => ({ ...x, platform: x.platform.trim(), login: x.login.trim(), passwordWhere: x.passwordWhere.trim(), twoFactor: x.twoFactor.trim(), notes: x.notes.trim() }));
         if (JSON.stringify(accounts) !== JSON.stringify(details.accounts)) changes.push(["otaAccounts", { accounts }]);
         if (draft.paymentNotes !== details.paymentNotes) changes.push(["finance", { managementFeeBps: details.feeBps, paymentNotes: draft.paymentNotes }]);
-        for (const [section, input] of changes) { await workspaceRequest("/api/mobile/property-details", { propertyId: property.id, version, section, input }); version += 1; }
+        for (const [section, input] of changes) {
+          if (done.includes(section)) continue;
+          await workspaceRequest("/api/mobile/property-details", { propertyId: property.id, version, section, input });
+          version += 1; done.push(section); written.current = { id: property.id, key, version, sections: done };
+        }
       }
+      written.current = null;
       onClose(); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }

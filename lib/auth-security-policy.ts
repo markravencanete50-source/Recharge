@@ -12,6 +12,18 @@ export const loginSchema = z.union([
 ]);
 export function loginContact(input: z.infer<typeof loginSchema>) { return 'email' in input ? input.email : input.phone; }
 export const newPasswordSchema = z.object({ password: z.string().min(12).max(72).refine(value => new TextEncoder().encode(value).byteLength <= 72) });
+// A password that is just the account's email address (or the part before the @) or its phone number
+// is the first thing anyone would guess, so it is refused everywhere a password is chosen.
+export const PASSWORD_IS_CONTACT = "Choose a password that isn't your email address or phone number.";
+export function passwordIsContact(password: string, ...contacts: (string | null | undefined)[]): boolean {
+  const typed = password.trim().toLowerCase(), squashed = typed.replace(/[\s()+.-]/g, "");
+  return contacts.some(contact => {
+    const value = contact?.trim().toLowerCase();
+    if (!value) return false;
+    const digits = value.replace(/\D/g, "");
+    return typed === value || (value.includes("@") && typed === value.split("@")[0]) || (digits.length >= 8 && !value.includes("@") && (squashed === digits || squashed === "0" + digits.slice(2)));
+  });
+}
 export const uuidSchema = z.string().uuid();
 export function isSameOrigin(request: Request, origin?: string): boolean {
   const expected = origin || new URL(request.url).origin;

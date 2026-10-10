@@ -57,8 +57,9 @@ async function confirmPassword(user: User, password: string): Promise<Check> {
       outcome: same ? 'success' : result.error?.code === 'invalid_credentials' ? 'failure' : 'unavailable',
       user_id: same?.user.id ?? null, session_id: same?.sessionId ?? null });
     attempt = undefined;
-    if (same && finish.allowed) return { ok: true };
+    // The throwaway session only proves the password; it is closed whatever the outcome.
     if (token) await client.auth.signOut({ scope: 'local' }).catch(() => null);
+    if (same && finish.allowed) return { ok: true };
     if (finish.locked) return { ok: false, status: 429, retryAfter: finish.retryAfter, error: 'Too many incorrect passwords. Try again in 24 hours, or reset your password.' };
     if (finish.passwordReset) return { ok: false, status: 403, error: PASSWORD_RESET_REQUIRED };
     return result.error?.code === 'invalid_credentials' ? { ok: false, status: 401, error: 'That password is not right.' } : { ok: false, status: 503, error: 'Your password could not be checked. Please try again later.' };

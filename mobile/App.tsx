@@ -38,7 +38,7 @@ import { ClientReports } from "./src/ClientReports";
 import { OwnerStatements } from "./src/AccountsFlows";
 
 // The Supabase-backed web workspace served by the recharge-backend Worker.
-const LIVE_WORKSPACE_SIGN_IN = process.env.EXPO_PUBLIC_LIVE_WORKSPACE_URL || "https://recharge-backend.markravencanete50.workers.dev/sign-in";
+const LIVE_WORKSPACE_SIGN_IN = process.env.EXPO_PUBLIC_LIVE_WORKSPACE_URL || "https://app.rechargegroup.co.uk/sign-in";
 import { NavigationBar } from "./src/NavigationBar";
 import { FilterBar } from "./src/FilterBar";
 import { StateGraphic } from "./src/StateGraphic";

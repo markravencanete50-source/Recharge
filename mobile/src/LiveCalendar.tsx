@@ -114,7 +114,7 @@ function WorkTimeEditor({ p, entry, onSaved }: { p: Palette; entry: CalendarEntr
   );
 }
 
-export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, onOpenView }: { palette: Palette; account: WorkspaceAccount; work: OperationView[]; desktop: boolean; onOpenWork: (item: OperationView) => void; onOpenView?: (view: WorkView) => void }) {
+export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, onOpenView }: { palette: Palette; account: WorkspaceAccount; work: OperationView[]; desktop: boolean; onOpenWork: (item: OperationView) => void; onOpenView?: (view: WorkView, sub?: string) => void }) {
   const { width } = useWindowDimensions();
   const roomy = width >= 700;
   const today = london(new Date());
@@ -303,7 +303,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
               </View>
             ))}
           </View>
-          {onOpenView && workViewsFor(account.role).includes("accounts") && <Button label="Open statements" icon="arrow-right" primary p={p} onPress={() => { setOpen(null); onOpenView("accounts"); }} />}
+          {onOpenView && workViewsFor(account.role).includes("accounts") && <Button label="Open statements" icon="arrow-right" primary p={p} onPress={() => { setOpen(null); onOpenView("accounts", "statements"); }} />}
         </>}
       </Sheet>
     </View>

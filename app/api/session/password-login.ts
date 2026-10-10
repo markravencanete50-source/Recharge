@@ -26,7 +26,8 @@ export async function passwordLogin(client: SupabaseClient, input: z.infer<typeo
       user_id: identity?.user.id || null, session_id: identity?.sessionId || null });
     attempt = undefined;
     if (identity && finish.allowed) return { ok: true };
-    if (identity) await client.auth.signOut({ scope: "local" });
+    // Any session Supabase opened (even one that failed the checks above) is closed again.
+    if (!error) await client.auth.signOut({ scope: "local" }).catch(() => null);
     if (finish.locked) return { ok: false, reason: "limited", locked: true, retryAfter: finish.retryAfter };
     if (finish.passwordReset) return { ok: false, reason: "passwordReset" };
     return { ok: false, reason: invalid ? "invalid" : "unavailable" };

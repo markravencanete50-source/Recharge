@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
@@ -67,8 +67,10 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   const mineToAct = repairs.filter(r => repairStep(account.role, String(r.data.phase), account.teamOnly) || canCloseRepair(account.role, String(r.data.phase)));
   const shown = stage === "open" ? repairs.filter(r => !repairClosed(String(r.data.phase))) : stage === "action" ? mineToAct : repairs.filter(r => repairStage(r.data) === stage);
   // Visits are created a batch at a time; keep asking until none are left.
+  const [creatingVisits, setCreatingVisits] = useState(false), creating = useRef(false);
   async function createVisits() {
-    setError("");
+    if (creating.current) return;
+    creating.current = true; setCreatingVisits(true); setError("");
     try {
       let created = 0;
       for (let round = 0; round < 20; round++) {
@@ -77,7 +79,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
         if (result.data.remaining <= 0) break;
       }
       await saved(load, created ? `${created} visit${created === 1 ? "" : "s"} created` : "Visits are up to date")();
-    } catch (e) { setError(message(e)); }
+    } catch (e) { setError(message(e)); } finally { creating.current = false; setCreatingVisits(false); }
   }
   const open = repairs.find(r => r.workId === openId);
   const visit = visits.find(v => v.workId === visitId);
@@ -130,7 +132,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
         <Section title="Preventative maintenance" p={p}>
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <Button label="New routine" icon="repeat" p={p} onPress={() => setPlanning(true)} />
-            <Button label="Create this month's visits" icon="calendar" p={p} disabled={!plans.length} onPress={() => void createVisits()} />
+            <Button label={creatingVisits ? "Creating visits…" : "Create this month's visits"} icon="calendar" p={p} disabled={!plans.length || creatingVisits} onPress={() => void createVisits()} />
           </View>
           {visits.filter(v => v.status !== "completed").length ? visits.filter(v => v.status !== "completed").map(v => (
             <MotionPress key={v.workId} accessibilityRole="button" onPress={() => setVisitId(v.workId)} style={[ui.card, ui.between, { gap: 10, backgroundColor: p.surface, borderColor: p.border }]}>
@@ -194,7 +196,9 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
   const declineRequest = useRequestId(repair && declining ? [declining, repair.workId, repair.version, fields.declineReason ?? ""].join(":") : null);
   const set = (k: string) => (v: string) => setFields(f => ({ ...f, [k]: v }));
   const f = (k: string) => fields[k] ?? "";
-  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(repair?.data.urgent === true); setError(""); setQuoting(false); setAfterIds([]); setAddingBefore(false); setUploading(false); setDeclining(null); } }); return () => { active = false; }; }, [repair, today]);
+  // Reset only when a different repair (or a newer version of it) opens, not on every refresh of the list.
+  const resetKey = repair ? repair.workId + ":" + repair.version : "", urgentNow = repair?.data.urgent === true;
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(urgentNow); setError(""); setQuoting(false); setAfterIds([]); setAddingBefore(false); setUploading(false); setDeclining(null); } }); return () => { active = false; }; }, [resetKey, urgentNow, today]);
 
   function build(): Record<string, unknown> | string {
     if (step === "approveBudget" && forOwner) return consent && f("ownerAgreement").trim().length >= 5 ? { consent: true, ownerAgreement: f("ownerAgreement").trim().slice(0, 500) } : "Add how the owner agreed and tick to record their approval.";
@@ -282,7 +286,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         <Detail label="Latest guest update" value={repair.data.guestUpdate} p={p} />
         <RepairPhotos p={p} repair={repair} />
         {team && ["referred", "booked"].includes(phase) && (addingBefore
-          ? <PhotoPicker p={p} workId={repair.workId} purpose="maintenance" label="Photos before the repair" hint="The problem as you found it. Each photo is saved as you add it." onChange={(_ids, loading) => setUploading(loading)} />
+          ? <PhotoPicker key={"before:" + resetKey} p={p} workId={repair.workId} purpose="maintenance" label="Photos before the repair" hint="The problem as you found it. Each photo is saved as you add it." onChange={(_ids, loading) => setUploading(loading)} />
           : <Button label="Add before photos" icon="camera" p={p} onPress={() => setAddingBefore(true)} />)}
         {step && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{forOwner ? "Record the owner's approval" : STEP_TITLE[step]}</Text>}
         {step === "approveBudget" && forOwner && !declining && <Field label="How the owner agreed" value={f("ownerAgreement")} onChange={set("ownerAgreement")} p={p} placeholder="For example: by phone with the owner on 10 October" />}
@@ -341,7 +345,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
           <Field label="Repair report" value={f("report")} onChange={set("report")} p={p} multiline placeholder="What was fixed and anything still outstanding" />
           <Field label={`Actual cost (up to ${pounds(repair.data.estimatedCostMinor)})`} value={f("actualCost")} onChange={set("actualCost")} p={p} placeholder="£0.00" />
           <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
-          <PhotoPicker p={p} workId={repair.workId} purpose="maintenance" label="After photos (optional)" hint="The finished repair. They go to Accounts with your report." onChange={(ids, loading) => { setAfterIds(ids); setUploading(loading); }} />
+          <PhotoPicker key={"after:" + resetKey} p={p} workId={repair.workId} purpose="maintenance" label="After photos (optional)" hint="The finished repair. They go to Accounts with your report." onChange={(ids, loading) => { setAfterIds(ids); setUploading(loading); }} />
           <Text style={[ui.small, { color: p.muted }]}>Completing sends the cost to Accounts as a draft expense, with your report and the before and after photos.</Text>
         </>}
         {canReviseQuote(role, phase) && (quoting ? <View style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border }}>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
@@ -24,7 +24,9 @@ const PURCHASE_STAGE: Record<string, string> = { requested: "To approve", approv
 function CleanerInvoiceSheet({ p, group, onClose, onDone }: { p: Palette; group: CleanerGroup | null; onClose: () => void; onDone: () => Promise<void> }) {
   const [reference, setReference] = useState(""), [amount, setAmount] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   // The total starts from the cleaner's pay rate per clean, when one is set.
-  useEffect(() => { queueMicrotask(() => setAmount(group?.amountMinor ? (group.amountMinor / 100).toFixed(2) : "")); }, [group]);
+  useEffect(() => { queueMicrotask(() => { setAmount(group?.amountMinor ? (group.amountMinor / 100).toFixed(2) : ""); setReference(""); setError(""); }); }, [group]);
+  // One request id per clean, kept across retries, so a retry never closes the same clean twice.
+  const ids = useRef(new Map<string, string>());
   async function save() {
     if (!group || busy) return;
     const minor = poundsToMinor(amount);
@@ -33,9 +35,16 @@ function CleanerInvoiceSheet({ p, group, onClose, onDone }: { p: Palette; group:
     const evidence = `Included in cleaner invoice ${reference.trim()} for ${group.cleanerName}: ${plural(group.tasks.length, "clean")}, ${formatMoney(minor)} in total.`;
     try {
       // One invoice: each clean's task is closed against the same reference.
-      for (const task of group.tasks) await writeOperation({ action: "updateOperation", requestId: Crypto.randomUUID(), workId: task.workId, version: task.version, step: "completeHandover", data: { evidence } });
+      for (const task of group.tasks) {
+        const key = task.workId + ":" + task.version;
+        if (!ids.current.has(key)) ids.current.set(key, Crypto.randomUUID());
+        await writeOperation({ action: "updateOperation", requestId: ids.current.get(key)!, workId: task.workId, version: task.version, step: "completeHandover", data: { evidence } });
+      }
       setReference(""); setAmount(""); await onDone();
-    } catch (e) { setError(message(e) + " Refresh: any cleans already recorded have been closed."); } finally { setBusy(false); }
+    } catch (e) {
+      // Cleans already closed keep their request id, so trying again only finishes the rest.
+      setError(message(e) + " Try again to finish the rest; cleans already recorded are not closed twice.");
+    } finally { setBusy(false); }
   }
   return (
     <Sheet palette={p} visible={!!group} onClose={onClose} title={group ? `Invoice for ${group.cleanerName}` : ""} subtitle={group ? plural(group.tasks.length, "accepted clean") : undefined} icon="coins">
@@ -89,11 +98,16 @@ export function AccountsWork({ palette: p, account, properties, onOpenWork }: { 
   const canBudget = ["admin", "super_admin"].includes(account.role) || (account.role === "accounts" && account.modules.includes("purchase-order-accounts"));
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    const [o, b, r] = await Promise.allSettled([readOperations(), readTeams({ section: "budgetChart" }), readTeams({ section: "cleanerRates" })]);
-    if (o.status === "fulfilled") setWork(z.array(operationViewSchema).parse(o.value.data)); else setError(message(o.reason));
-    if (b.status === "fulfilled") setBudget(budgetChartSchema.parse(b.value.data));
-    if (r.status === "fulfilled") setRates(new Map(cleanerRatesSchema.parse(r.value.data).map(x => [x.cleanerId, x.rateMinor])));
-    setLoading(false);
+    try {
+      const [o, b, r] = await Promise.allSettled([readOperations(), readTeams({ section: "budgetChart" }), readTeams({ section: "cleanerRates" })]);
+      // Each part shows on its own: an odd budget or rates reply never hides the work list.
+      const ops = o.status === "fulfilled" ? z.array(operationViewSchema).safeParse(o.value.data) : null;
+      if (ops?.success) setWork(ops.data); else setError(o.status === "rejected" ? message(o.reason) : "The work list could not be read. Refresh to try again.");
+      const chart = b.status === "fulfilled" ? budgetChartSchema.safeParse(b.value.data) : null;
+      if (chart?.success) setBudget(chart.data);
+      const pay = r.status === "fulfilled" ? cleanerRatesSchema.safeParse(r.value.data) : null;
+      if (pay?.success) setRates(new Map(pay.data.map(x => [x.cleanerId, x.rateMinor])));
+    } finally { setLoading(false); }
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const nameOf = useCallback((id: string) => properties.find(x => x.id === id)?.name ?? "Property", [properties]);

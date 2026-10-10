@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emailSchema, newPasswordSchema, phoneSchema } from "./auth-security-policy";
+import { emailSchema, newPasswordSchema, PASSWORD_IS_CONTACT, passwordIsContact, phoneSchema } from "./auth-security-policy";
 
 export { phoneSchema };
 export const avatarIds = [
@@ -40,6 +40,8 @@ export const registrationSchema = z
         message: "Check your email address or international phone number.",
         path: ["address"],
       });
+    if (passwordIsContact(value.password, value.address))
+      context.addIssue({ code: z.ZodIssueCode.custom, message: PASSWORD_IS_CONTACT, path: ["password"] });
   });
 export const verificationSchema = z
   .object({

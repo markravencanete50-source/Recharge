@@ -19,7 +19,7 @@ after(async () => { await db.close(); await vite.close(); });
 
 const roles = ['super_admin', 'admin', 'cleaning_manager', 'cleaning_manager', 'stays', 'cleans', 'cleans', 'ready'];
 const users = roles.map((_, i) => `97100000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
-const [SUPER, ADMIN, MANAGER, OTHER_MANAGER, STAYS, CLEANER, OTHER_CLEANER, READY] = roles.map((_, i) => i);
+const [SUPER, , MANAGER, , STAYS, CLEANER, OTHER_CLEANER, READY] = roles.map((_, i) => i);
 const session = i => users[i].replace('9710', '9810');
 for (let i = 0; i < users.length; i++) {
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())', [users[i], `cleanreport${i}@example.com`]);
@@ -33,9 +33,7 @@ async function as(i) {
   await db.query("select set_config('request.jwt.claims',$1,false)", [JSON.stringify(i === 'service' ? {} : { sub: users[i], session_id: session(i) })]);
   await db.exec(i === 'service' ? 'set role service_role' : 'set role authenticated');
 }
-const owner = async (text, args = []) => { await db.exec('reset role'); return (await db.query(text, args)).rows; };
 const rpc = async (name, args = []) => (await db.query(`select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) result`, args)).rows[0].result;
-const read = (section, target = null) => rpc('clean_checklists_read', [section, target]);
 const operation = input => rpc('workspace_operations_action', [{ requestId: crypto.randomUUID(), ...input }]);
 const today = (await db.query('select current_date::text d')).rows[0].d;
 

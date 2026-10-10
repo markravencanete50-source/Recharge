@@ -36,7 +36,8 @@ const SUBTITLE: Record<WorkspaceAccount["role"], string> = {
   accounts: "Invoices to approve and owner statements to send.",
 };
 const WORK_LABEL: Partial<Record<WorkspaceAccount["role"], string>> = { cleans: "Cleans to do", cleaning_manager: "Cleans to do", ready: "Repairs open", accounts: "Open items", client: "Open requests" };
-const greeting = () => { const hour = new Date().getHours(); return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"; };
+// London time, like every other date in the app, so the greeting is right wherever the phone is set.
+const greeting = () => { const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hourCycle: "h23" }).format(new Date())); return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"; };
 const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 const todayLabel = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
 

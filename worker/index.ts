@@ -90,6 +90,13 @@ const worker = {
         const configured = Boolean(env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY && env.SUPABASE_SECRET_KEY?.startsWith("sb_secret_") && (env.AUTH_RATE_LIMIT_SECRET?.length || 0) >= 32 && env.APP_ORIGIN?.startsWith("https://"));
         return new Response(JSON.stringify({ service: "Recharge backend", configured }), { status: configured ? 200 : 503, headers });
       }
+      // Pages opened on the old workers.dev address move to the app's own domain, where sign-in works
+      // (its cookies and origin checks belong to APP_ORIGIN). API calls such as the Hostaway webhook
+      // are left alone, so integrations pointed at the old address keep working.
+      if (env.APP_ORIGIN?.startsWith("https://") && url.hostname.endsWith(".workers.dev") && url.origin !== new URL(env.APP_ORIGIN).origin
+        && (request.method === "GET" || request.method === "HEAD") && !url.pathname.startsWith("/api/")) {
+        return Response.redirect(new URL(url.pathname + url.search, env.APP_ORIGIN).toString(), 308);
+      }
       if (!backendRouteAllowed(url.pathname)) return new Response(JSON.stringify({ error: "This endpoint is not available on the live backend" }), { status: 404, headers });
       // The pages' built scripts, styles and fonts live in the static asset store. The app
       // router only serves public files it knows about, so hand these over directly.

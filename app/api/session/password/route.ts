@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { workspaceSupabase } from "@/lib/supabase-server";
 import { authSecurityConfiguration, providerIdentity, recoveryPhase, requestQuota, securityHash } from "@/lib/auth-security";
-import { boundedJson, isSameOrigin, newPasswordSchema, RECOVERY_COOKIE, securityHeaders, uuidSchema } from "@/lib/auth-security-policy";
+import { boundedJson, isSameOrigin, newPasswordSchema, PASSWORD_IS_CONTACT, passwordIsContact, RECOVERY_COOKIE, securityHeaders, uuidSchema } from "@/lib/auth-security-policy";
 import { passwordLogin } from "../password-login";
 export async function POST(request: Request) {
   const config = authSecurityConfiguration();
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     const token = uuidSchema.safeParse((await cookies()).get(RECOVERY_COOKIE)?.value);
     const identity = await providerIdentity(); const client = await workspaceSupabase();
     if (!token.success || !identity?.user.email || !identity.user.email_confirmed_at || !client) return denied();
+    if (passwordIsContact(body.data.password, identity.user.email, identity.user.phone)) return NextResponse.json({ error: PASSWORD_IS_CONTACT }, { status: 400, headers: securityHeaders });
     recovery = { proofHash: await securityHash("recovery-proof", token.data), userId: identity.user.id, sessionId: identity.sessionId, phase: "begin", leaseId: crypto.randomUUID() };
     if (!await recoveryPhase(recovery)) return denied();
     const { error } = await client.auth.updateUser({ password: body.data.password });

@@ -142,16 +142,17 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [attempt, setAttempt] = useState<{ id: string; key: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const celebrate = useCelebrate();
+  const inFlight = useRef(false); // a second tap in the same instant never saves twice
   async function save() {
-    if (busy || uploading) return;
-    setBusy(true); setError("");
+    if (busy || uploading || inFlight.current) return;
+    inFlight.current = true; setBusy(true); setError("");
     try {
       const normalized = workflowValues(spec.fields, values), key = JSON.stringify(normalized), requestId = attempt?.key === key ? attempt.id : Crypto.randomUUID();
       setAttempt({ key, id: requestId });
       await liveApi(spec.endpoint === "workspace" ? "/workspace" : "/" + spec.endpoint, { ...(spec.endpoint === "workspace" ? {} : { requestId }), ...spec.build(normalized, requestId) });
       // A successful change is never repeated merely because the following read fails.
       celebrate("Done"); onClose(); await onSaved();
-    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+    } catch (e) { setError(message(e)); } finally { inFlight.current = false; setBusy(false); }
   }
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;
   return (
@@ -257,14 +258,14 @@ function EnquiryContact({ palette: p, j }: { palette: Palette; j: JourneyView })
     ["Existing client", e.existingClient === undefined ? "" : e.existingClient ? "Yes" : "No"], ["WCs", e.wcs === undefined ? "" : String(e.wcs)],
     ["Parking", e.parking], ["Garden", e.garden], ["Notes", e.notes],
   ].filter((r): r is [string, string] => !!r[1]);
-  if (!rows.length && !e.photoLink) return j.ownerAccount === false ? <Text style={[ui.small, { color: p.muted }]}>No owner account: the team records the owner's steps.</Text> : null;
+  if (!rows.length && !e.photoLink) return j.ownerAccount === false ? <Text style={[ui.small, { color: p.muted }]}>No owner account: the team records the owner&apos;s steps.</Text> : null;
   return (
     <View style={{ gap: 6, padding: 14, borderRadius: 16, backgroundColor: p.wash }}>
       <Text style={{ color: p.text, fontWeight: "700" }}>From the enquiry</Text>
       {rows.map(([label, value]) => <Text key={label} selectable style={[ui.body, { color: p.text }]}><Text style={{ color: p.muted }}>{label}: </Text>{value}</Text>)}
       {!!e.photoLink && <SoftButton label="Open the photos and videos" icon="external-link" palette={p} onPress={() => void Linking.openURL(e.photoLink!).catch(() => setLinkError("The photo link could not be opened."))} />}
       {!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}
-      {j.ownerAccount === false && <Text style={[ui.small, { color: p.muted }]}>No owner account: the team records the owner's steps.</Text>}
+      {j.ownerAccount === false && <Text style={[ui.small, { color: p.muted }]}>No owner account: the team records the owner&apos;s steps.</Text>}
     </View>
   );
 }
