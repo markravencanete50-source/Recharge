@@ -244,9 +244,9 @@ Migration `20261010230000_sweep_fixes` (applied live) and app fixes:
 
 ## Payouts list: approve in place, date filter, approve all (10 October 2026)
 
-Migration `20261010280000_bulk_payout_approval.sql` (**not applied live yet**). Apply it before the
-app build with this list goes out, and redeploy the backend, which validates `agreePayouts`. It has
-no deletes, so the SQL editor or the database tool can run it, and it is safe to run more than once.
+Migration `20261010280000_bulk_payout_approval.sql` (applied live on 10 October 2026). Redeploy the
+backend with this build, which validates `agreePayouts`. It has no deletes, so the SQL editor or the
+database tool can run it, and it is safe to run more than once.
 - **Screen** (`mobile/src/PayoutStays.tsx`, used by Accounts, Payouts in `LiveAccounts.tsx`): bold,
   aligned Expected, Received and Difference; an **Approve £x** button on each row that sends
   `agreePayout` without opening anything; a search box (above eight stays, like the shared `List`)

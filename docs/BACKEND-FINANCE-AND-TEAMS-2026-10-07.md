@@ -283,9 +283,9 @@ statements are paid. The rules live in `lib/accounts-live.ts` and match the data
 ### Approving payouts in bulk
 
 `20261010280000_bulk_payout_approval.sql` adds `private.workspace_agree_payouts` and the
-`agreePayouts` action (`lib/workspace-finance-policy.ts`). **It is not applied to the live Supabase
-project yet.** Apply it before the app build that has the Payouts list goes out. Until then the
-per-row **Approve** buttons work, and "Approve all" says that it needs a database update.
+`agreePayouts` action (`lib/workspace-finance-policy.ts`). Applied to the live Supabase project on
+10 October 2026. On a database without it, the per-row **Approve** buttons still work and
+"Approve all" says that it needs a database update.
 - One request holds 1 to 500 stays and runs in one transaction. The app sends 250 at a time.
 - Every stay gets the checks a single approval gets: the same roles, module and property access,
   the version the person saw must still match, and nothing changes once the month's statement is
