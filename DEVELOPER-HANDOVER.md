@@ -423,6 +423,11 @@ database tool can run it, and it is safe to run more than once.
   show in Messages, the toolbar and the left panel (`/api/{workspace,mobile}/profile?userId=…`).
   Deleting an account clears its photo and line; a copy of your data includes them.
 - Migration `20261010310000_chat_media_presence.sql`; tests `tests/chat-media-database.test.mjs`.
+- Live: applied 10 October 2026. The Supabase connector hangs on any statement containing DELETE,
+  so it went in as parts (`chat_media_presence_1_tables`, `_2a_helpers`, `_2b_attach_members`,
+  `_2d_files_profiles`, `_3_hooks`) plus `chat_more_action` and the account-deletion change pasted
+  into the SQL editor. Together they equal the migration file; checked afterwards (functions,
+  hooks, private buckets, row level security, no access for signed-out users).
   The Help button no longer shows in Messages (it covered the send button).
 
 ## Runtime requirements
