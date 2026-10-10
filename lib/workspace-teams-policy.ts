@@ -108,6 +108,10 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('saveContract'), requestId: id, contractId: id.optional(), version: version.optional(), title: text(2, 200),
     audience: z.array(z.enum(CONTRACT_AUDIENCES)).min(1).max(6), body: text(20, 100000), active: z.boolean(), resignRequired: z.boolean().optional() }).strict(),
   z.object({ action: z.literal('setCourseRequired'), requestId: id, courseId: id, required: z.boolean() }).strict(),
+  // Deleting: a course goes with its completions and files; a signed agreement is taken out of use
+  // and kept on record for whoever signed it, an unsigned one goes completely.
+  z.object({ action: z.literal('deleteCourse'), requestId: id, courseId: id, version }).strict(),
+  z.object({ action: z.literal('deleteContract'), requestId: id, contractId: id, version }).strict(),
   // Shifts and team performance targets.
   z.object({ action: z.literal('clockIn'), requestId: id, department: z.enum(DEPARTMENTS) }).strict(),
   z.object({ action: z.literal('saveRota'), requestId: id, userId: id, department: z.enum(DEPARTMENTS), usualShift: z.enum(['early', 'late', 'both']) }).strict(),

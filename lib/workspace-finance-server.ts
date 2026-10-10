@@ -24,7 +24,9 @@ export const workspaceTeams = rpcRoute({
     : client.rpc('workspace_teams_read', { section: input.section, start_on: input.from || null, end_on: input.to || null, target_property: input.propertyId || null, target_user: input.userId || null }),
   action: 'workspace_teams_action',
   // Sending the enquiry form makes its link and sends the email on the server.
-  handle: (context, input) => input.action === 'inviteEnquiry' || input.action === 'resendEnquiry' ? import('./client-enquiry-server').then(m => m.sendEnquiryForm(context, input)) : null,
+  // Deleting a course also deletes its stored files.
+  handle: (context, input) => input.action === 'inviteEnquiry' || input.action === 'resendEnquiry' ? import('./client-enquiry-server').then(m => m.sendEnquiryForm(context, input))
+    : input.action === 'deleteCourse' ? import('./training-files-server').then(m => m.deleteCourse(context, input)) : null,
   // Favorites and View as have their own database functions.
   actionFor: input => input.action === 'saveFavorites' ? 'workspace_save_favorites' : input.action === 'startViewAs' ? 'workspace_view_as_start'
     : input.action === 'stopViewAs' ? 'workspace_view_as_stop' : 'workspace_teams_action',

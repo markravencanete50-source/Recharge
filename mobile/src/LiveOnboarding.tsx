@@ -329,6 +329,20 @@ export function StaffContracts({ p }: { p: Palette }) {
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [person, setPerson] = useState<StaffOnboarding | null>(null);
   const [filter, setFilter] = useState<"todo" | "done" | "all">("todo");
+  const [confirmDelete, setConfirmDelete] = useState(false), [deleting, setDeleting] = useState(false), [deleteError, setDeleteError] = useState(""), [notice, setNotice] = useState("");
+  const deleteRequest = useRequestId(viewing ? ["deleteContract", viewing.id, viewing.version].join(":") : null);
+  // An unsigned contract goes completely; a signed one is taken out of use and its signed copies kept.
+  async function removeContract() {
+    if (!viewing) return;
+    setDeleting(true); setDeleteError("");
+    try {
+      const result = await writeTeams({ action: "deleteContract", requestId: deleteRequest.get(), contractId: viewing.id, version: viewing.version });
+      deleteRequest.done();
+      const kept = !!(result as { data?: { kept?: boolean } }).data?.kept;
+      setNotice(kept ? `“${viewing.title}” is deleted. The copies people signed are kept on their records.` : `“${viewing.title}” is deleted.`);
+      setViewing(null); setConfirmDelete(false); await load();
+    } catch (e) { setDeleteError(message(e)); } finally { setDeleting(false); }
+  }
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
@@ -360,6 +374,7 @@ export function StaffContracts({ p }: { p: Palette }) {
       </Section>
       <Section title="Staff contracts" p={p}>
         <Text style={[ui.small, { color: p.muted }]}>Each one is signed in the app with a typed name; the exact wording and date are kept on record.</Text>
+        {!!notice && <Notice text={notice} p={p} />}
         <Button label="New contract" icon="plus" p={p} onPress={() => setEditing("new")} />
         <List p={p} empty="No contracts yet. Add the one new staff sign.">
           {contracts.map((c, i) => {
@@ -377,9 +392,22 @@ export function StaffContracts({ p }: { p: Palette }) {
             tags={[[onboardingProgress(x), !x.required || x.complete ? "good" : "wait"]]} onPress={() => setPerson(x)} />)}
         </List>
       </Section>
-      <Sheet palette={p} visible={!!viewing} onClose={() => setViewing(null)} title={viewing?.title ?? ""} subtitle={viewing ? `Version ${viewing.version} · ${when(viewing.publishedAt)}` : undefined} icon="clipboard">
+      <Sheet palette={p} visible={!!viewing} onClose={() => { setViewing(null); setConfirmDelete(false); setDeleteError(""); }} title={viewing?.title ?? ""} subtitle={viewing ? `Version ${viewing.version} · ${when(viewing.publishedAt)}` : undefined} icon="clipboard">
         {viewing && <>
           <Button label="Edit contract" icon="edit-3" primary p={p} onPress={() => { const c = viewing; setViewing(null); setEditing(c); }} />
+          {confirmDelete
+            ? <View style={{ gap: 8, padding: 14, borderRadius: 16, backgroundColor: p.dangerWash }}>
+                <Text style={{ color: p.text, fontWeight: "700" }}>Delete “{viewing.title}”?</Text>
+                <Text style={[ui.small, { color: p.text }]}>{viewing.signatures?.length
+                  ? `Nobody will be asked to sign it any more. The ${new Set(viewing.signatures.map(s => s.userId)).size} signed ${new Set(viewing.signatures.map(s => s.userId)).size === 1 ? "copy is" : "copies are"} kept on record for the people who signed.`
+                  : "Nobody has signed it, so it goes completely. This can’t be undone."}</Text>
+                {!!deleteError && <Notice text={deleteError} p={p} tone="bad" />}
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <Button label={deleting ? "Deleting…" : "Delete contract"} icon="trash-2" primary p={p} disabled={deleting} onPress={() => void removeContract()} />
+                  <Button label="Keep it" p={p} disabled={deleting} onPress={() => setConfirmDelete(false)} />
+                </View>
+              </View>
+            : <Button label="Delete contract" icon="trash-2" p={p} onPress={() => setConfirmDelete(true)} />}
           {viewing.active && !!unsigned(viewing).length && <Section title="Still to sign this wording" count={unsigned(viewing).length} p={p}>
             <List p={p} empty="">{unsigned(viewing).map((x, i) => <Row key={x.userId} p={p} first={i === 0} avatar={x.fullName || "Team member"} title={x.fullName || "Team member"} detail={ROLE_LABEL[x.role] ?? x.role} tags={[["To sign", "wait"]]} />)}</List>
           </Section>}

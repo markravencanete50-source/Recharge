@@ -89,6 +89,8 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [people, setPeople] = useState<StaffOnboarding[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteRequest = useRequestId(visible && course ? ["deleteCourse", course.id, course.version].join(":") : null);
   const request = useRequestId(visible ? ["course", course?.id ?? "new", course?.version ?? 0, title, audience.join(","), summary, body, videoUrl, minutes, published, redo].join(":") : null);
   // Who the course is for and who has done it (from each team member's training list).
   useEffect(() => {
@@ -103,7 +105,7 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
     queueMicrotask(() => {
       if (!visible) return;
       setTitle(course?.title ?? ""); setAudience(course?.audience ?? ["all"]); setSummary(course?.summary ?? ""); setBody(course?.body ?? "");
-      setVideoUrl(course?.videoUrl ?? ""); setMinutes(String(course?.minutes ?? 10)); setPublished(course?.published ?? false); setRequired(course?.required ?? false); setRedo(false); setError("");
+      setVideoUrl(course?.videoUrl ?? ""); setMinutes(String(course?.minutes ?? 10)); setPublished(course?.published ?? false); setRequired(course?.required ?? false); setRedo(false); setError(""); setConfirmDelete(false);
     });
   }, [course, visible]);
   const toggle = (value: string) => setAudience(current => {
@@ -137,6 +139,13 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
     setBusy(false); onClose(); await onDone();
     if (requiredError) onRequiredFailed?.("The course was saved, but “Required” could not be changed: " + requiredError);
   }
+  // Deleting takes the course, its completions and its files away for everyone.
+  async function remove() {
+    if (!course) return;
+    setBusy(true); setError("");
+    try { await writeTeams({ action: "deleteCourse", requestId: deleteRequest.get(), courseId: course.id, version: course.version }); deleteRequest.done(); onClose(); await onDone(); }
+    catch (e) { setError(message(e)); } finally { setBusy(false); setConfirmDelete(false); }
+  }
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title={course ? "Edit course" : "New course"} subtitle="Staff see published courses for their role" icon="medal">
       <Field label="Title" value={title} onChange={setTitle} p={p} />
@@ -169,6 +178,16 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
       </Section>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : "Save course"} primary p={p} disabled={busy} onPress={() => void save()} />
+      {!!course && (confirmDelete
+        ? <View style={{ gap: 8, padding: 14, borderRadius: 16, backgroundColor: p.dangerWash }}>
+            <Text style={{ color: p.text, fontWeight: "700" }}>Delete “{course.title}”?</Text>
+            <Text style={[ui.small, { color: p.text }]}>It disappears for everyone, with its files{course.completions ? ` and the record of the ${course.completions} ${course.completions === 1 ? "person" : "people"} who completed it` : ""}. This can’t be undone.{course.required ? " Anyone waiting on it to start no longer needs it." : ""}</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <Button label={busy ? "Deleting…" : "Delete course"} icon="trash-2" primary p={p} disabled={busy} onPress={() => void remove()} />
+              <Button label="Keep it" p={p} disabled={busy} onPress={() => setConfirmDelete(false)} />
+            </View>
+          </View>
+        : <Button label="Delete course" icon="trash-2" p={p} disabled={busy} onPress={() => setConfirmDelete(true)} />)}
     </Sheet>
   );
 }

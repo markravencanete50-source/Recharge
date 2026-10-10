@@ -5,6 +5,8 @@ import { boundedJson, isSameOrigin } from './auth-security-policy';
 import { businessContext, businessResponse, databaseFailure, viewAsFailure } from './business-server';
 import { isNativeRequest } from './native-request-policy';
 import { MAX_TRAINING_FILE_BYTES, trainingFileType } from './training-files';
+import type { RpcContext } from './workspace-rpc-route';
+import type { TeamsAction } from './workspace-teams-policy';
 
 // Files attached to training courses (the Training centre's upload area): documents, pictures and
 // short videos in the private "training-files" bucket. Only the server touches the bucket; the
@@ -16,6 +18,16 @@ const bucket = () => {
   return createClient(config.url, config.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }).storage.from(TRAINING_BUCKET);
 };
 const id = z.string().uuid();
+
+// Deleting a course: the database removes it and returns where its files were kept; the stored
+// copies are deleted here (a copy left behind is only unreachable, never shown).
+export async function deleteCourse(context: RpcContext, input: Extract<TeamsAction, { action: 'deleteCourse' }>) {
+  const result = await context.client.rpc('workspace_teams_action', { input });
+  if (result.error) return databaseFailure(result.error);
+  const paths = z.array(z.string()).catch([]).parse((result.data as { paths?: unknown })?.paths);
+  if (paths.length) await bucket()?.remove(paths).catch(() => undefined);
+  return businessResponse({ data: result.data, ok: true });
+}
 
 export async function trainingFilesRoute(request: Request, native = false) {
   if (request.method === 'POST' && (native ? !isNativeRequest(request) : !isSameOrigin(request, authSecurityConfiguration()?.origin))) return businessResponse({ error: 'Invalid request origin' }, 403);

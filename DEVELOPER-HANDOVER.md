@@ -430,6 +430,18 @@ database tool can run it, and it is safe to run more than once.
   hooks, private buckets, row level security, no access for signed-out users).
   The Help button no longer shows in Messages (it covered the send button).
 
+## Deleting training courses and staff contracts (10 October 2026)
+
+- Admins and super admins: **Delete course** at the bottom of the course editor, and **Delete
+  contract** on a staff contract's sheet, each with a confirm step.
+- A course goes completely: its completions and its files (the stored copies are deleted by the
+  server with the paths the database returns, `deleteCourse` in `lib/training-files-server.ts`).
+- A contract nobody has signed goes completely. A signed one is taken out of use and off the list
+  (`workspace_contracts.deleted_at`); every signed copy is kept, so people still see theirs under
+  My contracts and in their copy of their data. It can't be edited back into use.
+- Anyone a deleted required course or contract was holding up is let through straight away.
+- Migration `20261010320000_delete_courses_contracts.sql`; tests `tests/training-delete-database.test.mjs`.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never
