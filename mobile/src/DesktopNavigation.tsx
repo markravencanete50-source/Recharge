@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Platform, ScrollView, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { navigationFor, type WorkspaceSection } from '../../lib/workspace-map';
@@ -15,7 +15,7 @@ import type { NavigationItem } from './NavigationBar';
 const ROW=52, GAP=6;
 const hover=Platform.OS==='web'?{dataSet:{hover:'tint'}}:{};
 
-export function DesktopNavigation({role,section,palette:p,onNavigate,onDepartment,onProfile,onCollapse,items:custom,profileDetail='Theme, motion and roles',extra}:{role:WorkspaceRole;section:WorkspaceSection;palette:Palette;onNavigate:(section:WorkspaceSection)=>void;onDepartment?:(department:string)=>void;onProfile:()=>void;onCollapse:()=>void;items?:readonly NavigationItem[];profileDetail?:string;extra?:ReactNode}) {
+export function DesktopNavigation({role,section,palette:p,onNavigate,onDepartment,onProfile,onCollapse,items:custom,profileDetail='Theme, motion and roles'}:{role:WorkspaceRole;section:WorkspaceSection;palette:Palette;onNavigate:(section:WorkspaceSection)=>void;onDepartment?:(department:string)=>void;onProfile:()=>void;onCollapse:()=>void;items?:readonly NavigationItem[];profileDetail?:string}) {
   const [expanded,setExpanded]=useState(true); const tools=toolsFor(role);
   // Clients reach tools from Home on phones; desktop has room to list them too.
   // The live workspace passes its own destinations and has no department shortcuts.
@@ -35,7 +35,6 @@ export function DesktopNavigation({role,section,palette:p,onNavigate,onDepartmen
         </Animated.View>
         {items.map(item=>{const selected=section===item.value;return <MotionPress key={item.value} {...hover} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{selected}} onPress={()=>onNavigate(item.value)} style={[ui.row,{height:ROW,gap:14,paddingHorizontal:14,borderRadius:16}]}><NavSymbol name={item.icon} active={selected} color={selected?p.primary:p.muted}/><Text style={{fontSize:14,fontWeight:selected?'700':'500',color:selected?p.primary:p.text}}>{item.label}</Text></MotionPress>;})}
       </View>
-      {extra}
       {!!onDepartment&&<><MotionPress accessibilityRole="button" accessibilityLabel="Toggle department shortcuts" accessibilityState={{expanded}} onPress={()=>setExpanded(!expanded)} style={[ui.between,{marginTop:26,minHeight:40,paddingHorizontal:12}]}><Text style={{color:p.muted,fontSize:11,fontWeight:'600',letterSpacing:1.4,textTransform:'uppercase'}}>Departments</Text><Feather name={expanded?'chevron-up':'chevron-down'} size={16} color={p.muted}/></MotionPress>
       {expanded&&<View style={{gap:2,marginTop:4}}>{DEPARTMENTS.map(d=>{const count=tools.filter(tool=>WORKSPACE_MAP[tool.id].tone===d.id).length;return count?<MotionPress key={d.id} {...hover} accessibilityRole="button" accessibilityLabel={'Open '+d.name+' department, '+count+' tools'} onPress={()=>onDepartment(d.id)} style={[ui.row,{gap:12,minHeight:48,paddingHorizontal:8,borderRadius:14}]}><DepartmentArtwork department={d.id} size={32} palette={p}/><Text style={{fontSize:14,color:p.text,flex:1,fontWeight:'500'}}>{d.name}</Text><View style={{minWidth:26,paddingHorizontal:7,paddingVertical:2,borderRadius:999,backgroundColor:p.elevated,alignItems:'center'}}><Text style={{fontSize:11,fontWeight:'600',color:p.muted}}>{count}</Text></View></MotionPress>:null;})}</View>}</>}
     </ScrollView>

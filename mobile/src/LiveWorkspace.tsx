@@ -65,7 +65,7 @@ import { DeleteAccountButton, DeleteAccountSheet, PrivacySection } from "./LiveP
 import { ACCOUNT_DELETED } from "../../lib/privacy-policy";
 import { PriceNightsLink, WorkHistory } from "./WorkHistory";
 import { WorkJumpContext } from "./WorkJump";
-import { FavoritesPage, HeaderSearch, HomeSearch, SearchPanel, SidebarFavorites } from "./WorkspaceSearch";
+import { FavoritesPage, FavoritesShortcut, HeaderSearch, SearchPanel } from "./WorkspaceSearch";
 import { FavoriteButton, FavoritesContext, useFavoritesStore } from "./Favorites";
 import { TrackerSheet } from "./LiveTools";
 import { FurnishingSheet } from "./LiveFurnishing";
@@ -96,9 +96,9 @@ function bookingPolicyForm(policy: BookingPolicy): WorkflowForm {
   };
 }
 
-// The live workspace's destinations for each role. On phones five items, with Favorites as the
-// raised centre action for the team (Activity is on Home and Messages in the header). The desktop
-// sidebar has room for every page, Favorites second.
+// The live workspace's destinations for each role. Five items on phones, where the middle one is the
+// raised action. The desktop sidebar has room for Favorites too, second; on phones Favorites is a
+// floating button next to Help instead.
 function liveNavigation(role: Role, desktop = false): NavigationItem[] {
   const item = (value: WorkspaceSection, label: string, icon: NavigationItem["icon"]): NavigationItem => ({ value, label, icon });
   const home = item("home", "Home", "home"), properties = item("properties", "Properties", "key"), reports = item("analytics", "Reports", "bar-chart-2"), activity = item("activity", "Activity", "activity"), help = item("help", "Help", "help-circle");
@@ -112,8 +112,7 @@ function liveNavigation(role: Role, desktop = false): NavigationItem[] {
     : role === "accounts" ? [item("work", "Invoices", "file-text"), item("statements", "Statements", "pie-chart"), item("inbox", "Inbox", "message-circle"), item("help", "Tools", "grid")]
     : [item("work", "Work", "check-square"), properties, reports, activity];
   if (desktop) return [home, favorites, work, ...rest];
-  const phone = rest.filter(x => x.value !== "activity" && x.value !== "inbox");
-  return [home, work, favorites, ...phone].slice(0, 5);
+  return [home, work, ...rest];
 }
 const WORK_TITLE: Record<Role, [string, string]> = {
   super_admin: ["Work", "Management, repairs and accounts in one place."], admin: ["Work", "Management, repairs and accounts in one place."],
@@ -454,8 +453,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
     </>
   );
   const page = tab === "home"
-    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} onTool={openTool}
-        search={team ? <HomeSearch palette={p} entries={entries} onSearch={() => setSearchOpen(true)} onOpen={openEntry} onFavorites={() => navigate("favorites")} /> : undefined} />
+    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} onTool={openTool} />
     : tab === "favorites" ? <FavoritesPage palette={p} desktop={desktop} entries={entries} onOpen={openEntry} onSearch={() => setSearchOpen(true)} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} focusProperty={propertyFocus} />
@@ -472,13 +470,14 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
   const title = sideNav.find(item => item.value === tab)?.label ?? nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
   // The floating Help button; the page leaves room under its last item while it shows.
   const showFaq = !faqShortcut.hidden && tab !== "help" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help")));
+  // On phones the team's Favorites button floats just above Help (or where Help would be).
+  const showFavorites = !desktop && team && tab !== "favorites";
   return (
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
       <FavoritesContext.Provider value={team ? favorites : null}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
-        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={sideNav} section={tab} palette={p} onNavigate={navigate} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme and sign out"
-          extra={team ? <SidebarFavorites palette={p} entries={entries} onOpen={openEntry} onAll={() => navigate("favorites")} /> : undefined} />}
+        {desktop && !sidebarHidden && <DesktopNavigation role={account.role} items={sideNav} section={tab} palette={p} onNavigate={navigate} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} profileDetail="Theme and sign out" />}
         {desktop && sidebarHidden && <View style={{ width: 64, backgroundColor: p.isDark ? p.surface : p.background, borderRightWidth: 1, borderColor: p.border }}><View style={{ height: 81, alignItems: "center", justifyContent: "center", backgroundColor: p.header }}><IconButton label="Show left panel" icon="chevrons-right" palette={header} onPress={() => setSidebarHidden(false)} /></View></View>}
         <View style={[ui.fill, { minWidth: 0 }]}>
           {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Photos are saved on this device; other changes will fail until you reconnect.</Text></View>}
@@ -506,7 +505,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
               </View>
             </View>
           </View>
-          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, showFaq && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
+          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, (showFaq || showFavorites) && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
               {!!viewAs && <View accessibilityRole="alert" style={[ui.row, { gap: 12, padding: 12, paddingLeft: 14, borderRadius: 16, backgroundColor: p.header, flexWrap: "wrap" }]}>
                 <Feather name="eye" size={18} color={p.headerText} />
@@ -524,6 +523,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, palette: p, theme, 
           </ScrollView>
           {/* On phones Home has its own help links and some bottom bars include Help, so the floating button stays out of the way there. */}
           {showFaq && <FaqShortcut palette={p} tucked={tucked} onOpen={() => navigate("help")} onHide={() => faqShortcut.setHidden(true)} />}
+          {showFavorites && <FavoritesShortcut palette={p} tucked={tucked} lifted={showFaq} count={favorites.items.length} onOpen={() => navigate("favorites")} />}
           {!desktop && <NavigationBar role={account.role} items={nav} section={tab} onNavigate={navigate} palette={p} />}
         </View>
       </KeyboardAvoidingView>

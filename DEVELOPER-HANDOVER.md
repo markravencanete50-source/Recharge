@@ -197,8 +197,8 @@ Migration `20261010230000_sweep_fixes` (applied live) and app fixes:
 
 ## Workspace search, Favorites, View as, and more (10 October 2026)
 
-- **Workspace search** (team roles): the header field on desktop (Ctrl/⌘ K or "/"), a search
-  button in the phone header, and a search bar first on Home. One index
+- **Workspace search** (team roles): the header field on desktop (Ctrl/⌘ K or "/") and a search
+  button in the phone header. One index
   (`lib/workspace-search.ts`, `buildSearchIndex`) covers pages, Work views, Home tools, every tool
   the person holds, quick actions, properties (name, street, postcode), work and invoices, all from
   data the app has already loaded, so it only finds what the person can open. `ALSO` adds everyday
@@ -207,9 +207,10 @@ Migration `20261010230000_sweep_fixes` (applied live) and app fixes:
   a place. They are stored per person in `private.workspace_favorites` (migration
   `20261010260000_favorites`, applied live) through the teams route (`section=favorites`, action
   `saveFavorites` → `workspace_save_favorites`), so the same list appears on every device: up to
-  40 keys such as `tool:queue` or `property:<id>`, each with a label. The desktop sidebar lists them
-  under the pages ("Your favorites"); on phones Favorites is the raised centre button (Activity is
-  reached from Home, Messages from the header). State lives in `mobile/src/Favorites.tsx`.
+  40 keys such as `tool:queue` or `property:<id>`, each with a label. One way in on each device: the
+  "Favorites" link in the desktop sidebar, and on phones a round star button floating above the
+  Help button (`FavoritesShortcut`, it shrinks away while scrolling); the bottom bar is unchanged.
+  Search is in the header only (no second bar on Home). State lives in `mobile/src/Favorites.tsx`.
 - **View as (super admins):** the eye button in the header, or Profile → "View the app as another
   role". The app shows that role's Home, menus, Work views and tools (`lib/view-as.ts`,
   `previewAccount`). The database still knows who is signed in, so lists show the whole business.

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Platform, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
+import { Animated, Modal, Platform, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { DimensionalIcon } from "./DimensionalIcon";
-import { MotionPress, Stagger } from "./motion";
+import { MotionPress, Stagger, useReducedMotion } from "./motion";
 import { ui, type Palette } from "./theme";
 import { FavoriteStar, FavoritesMessage, FilledStar, useFavorites } from "./Favorites";
 import { PageHeading } from "./LivePages";
@@ -127,53 +127,25 @@ export function HeaderSearch({ palette: p, onOpen }: { palette: Palette; onOpen:
   );
 }
 
-// Home, before everything else: the search bar and the person's Favorites, one tap each.
-export function HomeSearch({ palette: p, entries, onSearch, onOpen, onFavorites }: { palette: Palette; entries: SearchEntry[]; onSearch: () => void; onOpen: (entry: SearchEntry) => void; onFavorites: () => void }) {
-  const favorites = useFavorites();
-  const saved = resolveFavorites(favorites?.items ?? [], entries).flatMap(f => f.entry ? [f.entry] : []);
+// Phones: a round star button in the corner, just above the Help button, that opens Favorites.
+// It shrinks away while the page scrolls, like Help, so it never covers what is being read.
+export function FavoritesShortcut({ palette: p, onOpen, tucked, lifted, count }: { palette: Palette; onOpen: () => void; tucked: boolean; lifted: boolean; count: number }) {
+  const reduced = useReducedMotion();
+  const [away] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const to = tucked ? 1 : 0;
+    if (reduced) { away.setValue(to); return; }
+    const a = Animated.spring(away, { toValue: to, speed: 18, bounciness: tucked ? 0 : 6, useNativeDriver: !isWeb });
+    a.start();
+    return () => a.stop();
+  }, [tucked, reduced, away]);
   return (
-    <View style={{ gap: 10 }}>
-      <MotionPress accessibilityRole="search" accessibilityLabel="Search the workspace" onPress={onSearch}
-        style={[ui.row, { gap: 12, minHeight: 56, paddingHorizontal: 18, borderRadius: 20, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, ...(isWeb ? { boxShadow: "0 12px 26px -22px rgba(21, 45, 40, 0.5)" } : { elevation: 1 }) }]}>
-        <Feather name="search" size={20} color={p.primary} />
-        <Text numberOfLines={1} style={{ flex: 1, color: p.muted, fontSize: 15 }}>Search anything: a property, job, tool or page</Text>
-        {isWeb && <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, borderWidth: 1, borderColor: p.border }}><Text style={{ color: p.muted, fontSize: 11, fontWeight: "600" }}>{SEARCH_SHORTCUT}</Text></View>}
+    <Animated.View pointerEvents={tucked ? "none" : "box-none"} style={{ position: "absolute", right: 16, bottom: lifted ? 172 : 118, zIndex: 20, opacity: away.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), transform: [{ scale: away.interpolate({ inputRange: [0, 1], outputRange: [1, 0.6] }) }] }}>
+      <MotionPress accessibilityRole="button" accessibilityLabel={count ? `Open Favorites, ${count} saved` : "Open Favorites"} onPress={onOpen}
+        style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: p.primary, borderWidth: 1, borderColor: p.headerBorder, ...(isWeb ? { boxShadow: "0 12px 30px -12px rgba(8, 22, 18, 0.55)" } : { elevation: 6 }) }}>
+        <FilledStar size={20} color={p.onPrimary} />
       </MotionPress>
-      {favorites && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-        <MotionPress accessibilityRole="button" accessibilityLabel="Open Favorites" onPress={onFavorites} style={[ui.row, { gap: 7, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.primary }]}>
-          <FilledStar size={15} color={p.onPrimary} /><Text style={{ color: p.onPrimary, fontSize: 13, fontWeight: "700" }}>Favorites{saved.length ? ` · ${saved.length}` : ""}</Text>
-        </MotionPress>
-        {saved.slice(0, 8).map(entry => (
-          <MotionPress key={entry.key} accessibilityRole="button" accessibilityLabel={`Open ${entry.label}`} onPress={() => onOpen(entry)} style={[ui.row, { gap: 7, minHeight: 40, paddingLeft: 6, paddingRight: 14, borderRadius: 999, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }]}>
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={entry.art} size={20} /></View>
-            <Text numberOfLines={1} style={{ color: p.text, fontSize: 13, fontWeight: "600", maxWidth: 180 }}>{entry.label}</Text>
-          </MotionPress>
-        ))}
-        {!saved.length && favorites.loaded && <View style={{ justifyContent: "center", paddingHorizontal: 4 }}><Text style={[ui.small, { color: p.muted }]}>Star anything in search to keep it here.</Text></View>}
-      </ScrollView>}
-    </View>
-  );
-}
-
-// Favorites in the desktop sidebar, under the main pages.
-export function SidebarFavorites({ palette: p, entries, onOpen, onAll }: { palette: Palette; entries: SearchEntry[]; onOpen: (entry: SearchEntry) => void; onAll: () => void }) {
-  const favorites = useFavorites();
-  if (!favorites) return null;
-  const saved = resolveFavorites(favorites.items, entries).flatMap(f => f.entry ? [f.entry] : []);
-  return (
-    <View style={{ gap: 2, marginTop: 22 }}>
-      <View style={[ui.between, { paddingHorizontal: 12, minHeight: 32 }]}>
-        <Text style={{ color: p.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>Your favorites</Text>
-        {saved.length > 8 && <MotionPress accessibilityRole="button" accessibilityLabel="See all favorites" onPress={onAll} style={{ minHeight: 32, justifyContent: "center" }}><Text style={{ color: p.primary, fontSize: 12, fontWeight: "700" }}>All {saved.length}</Text></MotionPress>}
-      </View>
-      {saved.slice(0, 8).map(entry => (
-        <MotionPress key={entry.key} {...(isWeb ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={`Open ${entry.label}`} onPress={() => onOpen(entry)} style={[ui.row, { gap: 10, minHeight: 42, paddingHorizontal: 10, borderRadius: 12 }]}>
-          <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={entry.art} size={20} /></View>
-          <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 13, fontWeight: "500" }}>{entry.label}</Text>
-        </MotionPress>
-      ))}
-      {!saved.length && favorites.loaded && <Text style={{ color: p.muted, fontSize: 12, lineHeight: 18, paddingHorizontal: 12 }}>Star a page, tool, property or job in search and it appears here.</Text>}
-    </View>
+    </Animated.View>
   );
 }
 
