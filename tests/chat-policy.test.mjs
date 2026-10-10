@@ -4,7 +4,7 @@ import {createServer} from 'vite';
 
 // What a chat request may carry, and how message times read.
 const vite=await createServer({configFile:false,server:{middlewareMode:true,hmr:false}});
-const {chatActionSchema,chatReadSchema,chatTime}=await vite.ssrLoadModule('/lib/workspace-chat-policy.ts');
+const {chatActionSchema,chatReadSchema,chatTime,channelsFirst,conversationSchema,CHANNEL_ORDER}=await vite.ssrLoadModule('/lib/workspace-chat-policy.ts');
 const {backendRouteAllowed}=await vite.ssrLoadModule('/worker/backend-route-policy.ts');
 after(()=>vite.close());
 const id='11111111-1111-4111-8111-111111111111';
@@ -26,4 +26,16 @@ test('message times read naturally in UK time',()=>{
  assert.equal(chatTime('2026-10-08T13:05:00Z',now),'14:05');
  assert.equal(chatTime('2026-10-06T13:05:00Z',now),'Tue');
  assert.equal(chatTime('2026-09-20T13:05:00Z',now),'20 Sept');
+});
+
+test('team channels: the open request is strict, and channels list first in their own order',()=>{
+ assert.ok(chatActionSchema.safeParse({action:'openTeams'}).success);
+ assert.ok(!chatActionSchema.safeParse({action:'openTeams',department:'ready'}).success);
+ const make=(n,department)=>({id:'22222222-2222-4222-8222-22222222222'+n,kind:'group',department,title:String(n),subtitle:null,propertyId:null,workId:null,propertyName:null,lastMessageAt:'2026-10-10T09:00:00Z',unread:0,last:null});
+ const parsed=conversationSchema.parse({...make(1,null),department:undefined});
+ assert.equal(parsed.department,null,'an older reply without a department is a normal conversation');
+ const list=[make(1,null),make(2,'accounts'),make(3,null),make(4,'all'),make(5,'cleaning')];
+ assert.deepEqual(channelsFirst(list).map(c=>c.title),['4','5','2','1','3'],'Everyone, Cleaning, Accounts, then the rest as they were');
+ assert.deepEqual([...CHANNEL_ORDER],['all','management','guest_relations','client_relations','cleaning','ready','accounts']);
+ assert.ok(!conversationSchema.safeParse(make(1,'finance')).success);
 });

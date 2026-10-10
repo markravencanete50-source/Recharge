@@ -10,7 +10,7 @@ import { ui, type Palette } from "./theme";
 import { readChat, readInbox, writeChat } from "./backend/client";
 import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
-import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, threadSchema, type ChatMessage, type Conversation } from "../../lib/workspace-chat-policy";
+import { channelsFirst, chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, threadSchema, type ChatMessage, type Conversation } from "../../lib/workspace-chat-policy";
 import { inboxListSchema } from "../../lib/guest-inbox-policy";
 import { ALL_PROPERTIES, CHAT_CHIPS, chipCounts, conversationFacts, emptyMessage, filterInbox, propertyChips } from "../../lib/inbox-filters";
 import { InboxChips } from "./InboxChips";
@@ -135,7 +135,7 @@ function Thread({ p, id, onBack, onChanged, savedReplies = false }: { p: Palette
       </View>
       <ScrollView ref={scroll} style={{ flex: 1, maxHeight: Platform.OS === "web" ? 520 : undefined }} contentContainerStyle={{ gap: 10, paddingVertical: 6 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
         {!thread ? <Loading p={p} rows={2} /> : thread.messages.length ? thread.messages.map(m => <Bubble key={m.id} p={p} m={m} showName={c?.kind !== "direct"} />)
-          : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property. The team usually replies within minutes during the day." : "Say hello. Messages are only seen by the people in this conversation."}</Text>}
+          : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property. The team usually replies within minutes during the day." : c?.department ? (c.department === "all" ? "Everyone on the team can read and write here. Use it for announcements." : `Everyone in ${c.title} can read and write here. Admins can read it too.`) : "Say hello. Messages are only seen by the people in this conversation."}</Text>}
       </ScrollView>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.title, property: c.propertyName }} onInsert={reply => setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply)} />}
@@ -215,7 +215,8 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   // Owners go straight to their conversation with Recharge.
   useEffect(() => {
     queueMicrotask(() => {
-      void loadList();
+      // The team channels are made the first time anyone on the team opens Messages.
+      if (owner) void loadList(); else writeChat({ action: "openTeams" }).catch(() => undefined).finally(() => void loadList());
       if (owner) writeChat({ action: "startOwner" }).then(r => setOpen(conversationSchema.parse(r.data).id)).catch(e => setError(message(e)));
     });
   }, [loadList, owner]);
@@ -244,7 +245,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const propertyOptions = propertyChips(inTab, facts, names, chip);
   const where = propertyOptions.some(x => x.id === property) ? property : ALL_PROPERTIES;
   // The conversation open beside the list stays listed while it is read, so it does not jump away.
-  const matching = filterInbox(inTab, facts, chip, where), shown = inTab.filter(c => matching.includes(c) || (desktop && c.id === open));
+  const matching = filterInbox(inTab, facts, chip, where), shown = channelsFirst(inTab.filter(c => matching.includes(c) || (desktop && c.id === open)));
   const listView = (
     <View style={{ gap: 4, width: desktop ? 340 : "100%" }}>
       <View style={[ui.between, { paddingBottom: 6, gap: 12 }]}>

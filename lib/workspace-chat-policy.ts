@@ -22,6 +22,8 @@ export const chatActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('startOwner'), ownerId: uuid.optional() }).strict(),
   z.object({ action: z.literal('send'), requestId: uuid, conversationId: uuid, body: z.string().trim().min(1, 'Write a message').max(4000, 'Messages can be up to 4,000 characters') }).strict(),
   z.object({ action: z.literal('markRead'), conversationId: uuid }).strict(),
+  // Makes the team channels (Everyone and each department) the first time anyone opens Messages.
+  z.object({ action: z.literal('openTeams') }).strict(),
   // The team conversation for a property, or for one job there.
   z.object({ action: z.literal('startProperty'), propertyId: uuid, workId: uuid.optional() }).strict(),
   // Saved replies: a new one, or a change to one (with the version it was read at).
@@ -30,8 +32,11 @@ export const chatActionSchema = z.discriminatedUnion('action', [
 ]);
 export type ChatAction = z.infer<typeof chatActionSchema>;
 
+// Team channels: Everyone, and one for each department, always listed first and in this order.
+export const CHANNEL_ORDER = ['all', 'management', 'guest_relations', 'client_relations', 'cleaning', 'ready', 'accounts'] as const;
+export const channelSchema = z.enum(CHANNEL_ORDER);
 export const conversationSchema = z.object({
-  id: uuid, kind: z.enum(['direct', 'group', 'owner']), title: z.string(), subtitle: z.string().nullable(), propertyId: uuid.nullable(), workId: uuid.nullable(),
+  id: uuid, kind: z.enum(['direct', 'group', 'owner']), department: channelSchema.nullable().default(null), title: z.string(), subtitle: z.string().nullable(), propertyId: uuid.nullable(), workId: uuid.nullable(),
   propertyName: z.string().nullable(), lastMessageAt: z.string(), unread: z.number(),
   last: z.object({ body: z.string(), authorName: z.string(), at: z.string(), fromOwner: z.boolean().optional() }).nullable(),
   // For the inbox chips: the reader's own conversation (a member, has written, or looks after the
@@ -39,6 +44,11 @@ export const conversationSchema = z.object({
   mine: z.boolean().optional(), propertyIds: z.array(uuid).default([]),
 });
 export type Conversation = z.infer<typeof conversationSchema>;
+// The channels first, in their fixed order, then everything else as the list gave it (newest first).
+export function channelsFirst<T extends { department: (typeof CHANNEL_ORDER)[number] | null }>(items: readonly T[]): T[] {
+  const rank = (c: T) => c.department ? CHANNEL_ORDER.indexOf(c.department) : CHANNEL_ORDER.length;
+  return items.map((item, i) => ({ item, i })).sort((a, b) => rank(a.item) - rank(b.item) || a.i - b.i).map(x => x.item);
+}
 export const messageSchema = z.object({ id: uuid, body: z.string(), at: z.string(), mine: z.boolean(), authorName: z.string(), fromOwner: z.boolean() });
 export type ChatMessage = z.infer<typeof messageSchema>;
 export const threadSchema = z.object({ conversation: conversationSchema, messages: z.array(messageSchema) });
