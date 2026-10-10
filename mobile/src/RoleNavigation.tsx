@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { PersonAvatar } from './ChatParts';
 import { Animated, Platform, ScrollView, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
@@ -96,9 +97,11 @@ function RoleCard({panel,palette:p,viewing,onBack,backLabel='Back to my view'}:{
 
 // The live workspace's desktop left panel: the role's own heading and groups (lib/role-panel.ts).
 // While a super admin views as someone, it is that person's or role's panel, marked as a view.
-export function RoleNavigation({panel,selected,palette:p,onOpen,onProfile,onCollapse,badges={},viewing,onBack,backLabel}:{
+export function RoleNavigation({panel,selected,palette:p,onOpen,onProfile,onCollapse,badges={},viewing,onBack,backLabel,me}:{
   panel:RolePanel;selected:string;palette:Palette;onOpen:(link:PanelLink)=>void;onProfile:()=>void;onCollapse:()=>void;
   badges?:Record<string,number>;viewing?:{name:string;detail:string}|null;onBack?:()=>void;backLabel?:string;
+  // Your photo on the profile button, when you have one.
+  me?:{name:string;userId:string;photo:string|null};
 }) {
   return <View testID="workspace-sidebar" style={{width:264,backgroundColor:p.isDark?p.surface:p.background,borderRightWidth:1,borderColor:p.border}}>
     <View testID="sidebar-brand" style={[ui.between,{height:81,paddingHorizontal:16,gap:12,backgroundColor:p.header,borderBottomWidth:1,borderColor:p.isDark?p.border:p.header}]}><CompanyLogo palette={p} width={144}/><MotionPress accessibilityRole="button" accessibilityLabel="Hide left panel" accessibilityState={{expanded:true}} onPress={onCollapse} style={[ui.iconButton,{width:44,height:44,borderRadius:14,backgroundColor:p.headerControl,borderColor:p.headerBorder}]}><Feather name="chevrons-left" size={18} color={p.headerControlText}/></MotionPress></View>
@@ -107,8 +110,8 @@ export function RoleNavigation({panel,selected,palette:p,onOpen,onProfile,onColl
       {panel.groups.map(group=><Group key={group.title} group={group} selected={selected} palette={p} badges={badges} onOpen={onOpen}/>)}
     </ScrollView>
     <MotionPress {...hover} accessibilityRole="button" accessibilityLabel="Open profile and preferences" onPress={onProfile} style={[ui.row,{gap:12,margin:14,padding:12,borderRadius:18,borderWidth:1,borderColor:p.border,backgroundColor:p.surface,...depth.card}]}>
-      <View style={{width:38,height:38,borderRadius:12,backgroundColor:p.header,alignItems:'center',justifyContent:'center'}}><Feather name="settings" size={17} color={p.headerText}/></View>
-      <View style={{flex:1,minWidth:0}}><Text numberOfLines={1} style={{fontSize:13,fontWeight:'600',color:p.text}}>Profile</Text><Text numberOfLines={1} style={{fontSize:12,color:p.muted}}>Theme and sign out</Text></View>
+      {me?.photo?<PersonAvatar p={p} name={me.name} userId={me.userId} photo={me.photo} size={38}/>:<View style={{width:38,height:38,borderRadius:12,backgroundColor:p.header,alignItems:'center',justifyContent:'center'}}><Feather name="settings" size={17} color={p.headerText}/></View>}
+      <View style={{flex:1,minWidth:0}}><Text numberOfLines={1} style={{fontSize:13,fontWeight:'600',color:p.text}}>Profile</Text><Text numberOfLines={1} style={{fontSize:12,color:p.muted}}>Photo, theme and sign out</Text></View>
       <Feather name="chevron-right" size={16} color={p.muted}/>
     </MotionPress>
   </View>;

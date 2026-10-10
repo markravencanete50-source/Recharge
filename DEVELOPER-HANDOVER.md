@@ -395,6 +395,36 @@ database tool can run it, and it is safe to run more than once.
   *Property type* and *When would you like to get started?* (`lib/client-enquiry.ts`) were not
   visible in the ClickUp screenshots and are sensible placeholders.
 
+## Messages like a messenger: photos, video, reactions, groups, who is online, profiles (10 October 2026)
+
+- **Photos and a video in a message**: up to 5 photos (JPG, PNG, WebP, GIF, 15 MB each) and 1 video
+  (MP4, MOV, WebM, up to 50 MB), with or without words. The app asks for one-off upload links
+  (`prepareFiles` on `/api/{workspace,mobile}/chat`, `lib/chat-media-server.ts`) and sends each file
+  straight to the private `chat-files` bucket, so a 50 MB video never passes through the Worker.
+  Sending claims the files; the database checks each stored object's size and type against the
+  limits first (`private.chat_attach`). Files are opened with signed links valid for an hour
+  (`/api/{workspace,mobile}/chat-files?ids=…`), only for people who can read the conversation.
+  Files added but never sent are let go after 6 hours (and when taken out before sending).
+  In the browser videos play inline; the phone app opens them in the phone's own player.
+- **Reactions**: 👍 ❤️ 😂 😮 😢 🙏 🎉 ✅, one per person per message (the same again takes it off).
+  Hover a message (or long-press on phones) for the smiley; tap a reaction to add or take off yours.
+- **Groups**: anyone on the team starts a group (a name is optional; unnamed groups are called
+  after their people), sees who is in any conversation (the faces in the thread header), and adds
+  people to a group they are in. Whoever started it, or an admin, removes people; anyone leaves.
+  Adding people to a one-to-one starts a new group. Each change shows as a line in the group
+  ("Fiona added Ewan"), never counted as unread or notified. Team channels list their whole
+  department; their membership still follows the rota.
+- **Who is online**: the app checks in once a minute while open and in view (`heartbeat`, never in
+  the demo or while viewing as someone). A green dot shows on people seen in the last 2½ minutes;
+  otherwise "Active 5m ago". Owners are not shown the team's comings and goings.
+- **Your profile** (Profile & preferences → Your profile): a photo (JPG, PNG or WebP up to 5 MB,
+  checked from its bytes, kept in the private `avatars` bucket), a colour behind your initials and a
+  line about you (160 characters). Names and emails still change only in Access control. Photos
+  show in Messages, the toolbar and the left panel (`/api/{workspace,mobile}/profile?userId=…`).
+  Deleting an account clears its photo and line; a copy of your data includes them.
+- Migration `20261010310000_chat_media_presence.sql`; tests `tests/chat-media-database.test.mjs`.
+  The Help button no longer shows in Messages (it covered the send button).
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

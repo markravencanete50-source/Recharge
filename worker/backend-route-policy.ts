@@ -24,6 +24,8 @@ const endpoints = new Set([
   "/api/workspace/checklists", "/api/mobile/checklists",
   // Client Enquiries: the landlord's form (no account), and the team opening the files sent with it.
   "/enquiry", "/api/enquiry", "/api/enquiry/upload", "/api/workspace/enquiry-files", "/api/mobile/enquiry-files",
+  // Messages photos and videos, and profile photos.
+  "/api/workspace/chat-files", "/api/mobile/chat-files", "/api/workspace/profile", "/api/mobile/profile",
   "/privacy", "/terms", "/delete-account", "/api/session/delete-account", "/api/workspace/privacy", "/api/mobile/privacy",
   "/workspace", "/favicon.svg", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
 ]);

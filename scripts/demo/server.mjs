@@ -137,6 +137,9 @@ function serviceClient() {
       },
       download: async file => { const bytes = await storageGet(bucket, file).catch(() => null); return bytes ? { data: new Blob([bytes]), error: null } : { data: null, error: { message: 'Object not found', statusCode: '404' } }; },
       createSignedUrl: async (file, _expires, options = {}) => ({ data: { signedUrl: `${current().origin}/devstack-storage/${bucket}/${file.split('/').map(encodeURIComponent).join('/')}${options.download ? `?download=${encodeURIComponent(options.download)}` : ''}` }, error: null }),
+      createSignedUrls: async files => ({ data: files.map(file => ({ path: file, error: null, signedUrl: `${current().origin}/devstack-storage/${bucket}/${file.split('/').map(encodeURIComponent).join('/')}` })), error: null }),
+      // One-off upload links (Messages photos and videos): the browser PUTs the file to the devstack.
+      createSignedUploadUrl: async file => ({ data: { path: file, token: 'devstack', signedUrl: `${current().origin}/devstack-storage-upload/${bucket}/${file.split('/').map(encodeURIComponent).join('/')}?token=devstack` }, error: null }),
       remove: async files => { for (const file of files) await storageRemove(bucket, file).catch(() => undefined); return { data: [], error: null }; },
     }) },
   };
@@ -287,7 +290,7 @@ async function publicApi(req, res, url, origin, file) {
   return response.status;
 }
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.mjs': 'application/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain', '.pdf': 'application/pdf', '.mp4': 'video/mp4' };
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain', '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.webp': 'image/webp', '.gif': 'image/gif' };
 function serveStatic(req, res, url) {
   if (!STATIC) return send(res, 404, `<p>No web build: start with <code>--static &lt;dir&gt;</code> (an <code>expo export --platform web</code> output built with EXPO_PUBLIC_WORKSPACE_WEB=same-origin).</p>`);
   const relative = decodeURIComponent(url.pathname.replace(/^\/workspace\/?/, ''));
@@ -359,6 +362,15 @@ const server = http.createServer(async (req, res) => {
       const file = p.startsWith('/harness/') ? path.join(HARNESS, path.basename(p)) : path.join(ROOT, 'public', p.startsWith('/fonts/') ? 'fonts' : '', path.basename(p));
       if (!existsSync(file)) status = send(res, 404, { error: 'Not found' }) ?? 404;
       else { res.writeHead(200, { 'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache' }); createReadStream(file).pipe(res); status = 200; }
+    }
+    else if (p.startsWith('/devstack-storage-upload/') && req.method === 'PUT') {
+      // A file sent with a one-off upload link (at most 50 MB, like the real bucket).
+      const [bucket, ...rest] = p.slice('/devstack-storage-upload/'.length).split('/').map(decodeURIComponent);
+      const chunks = []; let size = 0;
+      for await (const chunk of req) { size += chunk.length; if (size > 52428800) break; chunks.push(chunk); }
+      if (size > 52428800) status = send(res, 413, { error: 'Payload too large' }) ?? 413;
+      else if (await storageGet(bucket, rest.join('/')).catch(() => null)) status = send(res, 409, { error: 'The resource already exists' }) ?? 409;
+      else { await storagePut(bucket, rest.join('/'), Buffer.concat(chunks)); status = send(res, 200, { Key: `${bucket}/${rest.join('/')}` }) ?? 200; }
     }
     else if (p.startsWith('/devstack-storage/')) {
       // What a signed storage URL points at (course files).

@@ -39,3 +39,16 @@ test('team channels: the open request is strict, and channels list first in thei
  assert.deepEqual([...CHANNEL_ORDER],['all','management','guest_relations','client_relations','cleaning','ready','accounts']);
  assert.ok(!conversationSchema.safeParse(make(1,'finance')).success);
 });
+
+test('photos, videos, reactions, groups and profiles: strict requests and their routes', () => {
+ assert.ok(chatActionSchema.safeParse({action:'send',requestId:id,conversationId:id,body:'',attachments:[id]}).success,'photos with no words');
+ assert.ok(!chatActionSchema.safeParse({action:'send',requestId:id,conversationId:id,body:''}).success,'never nothing');
+ assert.ok(!chatActionSchema.safeParse({action:'react',messageId:id,emoji:'🍕'}).success,'only the listed reactions');
+ assert.ok(chatActionSchema.safeParse({action:'prepareFiles',conversationId:id,files:[{name:'a.mp4',mime:'video/mp4',bytes:50*1024*1024}]}).success);
+ assert.ok(!chatActionSchema.safeParse({action:'prepareFiles',conversationId:id,files:[{name:'a.mp4',mime:'video/mp4',bytes:50*1024*1024+1}]}).success,'50 MB at most');
+ assert.ok(!chatActionSchema.safeParse({action:'prepareFiles',conversationId:id,files:[{name:'a.svg',mime:'image/svg+xml',bytes:10}]}).success,'photos and videos only');
+ assert.ok(chatActionSchema.safeParse({action:'startGroup',userIds:[id]}).success,'a group needs no name');
+ assert.ok(chatActionSchema.safeParse({action:'addMembers',conversationId:id,userIds:[id]}).success);
+ assert.ok(chatReadSchema.safeParse({section:'members',conversationId:id}).success);
+ for(const path of ['/api/workspace/chat-files','/api/mobile/chat-files','/api/workspace/profile','/api/mobile/profile'])assert.ok(backendRouteAllowed(path),path);
+});

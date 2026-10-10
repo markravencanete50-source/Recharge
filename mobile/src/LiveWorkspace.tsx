@@ -10,6 +10,8 @@ import { ListSearchBox, SearchBox, useListSearch } from "./SearchPicker";
 import { normalise } from "../../lib/search-options";
 import { CompanyLogo } from "./CompanyLogo";
 import { Avatar, type Profile } from "./AccountSetup";
+import { PersonAvatar } from "./ChatParts";
+import { ProfileEditor, usePresenceHeartbeat } from "./ProfileSettings";
 import { FeatureTile } from "./Artwork";
 import { RoleNavigation } from "./RoleNavigation";
 import { rolePanel, type PanelLink } from "../../lib/role-panel";
@@ -183,7 +185,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     untuck.current = setTimeout(() => setTucked(false), 900);
   };
   useEffect(() => () => { if (untuck.current) clearTimeout(untuck.current); }, []);
-  const profile: Profile = { displayName: account.fullName || account.email || "Your profile", avatar: "forest" };
+  const profile: Profile = { displayName: account.fullName || account.email || "Your profile", avatar: account.avatar };
+  // Who is online in Messages: this app checks in every minute while it is open (not in the demo or while viewing as someone).
+  usePresenceHeartbeat(!demo && !viewAs);
   const roleLabel = readableStage(account.role);
 
   useEffect(() => {
@@ -517,7 +521,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const ownerActions = { unread: chatUnread, openForm: setForm };
   const title = tab === "work" && currentView ? WORK_VIEW_LABEL[currentView] : panel.groups.flatMap(g => g.links).find(l => l.kind === "page" && l.section === tab)?.label ?? nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
   // The floating Help button; the page leaves room under its last item while it shows.
-  const showFaq = !faqShortcut.hidden && tab !== "help" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help")));
+  // Not in Messages, where it would sit over the send button.
+  const showFaq = !faqShortcut.hidden && tab !== "help" && tab !== "inbox" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help")));
   // On phones the team's Favorites button floats just above Help (or where Help would be).
   const showFavorites = !desktop && team && tab !== "favorites";
   return (
@@ -525,7 +530,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <FavoritesContext.Provider value={team ? favorites : null}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
-        {desktop && !sidebarHidden && <RoleNavigation panel={panel} selected={panelSelected} palette={p} onOpen={openPanel} badges={{ "page:inbox": messagesBadge }} viewing={panelViewing} onBack={demo ? () => (viewAs ? void onViewAs(null) : onDemo(false)) : viewAs ? () => void onViewAs(null) : undefined} backLabel={demo && !viewAs ? "Switch to Live" : undefined} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} />}
+        {desktop && !sidebarHidden && <RoleNavigation panel={panel} selected={panelSelected} palette={p} onOpen={openPanel} badges={{ "page:inbox": messagesBadge }} viewing={panelViewing} onBack={demo ? () => (viewAs ? void onViewAs(null) : onDemo(false)) : viewAs ? () => void onViewAs(null) : undefined} backLabel={demo && !viewAs ? "Switch to Live" : undefined} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} me={{ name: profile.displayName, userId: account.userId, photo: account.photo }} />}
         {desktop && sidebarHidden && <View style={{ width: 64, backgroundColor: p.isDark ? p.surface : p.background, borderRightWidth: 1, borderColor: p.border }}><View style={{ height: 81, alignItems: "center", justifyContent: "center", backgroundColor: p.header }}><IconButton label="Show left panel" icon="chevrons-right" palette={header} onPress={() => setSidebarHidden(false)} /></View></View>}
         <View {...(Platform.OS === "web" ? { dataSet: { canvas: "" } } : {})} style={[ui.fill, { minWidth: 0 }]}>
           {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Photos are saved on this device; other changes will fail until you reconnect.</Text></View>}
@@ -549,7 +554,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
                 {(desktop || width >= 440) && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
                 <MotionPress accessibilityRole="button" accessibilityLabel={`Open profile and preferences, ${roleLabel}`} onPress={() => setSettings(true)} style={{ minHeight: 48, minWidth: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: desktop ? 14 : 0, borderRadius: 999, backgroundColor: desktop ? p.headerControl : "transparent", borderWidth: desktop ? 1 : 0, borderColor: p.headerBorder }}>
                   {desktop && <View style={{ maxWidth: 180 }}><Text numberOfLines={1} style={{ color: p.headerText, fontSize: 14, fontWeight: "600" }}>{profile.displayName}</Text><Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 11 }}>{roleLabel}</Text></View>}
-                  <Avatar profile={profile} backgroundColor={desktop ? undefined : p.headerControl} textColor={desktop ? "#FFFFFF" : p.headerControlText} />
+                  {account.photo ? <PersonAvatar p={p} name={profile.displayName} userId={account.userId} photo={account.photo} /> : <Avatar profile={profile} backgroundColor={desktop ? undefined : p.headerControl} textColor={desktop ? "#FFFFFF" : p.headerControlText} />}
                 </MotionPress>
               </View>
             </View>
@@ -572,12 +577,16 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <Sheet palette={p} visible={settings} onClose={() => { setSettings(false); setConfirmOut(false); }} title="Profile & preferences" subtitle="Your account and comfort settings" icon="people">
         <View style={{ borderRadius: 22, padding: 18, gap: 6, backgroundColor: p.header, overflow: "hidden" }}>
           <View style={[ui.row, { gap: 14 }]}>
-            <Avatar profile={profile} size={56} backgroundColor={p.headerControl} textColor={p.headerControlText} />
+            {account.photo ? <PersonAvatar p={p} name={profile.displayName} userId={account.userId} photo={account.photo} size={56} /> : <Avatar profile={profile} size={56} backgroundColor={p.headerControl} textColor={p.headerControlText} />}
             <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
               <Text numberOfLines={1} style={{ color: p.headerText, fontSize: 18, fontWeight: "700", letterSpacing: -0.4 }}>{profile.displayName}</Text>
               <Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 13 }}>{roleLabel}{account.email ? " · " + account.email : ""}</Text>
             </View>
           </View>
+        </View>
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: p.muted, fontSize: 11, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>Your profile</Text>
+          <ProfileEditor p={p} account={realAccount} onAccount={onAccount} />
         </View>
         <View style={{ gap: 8 }}>
           {Platform.OS === "web" && <>

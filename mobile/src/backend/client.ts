@@ -1,14 +1,14 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { z } from "zod";
-import { workspaceAccountSchema, type WorkspaceAccount } from "../../../lib/workspace-account-policy";
+import { workspaceAccountSchema, type ProfileAction, type WorkspaceAccount } from "../../../lib/workspace-account-policy";
 import type { BusinessAction } from "../../../lib/business-policy";
 import type { AnalyticsPeriod } from "../../../lib/analytics";
 import type { OperationsAction } from "../../../lib/operations-policy";
 import type { FinanceAction } from '../../../lib/workspace-finance-policy';
 import type { TeamsAction } from '../../../lib/workspace-teams-policy';
 import type { AdminAction } from '../../../lib/workspace-admin-policy';
-import type { ChatAction } from '../../../lib/workspace-chat-policy';
+import { chatFileLinksSchema, type ChatAction } from '../../../lib/workspace-chat-policy';
 import type { InboxAction } from '../../../lib/guest-inbox-policy';
 import type { OversightAction } from '../../../lib/oversight-policy';
 import type { ChecklistAction } from '../../../lib/clean-checklist-policy';
@@ -150,7 +150,7 @@ function demoResponse(path: string, body: unknown) {
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
 export const viewMode = () => ({ readOnly: viewOnly !== "" || demo !== null, person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|profile|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (demo) return demoResponse(path, body);
   // While a super admin views the app as someone else nothing is saved (this device's own
   // notification link aside), so trying the screens never changes the business's records.
@@ -235,6 +235,45 @@ export const writeNotifications = async (body: { action: 'subscribe'; endpoint: 
 // Messages: conversations, a conversation's messages, people to message, and sending.
 export const readChat = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/chat?' + new URLSearchParams(query))).json();
 export const writeChat = async (action: ChatAction) => (await workspaceRequest('/api/mobile/chat', action)).json();
+// Photos and videos in Messages: links to open them (for an hour, kept here so pictures don't
+// reload), and sending a file straight to storage with its one-off upload link.
+const fileLinks = new Map<string, { url: string; mime: string; name: string; kind: 'image' | 'video'; until: number }>();
+export async function chatFileLinks(ids: string[]) {
+  const now = Date.now(), wanted = [...new Set(ids)].filter(id => !((fileLinks.get(id)?.until ?? 0) > now));
+  if (demo) for (const id of wanted) fileLinks.set(id, { url: demoPhoto(id), mime: 'image/svg+xml', name: 'Sample photo', kind: 'image', until: now + 3600_000 });
+  else for (let i = 0; i < wanted.length; i += 60) {
+    const found = chatFileLinksSchema.parse((await (await workspaceRequest('/api/mobile/chat-files?' + new URLSearchParams({ ids: wanted.slice(i, i + 60).join(',') }))).json()).data);
+    for (const [id, link] of Object.entries(found)) fileLinks.set(id, { ...link, until: now + 50 * 60_000 });
+  }
+  return new Map(ids.flatMap(id => { const link = fileLinks.get(id); return link ? [[id, link] as const] : []; }));
+}
+export async function uploadToLink(uploadUrl: string, file: { uri: string; file?: File; type: string }, onProgress?: (share: number) => void) {
+  const body: Blob = Platform.OS === 'web' && file.file ? file.file : await (await fetch(file.uri)).blob();
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    xhr.setRequestHeader('Content-Type', file.type); xhr.setRequestHeader('x-upsert', 'false'); xhr.setRequestHeader('Cache-Control', 'max-age=3600');
+    xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress?.(e.loaded / e.total); };
+    xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new WorkspaceApiError(xhr.status === 413 ? 'This file is too large.' : 'The upload did not finish. Try again.', xhr.status));
+    xhr.onerror = () => reject(new WorkspaceApiError('The upload did not finish. Check your connection and try again.', 0));
+    xhr.send(body);
+  });
+}
+// Profile photos: where to load someone's photo from (null in the demo), and changing your own.
+export async function profilePhotoSource(userId: string, version: string): Promise<{ uri: string; headers?: Record<string, string> } | null> {
+  if (demo) return null;
+  const path = '/api/mobile/profile?' + new URLSearchParams({ userId, v: version });
+  if (sameOriginWeb) return { uri: webWorkspacePath(path) };
+  if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
+  return { uri: liveApiOrigin() + path, headers: { Authorization: `Bearer ${session!.accessToken}`, 'X-Recharge-Client': 'native' } };
+}
+export const writeProfile = async (action: ProfileAction) => workspaceAccountSchema.parse((await (await workspaceRequest('/api/mobile/profile', action)).json()).data);
+export async function uploadProfilePhoto(photo: { uri: string; name: string; type: string; file?: File }) {
+  const form = new FormData();
+  if (Platform.OS === 'web') form.append('photo', photo.file ?? new File([await (await fetch(photo.uri)).blob()], photo.name, { type: photo.type }));
+  else form.append('photo', { uri: photo.uri, name: photo.name, type: photo.type } as unknown as Blob);
+  return workspaceAccountSchema.parse((await (await workspaceRequest('/api/mobile/profile', form)).json()).data);
+}
 // Course files (Training centre): admins upload; everyone the course is for opens them by a short link.
 export async function uploadCourseFile(courseId: string, file: { uri: string; name: string; mimeType?: string; file?: File }) {
   const form = new FormData();

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, Platform, ScrollView, TextInput, View } from "react-native";
+import { AppState, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
@@ -11,7 +11,8 @@ import { depth, primaryFill, ui, type Palette } from "./theme";
 import { readChat, readInbox, viewMode, writeChat } from "./backend/client";
 import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
-import { channelsFirst, chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, threadSchema, type ChatMessage, type Conversation } from "../../lib/workspace-chat-policy";
+import { channelsFirst, chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, presenceLabel, presenceOf, threadSchema, type ChatMessage, type ChatReaction, type Conversation } from "../../lib/workspace-chat-policy";
+import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
 import { inboxListSchema } from "../../lib/guest-inbox-policy";
 import { ALL_PROPERTIES, CHAT_CHIPS, chipCounts, conversationFacts, emptyMessage, filterInbox, propertyChips } from "../../lib/inbox-filters";
 import { InboxChips } from "./InboxChips";
@@ -30,7 +31,6 @@ type Tab = "guests" | "clients" | "team";
 const TAB_LABEL: Record<Tab, string> = { guests: "Guests", clients: "Clients", team: "Team" };
 const TAB_ICON = { guests: "globe", clients: "home", team: "users" } as const;
 const tabOf = (c: Conversation): Tab => c.kind === "owner" ? "clients" : "team";
-const initials = (name: string) => name.replace(/^Recharge · /, "").trim().split(/\s+/).slice(0, 2).map(w => w[0] ?? "").join("").toUpperCase() || "R";
 const roleName = (role: string) => ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role;
 
 function useVisiblePoll(run: () => void, every: number, active: boolean) {
@@ -58,19 +58,11 @@ export function useGuestWaiting(account: WorkspaceAccount) {
   return { waiting: enabled ? waiting : 0, reload: load };
 }
 
-function Avatar({ p, name, kind }: { p: Palette; name: string; kind: Conversation["kind"] }) {
-  return (
-    <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: kind === "owner" ? p.cautionWash : p.wash }}>
-      {kind === "group" ? <Feather name="users" size={18} color={p.primary} /> : <Text style={{ color: p.text, fontWeight: "700" }}>{initials(name)}</Text>}
-    </View>
-  );
-}
-
 function ConversationRow({ p, c, active, onPress }: { p: Palette; c: Conversation; active: boolean; onPress: () => void }) {
   return (
     <MotionPress accessibilityRole="button" accessibilityLabel={`${c.title}${c.unread ? `, ${c.unread} unread` : ""}`} onPress={onPress}
       style={[ui.row, { gap: 12, padding: 12, borderRadius: 16, backgroundColor: active ? p.wash : "transparent" }]}>
-      <Avatar p={p} name={c.title} kind={c.kind} />
+      <ConversationAvatar p={p} c={c} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <View style={[ui.row, { gap: 8 }]}>
           <Text numberOfLines={1} style={{ color: p.text, fontWeight: c.unread ? "800" : "700", flex: 1 }}>{c.title}</Text>
@@ -78,7 +70,7 @@ function ConversationRow({ p, c, active, onPress }: { p: Palette; c: Conversatio
         </View>
         <View style={[ui.row, { gap: 8 }]}>
           <Text numberOfLines={1} style={[ui.small, { color: c.unread ? p.text : p.muted, flex: 1, fontWeight: c.unread ? "600" : "400" }]}>
-            {c.last ? `${c.kind !== "direct" || c.last.authorName === "You" ? c.last.authorName + ": " : ""}${c.last.body}` : c.propertyName ? `About ${c.propertyName}` : c.subtitle ?? "No messages yet"}
+            {c.last ? c.last.kind === "event" ? `${c.last.authorName} ${c.last.body}` : `${c.kind !== "direct" || c.last.authorName === "You" ? c.last.authorName + ": " : ""}${c.last.body}` : c.propertyName ? `About ${c.propertyName}` : c.subtitle ?? "No messages yet"}
           </Text>
           {c.unread > 0 && <View style={{ minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: p.primary, alignItems: "center", justifyContent: "center" }}><Text style={{ color: p.surface, fontSize: 12, fontWeight: "800" }}>{c.unread > 99 ? "99+" : c.unread}</Text></View>}
         </View>
@@ -87,22 +79,47 @@ function ConversationRow({ p, c, active, onPress }: { p: Palette; c: Conversatio
   );
 }
 
-function Bubble({ p, m, showName }: { p: Palette; m: ChatMessage; showName: boolean }) {
+function Bubble({ p, m, showName, readOnly, reacting, onReacting, onReact }: { p: Palette; m: ChatMessage; showName: boolean; readOnly: boolean; reacting: boolean; onReacting: (open: boolean) => void; onReact: (emoji: string) => void }) {
+  // A line about the group ("Fiona added Isla"), in the middle.
+  if (m.kind === "event") return <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 4 }]}>{m.authorName} {m.body} · {chatTime(m.at)}</Text>;
+  const mine = m.mine, words = m.body.trim().length > 0, current = m.reactions.find(r => r.mine)?.emoji ?? null;
+  const react = !readOnly && (
+    <View {...(Platform.OS === "web" ? { dataSet: { chatTools: "true" } } : {})} style={{ alignSelf: "center" }}>
+      <MotionPress accessibilityRole="button" accessibilityLabel="React to this message" onPress={() => onReacting(!reacting)}
+        style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: reacting ? p.wash : "transparent" }}>
+        <Feather name="smile" size={17} color={p.muted} />
+      </MotionPress>
+    </View>
+  );
   return (
     // Each message rises in once, the first time it appears.
-    <Entrance sessionKey={"chat:" + m.id} style={{ alignItems: m.mine ? "flex-end" : "flex-start", gap: 3 }}>
-      {showName && !m.mine && <Text style={[ui.small, { color: p.muted, fontWeight: "700", marginLeft: 6 }]}>{m.authorName}</Text>}
-      <View style={[{ maxWidth: "82%", paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, borderBottomRightRadius: m.mine ? 6 : 20, borderBottomLeftRadius: m.mine ? 20 : 6, borderWidth: m.mine ? 0 : 1, borderColor: p.border }, m.mine ? primaryFill(p) : { backgroundColor: p.surface, ...depth.card }]}>
-        <Text selectable style={{ color: m.mine ? p.onPrimary : p.text, fontSize: 15, lineHeight: 21 }}>{m.body}</Text>
+    <Entrance sessionKey={"chat:" + m.id} style={{ alignItems: mine ? "flex-end" : "flex-start", gap: 3 }}>
+      {showName && !mine && <Text style={[ui.small, { color: p.muted, fontWeight: "700", marginLeft: 44 }]}>{m.authorName}</Text>}
+      {reacting && <View style={{ marginLeft: mine ? 0 : 38 }}><ReactionPicker p={p} current={current} onPick={e => { onReacting(false); onReact(e); }} /></View>}
+      <View {...(Platform.OS === "web" ? { dataSet: { chatRow: "true" } } : {})} style={[ui.row, { gap: 6, alignItems: "flex-end", width: "100%", flexDirection: mine ? "row-reverse" : "row" }]}>
+        {!mine && <PersonAvatar p={p} name={m.authorName} userId={m.authorId} photo={m.authorPhoto} size={30} />}
+        <Pressable onLongPress={readOnly ? undefined : () => onReacting(true)} delayLongPress={350} style={{ maxWidth: "78%", gap: 4, alignItems: mine ? "flex-end" : "flex-start" }}>
+          {!!m.attachments.length && <Attachments p={p} items={m.attachments} mine={mine} />}
+          {words && <View style={[{ paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, borderBottomRightRadius: mine ? 6 : 20, borderBottomLeftRadius: mine ? 20 : 6, borderWidth: mine ? 0 : 1, borderColor: p.border }, mine ? primaryFill(p) : { backgroundColor: p.surface, ...depth.card }]}>
+            <Text selectable style={{ color: mine ? p.onPrimary : p.text, fontSize: 15, lineHeight: 21 }}>{m.body}</Text>
+          </View>}
+        </Pressable>
+        {react}
       </View>
-      <Text style={{ color: p.muted, fontSize: 11, marginHorizontal: 6 }}>{chatTime(m.at)}</Text>
+      <View style={{ marginHorizontal: mine ? 0 : 38 }}><ReactionChips p={p} reactions={m.reactions} mine={mine} onToggle={e => { if (!readOnly) onReact(e); }} /></View>
+      <Text style={{ color: p.muted, fontSize: 11, marginHorizontal: mine ? 6 : 44 }}>{chatTime(m.at)}</Text>
     </Entrance>
   );
 }
 
-function Thread({ p, id, onBack, onChanged, savedReplies = false }: { p: Palette; id: string; onBack?: () => void; onChanged: () => void; savedReplies?: boolean }) {
+function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false }: { p: Palette; id: string; onBack?: () => void; onChanged: () => void; onOpen: (c: Conversation) => void; onLeft: () => void; savedReplies?: boolean }) {
   const [thread, setThread] = useState<z.infer<typeof threadSchema> | null>(null);
   const [text, setText] = useState(""), [sending, setSending] = useState(false), [error, setError] = useState("");
+  const [reacting, setReacting] = useState<string | null>(null), [people, setPeople] = useState(false);
+  const [readOnly] = useState(() => viewMode().readOnly);
+  const narrow = useWindowDimensions().width < 560;
+  const files = useChatUploads(id);
+  const { members, reload: reloadMembers } = useMembers(id);
   const scroll = useRef<ScrollView>(null), lastSeen = useRef("");
   const load = useCallback(async () => {
     try {
@@ -118,43 +135,72 @@ function Thread({ p, id, onBack, onChanged, savedReplies = false }: { p: Palette
   }, [id, onChanged]);
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
   useVisiblePoll(() => void load(), THREAD_EVERY, true);
+  // Reactions show straight away, then the conversation's own copy replaces them.
+  async function react(messageId: string, emoji: string) {
+    const toggle = (list: ChatReaction[]): ChatReaction[] => {
+      const had = list.find(r => r.mine)?.emoji, out = list.map(r => r.mine ? { ...r, count: r.count - 1, mine: false, names: r.names.filter(n => n !== "You") } : r).filter(r => r.count > 0);
+      if (had === emoji) return out;
+      const at = out.find(r => r.emoji === emoji);
+      return at ? out.map(r => r === at ? { ...r, count: r.count + 1, mine: true, names: [...r.names, "You"] } : r) : [...out, { emoji, count: 1, mine: true, names: ["You"] }];
+    };
+    setThread(t => t && { ...t, messages: t.messages.map(m => m.id === messageId ? { ...m, reactions: toggle(m.reactions) } : m) });
+    try { await writeChat({ action: "react", messageId, emoji: emoji as never }); } catch (e) { setError(message(e)); }
+    void load();
+  }
   // A ref (not state) guards against a second tap or Enter in the same instant, and the request id is
   // kept until the message is sent, so a retry after a timeout never posts it twice.
-  const inFlight = useRef(false), pending = useRef<{ body: string; requestId: string } | null>(null);
+  const inFlight = useRef(false), pending = useRef<{ key: string; requestId: string } | null>(null);
+  const canSend = (text.trim().length > 0 || files.ready.length > 0) && !files.uploading && !files.failed && !sending;
   async function send() {
-    const body = text.trim();
-    if (!body || inFlight.current) return;
+    const body = text.trim(), attachments = files.ready;
+    if ((!body && !attachments.length) || files.uploading || files.failed || inFlight.current) return;
     inFlight.current = true; setSending(true); setError("");
-    if (pending.current?.body !== body) pending.current = { body, requestId: Crypto.randomUUID() };
-    try { await writeChat({ action: "send", requestId: pending.current.requestId, conversationId: id, body }); pending.current = null; setText(""); await load(); onChanged(); }
+    const key = body + "|" + attachments.join();
+    if (pending.current?.key !== key) pending.current = { key, requestId: Crypto.randomUUID() };
+    try {
+      await writeChat({ action: "send", requestId: pending.current.requestId, conversationId: id, body, ...(attachments.length ? { attachments } : {}) });
+      pending.current = null; setText(""); files.clear(); await load(); onChanged();
+    }
     catch (e) { setError(message(e)); } finally { inFlight.current = false; setSending(false); }
   }
+  async function attach() { setError(""); const problem = await files.pick().catch(e => message(e)); if (problem) setError(problem); }
   const c = thread?.conversation;
+  const seen = c?.kind === "direct" ? presenceLabel(c.peer?.seenAt) : "";
+  const subtitle = c ? [seen || c.subtitle, c.propertyName ? `About ${c.propertyName}` : null].filter(Boolean).join(" · ") || (c.kind === "owner" ? "Owner conversation" : "Direct message") : "";
   return (
     <View style={{ flex: 1, minHeight: 420, gap: 10 }}>
       <View style={[ui.row, { gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderColor: p.border }]}>
         {onBack && <MotionPress accessibilityRole="button" accessibilityLabel="Back to messages" onPress={onBack} style={{ minWidth: 40, minHeight: 40, alignItems: "center", justifyContent: "center" }}><Feather name="chevron-left" size={22} color={p.text} /></MotionPress>}
-        {c && <Avatar p={p} name={c.title} kind={c.kind} />}
+        {c && <MotionPress accessibilityRole="button" accessibilityLabel="See who is in this conversation" onPress={() => setPeople(true)}><ConversationAvatar p={p} c={c} /></MotionPress>}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={{ color: p.text, fontWeight: "800", fontSize: 16 }}>{c?.title ?? "…"}</Text>
-          {!!c && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{[c.subtitle, c.propertyName ? `About ${c.propertyName}` : null].filter(Boolean).join(" · ") || (c.kind === "owner" ? "Owner conversation" : "Direct message")}</Text>}
+          {!!c && <Text numberOfLines={1} style={[ui.small, { color: presenceOf(c.peer?.seenAt) === "online" && c.kind === "direct" ? p.success : p.muted }]}>{subtitle}</Text>}
         </View>
+        {c && members && c.kind !== "direct" && !(c.kind === "owner" && c.title === "Recharge") && <MemberFaces p={p} members={members} compact={narrow} onPress={() => setPeople(true)} />}
+        {c && c.kind === "direct" && !readOnly && <MotionPress accessibilityRole="button" accessibilityLabel="Add people (starts a group)" onPress={() => setPeople(true)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: p.border }}><Feather name="user-plus" size={17} color={p.text} /></MotionPress>}
       </View>
-      <ScrollView ref={scroll} style={{ flex: 1, maxHeight: Platform.OS === "web" ? 520 : undefined }} contentContainerStyle={{ gap: 10, paddingVertical: 6 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
-        {!thread ? <Loading p={p} rows={2} /> : thread.messages.length ? thread.messages.map(m => <Bubble key={m.id} p={p} m={m} showName={c?.kind !== "direct"} />)
+      <ScrollView ref={scroll} style={{ flex: 1, maxHeight: Platform.OS === "web" ? 560 : undefined }} contentContainerStyle={{ gap: 10, paddingVertical: 6 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
+        {!thread ? <Loading p={p} rows={2} /> : thread.messages.length ? thread.messages.map(m => <Bubble key={m.id} p={p} m={m} showName={c?.kind !== "direct"} readOnly={readOnly} reacting={reacting === m.id} onReacting={on => setReacting(on ? m.id : null)} onReact={e => void react(m.id, e)} />)
           : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property. The team usually replies within minutes during the day." : c?.department ? (c.department === "all" ? "Everyone on the team can read and write here. Use it for announcements." : `Everyone in ${c.title} can read and write here. Admins can read it too.`) : "Say hello. Messages are only seen by the people in this conversation."}</Text>}
       </ScrollView>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.title, property: c.propertyName }} onInsert={reply => setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply)} />}
+      <PendingFiles p={p} items={files.items} onRemove={files.remove} onRetry={files.retry} />
       <View style={[ui.row, { gap: 8, alignItems: "flex-end" }]}>
-        <TextInput value={text} onChangeText={setText} placeholder="Write a message" placeholderTextColor={p.muted} multiline maxLength={4000} accessibilityLabel="Message"
+        {!readOnly && <MotionPress accessibilityRole="button" accessibilityLabel="Add photos or a video (up to 5 photos and 1 video of 50 MB)" onPress={() => void attach()}
+          style={{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}>
+          <Feather name="image" size={19} color={p.primary} />
+        </MotionPress>}
+        <TextInput value={text} onChangeText={setText} placeholder={files.items.length ? "Add a message (optional)" : "Write a message"} placeholderTextColor={p.muted} multiline maxLength={4000} accessibilityLabel="Message"
           onKeyPress={e => { const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean }; if (Platform.OS === "web" && key.key === "Enter" && !key.shiftKey) { (e as unknown as { preventDefault: () => void }).preventDefault(); void send(); } }}
           style={{ flex: 1, minHeight: 46, maxHeight: 140, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 18, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 15 }} />
-        <MotionPress accessibilityRole="button" accessibilityLabel="Send" disabled={!text.trim() || sending} onPress={() => void send()}
-          style={[{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" }, text.trim() ? primaryFill(p) : { backgroundColor: p.wash }]}>
-          <Feather name="send" size={19} color={text.trim() ? p.onPrimary : p.muted} />
+        <MotionPress accessibilityRole="button" accessibilityLabel={files.uploading ? "Send (waiting for uploads)" : "Send"} disabled={!canSend} onPress={() => void send()}
+          style={[{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" }, canSend ? primaryFill(p) : { backgroundColor: p.wash }]}>
+          <Feather name="send" size={19} color={canSend ? p.onPrimary : p.muted} />
         </MotionPress>
       </View>
+      {people && c && <MembersSheet p={p} conversation={c} members={members} onClose={() => setPeople(false)} onChanged={() => { void reloadMembers(); void load(); onChanged(); }}
+        onLeft={() => { setPeople(false); onLeft(); }} onOpen={next => { setPeople(false); onOpen(next); }} />}
     </View>
   );
 }
@@ -172,7 +218,7 @@ function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette;
   const team = only === "owners" ? [] : (people?.team ?? []).filter(x => match(x.fullName)), owners = only === "team" ? [] : (people?.owners ?? []).filter(x => match(x.fullName));
   const group = picked.length > 1;
   return (
-    <Sheet palette={p} visible onClose={onClose} title="New message" subtitle={only === "owners" ? "Choose an owner you look after" : "Choose one person, or several for a group"} icon="people">
+    <Sheet palette={p} visible onClose={onClose} title="New message" subtitle={only === "owners" ? "Choose an owner you look after" : "Choose one person, or several to start a group chat"} icon="people">
       <TextInput value={query} onChangeText={setQuery} placeholder="Search by name" placeholderTextColor={p.muted} accessibilityLabel="Search people" style={{ minHeight: 46, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, color: p.text, fontFamily: "Montserrat_500Medium" }} />
       {!people && !error && <Loading p={p} />}
       {people && !team.length && !owners.length && <Text style={[ui.small, { color: p.muted }]}>{query.trim() ? "Nobody matches." : only === "owners" ? "No owners to message yet. You can message the owners of the properties you look after." : "Nobody to message yet."}</Text>}
@@ -182,26 +228,29 @@ function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette;
         return (
           <MotionPress key={x.userId} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => setPicked(on ? picked.filter(y => y !== x.userId) : [...picked, x.userId])}
             style={[ui.row, { gap: 12, minHeight: 52, paddingHorizontal: 12, borderRadius: 14, backgroundColor: on ? p.wash : p.elevated }]}>
+            <PersonAvatar p={p} name={x.fullName} userId={x.userId} photo={x.photo} size={34} online={presenceOf(x.seenAt) === "online"} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600" }}>{x.fullName}</Text>
+              <Text numberOfLines={1} style={[ui.small, { color: presenceOf(x.seenAt) === "online" ? p.success : p.muted }]}>{[roleName(x.role), presenceLabel(x.seenAt) || null].filter(Boolean).join(" · ")}</Text>
+            </View>
             <Feather name={on ? "check-circle" : "circle"} size={20} color={on ? p.primary : p.muted} />
-            <Text style={{ color: p.text, flex: 1, fontWeight: "600" }}>{x.fullName}</Text>
-            <Text style={[ui.small, { color: p.muted }]}>{roleName(x.role)}</Text>
           </MotionPress>
         );
       })}
       {group && <>
-        <Field label="Group name" value={title} onChange={setTitle} p={p} placeholder="For example: Weekend changeovers" />
+        <Field label="Group name (optional)" value={title} onChange={setTitle} p={p} placeholder="Leave empty to name it after its people" />
         {!!properties.length && <View style={{ gap: 6 }}>
           <Text style={[ui.small, { color: p.muted, fontWeight: "700" }]}>About a property (optional)</Text>
           <PropertySelect p={p} properties={properties} value={propertyId} onChange={setPropertyId} clearable empty="" />
         </View>}
       </>}
-      {!!picked.length && <Button label={busy ? "Starting…" : group ? `Start group with ${picked.length} people` : "Start conversation"} icon="message-circle" primary p={p} disabled={busy || (group && title.trim().length < 2)}
-        onPress={() => void start(group ? { action: "startGroup", title: title.trim(), userIds: picked, ...(propertyId ? { propertyId } : {}) } : { action: "startDirect", userId: picked[0] })} />}
+      {!!picked.length && <Button label={busy ? "Starting…" : group ? `Start group with ${picked.length} people` : "Start conversation"} icon="message-circle" primary p={p} disabled={busy || (group && title.trim().length === 1)}
+        onPress={() => void start(group ? { action: "startGroup", ...(title.trim() ? { title: title.trim() } : {}), userIds: picked, ...(propertyId ? { propertyId } : {}) } : { action: "startDirect", userId: picked[0] })} />}
       {!!owners.length && <>
         <Text style={[ui.small, { color: p.muted, fontWeight: "700", paddingTop: 6 }]}>Owners you look after</Text>
         {owners.map(x => <MotionPress key={x.userId} accessibilityRole="button" onPress={() => void start({ action: "startOwner", ownerId: x.userId })}
           style={[ui.row, { gap: 12, minHeight: 52, paddingHorizontal: 12, borderRadius: 14, backgroundColor: p.elevated }]}>
-          <Feather name="home" size={18} color={p.primary} /><Text style={{ color: p.text, flex: 1, fontWeight: "600" }}>{x.fullName}</Text><Feather name="chevron-right" size={18} color={p.muted} />
+          <PersonAvatar p={p} name={x.fullName} userId={x.userId} photo={x.photo} size={34} online={presenceOf(x.seenAt) === "online"} /><Text style={{ color: p.text, flex: 1, fontWeight: "600" }}>{x.fullName}</Text><Feather name="chevron-right" size={18} color={p.muted} />
         </MotionPress>)}
       </>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
@@ -310,7 +359,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       </View>
     </View>
   );
-  const thread = (id: string, back?: () => void) => <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} />;
+  const thread = (id: string, back?: () => void) => <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} onOpen={c => { setOpen(c.id); void loadList(); }} onLeft={() => { setOpen(null); void loadList(); }} />;
   return (
     <View style={{ gap: 12 }}>
       {tabBar}
