@@ -49,7 +49,8 @@ export function channelsFirst<T extends { department: (typeof CHANNEL_ORDER)[num
   const rank = (c: T) => c.department ? CHANNEL_ORDER.indexOf(c.department) : CHANNEL_ORDER.length;
   return items.map((item, i) => ({ item, i })).sort((a, b) => rank(a.item) - rank(b.item) || a.i - b.i).map(x => x.item);
 }
-export const messageSchema = z.object({ id: uuid, body: z.string(), at: z.string(), mine: z.boolean(), authorName: z.string(), fromOwner: z.boolean() });
+export const messageSchema = z.object({ id: uuid, body: z.string(), at: z.string(), mine: z.boolean(), authorName: z.string(), // Only owner conversations have an owner to compare with, so older replies may leave this empty.
+  fromOwner: z.boolean().nullish().transform(v => v ?? false) });
 export type ChatMessage = z.infer<typeof messageSchema>;
 export const threadSchema = z.object({ conversation: conversationSchema, messages: z.array(messageSchema) });
 export const chatPeopleSchema = z.object({ team: z.array(z.object({ userId: uuid, fullName: z.string(), role: z.string() })), owners: z.array(z.object({ userId: uuid, fullName: z.string(), role: z.string() })) });

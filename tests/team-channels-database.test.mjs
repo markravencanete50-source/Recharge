@@ -1,10 +1,13 @@
-import test, { beforeEach } from 'node:test';
+import test, { after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import { createServer } from 'vite';
 
 // Team channels in Messages: Everyone and one per department, found by rota department or by
 // role, readable by admins, heard once until read, and never open to owners.
+const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
+const { threadSchema } = await vite.ssrLoadModule('/lib/workspace-chat-policy.ts');
 const db = new PGlite();
 const roles = ['super_admin', 'stays', 'stays', 'cleans', 'ready', 'accounts', 'client', 'cleaning_manager'];
 const names = ['Admin', 'Client Rel', 'Plain Stays', 'Cleaner', 'Ready Person', 'Accounts Person', 'Owner', 'Cleaning Mgr'];
@@ -29,6 +32,7 @@ async function as(i) {
   await db.query("select set_config('request.jwt.claims',$1,false)", [JSON.stringify({ sub: users[i], session_id: session(i) })]);
   await db.exec('set role authenticated');
 }
+after(async () => { await db.close(); await vite.close(); });
 beforeEach(async () => { await db.exec('reset role'); await db.exec('delete from private.workspace_write_limits'); });
 const read = async (section, target = null) => (await db.query('select public.workspace_chat_read($1,$2) r', [section, target])).rows[0].r;
 const act = async input => (await db.query('select public.workspace_chat_action($1::jsonb) r', [JSON.stringify(input)])).rows[0].r;
@@ -100,4 +104,18 @@ test('Everyone and Management reach the right people', async () => {
   await db.query("insert into private.workspace_staff_rota(user_id,department,usual_shift) values($1,'management','early') on conflict(user_id) do update set department='management'", [users[PLAIN_STAYS]]);
   await as(PLAIN_STAYS);
   assert.deepEqual(await channels(), ['all', 'management'], 'a rota department of management puts them in Management');
+});
+
+test('direct messages and channel threads pass the app\'s own check (no empty fromOwner)', async () => {
+  await as(CLEANER);
+  const direct = await act({ action: 'startDirect', userId: users[CLEAN_MGR] });
+  await send(direct.id, 'Can you cover Saturday?');
+  const channel = (await read('list')).find(c => c.department === 'cleaning');
+  for (const id of [direct.id, channel.id]) {
+    const raw = await read('messages', id);
+    assert.ok(raw.messages.length >= 1 && raw.messages.every(m => m.fromOwner === false), 'false, not empty');
+    const parsed = threadSchema.parse(raw);
+    assert.ok(parsed.messages.every(m => m.fromOwner === false));
+  }
+  assert.equal(threadSchema.parse({ conversation: (await read('messages', direct.id)).conversation, messages: [{ id: crypto.randomUUID(), body: 'x', at: '2026-10-10T09:00:00Z', mine: true, authorName: 'You', fromOwner: null }] }).messages[0].fromOwner, false, 'an older reply with an empty value is still accepted');
 });
