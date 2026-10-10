@@ -242,6 +242,34 @@ Migration `20261010230000_sweep_fixes` (applied live) and app fixes:
   (property type and room suggestions, listing titles) for the enquiry form and a listing-style
   property view. They are not wired into the screens yet.
 
+## Payouts list: approve in place, date filter, approve all (10 October 2026)
+
+Migration `20261010280000_bulk_payout_approval.sql` (**not applied live yet**). Apply it before the
+app build with this list goes out, and redeploy the backend, which validates `agreePayouts`. It has
+no deletes, so the SQL editor or the database tool can run it, and it is safe to run more than once.
+- **Screen** (`mobile/src/PayoutStays.tsx`, used by Accounts, Payouts in `LiveAccounts.tsx`): bold,
+  aligned Expected, Received and Difference; an **Approve £x** button on each row that sends
+  `agreePayout` without opening anything; a search box (above eight stays, like the shared `List`)
+  that matches the property, reference, platform code, date, status and amounts
+  (`payoutSearchText`); filters by status and by check-in date; **Approve all** for the dates chosen,
+  or for the month shown when none are chosen. What is in view is the search, then the status, then
+  the dates, and the figures, the chip counts, the list and Approve all all read that one set, so the
+  button never reaches a stay the list does not show. Stays paid a different amount are left out
+  unless the person ticks the box in the confirmation sheet.
+- **Rules** (`payoutApproval`, `filterPayouts`, `bulkPayoutPlan` and the rest in
+  `lib/accounts-live.ts`) repeat what the database checks. The amount on a button is the amount sent.
+- **Bulk action:** `agreePayouts` runs `private.workspace_agree_payouts`: 1 to 500 stays in one
+  transaction (the app sends 250 per request), skipped stays counted and not failed, and one request
+  counted as one change against the 60 a minute limit.
+- **Hover and focus:** list rows use `data-hover="row"` and `"rowhit"` (`lib/design-tokens.ts`): a
+  quiet background on hover and a bar at the left edge on keyboard focus, with no outline box. Other
+  buttons keep the 2px focus outline. The shared `SearchBox` (`SearchPicker.tsx`) shows focus with its
+  own thicker border instead of the browser's ring, which used to draw a second box inside it. `Row` in `LiveAccounts.tsx` carries `data-hover="row"` too, so
+  the other lists built on it lose the box in the same way.
+- **Tests:** `tests/payout-list-helpers.test.mjs` and `tests/payout-bulk-approval-database.test.mjs`.
+- **More detail:** `docs/BACKEND-FINANCE-AND-TEAMS-2026-10-07.md`, under Payouts and Approving
+  payouts in bulk.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

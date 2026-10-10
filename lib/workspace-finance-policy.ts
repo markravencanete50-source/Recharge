@@ -9,6 +9,8 @@ const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Choose a month');
 const date = z.string().refine(value => Boolean(parseAnalyticsDate(value)), 'Choose a valid date');
 const text = (min: number, max: number) => z.string().trim().min(min).max(max);
 const note = text(5, 2000);
+// The most stays one bulk approval carries; the screen sends longer lists in several requests.
+export const BULK_PAYOUT_LIMIT = 500;
 
 export const financeReadSchema = z.object({
   section: z.enum(['overview', 'expenses', 'expense', 'reconciliation', 'statements', 'policy', 'jobs']),
@@ -42,6 +44,10 @@ export const financeActionSchema = z.discriminatedUnion('action', [
   // The uploaded CSV is parsed here; the database receives one total per reservation code.
   z.object({ action: z.literal('importPayoutReport'), requestId: id, channel, fileName: text(1, 200), csv: z.string().min(1).max(250000) }).strict(),
   z.object({ action: z.literal('agreePayout'), requestId: id, reservationId: id, version, agreedMinor: money, note }).strict(),
+  // Approve many stays at once (the Payouts list's "Approve all"). The database works out each amount: the expected payout for a
+  // stay not paid yet, the amount received for one paid a different amount, which is only included when asked for.
+  z.object({ action: z.literal('agreePayouts'), requestId: id, note: text(5, 1900), includeDifferent: z.boolean().optional(),
+    items: z.array(z.object({ reservationId: id, version }).strict()).min(1).max(BULK_PAYOUT_LIMIT) }).strict(),
   z.object({ action: z.literal('setAsidePayoutLine'), requestId: id, lineId: id, note }).strict(),
   z.object({ action: z.literal('prepareStatement'), requestId: id, propertyId: id, period }).strict(),
   z.object({ action: z.literal('issueStatement'), requestId: id, statementId: id, version }).strict(),

@@ -61,6 +61,8 @@ role. The future Xero worker uses it to record a posted or failed bill.
    `matched`, `different`, `missing`, `no_reference`, `no_expected_amount` or `agreed`, plus
    report lines that match no reservation.
    - `agreePayout` records the agreed amount with a note.
+   - `agreePayouts` does the same for many stays in one request (see "Approving payouts in
+     bulk" below).
    - An agreement lapses automatically if a later report changes that reservation's total.
    - `setAsidePayoutLine` parks an unmatched line with a reason.
 4. **Terms.** `setStatementTerms` (management) stores the management fee and cleaning cost
@@ -228,8 +230,44 @@ statements are paid. The rules live in `lib/accounts-live.ts` and match the data
 - **Stays missing details:** new stays are saved as direct with no payout, so they are listed here
   until Accounts adds the platform and reservation code, or the payout for a direct stay. They
   block the owner statement until then.
-- **Platform stays** show matched, agreed, different, not received, or needing a code.
-  - Tap one to agree the payout with a note, or to add its missing code or expected amount.
+- **Platform stays** (`mobile/src/PayoutStays.tsx`) lists every confirmed platform stay for the
+  month. The screen calls an agreed payout "Approved"; the database still says `agreed`.
+  - **The figures.** Expected, Received and Difference are bold and line up in columns (stacked
+    and labelled when the screen is narrow). Difference is received minus expected: red with a minus sign when
+    the platform paid less, amber with a plus sign when it paid more, and a dash when either
+    amount is not known yet.
+  - **Approve in place.** A stay that has not been paid yet, or was paid a different amount, has an
+    **Approve £x** button on its row, so nothing has to be opened. The amount on the button is the
+    amount that is sent: the expected payout for a stay not paid yet, the amount received for a
+    stay paid a different amount. It is `agreePayout` with a standard note, so the database makes
+    the same checks. As soon as the server accepts it the row shows Approved, and it leaves the
+    To approve list. Only accounts, admins and super admins see the button.
+  - **Add details** takes the button's place on a stay that has no platform code or no expected
+    payout. Tapping the rest of a row opens the sheet, to approve with your own amount and note
+    or to add the missing details. A matched stay has nothing to open.
+  - **Search.** Above eight stays a search box appears, as on every other long list. Every word
+    typed must appear somewhere in what a row shows: the property, the reference, the platform and
+    its code, the check-in date, the status or an amount, in any order and any case. "pitt 1 oct"
+    finds the stays at Pitt Street that check in on 1 October.
+  - **Filters.** The first row of chips is To approve (the default), Approved or matched, or All.
+    The second is the check-in date, with a count on each chip. Choose one date, several, or none
+    (every date in the month). The search, the filters, the figures at the top, the counts on the
+    chips, the list and Approve all all follow the same set of stays, so a search never leaves
+    Approve all reaching a stay that is not on the screen. With a search typed, the button reads
+    `Approve 12 matching`, and the summary names what was searched for.
+  - **Approve all.** One button for what is in view. Its label says what it will do:
+    `Approve all 150`, `Approve 9 on Fri 2 Oct`, `Approve 13 on 2 dates`. "All" is the month in
+    the month switcher, so use the switcher for another month. It opens a summary and asks for a
+    note before anything is sent.
+    - Stays not paid yet are approved at their expected amount.
+    - Stays paid a different amount are left for you to check one by one, unless you tick
+      "Also approve the stays paid a different amount". Then each is approved at the amount
+      received.
+    - Stays that need details are always skipped.
+    - The summary afterwards says how many were approved, for how much, and why any were left.
+  - **Hover and keyboard focus.** A row takes one quiet background on hover. Keyboard focus
+    shows a bar at the left edge of the row, not the outline box that other buttons get
+    (`data-hover="row"` and `"rowhit"` in `lib/design-tokens.ts`).
 - **Unmatched payouts** can be set aside with a reason.
 
 **Statements:**
@@ -241,6 +279,32 @@ statements are paid. The rules live in `lib/accounts-live.ts` and match the data
 - Record the bank transfer with its reference.
 - A draft can be voided by Accounts; only management can void an issued one. If the owner owes
   the balance, no payout is offered.
+
+### Approving payouts in bulk
+
+`20261010280000_bulk_payout_approval.sql` adds `private.workspace_agree_payouts` and the
+`agreePayouts` action (`lib/workspace-finance-policy.ts`). **It is not applied to the live Supabase
+project yet.** Apply it before the app build that has the Payouts list goes out. Until then the
+per-row **Approve** buttons work, and "Approve all" says that it needs a database update.
+- One request holds 1 to 500 stays and runs in one transaction. The app sends 250 at a time.
+- Every stay gets the checks a single approval gets: the same roles, module and property access,
+  the version the person saw must still match, and nothing changes once the month's statement is
+  issued or paid.
+- A stay that changed, is already settled, still needs details, or has a different amount (unless
+  `includeDifferent` is set) is skipped and counted in the reply. It is never a failure.
+- Each approved stay gets its own agreement row and activity entry. The note is the person's note,
+  then "Approved at the amount received." or "Approved at the expected amount, before the payout
+  arrived."
+- The database limits each person to 60 changes a minute, counted per row written. One bulk request
+  counts as one change, and the row counting is paused for its own writes only (the setting
+  `recharge.bulk_write` is local to the transaction). The HTTP limit of 60 requests a minute is
+  unchanged.
+- The backend checks the request with the schema in `lib/workspace-finance-policy.ts`
+  (`lib/workspace-finance-server.ts`), so redeploy it as well as applying the migration.
+
+Tests: `tests/payout-bulk-approval-database.test.mjs` runs the function in PGlite, and
+`tests/payout-list-helpers.test.mjs` covers the row rules, the date filter and the plan that the
+screen shows before it sends anything (`lib/accounts-live.ts`).
 
 ### New database change: stays missing details
 

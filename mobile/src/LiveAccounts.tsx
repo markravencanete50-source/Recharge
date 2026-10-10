@@ -1,5 +1,5 @@
 import { Children, isValidElement, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ScrollView, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
@@ -15,8 +15,9 @@ import { formatCount, formatMoney } from "../../lib/format";
 import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { PayoutExamples, StatementFiles } from "./AccountsFiles";
+import { PayoutStays } from "./PayoutStays";
 import {
-  EVIDENCE_KINDS, EXPENSE_CATEGORIES, PAYOUT_LABEL, expenseMoves, expenseSchema, isFinanceRole, expensesSchema, jobsSchema, monthLabel, overviewSchema, policySchema, pounds,
+  CHANNEL_LABEL, EVIDENCE_KINDS, EXPENSE_CATEGORIES, expenseMoves, expenseSchema, isFinanceRole, expensesSchema, jobsSchema, monthLabel, overviewSchema, policySchema, pounds,
   reconciliationSchema, shiftMonth, statementMoves, statementsSchema, type Expense, type Job, type PayoutRow,
 } from "../../lib/accounts-live";
 import { poundsToMinor } from "../../lib/repairs-live";
@@ -36,7 +37,6 @@ type Tab = "expenses" | "payouts" | "statements";
 
 const STATUS_LABEL: Record<Expense["status"], [string, "good" | "wait" | "bad" | "plain"]> = { draft: ["Draft", "wait"], to_approve: ["To approve", "wait"], queried: ["Queried", "bad"], approved: ["Approved", "good"], rejected: ["Rejected", "plain"] };
 const STATEMENT_LABEL: Record<string, [string, "good" | "wait" | "bad" | "plain"]> = { draft: ["Draft", "wait"], issued: ["Issued to owner", "plain"], paid: ["Paid", "good"], void: ["Void", "bad"] };
-const CHANNEL_LABEL: Record<string, string> = { airbnb: "Airbnb", booking_com: "Booking.com", vrbo: "Vrbo", direct: "Direct", other: "Other" };
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v + "T12:00:00Z"));
 
 // Choices as pills. A short fixed set wraps onto more lines so every option is visible on a phone;
@@ -56,10 +56,11 @@ export function Pills<T extends string>({ p, values, value, onChange, label, wra
 }
 
 // A list row: optional icon, title, supporting line and status tags, with any amount
-// right-aligned in lining figures so columns of money line up.
+// right-aligned in lining figures so columns of money line up. A row that opens something takes a quiet wash on hover
+// and a bar on keyboard focus (lib/design-tokens.ts), not the box other pressables get.
 export function Row({ p, title, detail, amount, tags, onPress, first, icon, tone, art }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean; icon?: IconName; tone?: Tone; art?: DimensionalName }) {
   return (
-    <MotionPress accessibilityRole={onPress ? "button" : undefined} disabled={!onPress} accessibilityLabel={[title, amount, ...(tags ?? []).map(t => t[0])].filter(Boolean).join(", ")} onPress={onPress} style={[ui.row, { gap: 14, paddingVertical: 14, alignItems: tags?.length ? "flex-start" : "center", borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
+    <MotionPress {...(Platform.OS === "web" && onPress ? { dataSet: { hover: "row" } } : {})} accessibilityRole={onPress ? "button" : undefined} disabled={!onPress} accessibilityLabel={[title, amount, ...(tags ?? []).map(t => t[0])].filter(Boolean).join(", ")} onPress={onPress} style={[ui.row, { gap: 14, paddingVertical: 14, alignItems: tags?.length ? "flex-start" : "center", borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
       {art ? <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}><DimensionalIcon name={art} size={34} /></View> : !!icon && <IconChip icon={icon} tone={tone} p={p} />}
       <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{title}</Text>
@@ -459,8 +460,9 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
   const ids = useRef(new Map<string, string>());
   const idFor = (key: string) => { if (!ids.current.has(key)) ids.current.set(key, Crypto.randomUUID()); return ids.current.get(key)!; };
 
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
+  // A quiet reload refreshes the figures without the loading shimmer, so approving a payout does not shift the page.
+  const load = useCallback(async (options?: { quiet?: boolean }) => {
+    if (options?.quiet !== true) { setLoading(true); setError(""); }
     const [o, pol, ex, r, st] = await Promise.allSettled([
       readFinance({ section: "overview", period }), readFinance({ section: "policy" }), readFinance({ section: "expenses", status }),
       readFinance({ section: "reconciliation", period }), readFinance({ section: "statements", period }),
@@ -477,7 +479,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
     take(ex, data => setExpenses(expensesSchema.parse(data)));
     take(r, data => setRec(reconciliationSchema.parse(data)));
     take(st, data => setStatements(statementsSchema.parse(data)));
-    if (problems.length) setError([...new Set(problems)].join(" "));
+    setError(problems.length ? [...new Set(problems)].join(" ") : "");
     setLoading(false);
   }, [period, status]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
@@ -501,6 +503,16 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
     setBusyStatement(key); setError("");
     try { await writeFinance({ ...action, requestId: idFor(key) } as FinanceAction); ids.current.delete(key); await load(); }
     catch (e) { setError(message(e)); } finally { setBusyStatement(""); }
+  }
+  // The full form behind a payout row: add what a stay is missing, or approve with your own amount and a note.
+  // (The row's own Approve button agrees the amount it shows without opening anything.)
+  function openPayout(r: PayoutRow) {
+    if (r.state === "no_reference" || r.state === "no_expected_amount") { setStay({ ...r, propertyName: properties.find(x => x.id === r.propertyId)?.name }); return; }
+    setAsk({
+      title: "Approve the payout", subtitle: `${r.reference} · expected ${pounds(r.expectedMinor)}, received ${pounds(r.receivedMinor)}`, label: "Why this amount is right", min: 5, confirm: "Approve payout",
+      amount: { label: "Amount to approve", initial: (((r.state === "agreed" ? r.agreedMinor : null) ?? r.receivedMinor ?? r.expectedMinor ?? 0) / 100).toFixed(2) },
+      build: (note, minor) => ({ action: "agreePayout", requestId: "", reservationId: r.reservationId, version: r.version, agreedMinor: minor ?? 0, note }),
+    });
   }
 
   const unsettled = (overview?.unsettledPayouts ?? 0) + (overview?.missingDetails ?? 0);
@@ -579,17 +591,8 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
           </List>
         </Section>}
         <Section title="Platform stays" count={rec.rows.filter(r => r.settledMinor === null).length} p={p}>
-          <List p={p} empty="No Airbnb or Booking.com stays this month.">
-            {rec.rows.map((r, i) => (
-              <Row key={r.reservationId} p={p} first={i === 0} title={r.reference} detail={`${CHANNEL_LABEL[r.channel] ?? r.channel}${r.channelReference ? " " + r.channelReference : ""} · ${r.checkIn} · expected ${pounds(r.expectedMinor)}, received ${pounds(r.receivedMinor)}`}
-                amount={r.settledMinor !== null ? pounds(r.settledMinor) : undefined} tags={[PAYOUT_LABEL[r.state]]}
-                onPress={r.state === "matched" ? undefined : () => r.state === "no_reference" || r.state === "no_expected_amount" ? setStay({ ...r, propertyName: properties.find(x => x.id === r.propertyId)?.name }) : setAsk({
-                  title: "Agree the payout", subtitle: `${r.reference} · expected ${pounds(r.expectedMinor)}, received ${pounds(r.receivedMinor)}`, label: "Why this amount is right", min: 5, confirm: "Agree payout",
-                  amount: { label: "Agreed amount", initial: ((r.receivedMinor ?? r.expectedMinor ?? 0) / 100).toFixed(2) },
-                  build: (note, minor) => ({ action: "agreePayout", requestId: "", reservationId: r.reservationId, version: r.version, agreedMinor: minor ?? 0, note }),
-                })} />
-            ))}
-          </List>
+          <PayoutStays p={p} rows={rec.rows} periodLabel={monthLabel(period)} canApprove={isFinanceRole(role)} propertyName={id => properties.find(x => x.id === id)?.name}
+            onOpen={openPayout} onChanged={() => load({ quiet: true })} />
         </Section>
         {rec.unexpected.length > 0 && <Section title="Payouts we could not match" count={rec.unexpected.length} p={p}>
           <List p={p} empty="">

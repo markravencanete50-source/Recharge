@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { TextInput, View } from "react-native";
+import { Platform, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
@@ -12,11 +12,15 @@ import { matchesSearch, normalise, propertyOption, searchOptions, textOfRow, typ
 const SHOW_SEARCH_ABOVE = 8, SHOWN = 12;
 
 export function SearchBox({ p, value, onChange, placeholder }: { p: Palette; value: string; onChange: (v: string) => void; placeholder: string }) {
+  // On the web the browser's own focus ring would sit as a second box inside this one. The box shows focus itself instead: a thicker
+  // border in the primary colour, with the padding one pixel less so the text does not move.
+  const [focused, setFocused] = useState(false);
   return (
-    <View style={[ui.row, { gap: 10, paddingHorizontal: 14, minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background }]}>
+    <View style={[ui.row, { gap: 10, paddingHorizontal: focused ? 13 : 14, minHeight: 48, borderRadius: 14, borderWidth: focused ? 2 : 1, borderColor: focused ? p.primary : p.controlBorder, backgroundColor: p.background }]}>
       <Feather name="search" size={18} color={p.muted} />
       <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={p.muted} accessibilityLabel={placeholder} autoCapitalize="none" autoCorrect={false}
-        style={{ flex: 1, minWidth: 0, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
+        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={{ flex: 1, minWidth: 0, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14, ...(Platform.OS === "web" ? { outlineStyle: "none" } as object : {}) }} />
       {!!value && <MotionPress accessibilityRole="button" accessibilityLabel="Clear the search" onPress={() => onChange("")} style={{ padding: 6 }}>
         <Feather name="x" size={16} color={p.muted} />
       </MotionPress>}
