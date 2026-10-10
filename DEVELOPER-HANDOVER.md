@@ -351,6 +351,7 @@ database tool can run it, and it is safe to run more than once.
   change becomes a request that waits for a super admin; it reaches the timesheet, hours,
   productivity and Team performance only once approved. Declined or withdrawn requests never do.
   Every change is kept with who asked, who decided, the hours before and after, and why.
+- **Live:** applied to the Supabase project on 10 October 2026 (recorded as `productivity`).
 - **Database** (`supabase/migrations/20261010290000_productivity.sql`): `private.workspace_shift_changes`
   (status pending / approved / declined / withdrawn / direct), `workspace_shift_change_action`
   (`editShift`, `addShift`, `closeShift`, `decideShiftChange`, `withdrawShiftChange`; routed from
@@ -379,6 +380,8 @@ database tool can run it, and it is safe to run more than once.
   `NOTIFICATION_FROM_EMAIL` are set (the same settings as notification emails). Without them the
   team makes the link and sends it from their own email (copy, or open the email app filled in).
   Links are built from `APP_ORIGIN`.
+- **Live:** applied to the Supabase project on 10 October 2026 (recorded as `client_enquiries`); the
+  private `enquiry-files` bucket exists.
 - **Database** (`supabase/migrations/20261010300000_client_enquiries.sql`):
   `private.workspace_client_enquiries` keeps only a hash of each link's token. The landlord's side is
   `workspace_enquiry_public` (open, addFile, removeFile, submit), callable only with the service key
