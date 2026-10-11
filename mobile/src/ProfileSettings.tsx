@@ -7,6 +7,7 @@ import { MotionPress } from "./motion";
 import { Button, Field, message, Notice } from "./LiveKit";
 import { avatarColors } from "./AccountSetup";
 import { PersonAvatar } from "./ChatParts";
+import { PhotoCropper } from "./PhotoCropper";
 import { ui, type Palette } from "./theme";
 import { uploadProfilePhoto, viewMode, writeChat, writeProfile } from "./backend/client";
 import { AVATAR_COLOURS, type WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -16,37 +17,50 @@ import { AVATAR_COLOURS, type WorkspaceAccount } from "../../lib/workspace-accou
 const COLOUR_LABEL: Record<(typeof AVATAR_COLOURS)[number], string> = { forest: "Forest", sage: "Sage", ocean: "Ocean", plum: "Plum", clay: "Clay", slate: "Slate" };
 export function ProfileEditor({ p, account, onAccount }: { p: Palette; account: WorkspaceAccount; onAccount: (next: WorkspaceAccount) => void }) {
   const [about, setAbout] = useState(account.about), [busy, setBusy] = useState<"" | "photo" | "remove" | "save">(""), [error, setError] = useState(""), [done, setDone] = useState("");
+  // On the web, a chosen photo opens the crop panel first; phones crop on their own screen.
+  const [cropping, setCropping] = useState<{ uri: string; name: string } | null>(null);
   const readOnly = viewMode().readOnly;
   const name = account.fullName || account.email || "You";
   const keep = (next: WorkspaceAccount) => onAccount({ ...account, avatar: next.avatar, photo: next.photo, about: next.about });
   async function run(kind: "photo" | "remove" | "save", work: () => Promise<WorkspaceAccount | null>, said: string) {
-    if (busy) return;
+    if (busy) return false;
     setBusy(kind); setError(""); setDone("");
-    try { const next = await work(); if (next) { keep(next); setDone(said); } } catch (e) { setError(message(e)); } finally { setBusy(""); }
+    try { const next = await work(); if (next) { keep(next); setDone(said); } return true; } catch (e) { setError(message(e)); return false; } finally { setBusy(""); }
   }
   async function choosePhoto() {
     if (Platform.OS !== "web") { const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) { setError("Allow photo access to choose a profile photo."); return; } }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    const web = Platform.OS === "web";
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: !web, aspect: [1, 1], quality: 0.8 });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
+    // The web crops it here and uploads only the cropped square, so a bigger original is fine.
+    if (web) {
+      if ((asset.fileSize ?? asset.file?.size ?? 0) > 25 * 1024 * 1024) { setError("Choose a photo up to 25 MB."); return; }
+      setError(""); setDone(""); setCropping({ uri: asset.uri, name: asset.fileName || "profile.jpg" }); return;
+    }
     const type = asset.mimeType === "image/png" || asset.mimeType === "image/webp" ? asset.mimeType : "image/jpeg";
     if ((asset.fileSize ?? asset.file?.size ?? 0) > 5 * 1024 * 1024) { setError("Choose a photo up to 5 MB."); return; }
     await run("photo", () => uploadProfilePhoto({ uri: asset.uri, name: asset.fileName || "profile.jpg", type, file: asset.file }), "Photo saved. The team sees it next to your messages.");
   }
+  // The crop panel stays open if the upload fails, so they can try again.
+  async function saveCropped(file: File) {
+    if (await run("photo", () => uploadProfilePhoto({ uri: "", name: "profile.jpg", type: "image/jpeg", file }), "Photo saved. The team sees it next to your messages.")) setCropping(null);
+  }
   const changed = about.trim() !== account.about.trim();
   return (
     <View style={{ gap: 12, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
-      <View style={[ui.row, { gap: 14 }]}>
+      {cropping && <PhotoCropper key={cropping.uri} p={p} source={cropping} busy={busy === "photo"} onCancel={() => setCropping(null)} onChooseAnother={() => void choosePhoto()} onDone={file => void saveCropped(file)} />}
+      {!cropping && <View style={[ui.row, { gap: 14 }]}>
         <PersonAvatar p={p} name={name} userId={account.userId} photo={account.photo} colour={account.avatar} size={72} />
         <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             <Button label={busy === "photo" ? "Uploading…" : account.photo ? "Change photo" : "Add a photo"} icon="camera" primary p={p} disabled={readOnly || !!busy} onPress={() => void choosePhoto()} />
             {!!account.photo && <Button label={busy === "remove" ? "Removing…" : "Remove"} icon="trash-2" p={p} disabled={readOnly || !!busy} onPress={() => void run("remove", () => writeProfile({ action: "clearPhoto" }), "Photo removed.")} />}
           </View>
-          <Text style={[ui.small, { color: p.muted }]}>JPG, PNG or WebP, up to 5 MB. Shown in Messages and People.</Text>
+          <Text style={[ui.small, { color: p.muted }]}>JPG, PNG or WebP. You choose the part that shows. Shown in Messages and People.</Text>
         </View>
-      </View>
-      {!account.photo && <View style={{ gap: 6 }}>
+      </View>}
+      {!account.photo && !cropping && <View style={{ gap: 6 }}>
         <Text style={[ui.small, { color: p.muted, fontWeight: "700" }]}>Colour behind your initials</Text>
         <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           {AVATAR_COLOURS.map(c => {
