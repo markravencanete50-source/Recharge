@@ -27,8 +27,7 @@ create index if not exists workspace_feedback_replier_idx on private.workspace_f
 create index if not exists workspace_feedback_handler_idx on private.workspace_feedback(handled_by);
 alter table private.workspace_feedback enable row level security;
 revoke all on private.workspace_feedback from public,anon,authenticated;
-drop trigger if exists business_write_limit on private.workspace_feedback;
-create trigger business_write_limit before insert or update on private.workspace_feedback for each row execute function private.workspace_enforce_write_limit();
+create or replace trigger business_write_limit before insert or update on private.workspace_feedback for each row execute function private.workspace_enforce_write_limit();
 
 create or replace function private.workspace_feedback_view(f private.workspace_feedback) returns jsonb language sql stable security definer set search_path='' as $fn$
  select jsonb_build_object('id',f.id,'category',f.category,'message',f.message,'status',f.status,'createdAt',f.created_at,'version',f.version,
