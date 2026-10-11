@@ -326,6 +326,16 @@ database tool can run it, and it is safe to run more than once.
 - **Charts** (`mobile/src/Charts.tsx`, `smoothPath`/`smoothArea`/`pathLength` in `lib/report-graphs.ts`):
   monotone curves that draw in, a hover or tap guide with figures, a status ring that sweeps round, bars
   that grow. Home's trend uses the same curves.
+- **Chart tips** (`mobile/src/ChartTip.tsx`): every chart shows exact figures when you point at it (hover
+  on a computer, tap on a phone). `ChartTip` is the small card, kept inside the chart's width; it never
+  catches taps. `useChartFocus()` holds which bar, day or segment is in focus: `press(i)` for charts that
+  aren't buttons themselves (hover and tap toggle), `hover(i)` for charts inside cards that open a page on
+  tap (web hover only, so the tap still navigates), and `leave` clears on mouse-out. `HoverColumns` lays
+  invisible columns over line and area charts so each point can be picked. Used on Home (open tasks trend,
+  waiting bars, work by area, done ring), Reports (sparklines, queue), Productivity (hours columns, month
+  calendar, day timeline), Properties (nights per month, by region), client Reports (earnings by property,
+  12-month bars) and the Estimate split. When adding a chart, give it a tip the same way; small progress
+  bars that already print their numbers don't need one.
 - **Errors** (`lib/error-copy.ts`): server reasons pass through; technical text never reaches the screen.
 
 ## Demo mode (10 October 2026)
