@@ -42,8 +42,8 @@ in the repository.
 
 1. **Create a Hostaway API key.** In Hostaway, open *Settings → Hostaway API* (the account owner
    can do this) and create a key. The same page shows your **Account ID**.
-2. **Choose a webhook password.** Any long random text, at least 24 characters. For example, run
-   `openssl rand -base64 32` and copy the result.
+2. **Choose a webhook password.** At least 24 letters and numbers. For example, run
+   `openssl rand -hex 32` and copy the result.
 3. **Add the three secrets to the backend.** From the project folder, after `npx wrangler login`:
    ```
    npx wrangler secret put HOSTAWAY_ACCOUNT_ID --name recharge-backend
@@ -53,10 +53,14 @@ in the repository.
    Each command asks for the value; paste it there.
 4. **Redeploy the backend** (this also switches on the 15-minute schedule):
    `npm run build && npm run backend:deploy`
-5. **Add the webhook in Hostaway.** In *Settings → Webhooks* (unified webhooks), add:
-   - URL: `https://recharge-backend.markravencanete50.workers.dev/api/hostaway/webhook`
-   - Login: `recharge`
-   - Password: the webhook password from step 2
+5. **Add the webhook in Hostaway.** In *Settings → Integrations → Webhooks* (unified webhooks), add
+   the events `reservation.created` and `reservation.updated` and, as the URL,
+   `https://app.rechargegroup.co.uk/api/hostaway/webhook?key=<webhook password>`.
+   (If the form has Login and Password fields, you can instead leave `?key=…` off and use the login
+   `recharge` with the webhook password.) Make the password letters and numbers only, for example
+   `openssl rand -hex 32`, so it is safe in a web address.
+   The webhook's history log in Hostaway shows each call: 200 is working, 401 is a wrong password,
+   and 503 means the backend has no `HOSTAWAY_WEBHOOK_SECRET` yet.
 6. **Run the first sync.** In the app, open Properties and press **Sync now** on the Hostaway card.
    Imported properties start with nobody assigned, and team members only see assigned properties:
    in Work → Management → People, open each cleaning manager, cleaner or Stays member and press

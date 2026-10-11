@@ -94,6 +94,19 @@ test('the webhook needs its password, ignores other events, and re-fetches the r
   assert.deepEqual(state.calls.map(c => [c.name, c.args.input.trigger, c.args.input.error]), [['workspace_hostaway_sync_failed', 'webhook', 'Hostaway could not be reached. The next sync will try again.']]);
 });
 
+test('the webhook also accepts the password as the key in its address', async () => {
+  reset();
+  const at = (key, auth = null) => hostawayWebhookRoute(new Request('https://backend.example/api/hostaway/webhook' + (key === null ? '' : '?key=' + encodeURIComponent(key)), {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...(auth ? { Authorization: 'Basic ' + btoa(auth) } : {}) }, body: JSON.stringify({ object: 'reservation', event: 'reservation.created', data: { id: 7001 } }) }));
+  for (const key of ['wrong', '', 'a'.repeat(31)]) assert.equal((await at(key)).status, 401, key);
+  // A wrong key is refused even alongside the right Basic password.
+  assert.equal((await at('wrong', 'recharge:' + 'a'.repeat(32))).status, 401);
+  assert.deepEqual(state.fetched, []);
+  assert.deepEqual(await (await at('a'.repeat(32))).json(), { ok: true, synced: true });
+  assert.deepEqual(state.fetched, ['reservation:7001', 'listing:501']);
+  assert.equal(state.calls[0].args.input.trigger, 'webhook');
+});
+
 test('the full sync sends every listing and every stay from 30 days back', async () => {
   reset();
   const summary = await runHostawaySync('schedule');

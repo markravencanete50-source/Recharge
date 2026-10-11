@@ -55,8 +55,10 @@ export async function syncHostawayReservation(id: string): Promise<SyncSummary |
   }
 }
 
-// Hostaway's unified webhook, with the login "recharge" and the password stored as the
-// HOSTAWAY_WEBHOOK_SECRET Worker secret (HTTP Basic authentication).
+// Hostaway's unified webhook. It proves itself with the HOSTAWAY_WEBHOOK_SECRET Worker secret:
+// either as HTTP Basic authentication (login "recharge"), or, where Hostaway's webhook form has
+// no login and password, as the key in the webhook address (…/api/hostaway/webhook?key=<secret>).
+// The body is never trusted either way: the reservation is fetched fresh from Hostaway.
 async function sameSecret(a: string, b: string) {
   const digest = async (value: string) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)));
   const [x, y] = await Promise.all([digest(a), digest(b)]);
@@ -70,7 +72,9 @@ export async function hostawayWebhookRoute(request: Request) {
   const header = request.headers.get('authorization') || '';
   let credentials = '';
   try { credentials = header.startsWith('Basic ') ? atob(header.slice(6).trim()) : ''; } catch { credentials = ''; }
-  if (!(await sameSecret(credentials, `recharge:${secret}`))) return businessResponse({ error: 'Not authorised' }, 401);
+  const key = new URL(request.url).searchParams.get('key');
+  const authorised = key !== null ? await sameSecret(key, secret) : await sameSecret(credentials, `recharge:${secret}`);
+  if (!authorised) return businessResponse({ error: 'Not authorised' }, 401);
   const id = webhookReservationId(await boundedJson(request, 262_144));
   // Other events (messages, listings) are acknowledged so Hostaway doesn't retry them.
   if (!id) return businessResponse({ ok: true, ignored: true });
