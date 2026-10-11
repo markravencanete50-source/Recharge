@@ -5,6 +5,7 @@ import { Text } from "./Typography";
 import Feather from "@expo/vector-icons/Feather";
 import { GrowBar, MotionPress, Pop, Stagger } from "./motion";
 import { ui, type Palette } from "./theme";
+import { ChartTip, useChartFocus } from "./ChartTip";
 import { workspaceRequest } from "./backend/client";
 import { formatCount, plural } from "../../lib/format";
 import { ONBOARDING_PHASES, journeyPhase, onboardingProgress, type PropertyView } from "../../lib/workspace-view";
@@ -50,6 +51,7 @@ export function PortfolioInsights({ palette: p, properties, journeys, filter, on
   const stages = [...ONBOARDING_PHASES, "Not onboarding", "Archived"].filter(s => byStage.has(s));
   const toggle = (next: Exclude<PropertyFilter, null>) => onFilter(filter && filter.kind === next.kind && filter.value === next.value ? null : next);
   const trend = insights?.trend ?? [], peak = Math.max(1, ...trend.map(t => t.bookedNights));
+  const nights = useChartFocus(), [nightsWidth, setNightsWidth] = useState(0);
   const year = trend.reduce((a, t) => ({ added: a.added + t.added, live: a.live + t.wentLive, nights: a.nights + t.bookedNights }), { added: 0, live: 0, nights: 0 });
   return (
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 16 }]}>
@@ -72,15 +74,16 @@ export function PortfolioInsights({ palette: p, properties, journeys, filter, on
           <Text style={[ui.small, { color: p.muted }]}>{plural(year.added, "property", "properties")} added · {formatCount(year.live)} gone live</Text>
         </View>
         <Text style={[ui.small, { color: p.muted }]}>Nights booked each month · {formatCount(year.nights)} in total</Text>
-        <View accessibilityLabel={`Nights booked by month: ${trend.map(t => `${monthShort(t.month)} ${t.bookedNights}`).join(", ")}`} style={{ flexDirection: "row", alignItems: "flex-end", gap: 4, height: 96 }}>
-          {trend.map(t => (
-            <View key={t.month} style={{ flex: 1, alignItems: "center", gap: 4 }}>
+        <View onLayout={e => setNightsWidth(e.nativeEvent.layout.width)} accessibilityLabel={`Nights booked by month: ${trend.map(t => `${monthShort(t.month)} ${t.bookedNights}`).join(", ")}`} style={{ flexDirection: "row", alignItems: "flex-end", gap: 4, height: 96, position: "relative" }}>
+          {trend.map((t, i) => (
+            <MotionPress key={t.month} accessibilityRole="button" accessibilityLabel={`${monthShort(t.month)}: ${t.bookedNights} nights booked`} {...nights.press(i)} style={{ flex: 1, alignItems: "center", gap: 4 }}>
               <View style={{ width: "100%", height: 72, justifyContent: "flex-end" }}>
                 <View style={{ height: Math.max(2, Math.round((t.bookedNights / peak) * 72)), borderRadius: 4, backgroundColor: t.bookedNights ? p.primary : p.wash }} />
               </View>
               <Text style={{ color: p.muted, fontSize: 10 }}>{monthShort(t.month).slice(0, 1)}</Text>
-            </View>
+            </MotionPress>
           ))}
+          {nights.focus !== null && trend[nights.focus] && <ChartTip p={p} x={(nights.focus + 0.5) / trend.length * nightsWidth} width={nightsWidth} top={-34} tipWidth={170} title={monthShort(trend[nights.focus].month)} rows={[{ label: "Nights booked", value: formatCount(trend[nights.focus].bookedNights), color: p.primary }, { label: "Live properties", value: formatCount(trend[nights.focus].liveProperties ?? 0) }]} />}
         </View>
         <View style={[ui.between, { gap: 12 }]}>
           <Text style={[ui.small, { color: p.muted }]}>Live properties now</Text>

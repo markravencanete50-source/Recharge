@@ -7,6 +7,7 @@ import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { Entrance, GrowBar, MotionPress, TweenNumber } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
+import { ChartTip, useChartFocus } from "./ChartTip";
 import { addDays, Loading, london, message, Notice, Section } from "./LiveKit";
 import { StatementCard } from "./LiveOwner";
 import { MailboxSection } from "./LiveTools";
@@ -109,6 +110,9 @@ export function LiveClientReports({ palette: p, mailbox = false }: { palette: Pa
   );
   const maxProperty = Math.max(1, ...byProperty.map(x => x.earningsMinor)), maxMonth = Math.max(1, ...twelve.map(x => x.earningsMinor));
   const yearTotal = twelve.reduce((n, x) => n + x.earningsMinor, 0);
+  const propertyFocus = useChartFocus(), monthFocus = useChartFocus();
+  const [propertyWidth, setPropertyWidth] = useState(0), [monthsWidth, setMonthsWidth] = useState(0);
+  const propertyTotal = byProperty.reduce((t, x) => t + x.earningsMinor, 0);
   const myStatements = statements.filter(s => !hidden.includes(s.propertyId));
 
   return (
@@ -162,15 +166,16 @@ export function LiveClientReports({ palette: p, mailbox = false }: { palette: Pa
         </View>
         <View style={[card, { flex: desktop ? 1 : undefined, alignSelf: "stretch", gap: 14 }]}>
           {heading("Earnings by property", `${monthName(month)}, by stays checking out`)}
-          {byProperty.map(x => (
-            <View key={x.propertyId} style={{ gap: 8 }}>
+          {byProperty.map((x, i) => (
+            <MotionPress key={x.propertyId} accessibilityRole="button" accessibilityLabel={`${x.name}: ${formatMoney(x.earningsMinor)}`} {...propertyFocus.press(i)} onLayout={i === 0 ? (e: { nativeEvent: { layout: { width: number } } }) => setPropertyWidth(e.nativeEvent.layout.width) : undefined} style={{ gap: 8, position: "relative", zIndex: propertyFocus.focus === i ? 5 : 0 }}>
               <View style={ui.between}>
                 <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 14, fontWeight: "600" }}>{x.name}</Text>
                 <Text style={{ color: p.text, fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatMoney(x.earningsMinor)}</Text>
               </View>
               <GrowBar share={x.earningsMinor / maxProperty} color={colourOf(x.propertyId)} track={p.background} />
               <Text style={[ui.small, { color: p.muted }]}>{percent(x.occupancy)} occupied · {x.nights} {x.nights === 1 ? "night" : "nights"} · {x.bookings} {x.bookings === 1 ? "booking" : "bookings"}</Text>
-            </View>
+              {propertyFocus.focus === i && <ChartTip p={p} x={Math.max(80, x.earningsMinor / maxProperty * propertyWidth)} width={propertyWidth} top={-62} tipWidth={170} title={x.name} rows={[{ label: "Earnings", value: formatMoney(x.earningsMinor), color: colourOf(x.propertyId) }, { label: "Share of month", value: propertyTotal ? Math.round(x.earningsMinor / propertyTotal * 100) + "%" : "0%" }]} />}
+            </MotionPress>
           ))}
           {!byProperty.length && !loading && <Text style={[ui.small, { color: p.muted }]}>Your properties appear here once they are live.</Text>}
         </View>
@@ -178,16 +183,17 @@ export function LiveClientReports({ palette: p, mailbox = false }: { palette: Pa
 
       <View style={[card, { gap: 14 }]}>
         {heading("Earnings, last 12 months", `${formatMoney(yearTotal)} from stays checking out since ${monthName(twelve[0].month)}. Tap a month to see it.`)}
-        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: desktop ? 10 : 4, height: 150 }}>
-          {twelve.map(x => {
+        <View onLayout={e => setMonthsWidth(e.nativeEvent.layout.width)} style={{ flexDirection: "row", alignItems: "flex-end", gap: desktop ? 10 : 4, height: 150, position: "relative" }}>
+          {twelve.map((x, i) => {
             const selected = x.month === month;
             return (
-              <MotionPress key={x.month} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={`${monthName(x.month)}: ${formatMoney(x.earningsMinor)}`} onPress={() => setMonth(x.month)} style={{ flex: 1, height: "100%", justifyContent: "flex-end", alignItems: "center", gap: 6 }}>
+              <MotionPress key={x.month} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={`${monthName(x.month)}: ${formatMoney(x.earningsMinor)}`} onPress={() => setMonth(x.month)} onHoverIn={() => monthFocus.setFocus(i)} onHoverOut={() => monthFocus.setFocus(f => (f === i ? null : f))} style={{ flex: 1, height: "100%", justifyContent: "flex-end", alignItems: "center", gap: 6 }}>
                 <View style={{ width: "100%", maxWidth: 44, height: Math.max(4, (x.earningsMinor / maxMonth) * 112), borderRadius: 8, backgroundColor: selected ? p.primary : p.wash, borderWidth: selected ? 0 : 1, borderColor: p.border }} />
                 <Text numberOfLines={1} style={{ color: selected ? p.text : p.muted, fontSize: 11, fontWeight: selected ? "700" : "500" }}>{desktop ? monthName(x.month, false) : monthName(x.month, false).slice(0, 1)}</Text>
               </MotionPress>
             );
           })}
+          {(() => { const i = monthFocus.focus ?? (desktop ? null : twelve.findIndex(x => x.month === month)); const x = i === null || i < 0 ? null : twelve[i]; return x && <ChartTip p={p} x={(i! + 0.5) / twelve.length * monthsWidth} width={monthsWidth} top={-10} tipWidth={160} title={monthName(x.month)} rows={[{ label: "Earnings", value: formatMoney(x.earningsMinor), color: p.primary }, { label: "Share of year", value: yearTotal ? Math.round(x.earningsMinor / yearTotal * 100) + "%" : "0%" }]} />; })()}
         </View>
       </View>
 

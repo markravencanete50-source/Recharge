@@ -6,6 +6,7 @@ import { Text } from './Typography';
 import { ui, departmentColor, depth, type Palette } from './theme';
 import { GrowBar, MotionPress, TweenNumber, useMotionPreference, useReveal } from './motion';
 import type { ReportPresentation } from '../../lib/report-presentation';
+import { ChartTip, HoverColumns, useChartFocus } from './ChartTip';
 import { graphGeometry, pathLength, shortReportDate, smoothArea, smoothPath, statusBreakdown } from '../../lib/report-graphs';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -39,10 +40,11 @@ export function MetricSparkline({report,metric,color,palette:p,motionKey}:{repor
   const [width,setWidth]=useState(120),field=metric==='total'?'value':metric==='complete'?'completed':'waiting';
   const values=report.chartDays.map(day=>day[field]),g=graphGeometry(values,width,6,26);
   const pts=pointsOf(values,g),length=pathLength(pts)||1,draw=useDraw(motionKey,900);
-  const id='spark-'+motionKey.replace(/[^a-z0-9]/gi,'');
+  const id='spark-'+motionKey.replace(/[^a-z0-9]/gi,''),point=useChartFocus();
+  const what=metric==='total'?'Tasks':metric==='complete'?'Completed':'Waiting';
   if(!report.available)return <Text style={[ui.small,{color:p.muted}]}>Data unavailable</Text>;
   if(!report.sparkReady[metric])return <Text style={[ui.small,{color:p.muted,minHeight:36}]}>Not enough days to chart</Text>;
-  return <View onLayout={event=>setWidth(event.nativeEvent.layout.width)} accessible accessibilityLabel={`${report.duration>31?'Weekly':'Daily'} ${metric==='total'?'tasks':metric==='complete'?'completed tasks':'waiting tasks'}. Start ${values[0]}, end ${values.at(-1)}.`}>
+  return <View onLayout={event=>setWidth(event.nativeEvent.layout.width)} style={{position:'relative'}} accessible accessibilityLabel={`${report.duration>31?'Weekly':'Daily'} ${metric==='total'?'tasks':metric==='complete'?'completed tasks':'waiting tasks'}. Start ${values[0]}, end ${values.at(-1)}.`}>
     <Svg width="100%" height={40} viewBox={`0 0 ${width} 40`}>
       <Defs><LinearGradient id={id} x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={color} stopOpacity={0.24}/><Stop offset="1" stopColor={color} stopOpacity={0}/></LinearGradient></Defs>
       <AnimatedPath d={smoothArea(pts,30)} fill={`url(#${id})`} opacity={draw}/>
@@ -50,7 +52,10 @@ export function MetricSparkline({report,metric,color,palette:p,motionKey}:{repor
       <AnimatedCircle cx={pts.at(-1)!.x} cy={pts.at(-1)!.y} r={6} fill={color} opacity={draw.interpolate({inputRange:[0,0.85,1],outputRange:[0,0,0.18]})}/>
       <AnimatedCircle cx={pts.at(-1)!.x} cy={pts.at(-1)!.y} r={2.8} fill={color} opacity={draw.interpolate({inputRange:[0,0.85,1],outputRange:[0,0,1]})}/>
       <SvgText x={0} y={39} fill={p.muted} fontFamily="Montserrat_500Medium" fontSize={11}>{values[0]}</SvgText><SvgText x={width} y={39} textAnchor="end" fill={p.muted} fontFamily="Montserrat_500Medium" fontSize={11}>{values.at(-1)}</SvgText>
+      {point.focus!==null&&<><Line x1={pts[point.focus].x} x2={pts[point.focus].x} y1={2} y2={30} stroke={p.controlBorder} strokeDasharray="2 3"/><Circle cx={pts[point.focus].x} cy={pts[point.focus].y} r={3.5} fill={color} stroke={p.surface} strokeWidth={1.5}/></>}
     </Svg>
+    <HoverColumns xs={pts.map(pt=>pt.x)} width={width} height={40} focus={point} label={i=>`${shortReportDate(report.chartDays[i].date)}: ${values[i]} ${what.toLowerCase()}`}/>
+    {point.focus!==null&&<ChartTip p={p} x={pts[point.focus].x} width={width} top={-62} tipWidth={140} title={(report.duration>31?'Week of ':'')+shortReportDate(report.chartDays[point.focus].date)} rows={[{label:what,value:values[point.focus],color}]}/>}
   </View>;
 }
 
@@ -144,13 +149,15 @@ export function StatusChart({report,palette:p,motionKey='report:status'}:{report
 
 // Work by type: one bar per area in its department colour, growing to its share of the largest.
 export function QueueChart({report,palette:p,motionKey='report:queues'}:{report:ReportPresentation;palette:Palette;motionKey?:string}) {
-  const max=Math.max(1,...report.queues.map(q=>q.value));
-  return <ChartReveal motionKey={motionKey}><View style={{gap:16}}>{report.queues.map(q=>{
+  const max=Math.max(1,...report.queues.map(q=>q.value)),sum=report.queues.reduce((t,q)=>t+(q.available?q.value:0),0);
+  const row=useChartFocus(),[width,setWidth]=useState(280);
+  return <ChartReveal motionKey={motionKey}><View onLayout={e=>setWidth(e.nativeEvent.layout.width)} style={{gap:16}}>{report.queues.map((q,i)=>{
     const ink=q.tone==='primary'?p.primary:departmentColor(q.tone,p).ink;
-    return <View key={q.name} style={{gap:8}}>
+    return <MotionPress key={q.name} accessibilityRole="button" accessibilityLabel={`${q.name}: ${q.available?q.value:'unavailable'}`} {...row.press(i)} style={{gap:8,position:'relative',zIndex:row.focus===i?5:0}}>
       <View style={ui.between}><Text style={[ui.small,{color:p.text,fontWeight:'600'}]}>{q.name}</Text><Text style={{color:p.text,fontSize:15,fontWeight:'700',fontVariant:['tabular-nums']}}>{q.available?q.value:'-'}</Text></View>
       <GrowBar share={q.available?q.value/max:0} color={ink} track={p.elevated} height={12}/>
       {(!q.available||q.value===0)&&<Text style={[ui.small,{color:p.muted}]}>{q.available?'None in this period':'Data unavailable'}</Text>}
-    </View>;})}
+      {row.focus===i&&q.available&&<ChartTip p={p} x={Math.max(70,q.value/max*width)} width={width} top={-64} title={q.name} rows={[{label:'Tasks',value:q.value,color:ink},{label:'Share of all',value:sum?Math.round(q.value/sum*100)+'%':'0%'}]}/>}
+    </MotionPress>;})}
     <Text style={[ui.small,{color:p.muted}]}>{report.available?`${report.current.total} tasks in total`:'Task data unavailable'}</Text></View></ChartReveal>;
 }

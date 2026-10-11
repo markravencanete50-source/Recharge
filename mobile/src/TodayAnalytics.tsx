@@ -8,6 +8,7 @@ import { pathLength, smoothArea, smoothPath } from '../../lib/report-graphs';
 import { Text } from './Typography';
 import { MotionPress, useMotionPreference, useReducedMotion } from './motion';
 import { ui, type Palette } from './theme';
+import { ChartTip, HoverColumns, useChartFocus } from './ChartTip';
 
 type Today=ReturnType<typeof todayPresentation>;
 
@@ -52,7 +53,8 @@ export function TodayRing({completed,total,motionKey,size=88,palette:p}:{complet
     animation.start();return()=>{animation.stop();draw.setValue(1);};
   },[draw,motionKey,ready,reduced,seen]);
   const ring={cx:44,cy:44,r:35,fill:'none',stroke:tone.mint,strokeWidth:6,strokeLinecap:'round' as const,strokeDasharray:circumference,strokeDashoffset:draw.interpolate({inputRange:[0,1],outputRange:[circumference,circumference*(1-share)]}),rotation:-90,origin:'44,44'};
-  return <View accessible accessibilityLabel={`${completed} of ${total} tasks done, ${total?Math.round(share*100):0} percent`} style={{width:size,height:size,alignItems:'center',justifyContent:'center',gap:1}}>
+  const ringTip=useChartFocus();
+  return <View accessible accessibilityLabel={`${completed} of ${total} tasks done, ${total?Math.round(share*100):0} percent`} {...ringTip.hover(0)} style={{width:size,height:size,alignItems:'center',justifyContent:'center',gap:1,zIndex:ringTip.focus===null?0:20}}>
     <Svg width={size} height={size} style={{position:'absolute'}} viewBox="0 0 88 88">
       <Defs><Filter id="today-ring-glow" x="-50%" y="-50%" width="200%" height="200%"><FeGaussianBlur stdDeviation={4}/></Filter></Defs>
       {/* Solid themed backing and track keep the progress stroke readable. */}
@@ -61,6 +63,7 @@ export function TodayRing({completed,total,motionKey,size=88,palette:p}:{complet
       {share>0&&<><AnimatedCircle {...ring} opacity={0.4} filter="url(#today-ring-glow)"/><AnimatedCircle {...ring}/></>}
     </Svg>
     <Text style={{color:tone.heroText,fontSize:size>88?28:22,fontWeight:'600',letterSpacing:-0.7}}>{total?Math.round(share*100):0}%</Text><Text style={{color:tone.heroMuted,fontSize:12}}>done</Text>
+    {ringTip.focus!==null&&<View pointerEvents="none" style={{position:'absolute',top:size+6,right:0,width:160}}><ChartTip p={p} x={80} width={160} title="Tasks this period" rows={[{label:'Done',value:completed,color:p.success},{label:'Still open',value:Math.max(0,total-completed)},{label:'Total',value:total}]}/></View>}
   </View>;
 }
 
@@ -74,8 +77,9 @@ export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today
   const y=(value:number)=>height-12-value/max*(height-36);
   const pts=values.map((value,i)=>({x:x(i),y:y(value)}));
   const length=pathLength(pts);
+  const point=useChartFocus();
   const found=data.days.findIndex(day=>day.date===selectedDate);
-  const selected=found<0?data.days.length-1:found;
+  const selected=point.focus??(found<0?data.days.length-1:found);
   const day=data.days[selected];
   const label=(date:string)=>new Date(date+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'Europe/London'});
   const {reduced,ready,seen}=useMotionPreference(),[draw]=useState(()=>new Animated.Value(1));
@@ -93,7 +97,7 @@ export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today
     </View>
     {data.available?<>
       <Text style={{color:tone.heroText,fontSize:12,lineHeight:18}}>{total} currently open, recorded in these 7 days</Text>
-      <View onLayout={event=>setWidth(Math.max(80,event.nativeEvent.layout.width))} accessible accessibilityRole="image" accessibilityLabel={`Open tasks by recorded date. ${data.days.map(day=>`${day.date}: ${day.value}`).join('; ')}. ${data.changeLabel}. Counts use current task status, not historical backlog.`}>
+      <View onLayout={event=>setWidth(Math.max(80,event.nativeEvent.layout.width))} style={{position:'relative'}} accessible accessibilityRole="image" accessibilityLabel={`Open tasks by recorded date. ${data.days.map(day=>`${day.date}: ${day.value}`).join('; ')}. ${data.changeLabel}. Counts use current task status, not historical backlog.`}>
         <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
           <Defs><LinearGradient id="today-open-area" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={tone.spark} stopOpacity={0.3}/><Stop offset="1" stopColor={tone.spark} stopOpacity={0}/></LinearGradient></Defs>
           {[0,max/2,max].map(value=><Line key={'grid-'+value} x1={28} x2={width} y1={y(value)} y2={y(value)} stroke={tone.grid} strokeOpacity={tone.gridOpacity} strokeDasharray="3 5"/>)}
@@ -105,6 +109,9 @@ export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today
           <Circle cx={x(selected)} cy={y(day.value)} r={8} fill={tone.spark} fillOpacity={0.3}/><Circle cx={x(selected)} cy={y(day.value)} r={4} fill={tone.dot}/>
           <SvgText x={x(selected)} y={y(day.value)-12} textAnchor="middle" fill={tone.heroText} fontSize={13} fontFamily="Montserrat_600SemiBold">{day.value}</SvgText>
         </Svg>
+        {/* Point anywhere over a day (hover, or tap on a phone) to see its figure. */}
+        <HoverColumns xs={values.map((_,i)=>x(i))} width={width} height={height} focus={{...point,press:(i:number)=>({...point.press(i),onPress:()=>{setSelectedDate(data.days[i].date);point.setFocus(null);}})}} label={i=>`${label(data.days[i].date)}: ${values[i]} open tasks`}/>
+        {point.focus!==null&&<ChartTip p={p} x={x(point.focus)} width={width} top={0} title={new Date(data.days[point.focus].date+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',timeZone:'Europe/London'})} rows={[{label:'Open tasks',value:values[point.focus],color:p.primary},{label:'Share of week',value:total?Math.round(values[point.focus]/total*100)+'%':'0%'}]}/>}
       </View>
       <View style={{flexDirection:'row',paddingLeft:28}}>{data.days.map(item=><MotionPress key={item.date} accessibilityRole="button" accessibilityLabel={`${label(item.date)}, ${item.value} open tasks. Show daily count`} accessibilityState={{selected:item.date===day.date}} onPress={()=>setSelectedDate(item.date)} onHoverIn={()=>setSelectedDate(item.date)} style={{flex:1,minHeight:44,borderRadius:10,alignItems:'center',justifyContent:'center',backgroundColor:item.date===day.date?tone.selectedBg:'transparent'}}><Text style={{color:tone.heroText,fontSize:12,fontWeight:item.date===day.date?'600':'400'}}>{wide?label(item.date):Number(item.date.slice(-2))}</Text></MotionPress>)}</View>
       <View style={{gap:4}}><Text accessibilityLiveRegion="polite" style={{color:tone.heroText,fontSize:14,fontWeight:'600'}}>{label(day.date)} · {day.value} open {day.value===1?'task':'tasks'}</Text><Text style={{color:tone.heroText,fontSize:12,lineHeight:18}}>By record date, using current task status. Select a date to explore.</Text>{data.partial&&<Text style={{color:tone.heroText,fontSize:12}}>Some data sources are unavailable.</Text>}</View>
@@ -138,6 +145,9 @@ export function TodayTiles({data,palette:p,onWaiting,onProperties,vertical=false
   const areaTotal=areas.reduce((total,queue)=>total+queue.value,0);
   const colours=AREA_COLOURS[p.isDark?'dark':'light'];
   const perProperty=data.properties?Math.round(data.open/data.properties*10)/10:null;
+  const bar=useChartFocus(),area=useChartFocus();
+  const [barsWidth,setBarsWidth]=useState(0),[areaWidth,setAreaWidth]=useState(0);
+  const dayName=(key:string)=>new Date(key+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',timeZone:'Europe/London'});
   const card=(waiting:boolean)=>({minWidth:0,padding:vertical?22:16,borderRadius:26,borderWidth:1,borderColor:waiting?tone.waitingBorder:tone.propertyBorder,backgroundColor:waiting?tone.waitingBg:tone.propertyBg,gap:16,overflow:'hidden' as const});
   const header=(waiting:boolean)=>{const icon=waiting?tone.waitingIcon:tone.propertyIcon;return <View style={[ui.row,{gap:12}]}>
     <View style={{width:52,height:52,borderRadius:17,backgroundColor:p.isDark?'#FFFFFF0D':'#FFFFFF8C',alignItems:'center',justifyContent:'center'}}><DimensionalIcon name={waiting?'hourglass':'house'} size={42}/></View>
@@ -152,8 +162,9 @@ export function TodayTiles({data,palette:p,onWaiting,onProperties,vertical=false
       {header(true)}
       <View accessible accessibilityLabel={'Waiting tasks by day: '+week.map(day=>day.waiting).join(', ')} style={{gap:8}}>
         <Text style={{fontSize:12,fontWeight:'600',color:p.text}}>Last 7 days</Text>
-        <View style={{flexDirection:'row',gap:7,height:84}}>
-          {week.map((day,index)=><GrowBar key={day.key} value={day.waiting} max={weekMax} color={tone.waitingFill} track={tone.waitingFill+'1F'} delay={120+index*60} highlight={index===week.length-1}/>)}
+        <View onLayout={e=>setBarsWidth(e.nativeEvent.layout.width)} style={{flexDirection:'row',gap:7,height:84,position:'relative'}}>
+          {week.map((day,index)=><View key={day.key} style={{flex:1}} {...bar.hover(index)}><GrowBar value={day.waiting} max={weekMax} color={tone.waitingFill} track={tone.waitingFill+'1F'} delay={120+index*60} highlight={bar.focus===null?index===week.length-1:bar.focus===index}/></View>)}
+          {bar.focus!==null&&week[bar.focus]&&<ChartTip p={p} x={(bar.focus+0.5)/week.length*barsWidth} width={barsWidth} top={-8} tipWidth={140} title={dayName(week[bar.focus].key)} rows={[{label:'Waiting',value:week[bar.focus].waiting,color:tone.waitingIcon}]}/>}
         </View>
         <View style={{flexDirection:'row',gap:7}}>{week.map((day,index)=><Text key={day.key} style={{flex:1,textAlign:'center',fontSize:11,fontWeight:index===week.length-1?'700':'500',color:index===week.length-1?p.text:p.muted}}>{DAY_INITIALS[new Date(day.key+'T12:00:00Z').getUTCDay()]}</Text>)}</View>
       </View>
@@ -171,7 +182,10 @@ export function TodayTiles({data,palette:p,onWaiting,onProperties,vertical=false
       <View style={{gap:10}}>
         <Text style={{fontSize:12,fontWeight:'600',color:p.text}}>Work by area</Text>
         {areaTotal>0?<>
-          <View style={{flexDirection:'row',height:10,borderRadius:5,overflow:'hidden',gap:2}}>{areas.map((queue,index)=><View key={queue.name} style={{flex:queue.value,backgroundColor:colours[index%colours.length]}}/>)}</View>
+          <View onLayout={e=>setAreaWidth(e.nativeEvent.layout.width)} style={{position:'relative'}}>
+            <View style={{flexDirection:'row',height:10,borderRadius:5,overflow:'hidden',gap:2}}>{areas.map((queue,index)=><View key={queue.name} {...area.hover(index)} style={{flex:queue.value,backgroundColor:colours[index%colours.length],opacity:area.focus===null||area.focus===index?1:0.35}}/>)}</View>
+            {area.focus!==null&&areas[area.focus]&&<ChartTip p={p} x={(areas.slice(0,area.focus).reduce((t,q)=>t+q.value,0)+areas[area.focus].value/2)/areaTotal*areaWidth} width={areaWidth} top={16} title={areas[area.focus].name} rows={[{label:'Tasks',value:areas[area.focus].value,color:colours[area.focus%colours.length]},{label:'Share',value:Math.round(areas[area.focus].value/areaTotal*100)+'%'}]}/>}
+          </View>
           {areas.map((queue,index)=><View key={queue.name} style={[ui.row,{gap:8}]}>
             <View style={{width:9,height:9,borderRadius:3,backgroundColor:colours[index%colours.length]}}/>
             <Text style={{flex:1,fontSize:12,color:p.text}}>{queue.name}</Text>

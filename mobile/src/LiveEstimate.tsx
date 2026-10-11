@@ -4,6 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { GrowBar, MotionPress, Pop, TweenNumber } from "./motion";
 import { ui, type Palette } from "./theme";
+import { ChartTip, useChartFocus } from "./ChartTip";
 import { formatBps, formatMoney, plural } from "../../lib/format";
 import { AVAILABLE_NIGHTS, DIRECT_RANGE, OCCUPANCY_RANGE, SCENARIOS, directBookingGain, hasFees, project, readEstimate, snap, startingChoices, type Choices } from "../../lib/estimate-projection";
 
@@ -51,12 +52,18 @@ function Line({ p, label, value, tone, strong }: { p: Palette; label: string; va
 export function EstimateExplorer({ palette: p, estimate, owner }: { palette: Palette; estimate: Record<string, unknown> | null; owner: boolean }) {
   const published = useMemo(() => readEstimate(estimate), [estimate]);
   const [choices, setChoices] = useState<Choices | null>(() => published ? startingChoices(published) : null);
+  const splitFocus = useChartFocus(), [splitWidth, setSplitWidth] = useState(0);
   if (!published || !choices) return null;
   const start = startingChoices(published), fees = hasFees(published);
   const result = project(published, choices), gain = directBookingGain(published, choices);
   const set = (next: Partial<Choices>) => setChoices({ ...choices, ...next });
   const changed = choices.scenario !== start.scenario || choices.occupancyBps !== start.occupancyBps || choices.directBookingBps !== start.directBookingBps;
   const total = result.grossMinor || 1;
+  const split = fees ? [
+    { label: owner ? "Your earnings" : "Owner earnings", minor: result.ownerMinor!, color: p.success },
+    { label: "Recharge management", minor: result.managementFeesMinor!, color: p.primary, opacity: 0.55 },
+    { label: "Platform fees", minor: result.platformFeesMinor!, color: p.waiting },
+  ] : [];
   return (
     <View style={[ui.card, { backgroundColor: p.background, borderColor: p.border, gap: 16 }]}>
       <View style={{ gap: 2 }}>
@@ -92,10 +99,11 @@ export function EstimateExplorer({ palette: p, estimate, owner }: { palette: Pal
       </View>
 
       {fees && <View style={{ gap: 0 }}>
-        <View style={{ flexDirection: "row", height: 10, borderRadius: 5, overflow: "hidden", backgroundColor: p.wash, marginBottom: 6 }}>
-          <View style={{ flex: Math.max(0, result.ownerMinor!) / total, backgroundColor: p.success }} />
-          <View style={{ flex: result.managementFeesMinor! / total, backgroundColor: p.primary, opacity: 0.55 }} />
-          <View style={{ flex: result.platformFeesMinor! / total, backgroundColor: p.waiting }} />
+        <View onLayout={e => setSplitWidth(e.nativeEvent.layout.width)} style={{ position: "relative", zIndex: 5 }}>
+          <View style={{ flexDirection: "row", height: 10, borderRadius: 5, overflow: "hidden", backgroundColor: p.wash, marginBottom: 6 }}>
+            {split.map((x, i) => <MotionPress key={x.label} accessibilityRole="button" accessibilityLabel={`${x.label}: ${pounds(x.minor)}`} {...splitFocus.press(i)} style={{ flex: Math.max(0, x.minor) / total, backgroundColor: x.color, opacity: x.opacity ?? 1 }} />)}
+          </View>
+          {splitFocus.focus !== null && split[splitFocus.focus] && <ChartTip p={p} x={(split.slice(0, splitFocus.focus).reduce((t, x) => t + Math.max(0, x.minor), 0) + Math.max(0, split[splitFocus.focus].minor) / 2) / total * splitWidth} width={splitWidth} top={18} tipWidth={180} title={split[splitFocus.focus].label} rows={[{ label: "A year", value: pounds(split[splitFocus.focus].minor), color: split[splitFocus.focus].color }, { label: "Share of income", value: Math.round(Math.max(0, split[splitFocus.focus].minor) / total * 100) + "%" }]} />}
         </View>
         <Line p={p} label="Booking income" value={result.grossMinor} />
         <Line p={p} label={`Platform fees (${formatBps(published.otaFeeBps!).replace(".0%", "%")} on non-direct bookings)`} value={result.platformFeesMinor!} tone="minus" />

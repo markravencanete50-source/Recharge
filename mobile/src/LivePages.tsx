@@ -37,6 +37,7 @@ import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
 import { DrawLine, Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
 import { departmentColor, primaryFill, ui, web, type Palette } from "./theme";
+import { ChartTip, useChartFocus } from "./ChartTip";
 import { workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
 import { weeklyReportDocument, weeklyReportFileName } from "../../lib/weekly-report";
@@ -400,6 +401,7 @@ function PortfolioCard({ palette: p, summary, properties, onOpen }: { palette: P
   const positions = usePostcodePositions(properties);
   const points = useMemo(() => propertyPoints(properties, positions), [properties, positions]);
   const top = summary.regions[0]?.count || 1, wide = useWindowDimensions().width >= 700;
+  const regionFocus = useChartFocus(), [regionWidth, setRegionWidth] = useState(0), regionTotal = summary.regions.reduce((t, r) => t + r.count, 0);
   const stats: [string, number, IconName][] = [["Properties", summary.total, "home"], ["Live", summary.live, "check-circle"], ["Onboarding", summary.onboarding, "key"], ["Owners", summary.owners, "users"]];
   return (
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 14 }]}>
@@ -416,13 +418,14 @@ function PortfolioCard({ palette: p, summary, properties, onOpen }: { palette: P
             <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{summary.regions.length} {summary.regions.length === 1 ? "region" : "regions"}</Text>
           </View>
           {summary.regions.slice(0, 8).map((r, i) => (
-            <Stagger key={r.region} index={i}><View accessibilityLabel={`${r.region}: ${r.count}`} style={{ gap: 7 }}>
+            <Stagger key={r.region} index={i}><MotionPress accessibilityRole="button" accessibilityLabel={`${r.region}: ${r.count}`} {...regionFocus.press(i)} onLayout={i === 0 ? (e: { nativeEvent: { layout: { width: number } } }) => setRegionWidth(e.nativeEvent.layout.width) : undefined} style={{ gap: 7, position: "relative", zIndex: regionFocus.focus === i ? 5 : 0 }}>
               <View style={[ui.between, { gap: 10 }]}>
                 <Text numberOfLines={1} style={{ color: p.text, flex: 1, fontSize: 14, fontWeight: i === 0 ? "700" : "500" }}>{r.region}</Text>
                 <Text style={{ color: p.text, fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatCount(r.count)}</Text>
               </View>
               <GrowBar share={Math.max(0.06, r.count / top)} color={i === 0 ? p.primary : p.chart} track={p.elevated} height={8} />
-            </View></Stagger>
+              {regionFocus.focus === i && <ChartTip p={p} x={Math.max(80, Math.max(0.06, r.count / top) * regionWidth)} width={regionWidth} top={-58} tipWidth={170} title={r.region} rows={[{ label: "Properties", value: formatCount(r.count), color: p.primary }, { label: "Share of all", value: regionTotal ? Math.round(r.count / regionTotal * 100) + "%" : "0%" }]} />}
+            </MotionPress></Stagger>
           ))}
         </View>
       </View>

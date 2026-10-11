@@ -15,6 +15,7 @@ import { ShiftSheet, WeekNav, type ShiftTarget } from "./LiveTeamTime";
 import { useCelebrate } from "./Celebrate";
 import { exportReport } from "./exportReport";
 import { depth, primaryFill, ui, web, type Palette } from "./theme";
+import { ChartTip, useChartFocus } from "./ChartTip";
 import { readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL } from "../../lib/hub";
 import { ROLE_LABEL } from "../../lib/admin-live";
@@ -160,23 +161,25 @@ function HoursColumns({ p, bars, sessionKey }: { p: Palette; bars: { key: string
     a.start(); return () => a.stop();
   }, [sessionKey, reduced, grow]);
   const height = 150;
+  const col = useChartFocus(), [width, setWidth] = useState(0), sum = bars.reduce((t, b) => t + b.minutes, 0);
   return (
     <View accessibilityRole="image" accessibilityLabel={bars.map(b => `${b.label} ${hoursShort(b.minutes)}`).join(", ")}
       style={{ padding: 16, paddingBottom: 12, borderRadius: 22, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, ...depth.card }}>
-      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 6, height: height + 22 }}>
+      <View onLayout={e => setWidth(e.nativeEvent.layout.width)} style={{ flexDirection: "row", alignItems: "flex-end", gap: 6, height: height + 22, position: "relative" }}>
         {bars.map((b, i) => {
           const share = b.minutes / max;
           return (
-            <View key={b.key} style={{ flex: 1, minWidth: 0, alignItems: "center", justifyContent: "flex-end", height: height + 22, gap: 4 }}>
+            <MotionPress key={b.key} accessibilityRole="button" accessibilityLabel={`${b.label}: ${minutesLabel(b.minutes)}`} {...col.press(i)} style={{ flex: 1, minWidth: 0, alignItems: "center", justifyContent: "flex-end", height: height + 22, gap: 4, opacity: col.focus === null || col.focus === i ? 1 : 0.6 }}>
               <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: "700", color: b.now ? p.primary : p.muted, fontVariant: ["tabular-nums"] }}>{b.minutes ? hoursShort(b.minutes).replace(/ \d+m$/, "") : ""}</Text>
               <Animated.View style={{
                 width: "78%", maxWidth: 40, borderRadius: 8, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, backgroundColor: b.now ? p.primary : p.chart, opacity: b.now ? 1 : 0.55,
                 height: grow.interpolate({ inputRange: [0, Math.min(1, 0.4 + i * 0.05), 1], outputRange: [2, 2, Math.max(2, share * height)] }),
                 ...(b.now ? web({ boxShadow: "0 10px 20px -12px rgba(21,45,40,.6)" }) : {}),
               }} />
-            </View>
+            </MotionPress>
           );
         })}
+        {col.focus !== null && bars[col.focus] && <ChartTip p={p} x={(col.focus + 0.5) / bars.length * width} width={width} top={0} title={bars[col.focus].label} rows={[{ label: "Hours worked", value: bars[col.focus].minutes ? minutesLabel(bars[col.focus].minutes) : "0h", color: p.primary }, { label: "Share of total", value: sum ? Math.round(bars[col.focus].minutes / sum * 100) + "%" : "0%" }]} />}
       </View>
       <View style={{ flexDirection: "row", gap: 6, marginTop: 6, borderTopWidth: 1, borderColor: p.border, paddingTop: 6 }}>
         {bars.map(b => <Text key={b.key} numberOfLines={1} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 10, fontWeight: b.now ? "800" : "600", color: b.now ? p.primary : p.muted }}>{b.label}</Text>)}
@@ -506,13 +509,14 @@ function MonthCalendar({ p, month, day, today, totals, loading, onPick }: { p: P
   const { width } = useWindowDimensions();
   const compact = width < 600;
   const max = Math.max(60, ...[...totals.values()].map(t => t.minutes));
+  const [hovered, setHovered] = useState<string | null>(null), [rowWidth, setRowWidth] = useState(0);
   return (
     <View accessibilityLabel={`${monthLabel(month, "long")} calendar`} style={{ padding: compact ? 8 : 12, gap: compact ? 4 : 6, borderRadius: 22, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, ...depth.card }}>
       <View style={{ flexDirection: "row", gap: compact ? 4 : 6 }}>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => <Text key={d} style={{ flex: 1, textAlign: "center", color: p.muted, fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", paddingVertical: 4 }}>{compact ? d.slice(0, 1) : d}</Text>)}
       </View>
       {calendarWeeks(month).map(week => (
-        <View key={week[0]} style={{ flexDirection: "row", gap: compact ? 4 : 6 }}>
+        <View key={week[0]} onLayout={e => setRowWidth(e.nativeEvent.layout.width)} style={{ flexDirection: "row", gap: compact ? 4 : 6, position: "relative", zIndex: hovered && week.includes(hovered) ? 10 : 0 }}>
           {week.map(d => {
             const t = totals.get(d), inMonth = d.slice(0, 7) === month, on = d === day, isToday = d === today, future = d > today;
             const share = t ? t.minutes / max : 0;
@@ -520,7 +524,7 @@ function MonthCalendar({ p, month, day, today, totals, loading, onPick }: { p: P
               <Pop key={d} active={on} style={{ flex: 1 }}>
                 <MotionPress {...(Platform.OS === "web" && !on ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ selected: on }}
                   accessibilityLabel={`${longDay(d)}${t?.minutes ? `, ${minutesLabel(t.minutes)} worked by ${t.people}` : ""}${t?.waiting ? `, ${t.waiting} change waiting` : ""}${t?.missed ? `, ${t.missed} not clocked` : ""}`}
-                  onPress={() => onPick(d)}
+                  onPress={() => onPick(d)} onHoverIn={() => setHovered(d)} onHoverOut={() => setHovered(h => (h === d ? null : h))}
                   style={[{ minHeight: compact ? 50 : 66, borderRadius: compact ? 12 : 14, padding: compact ? 5 : 8, justifyContent: "space-between", opacity: inMonth ? 1 : 0.38,
                     backgroundColor: on ? undefined : share > 0 ? heat(p, share) : future ? "transparent" : p.background, borderWidth: isToday && !on ? 1.5 : 0, borderColor: p.primary }, on ? primaryFill(p) : null]}>
                   <View style={[ui.between, { gap: 2 }]}>
@@ -535,6 +539,13 @@ function MonthCalendar({ p, month, day, today, totals, loading, onPick }: { p: P
               </Pop>
             );
           })}
+          {hovered && week.includes(hovered) && (() => {
+            const t = totals.get(hovered), i = week.indexOf(hovered);
+            return <ChartTip p={p} x={(i + 0.5) / 7 * rowWidth} width={rowWidth} top={compact ? 52 : 70} tipWidth={170} title={longDay(hovered)} rows={[
+              { label: "Hours worked", value: t?.minutes ? minutesLabel(t.minutes) : "0h", color: p.primary }, { label: "People", value: t?.people ?? 0 }, { label: "Shifts", value: t?.shifts ?? 0 },
+              ...(t?.missed ? [{ label: "Not clocked", value: t.missed, color: p.danger }] : []), ...(t?.waiting ? [{ label: "Changes waiting", value: t.waiting, color: p.waiting }] : []),
+            ]} />;
+          })()}
         </View>
       ))}
     </View>
@@ -561,6 +572,8 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
     ["Shifts", String(total?.shifts ?? 0)], ["Not clocked", String(total?.missed ?? 0)],
   ];
   const ticks = [6, 9, 12, 15, 18, 21, 24];
+  const [hoverShift, setHoverShift] = useState<string | null>(null), [trackWidth, setTrackWidth] = useState(0);
+  const shiftHover = (id: string) => Platform.OS === "web" ? { onMouseEnter: () => setHoverShift(id), onMouseLeave: () => setHoverShift(h => (h === id ? null : h)) } as object : {};
   return (
     <SwapIn swapKey={day} style={{ gap: 14 }}>
       <View style={{ padding: wide ? 20 : 16, gap: 14, borderRadius: 22, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, ...depth.card }}>
@@ -608,8 +621,10 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
                 {status && <Tag label={status[0]} tone={status[1]} p={p} />}
               </View>
             );
+            const tipShift = shifts.find(s => s.id === hoverShift);
             const track = (
-              <View style={{ flex: wide ? 1 : undefined, alignSelf: wide ? undefined : "stretch", height: 34, borderRadius: 10, backgroundColor: p.wash, overflow: "hidden" }}>
+              <View onLayout={e => setTrackWidth(e.nativeEvent.layout.width)} style={{ flex: wide ? 1 : undefined, alignSelf: wide ? undefined : "stretch", position: "relative", zIndex: tipShift ? 10 : 0 }}>
+              <View style={{ height: 34, borderRadius: 10, backgroundColor: p.wash, overflow: "hidden" }}>
                 {ticks.slice(1, -1).map(h => <View key={h} style={{ position: "absolute", left: `${along(h)}%`, top: 0, bottom: 0, width: 1, backgroundColor: p.border, opacity: 0.7 }} />)}
                 {planned && <View style={{ position: "absolute", left: `${along(planned[0])}%`, width: `${along(planned[1]) - along(planned[0])}%`, top: 4, bottom: 4, borderRadius: 7, borderWidth: 1, borderStyle: "dashed", borderColor: tint(p.chart, 1), backgroundColor: tint(p.chart, 0.35) }} />}
                 {waiting.map(c => { const from = ukHours(c.clockedInAt), to = c.clockedOutAt ? from + (Date.parse(c.clockedOutAt) - Date.parse(c.clockedInAt)) / 3600000 : from + 1; return (
@@ -620,7 +635,7 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
                   const from = ukHours(s.clockedInAt), to = from + length(s.clockedOutAt), w = Math.max(1.2, along(to) - along(from));
                   const at = (iso: string) => w ? Math.min(100, Math.max(0, (along(from + length(iso)) - along(from)) / w * 100)) : 0;
                   return (
-                    <Animated.View key={s.id} style={{ position: "absolute", left: `${along(from)}%`, top: 8, bottom: 8, borderRadius: 6, overflow: "hidden", width: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${w}%`] }),
+                    <Animated.View key={s.id} {...shiftHover(s.id)} style={{ position: "absolute", left: `${along(from)}%`, top: 8, bottom: 8, borderRadius: 6, overflow: "hidden", width: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${w}%`] }),
                       backgroundColor: s.clockedOutAt ? p.primary : p.success, ...web({ backgroundImage: "linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0))", boxShadow: "0 4px 10px -6px rgba(21,45,40,.55)" }) }}>
                       {!!s.overtimeFrom && <View accessibilityLabel={`Overtime from ${londonClock(s.overtimeFrom)}`} style={{ position: "absolute", left: `${at(s.overtimeFrom)}%`, right: 0, top: 0, bottom: 0, backgroundColor: p.waiting, opacity: 0.85 }} />}
                       {s.pauses.map(x => <View key={x.startedAt} accessibilityLabel={`${PAUSE_LABEL[x.kind]} ${londonClock(x.startedAt)}`} style={{ position: "absolute", left: `${at(x.startedAt)}%`, width: `${Math.max(1, at(x.endedAt ?? s.clockedOutAt ?? new Date().toISOString()) - at(x.startedAt))}%`, top: 0, bottom: 0, backgroundColor: x.kind === "emergency" ? p.danger : p.surface, opacity: x.kind === "emergency" ? 0.75 : 0.6 }} />)}
@@ -628,6 +643,16 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
                     </Animated.View>
                   );
                 })}
+              </View>
+              {tipShift && (() => {
+                const from = ukHours(tipShift.clockedInAt), hours = ((tipShift.clockedOutAt ? Date.parse(tipShift.clockedOutAt) : Date.now()) - Date.parse(tipShift.clockedInAt)) / 3600000;
+                const unpaid = tipShift.unpaidMinutes ?? 0, worked = Math.max(0, Math.round(hours * 60) - unpaid);
+                return <ChartTip p={p} x={(along(from) + along(from + hours)) / 200 * trackWidth} width={trackWidth} top={38} tipWidth={190} title={`${londonClock(tipShift.clockedInAt)} – ${tipShift.clockedOutAt ? londonClock(tipShift.clockedOutAt) : "now"}`} rows={[
+                  { label: "Worked", value: minutesLabel(worked), color: p.primary },
+                  ...tipShift.pauses.map(x => ({ label: `${PAUSE_LABEL[x.kind]} ${londonClock(x.startedAt)}`, value: x.endedAt ? minutesLabel(Math.max(1, Math.round((Date.parse(x.endedAt) - Date.parse(x.startedAt)) / 60000))) : "now", color: x.kind === "emergency" ? p.danger : p.muted })),
+                  ...(tipShift.overtimeFrom ? [{ label: "Overtime from", value: londonClock(tipShift.overtimeFrom), color: p.waiting }] : []),
+                ]} />;
+              })()}
               </View>
             );
             const first = shifts[0];
