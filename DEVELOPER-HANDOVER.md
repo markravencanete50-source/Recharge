@@ -473,6 +473,9 @@ database tool can run it, and it is safe to run more than once.
   were last online, and whether they are clocked in, on a pause or on overtime. "Online now" is a
   filter and a tile, and the list refreshes every minute.
 - Migration `20261011010000_shift_pauses_presence.sql`; tests `tests/shift-pauses-database.test.mjs`.
+- People (admins) shows approved accounts as **Online** or **Offline** (with "Last online …")
+  instead of Active, with Online and Offline filters, refreshed every minute
+  (`personState`/`lastOnline` in `lib/admin-live.ts`; migration `20261011020000_people_presence.sql`).
 
 ## Runtime requirements
 

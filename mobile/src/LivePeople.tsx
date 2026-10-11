@@ -12,7 +12,7 @@ import { Button, Field, message, Notice, Section, Tag, Loading, type Tone } from
 import { List, Pills, Row } from "./LiveAccounts";
 import { HostawaySyncCard } from "./HostawaySyncCard";
 import { readAdmin, workspaceRequest, writeAdmin, writeWorkspace, WorkspaceApiError } from "./backend/client";
-import { adminPropertiesSchema, assignmentFor, canEdit, detailSchemas, peopleSchema, ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange, type AdminProperty, type Person } from "../../lib/admin-live";
+import { adminPropertiesSchema, assignmentFor, canEdit, detailSchemas, lastOnline, peopleSchema, personState, ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange, type AdminProperty, type Person, type PersonState } from "../../lib/admin-live";
 import { isWorkspaceAdmin, type ModuleId, type WorkspaceRole } from "../../lib/modules";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { blankOtaAccount, HOLDER_LABEL, looksLikePassword, OTA_PLATFORMS, type OtaAccount } from "../../lib/ota-accounts";
@@ -21,7 +21,7 @@ import { blankOtaAccount, HOLDER_LABEL, looksLikePassword, OTA_PLATFORMS, type O
 // properties. Admins only; the database enforces the role hierarchy.
 // Each person's initials take their department's colour.
 const ROLE_TONE: Partial<Record<string, Tone>> = { client: "clients", stays: "stays", cleans: "cleans", cleaning_manager: "cleans", ready: "ready", accounts: "accounts" };
-const STATUS_TAG: Record<Person["status"], [string, "good" | "wait" | "bad" | "plain"]> = { pending: ["Waiting for approval", "wait"], active: ["Active", "good"], revoked: ["Revoked", "bad"] };
+const STATUS_TAG: Record<PersonState, [string, "good" | "wait" | "bad" | "plain"]> = { pending: ["Waiting for approval", "wait"], online: ["Online", "good"], offline: ["Offline", "plain"], revoked: ["Revoked", "bad"] };
 const PROPERTY_TAG: Record<AdminProperty["status"], [string, "good" | "wait" | "bad" | "plain"]> = { onboarding: ["Onboarding", "wait"], active: ["Live", "good"], archived: ["Archived", "plain"] };
 const roleLabel = (role: string) => ROLE_LABEL[role as WorkspaceRole] ?? role;
 
@@ -80,7 +80,8 @@ function PersonSheet({ p, actorRole, person, properties, onClose, onDone }: { p:
   return (
     <Sheet palette={p} visible onClose={onClose} title={person.fullName || person.email || "New account"} subtitle={person.email ?? "Signed up by phone"} icon="people">
       <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-        <Tag label={STATUS_TAG[person.status][0]} tone={STATUS_TAG[person.status][1]} p={p} />
+        <Tag label={STATUS_TAG[personState(person)][0]} tone={STATUS_TAG[personState(person)][1]} p={p} />
+        {personState(person) === "offline" && <Text style={[ui.small, { color: p.muted, alignSelf: "center" }]}>{lastOnline(person.seenAt)}</Text>}
         {!person.emailVerified && <Tag label="Email not verified" tone="wait" p={p} />}
       </View>
       {!editable && <Notice text="Only a super admin can change an admin's access." p={p} />}
@@ -282,7 +283,7 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [personFilter, setPersonFilter] = useState<"pending" | "active" | "revoked" | "all">("pending");
+  const [personFilter, setPersonFilter] = useState<PersonState | "all">("pending");
   const [propertyFilter, setPropertyFilter] = useState<"active" | "onboarding" | "archived" | "all">("all");
   const [openPerson, setOpenPerson] = useState<string | null>(null);
   const [openProperty, setOpenProperty] = useState<string | null>(null);
@@ -298,11 +299,16 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
     setLoading(false);
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  // Who is online changes by the minute, so check again quietly every minute.
+  useEffect(() => {
+    const timer = setInterval(() => { void readAdmin("people").then(r => setPeople(peopleSchema.parse(r.data))).catch(() => undefined); }, 60_000);
+    return () => clearInterval(timer);
+  }, []);
   // Start on everyone when nobody is waiting.
-  const pending = people.filter(x => x.status === "pending").length;
+  const pending = people.filter(x => x.status === "pending").length, online = people.filter(x => personState(x) === "online").length;
   const shownFilter = personFilter === "pending" && !pending && !loading ? "all" : personFilter;
   const q = query.trim().toLowerCase();
-  const shownPeople = useMemo(() => people.filter(x => (shownFilter === "all" || x.status === shownFilter) && (!q || (x.fullName + " " + (x.email ?? "")).toLowerCase().includes(q))), [people, shownFilter, q]);
+  const shownPeople = useMemo(() => people.filter(x => (shownFilter === "all" || personState(x) === shownFilter) && (!q || (x.fullName + " " + (x.email ?? "")).toLowerCase().includes(q))), [people, shownFilter, q]);
   const shownProperties = properties.filter(x => (propertyFilter === "all" ? x.status !== "archived" : x.status === propertyFilter) && (!q || (x.name + " " + x.region + " " + x.address).toLowerCase().includes(q)));
   const person = people.find(x => x.userId === openPerson) ?? null;
   const property = properties.find(x => x.id === openProperty) ?? null;
@@ -313,11 +319,11 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
       {loading && <Loading p={p} />}
       <Search p={p} value={query} onChange={setQuery} placeholder={view === "people" ? "Search people" : "Search properties"} />
       {view === "people" && <>
-        <Pills p={p} values={["pending", "active", "revoked", "all"] as const} value={shownFilter} onChange={setPersonFilter} label={v => ({ pending: `Waiting (${pending})`, active: "Active", revoked: "Revoked", all: "Everyone" })[v]} />
-        <List p={p} search={false} empty={shownFilter === "pending" ? "Nobody is waiting for approval." : "No people match."}>
+        <Pills p={p} values={["pending", "online", "offline", "revoked", "all"] as const} value={shownFilter} onChange={setPersonFilter} label={v => ({ pending: `Waiting (${pending})`, online: `Online (${online})`, offline: "Offline", revoked: "Revoked", all: "Everyone" })[v]} />
+        <List p={p} search={false} empty={shownFilter === "pending" ? "Nobody is waiting for approval." : shownFilter === "online" ? "Nobody is online right now." : "No people match."}>
           {shownPeople.map((x, i) => (
-            <Row key={x.userId} p={p} first={i === 0} avatar={x.fullName || x.email || "?"} tone={ROLE_TONE[x.role]} title={x.fullName || x.email || "New account"} detail={`${roleLabel(x.role)} · ${x.email ?? "phone sign-up"}${!isWorkspaceAdmin(x.role) ? ` · ${x.assignments.length} propert${x.assignments.length === 1 ? "y" : "ies"}` : ""}`}
-              tags={[STATUS_TAG[x.status], ...(!x.emailVerified ? [["Email not verified", "wait"] as [string, "wait"]] : [])]} onPress={() => setOpenPerson(x.userId)} />
+            <Row key={x.userId} p={p} first={i === 0} avatar={x.fullName || x.email || "?"} tone={ROLE_TONE[x.role]} title={x.fullName || x.email || "New account"} detail={`${roleLabel(x.role)} · ${x.email ?? "phone sign-up"}${!isWorkspaceAdmin(x.role) ? ` · ${x.assignments.length} propert${x.assignments.length === 1 ? "y" : "ies"}` : ""}${personState(x) === "offline" ? ` · ${lastOnline(x.seenAt)}` : ""}`}
+              tags={[STATUS_TAG[personState(x)], ...(!x.emailVerified ? [["Email not verified", "wait"] as [string, "wait"]] : [])]} onPress={() => setOpenPerson(x.userId)} />
           ))}
         </List>
         <Text style={[ui.small, { color: p.muted }]}>New people sign up in the app and ask for access. Their request appears here for approval.</Text>

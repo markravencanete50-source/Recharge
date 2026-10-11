@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { storedOtaAccountsSchema } from "./ota-accounts";
+import { presenceLabel, presenceOf } from "./workspace-chat-policy";
 import { defaultModulesForRole, isWorkspaceAdmin, MODULE_IDS, MODULES, type ModuleId, type WorkspaceRole } from "./modules";
 
 // Response shapes and rules for the live People, Properties and owner screens,
@@ -7,11 +8,21 @@ import { defaultModulesForRole, isWorkspaceAdmin, MODULE_IDS, MODULES, type Modu
 const assignment = z.enum(["client", "cleaner", "cleaning_manager", "staff"]);
 export const personSchema = z.object({
   userId: z.string().uuid(), email: z.string().nullable(), fullName: z.string(), role: z.string(), status: z.enum(["active", "pending", "revoked"]),
-  responsibilities: z.string().nullable(), modules: z.array(z.string()), emailVerified: z.boolean(),
+  responsibilities: z.string().nullable(), modules: z.array(z.string()), emailVerified: z.boolean(), seenAt: z.string().nullable().default(null),
   assignments: z.array(z.object({ propertyId: z.string().uuid(), propertyName: z.string(), propertyStatus: z.string(), assignment })),
 });
 export const peopleSchema = z.array(personSchema);
 export type Person = z.infer<typeof personSchema>;
+// How People shows an account: waiting, revoked, or (once approved) online or offline right now.
+export type PersonState = "pending" | "online" | "offline" | "revoked";
+export function personState(person: Pick<Person, "status" | "seenAt">, now = Date.now()): PersonState {
+  if (person.status !== "active") return person.status;
+  return presenceOf(person.seenAt, now) === "online" ? "online" : "offline";
+}
+// "Last online 3h ago", or "Not online yet" for someone who has not opened the app since this was added.
+export function lastOnline(seenAt: string | null, now = Date.now()) {
+  return seenAt ? presenceLabel(seenAt, now).replace(/^Active/, "Last online") : "Not online yet";
+}
 export const adminPropertySchema = z.object({
   id: z.string().uuid(), name: z.string(), address: z.string(), region: z.string(), status: z.enum(["onboarding", "active", "archived"]), bedrooms: z.number(), version: z.number(),
   people: z.array(z.object({ userId: z.string().uuid(), fullName: z.string(), role: z.string(), status: z.string(), assignment })),

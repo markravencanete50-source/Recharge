@@ -137,3 +137,20 @@ test('owners: an owner sees their issued statements and stays', async () => {
   assert.equal(schedule.stays.length, 1);
   assert.equal(schedule.stays[0].guests, 2);
 });
+
+test('people: approved accounts show online or offline instead of active', async () => {
+  await as(OTHER_ADMIN);
+  await rpc('workspace_chat_action', [{ action: 'heartbeat' }]);
+  await as(ADMIN);
+  const people = live.peopleSchema.parse(await read('people'));
+  const other = people.find(p => p.userId === users[OTHER_ADMIN]), me = people.find(p => p.userId === users[ADMIN]);
+  assert.ok(other.seenAt, 'the people list carries when they were last in the app');
+  assert.equal(live.personState(other), 'online');
+  assert.equal(me.seenAt, null); assert.equal(live.personState(me), 'offline');
+  assert.equal(live.lastOnline(null), 'Not online yet');
+  const now = Date.parse('2026-10-11T12:00:00Z');
+  assert.equal(live.personState({ status: 'active', seenAt: '2026-10-11T11:00:00Z' }, now), 'offline');
+  assert.equal(live.lastOnline('2026-10-11T09:00:00Z', now), 'Last online 3h ago');
+  assert.equal(live.personState({ status: 'pending', seenAt: null }), 'pending');
+  assert.equal(live.personState({ status: 'revoked', seenAt: '2026-10-11T11:59:30Z' }, now), 'revoked');
+});
