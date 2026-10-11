@@ -174,7 +174,7 @@ export function LiveClientReports({ palette: p, mailbox = false }: { palette: Pa
               </View>
               <GrowBar share={x.earningsMinor / maxProperty} color={colourOf(x.propertyId)} track={p.background} />
               <Text style={[ui.small, { color: p.muted }]}>{percent(x.occupancy)} occupied · {x.nights} {x.nights === 1 ? "night" : "nights"} · {x.bookings} {x.bookings === 1 ? "booking" : "bookings"}</Text>
-              {propertyFocus.focus === i && <ChartTip p={p} x={Math.max(80, x.earningsMinor / maxProperty * propertyWidth)} width={propertyWidth} top={-62} tipWidth={170} title={x.name} rows={[{ label: "Earnings", value: formatMoney(x.earningsMinor), color: colourOf(x.propertyId) }, { label: "Share of month", value: propertyTotal ? Math.round(x.earningsMinor / propertyTotal * 100) + "%" : "0%" }]} />}
+              {propertyFocus.focus === i && <ChartTip p={p} x={Math.max(80, x.earningsMinor / maxProperty * propertyWidth)} width={propertyWidth} top={-62} tipWidth={210} title={x.name} rows={[{ label: "Earnings", value: formatMoney(x.earningsMinor), color: colourOf(x.propertyId) }, { label: "Share of month", value: propertyTotal ? Math.round(x.earningsMinor / propertyTotal * 100) + "%" : "0%" }]} />}
             </MotionPress>
           ))}
           {!byProperty.length && !loading && <Text style={[ui.small, { color: p.muted }]}>Your properties appear here once they are live.</Text>}
@@ -193,7 +193,7 @@ export function LiveClientReports({ palette: p, mailbox = false }: { palette: Pa
               </MotionPress>
             );
           })}
-          {(() => { const i = monthFocus.focus ?? (desktop ? null : twelve.findIndex(x => x.month === month)); const x = i === null || i < 0 ? null : twelve[i]; return x && <ChartTip p={p} x={(i! + 0.5) / twelve.length * monthsWidth} width={monthsWidth} top={-10} tipWidth={160} title={monthName(x.month)} rows={[{ label: "Earnings", value: formatMoney(x.earningsMinor), color: p.primary }, { label: "Share of year", value: yearTotal ? Math.round(x.earningsMinor / yearTotal * 100) + "%" : "0%" }]} />; })()}
+          {(() => { const i = monthFocus.focus ?? (desktop ? null : twelve.findIndex(x => x.month === month)); const x = i === null || i < 0 ? null : twelve[i]; return x && <ChartTip p={p} x={(i! + 0.5) / twelve.length * monthsWidth} width={monthsWidth} top={-10} tipWidth={190} title={monthName(x.month)} rows={[{ label: "Earnings", value: formatMoney(x.earningsMinor), color: p.primary }, { label: "Share of year", value: yearTotal ? Math.round(x.earningsMinor / yearTotal * 100) + "%" : "0%" }]} />; })()}
         </View>
       </View>
 

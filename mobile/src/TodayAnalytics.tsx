@@ -63,7 +63,8 @@ export function TodayRing({completed,total,motionKey,size=88,palette:p}:{complet
       {share>0&&<><AnimatedCircle {...ring} opacity={0.4} filter="url(#today-ring-glow)"/><AnimatedCircle {...ring}/></>}
     </Svg>
     <Text style={{color:tone.heroText,fontSize:size>88?28:22,fontWeight:'600',letterSpacing:-0.7}}>{total?Math.round(share*100):0}%</Text><Text style={{color:tone.heroMuted,fontSize:12}}>done</Text>
-    {ringTip.focus!==null&&<View pointerEvents="none" style={{position:'absolute',top:size+6,right:0,width:160}}><ChartTip p={p} x={80} width={160} title="Tasks this period" rows={[{label:'Done',value:completed,color:p.success},{label:'Still open',value:Math.max(0,total-completed)},{label:'Total',value:total}]}/></View>}
+    {/* Beside the ring: below it, the trend card paints over the tip. */}
+    {ringTip.focus!==null&&<View pointerEvents="none" style={{position:'absolute',top:Math.max(0,(size-92)/2),right:size+8,width:160}}><ChartTip p={p} x={80} width={160} title="Tasks this period" rows={[{label:'Done',value:completed,color:p.success},{label:'Still open',value:Math.max(0,total-completed)},{label:'Total',value:total}]}/></View>}
   </View>;
 }
 

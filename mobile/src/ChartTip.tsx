@@ -8,16 +8,16 @@ import { depth, ui, type Palette } from './theme';
 // phone) and a small card shows its numbers. Shared so every chart reads the same way.
 export type TipRow = { label: string; value: string | number; color?: string };
 
-// The card itself, kept inside the chart's width and above whatever it describes.
-export function ChartTip({ p, x, width, top = 0, title, rows, tipWidth = 150 }: { p: Palette; x: number; width: number; top?: number; title: string; rows: TipRow[]; tipWidth?: number }) {
+// The card itself, kept inside the chart's width and above whatever it describes (`bottom` hangs it above its anchor instead).
+export function ChartTip({ p, x, width, top = 0, bottom, title, rows, tipWidth = 150 }: { p: Palette; x: number; width: number; top?: number; bottom?: number; title: string; rows: TipRow[]; tipWidth?: number }) {
   const left = Math.min(Math.max(0, x - tipWidth / 2), Math.max(0, width - tipWidth));
   return (
-    <View pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', top, left, width: tipWidth, padding: 10, borderRadius: 14, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, gap: 3, zIndex: 20, ...depth.raised }}>
-      <Text numberOfLines={1} style={{ color: p.muted, fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>{title}</Text>
+    <View pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', ...(bottom === undefined ? { top } : { bottom }), left, width: tipWidth, padding: 10, borderRadius: 14, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, gap: 3, zIndex: 20, ...depth.raised }}>
+      <Text numberOfLines={2} style={{ color: p.muted, fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>{title}</Text>
       {rows.map(row => (
         <View key={row.label} style={[ui.between, { gap: 8 }]}>
           <Text numberOfLines={1} style={{ color: p.text, fontSize: 12, flexShrink: 1 }}>{row.label}</Text>
-          <Text style={{ color: row.color ?? p.text, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{row.value}</Text>
+          <Text numberOfLines={1} style={{ color: row.color ?? p.text, flexShrink: 0, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{row.value}</Text>
         </View>
       ))}
     </View>

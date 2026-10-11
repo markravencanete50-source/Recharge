@@ -515,7 +515,7 @@ function MonthCalendar({ p, month, day, today, totals, loading, onPick }: { p: P
       <View style={{ flexDirection: "row", gap: compact ? 4 : 6 }}>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => <Text key={d} style={{ flex: 1, textAlign: "center", color: p.muted, fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", paddingVertical: 4 }}>{compact ? d.slice(0, 1) : d}</Text>)}
       </View>
-      {calendarWeeks(month).map(week => (
+      {calendarWeeks(month).map((week, wi, weeks) => (
         <View key={week[0]} onLayout={e => setRowWidth(e.nativeEvent.layout.width)} style={{ flexDirection: "row", gap: compact ? 4 : 6, position: "relative", zIndex: hovered && week.includes(hovered) ? 10 : 0 }}>
           {week.map(d => {
             const t = totals.get(d), inMonth = d.slice(0, 7) === month, on = d === day, isToday = d === today, future = d > today;
@@ -540,9 +540,10 @@ function MonthCalendar({ p, month, day, today, totals, loading, onPick }: { p: P
             );
           })}
           {hovered && week.includes(hovered) && (() => {
-            const t = totals.get(hovered), i = week.indexOf(hovered);
-            return <ChartTip p={p} x={(i + 0.5) / 7 * rowWidth} width={rowWidth} top={compact ? 52 : 70} tipWidth={170} title={longDay(hovered)} rows={[
-              { label: "Hours worked", value: t?.minutes ? minutesLabel(t.minutes) : "0h", color: p.primary }, { label: "People", value: t?.people ?? 0 }, { label: "Shifts", value: t?.shifts ?? 0 },
+            const t = totals.get(hovered), i = week.indexOf(hovered), gap = compact ? 52 : 70;
+            // The last two weeks hang the card above, so it stays inside the calendar.
+            return <ChartTip p={p} x={(i + 0.5) / 7 * rowWidth} width={rowWidth} top={gap} bottom={wi >= weeks.length - 2 ? gap : undefined} tipWidth={220} title={longDay(hovered)} rows={[
+              { label: "Hours", value: t?.minutes ? minutesLabel(t.minutes) : "0h", color: p.primary }, { label: "People", value: t?.people ?? 0 }, { label: "Shifts", value: t?.shifts ?? 0 },
               ...(t?.missed ? [{ label: "Not clocked", value: t.missed, color: p.danger }] : []), ...(t?.waiting ? [{ label: "Changes waiting", value: t.waiting, color: p.waiting }] : []),
             ]} />;
           })()}
@@ -659,7 +660,7 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
             return (
               <MotionPress key={person.userId} {...(Platform.OS === "web" && canEdit && first ? { dataSet: { hover: "tint" } } : {})} disabled={!canEdit || !first} accessibilityRole={canEdit && first ? "button" : undefined}
                 accessibilityLabel={`${person.fullName}: ${shifts.map(s => `${londonClock(s.clockedInAt)} to ${s.clockedOutAt ? londonClock(s.clockedOutAt) : "now"}`).join(", ") || "nothing clocked"}`}
-                onPress={() => first && onShift(person, first)} style={{ borderRadius: 14, paddingVertical: 6, paddingHorizontal: 4 }}>
+                onPress={() => first && onShift(person, first)} style={{ borderRadius: 14, paddingVertical: 6, paddingHorizontal: 4, zIndex: tipShift ? 10 : 0 }}>
                 {wide ? <View style={[ui.row, { gap: 10 }]}>{name}{track}{figure}</View>
                   : <View style={{ gap: 8 }}><View style={[ui.row, { gap: 10 }]}>{name}{figure}</View>{track}</View>}
               </MotionPress>
