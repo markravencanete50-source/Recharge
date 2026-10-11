@@ -119,6 +119,12 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('removeBudgetItem'), requestId: id, id, version }).strict(),
   z.object({ action: z.literal('signOffDay'), requestId: id, allVisible: z.literal(true), reviewsHandled: z.literal(true), suspensionsHandled: z.literal(true), relistingsDone: z.literal(true), note: z.string().trim().max(2000).default('') }).strict(),
   z.object({ action: z.literal('clockOut'), requestId: id }).strict(),
+  // While clocked in: pause for lunch, a break or an emergency, go back to work, or switch to overtime.
+  z.object({ action: z.literal('startPause'), requestId: id, kind: z.enum(['lunch', 'break', 'emergency']), note: z.string().trim().max(200).optional() }).strict(),
+  z.object({ action: z.literal('endPause'), requestId: id }).strict(),
+  z.object({ action: z.literal('startOvertime'), requestId: id }).strict(),
+  // Admins: whether each kind of pause counts as paid time.
+  z.object({ action: z.literal('savePausePolicy'), requestId: id, lunchPaid: z.boolean(), breakPaid: z.boolean(), emergencyPaid: z.boolean(), version: z.number().int().positive() }).strict(),
   z.object({ action: z.literal('closeShift'), requestId: id, shiftId: id, endedAt: z.string().datetime({ offset: true }), note: text(3, 500).optional() }).strict(),
   z.object({ action: z.literal('saveTargets'), requestId: id, version, greenMinutes: z.number().int().min(1).max(120), amberMinutes: z.number().int().min(2).max(240),
     passPercent: z.number().int().min(1).max(100), bonusPercents: z.array(z.number().int().min(1).max(100)).max(5),
@@ -193,10 +199,10 @@ export const shiftChangesSchema = z.object({ canApprove: z.boolean(), me: id, pe
 export type ShiftChanges = z.infer<typeof shiftChangesSchema>;
 
 // Hours per person for a period, by week (each starting on its Monday) and by month (YYYY-MM).
-const tally = { minutes: z.number(), shifts: z.number(), days: z.number() };
+const tally = { minutes: z.number(), shifts: z.number(), days: z.number(), overtime: z.number().default(0) };
 export const productivitySchema = z.object({
   from: z.string(), to: z.string(), canEdit: z.boolean(), canApprove: z.boolean(), pending: z.number(),
-  people: z.array(z.object({ ...person, active: z.boolean(), onShift: z.boolean(), ...tally,
+  people: z.array(z.object({ ...person, active: z.boolean(), onShift: z.boolean(), ...tally, overtimeMinutes: z.number().default(0),
     weeks: z.array(z.object({ start: z.string(), ...tally })), months: z.array(z.object({ month: z.string(), ...tally })) })),
 });
 export type Productivity = z.infer<typeof productivitySchema>;
@@ -206,7 +212,9 @@ export const timesheetSchema = z.object({
   from: z.string(), to: z.string(), canEdit: z.boolean(), canApprove: z.boolean().default(false), pending: z.array(shiftChangeSchema).default([]),
   people: z.array(z.object({ ...person, active: z.boolean(), totalMinutes: z.number(),
     days: z.array(z.object({ day: z.string(), planned: rotaDay.omit({ day: true }).nullable(), minutes: z.number(),
-      shifts: z.array(z.object({ id, department: z.enum(DEPARTMENTS), clockedInAt: z.string(), clockedOutAt: z.string().nullable(), minutes: z.number(), edited: z.boolean(), editNote: z.string() })) })) })),
+      shifts: z.array(z.object({ id, department: z.enum(DEPARTMENTS), clockedInAt: z.string(), clockedOutAt: z.string().nullable(), minutes: z.number(), edited: z.boolean(), editNote: z.string(),
+        overtimeFrom: z.string().nullable().default(null), unpaidMinutes: z.number().default(0),
+        pauses: z.array(z.object({ kind: z.enum(['lunch', 'break', 'emergency']), startedAt: z.string(), endedAt: z.string().nullable() })).default([]) })) })) })),
 });
 export type Timesheet = z.infer<typeof timesheetSchema>;
 export type TimesheetPerson = Timesheet['people'][number];

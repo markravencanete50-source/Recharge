@@ -102,3 +102,19 @@ export function dayPeople(sheet: Sheet, day: string, today: string): DayPerson[]
     return working || waiting.length ? [{ person, row, waiting }] : [];
   }).sort((a, b) => start(a) - start(b) || a.person.fullName.localeCompare(b.person.fullName));
 }
+
+// A day's pauses and overtime in a few words: "Lunch 30m · Break 10m · Overtime 1h 15m".
+const PAUSE_WORD = { lunch: 'Lunch', break: 'Break', emergency: 'Emergency' } as const;
+type PausedShift = { clockedOutAt: string | null; overtimeFrom?: string | null; pauses?: { kind: keyof typeof PAUSE_WORD; startedAt: string; endedAt: string | null }[] };
+export function pauseSummary(shifts: PausedShift[], now = Date.now()) {
+  const totals = new Map<keyof typeof PAUSE_WORD, number>();
+  let overtime = 0;
+  for (const s of shifts) {
+    const end = (iso: string | null | undefined) => iso ? Date.parse(iso) : s.clockedOutAt ? Date.parse(s.clockedOutAt) : now;
+    for (const x of s.pauses ?? []) totals.set(x.kind, (totals.get(x.kind) ?? 0) + Math.max(0, Math.round((end(x.endedAt) - Date.parse(x.startedAt)) / 60000)));
+    if (s.overtimeFrom) overtime += Math.max(0, Math.round((end(null) - Date.parse(s.overtimeFrom)) / 60000));
+  }
+  const parts = (['lunch', 'break', 'emergency'] as const).filter(k => totals.has(k)).map(k => `${PAUSE_WORD[k]} ${totals.get(k)! ? hoursShort(totals.get(k)!) : 'under 1m'}`);
+  if (overtime) parts.push(`Overtime ${hoursShort(overtime)}`);
+  return parts.join(' · ');
+}

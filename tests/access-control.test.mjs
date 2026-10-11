@@ -32,7 +32,7 @@ test('states, labels, search and grouping', () => {
   assert.equal(lastSeen('2026-10-06T12:00:00Z', now), 'Signed in 2 days ago');
   const person = { fullName: 'Fiona MacLeod', email: 'fiona@example.com', phone: null, role: 'client', status: 'active', closed: false, activeSessions: 1 };
   assert.ok(matchesSearch(person, 'macleod') && matchesSearch(person, 'CLIENT') && !matchesSearch(person, 'glasgow'));
-  assert.deepEqual(accessSummary([person, { ...person, status: 'revoked', activeSessions: 0 }, { ...person, closed: true }]), { people: 2, active: 1, waiting: 0, blocked: 1, signedIn: 1 });
+  assert.deepEqual(accessSummary([person, { ...person, status: 'revoked', activeSessions: 0 }, { ...person, closed: true }]), { people: 2, active: 1, waiting: 0, blocked: 1, signedIn: 1, online: 0 });
   const grouped = toolGroups().flatMap(g => g.tools.map(t => t.id)).sort();
   assert.deepEqual(grouped, [...MODULE_IDS].sort(), 'every tool appears once in a group');
 });

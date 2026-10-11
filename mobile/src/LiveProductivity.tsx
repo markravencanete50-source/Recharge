@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { PauseRules } from "./LiveShifts";
 import * as Crypto from "expo-crypto";
 import { Animated, Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
@@ -17,10 +18,11 @@ import { depth, primaryFill, ui, web, type Palette } from "./theme";
 import { readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL } from "../../lib/hub";
 import { ROLE_LABEL } from "../../lib/admin-live";
+import { PAUSE_LABEL } from "../../lib/management-live";
 import { ROTA_HOURS, ROTA_LABEL, londonClock, minutesLabel, mondayOf, shiftWeek, timesheetCsv } from "../../lib/team-time";
 import {
   CHANGE_KIND, CHANGE_STATUS, averageWeek, dayWithYear, describeChange, hoursShort, minutesDelta, monthLabel, monthMinutes, monthsOf, moveMonth,
-  productivityCsv, teamMonth, teamWeek, weekLabel, weekMinutes, weeksOfMonth, calendarWeeks, dayPeople, dayTotals, monthEnd, ROTA_SPAN, ukHours, type DayTotal,
+  productivityCsv, teamMonth, teamWeek, weekLabel, weekMinutes, weeksOfMonth, calendarWeeks, dayPeople, dayTotals, monthEnd, pauseSummary, ROTA_SPAN, ukHours, type DayTotal,
 } from "../../lib/productivity";
 import {
   productivitySchema, shiftChangesSchema, timesheetSchema,
@@ -75,6 +77,7 @@ export function LiveProductivity({ palette: p, account, initial = "days" }: { pa
           ? [
             <StatTile key="week" p={p} icon="clock" tone="stays" label="Hours this week" value={data ? teamWeek(data, mondayOf(today)) : 0} format={hoursTile} detail="The whole team, from Monday" />,
             <StatTile key="month" p={p} icon="calendar" tone="clients" label="Hours this month" value={data ? teamMonth(data, today.slice(0, 7)) : 0} format={hoursTile} detail={monthLabel(today.slice(0, 7), "long")} />,
+            <StatTile key="overtime" p={p} icon="clock" tone="ready" label="Overtime this month" value={data ? data.people.reduce((sum, x) => sum + (x.months.find(m => m.month === today.slice(0, 7))?.overtime ?? 0), 0) : 0} format={hoursTile} detail="Time after people switched to overtime" />,
           ]
           : [
             <StatTile key="year" p={p} icon="calendar" tone="stays" label={`Hours in ${year}`} value={yearMinutes} format={hoursTile} detail="The whole team" />,
@@ -96,6 +99,7 @@ export function LiveProductivity({ palette: p, account, initial = "days" }: { pa
         {view === "log" && <ClockLog p={p} account={account} today={today} onChanged={reload} />}
         {view === "changes" && <Approvals p={p} onChanged={reload} />}
       </SwapIn>
+      {(account.role === "admin" || account.role === "super_admin") && <PauseRules p={p} />}
       <PersonSheet p={p} person={person} data={data} today={today} onClose={() => setPerson(null)} />
     </View>
   );
@@ -594,6 +598,7 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text numberOfLines={1} style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>{person.fullName || "Team member"}</Text>
                   <Text numberOfLines={1} style={{ color: p.muted, fontSize: 11 }}>{row?.planned && row.planned.shift !== "off" ? `${ROTA_LABEL[row.planned.shift]} · ${ROTA_HOURS[row.planned.shift]}` : person.department ? DEPARTMENT_LABEL[person.department] : "Not on the rota"}</Text>
+                  {!!pauseSummary(shifts) && <Text numberOfLines={1} style={{ color: p.muted, fontSize: 11 }}>{pauseSummary(shifts)}</Text>}
                 </View>
               </View>
             );
@@ -610,10 +615,15 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
                 {waiting.map(c => { const from = ukHours(c.clockedInAt), to = c.clockedOutAt ? from + (Date.parse(c.clockedOutAt) - Date.parse(c.clockedInAt)) / 3600000 : from + 1; return (
                   <View key={c.id} style={{ position: "absolute", left: `${along(from)}%`, width: `${Math.max(1, along(to) - along(from))}%`, top: 3, bottom: 3, borderRadius: 7, borderWidth: 1.5, borderColor: p.waiting }} />); })}
                 {shifts.map(s => {
-                  const from = ukHours(s.clockedInAt), to = from + s.minutes / 60, w = Math.max(1.2, along(to) - along(from));
+                  // The bar runs from clock-in to clock-out (pauses are marked on it, not cut out of it).
+                  const length = (iso: string | null) => ((iso ? Date.parse(iso) : Date.now()) - Date.parse(s.clockedInAt)) / 3600000;
+                  const from = ukHours(s.clockedInAt), to = from + length(s.clockedOutAt), w = Math.max(1.2, along(to) - along(from));
+                  const at = (iso: string) => w ? Math.min(100, Math.max(0, (along(from + length(iso)) - along(from)) / w * 100)) : 0;
                   return (
                     <Animated.View key={s.id} style={{ position: "absolute", left: `${along(from)}%`, top: 8, bottom: 8, borderRadius: 6, overflow: "hidden", width: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${w}%`] }),
                       backgroundColor: s.clockedOutAt ? p.primary : p.success, ...web({ backgroundImage: "linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0))", boxShadow: "0 4px 10px -6px rgba(21,45,40,.55)" }) }}>
+                      {!!s.overtimeFrom && <View accessibilityLabel={`Overtime from ${londonClock(s.overtimeFrom)}`} style={{ position: "absolute", left: `${at(s.overtimeFrom)}%`, right: 0, top: 0, bottom: 0, backgroundColor: p.waiting, opacity: 0.85 }} />}
+                      {s.pauses.map(x => <View key={x.startedAt} accessibilityLabel={`${PAUSE_LABEL[x.kind]} ${londonClock(x.startedAt)}`} style={{ position: "absolute", left: `${at(x.startedAt)}%`, width: `${Math.max(1, at(x.endedAt ?? s.clockedOutAt ?? new Date().toISOString()) - at(x.startedAt))}%`, top: 0, bottom: 0, backgroundColor: x.kind === "emergency" ? p.danger : p.surface, opacity: x.kind === "emergency" ? 0.75 : 0.6 }} />)}
                       {w > 14 && <Text numberOfLines={1} style={{ color: p.onPrimary, fontSize: 10, fontWeight: "700", paddingHorizontal: 6, lineHeight: 18, fontVariant: ["tabular-nums"] }}>{londonClock(s.clockedInAt)}–{s.clockedOutAt ? londonClock(s.clockedOutAt) : "now"}</Text>}
                     </Animated.View>
                   );

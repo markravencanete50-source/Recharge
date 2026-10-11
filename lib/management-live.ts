@@ -123,12 +123,21 @@ export function vacantNights(propertyId: string, stays: { propertyId: string; ch
 export const DEPARTMENT_LABEL: Record<string, string> = { guest_relations: "Guest relations", client_relations: "Client relations", cleaning: "Cleaning", ready: "Ready", accounts: "Accounts", management: "Management" };
 // The department a role usually clocks in to.
 export const departmentFor = (role: string) => ({ stays: "guest_relations", cleans: "cleaning", cleaning_manager: "cleaning", ready: "ready", accounts: "accounts" } as Record<string, string>)[role] ?? "management";
-export const shiftSchema = z.object({ id: z.string().uuid(), userId: z.string().uuid(), fullName: z.string().nullable(), department: z.string(), clockedInAt: z.string(), clockedOutAt: z.string().nullable() });
+// Pauses while clocked in (lunch, a break, an emergency) and overtime once the shift is done.
+export const PAUSE_KINDS = ["lunch", "break", "emergency"] as const;
+export type PauseKind = (typeof PAUSE_KINDS)[number];
+export const PAUSE_LABEL: Record<PauseKind, string> = { lunch: "Lunch", break: "Break", emergency: "Emergency" };
+const pauseSchema = z.object({ kind: z.enum(PAUSE_KINDS), startedAt: z.string(), endedAt: z.string().nullable().optional() });
+export const pausePolicySchema = z.object({ lunchPaid: z.boolean(), breakPaid: z.boolean(), emergencyPaid: z.boolean(), version: z.number(), updatedAt: z.string().nullable().optional(), updatedBy: z.string().nullable().optional() });
+export type PausePolicy = z.infer<typeof pausePolicySchema>;
+export const shiftSchema = z.object({ id: z.string().uuid(), userId: z.string().uuid(), fullName: z.string().nullable(), department: z.string(), clockedInAt: z.string(), clockedOutAt: z.string().nullable(),
+  overtimeFrom: z.string().nullable().default(null), pause: pauseSchema.extend({ note: z.string().default("") }).nullable().default(null), pauses: z.array(pauseSchema).default([]), unpaidMinutes: z.number().default(0) });
 export type Shift = z.infer<typeof shiftSchema>;
 export const SHIFTS = { early: "Early, 8am–4pm", late: "Late, 3pm–11pm", both: "Early and late" } as const;
 export const rotaSchema = z.object({ department: z.string(), usualShift: z.enum(["early", "late", "both"]) });
 export const rotaListSchema = z.array(z.object({ userId: z.string().uuid(), fullName: z.string(), role: z.string(), department: z.string().nullable(), usualShift: z.enum(["early", "late", "both"]).nullable() }));
-export const myShiftSchema = z.object({ open: shiftSchema.nullable(), today: z.array(shiftSchema), green: z.number(), responses: z.number(), passPercent: z.number(), rota: rotaSchema.nullable().optional() });
+export const myShiftSchema = z.object({ open: shiftSchema.nullable(), today: z.array(shiftSchema), green: z.number(), responses: z.number(), passPercent: z.number(), rota: rotaSchema.nullable().optional(),
+  pausePolicy: pausePolicySchema.default({ lunchPaid: false, breakPaid: true, emergencyPaid: true, version: 1 }) });
 export const teamPerformanceSchema = z.object({
   targets: z.object({ greenMinutes: z.number(), amberMinutes: z.number(), passPercent: z.number(), bonusPercents: z.array(z.number()), version: z.number(),
     workWeight: z.number().default(0), dailyTargets: z.object({ signOffs: z.number(), listingChecks: z.number(), pricingDecisions: z.number(), reviewsLogged: z.number() }).default({ signOffs: 1, listingChecks: 1, pricingDecisions: 1, reviewsLogged: 0 }) }),

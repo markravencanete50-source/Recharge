@@ -442,6 +442,38 @@ database tool can run it, and it is safe to run more than once.
 - Anyone a deleted required course or contract was holding up is let through straight away.
 - Migration `20261010320000_delete_courses_contracts.sql`; tests `tests/training-delete-database.test.mjs`.
 
+## Security sweep (11 October 2026)
+
+- Live database: every table has row level security, signed-out visitors can read no table and
+  call one harmless function, all storage buckets are private, every security-definer function
+  sets its search path, and the sensitive ones check the caller's role first.
+- Fixed:
+  - The landlord form's upload now checks the form link (`X-Enquiry-Token`) before reading the
+    file, and uploads stream into one parse with a size cap (`lib/bounded-form.ts`, also used for
+    training files).
+  - The workers.dev redirect keeps only the path, so it can't point to another site.
+  - Chat file links while viewing as someone need the super admin's own access to that conversation.
+  - At most 18 unsent chat files per person, and 60 added an hour.
+  - Migration `20261011000000_security_sweep.sql`.
+- Still open (needs a person): turn on Leaked Password Protection in Supabase (Authentication →
+  Policies). The phone app's build tools (Expo, Metro) report advisories; they are in the build,
+  not in the shipped app or the server, and go with the next Expo upgrade.
+
+## Pauses, overtime and who is online (11 October 2026)
+
+- While clocked in, team members tap Lunch, Break or Emergency, then Back to work, and Overtime
+  once their shift is done (`startPause`, `endPause`, `startOvertime`; `private.workspace_pause_action`).
+  Clocking out ends any pause.
+- Admins and super admins choose which pauses count as paid time (Productivity → Breaks and pay,
+  `savePausePolicy`). Lunch is unpaid to start with. Unpaid pauses come off the hours in the
+  timesheet, the Productivity Tool and team performance (`private.workspace_shift_unpaid_minutes`).
+  Overtime is shown per person, week and month, and as a tile.
+- An Emergency notifies admins and super admins straight away (`team.emergency`).
+- Access control shows who is online now (from the app's minute-by-minute check-in), when they
+  were last online, and whether they are clocked in, on a pause or on overtime. "Online now" is a
+  filter and a tile, and the list refreshes every minute.
+- Migration `20261011010000_shift_pauses_presence.sql`; tests `tests/shift-pauses-database.test.mjs`.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

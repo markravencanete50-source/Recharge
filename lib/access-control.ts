@@ -3,6 +3,9 @@ import { WORKSPACE_MAP, type DepartmentTone } from './workspace-map';
 import { isWorkspaceAdmin, MODULE_IDS, MODULES, type ModuleId, type WorkspaceRole } from './modules';
 import { WORK_VIEW_LABEL, workViewsFor } from './tool-directory';
 import { homeToolsFor } from './home-tools';
+import { presenceLabel, presenceOf } from './workspace-chat-policy';
+import { londonClock } from './team-time';
+import { PAUSE_LABEL, shiftSchema, type Shift } from './management-live';
 
 // Access control (super admins): the shapes read from the database, and the plain-English labels
 // and groups the screen uses. The database decides what is allowed.
@@ -10,6 +13,8 @@ export const accessPersonSchema = z.object({
   userId: z.string().uuid(), fullName: z.string(), email: z.string().nullable(), phone: z.string().nullable(), role: z.string(),
   status: z.enum(['active', 'pending', 'revoked']), emailVerified: z.boolean(), joinedAt: z.string(), lastSignInAt: z.string().nullable(),
   modules: z.array(z.string()), properties: z.number(), activeSessions: z.number(), passwordRevoked: z.boolean(), closed: z.boolean(),
+  // When they last had the app open, and their shift right now (with any pause or overtime).
+  seenAt: z.string().nullable().default(null), shift: shiftSchema.nullable().default(null),
 });
 export type AccessPerson = z.infer<typeof accessPersonSchema>;
 export const accessPeopleSchema = z.array(accessPersonSchema);
@@ -86,9 +91,23 @@ export function toolGroups(): { tone: DepartmentTone; label: string; tools: { id
 export function accessSummary(people: AccessPerson[]) {
   const live = people.filter(p => !p.closed);
   return { people: live.length, active: live.filter(p => p.status === 'active').length, waiting: live.filter(p => p.status === 'pending').length,
-    blocked: live.filter(p => p.status === 'revoked').length, signedIn: live.filter(p => p.activeSessions > 0).length };
+    blocked: live.filter(p => p.status === 'revoked').length, signedIn: live.filter(p => p.activeSessions > 0).length,
+    online: live.filter(p => presenceOf(p.seenAt) === 'online').length };
 }
 export function matchesSearch(p: AccessPerson, query: string) {
   const q = query.trim().toLowerCase();
   return !q || [p.fullName, p.email ?? '', p.phone ?? '', p.role].some(v => v.toLowerCase().includes(q));
+}
+
+// Online or not: the app checks in every minute while it is open.
+export function presenceText(person: Pick<AccessPerson, 'seenAt' | 'lastSignInAt'>, now = Date.now()) {
+  if (presenceOf(person.seenAt, now) === 'online') return 'Online now';
+  return person.seenAt ? presenceLabel(person.seenAt, now).replace(/^Active/, 'Last online') : lastSeen(person.lastSignInAt, new Date(now));
+}
+// Where someone is with their shift: on a pause, on overtime, or clocked in (and since when).
+export function shiftStatus(shift: Shift | null): { label: string; tone: 'good' | 'wait' | 'bad' } | null {
+  if (!shift || shift.clockedOutAt) return null;
+  if (shift.pause) return { label: `${PAUSE_LABEL[shift.pause.kind]} since ${londonClock(shift.pause.startedAt)}`, tone: shift.pause.kind === 'emergency' ? 'bad' : 'wait' };
+  if (shift.overtimeFrom) return { label: `Overtime since ${londonClock(shift.overtimeFrom)}`, tone: 'good' };
+  return { label: `Clocked in since ${londonClock(shift.clockedInAt)}`, tone: 'good' };
 }

@@ -9,8 +9,9 @@ import { departmentColor, ui, type Palette } from "./theme";
 import { Anchor, Button, Field, Loading, message, Notice, Section, StatGrid, StatTile, Tag } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { readAdmin, readTeams, writeAdmin } from "./backend/client";
+import { presenceOf } from "../../lib/workspace-chat-policy";
 import { contractsSchema, coursesSchema, onboardingFor, type Contract, type Course } from "../../lib/management-live";
-import { accessHistorySchema, accessPeopleSchema, accessState, accessSummary, eventLabel, lastSeen, matchesSearch, ROLE_SUMMARY, roleChange, STATE_LABEL, toolGroups, type AccessEvent, type AccessPerson, type AccessState } from "../../lib/access-control";
+import { accessHistorySchema, accessPeopleSchema, accessState, accessSummary, eventLabel, lastSeen, matchesSearch, presenceText, shiftStatus, ROLE_SUMMARY, roleChange, STATE_LABEL, toolGroups, type AccessEvent, type AccessPerson, type AccessState } from "../../lib/access-control";
 import { ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange } from "../../lib/admin-live";
 import { isWorkspaceAdmin, type ModuleId, type WorkspaceRole } from "../../lib/modules";
 import { z } from "zod";
@@ -20,25 +21,28 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 // (sign out everywhere, revoke the password, block, delete). The database checks every change.
 const roleLabel = (role: string) => ROLE_LABEL[role as WorkspaceRole] ?? role;
 const initials = (name: string) => name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
-const FILTERS = ["all", "active", "pending", "blocked", "deleted"] as const;
-const FILTER_LABEL: Record<(typeof FILTERS)[number], string> = { all: "Everyone", active: "Active", pending: "Waiting", blocked: "Blocked", deleted: "Deleted" };
+const FILTERS = ["all", "online", "active", "pending", "blocked", "deleted"] as const;
+const FILTER_LABEL: Record<(typeof FILTERS)[number], string> = { all: "Everyone", online: "Online now", active: "Active", pending: "Waiting", blocked: "Blocked", deleted: "Deleted" };
 
 function PersonRow({ p, person, first, onPress }: { p: Palette; person: AccessPerson; first: boolean; onPress: () => void }) {
   const state = accessState(person), [label, tone] = STATE_LABEL[state];
   const tools = isWorkspaceAdmin(person.role) ? "Every tool" : `${person.modules.length} tool${person.modules.length === 1 ? "" : "s"}`;
+  const online = presenceOf(person.seenAt) === "online", shift = shiftStatus(person.shift);
   return (
     <MotionPress accessibilityRole="button" accessibilityLabel={`${person.fullName}, ${roleLabel(person.role)}, ${label}`} onPress={onPress}
       style={[ui.row, { gap: 12, paddingVertical: 12, borderTopWidth: first ? 0 : 1, borderColor: p.border, alignItems: "center" }]}>
       <View style={{ width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: state === "blocked" ? p.cautionWash : p.wash }}>
         <Text style={{ color: p.text, fontWeight: "700", fontSize: 14 }}>{initials(person.fullName)}</Text>
-        {person.activeSessions > 0 && <View accessibilityLabel="Signed in now" style={{ position: "absolute", right: 0, bottom: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: p.success, borderWidth: 2, borderColor: p.surface }} />}
+        {/* Green while they have the app open; grey once they have been away a while. */}
+        {!person.closed && <View accessibilityLabel={online ? "Online now" : "Offline"} style={{ position: "absolute", right: 0, bottom: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: online ? p.success : p.controlBorder, borderWidth: 2, borderColor: p.surface }} />}
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{person.fullName || "No name yet"}</Text>
-        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{person.email ?? person.phone ?? "No contact"} · {lastSeen(person.lastSignInAt)}</Text>
+        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{person.email ?? person.phone ?? "No contact"} · <Text style={[ui.small, { color: online ? p.success : p.muted, fontWeight: online ? "700" : "400" }]}>{presenceText(person)}</Text></Text>
         <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
           <Tag label={roleLabel(person.role)} tone="plain" p={p} />
           <Tag label={label} tone={tone} p={p} />
+          {!!shift && <Tag label={shift.label} tone={shift.tone} p={p} />}
           {person.passwordRevoked && !person.closed && <Tag label="Password reset needed" tone="wait" p={p} />}
         </View>
       </View>
@@ -100,6 +104,8 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
       <View style={{ gap: 8, padding: 14, borderRadius: 18, backgroundColor: p.background, borderWidth: 1, borderColor: p.border }}>
         {!!person.email && detail("mail", person.email + (person.emailVerified ? "" : " (not verified)"))}
         {!!person.phone && detail("phone", person.phone)}
+        {detail("monitor", presenceText(person))}
+        {!!shiftStatus(person.shift) && detail("clock", shiftStatus(person.shift)!.label)}
         {detail("clock", lastSeen(person.lastSignInAt))}
         {detail("monitor", person.activeSessions ? `${person.activeSessions} active session${person.activeSessions === 1 ? "" : "s"}` : "Not signed in anywhere")}
         {detail("home", `${person.properties} propert${person.properties === 1 ? "y" : "ies"} assigned`)}
@@ -317,9 +323,11 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
     setLoading(false);
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  // Who is online changes by the minute, so the list refreshes itself while it is open.
+  useEffect(() => { const timer = setInterval(() => void load(), 60_000); return () => clearInterval(timer); }, [load]);
   if (account.role !== "super_admin") return <Notice text="Access control is for super admins." p={p} />;
   const summary = accessSummary(people);
-  const shown = people.filter(x => (filter === "all" ? !x.closed : accessState(x) === (filter as AccessState)) && matchesSearch(x, query));
+  const shown = people.filter(x => (filter === "all" ? !x.closed : filter === "online" ? !x.closed && presenceOf(x.seenAt) === "online" : accessState(x) === (filter as AccessState)) && matchesSearch(x, query));
   const person = people.find(x => x.userId === openId) ?? null;
   return (
     <Anchor id="access-control"><View style={{ gap: 18 }}>
@@ -330,14 +338,14 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
       <View style={{ flexDirection: "row" }}><Button label="Add a person" icon="user-plus" primary p={p} onPress={() => setAdding(true)} /></View>
       <StatGrid>
         <StatTile key="people" p={p} icon="users" label="People" value={summary.people} />
-        <StatTile key="signed" p={p} icon="monitor" label="Signed in now" value={summary.signedIn} />
+        <StatTile key="online" p={p} icon="monitor" label="Online now" value={summary.online} />
         <StatTile key="blocked" p={p} icon="slash" label="Blocked" value={summary.blocked} attention={summary.blocked > 0} />
       </StatGrid>
       <View style={[ui.row, { gap: 10, paddingHorizontal: 14, minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background }]}>
         <Feather name="search" size={18} color={p.muted} />
         <TextInput value={query} onChangeText={setQuery} placeholder="Search by name, email, phone or role" placeholderTextColor={p.muted} accessibilityLabel="Search people" autoCapitalize="none" style={{ flex: 1, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
       </View>
-      <Pills p={p} values={FILTERS} value={filter} onChange={setFilter} label={v => FILTER_LABEL[v] + (v === "pending" && summary.waiting ? ` (${summary.waiting})` : "")} />
+      <Pills p={p} values={FILTERS} value={filter} onChange={setFilter} label={v => FILTER_LABEL[v] + (v === "pending" && summary.waiting ? ` (${summary.waiting})` : v === "online" ? ` (${summary.online})` : "")} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading ? <Loading p={p} /> : (
         <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>

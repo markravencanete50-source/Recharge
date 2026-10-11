@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { View } from "react-native";
+import { Switch, TextInput, View } from "react-native";
+import * as Crypto from "expo-crypto";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
@@ -10,7 +11,7 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Pills, Row } from "./LiveAccounts";
 import { readChat, readTeams, writeTeams } from "./backend/client";
-import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, rotaListSchema, SHIFTS, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
+import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, PAUSE_LABEL, pausePolicySchema, type PauseKind, type PausePolicy, rotaListSchema, SHIFTS, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
 import { DAILY_WORK, DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { formatCount, formatDay, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -31,6 +32,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [unavailable, setUnavailable] = useState(false);
+  const [emergency, setEmergency] = useState(false), [note, setNote] = useState("");
   const celebrate = useCelebrate();
   // Keyed per shift: after a clock-out the next clock-in gets a new request, even if an earlier
   // response was lost.
@@ -49,7 +51,22 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
       request.done(); celebrate(shift.open ? "Clocked out" : "Clocked in"); await load();
     } catch (e) { setError(message(e)); await load(); } finally { setBusy(false); }
   }
+  // Pausing for lunch, a break or an emergency, going back to work, and overtime.
+  async function pause(action: "startPause" | "endPause" | "startOvertime", kind?: PauseKind) {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      await writeTeams(action === "startPause" ? { action, requestId: Crypto.randomUUID(), kind: kind!, ...(note.trim() ? { note: note.trim() } : {}) } : { action, requestId: Crypto.randomUUID() });
+      setEmergency(false); setNote("");
+      celebrate(action === "endPause" ? "Back to work" : action === "startOvertime" ? "Overtime started" : `${PAUSE_LABEL[kind!]} started`);
+      await load();
+    } catch (e) { setError(message(e)); await load(); } finally { setBusy(false); }
+  }
   const open = shift?.open;
+  const onPause = open?.pause ?? null;
+  const unpaid = (kind: PauseKind) => shift ? !({ lunch: shift.pausePolicy.lunchPaid, break: shift.pausePolicy.breakPaid, emergency: shift.pausePolicy.emergencyPaid })[kind] : false;
+  // Worked so far: the time since clocking in, less pauses that don't count as paid time.
+  const worked = open ? Math.max(0, sinceMinutes(open.clockedInAt) - open.unpaidMinutes) : 0;
   const score = shift && shift.responses ? Math.floor(shift.green * 100 / shift.responses) : null;
   return (
     <View style={[ui.card, { backgroundColor: open ? p.header : p.surface, borderColor: open ? p.header : p.border, gap: 12 }]}>
@@ -59,7 +76,11 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
           <Text style={{ color: open ? p.headerText : p.text, fontSize: 18, fontWeight: "700" }}>
             {!shift ? "Checking…" : open ? `${DEPARTMENT_LABEL[open.department] ?? open.department} · since ${time(open.clockedInAt)}` : "You’re clocked out"}
           </Text>
-          {!!open && <Text style={{ color: p.headerMuted, fontSize: 13 }}>{shiftName(open.clockedInAt)} · {hoursLabel(sinceMinutes(open.clockedInAt))} so far</Text>}
+          {!!open && <Text style={{ color: p.headerMuted, fontSize: 13 }}>{shiftName(open.clockedInAt)} · {hoursLabel(worked)} worked so far{open.overtimeFrom ? ` · overtime since ${time(open.overtimeFrom)}` : ""}</Text>}
+          {!!onPause && <View style={[ui.row, { gap: 8, marginTop: 2 }]}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onPause.kind === "emergency" ? p.danger : p.waiting }} />
+            <Text style={{ color: p.headerText, fontSize: 14, fontWeight: "700" }}>On {PAUSE_LABEL[onPause.kind].toLowerCase()} since {time(onPause.startedAt)} · {hoursLabel(sinceMinutes(onPause.startedAt))}{unpaid(onPause.kind) ? " (unpaid)" : ""}</Text>
+          </View>}
           {!open && shift?.rota && <Text style={{ color: p.muted, fontSize: 13 }}>{DEPARTMENT_LABEL[shift.rota.department] ?? shift.rota.department} · usually {SHIFTS[shift.rota.usualShift]}</Text>}
           {score !== null && <Text style={{ color: open ? p.headerMuted : p.muted, fontSize: 13 }}>Guest replies, last 30 days: {score}% on time ({shift!.passPercent}% is on track)</Text>}
           {score !== null && <View style={{ marginTop: 4, maxWidth: 260 }}><GrowBar share={score / 100} height={6} color={score >= shift!.passPercent ? p.success : p.waiting} track={open ? p.headerBorder : p.wash} /></View>}
@@ -70,6 +91,35 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
           <Text style={[ui.buttonText, { color: open ? p.text : p.onPrimary }]}>{busy ? "Saving…" : open ? "Clock out" : "Clock in"}</Text>
         </MotionPress> : <Loading p={p} />}
       </View>
+      {!!open && (onPause
+        ? <MotionPress accessibilityRole="button" accessibilityLabel="Back to work" disabled={busy} onPress={() => void pause("endPause")}
+            style={[ui.button, { alignSelf: "flex-start", backgroundColor: p.background, paddingHorizontal: 20 }]}>
+            <Feather name="play" size={16} color={p.text} /><Text style={[ui.buttonText, { color: p.text }]}>{busy ? "Saving…" : "Back to work"}</Text>
+          </MotionPress>
+        : <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {([["lunch", "coffee"], ["break", "pause-circle"], ["emergency", "alert-triangle"]] as const).map(([kind, icon]) => (
+              <MotionPress key={kind} accessibilityRole="button" accessibilityLabel={`${PAUSE_LABEL[kind]}${unpaid(kind) ? ", unpaid" : ""}`} disabled={busy}
+                onPress={() => kind === "emergency" ? setEmergency(v => !v) : void pause("startPause", kind)}
+                style={[ui.row, { gap: 8, minHeight: 42, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: kind === "emergency" ? p.danger : p.headerBorder, backgroundColor: emergency && kind === "emergency" ? p.dangerWash : p.headerControl }]}>
+                <Feather name={icon} size={15} color={kind === "emergency" ? (emergency ? p.danger : p.headerText) : p.headerText} />
+                <Text style={{ color: kind === "emergency" && emergency ? p.danger : p.headerText, fontWeight: "700", fontSize: 13 }}>{PAUSE_LABEL[kind]}</Text>
+              </MotionPress>
+            ))}
+            {!open.overtimeFrom && <MotionPress accessibilityRole="button" accessibilityLabel="Start overtime" disabled={busy} onPress={() => void pause("startOvertime")}
+              style={[ui.row, { gap: 8, minHeight: 42, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: p.headerBorder, backgroundColor: p.headerControl }]}>
+              <Feather name="clock" size={15} color={p.headerText} /><Text style={{ color: p.headerText, fontWeight: "700", fontSize: 13 }}>Overtime</Text>
+            </MotionPress>}
+          </View>)}
+      {!!open && !onPause && emergency && <View style={{ gap: 8, padding: 12, borderRadius: 16, backgroundColor: p.dangerWash }}>
+        <Text style={{ color: p.text, fontWeight: "700" }}>Start an emergency pause?</Text>
+        <Text style={[ui.small, { color: p.text }]}>Managers are told straight away. Add a few words if you can.</Text>
+        <TextInput value={note} onChangeText={v => setNote(v.slice(0, 200))} placeholder="What's happened (optional)" placeholderTextColor={p.muted} accessibilityLabel="What's happened"
+          style={{ minHeight: 44, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.surface, color: p.text, fontFamily: "Montserrat_500Medium" }} />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Button label={busy ? "Starting…" : "Start emergency"} icon="alert-triangle" primary p={p} disabled={busy} onPress={() => void pause("startPause", "emergency")} />
+          <Button label="Cancel" p={p} onPress={() => { setEmergency(false); setNote(""); }} />
+        </View>
+      </View>}
       {shift && !open && <Pills p={p} values={DEPARTMENTS} value={department as (typeof DEPARTMENTS)[number]} onChange={setDepartment} label={d => DEPARTMENT_LABEL[d]} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
     </View>
@@ -275,5 +325,46 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
         <Button label={busy ? "Saving…" : direct ? "End the shift" : "Send for approval"} icon={direct ? "log-out" : "send"} primary p={p} disabled={busy} onPress={() => void close()} />
       </Sheet>
     </View>
+  );
+}
+
+// Admins: whether lunch, breaks and emergencies count as paid time. Unpaid pauses come off the
+// hours in the timesheet, the Productivity Tool and team performance.
+export function PauseRules({ p }: { p: Palette }) {
+  const [policy, setPolicy] = useState<PausePolicy | null>(null), [draft, setDraft] = useState<PausePolicy | null>(null);
+  const [busy, setBusy] = useState(false), [error, setError] = useState(""), [saved, setSaved] = useState("");
+  const load = useCallback(async () => {
+    try { const parsed = myShiftSchema.parse((await readTeams({ section: "shift" })).data).pausePolicy; setPolicy(parsed); setDraft(parsed); }
+    catch (e) { setError(message(e)); }
+  }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  if (!draft || !policy) return error ? <Notice text={error} p={p} tone="bad" /> : null;
+  const changed = draft.lunchPaid !== policy.lunchPaid || draft.breakPaid !== policy.breakPaid || draft.emergencyPaid !== policy.emergencyPaid;
+  async function save() {
+    if (!draft || !policy) return;
+    setBusy(true); setError(""); setSaved("");
+    try {
+      const next = pausePolicySchema.parse((await writeTeams({ action: "savePausePolicy", requestId: Crypto.randomUUID(), lunchPaid: draft.lunchPaid, breakPaid: draft.breakPaid, emergencyPaid: draft.emergencyPaid, version: policy.version })).data);
+      setPolicy(next); setDraft(next); setSaved("Saved. Hours are worked out with these rules from now on, including past pauses.");
+    } catch (e) { setError(message(e)); await load(); } finally { setBusy(false); }
+  }
+  const rows: [keyof Pick<PausePolicy, "lunchPaid" | "breakPaid" | "emergencyPaid">, string, string][] = [
+    ["lunchPaid", "Lunch", "The lunch pause"], ["breakPaid", "Breaks", "Short breaks"], ["emergencyPaid", "Emergencies", "Emergency pauses (managers are told)"]];
+  return (
+    <Section title="Breaks and pay" p={p}>
+      <Text style={[ui.small, { color: p.muted }]}>Team members pause for lunch, a break or an emergency while clocked in, and switch to overtime when their shift is done. Choose which pauses count as paid time.</Text>
+      <View style={{ borderRadius: 18, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
+        {rows.map(([key, title, detail], i) => (
+          <View key={key} style={[ui.between, { gap: 12, minHeight: 60, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
+            <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "700" }}>{title}</Text><Text style={[ui.small, { color: p.muted }]}>{detail} · {draft[key] ? "counts as paid time" : "unpaid, taken off their hours"}</Text></View>
+            <Switch accessibilityLabel={`${title} count as paid time`} value={draft[key]} onValueChange={v => setDraft({ ...draft, [key]: v })} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
+          </View>
+        ))}
+      </View>
+      {!!policy.updatedBy && <Text style={[ui.small, { color: p.muted }]}>Last changed by {policy.updatedBy}{policy.updatedAt ? ` on ${formatDay(policy.updatedAt.slice(0, 10))}` : ""}.</Text>}
+      {changed && <Button label={busy ? "Saving…" : "Save"} icon="check" primary p={p} disabled={busy} onPress={() => void save()} />}
+      {!!saved && <Notice text={saved} p={p} />}
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+    </Section>
   );
 }
