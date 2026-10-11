@@ -818,6 +818,15 @@ async function extras(s) {
     ['merchant', 'Glasgow Christmas markets', 40, 'https://peoplemakeglasgow.com/', 'Weekend demand from late November; review prices for Friday and Saturday nights.'],
     ['inverness', 'Loch Ness Marathon', -7, 'https://www.lochnessmarathon.com/', 'Race weekend sold out; note for next year.'],
   ]) await s.step(`local event ${name}`, () => s.portfolio(PROPERTIES.find(p => p.key === key).stays, { action: 'recordLocalEvent', propertyId: s.p[key].id, name, eventOn: day(offset), sourceUrl: url, opportunity }));
+  // Team feedback to the super admin: two new, one already answered.
+  const sent = [];
+  for (const [who, category, message] of [
+    ['callum', 'idea', 'Could the guest inbox show the check-in time next to each guest? It would save opening every booking.'],
+    ['morag', 'problem', 'The weekly report took a long time to load this morning. It came through in the end.'],
+    ['fiona', 'praise', 'The new clock card with Lunch and Break is so much easier than messaging the team.'],
+  ]) await s.step(`feedback ${who}`, async () => { sent.push(await s.teams(who, { action: 'sendFeedback', category, message })); });
+  const praise = sent.find(f => f?.category === 'praise');
+  if (praise) await s.step('feedback reply', () => s.teams('sam', { action: 'updateFeedback', feedbackId: praise.id, version: praise.version, status: 'done', reply: 'Thanks Fiona, really glad it helps. Tell me if anything else gets in the way.' }));
   // The backend jobs that run overnight: weekly report notices and owner approval chases.
   await s.step('owner chases', () => s.call('service', 'workspace_chase_owner_approvals', {}));
   await s.step('weekly notices', () => s.call('service', 'workspace_weekly_report_notices', {}));

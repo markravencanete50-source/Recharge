@@ -477,6 +477,19 @@ database tool can run it, and it is safe to run more than once.
   instead of Active, with Online and Offline filters, refreshed every minute
   (`personState`/`lastOnline` in `lib/admin-live.ts`; migration `20261011020000_people_presence.sql`).
 
+## Team feedback (11 October 2026)
+
+- Admins and the Stays team send feedback (Idea, Problem, Praise or Other, 5 to 2000 characters)
+  from **Send feedback** (left panel, the Profile sheet, and search). It is always sent under their
+  name, at most 10 an hour per person, and they see what they sent, its status and any reply.
+- Super admins get every piece in **Feedback** (New, Seen, Done, All), mark it seen or done, and
+  reply. New feedback notifies every super admin (`feedback.received`); a new reply notifies the
+  sender (`feedback.replied`). Nobody else can read or send it.
+- Migration `20261011030000_team_feedback.sql` (`private.workspace_feedback`, read section
+  `feedback`, actions `sendFeedback` and `updateFeedback`); screen `mobile/src/LiveFeedback.tsx`;
+  shared rules `lib/team-feedback.ts`; tests `tests/team-feedback-database.test.mjs`.
+- Demo mode shows it once the demo data is recorded again.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

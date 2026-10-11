@@ -36,6 +36,7 @@ const ALSO: Record<string, string> = {
   'section:activity': 'updates notifications activity history',
   'section:help': 'help training guides faq all tools directory',
   'section:favorites': 'favourites favorites saved starred pinned shortcuts',
+  'section:feedback': 'feedback suggestions ideas problems complaints praise tell super admin',
   'section:properties': 'properties listings houses flats portfolio map',
   'section:statements': 'owner statements payouts money',
   'view:management': 'approvals decisions people performance queue',
@@ -61,6 +62,7 @@ function pages(role: string): SearchEntry[] {
     ...(role === 'client' ? [page('approvals', 'Approvals', 'Costs and steps to decide', 'hourglass')] : []),
     page('inbox', 'Messages', team ? 'Departments, owners and guests' : 'Your property team', 'chat'),
     page('activity', 'Activity', 'Recent updates', 'bell'),
+    ...(role === 'super_admin' ? [page('feedback', 'Feedback', 'What the team has told you', 'chat')] : ['admin', 'stays'].includes(role) ? [page('feedback', 'Send feedback', 'Ideas, problems and praise for the super admin', 'chat')] : []),
     ...(team ? [page('favorites', 'Favorites', 'Your saved places', 'star')] : []),
     page('help', 'Help and all tools', 'Guides, training and every tool', 'compass'),
   ];

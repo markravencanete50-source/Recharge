@@ -104,6 +104,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'team.rota_planned': copy('Your rota has changed', 'Management has planned or changed your shifts. Check the rota for your days.'),
   'team.shift_corrected': copy('Your timesheet was corrected', 'Management has corrected or added one of your shifts, with a note of why.'),
   'enquiry.received': copy('A client enquiry is back', 'A landlord has filled in the property enquiry form. Their details are in Client enquiries, ready to value.'),
+  'feedback.received': copy('New team feedback', 'Someone on the team has sent feedback. Read it in Feedback, mark it seen or done, and reply if you like.'),
+  'feedback.replied': copy('A reply to your feedback', 'A super admin has replied to feedback you sent. Open Feedback to read it.'),
   'team.emergency': copy('Emergency on shift', 'A team member has paused their shift for an emergency. Open Access control or Productivity to see who, and check in with them.'),
   'team.shift_change_requested': copy('Timesheet change to approve', 'An admin has asked to change someone\'s clock in or clock out. It reaches their hours only once you approve it.'),
   'team.shift_change_approved': copy('Timesheet change approved', 'A super admin has approved your change to someone\'s hours. It now counts in their timesheet and productivity.'),

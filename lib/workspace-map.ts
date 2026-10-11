@@ -1,6 +1,6 @@
 import { MODULES, type ModuleId, type WorkspaceRole } from "./modules";
 
-export type WorkspaceSection = "home" | "work" | "properties" | "inbox" | "more" | "workspace" | "analytics" | "calendar" | "approvals" | "help" | "activity" | "training" | "statements" | "favorites" | "enquiries";
+export type WorkspaceSection = "home" | "work" | "properties" | "inbox" | "more" | "workspace" | "analytics" | "calendar" | "approvals" | "help" | "activity" | "training" | "statements" | "favorites" | "enquiries" | "feedback";
 export type DepartmentTone = "cleans" | "ready" | "stays" | "clients" | "accounts";
 type Destination = { area: string; tone: DepartmentTone; icon: string; service: string };
 
