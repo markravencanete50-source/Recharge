@@ -174,3 +174,21 @@ test('who is online, and your own profile', async () => {
   await db.exec('set role anon');
   await assert.rejects(rpc('workspace_profile_photo', [users[CLEANER]]), /permission denied/);
 });
+
+test('security sweep: unsent files are capped, and viewing as someone never opens their private files', async () => {
+  await as(STAYS);
+  const sent = threadSchema.parse(await read('messages', group.id)).messages.find(m => m.attachments.length);
+  const ids = sent.attachments.map(a => a.id);
+  // Viewing as Isla (the cleaner), a super admin who is not in the group sees no links.
+  await as(CLEANER);
+  assert.equal((await rpc('workspace_chat_files', [ids])).length, 3, 'Isla herself can open them');
+  await db.query("select set_config('recharge.view_as',$1,false)", [users[SUPER]]);
+  assert.deepEqual(await rpc('workspace_chat_files', [ids]), [], 'not while a super admin views as her');
+  await db.query("select set_config('recharge.view_as','',false)");
+  // 18 files may wait unsent; the 19th is refused until some are sent or removed.
+  const photo = n => ({ name: `p${n}.jpg`, mime: 'image/jpeg', bytes: 1000 });
+  await as(STAYS);
+  for (let i = 0; i < 3; i++) await act({ action: 'prepareFiles', conversationId: group.id, files: [1, 2, 3, 4, 5].map(photo) });
+  await act({ action: 'prepareFiles', conversationId: group.id, files: [1, 2, 3].map(photo) });
+  await assert.rejects(act({ action: 'prepareFiles', conversationId: group.id, files: [photo(1)] }), /waiting to be sent/);
+});

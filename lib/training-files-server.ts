@@ -5,6 +5,7 @@ import { boundedJson, isSameOrigin } from './auth-security-policy';
 import { businessContext, businessResponse, databaseFailure, viewAsFailure } from './business-server';
 import { isNativeRequest } from './native-request-policy';
 import { MAX_TRAINING_FILE_BYTES, trainingFileType } from './training-files';
+import { boundedFormData } from './bounded-form';
 import type { RpcContext } from './workspace-rpc-route';
 import type { TeamsAction } from './workspace-teams-policy';
 
@@ -59,18 +60,9 @@ export async function trainingFilesRoute(request: Request, native = false) {
       await storage.remove([String(removed.data.path)]).catch(() => undefined);
       return businessResponse({ ok: true });
     }
-    if (!request.headers.get('Content-Type')?.startsWith('multipart/form-data;')) return businessResponse({ error: 'Choose a file to upload' }, 400);
-    // The size is checked while reading, so a missing or false Content-Length can't get round it.
-    const reader = request.body?.getReader(); if (!reader) return businessResponse({ error: 'Choose a file to upload' }, 400);
-    let size = 0; const chunks: Uint8Array[] = [];
-    for (;;) {
-      const next = await reader.read(); if (next.done) break;
-      size += next.value.length;
-      if (size > MAX_TRAINING_FILE_BYTES + 65536) { await reader.cancel(); return businessResponse({ error: 'Files can be up to 25 MB. For longer videos, add a YouTube, Vimeo or Loom link instead.' }, 413); }
-      chunks.push(next.value);
-    }
-    const body = new Uint8Array(size); let offset = 0; for (const c of chunks) { body.set(c, offset); offset += c.length; }
-    const form = await new Response(body, { headers: { 'Content-Type': request.headers.get('Content-Type')! } }).formData();
+    const form = await boundedFormData(request, MAX_TRAINING_FILE_BYTES + 65536);
+    if (form === 'too-large') return businessResponse({ error: 'Files can be up to 25 MB. For longer videos, add a YouTube, Vimeo or Loom link instead.' }, 413);
+    if (!form) return businessResponse({ error: 'Choose a file to upload' }, 400);
     if ([...form.keys()].some(k => !['courseId', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return businessResponse({ error: 'Unexpected upload fields' }, 400);
     const courseId = id.safeParse(form.get('courseId')); const file = form.get('file');
     if (!courseId.success || !(file instanceof Blob)) return businessResponse({ error: 'Choose a course and a file' }, 400);

@@ -4,6 +4,7 @@ import { authSecurityConfiguration, requestQuota, securityHash } from './auth-se
 import { boundedJson, isSameOrigin } from './auth-security-policy';
 import { businessContext, businessResponse, databaseFailure, viewAsFailure } from './business-server';
 import { isNativeRequest } from './native-request-policy';
+import { boundedFormData } from './bounded-form';
 import { integrationConfiguration } from './integration-policy';
 import { integrationSettings } from './integration-server';
 import { sendEmail } from './integration-providers';
@@ -98,33 +99,29 @@ export async function enquiryUploadRoute(request: Request) {
       await storage.remove([removed.path]).catch(() => undefined);
       return businessResponse({ ok: true });
     }
-    if (!request.headers.get('Content-Type')?.startsWith('multipart/form-data;')) return businessResponse({ error: 'Choose a photo or video' }, 400);
-    const reader = request.body?.getReader(); if (!reader) return businessResponse({ error: 'Choose a photo or video' }, 400);
-    let size = 0; const chunks: Uint8Array[] = [];
-    for (;;) {
-      const next = await reader.read(); if (next.done) break;
-      size += next.value.length;
-      if (size > MAX_ENQUIRY_FILE_BYTES + 65536) { await reader.cancel(); return businessResponse({ error: 'Each file can be up to 25 MB. For longer videos, paste a link below instead.' }, 413); }
-      chunks.push(next.value);
-    }
-    const body = new Uint8Array(size); let offset = 0; for (const c of chunks) { body.set(c, offset); offset += c.length; }
-    const form = await new Response(body, { headers: { 'Content-Type': request.headers.get('Content-Type')! } }).formData();
-    if ([...form.keys()].some(k => !['token', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return businessResponse({ error: 'Unexpected upload fields' }, 400);
-    const token = String(form.get('token') ?? ''), file = form.get('file');
-    if (!tokenPattern.test(token) || !(file instanceof Blob)) return businessResponse({ error: 'Choose a photo or video' }, 400);
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const type = enquiryFileType(bytes);
-    if (!type) return businessResponse({ error: 'Add photos (JPG, PNG, WebP, HEIC) or videos (MP4, MOV, WebM) up to 25 MB each.' }, 400);
+    // The form's link comes in a header and is checked before the file is read, so nobody without
+    // a valid open form can make the site read a large upload.
+    const token = request.headers.get('X-Enquiry-Token') ?? '';
+    if (!tokenPattern.test(token)) return businessResponse({ error: 'This form link is not valid' }, 400);
     const hash = await tokenHash(token);
     const opened = await publicRpc<{ state: string; id: string }>({ action: 'open', tokenHash: hash });
     if (opened.state !== 'open') return businessResponse({ error: 'This form can’t take more files.' }, 400);
+    const form = await boundedFormData(request, MAX_ENQUIRY_FILE_BYTES + 65536);
+    if (form === 'too-large') return businessResponse({ error: 'Each file can be up to 25 MB. For longer videos, paste a link below instead.' }, 413);
+    if (!form) return businessResponse({ error: 'Choose a photo or video' }, 400);
+    if ([...form.keys()].some(k => !['token', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return businessResponse({ error: 'Unexpected upload fields' }, 400);
+    const file = form.get('file');
+    if ((form.has('token') && form.get('token') !== token) || !(file instanceof Blob) || file.size > MAX_ENQUIRY_FILE_BYTES) return businessResponse({ error: 'Choose a photo or video' }, 400);
+    // The type is read from the file's first bytes; the file itself goes to storage as it is.
+    const type = enquiryFileType(new Uint8Array(await file.slice(0, 64).arrayBuffer()));
+    if (!type) return businessResponse({ error: 'Add photos (JPG, PNG, WebP, HEIC) or videos (MP4, MOV, WebM) up to 25 MB each.' }, 400);
     const fileId = crypto.randomUUID(), path = `enquiries/${opened.id}/${fileId}.${type.ext}`;
     const name = (file instanceof File ? file.name : 'File').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200) || 'File';
-    const stored = await storage.upload(path, bytes, { contentType: type.mime, upsert: false, cacheControl: 'private, max-age=0' });
+    const stored = await storage.upload(path, file, { contentType: type.mime, upsert: false, cacheControl: 'private, max-age=0' });
     if (stored.error) return businessResponse({ error: 'The file could not be saved. Please try again.' }, 503);
-    try { await publicRpc({ action: 'addFile', tokenHash: hash, file: { id: fileId, path, name, mime: type.mime, bytes: bytes.length } }); }
+    try { await publicRpc({ action: 'addFile', tokenHash: hash, file: { id: fileId, path, name, mime: type.mime, bytes: file.size } }); }
     catch (error) { await storage.remove([path]).catch(() => undefined); throw error; }
-    return businessResponse({ ok: true, data: { id: fileId, name, mime: type.mime, bytes: bytes.length } });
+    return businessResponse({ ok: true, data: { id: fileId, name, mime: type.mime, bytes: file.size } });
   } catch (error) {
     if (error instanceof PublicRefusal) return businessResponse({ error: error.message }, 400);
     return businessResponse({ error: 'Uploads are not available just now. Add a link to your photos instead.' }, 503);

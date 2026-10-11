@@ -50,6 +50,8 @@ export function EnquiryForm({ token, name, email, files }: { token: string; name
     const form = new FormData(); form.append("token", token); form.append("file", file);
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/enquiry/upload");
+    // The link goes in a header too, so the site checks it before reading the file.
+    xhr.setRequestHeader("X-Enquiry-Token", token);
     xhr.upload.onprogress = e => { if (e.lengthComputable) setUploads(list => list.map(u => u.key === key ? { ...u, progress: Math.min(0.97, e.loaded / e.total) } : u)); };
     xhr.onload = () => {
       let body: { data?: { id: string }; error?: string } = {};

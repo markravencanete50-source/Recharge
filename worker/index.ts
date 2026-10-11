@@ -95,7 +95,9 @@ const worker = {
       // are left alone, so integrations pointed at the old address keep working.
       if (env.APP_ORIGIN?.startsWith("https://") && url.hostname.endsWith(".workers.dev") && url.origin !== new URL(env.APP_ORIGIN).origin
         && (request.method === "GET" || request.method === "HEAD") && !url.pathname.startsWith("/api/")) {
-        return Response.redirect(new URL(url.pathname + url.search, env.APP_ORIGIN).toString(), 308);
+        // Only the path and query move across: a path such as "//other.site/x" must not become another host.
+        const target = new URL(env.APP_ORIGIN); target.pathname = url.pathname.replace(/^[/\\]+/, "/"); target.search = url.search;
+        return Response.redirect(target.toString(), 308);
       }
       if (!backendRouteAllowed(url.pathname)) return new Response(JSON.stringify({ error: "This endpoint is not available on the live backend" }), { status: 404, headers });
       // The pages' built scripts, styles and fonts live in the static asset store. The app
