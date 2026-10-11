@@ -1,0 +1,6 @@
+{
+  // A one-page placeholder for comfortservicedaccommodation.co.uk. Deploy with: npx wrangler deploy
+  "name": "comfort-serviced-accommodation",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./public" }
+}
