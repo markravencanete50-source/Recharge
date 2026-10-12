@@ -141,8 +141,9 @@ Migration `20261009140000_daily_work_logins_inbox` (applied live).
 - **Guest inbox** (Stays → Guest inbox, `mobile/src/LiveGuestInbox.tsx`, `lib/guest-inbox-*`,
   `/api/{mobile,workspace}/guest-inbox`): `private.workspace_guest_threads` groups
   `workspace_guest_messages` (now with `body` and `delivery`). Staff log guest messages and save
-  replies (`delivery = 'logged'`) until the channel manager is connected; its feed calls
-  `workspace_guest_messages_ingest` with `body`, `guestName`, `reservationRef`, `checkIn`, `checkOut`.
+  replies (`delivery = 'logged'`) for anything outside Hostaway; Hostaway's conversations arrive every
+  minute through `workspace_hostaway_messages_ingest`, which calls `workspace_guest_messages_ingest`
+  with `body`, `guestName`, `reservationRef`, `checkIn`, `checkOut` (see `docs/HOSTAWAY-SYNC.md`).
   Visibility: the guest communication tool, per property; unmatched conversations are shared.
 
 ## Staff onboarding completed (9 October 2026)

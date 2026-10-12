@@ -11,7 +11,8 @@ do $$
 declare
  fixes constant text[][] := array[
   ['private.chat_report_decide(jsonb)',
-   $q$update private.chat_reports x set status=case when decision='remove' then 'actioned' else 'dismissed' end,handled_by=auth.uid(),handled_at=now(),version=x.version+1$q$,
+   $q$update private.chat_reports x set status=case when decision='remove' then 'actioned' else 'dismissed' end,handled_by=auth.uid(),handled_at=now(),version=x.version+1
+  where x.message_id=rep.message_id and x.status='open'$q$,
    $q$with ev as (insert into public.workspace_activity(actor_id,event_type) values(null,case when decision='remove' then 'chat.report_removed' else 'chat.report_reviewed' end) returning id)
   insert into private.workspace_notification_outbox(user_id,event_id)
    select r.reporter_id,ev.id from ev,(select distinct x.reporter_id from private.chat_reports x where x.message_id=rep.message_id and x.status='open') r
@@ -21,7 +22,8 @@ declare
   insert into private.workspace_notification_outbox(user_id,event_id)
    select p.user_id,ev.id from ev,public.workspace_profiles p where p.user_id=rep.author_id and p.status='active' on conflict do nothing;
  end if;
- update private.chat_reports x set status=case when decision='remove' then 'actioned' else 'dismissed' end,handled_by=auth.uid(),handled_at=now(),version=x.version+1$q$,
+ update private.chat_reports x set status=case when decision='remove' then 'actioned' else 'dismissed' end,handled_by=auth.uid(),handled_at=now(),version=x.version+1
+  where x.message_id=rep.message_id and x.status='open'$q$,
    $q$chat.message_removed$q$]
  ];
  definition text;

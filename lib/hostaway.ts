@@ -340,6 +340,37 @@ export async function cancelHostawayReservation(id: string): Promise<void> {
   });
 }
 
+// Guest conversations, newest activity first (100 a page), with their reservation embedded.
+export async function fetchHostawayConversations(pages = 1): Promise<unknown[]> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  const rows: unknown[] = [];
+  for (let page = 0; page < Math.min(10, Math.max(1, pages)); page++) {
+    const batch = await hostawayRequest<unknown[]>(`/conversations?limit=100&offset=${page * 100}&includeResources=1`);
+    if (!Array.isArray(batch)) throw new HostawayApiError("Hostaway returned an invalid conversation list", 502);
+    rows.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return rows;
+}
+
+export async function fetchHostawayConversation(id: string): Promise<unknown> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  return hostawayRequest<unknown>(`/conversations/${encodeURIComponent(id)}?includeResources=1`);
+}
+
+// A conversation's messages (up to 500, in the order Hostaway gives them; the mapping sorts them).
+export async function fetchHostawayConversationMessages(id: string): Promise<unknown[]> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  const rows: unknown[] = [];
+  for (let offset = 0; offset < 500; offset += 100) {
+    const page = await hostawayRequest<unknown[]>(`/conversations/${encodeURIComponent(id)}/messages?limit=100&offset=${offset}`);
+    if (!Array.isArray(page)) throw new HostawayApiError("Hostaway returned an invalid message list", 502);
+    rows.push(...page);
+    if (page.length < 100) break;
+  }
+  return rows;
+}
+
 export async function fetchHostawayListing(id: string): Promise<unknown> {
   if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
   return hostawayRequest<unknown>(`/listings/${encodeURIComponent(id)}`);

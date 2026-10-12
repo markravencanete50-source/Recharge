@@ -35,6 +35,40 @@ Recharge reads Hostaway and keeps itself up to date. Nothing is written back to 
 - **The Hostaway card** shows when it last ran, the numbers linked, any error, and anything to
   check (overlapping stays, a listing that couldn't be added, a clean already started).
 
+## Guest messages
+
+Guest conversations from Hostaway come into the Guest inbox (Stays → Guest inbox) by themselves,
+read only: nothing is ever sent or written to Hostaway.
+
+- **What comes in:** each guest message and each reply the team sends in Hostaway (or that
+  Hostaway sends automatically), grouped into one conversation per guest with the property, the
+  platform, the guest's name, the booking reference and the stay dates. Photos show as "(Photo)".
+  Messages that were scheduled but not sent, or failed, are left out. Reply times, scores and
+  bonuses count from these messages exactly as for ones logged by hand.
+- **When:** every minute the backend asks Hostaway for the 100 conversations with the newest
+  activity (one request), and fetches the messages only of those that changed (25 at most per
+  minute, one after another, to stay inside Hostaway's rate limit). So a guest's message shows
+  within about a minute even without the webhook. For an even quicker start, add the event
+  **`message.received`** to the existing Hostaway webhook (same URL and password as the
+  reservation events): the backend then fetches that conversation straight away. The webhook body
+  is never trusted; only the conversation id is used.
+- **History:** the last 14 days of messages. Older ones are not imported.
+- **Old conversations start Done.** A conversation new to Recharge whose newest message is over
+  24 hours old is added as Done, so the first import doesn't fill "Waiting" with old chats. A
+  newer guest message reopens it, as for any done conversation. A conversation Hostaway shows but
+  with nothing in the last 14 days is not added.
+- **Replies are still sent in Hostaway** (or on the platform). The reply comes back into the inbox
+  within a minute and ends the wait. "Save reply" in the app only records one; nothing is sent.
+  The "Log a guest message" option stays for WhatsApp, email and anything else outside Hostaway.
+- **Properties and stays:** a conversation is matched to the property by its Hostaway listing ID,
+  and to the stay (`HA:<reservation id>`) for the booking reference, dates and platform. If the
+  listing isn't in Recharge yet the conversation is shared with everyone with the inbox until a
+  later message finds the property, or someone matches it by hand (Guest details).
+- **Off and paused:** the same switches as the rest of the sync. While `HOSTAWAY_SYNC_ENABLED` is
+  not `true`, or the database sync state is paused, nothing is fetched or stored.
+- **If something goes wrong,** the error is logged and the next minute retries. It doesn't change
+  the Hostaway card's "last error", which belongs to the reservation sync.
+
 ## Setting it up (about 10 minutes)
 
 The keys go straight into the backend as secrets. Never paste them into chat, email or a file
@@ -54,7 +88,7 @@ in the repository.
 4. **Redeploy the backend** (this also switches on the 15-minute schedule):
    `npm run build && npm run backend:deploy`
 5. **Add the webhook in Hostaway.** In *Settings → Integrations → Webhooks* (unified webhooks), add
-   the events `reservation.created` and `reservation.updated` and, as the URL,
+   the events `reservation.created`, `reservation.updated` and `message.received` and, as the URL,
    `https://app.rechargegroup.co.uk/api/hostaway/webhook?key=<webhook password>`.
    (If the form has Login and Password fields, you can instead leave `?key=…` off and use the login
    `recharge` with the webhook password.) Make the password letters and numbers only, for example
@@ -77,7 +111,14 @@ sync state is unpaused (`update private.workspace_hostaway_sync_state set paused
 - Database: `supabase/migrations/20261007113020_hostaway_sync_tables.sql` and
   `20261007113021_hostaway_sync_functions.sql`
   (`workspace_hostaway_sync`, service role only; `workspace_hostaway_status` for admins and Stays).
-- Mapping: `lib/hostaway-sync-policy.ts`. Runner and webhook: `lib/hostaway-sync.ts`.
-  Schedule: `worker/index.ts` and `scripts/build-backend-config.mjs`.
-- App: `mobile/src/HostawaySyncCard.tsx`.
-- Tests: `tests/hostaway-sync-database.test.mjs`, `tests/hostaway-sync-http.test.mjs`.
+- Guest messages: `supabase/migrations/20261012040000_hostaway_guest_messages.sql`
+  (`workspace_hostaway_conversations_due` and `workspace_hostaway_messages_ingest`, service role
+  only; they store through `workspace_guest_messages_ingest`; `remote_marker` on
+  `workspace_guest_threads`).
+- Mapping: `lib/hostaway-sync-policy.ts` (reservations, listings), `lib/hostaway-messages-policy.ts`
+  (conversations, messages, the message webhook; every Hostaway field name for messages is there).
+  Runner and webhook: `lib/hostaway-sync.ts` (`runHostawayMessages`, `syncHostawayConversation`).
+  Schedule: `worker/index.ts` (messages every minute, the rest every 15) and `scripts/build-backend-config.mjs`.
+- App: `mobile/src/HostawaySyncCard.tsx`, `mobile/src/LiveGuestInbox.tsx`.
+- Tests: `tests/hostaway-sync-database.test.mjs`, `tests/hostaway-sync-http.test.mjs`,
+  `tests/hostaway-messages-database.test.mjs`, `tests/hostaway-messages-policy.test.mjs`.

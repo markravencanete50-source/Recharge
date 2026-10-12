@@ -60,5 +60,6 @@ owners never go through it. The database enforces it, so it can't be skipped fro
   to clock out of) and, for today, 7 or 30 days: each person's green/amber/red replies, on or off
   track, bonus tier, hours worked, listing checks and pricing decisions. Team members see their
   own figures on their shift card.
-- Guest messages arrive once the new channel manager is connected; until then reply times read
-  "No guest messages yet". The backend stores them through `workspace_guest_messages_ingest`.
+- Guest messages arrive from Hostaway once its sync is switched on (see `docs/HOSTAWAY-SYNC.md`);
+  until then reply times read "No guest messages yet". The backend stores them through
+  `workspace_guest_messages_ingest`.

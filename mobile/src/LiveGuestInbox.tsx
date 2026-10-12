@@ -20,8 +20,9 @@ import { SavedReplies } from "./SavedReplies";
 import type { PropertyView } from "../../lib/workspace-view";
 
 // The guest inbox (Stays → Guest inbox): every conversation with guests, the longest wait first.
-// The channel manager fills it once connected. Until then staff log each guest message as it
-// arrives and record their reply, so reply times and bonuses already count.
+// Hostaway fills it by itself (guest messages and the team's replies there, within about a minute).
+// Messages from anywhere else (WhatsApp, email) are logged by hand, and a reply can be recorded
+// here, so reply times and bonuses count either way. Replies are never sent from here.
 // Channel colours, darkened or given dark letters where needed so each letter reads at 4.5:1.
 const CHANNEL_STYLE: Record<GuestChannel, { bg: string; fg: string; letter: string }> = {
   airbnb: { bg: "#D0353B", fg: "#FFFFFF", letter: "A" }, booking_com: { bg: "#003580", fg: "#FFFFFF", letter: "B." }, vrbo: { bg: "#245ABC", fg: "#FFFFFF", letter: "V" },
@@ -157,10 +158,11 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
     if (replyId.current?.text !== text) replyId.current = { text, id: Crypto.randomUUID() };
     if (!(await run({ action: "reply", requestId: replyId.current.id, threadId, body: text }, "Reply recorded", () => setReply("")))) return;
     replyId.current = null;
-    // Until the channel manager sends replies, copy it so it can be pasted into the platform.
+    // Replies aren't sent from here: copy it so it can be pasted into the platform. A Hostaway conversation brings the real reply in itself.
     if (text && t && t.source === "manual" && Platform.OS === "web" && globalThis.navigator?.clipboard) {
       try { await globalThis.navigator.clipboard.writeText(text); setNote(`Reply copied. Paste it into ${CHANNEL_LABEL[t.channel]} to send it to the guest.`); } catch { /* copying is a convenience */ }
     } else if (text && t?.source === "manual") setNote(`Remember to send it on ${CHANNEL_LABEL[t.channel]} too.`);
+    else if (text && t?.source === "hostaway") setNote("Recorded. Send it to the guest in Hostaway; it then appears here by itself.");
   }
   const wait = t && t.status === "open" && data ? waitGrade(t.waitingSince, data.targets) : null;
   return (
@@ -196,7 +198,8 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
             <Button label={busy ? "Saving…" : "Save reply"} icon="send" primary p={p} disabled={busy || !reply.trim()} onPress={() => void sendReply(false)} />
             {!!wait && <Button label="I replied on the platform" icon="check" p={p} disabled={busy} onPress={() => void sendReply(true)} />}
           </View>
-          {t.source === "manual" && <Text style={[ui.small, { color: p.muted }]}>Replies aren’t sent to {CHANNEL_LABEL[t.channel]} until the channel manager is connected. Saving one records when you replied, for reply times.</Text>}
+          {t.source === "manual" && <Text style={[ui.small, { color: p.muted }]}>Replies aren’t sent to {CHANNEL_LABEL[t.channel]} from here. Saving one records when you replied, for reply times.</Text>}
+          {t.source === "hostaway" && <Text style={[ui.small, { color: p.muted }]}>Send your reply in Hostaway (or on {CHANNEL_LABEL[t.channel]}): it shows up here by itself within a minute and the wait ends. Saving one here only records it; nothing is sent to the guest.</Text>}
         </> : null}
         {!!note && <Notice text={note} p={p} />}
         {t.source === "manual" && t.status === "open" && <View style={{ gap: 6 }}>

@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-// The guest inbox: conversations with guests from Airbnb, Booking.com, Vrbo and direct. The
-// channel manager fills it once connected; until then staff log guest messages and their replies
-// by hand, so reply times already count. The database decides who sees each conversation.
+// The guest inbox: conversations with guests from Airbnb, Booking.com, Vrbo and direct. Hostaway
+// fills it by itself (guest messages and the team's replies sent there); messages from elsewhere,
+// such as WhatsApp or email, are logged by hand, and a reply can be recorded here, so reply times
+// count either way. Replies are never sent from the app. The database decides who sees each conversation.
 const uuid = z.string().uuid();
 export const GUEST_CHANNELS = ['airbnb', 'booking_com', 'vrbo', 'direct', 'whatsapp', 'email', 'other'] as const;
 export type GuestChannel = (typeof GUEST_CHANNELS)[number];

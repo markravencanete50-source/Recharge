@@ -43,10 +43,19 @@ const worker = {
     ctx.waitUntil(import('../lib/web-push-server').then(module => module.runWebPush()).catch(() => {
       console.error('Web push batch failed; the next run retries.');
     }));
+    // Every minute too: guests' messages from Hostaway (one request, plus the conversations that changed),
+    // so the reply-time clock starts within about a minute. Off unless switched on, like the sync below.
+    // (The 15-minute tick is also a minute tick; it leaves this to the every-minute cron.)
+    const hostawayOn = Boolean(env.HOSTAWAY_ACCOUNT_ID && env.HOSTAWAY_API_KEY && env.HOSTAWAY_SYNC_ENABLED === 'true');
+    if (hostawayOn && controller.cron !== '*/15 * * * *') {
+      ctx.waitUntil(import('../lib/hostaway-sync').then(module => module.runHostawayMessages('schedule')).catch(() => {
+        console.error('Hostaway messages failed; the next run retries.');
+      }));
+    }
     // The rest runs every 15 minutes (scripts/build-backend-config.mjs). Each job only runs once configured.
     if (controller.cron && controller.cron !== '*/15 * * * *') return;
     // Off unless switched on: Recharge starts as a new business and Hostaway is being replaced.
-    if (env.HOSTAWAY_ACCOUNT_ID && env.HOSTAWAY_API_KEY && env.HOSTAWAY_SYNC_ENABLED === 'true') {
+    if (hostawayOn) {
       ctx.waitUntil(import('../lib/hostaway-sync').then(module => module.runHostawaySync('schedule')).catch(() => {
         console.error('Hostaway sync failed; the error is recorded and the next run retries.');
       }));

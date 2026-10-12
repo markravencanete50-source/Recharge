@@ -3,8 +3,10 @@ import { securityRpc } from './auth-security';
 import { boundedJson } from './auth-security-policy';
 import { businessResponse } from './business-server';
 import {
-  fetchHostawayListing, fetchHostawayListings, fetchHostawayReservation, fetchHostawayReservations, hostawaySyncErrorMessage, isHostawayConfigured,
+  fetchHostawayConversation, fetchHostawayConversationMessages, fetchHostawayConversations, fetchHostawayListing, fetchHostawayListings, fetchHostawayReservation,
+  fetchHostawayReservations, hostawaySyncErrorMessage, isHostawayConfigured,
 } from './hostaway';
+import { syncConversation, syncMessage, webhookConversationId, type SyncConversation, type SyncMessage } from './hostaway-messages-policy';
 import { syncListing, syncReservation, webhookReservationId, type SyncListing, type SyncReservation } from './hostaway-sync-policy';
 
 // Hostaway -> Recharge. Runs every 15 minutes from the Worker's cron, on each Hostaway
@@ -55,6 +57,58 @@ export async function syncHostawayReservation(id: string): Promise<SyncSummary |
   }
 }
 
+// Guest messages, read only. Every minute from the Worker's cron, and on each message webhook
+// (one conversation). The newest 100 conversations come in one request; only those that changed since
+// last time (the database compares each one's latest-activity marker) have their messages fetched, at
+// most 25 a run so Hostaway's rate limit is respected. Everything goes through the service-role-only
+// workspace_hostaway_messages_ingest, which keeps 14 days and refuses while the sync is paused.
+// Message problems are logged and retried next run; they never overwrite the reservation sync's last error.
+export type MessagesSummary = { added: number; conversations: number };
+const MESSAGE_DAYS = 14, MAX_FETCHED = 25;
+const messageWindow = () => new Date(Date.now() - MESSAGE_DAYS * 86_400_000).toISOString();
+type ConversationWithMessages = SyncConversation & { messages: SyncMessage[] };
+
+async function conversationMessages(conversation: SyncConversation): Promise<ConversationWithMessages> {
+  const since = messageWindow();
+  const messages = (await fetchHostawayConversationMessages(conversation.id)).map(syncMessage).filter((m): m is SyncMessage => m !== null && m.sentAt >= since)
+    .sort((a, b) => a.sentAt.localeCompare(b.sentAt)).slice(-300);
+  return { ...conversation, messages };
+}
+function ingestMessages(conversations: ConversationWithMessages[]) {
+  return securityRpc<MessagesSummary>('workspace_hostaway_messages_ingest', { input: { conversations: conversations.slice(0, 100).map(c => ({
+    id: c.id, listingId: c.listingId, reservationId: c.reservationId, guestName: c.guestName, checkIn: c.checkIn, checkOut: c.checkOut, channel: c.channel, marker: c.marker, messages: c.messages,
+  })) } });
+}
+
+export async function runHostawayMessages(trigger: SyncTrigger): Promise<MessagesSummary | null> {
+  if (!hostawaySyncConfigured()) return null;
+  const since = messageWindow();
+  // Newest activity first, whatever order Hostaway gave them; conversations quiet for 14 days have nothing to bring in.
+  const recent = (await fetchHostawayConversations(1)).map(syncConversation).filter(present)
+    .filter(c => !c.activityAt || c.activityAt >= since).sort((a, b) => (b.activityAt ?? '').localeCompare(a.activityAt ?? '')).slice(0, 100);
+  if (!recent.length) return { added: 0, conversations: 0 };
+  const { due, paused } = await securityRpc<{ due: string[]; paused: boolean }>('workspace_hostaway_conversations_due', { input: { conversations: recent.map(c => ({ id: c.id, marker: c.marker })) } });
+  if (paused || !due.length) return { added: 0, conversations: 0 };
+  const wanted = new Set(due);
+  const fetched: ConversationWithMessages[] = [];
+  let failure: unknown = null;
+  // One at a time (Hostaway limits requests). What was fetched before a failure is still kept.
+  for (const conversation of recent.filter(c => wanted.has(c.id)).slice(0, MAX_FETCHED)) {
+    try { fetched.push(await conversationMessages(conversation)); } catch (error) { failure = error; break; }
+  }
+  const summary = fetched.length ? await ingestMessages(fetched) : { added: 0, conversations: 0 };
+  if (failure) { console.error(`Hostaway messages (${trigger}) stopped early: ${hostawaySyncErrorMessage(failure)}`); throw failure; }
+  return summary;
+}
+
+// One conversation, fetched fresh from Hostaway (never trusting the webhook body).
+export async function syncHostawayConversation(id: string): Promise<MessagesSummary | null> {
+  if (!hostawaySyncConfigured()) return null;
+  const conversation = syncConversation(await fetchHostawayConversation(id));
+  if (!conversation) return null;
+  return await ingestMessages([await conversationMessages(conversation)]);
+}
+
 // Hostaway's unified webhook. It proves itself with the HOSTAWAY_WEBHOOK_SECRET Worker secret:
 // either as HTTP Basic authentication (login "recharge"), or, where Hostaway's webhook form has
 // no login and password, as the key in the webhook address (…/api/hostaway/webhook?key=<secret>).
@@ -75,9 +129,21 @@ export async function hostawayWebhookRoute(request: Request) {
   const key = new URL(request.url).searchParams.get('key');
   const authorised = key !== null ? await sameSecret(key, secret) : await sameSecret(credentials, `recharge:${secret}`);
   if (!authorised) return businessResponse({ error: 'Not authorised' }, 401);
-  const id = webhookReservationId(await boundedJson(request, 262_144));
-  // Other events (messages, listings) are acknowledged so Hostaway doesn't retry them.
-  if (!id) return businessResponse({ ok: true, ignored: true });
+  const body = await boundedJson(request, 262_144);
+  const id = webhookReservationId(body);
+  if (!id) {
+    // A new guest message: that conversation's messages are fetched. Other events (listings) are
+    // acknowledged so Hostaway doesn't retry them.
+    const conversationId = webhookConversationId(body);
+    if (!conversationId) return businessResponse({ ok: true, ignored: true });
+    try {
+      const summary = await syncHostawayConversation(conversationId);
+      return businessResponse({ ok: true, synced: Boolean(summary) });
+    } catch {
+      // Hostaway retries; the next minute's run is the backstop either way.
+      return businessResponse({ error: 'Message sync failed; it will be retried' }, 503);
+    }
+  }
   try {
     const summary = await syncHostawayReservation(id);
     return businessResponse({ ok: true, synced: Boolean(summary) });

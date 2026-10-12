@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 
 // The Hostaway mapping, the webhook and the full sync, with Hostaway and the database mocked.
-const state = { env: {}, calls: [], fetched: [], fail: null };
+const state = { env: {}, calls: [], fetched: [], fail: null, rpc: {}, conversations: [], conversation: null, messages: {}, failOn: null };
 globalThis.__hostawaySync = state;
 const mocks = {
   'cloudflare:workers': `export const env=globalThis.__hostawaySync.env;`,
-  'auth-security': `const s=globalThis.__hostawaySync;export const securityRpc=async(name,args)=>{s.calls.push({name,args});return {createdProperties:0,linkedProperties:0,newReservations:1,changedReservations:0,newCleans:1,movedCleans:0,cancelledCleans:0,problems:[]};};`,
+  'auth-security': `const s=globalThis.__hostawaySync;export const securityRpc=async(name,args)=>{s.calls.push({name,args});return s.rpc[name]??{createdProperties:0,linkedProperties:0,newReservations:1,changedReservations:0,newCleans:1,movedCleans:0,cancelledCleans:0,problems:[]};};`,
   'business-server': `export const businessResponse=(body,status=200)=>Response.json(body,{status});`,
   'hostaway': `const s=globalThis.__hostawaySync;const go=(what,value)=>{s.fetched.push(what);if(s.fail)throw s.fail;return value;};
     export const isHostawayConfigured=()=>Boolean(s.env.HOSTAWAY_ACCOUNT_ID&&s.env.HOSTAWAY_API_KEY);
@@ -15,7 +15,10 @@ const mocks = {
     export const fetchHostawayListings=async()=>go('listings',[{id:501,name:'Harbour View Flat',city:'Bristol'}]);
     export const fetchHostawayReservations=async(from)=>go('reservations:'+from,[s.reservation]);
     export const fetchHostawayReservation=async(id)=>go('reservation:'+id,s.reservation);
-    export const fetchHostawayListing=async(id)=>go('listing:'+id,{id:Number(id),name:'Harbour View Flat'});`,
+    export const fetchHostawayListing=async(id)=>go('listing:'+id,{id:Number(id),name:'Harbour View Flat'});
+    export const fetchHostawayConversations=async(pages)=>go('conversations:'+pages,s.conversations);
+    export const fetchHostawayConversation=async(id)=>go('conversation:'+id,s.conversation);
+    export const fetchHostawayConversationMessages=async(id)=>{if(s.failOn===id){s.fetched.push('messages:'+id);throw new Error('rate limited');}return go('messages:'+id,s.messages[id]??[]);};`,
 };
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, plugins: [{
   name: 'isolated-hostaway-sync', enforce: 'pre',
@@ -28,7 +31,7 @@ const vite = await createServer({ configFile: false, server: { middlewareMode: t
   load: id => id.startsWith('\0hostaway-test:') ? mocks[id.slice(15)] : null,
 }] });
 const policy = await vite.ssrLoadModule('/lib/hostaway-sync-policy.ts');
-const { hostawayWebhookRoute, runHostawaySync } = await vite.ssrLoadModule('/lib/hostaway-sync.ts');
+const { hostawayWebhookRoute, runHostawaySync, runHostawayMessages } = await vite.ssrLoadModule('/lib/hostaway-sync.ts');
 after(async () => { delete globalThis.__hostawaySync; await vite.close(); });
 
 const airbnb = { id: 7001, listingMapId: 501, channelName: 'airbnbOfficial', channelReservationId: 'HMABC123', status: 'new', arrivalDate: '2026-11-02', departureDate: '2026-11-05',
@@ -36,7 +39,7 @@ const airbnb = { id: 7001, listingMapId: 501, channelName: 'airbnbOfficial', cha
 function reset(env = { HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k', HOSTAWAY_SYNC_ENABLED: 'true', HOSTAWAY_WEBHOOK_SECRET: 'a'.repeat(32) }) {
   for (const k of Object.keys(state.env)) delete state.env[k];
   Object.assign(state.env, env);
-  Object.assign(state, { calls: [], fetched: [], fail: null, reservation: { ...airbnb } });
+  Object.assign(state, { calls: [], fetched: [], fail: null, failOn: null, rpc: {}, conversations: [], conversation: null, messages: {}, reservation: { ...airbnb } });
 }
 const hook = (body, auth = 'recharge:' + 'a'.repeat(32)) => new Request('https://backend.example/api/hostaway/webhook', {
   method: 'POST', headers: { 'Content-Type': 'application/json', ...(auth === null ? {} : { Authorization: 'Basic ' + btoa(auth) }) }, body: JSON.stringify(body) });
@@ -123,4 +126,99 @@ test('the full sync sends every listing and every stay from 30 days back', async
   reset(); state.fail = new Error('down');
   await assert.rejects(runHostawaySync('manual'));
   assert.equal(state.calls[0].name, 'workspace_hostaway_sync_failed');
+});
+
+// Hostaway's "YYYY-MM-DD HH:MM:SS" (UTC), a number of minutes ago.
+const hostawayTime = minutes => new Date(Date.now() - minutes * 60000).toISOString().slice(0, 19).replace('T', ' ');
+const talk = (id, minutes, extra = {}) => ({ id, listingMapId: 501, reservationId: 7001, recipientName: 'Alex Kim', messageReceivedOn: hostawayTime(minutes), messageSentOn: null,
+  Reservation: { channelName: 'airbnbOfficial' }, ...extra });
+const said = (id, incoming, minutes, body = 'Hello') => ({ id, body, isIncoming: incoming ? 1 : 0, status: incoming ? 'received' : 'sent', date: hostawayTime(minutes) });
+
+test('a message webhook fetches that conversation fresh and never trusts the body', async () => {
+  reset();
+  state.conversation = talk(41, 3);
+  state.messages['41'] = [said(5001, true, 3, 'Is early check-in possible?'), said(5002, false, 2, 'Scheduled'), { ...said(5003, false, 1), status: 'scheduled' }];
+  const forged = { object: 'conversationMessage', event: 'message.received', data: { id: 5001, conversationId: 41, body: 'forged', listingMapId: 999, guestName: 'Mallory' } };
+  for (const auth of [null, 'recharge:wrong']) assert.equal((await hostawayWebhookRoute(hook(forged, auth))).status, 401);
+  assert.deepEqual([state.fetched, state.calls], [[], []]);
+  assert.deepEqual(await (await hostawayWebhookRoute(hook(forged))).json(), { ok: true, synced: true });
+  assert.deepEqual(state.fetched, ['conversation:41', 'messages:41']);
+  const [call] = state.calls;
+  assert.equal(call.name, 'workspace_hostaway_messages_ingest');
+  const [sent] = call.args.input.conversations;
+  assert.deepEqual([sent.id, sent.listingId, sent.reservationId, sent.guestName, sent.channel], ['41', '501', '7001', 'Alex Kim', 'airbnb']);
+  assert.deepEqual(sent.messages.map(m => [m.id, m.incoming, m.body]), [['5001', true, 'Is early check-in possible?'], ['5002', false, 'Scheduled']]);
+
+  // A reservation event still takes the reservation path.
+  reset();
+  await hostawayWebhookRoute(hook({ object: 'reservation', event: 'reservation.updated', data: { id: 7001 } }));
+  assert.deepEqual(state.fetched, ['reservation:7001', 'listing:501']);
+  // A message event without its conversation, or a listing event, is acknowledged and ignored.
+  reset();
+  for (const body of [{ object: 'conversationMessage', event: 'message.received', data: { id: 5001 } }, { object: 'listing', event: 'listing.updated', data: { id: 501 } }]) {
+    assert.deepEqual(await (await hostawayWebhookRoute(hook(body))).json(), { ok: true, ignored: true });
+  }
+  assert.deepEqual([state.fetched, state.calls], [[], []]);
+  // Switched off: acknowledged, nothing fetched.
+  reset({ HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k', HOSTAWAY_WEBHOOK_SECRET: 'a'.repeat(32) });
+  assert.deepEqual(await (await hostawayWebhookRoute(hook(forged))).json(), { ok: true, ignored: true });
+  assert.deepEqual([state.fetched, state.calls], [[], []]);
+  // Hostaway or the database failing: refused so Hostaway retries; the reservation sync's error is untouched.
+  reset(); state.fail = new Error('down');
+  assert.equal((await hostawayWebhookRoute(hook(forged))).status, 503);
+  assert.deepEqual(state.calls, []);
+});
+
+test('the minute run fetches only changed conversations, newest first, 25 at most', async () => {
+  reset();
+  // 30 conversations in an unsorted list, one quiet for a month.
+  state.conversations = [...Array.from({ length: 30 }, (_, i) => talk(100 + i, 10 + i)).reverse(), talk(999, 40 * 1440), { listingMapId: 5 }];
+  for (const c of state.conversations) if (c.id) state.messages[String(c.id)] = [said(c.id * 10, true, 5)];
+  state.rpc.workspace_hostaway_conversations_due = { due: state.conversations.map(c => String(c.id)).filter(id => id !== 'undefined'), paused: false };
+  state.rpc.workspace_hostaway_messages_ingest = { added: 25, conversations: 25 };
+  const summary = await runHostawayMessages('schedule');
+  assert.deepEqual(summary, { added: 25, conversations: 25 });
+  const [due, ingest] = state.calls;
+  assert.equal(due.name, 'workspace_hostaway_conversations_due');
+  assert.equal(due.args.input.conversations.length, 30, 'the quiet one and the unreadable one are never asked about');
+  assert.deepEqual(due.args.input.conversations[0], { id: '100', marker: state.conversations.find(c => c.id === 100).messageReceivedOn + '|' }, 'newest first, marker as Hostaway gave it');
+  assert.deepEqual(state.fetched.slice(0, 2), ['conversations:1', 'messages:100']);
+  assert.equal(state.fetched.length, 1 + 25, 'one list request, then 25 conversations');
+  assert.deepEqual(ingest.args.input.conversations.map(c => c.id).slice(0, 3), ['100', '101', '102']);
+  assert.equal(ingest.args.input.conversations.length, 25);
+
+  // Only what the database says changed is fetched.
+  reset();
+  state.conversations = [talk(1, 5), talk(2, 6)];
+  state.messages['2'] = [said(21, false, 6)];
+  state.rpc.workspace_hostaway_conversations_due = { due: ['2'], paused: false };
+  await runHostawayMessages('schedule');
+  assert.deepEqual(state.fetched, ['conversations:1', 'messages:2']);
+  assert.deepEqual(state.calls[1].args.input.conversations.map(c => c.id), ['2']);
+
+  // Nothing changed: no ingest. Paused: nothing fetched beyond the list.
+  for (const answer of [{ due: [], paused: false }, { due: ['1'], paused: true }]) {
+    reset(); state.conversations = [talk(1, 5)]; state.rpc.workspace_hostaway_conversations_due = answer;
+    assert.deepEqual(await runHostawayMessages('schedule'), { added: 0, conversations: 0 });
+    assert.deepEqual(state.calls.map(c => c.name), ['workspace_hostaway_conversations_due']);
+    assert.deepEqual(state.fetched, ['conversations:1']);
+  }
+});
+
+test('the minute run keeps what it fetched before a failure, then fails so the next run retries', async () => {
+  reset();
+  state.conversations = [talk(1, 5), talk(2, 6), talk(3, 7)];
+  state.messages = { 1: [said(11, true, 5)], 3: [said(31, true, 7)] };
+  state.failOn = '2';
+  state.rpc.workspace_hostaway_conversations_due = { due: ['1', '2', '3'], paused: false };
+  await assert.rejects(runHostawayMessages('schedule'), /rate limited/);
+  assert.deepEqual(state.fetched, ['conversations:1', 'messages:1', 'messages:2']);
+  assert.deepEqual(state.calls.map(c => c.name), ['workspace_hostaway_conversations_due', 'workspace_hostaway_messages_ingest']);
+  assert.deepEqual(state.calls[1].args.input.conversations.map(c => c.id), ['1']);
+  assert.ok(!state.calls.some(c => c.name === 'workspace_hostaway_sync_failed'), 'the reservation sync\'s last error is left alone');
+
+  // Switched off: nothing at all.
+  reset({ HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k' });
+  assert.equal(await runHostawayMessages('schedule'), null);
+  assert.deepEqual([state.fetched, state.calls], [[], []]);
 });
