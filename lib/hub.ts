@@ -4,10 +4,10 @@ import type { HubItem } from './workspace-teams-policy';
 // The hub: the business's trackers laid out like rows in a sheet. Its own rows (to-dos, approval
 // tickets, AirCover claims, invoices to send) come from the hub read; the rest are worked out here
 // from the work, routine plans and onboardings the app already holds.
-export type HubTab = 'todos' | 'approvals' | 'purchases' | 'preventative' | 'daily' | 'aircover' | 'invoices' | 'onboarding' | 'responsibilities' | 'rota' | 'timesheets';
+export type HubTab = 'todos' | 'approvals' | 'purchases' | 'preventative' | 'daily' | 'aircover' | 'invoices' | 'onboarding' | 'licensing' | 'responsibilities' | 'rota' | 'timesheets';
 export const HUB_TAB_LABEL: Record<HubTab, string> = {
   todos: 'To-dos', approvals: 'Approvals', purchases: 'Purchase orders', preventative: 'Preventative', daily: 'Reviews & pricing',
-  aircover: 'AirCover', invoices: 'Invoices to send', onboarding: 'Onboarding', responsibilities: 'Responsibilities', rota: 'Rota', timesheets: 'Timesheets',
+  aircover: 'AirCover', invoices: 'Invoices to send', onboarding: 'Onboarding', licensing: 'Licensing', responsibilities: 'Responsibilities', rota: 'Rota', timesheets: 'Timesheets',
 };
 export function hubTabsFor(role: string, keeps: readonly string[]): HubTab[] {
   const admin = role === 'admin' || role === 'super_admin';
@@ -20,6 +20,8 @@ export function hubTabsFor(role: string, keeps: readonly string[]): HubTab[] {
   if (keeps.includes('aircover') && (admin || ['stays', 'accounts'].includes(role))) tabs.push('aircover');
   if (keeps.includes('invoice') && (admin || role === 'accounts')) tabs.push('invoices');
   if (admin || role === 'stays') tabs.push('onboarding');
+  // Licensing is recorded by the same roles the database lets run the three licensing steps.
+  if (admin || role === 'stays') tabs.push('licensing');
   // Everyone on the team reads who does what and the rota, and their own timesheet.
   tabs.push('responsibilities', 'rota', 'timesheets');
   return tabs;
@@ -50,7 +52,7 @@ export function todoRows(items: readonly HubItem[], filter: { userId: string; de
 
 const text = (v: unknown) => typeof v === 'string' ? v : '';
 const num = (v: unknown) => typeof v === 'number' ? v : null;
-export const PURCHASE_STAGE: Record<string, string> = { requested: 'Requested', approved: 'Approved', ordered: 'Ordered', delivered: 'Delivered' };
+export const PURCHASE_STAGE: Record<string, string> = { requested: 'Requested', approved: 'Approved', ordered: 'Ordered', delivered: 'Delivered', reconciled: 'Done' };
 export function purchaseRows(work: readonly OperationView[]) {
   return work.filter(w => w.kind === 'purchase').map(w => ({
     work: w, propertyId: w.propertyId, items: text(w.data.requirements).split('\n').find(l => l.trim() && !/^From the/i.test(l)) ?? text(w.data.requirements),

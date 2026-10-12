@@ -67,7 +67,7 @@ export function ClientReports({ palette: p }: { palette: Palette }) {
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {kpis.map((kpi) => (
           <View key={kpi.key} style={[card, { flexBasis: desktop ? "23%" : "46%", flexGrow: 1, gap: 12, padding: 16 }]}>
-            <View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={kpi.icon} size={38} /></View>
+            <View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={kpi.icon} size={38} color={p.primary} /></View>
             <View style={[ui.row, { gap: 1, alignItems: "flex-end" }]}>
               {!!kpi.prefix && <Text style={{ color: p.text, fontSize: 18, lineHeight: 30, fontWeight: "700" }}>{kpi.prefix}</Text>}
               <CountUp value={kpi.value} sessionKey={"client-reports:" + kpi.key} style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700", letterSpacing: -1 }} />

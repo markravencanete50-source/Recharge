@@ -17,12 +17,15 @@ const todo = (n, extra) => ({ id: id(n), kind: 'todo', title: 'T' + n, details: 
 test('every team role has the Hub; each sees the trackers for their work', () => {
   for (const role of ['admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts']) assert.ok(workViewsFor(role).includes('hub'), role);
   assert.equal(workViewsFor('client').includes('hub'), false);
-  assert.deepEqual(hubTabsFor('admin', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'invoices', 'onboarding', 'responsibilities', 'rota', 'timesheets']);
+  assert.deepEqual(hubTabsFor('admin', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'invoices', 'onboarding', 'licensing', 'responsibilities', 'rota', 'timesheets']);
+  assert.deepEqual(hubTabsFor('super_admin', ['todo']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'onboarding', 'licensing', 'responsibilities', 'rota', 'timesheets']);
   assert.deepEqual(hubTabsFor('cleans', ['todo', 'approval']), ['todos', 'approvals', 'responsibilities', 'rota', 'timesheets']);
   assert.deepEqual(hubTabsFor('accounts', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'aircover', 'invoices', 'responsibilities', 'rota', 'timesheets']);
   // A super admin previewing Ready gets the database's answer for themselves (all four kinds), but only Ready's trackers show.
   assert.deepEqual(hubTabsFor('ready', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'responsibilities', 'rota', 'timesheets']);
-  assert.deepEqual(hubTabsFor('stays', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'onboarding', 'responsibilities', 'rota', 'timesheets']);
+  assert.deepEqual(hubTabsFor('stays', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'onboarding', 'licensing', 'responsibilities', 'rota', 'timesheets']);
+  // Only the roles the database lets record licensing steps (stays, admin, super admin) get the tab.
+  for (const role of ['accounts', 'ready', 'cleans', 'cleaning_manager', 'client']) assert.equal(hubTabsFor(role, ['todo', 'approval', 'aircover', 'invoice']).includes('licensing'), false, role);
   assert.ok(teamsReadSchema.safeParse({ section: 'hub' }).success);
 });
 
@@ -40,6 +43,11 @@ test('to-do lists: mine, my department\'s, one person\'s; open first, soonest du
 test('purchase orders and onboarding as rows', () => {
   const rows = purchaseRows([op(1, 'purchase', { requirements: 'From the clean report:\n6 × Toilet roll', budgetMinor: 3000, phase: 'ordered', supplier: 'Costco', approvedAmountMinor: 2800 }, { createdAt: '2026-10-08T10:00:00Z' })]);
   assert.equal(rows[0].items, '6 × Toilet roll'); assert.equal(rows[0].stage, 'Ordered'); assert.equal(rows[0].raisedOn, '2026-10-08');
+  // Every purchase phase has its own label; a reconciled purchase is Done, not Requested.
+  const stage = (phase, extra) => purchaseRows([op(2, 'purchase', { requirements: 'Mop', phase }, extra)])[0].stage;
+  assert.deepEqual(['requested', 'approved', 'ordered', 'delivered', 'reconciled'].map(p => stage(p)), ['Requested', 'Approved', 'Ordered', 'Delivered', 'Done']);
+  assert.equal(stage('reconciled', { status: 'completed' }), 'Done');
+  assert.equal(stage('ordered', { status: 'cancelled' }), 'Cancelled');
   const j = onboardingRows([{ propertyId: id(2), clientId: null, workId: id(3), stage: 'form', enquiry: { contactName: 'Morag', phone: '07700 900123' } }, { propertyId: id(4), clientId: id(9), workId: id(5), stage: 'live' }]);
   assert.equal(j[0].next, 'Set-up form to complete'); assert.equal(j[0].contact, 'Morag'); assert.equal(j[1].contact, 'Owner account');
 });

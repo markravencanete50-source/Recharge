@@ -17,7 +17,7 @@ export const SEARCH_SHORTCUT = mac ? "⌘ K" : "Ctrl K";
 const heading = (p: Palette) => ({ color: p.muted, fontSize: 11, fontWeight: "600" as const, letterSpacing: 1.4, textTransform: "uppercase" as const, paddingHorizontal: 10 });
 
 function Art({ entry, size = 40, palette: p }: { entry: SearchEntry; size?: number; palette: Palette }) {
-  return <View style={{ width: size, height: size, borderRadius: 13, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={entry.art} size={size - 10} /></View>;
+  return <View style={{ width: size, height: size, borderRadius: 13, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={entry.art} size={size - 10} color={p.primary} /></View>;
 }
 function Highlight({ text, query, palette: p }: { text: string; query: string; palette: Palette }) {
   // The first word typed is picked out in the name, so the eye finds why it matched.
@@ -208,7 +208,7 @@ export function FavoritesPage({ palette: p, desktop, entries, onOpen, onSearch }
           {suggestions.map(entry => (
             <MotionPress key={entry.key} accessibilityRole="button" accessibilityLabel={`Save ${entry.label} to Favorites`} onPress={() => favorites.toggle({ key: entry.key, label: entry.label })}
               style={[ui.row, { gap: 8, minHeight: 44, paddingLeft: 6, paddingRight: 14, borderRadius: 999, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }]}>
-              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={entry.art} size={22} /></View>
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={entry.art} size={22} color={p.primary} /></View>
               <Text style={{ color: p.text, fontSize: 13, fontWeight: "600" }}>{entry.label}</Text>
               <Feather name="plus" size={15} color={p.primary} />
             </MotionPress>

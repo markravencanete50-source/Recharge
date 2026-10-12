@@ -8,7 +8,6 @@ export default function Layout() {
     Montserrat_400Regular: require("../../assets/fonts/Montserrat_400Regular.ttf"),
     Montserrat_500Medium: require("../../assets/fonts/Montserrat_500Medium.ttf"),
     Montserrat_600SemiBold: require("../../assets/fonts/Montserrat_600SemiBold.ttf"),
-    Montserrat_700Bold: require("../../assets/fonts/Montserrat_700Bold.ttf"),
   });
   /* eslint-enable @typescript-eslint/no-require-imports */
   return (

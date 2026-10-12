@@ -2,28 +2,21 @@ import { useEffect, useRef, useState } from 'react';
 import { PersonAvatar } from './ChatParts';
 import { Animated, Platform, ScrollView, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { MotionPress, motionTokens, useReducedMotion } from './motion';
 import { Text } from './Typography';
-import { depth, departmentColor, navHue, ui, web, type Palette } from './theme';
+import { depth, ui, web, type Palette } from './theme';
 import { CompanyLogo } from './CompanyLogo';
-import { linkHue, type PanelGroup, type PanelHue, type PanelLink, type RolePanel } from '../../lib/role-panel';
+import type { PanelGroup, PanelLink, RolePanel } from '../../lib/role-panel';
 
 type Icon = keyof typeof Feather.glyphMap;
 const hover=Platform.OS==='web'?{dataSet:{hover:'tint'}}:{};
-const native=Platform.OS!=='web';
-// The hover lift and the icon's little turn (lib/design-tokens.ts hoverCss) on the web.
 const tile=Platform.OS==='web'?{dataSet:{glyphTile:''}}:{};
 const mark=Platform.OS==='web'?{dataSet:{glyphMark:''}}:{};
-const hueOf=(hue:PanelHue,p:Palette)=>hue==='stays'||hue==='cleans'||hue==='ready'||hue==='accounts'||hue==='clients'?departmentColor(hue,p):navHue(hue,p);
-// A link's icon on a tile of its colour: a soft wash at rest, filled (with a lift of light and a
-// coloured glow on the web) when it is the place open now.
+// A link's icon as a plain outline glyph on a neutral tile: muted at rest, the primary colour when it
+// is the place open now.
 function IconTile({link,on,palette:p}:{link:PanelLink;on:boolean;palette:Palette}) {
-  const hue=hueOf(linkHue(link),p);
-  return <View {...tile} style={{width:30,height:30,borderRadius:10,alignItems:'center',justifyContent:'center',backgroundColor:on?hue.ink:hue.wash,
-    ...(on?web({backgroundImage:'linear-gradient(160deg,rgba(255,255,255,.26),rgba(255,255,255,0) 62%)',boxShadow:`0 8px 16px -8px color-mix(in srgb,${hue.ink} 75%,transparent),inset 0 1px 0 rgba(255,255,255,.28)`})
-      :web({boxShadow:`inset 0 0 0 1px color-mix(in srgb,${hue.ink} 16%,transparent)`}))}}>
-    <View {...mark}><Feather name={link.icon as Icon} size={15} color={on?(p.isDark?'#10241F':'#FFFFFF'):hue.ink}/></View>
+  return <View {...tile} style={{width:30,height:30,borderRadius:10,alignItems:'center',justifyContent:'center',backgroundColor:on?p.surface:p.wash}}>
+    <View {...mark}><Feather name={link.icon as Icon} size={15} color={on?p.primary:p.muted}/></View>
   </View>;
 }
 
@@ -33,7 +26,6 @@ function Group({group,selected,palette:p,badges,onOpen}:{group:PanelGroup;select
   const reduced=useReducedMotion();
   const [boxes,setBoxes]=useState<Record<string,{y:number;h:number}>>({});
   const box=boxes[selected];
-  const selectedLink=group.links.find(l=>l.key===selected);
   const [y]=useState(()=>new Animated.Value(0)),[h]=useState(()=>new Animated.Value(40)),[shown]=useState(()=>new Animated.Value(0));
   const visible=useRef(false);
   useEffect(()=>{
@@ -50,7 +42,7 @@ function Group({group,selected,palette:p,badges,onOpen}:{group:PanelGroup;select
     </View>
     <View style={{gap:2}}>
       <Animated.View pointerEvents="none" style={{position:'absolute',left:0,right:0,top:y,height:h,borderRadius:12,backgroundColor:p.wash,opacity:shown,...web({boxShadow:'inset 0 1px 0 rgba(255,255,255,.5)'})}}>
-        <View style={{position:'absolute',left:-14,top:9,bottom:9,width:4,borderTopRightRadius:4,borderBottomRightRadius:4,backgroundColor:selectedLink?hueOf(linkHue(selectedLink),p).ink:p.primary}}/>
+        <View style={{position:'absolute',left:-14,top:9,bottom:9,width:4,borderTopRightRadius:4,borderBottomRightRadius:4,backgroundColor:p.primary}}/>
       </Animated.View>
       {group.links.map(link=>{
         const on=link.key===selected,count=badges[link.key]??0,start=link.kind==='start';
@@ -66,20 +58,10 @@ function Group({group,selected,palette:p,badges,onOpen}:{group:PanelGroup;select
   </View>;
 }
 
-// The role's card at the top of the panel: forest, with a slow drifting light behind the heading.
+// The role's card at the top of the panel: solid forest.
 function RoleCard({panel,palette:p,viewing,onBack,backLabel='Back to my view'}:{panel:RolePanel;palette:Palette;viewing?:{name:string;detail:string}|null;onBack?:()=>void;backLabel?:string}) {
-  const reduced=useReducedMotion();
-  const [drift]=useState(()=>new Animated.Value(0));
-  useEffect(()=>{
-    if(reduced){drift.setValue(0);return;}
-    const loop=Animated.loop(Animated.sequence([Animated.timing(drift,{toValue:1,duration:7000,useNativeDriver:native}),Animated.timing(drift,{toValue:0,duration:7000,useNativeDriver:native})]));
-    loop.start();return()=>loop.stop();
-  },[drift,reduced]);
   return <View testID="sidebar-role" accessibilityRole="header" accessibilityLabel={(viewing?`${viewing.name}. `:'')+panel.title+' workspace. '+panel.tagline}
-    style={{borderRadius:20,overflow:'hidden',backgroundColor:p.hero,padding:14,gap:10,...depth.raised,...web({backgroundImage:'linear-gradient(145deg,#2A5248 0%,#1F3D38 55%,#17302B 100%)'})}}>
-    <Animated.View pointerEvents="none" style={{position:'absolute',right:-70,top:-80,transform:[{translateX:drift.interpolate({inputRange:[0,1],outputRange:[0,-26]})},{translateY:drift.interpolate({inputRange:[0,1],outputRange:[0,18]})}]}}>
-      <Svg width={200} height={200}><Defs><RadialGradient id="role-card-glow" cx="50%" cy="50%" r="50%"><Stop offset="0" stopColor="#A7D9C1" stopOpacity={0.42}/><Stop offset="1" stopColor="#A7D9C1" stopOpacity={0}/></RadialGradient></Defs><Circle cx={100} cy={100} r={100} fill="url(#role-card-glow)"/></Svg>
-    </Animated.View>
+    style={{borderRadius:20,overflow:'hidden',backgroundColor:p.hero,padding:14,gap:10,...depth.raised}}>
     <View style={[ui.row,{gap:11}]}>
       <View style={{width:38,height:38,borderRadius:12,backgroundColor:'rgba(255,255,255,0.12)',borderWidth:1,borderColor:'rgba(255,255,255,0.18)',alignItems:'center',justifyContent:'center'}}><Feather name={panel.icon as Icon} size={17} color="#FFFFFF"/></View>
       <View style={{flex:1,minWidth:0}}>

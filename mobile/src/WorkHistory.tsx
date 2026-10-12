@@ -16,7 +16,7 @@ const stamp = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "num
 
 // Who did what to this item and when: every status change, step and decision, newest first, with
 // the notes and evidence recorded at the time.
-export function WorkHistory({ p, workId, version }: { p: Palette; workId: string; version: number }) {
+export function WorkHistory({ p, workId, version, hideNames = false }: { p: Palette; workId: string; version: number; hideNames?: boolean }) {
   const [rows, setRows] = useState<HistoryRow[] | null>(null);
   const [error, setError] = useState("");
   const [all, setAll] = useState(false);
@@ -44,7 +44,7 @@ export function WorkHistory({ p, workId, version }: { p: Palette; workId: string
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 3, paddingBottom: 6 }}>
             <Text style={{ color: p.text, fontSize: 14, fontWeight: "700" }}>{row.label}</Text>
-            <Text style={[ui.small, { color: p.muted }]}>{row.by ?? "Automatic"} · {stamp(row.at)}</Text>
+            <Text style={[ui.small, { color: p.muted }]}>{hideNames ? "Recharge" : row.by ?? "Automatic"} · {stamp(row.at)}</Text>
             {!!row.note && <Text selectable style={[ui.small, { color: p.text }]}>{row.note}</Text>}
             {!!row.evidence.length && <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{row.evidence.map(e => <Tag key={e} label={e} tone="plain" p={p} />)}</View>}
           </View>

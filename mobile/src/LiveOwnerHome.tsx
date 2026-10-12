@@ -43,11 +43,11 @@ export function OwnerHome({ palette: p, desktop, account, properties, journeys, 
             <MotionPress {...hover} accessibilityRole="button" accessibilityLabel={`${tile.value === null ? "Unavailable" : tile.money ? formatMoneyShort(tile.value) : formatCount(tile.value)} ${tile.label}. ${tile.hint}`} onPress={tile.onPress}
               style={{ padding: 16, gap: 12, borderRadius: 24, backgroundColor: tile.attention ? p.wash : p.surface, borderWidth: 1, borderColor: tile.attention ? p.primary : p.border, ...(Platform.OS === "web" ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" } : { elevation: 2 }) }}>
               <View style={[ui.between, { alignItems: "flex-start" }]}>
-                <View style={{ width: 54, height: 54, borderRadius: 18, backgroundColor: tile.attention ? p.surface : p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={tile.icon} size={42} /></View>
+                <View style={{ width: 54, height: 54, borderRadius: 18, backgroundColor: tile.attention ? p.surface : p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={tile.icon} size={42} color={p.primary} /></View>
                 <Feather name="chevron-right" size={18} color={p.muted} />
               </View>
               <View style={{ gap: 2 }}>
-                {tile.value === null ? <Text style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700" }}>—</Text>
+                {tile.value === null ? <Text style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700" }}>-</Text>
                   : <TweenNumber value={tile.value} format={tile.money ? formatMoneyShort : formatCount} numberOfLines={1} adjustsFontSizeToFit style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700", letterSpacing: -1, fontVariant: ["tabular-nums"] }} />}
                 <Text numberOfLines={1} style={{ color: p.muted, fontSize: 13, fontWeight: "500" }}>{tile.label}</Text>
               </View>

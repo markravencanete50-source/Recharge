@@ -23,17 +23,12 @@ export function GreetingCard({ palette: p, profile, openTasks, waiting, onClose,
   const reduced = useReducedMotion();
   const { width } = useWindowDimensions();
   const [enter] = useState(() => new Animated.Value(reduced ? 1 : 0));
-  const [bob] = useState(() => new Animated.Value(0));
   useEffect(() => {
     if (reduced) return;
-    const a = Animated.spring(enter, { toValue: 1, speed: 10, bounciness: 4, useNativeDriver: native });
-    const b = Animated.loop(Animated.sequence([
-      Animated.timing(bob, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: native }),
-      Animated.timing(bob, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: native }),
-    ]));
-    a.start(); b.start();
-    return () => { a.stop(); b.stop(); };
-  }, [bob, enter, reduced]);
+    const a = Animated.timing(enter, { toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: native });
+    a.start();
+    return () => a.stop();
+  }, [enter, reduced]);
   const moment = momentFor(new Date().getHours());
   const night = moment.icon === "moon";
   const first = profile.displayName.trim().split(/\s+/)[0] || "there";
@@ -56,9 +51,7 @@ export function GreetingCard({ palette: p, profile, openTasks, waiting, onClose,
           <View style={{ height: 132, backgroundColor: moment.band[0], alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
             <View style={{ position: "absolute", left: -40, bottom: -60, width: 220, height: 140, borderRadius: 110, backgroundColor: moment.band[1], opacity: night ? 0.35 : 0.6 }} />
             <View style={{ position: "absolute", right: -30, top: -50, width: 160, height: 120, borderRadius: 80, backgroundColor: "#FFFFFF", opacity: night ? 0.06 : 0.35 }} />
-            <Animated.View style={{ transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -6] }) }] }}>
-              <DimensionalIcon name={moment.icon} size={96} />
-            </Animated.View>
+            <DimensionalIcon name={moment.icon} size={96} color={night ? "#FAF7F0" : "#1F3D38"} />
             <MotionPress accessibilityRole="button" accessibilityLabel="Close greeting" onPress={onClose} style={{ position: "absolute", right: 14, top: 14, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: night ? "#FFFFFF1F" : "#FFFFFF99" }}>
               <Feather name="x" size={17} color={night ? "#FAF7F0" : "#1F3D38"} />
             </MotionPress>
@@ -77,7 +70,7 @@ export function GreetingCard({ palette: p, profile, openTasks, waiting, onClose,
             <View style={[ui.row, { gap: 10, alignSelf: "stretch" }]}>
               {[["clipboard", openTasks, "open tasks"], ["hourglass", waiting, "waiting"]].map(([icon, value, label]) => (
                 <View key={String(label)} style={[ui.row, { flex: 1, gap: 10, padding: 12, borderRadius: 18, backgroundColor: p.background, borderWidth: 1, borderColor: p.border }]}>
-                  <DimensionalIcon name={icon as DimensionalName} size={34} />
+                  <DimensionalIcon name={icon as DimensionalName} size={34} color={p.primary} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: p.text, fontSize: 20, fontWeight: "700", letterSpacing: -0.5 }}>{value}</Text>
                     <Text numberOfLines={1} style={{ color: p.muted, fontSize: 12 }}>{label}</Text>

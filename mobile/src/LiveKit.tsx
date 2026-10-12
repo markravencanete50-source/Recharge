@@ -28,17 +28,15 @@ export const message = (error: unknown) => readableError(error);
 export const london = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 export const addDays = (iso: string, days: number) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 export const dayLabel = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-// The primary action is forest with a lift of light and a sheen that passes on hover; the others
-// are a quiet mint wash that deepens on hover. On phones and inside sheets buttons span the width;
+// The primary action is a flat forest fill; the others are a quiet mint wash that deepens on hover. On phones and inside sheets buttons span the width;
 // on a computer's page they size to their label, so a lone action doesn't stretch across the screen.
-const sheen = Platform.OS === "web" ? { dataSet: { sheen: "" } } : {};
 export const InSheet = createContext(false);
 export function Button({ label, onPress, p, primary = false, disabled = false, icon }: { label: string; onPress: () => void; p: Palette; primary?: boolean; disabled?: boolean; icon?: ComponentProps<typeof Feather>["name"] }) {
   const ink = disabled ? p.muted : primary ? p.onPrimary : p.primary;
   const { width } = useWindowDimensions(), sheet = useContext(InSheet);
   const hug = width >= 900 && !sheet;
   return (
-    <MotionPress {...(primary && !disabled ? sheen : Platform.OS === "web" && !disabled ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+    <MotionPress {...(!primary && Platform.OS === "web" && !disabled ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
       style={[ui.button, hug ? { flexGrow: 0, alignSelf: "flex-start", minWidth: 180, paddingHorizontal: 22 } : { flexGrow: 1 }, disabled ? { backgroundColor: p.elevated } : primary ? primaryFill(p) : { backgroundColor: p.wash, borderWidth: 1, borderColor: "transparent" }]}>
       {!!icon && <Feather name={icon} size={16} color={ink} />}
       <Text style={[ui.buttonText, { color: ink, letterSpacing: 0.1 }]}>{label}</Text>
@@ -119,12 +117,10 @@ export function useRequestId(key: string | null) {
 // A small coloured icon tile: department colour behind a line icon. Used on rows and stats.
 export type IconName = ComponentProps<typeof Feather>["name"];
 export type Tone = "cleans" | "ready" | "stays" | "clients" | "accounts";
-// A soft tile with a highlight along its top edge, so icons read as objects rather than flat marks.
-export function IconChip({ icon, tone, p, size = 40 }: { icon: IconName; tone?: Tone; p: Palette; size?: number }) {
-  const colour = tone ? departmentColor(tone, p) : { ink: p.primary, wash: p.wash };
-  return <View style={{ width: size, height: size, borderRadius: size * 0.34, alignItems: "center", justifyContent: "center", backgroundColor: colour.wash,
-    ...web({ backgroundImage: "linear-gradient(160deg,rgba(255,255,255,.55),rgba(255,255,255,0) 60%)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.6),inset 0 0 0 1px rgba(255,255,255,.12)" }) }}>
-    <Feather name={icon} size={Math.round(size * 0.45)} color={colour.ink} />
+// A flat neutral tile behind a line icon; `tone` is kept so callers need no change.
+export function IconChip({ icon, p, size = 40 }: { icon: IconName; tone?: Tone; p: Palette; size?: number }) {
+  return <View style={{ width: size, height: size, borderRadius: size * 0.34, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}>
+    <Feather name={icon} size={Math.round(size * 0.45)} color={p.primary} />
   </View>;
 }
 

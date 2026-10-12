@@ -10,9 +10,9 @@ const { MODULE_IDS, MODULES } = await vite.ssrLoadModule("/lib/modules.ts");
 const { WORKSPACE_MAP } = await vite.ssrLoadModule("/lib/workspace-map.ts");
 const { featureGlyphs, departmentGlyphs, iconNodes } =
   await vite.ssrLoadModule("/lib/artwork.ts");
-const { designTokens, departmentTokens } = await vite.ssrLoadModule(
-  "/lib/design-tokens.ts",
-);
+const { designTokens, departmentTokens, depthTokens, designTokenCss } =
+  await vite.ssrLoadModule("/lib/design-tokens.ts");
+const { todayColors } = await vite.ssrLoadModule("/lib/today-presentation.ts");
 const { findTools, titleParts } = await vite.ssrLoadModule(
   "/lib/tool-finder.ts",
 );
@@ -105,4 +105,32 @@ test("finder scales to 100 entries without truncating counts, saved rows or lite
       .map((t) => t.text),
     ["+", "+"],
   );
+});
+test("the calm style pass: flat hero, no shine tokens, no decorative CSS, primary colours unchanged", () => {
+  assert.equal(designTokens.light.primary, "#1F3D38");
+  assert.equal(designTokens.dark.primary, "#A7D9C1");
+  for (const mode of ["light", "dark"]) {
+    const p = designTokens[mode];
+    assert.equal(p.heroEnd, p.hero, `${mode} hero is one flat colour`);
+    assert(ratio(p.heroMuted, p.hero) >= 4.5, `${mode} muted hero text`);
+    const d = depthTokens[mode];
+    assert.equal(d.sheen, "0 0 #0000", `${mode} sheen stays a valid empty shadow`);
+    for (const key of ["spot", "canvas-a", "canvas-b", "shimmer", "glow"])
+      assert.match(d[key], /^(transparent|rgba\(0,0,0,0\)|#0000|#00000000)$/, `${mode} ${key} is transparent`);
+    for (const key of ["elev-1", "elev-2", "elev-3"]) assert(d[key].includes("rgba"), `${mode} ${key} keeps its depth`);
+  }
+  for (const mode of ["light", "dark"]) {
+    const c = todayColors[mode];
+    assert.equal(c.heroEnd, c.heroStart, `${mode} Home panel is flat`);
+  }
+  assert.doesNotMatch(designTokenCss, /gradient|rc-sweep|data-sheen|data-glyph|data-canvas|data-shimmer|--mx|--my|var\(--rc-(spot|canvas|shimmer)/);
+  assert.match(designTokenCss, /outline:2px solid var\(--rc-primary\)/, "the 2 px focus outline stays");
+  for (const role of ["radio", "link", "tab", "switch"])
+    assert.match(
+      designTokenCss,
+      new RegExp(`\\[role="${role}"\\]:focus-visible[^{]*\\{outline:2px solid var\\(--rc-primary\\);outline-offset:3px`),
+      `${role} keeps a visible focus outline now that the glow is transparent`,
+    );
+  assert.match(designTokenCss, /prefers-reduced-motion:reduce/, "reduced-motion blocks stay");
+  assert.match(designTokenCss, /data-reduce-motion="true"/);
 });

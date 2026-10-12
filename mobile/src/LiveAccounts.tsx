@@ -69,7 +69,7 @@ export function Initials({ p, name, tone, size = 42 }: { p: Palette; name: strin
 export function Row({ p, title, detail, amount, tags, onPress, first, icon, tone, art, avatar }: { p: Palette; title: string; detail: string; amount?: string; tags?: [string, "good" | "wait" | "bad" | "plain"][]; onPress?: () => void; first: boolean; icon?: IconName; tone?: Tone; art?: DimensionalName; avatar?: string }) {
   return (
     <MotionPress {...(Platform.OS === "web" && onPress ? { dataSet: { hover: "row" } } : {})} accessibilityRole={onPress ? "button" : undefined} disabled={!onPress} accessibilityLabel={[title, amount, ...(tags ?? []).map(t => t[0])].filter(Boolean).join(", ")} onPress={onPress} style={[ui.row, { gap: 14, paddingVertical: 14, alignItems: tags?.length ? "flex-start" : "center", borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
-      {avatar !== undefined ? <Initials p={p} name={avatar} tone={tone} /> : art ? <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}><DimensionalIcon name={art} size={34} /></View> : !!icon && <IconChip icon={icon} tone={tone} p={p} />}
+      {avatar !== undefined ? <Initials p={p} name={avatar} tone={tone} /> : art ? <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}><DimensionalIcon name={art} size={34} color={p.primary} /></View> : !!icon && <IconChip icon={icon} tone={tone} p={p} />}
       <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{title}</Text>
         <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{detail}</Text>

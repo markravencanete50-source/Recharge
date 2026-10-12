@@ -35,20 +35,18 @@ export function navHue(hue: NavHue, palette: Palette) {
   const values = navHueTokens[palette.isDark ? "dark" : "light"][hue];
   return Platform.OS === "web" ? { ink: `var(--rc-hue-${hue}-ink)`, wash: `var(--rc-hue-${hue}-wash)` } : values;
 }
-// Styles that only exist in the browser (gradients, layered shadows, blur); nothing elsewhere.
+// Styles that only exist in the browser (layered shadows, blur); nothing elsewhere.
 export const web = (style: Record<string, unknown>): ViewStyle => (Platform.OS === "web" ? style : {}) as ViewStyle;
 // Depth (lib/design-tokens.ts depthTokens): resting cards, raised cards and floating sheets. The web
-// uses the layered CSS shadows with a hairline top highlight; phones use one soft native shadow.
+// uses the layered CSS shadows (the top highlight is now an empty shadow); phones use one soft native shadow.
 const shadow = (opacity: number, radius: number, y: number, elevation: number) => ({ shadowColor: "#0B1F1A", shadowOpacity: opacity, shadowRadius: radius, shadowOffset: { width: 0, height: y }, elevation });
 export const depth = {
   card: Platform.OS === "web" ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" } : shadow(0.07, 14, 6, 2),
   raised: Platform.OS === "web" ? { boxShadow: "var(--rc-elev-2),var(--rc-sheen)" } : shadow(0.12, 20, 10, 5),
   floating: Platform.OS === "web" ? { boxShadow: "var(--rc-elev-3)" } : shadow(0.2, 32, 16, 12),
 };
-// The primary action: forest with a soft lift of light from the top (web), and a coloured shadow.
-export const primaryFill = (p: { primary: string; isDark: boolean }) => Platform.OS === "web"
-  ? { backgroundColor: p.primary, backgroundImage: p.isDark ? "linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,0) 60%)" : "linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 55%)", boxShadow: p.isDark ? "0 10px 24px -14px rgba(167,217,193,.55),inset 0 1px 0 rgba(255,255,255,.25)" : "0 10px 22px -12px rgba(21,45,40,.55),inset 0 1px 0 rgba(255,255,255,.18)" }
-  : { backgroundColor: p.primary };
+// The primary action: a flat solid fill, no gradient, sheen or coloured shadow.
+export const primaryFill = (p: { primary: string; isDark?: boolean }) => ({ backgroundColor: p.primary });
 export const ui = StyleSheet.create({
   fill: { flex: 1 },
   row: { flexDirection: "row", alignItems: "center" },

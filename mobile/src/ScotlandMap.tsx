@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Linking, Modal, PanResponder, Platform, Pressable, View, type GestureResponderEvent } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import Svg, { Circle, Defs, G, LinearGradient, Path, Stop, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, G, Path, Text as SvgText } from "react-native-svg";
 import { Text } from "./Typography";
 import { Entrance, useReducedMotion } from "./motion";
 import { ui, type Palette } from "./theme";
@@ -24,7 +24,7 @@ function Layers({ c, k, showRank, picked, hot, onArea }: { c: Colours; k: number
   const [seaX, seaY] = projectXY(-1.1, 58.3), [atlX, atlY] = projectXY(-7.1, 56.15);
   return (
     <G>
-      <Path d={`M-2000 -2000H${MAP_WIDTH + 2000}V${MAP_HEIGHT + 2000}H-2000Z`} fill="url(#sea)" />
+      <Path d={`M-2000 -2000H${MAP_WIDTH + 2000}V${MAP_HEIGHT + 2000}H-2000Z`} fill={c.seaTop} />
       {GRATICULE.map(lon => { const [x] = projectXY(lon, 55); return <Path key={lon} d={`M${x} 0V${MAP_HEIGHT}`} stroke={c.grid} strokeOpacity={0.35} strokeWidth={0.6 * k} />; })}
       {PARALLELS.map(lat => { const [, y] = projectXY(-4, lat); return <Path key={lat} d={`M0 ${y}H${MAP_WIDTH}`} stroke={c.grid} strokeOpacity={0.35} strokeWidth={0.6 * k} />; })}
       <SvgText x={seaX} y={seaY} fontSize={9.5 * k} fontStyle="italic" letterSpacing={2.4 * k} textAnchor="middle" fill={c.seaText} transform={`rotate(90 ${seaX} ${seaY})`}>NORTH SEA</SvgText>
@@ -183,9 +183,6 @@ function MapBody({ palette: p, regions, points = [], onOpenProperty, addressOf, 
         onLayout={e => { const { width, height } = e.nativeEvent.layout; if (width > 0 && height > 0) setSize({ w: width, h: height }); }}
         style={[{ width: "100%", borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: p.border }, full ? { flex: 1 } : { aspectRatio: MAP_WIDTH / MAP_HEIGHT }, grab]}>
         <Svg width="100%" height="100%" viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`} preserveAspectRatio="none">
-          <Defs>
-            <LinearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor={c.seaTop} /><Stop offset="1" stopColor={c.seaBottom} /></LinearGradient>
-          </Defs>
           <Layers c={c} k={k} showRank={showRank} picked={picked} hot={hot} onArea={choose} />
           {labelled.map(({ t, xy: [x, y] }) => (
             <G key={t.name} pointerEvents="none">
@@ -210,7 +207,7 @@ function MapBody({ palette: p, regions, points = [], onOpenProperty, addressOf, 
               <G key={b.region} onPress={() => choose(b.region)}>
                 <Circle cx={b.x} cy={b.y} r={b.r} fill={on ? p.waiting : p.primary} fillOpacity={0.16} stroke={on ? p.waiting : p.primary} strokeWidth={1.3 * k} strokeOpacity={0.8} />
                 <Circle cx={b.x + b.r * 0.72} cy={b.y - b.r * 0.72} r={8 * k} fill={on ? p.waiting : p.primary} stroke={p.surface} strokeWidth={1.4 * k} />
-                <SvgText x={b.x + b.r * 0.72} y={b.y - b.r * 0.72 + 3.4 * k} fontSize={10 * k} fontFamily="Montserrat_700Bold, Montserrat, sans-serif" fontWeight="700" textAnchor="middle" fill={p.onPrimary}>{b.count}</SvgText>
+                <SvgText x={b.x + b.r * 0.72} y={b.y - b.r * 0.72 + 3.4 * k} fontSize={10 * k} fontFamily="Montserrat_600SemiBold, Montserrat, sans-serif" fontWeight="700" textAnchor="middle" fill={p.onPrimary}>{b.count}</SvgText>
               </G>
             );
           })}

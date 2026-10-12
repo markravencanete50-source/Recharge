@@ -35,21 +35,9 @@ export function ModeSwitch({ palette: p, demo, busy, onChange }: { palette: Pale
 
 // Shown at the top of every page while demo mode is on.
 export function DemoBanner({ viewing, onViewAs, onLive }: { palette: Palette; viewing: string | null; onViewAs: () => void; onLive: () => void }) {
-  const reduced = useReducedMotion();
-  const [pulse] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    if (reduced) return;
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1, duration: 1200, easing: Easing.out(Easing.quad), useNativeDriver: native }),
-      Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: native }),
-    ]));
-    loop.start(); return () => loop.stop();
-  }, [pulse, reduced]);
   return (
-    <View accessibilityRole="alert" style={[ui.row, { gap: 12, padding: 12, paddingLeft: 14, borderRadius: 18, backgroundColor: "#3A2C15", borderWidth: 1, borderColor: "#6B5326", flexWrap: "wrap", overflow: "hidden", ...depth.card,
-      ...web({ backgroundImage: "linear-gradient(120deg,#4A3818 0%,#2E2410 100%)" }) }]}>
+    <View accessibilityRole="alert" style={[ui.row, { gap: 12, padding: 12, paddingLeft: 14, borderRadius: 18, backgroundColor: "#3A2C15", borderWidth: 1, borderColor: "#6B5326", flexWrap: "wrap", overflow: "hidden", ...depth.card }]}>
       <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center" }}>
-        <Animated.View style={{ position: "absolute", width: 34, height: 34, borderRadius: 17, backgroundColor: "#E8C27D", opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] }), transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.4] }) }] }} />
         <View style={{ width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "#E8C27D" }}><Feather name="play" size={12} color="#3A2C15" /></View>
       </View>
       <View style={{ flex: 1, minWidth: 200, gap: 2 }}>

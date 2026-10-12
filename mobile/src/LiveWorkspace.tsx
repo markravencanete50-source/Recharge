@@ -75,6 +75,8 @@ import { BlockedPeopleSheet } from "./BlockedPeople";
 import { FavoritesPage, FavoritesShortcut, HeaderSearch, SearchPanel } from "./WorkspaceSearch";
 import { FavoriteButton, FavoritesContext, useFavoritesStore } from "./Favorites";
 import { TrackerSheet } from "./LiveTools";
+import { TrackerDetail } from "./Tracker";
+import { trackerItemFor } from "../../lib/tracker-sections";
 import { FurnishingSheet } from "./LiveFurnishing";
 import { buildSearchIndex, type SearchEntry } from "../../lib/workspace-search";
 import { toolsFor, type Tool } from "../../lib/tool-directory";
@@ -441,6 +443,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // An inspection booked for a later day: say when the report can be filed instead of offering it.
   const openJourney = openWork && !isDone(openWork.status) ? journeys.find(j => j.propertyId === openWork.propertyId && (j.workId === openWork.workId || openWork.kind === "inspection")) : undefined;
   const reportFrom = openJourney ? inspectionReportFrom(account, openJourney) : null;
+  // Kinds with a tracker adapter (purchase orders, licensing) open with the shared tracker detail; the rest keep the plain sheet.
+  const openTracker = openWork ? trackerItemFor(openWork, { property: id => properties.find(x => x.id === id), forms: w => workItemForms(account, w, journeys, work), now: new Date(), owner: account.role === "client" }) : null;
   // Every word typed must appear in the title, the property (name or street) or the stage.
   const workWords = normalise(workQuery).split(" ").filter(Boolean);
   const places = new Map(properties.map(property => [property.id, `${property.name} ${property.address ?? ""} ${property.region ?? ""}`]));
@@ -633,7 +637,16 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <DeleteAccountSheet p={p} visible={deleting} onClose={() => setDeleting(false)} onDeleted={() => { setDeleting(false); onDeleted(); }} />
       <WorkflowSheet spec={form} invoices={invoices} budget={budget} palette={p} onClose={() => setForm(null)} onSaved={refresh} />
       <Sheet palette={p} visible={!!openWork} onClose={() => setOpenWork(null)} title={openWork?.title ?? ""} subtitle={openWork ? [names.get(openWork.propertyId), readableStage(openWork.status)].filter(Boolean).join(" · ") : undefined} icon="clipboard">
-        {openWork && <>
+        {openWork && openTracker && (
+          <TrackerDetail p={p} item={openTracker} owner={account.role === "client"} forms={workItemForms(account, openWork, journeys, work)} onForm={f => { setOpenWork(null); setForm(f); }}>
+            {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
+            {team && <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />}
+            <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
+            {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}
+            <PriceNightsLink p={p} account={account} item={openWork} onOpen={target => { setOpenWork(null); openTool(target); }} />
+          </TrackerDetail>
+        )}
+        {openWork && !openTracker && <>
           {workDetails(openWork).map(d => <View key={d.label} style={{ gap: 4 }}><Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>{d.label}</Text><Text selectable style={[ui.body, { color: d.tone === "bad" ? p.danger : d.tone === "good" ? p.success : p.text, fontWeight: d.tone ? "700" : "400" }]}>{d.value}</Text></View>)}
           {openWork.kind === "direct_booking" && openWork.data.phase === "follow_up" && policy?.confirmed && <Text style={[ui.small, { color: p.muted }]}>Offer the guest {formatBps(policy.discount_bps).replace(".0%", "%")} off, up to {formatMoney(policy.discount_cap_minor)} off. The offer price is worked out when you prepare it.</Text>}
           {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}

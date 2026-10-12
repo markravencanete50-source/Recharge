@@ -233,8 +233,8 @@ type Metric = { label: string; value: number | string; attention?: boolean; targ
 function DepartmentCard({ p, tone, icon, title, metrics, onOpen, target }: { p: Palette; tone: Tone; icon: IconName; title: string; metrics: Metric[]; onOpen: (t: HomeToolTarget) => void; target: HomeToolTarget }) {
   const colour = departmentColor(tone, p);
   return (
-    // Each department card carries its colour: a thread along the top and a faint wash behind its heading.
-    <View {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 2, paddingVertical: 16, flex: 1, overflow: "hidden" }, web({ backgroundImage: `linear-gradient(180deg,${colour.wash} 0%,transparent 38%)` })]}>
+    // Each department card carries its colour: a thread along the top.
+    <View {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 2, paddingVertical: 16, flex: 1, overflow: "hidden" }]}>
       <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 3, backgroundColor: colour.ink, opacity: 0.75 }} />
       <MotionPress accessibilityRole="button" accessibilityLabel={`Open ${title}`} onPress={() => onOpen(target)} style={[ui.between, { gap: 10, minHeight: 48, marginBottom: 4 }]}>
         <View style={[ui.row, { gap: 12, flex: 1, minWidth: 0 }]}>

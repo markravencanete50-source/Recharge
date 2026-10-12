@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, Animated, Easing, Platform, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Animated, Platform, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import Svg, { Circle, Defs, Ellipse, Path, RadialGradient, Stop } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 import * as Linking from "expo-linking";
 import { Text } from "./Typography";
 import { CompanyLogo } from "./CompanyLogo";
@@ -239,7 +239,6 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme, notice = "" }: { p
           </Rise>
         </View>
         <View style={{ flex: 1, overflow: "hidden" }}>
-          <PageGlow p={p} />
           <View style={{ alignItems: "flex-end", padding: 20 }}>{themeButton("page")}</View>
           <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 32, paddingBottom: 80 }} keyboardShouldPersistTaps="handled">
             <View style={[{ width: "100%", maxWidth: 500, alignSelf: "center", padding: 36, borderRadius: 28, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface },
@@ -281,38 +280,17 @@ function Rise({ index, children }: { index: number; children: ReactNode }) {
   }, [index, progress, reduced]);
   return <Animated.View style={{ opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>{children}</Animated.View>;
 }
-// A slow, endless 0 → 1 → 0 loop for ambient movement. Still when reduced motion is on.
-function useLoop(duration: number, delay = 0) {
-  const reduced = useReducedMotion();
-  const [value] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    if (reduced) { value.setValue(0); return; }
-    const ease = Easing.inOut(Easing.sin);
-    const loop = Animated.loop(Animated.sequence([
-      Animated.delay(delay),
-      Animated.timing(value, { toValue: 1, duration, easing: ease, useNativeDriver: native }),
-      Animated.timing(value, { toValue: 0, duration, easing: ease, useNativeDriver: native }),
-    ]));
-    loop.start(); return () => loop.stop();
-  }, [duration, delay, value, reduced]);
-  return value;
-}
-// The house and flats float gently on a charging glow that breathes beneath them.
+// The house and flats sit still above a flat tint.
 function ChargeScene({ width }: { width: number }) {
-  const float = useLoop(2600), pulse = useLoop(1800, 300);
   const glow = width * 0.9;
   return (
     <View style={{ width, height: width * 0.75, alignItems: "center", justifyContent: "flex-end" }}>
-      <Animated.View pointerEvents="none" style={{ position: "absolute", bottom: -glow * 0.22, width: glow, height: glow * 0.5,
-        opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }), transform: [{ scaleX: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.06] }) }] }}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 50"><Defs><RadialGradient id="charge-glow" cx="50%" cy="50%" r="50%"><Stop offset="0" stopColor="#A7D9C1" stopOpacity={0.42} /><Stop offset="1" stopColor="#A7D9C1" stopOpacity={0} /></RadialGradient></Defs>
-          <Ellipse cx={50} cy={25} rx={50} ry={25} fill="url(#charge-glow)" /></Svg>
-      </Animated.View>
-      <Animated.View style={{ transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }) }] }}><HomeScene width={width} /></Animated.View>
+      <View pointerEvents="none" style={{ position: "absolute", bottom: -glow * 0.22, width: glow, height: glow * 0.5, borderRadius: glow, backgroundColor: "#A7D9C1", opacity: 0.1 }} />
+      <HomeScene width={width} />
     </View>
   );
 }
-// A glimpse of the workspace at work: activity cards float beside the house, one lit at a time.
+// A glimpse of the workspace at work: activity cards sit beside the house.
 const ACTIVITY: { icon: "check-circle" | "tool" | "message-circle" | "file-text"; title: string; detail: string }[] = [
   { icon: "check-circle", title: "Clean accepted", detail: "Ready for guests" },
   { icon: "tool", title: "Repair booked", detail: "Boiler · Tue 10:00" },
@@ -322,28 +300,23 @@ const ACTIVITY: { icon: "check-circle" | "tool" | "message-circle" | "file-text"
 function Showcase({ panel }: { panel: number }) {
   // Cards and picture each get their own column, so neither ever sits on top of the other.
   const cards = Math.round(Math.max(200, Math.min(250, panel * 0.5))), scene = Math.round(Math.max(150, Math.min(300, panel - cards - 20)));
-  const [active, setActive] = useState(0);
-  const reduced = useReducedMotion();
-  useEffect(() => { if (reduced) return; const t = setInterval(() => setActive(a => (a + 1) % ACTIVITY.length), 2600); return () => clearInterval(t); }, [reduced]);
   return (
     <View style={[ui.row, { gap: 20, alignItems: "center" }]}>
       <View style={{ width: cards, gap: 10 }}>
-        {ACTIVITY.map((item, i) => <Rise key={item.title} index={4 + i}><ActivityCard {...item} index={i} lit={reduced ? i === 0 : active === i} /></Rise>)}
+        {ACTIVITY.map((item, i) => <Rise key={item.title} index={4 + i}><ActivityCard {...item} index={i} lit={i === 0} /></Rise>)}
       </View>
       <View style={{ flex: 1, alignItems: "center" }}><ChargeScene width={scene} /></View>
     </View>
   );
 }
-function ActivityCard({ icon, title, detail, index, lit }: { icon: "check-circle" | "tool" | "message-circle" | "file-text"; title: string; detail: string; index: number; lit: boolean }) {
-  const bob = useLoop(2400 + index * 300, index * 400);
+function ActivityCard({ icon, title, detail, lit }: { icon: "check-circle" | "tool" | "message-circle" | "file-text"; title: string; detail: string; index: number; lit: boolean }) {
   const reduced = useReducedMotion();
   const [glow] = useState(() => new Animated.Value(lit ? 1 : 0));
   useEffect(() => { const a = Animated.timing(glow, { toValue: lit ? 1 : 0, duration: reduced ? 0 : motionTokens.page + 160, easing: motionTokens.standard, useNativeDriver: false }); a.start(); return () => a.stop(); }, [lit, glow, reduced]);
   return (
     <Animated.View style={[ui.row, { gap: 12, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1,
       borderColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(167,217,193,0.18)", "rgba(167,217,193,0.6)"] }),
-      backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(250,247,240,0.05)", "rgba(250,247,240,0.12)"] }),
-      transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }] },
+      backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(250,247,240,0.05)", "rgba(250,247,240,0.12)"] }), },
       Platform.OS === "web" ? ({ backdropFilter: "blur(6px)" } as object) : null]}>
       <Animated.View style={{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center",
         backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(167,217,193,0.14)", "rgba(167,217,193,0.3)"] }) }}>
@@ -356,34 +329,22 @@ function ActivityCard({ icon, title, detail, index, lit }: { icon: "check-circle
     </Animated.View>
   );
 }
-// The four teams, each with a soft light that passes along them in turn.
+// The four teams.
 function TeamChips() {
   const teams: { label: string; icon: "home" | "droplet" | "tool" | "pie-chart" }[] = [
     { label: "Stays", icon: "home" }, { label: "Cleans", icon: "droplet" }, { label: "Ready", icon: "tool" }, { label: "Accounts", icon: "pie-chart" }];
   return (
     <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-      {teams.map((team, i) => <TeamChip key={team.label} {...team} index={i} />)}
+      {teams.map(team => <TeamChip key={team.label} {...team} />)}
     </View>
   );
 }
-function TeamChip({ label, icon, index }: { label: string; icon: "home" | "droplet" | "tool" | "pie-chart"; index: number }) {
-  const light = useLoop(1400, index * 700);
+function TeamChip({ label, icon }: { label: string; icon: "home" | "droplet" | "tool" | "pie-chart" }) {
   return (
-    <Animated.View style={[ui.row, { gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: "rgba(167,217,193,.35)",
-      backgroundColor: "rgba(250,247,240,.06)", opacity: light.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] }) }]}>
+    <View style={[ui.row, { gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: "rgba(167,217,193,.35)",
+      backgroundColor: "rgba(250,247,240,.06)" }]}>
       <Feather name={icon} size={14} color="#A7D9C1" />
       <Text style={{ color: "#FAF7F0", fontSize: 13, fontWeight: "600" }}>{label}</Text>
-    </Animated.View>
-  );
-}
-// A faint mint light drifting in the corner of the sign-in side, so it shares the brand panel's glow.
-function PageGlow({ p }: { p: Palette }) {
-  const drift = useLoop(7000);
-  return (
-    <Animated.View pointerEvents="none" style={{ position: "absolute", right: -260, top: -300, width: 720, height: 720,
-      transform: [{ translateX: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -40] }) }, { translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, 30] }) }] }}>
-      <Svg width="100%" height="100%" viewBox="0 0 100 100"><Defs><RadialGradient id="page-glow" cx="50%" cy="50%" r="50%"><Stop offset="0" stopColor={p.isDark ? "#3F8A75" : "#A7D9C1"} stopOpacity={p.isDark ? 0.28 : 0.45} /><Stop offset="1" stopColor={p.isDark ? "#3F8A75" : "#A7D9C1"} stopOpacity={0} /></RadialGradient></Defs>
-        <Circle cx={50} cy={50} r={50} fill="url(#page-glow)" /></Svg>
-    </Animated.View>
+    </View>
   );
 }

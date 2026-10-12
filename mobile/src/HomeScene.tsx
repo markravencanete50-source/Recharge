@@ -1,13 +1,17 @@
-import { useId } from "react";
 import { View } from "react-native";
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg";
+import Svg, { Circle, Ellipse, G, Path, Rect } from "react-native-svg";
 
 // A small 2.5D street scene for the mobile welcome panel: a gabled house in
 // front of an apartment block, lit from the top left. Fixed colours suit the
 // forest header in both themes.
 export function HomeScene({ width = 176 }: { width?: number }) {
-  const id = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const u = (name: string) => "url(#" + id + name + ")";
+  // Solid fills only: one flat colour per surface.
+  const solid: Record<string, string> = {
+    ground: "#A7D9C1", shadow: "#06110E", front: "#F2EBDD", side: "#CCC1A8", top: "#EBE4D3",
+    towerFront: "#D8E3DD", towerSide: "#8EA89E", roof: "#CC7050", roofSide: "#B0502F",
+    glass: "#7898A8", lit: "#F0C676", door: "#235849", leaf: "#7DAA5E", leafDark: "#5B9870",
+  };
+  const u = (name: string) => solid[name];
   const height = width * 0.75;
   const glass = (x: number, y: number, w: number, h: number, lit = false, key?: string) => (
     <G key={key}>
@@ -20,69 +24,10 @@ export function HomeScene({ width = 176 }: { width?: number }) {
   return (
     <View pointerEvents="none" accessible={false} style={{ width, height }}>
       <Svg width={width} height={height} viewBox="0 0 240 180">
-        <Defs>
-          <RadialGradient id={id + "ground"} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0" stopColor="#A7D9C1" stopOpacity={0.55} />
-            <Stop offset="1" stopColor="#A7D9C1" stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient id={id + "shadow"} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0" stopColor="#06110E" stopOpacity={0.45} />
-            <Stop offset="1" stopColor="#06110E" stopOpacity={0} />
-          </RadialGradient>
-          <LinearGradient id={id + "front"} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#FFFDF7" />
-            <Stop offset="1" stopColor="#E9E1CF" />
-          </LinearGradient>
-          <LinearGradient id={id + "side"} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#D9CFB8" />
-            <Stop offset="1" stopColor="#BFB397" />
-          </LinearGradient>
-          <LinearGradient id={id + "top"} x1="0" y1="0" x2="1" y2="0">
-            <Stop offset="0" stopColor="#F4EFE4" />
-            <Stop offset="1" stopColor="#E3DAC6" />
-          </LinearGradient>
-          <LinearGradient id={id + "towerFront"} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#E7EEEA" />
-            <Stop offset="1" stopColor="#C9D7D0" />
-          </LinearGradient>
-          <LinearGradient id={id + "towerSide"} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#9DB5AC" />
-            <Stop offset="1" stopColor="#7E998E" />
-          </LinearGradient>
-          <LinearGradient id={id + "roof"} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#E9906A" />
-            <Stop offset="1" stopColor="#B4512F" />
-          </LinearGradient>
-          <LinearGradient id={id + "roofSide"} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#C8643F" />
-            <Stop offset="1" stopColor="#99401F" />
-          </LinearGradient>
-          <LinearGradient id={id + "glass"} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#A9C6D2" />
-            <Stop offset="1" stopColor="#4F7383" />
-          </LinearGradient>
-          <LinearGradient id={id + "lit"} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#FBE3A6" />
-            <Stop offset="1" stopColor="#E3A846" />
-          </LinearGradient>
-          <LinearGradient id={id + "door"} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#2F6F5E" />
-            <Stop offset="1" stopColor="#163A32" />
-          </LinearGradient>
-          <RadialGradient id={id + "leaf"} cx="0.35" cy="0.3" r="0.75">
-            <Stop offset="0" stopColor="#C9E3A4" />
-            <Stop offset="1" stopColor="#4F7F35" />
-          </RadialGradient>
-          <RadialGradient id={id + "leafDark"} cx="0.35" cy="0.3" r="0.75">
-            <Stop offset="0" stopColor="#8FC79A" />
-            <Stop offset="1" stopColor="#2F6A4A" />
-          </RadialGradient>
-        </Defs>
-
-        {/* Ground glow and contact shadows. */}
-        <Ellipse cx={124} cy={158} rx={116} ry={18} fill={u("ground")} />
-        <Ellipse cx={170} cy={154} rx={44} ry={7} fill={u("shadow")} />
-        <Ellipse cx={88} cy={156} rx={52} ry={7} fill={u("shadow")} />
+        {/* Ground tint and contact shadows. */}
+        <Ellipse cx={124} cy={158} rx={116} ry={18} fill={u("ground")} opacity={0.2} />
+        <Ellipse cx={170} cy={154} rx={44} ry={7} fill={u("shadow")} opacity={0.2} />
+        <Ellipse cx={88} cy={156} rx={52} ry={7} fill={u("shadow")} opacity={0.2} />
 
         {/* Apartment block: top, front and shaded side faces. */}
         <Path d="M134 34 L156 24 L206 24 L184 34 Z" fill={u("top")} />

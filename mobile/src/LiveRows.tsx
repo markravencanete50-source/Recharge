@@ -32,7 +32,7 @@ export function LiveWorkRow({ item, property, palette: p, onPress }: { item: Ope
   const date = shortDate(workDate(item)), urgent = item.data.sameDayTurnover === true;
   return (
     <MotionPress {...hoverTint} accessibilityRole="button" accessibilityLabel={`${item.title}, ${property ?? ""}, ${readableStage(item.status)}`} onPress={onPress} style={[ui.row, { gap: 14, paddingVertical: 14, paddingHorizontal: 12, marginHorizontal: -12, borderRadius: 18 }]}>
-      <View style={{ backgroundColor: departmentColor(look.tone, p).wash, width: 48, height: 48, borderRadius: 16, justifyContent: "center", alignItems: "center" }}><DimensionalIcon name={look.icon} size={36} /></View>
+      <View style={{ backgroundColor: p.wash, width: 48, height: 48, borderRadius: 16, justifyContent: "center", alignItems: "center" }}><DimensionalIcon name={look.icon} size={36} color={p.primary} /></View>
       <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
         <Text numberOfLines={2} style={{ color: p.text, fontSize: 15, lineHeight: 21, fontWeight: "600" }}>{item.title}</Text>
         {!!property && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{property}</Text>}
@@ -71,7 +71,7 @@ export function LiveNoticeRow({ notice, palette: p }: { notice: NoticeView; pale
   const when = new Date(notice.created_at).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   return (
     <View style={[ui.row, { gap: 14, paddingVertical: 12 }]}>
-      <View style={{ backgroundColor: departmentColor(look.tone, p).wash, width: 42, height: 42, borderRadius: 14, justifyContent: "center", alignItems: "center" }}><DimensionalIcon name={look.icon} size={30} /></View>
+      <View style={{ backgroundColor: p.wash, width: 42, height: 42, borderRadius: 14, justifyContent: "center", alignItems: "center" }}><DimensionalIcon name={look.icon} size={30} color={p.primary} /></View>
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <Text numberOfLines={2} style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{noticeCopy(notice.event_type).title}</Text>
         <Text style={[ui.small, { color: p.muted }]}>{when}</Text>

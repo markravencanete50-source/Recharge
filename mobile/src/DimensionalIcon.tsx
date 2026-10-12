@@ -1,10 +1,11 @@
-import { useId, type ReactNode } from "react";
 import { Platform, View } from "react-native";
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg";
+import Svg, { Circle, Ellipse, Line, Path, Polygon, Polyline, Rect } from "react-native-svg";
+import { iconNodes } from "../../lib/artwork";
+import { themes } from "./theme";
 
-// Small dimensional illustrations for departments and headline features.
-// Each object is lit from the top left: a gradient body, a soft highlight and
-// a grounded shadow, drawn in the bone, forest and earth palette.
+// Outline glyphs for departments and headline features: Lucide geometry drawn
+// as a thin single-colour line, like the Recharge logo. No fills, gradients,
+// shadows or depth. Names stay the same so every caller keeps working.
 export type DimensionalName =
   | "house"
   | "building"
@@ -39,330 +40,109 @@ export type DimensionalName =
   | "mail"
   | "star";
 
-const C = {
-  forest: ["#2F6F5E", "#163A32"],
-  mint: ["#C9EBDB", "#7FC3A6"],
-  bone: ["#FFFDF7", "#E3DAC6"],
-  gold: ["#F6D58A", "#C68B2C"],
-  terracotta: ["#F0A27E", "#B4512F"],
-  slate: ["#A9C6D2", "#4A6B7A"],
-  heather: ["#E2C3DE", "#8C6189"],
-  moss: ["#C9E3A4", "#5E8A3A"],
-} as const;
 
-type Grad = (key: keyof typeof C, x2?: string, y2?: string) => string;
+type Node = readonly [string, Record<string, string | number>];
 
-function draw(name: DimensionalName, g: Grad): ReactNode {
+// Lucide v1.31.0 geometry (ISC licensed, see docs/LUCIDE-ARTWORK-LICENSE.txt)
+// for glyphs that lib/artwork.ts does not already carry.
+const extraNodes: Record<string, readonly Node[]> = {
+  "house": [["path",{"d":"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"}],["path",{"d":"M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"}]],
+  "hourglass": [["path",{"d":"M5 22h14"}],["path",{"d":"M5 2h14"}],["path",{"d":"M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"}],["path",{"d":"M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"}]],
+  "toolbox": [["path",{"d":"M16 12v4"}],["path",{"d":"M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"}],["path",{"d":"M17 6a2 2 0 011.414.586l3 3A2 2 0 0122 11v8a2 2 0 01-2 2H4a2 2 0 01-2-2v-8a2 2 0 01.586-1.414l3-3A2 2 0 017 6z"}],["path",{"d":"M2 14h20"}],["path",{"d":"M8 12v4"}]],
+  "compass": [["circle",{"cx":"12","cy":"12","r":"10"}],["path",{"d":"m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"}]],
+  "sun": [["circle",{"cx":"12","cy":"12","r":"4"}],["path",{"d":"M12 2v2"}],["path",{"d":"M12 20v2"}],["path",{"d":"m4.93 4.93 1.41 1.41"}],["path",{"d":"m17.66 17.66 1.41 1.41"}],["path",{"d":"M2 12h2"}],["path",{"d":"M20 12h2"}],["path",{"d":"m6.34 17.66-1.41 1.41"}],["path",{"d":"m19.07 4.93-1.41 1.41"}]],
+  "sunset": [["path",{"d":"M12 10V2"}],["path",{"d":"m4.93 10.93 1.41 1.41"}],["path",{"d":"M2 18h2"}],["path",{"d":"M20 18h2"}],["path",{"d":"m19.07 10.93-1.41 1.41"}],["path",{"d":"M22 22H2"}],["path",{"d":"m16 6-4 4-4-4"}],["path",{"d":"M16 18a4 4 0 0 0-8 0"}]],
+  "moon": [["path",{"d":"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"}]],
+  "tag": [["path",{"d":"M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"}],["circle",{"cx":"7.5","cy":"7.5","r":".5","fill":"currentColor"}]],
+  "refresh-cw": [["path",{"d":"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"}],["path",{"d":"M21 3v5h-5"}],["path",{"d":"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"}],["path",{"d":"M8 16H3v5"}]],
+  "signature": [["path",{"d":"m21 17-2.156-1.868A.5.5 0 0 0 18 15.5v.5a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1c0-2.545-3.991-3.97-8.5-4a1 1 0 0 0 0 5c4.153 0 4.745-11.295 5.708-13.5a2.5 2.5 0 1 1 3.31 3.284"}],["path",{"d":"M3 21h18"}]],
+  "bell": [["path",{"d":"M10.268 21a2 2 0 0 0 3.464 0"}],["path",{"d":"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"}]],
+  "wallet": [["path",{"d":"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"}],["path",{"d":"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"}]],
+  "star": [["path",{"d":"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"}]],
+};
+
+const shapes = { path: Path, circle: Circle, rect: Rect, line: Line, polyline: Polyline, polygon: Polygon, ellipse: Ellipse };
+
+// Which Lucide glyph draws each name.
+function glyphFor(name: DimensionalName): string {
   switch (name) {
     case "house":
-      // 2.5D: gable front, shaded side wall and a receding roof plane.
-      return <>
-        <Path d="M44 30 L54 25 L54 49 L44 54 Z" fill="#C9BEA4" />
-        <Path d="M12 54 L12 32 L28 17 L44 32 L44 54 Z" fill={g("bone", "0", "1")} />
-        <Path d="M28 17 L38 12 L54 26 L44 31 Z" fill="#B4512F" />
-        <Path d="M9 34 L28 16 L47 34" fill="none" stroke={g("terracotta")} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
-        <Rect x={41} y={12} width={5} height={10} rx={1} fill="#C9BEA4" />
-        <Circle cx={28} cy={29} r={3.4} fill={g("gold")} />
-        <Path d="M23.5 54 V44.5 a4.5 4.5 0 0 1 9 0 V54 Z" fill={g("forest")} />
-        <Rect x={15} y={40} width={6.5} height={6.5} rx={1} fill={g("slate")} />
-        <Rect x={34.5} y={40} width={6.5} height={6.5} rx={1} fill={g("gold")} />
-      </>;
+      return "house";
     case "building":
-      // 2.5D block: lit front, shaded side and a calm window rhythm.
-      return <>
-        <Path d="M18 14 L28 9 L50 9 L40 14 Z" fill="#F4EFE4" />
-        <Rect x={18} y={14} width={22} height={41} fill={g("bone", "0", "1")} />
-        <Path d="M40 14 L50 9 L50 50 L40 55 Z" fill="#9DB5AC" />
-        {[0, 1, 2, 3].map(row => [0, 1].map(col => <Rect key={row + "-" + col} x={21.5 + col * 9} y={18 + row * 8.5} width={6} height={5} rx={1} fill={row === 1 && col === 0 || row === 3 && col === 1 ? g("gold") : g("slate")} />))}
-        {[0, 1, 2, 3].map(row => <Path key={"s" + row} d={`M42.5 ${19 + row * 8.5} L47.5 ${16.5 + row * 8.5} L47.5 ${21.5 + row * 8.5} L42.5 ${24 + row * 8.5} Z`} fill="#5E7F87" opacity={0.55} />)}
-        <Rect x={26} y={48} width={6} height={7} rx={1} fill={g("forest")} />
-      </>;
+      return "building-2";
     case "hardhat":
-      return <>
-        <Path d="M14 40 C14 25 22 16 32 16 C42 16 50 25 50 40 Z" fill={g("gold")} />
-        <Path d="M29 16.4 C29 16.4 30 26 30 40 L34 40 C34 26 35 16.4 35 16.4 C34 16.1 30 16.1 29 16.4 Z" fill="#E9B65C" />
-        <Rect x={8} y={39} width={48} height={7} rx={3.5} fill={g("terracotta")} />
-      </>;
+      return "hard-hat";
     case "spray":
-      return <>
-        <Path d="M22 24 L38 24 L42 50 C42 52 40.5 53 39 53 L21 53 C19.5 53 18 52 18 50 Z" fill={g("mint")} />
-        <Rect x={21} y={31} width={18} height={11} rx={2} fill={g("bone")} />
-        <Path d="M23 13 L37 13 C39 13 40 14 40 16 L40 24 L20 24 L20 16 C20 14 21 13 23 13 Z" fill={g("forest")} />
-        <Path d="M40 15 L49 15 L49 19 L40 19 Z" fill={g("forest")} />
-        <Path d="M53 9 l1.2 2.8 2.8 1.2 -2.8 1.2 -1.2 2.8 -1.2 -2.8 -2.8 -1.2 2.8 -1.2 Z" fill="#F6D58A" />
-        <Path d="M54 22 l.8 1.8 1.8 .8 -1.8 .8 -.8 1.8 -.8 -1.8 -1.8 -.8 1.8 -.8 Z" fill="#C9EBDB" />
-      </>;
+      return "spray-can";
     case "people":
-      return <>
-        <Circle cx={40} cy={21} r={7} fill={g("heather")} />
-        <Path d="M27 50 C27 38 33 32 40 32 C47 32 53 38 53 50 Z" fill={g("heather")} />
-        <Circle cx={25} cy={23} r={8} fill={g("slate")} />
-        <Path d="M10 52 C10 39 17 34 25 34 C33 34 40 39 40 52 Z" fill={g("slate")} />
-      </>;
+      return "users";
     case "coins":
-      return <>
-        {[0, 1, 2].map(i => <G key={i}>
-          <Ellipse cx={30} cy={46 - i * 7} rx={16} ry={6} fill="#B07A26" />
-          <Rect x={14} y={40 - i * 7} width={32} height={6} fill="#B07A26" />
-          <Ellipse cx={30} cy={40 - i * 7} rx={16} ry={6} fill={g("gold", "1", "0")} />
-        </G>)}
-        <Path d="M27.5 30 c0-3 4.5-3 4.5 0 M26 26 l7 0 M26.5 23 l6 0" stroke="#9A6A1E" strokeWidth={1.4} strokeLinecap="round" fill="none" />
-        <Circle cx={47} cy={18} r={8.5} fill={g("gold")} />
-        <Circle cx={47} cy={18} r={5.5} fill="none" stroke="#B07A26" strokeWidth={1.3} />
-      </>;
+      return "circle-pound-sterling";
     case "clipboard":
-      return <>
-        <Rect x={14} y={12} width={36} height={44} rx={5} fill={g("terracotta")} />
-        <Rect x={18} y={17} width={28} height={35} rx={3} fill={g("bone")} />
-        <Rect x={24} y={9} width={16} height={8} rx={3} fill={g("forest")} />
-        {[0, 1, 2].map(i => <G key={i}>
-          <Path d={`M21.5 ${26 + i * 8} l2.2 2.2 4 -4.4`} stroke={i < 2 ? "#3F8A5E" : "#C9C1AE"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          <Rect x={30} y={24.5 + i * 8} width={12} height={3} rx={1.5} fill={i < 2 ? "#BFD8C6" : "#E3DAC6"} />
-        </G>)}
-      </>;
+      return "clipboard-list";
     case "hourglass":
-      return <>
-        <Rect x={16} y={9} width={32} height={6} rx={3} fill={g("forest")} />
-        <Rect x={16} y={49} width={32} height={6} rx={3} fill={g("forest")} />
-        <Path d="M20 15 L44 15 C44 24 36 28 34 32 C36 36 44 40 44 49 L20 49 C20 40 28 36 30 32 C28 28 20 24 20 15 Z" fill={g("mint")} opacity={0.75} />
-        <Path d="M24 20 L40 20 C38 25 33 27 32 30 C31 27 26 25 24 20 Z" fill={g("gold")} />
-        <Path d="M32 36 C33 40 41 42 42 47 L22 47 C23 42 31 40 32 36 Z" fill={g("gold")} />
-      </>;
+      return "hourglass";
     case "medal":
-      return <>
-        <Path d="M20 8 L30 8 L36 26 L28 30 Z" fill={g("terracotta")} />
-        <Path d="M44 8 L34 8 L28 26 L36 30 Z" fill={g("forest")} />
-        <Circle cx={32} cy={39} r={15} fill={g("gold")} />
-        <Circle cx={32} cy={39} r={10.5} fill="none" stroke="#B07A26" strokeWidth={1.5} />
-        <Path d="M32 32.5 l2 4.1 4.5 .6 -3.3 3.1 .8 4.4 -4 -2.1 -4 2.1 .8 -4.4 -3.3 -3.1 4.5 -.6 Z" fill="#FFF3D2" />
-      </>;
+      return "award";
     case "key":
-      return <>
-        <Circle cx={22} cy={24} r={12} fill={g("gold")} />
-        <Circle cx={22} cy={24} r={4.5} fill="#EFE9DB" />
-        <Path d="M30 31 L50 51 L45 56 L42 53 L39 56 L35 52 L38 49 L26 37 Z" fill={g("gold")} />
-        <Rect x={11} y={42} width={16} height={11} rx={3} fill={g("forest")} transform="rotate(-12 19 47)" />
-        <Circle cx={15} cy={47} r={1.6} fill="#C9EBDB" />
-      </>;
+      return "key-round";
     case "chart":
-      return <>
-        <Rect x={10} y={50} width={44} height={5} rx={2.5} fill={g("forest")} />
-        <Rect x={14} y={34} width={9} height={16} rx={2.5} fill={g("mint")} />
-        <Rect x={27.5} y={24} width={9} height={26} rx={2.5} fill={g("gold")} />
-        <Rect x={41} y={14} width={9} height={36} rx={2.5} fill={g("terracotta")} />
-        <Path d="M15 26 L30 16 L38 20 L50 8" stroke="#2F6F5E" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <Circle cx={50} cy={8} r={2.6} fill="#2F6F5E" />
-      </>;
+      return "chart-no-axes-combined";
     case "toolbox":
-      return <>
-        <Path d="M24 22 L24 16 C24 14 25 13 27 13 L37 13 C39 13 40 14 40 16 L40 22" stroke="#163A32" strokeWidth={3.4} fill="none" strokeLinecap="round" />
-        <Rect x={9} y={21} width={46} height={31} rx={5} fill={g("terracotta")} />
-        <Rect x={9} y={30} width={46} height={4} fill="#9A4426" opacity={0.55} />
-        <Rect x={27} y={27} width={10} height={10} rx={2} fill={g("gold")} />
-      </>;
+      return "toolbox";
     case "calendar":
-      return <>
-        <Rect x={11} y={14} width={42} height={40} rx={6} fill={g("bone")} />
-        <Path d="M11 20 C11 16.7 13.7 14 17 14 L47 14 C50.3 14 53 16.7 53 20 L53 25 L11 25 Z" fill={g("terracotta")} />
-        <Rect x={20} y={9} width={4} height={10} rx={2} fill={g("forest")} />
-        <Rect x={40} y={9} width={4} height={10} rx={2} fill={g("forest")} />
-        {[0, 1, 2].map(r => [0, 1, 2, 3].map(c => <Rect key={r + "" + c} x={16 + c * 8.5} y={30 + r * 7.5} width={5.5} height={4.5} rx={1.2} fill={r === 1 && c === 2 ? "#2F6F5E" : "#E3DAC6"} />))}
-      </>;
+      return "calendar-days";
     case "chat":
-      return <>
-        <Path d="M30 12 C43 12 52 19 52 29 C52 39 43 46 30 46 C27 46 24 45.6 21.5 44.8 L12 50 L14.5 41.5 C10.4 38.3 8 34 8 29 C8 19 17 12 30 12 Z" fill={g("mint")} />
-        <Path d="M44 30 C52 30 57 34.5 57 40 C57 43 55.5 45.6 53 47.4 L54.5 53 L48.5 49.6 C47 50 45.6 50.2 44 50.2 C36 50.2 31 45.6 31 40 C31 34.5 36 30 44 30 Z" fill={g("forest")} />
-        <Circle cx={21} cy={29} r={2.6} fill="#2F6F5E" />
-        <Circle cx={30} cy={29} r={2.6} fill="#2F6F5E" />
-        <Circle cx={39} cy={29} r={2.6} fill="#2F6F5E" />
-      </>;
-    case "sun":
-      return <>
-        {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => <Rect key={angle} x={30} y={4} width={4} height={10} rx={2} fill={g("gold")} transform={`rotate(${angle} 32 30)`} />)}
-        <Circle cx={32} cy={30} r={14} fill={g("gold")} />
-        <Circle cx={27} cy={25} r={5} fill="#FFF3D2" opacity={0.65} />
-      </>;
-    case "sunset":
-      return <>
-        {[-60, -30, 0, 30, 60].map(angle => <Rect key={angle} x={30} y={6} width={4} height={9} rx={2} fill={g("terracotta")} transform={`rotate(${angle} 32 38)`} />)}
-        <Path d="M14 40 A18 18 0 0 1 50 40 Z" fill={g("terracotta")} />
-        <Rect x={8} y={40} width={48} height={4} rx={2} fill={g("forest")} />
-        <Rect x={16} y={47} width={32} height={3} rx={1.5} fill={g("slate")} />
-        <Rect x={23} y={53} width={18} height={3} rx={1.5} fill={g("slate")} opacity={0.7} />
-      </>;
-    case "moon":
-      return <>
-        <Path d="M38 10 A22 22 0 1 0 54 42 A17 17 0 1 1 38 10 Z" fill={g("bone")} />
-        <Circle cx={26} cy={34} r={3} fill="#E3DAC6" />
-        <Circle cx={33} cy={45} r={2} fill="#E3DAC6" />
-        <Path d="M50 12 l1.1 2.6 2.6 1.1 -2.6 1.1 -1.1 2.6 -1.1 -2.6 -2.6 -1.1 2.6 -1.1 Z" fill="#F6D58A" />
-        <Path d="M56 26 l.8 1.8 1.8 .8 -1.8 .8 -.8 1.8 -.8 -1.8 -1.8 -.8 1.8 -.8 Z" fill="#C9EBDB" />
-      </>;
+      return "messages-square";
     case "compass":
-      return <>
-        <Circle cx={32} cy={32} r={22} fill={g("forest")} />
-        <Circle cx={32} cy={32} r={17} fill={g("bone")} />
-        <Path d="M32 17 L36 32 L32 34 L28 32 Z" fill={g("terracotta")} />
-        <Path d="M32 47 L28 32 L32 30 L36 32 Z" fill={g("slate")} />
-        <Circle cx={32} cy={32} r={2.5} fill="#163A32" />
-      </>;
+      return "compass";
+    case "sun":
+      return "sun";
+    case "sunset":
+      return "sunset";
+    case "moon":
+      return "moon";
     case "tag":
-      // A price tag on a string, with a gold eyelet.
-      return <>
-        <Path d="M12 30 L30 12 L52 12 L52 34 L34 52 Z" fill={g("terracotta")} />
-        <Path d="M30 12 L52 12 L52 16 L32 16 Z" fill="#F7C2A6" opacity={0.6} />
-        <Circle cx={43} cy={21} r={4} fill="#FFF3E8" />
-        <Circle cx={43} cy={21} r={2} fill={g("forest")} />
-        <Path d="M43 21 C50 10 58 12 57 6" stroke="#163A32" strokeWidth={1.8} fill="none" strokeLinecap="round" />
-        <Rect x={22} y={31} width={14} height={4} rx={2} fill="#FFF3E8" opacity={0.85} transform="rotate(-45 29 33)" />
-      </>;
+      return "tag";
     case "relist":
-      // Two arrows chasing each other around a listing card: list it again.
-      return <>
-        <Rect x={20} y={20} width={24} height={24} rx={5} fill={g("bone")} />
-        <Rect x={24} y={25} width={16} height={7} rx={2} fill={g("slate")} />
-        <Rect x={24} y={35} width={10} height={3} rx={1.5} fill="#C9BEA4" />
-        <Path d="M32 9 A23 23 0 0 1 55 32" stroke={g("forest")} strokeWidth={5} fill="none" strokeLinecap="round" />
-        <Path d="M55 40 L50 30 L60 30 Z" fill="#2F6F5E" />
-        <Path d="M32 55 A23 23 0 0 1 9 32" stroke={g("mint")} strokeWidth={5} fill="none" strokeLinecap="round" />
-        <Path d="M9 24 L14 34 L4 34 Z" fill="#7FC3A6" />
-      </>;
+      return "refresh-cw";
     case "signature":
-      // A signed sheet and a fountain pen.
-      return <>
-        <Rect x={10} y={12} width={34} height={42} rx={4} fill={g("bone")} />
-        <Rect x={15} y={19} width={20} height={3} rx={1.5} fill="#C9BEA4" />
-        <Rect x={15} y={26} width={24} height={3} rx={1.5} fill="#C9BEA4" />
-        <Path d="M15 44 C19 38 21 47 25 41 C27 38 28 45 33 42" stroke="#2F6F5E" strokeWidth={2.2} fill="none" strokeLinecap="round" />
-        <Path d="M40 42 L54 14 L60 17 L46 45 Z" fill={g("forest")} />
-        <Path d="M40 42 L46 45 L41 51 Z" fill={g("gold")} />
-        <Path d="M52 18 L58 21" stroke="#C9EBDB" strokeWidth={1.6} strokeLinecap="round" />
-      </>;
+      return "signature";
     case "shield":
-      return <>
-        <Path d="M32 8 L52 15 L52 31 C52 43 43 52 32 56 C21 52 12 43 12 31 L12 15 Z" fill={g("forest")} />
-        <Path d="M32 8 L52 15 L52 31 C52 43 43 52 32 56 Z" fill="#163A32" opacity={0.35} />
-        <Path d="M32 15 L45 20 L45 31 C45 39 39 45 32 48 C25 45 19 39 19 31 L19 20 Z" fill={g("mint")} />
-        <Path d="M25 31 L30 36 L39 26" stroke="#163A32" strokeWidth={3.2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      </>;
+      return "shield-check";
     case "box":
-      // An open parcel of supplies.
-      return <>
-        <Path d="M10 24 L32 16 L54 24 L32 32 Z" fill="#E9C38A" />
-        <Path d="M10 24 L32 32 L32 56 L10 48 Z" fill={g("gold", "0", "1")} />
-        <Path d="M54 24 L32 32 L32 56 L54 48 Z" fill="#B07A26" />
-        <Path d="M10 24 L4 16 L26 9 L32 16 Z" fill="#F6D58A" />
-        <Path d="M54 24 L60 16 L38 9 L32 16 Z" fill="#E9B65C" />
-        <Path d="M17 34 L25 37 M17 39 L22 41" stroke="#8A5A16" strokeWidth={1.8} strokeLinecap="round" />
-      </>;
+      return "package-open";
     case "bell":
-      return <>
-        <Path d="M32 10 C42 10 47 18 47 28 L47 38 L52 45 L12 45 L17 38 L17 28 C17 18 22 10 32 10 Z" fill={g("gold")} />
-        <Path d="M22 22 C23 17 26 14 30 13" stroke="#FFF3D2" strokeWidth={2.4} fill="none" strokeLinecap="round" opacity={0.8} />
-        <Rect x={10} y={44} width={44} height={5} rx={2.5} fill="#B07A26" />
-        <Circle cx={32} cy={53} r={4.5} fill={g("forest")} />
-        <Circle cx={48} cy={14} r={6} fill={g("terracotta")} />
-      </>;
+      return "bell";
     case "receipt":
-      // An invoice with a zig-zag tear and a total.
-      return <>
-        <Path d="M14 8 L50 8 L50 56 L45 52 L40 56 L35 52 L30 56 L25 52 L20 56 L14 52 Z" fill={g("bone")} />
-        <Rect x={14} y={8} width={36} height={8} fill={g("forest")} />
-        <Rect x={19} y={22} width={18} height={3} rx={1.5} fill="#C9BEA4" />
-        <Rect x={19} y={29} width={24} height={3} rx={1.5} fill="#C9BEA4" />
-        <Rect x={19} y={36} width={14} height={3} rx={1.5} fill="#C9BEA4" />
-        <Rect x={33} y={42} width={12} height={5} rx={2} fill={g("gold")} />
-      </>;
+      return "receipt-pound-sterling";
     case "wallet":
-      return <>
-        <Rect x={10} y={18} width={40} height={10} rx={4} fill="#9DB5AC" transform="rotate(-8 30 23)" />
-        <Rect x={8} y={22} width={46} height={32} rx={7} fill={g("forest")} />
-        <Rect x={36} y={32} width={20} height={13} rx={5} fill={g("mint")} />
-        <Circle cx={43} cy={38.5} r={3} fill={g("gold")} />
-        <Path d="M14 28 L34 28" stroke="#C9EBDB" strokeWidth={1.6} strokeLinecap="round" opacity={0.6} />
-      </>;
+      return "wallet";
     case "pie":
-      // A statement's share: most to the owner, a slice to Recharge.
-      return <>
-        <Circle cx={30} cy={34} r={20} fill={g("slate")} />
-        <Path d="M30 34 L30 14 A20 20 0 1 1 11.5 41.6 Z" fill={g("forest")} />
-        <Path d="M36 28 L36 8 A20 20 0 0 1 56 28 Z" fill={g("gold")} />
-        <Circle cx={30} cy={34} r={6} fill="#FFFDF7" opacity={0.9} />
-      </>;
+      return "chart-pie";
     case "cart":
-      return <>
-        <Path d="M6 12 L14 12 L20 40 L48 40" stroke="#163A32" strokeWidth={3.4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <Path d="M16 18 L54 18 L49 36 L20 36 Z" fill={g("mint")} />
-        <Rect x={22} y={10} width={12} height={12} rx={2} fill={g("terracotta")} />
-        <Rect x={35} y={13} width={10} height={9} rx={2} fill={g("gold")} />
-        <Circle cx={23} cy={49} r={4.5} fill={g("forest")} />
-        <Circle cx={45} cy={49} r={4.5} fill={g("forest")} />
-      </>;
+      return "shopping-bag";
     case "sofa":
-      return <>
-        <Rect x={14} y={16} width={36} height={20} rx={7} fill={g("heather", "0", "1")} />
-        <Rect x={8} y={28} width={48} height={16} rx={6} fill={g("heather")} />
-        <Rect x={6} y={26} width={10} height={20} rx={5} fill="#8C6189" />
-        <Rect x={48} y={26} width={10} height={20} rx={5} fill="#8C6189" />
-        <Rect x={18} y={30} width={28} height={6} rx={3} fill="#F3E3F0" opacity={0.55} />
-        <Rect x={11} y={46} width={4} height={6} rx={1.5} fill={g("forest")} />
-        <Rect x={49} y={46} width={4} height={6} rx={1.5} fill={g("forest")} />
-      </>;
+      return "sofa";
     case "search":
-      // A magnifying glass over a small house: an inspection.
-      return <>
-        <Path d="M14 38 L14 28 L24 20 L34 28 L34 38 Z" fill={g("bone")} />
-        <Path d="M12 29 L24 19 L36 29" stroke={g("terracotta")} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <Rect x={21} y={31} width={6} height={7} rx={1} fill={g("forest")} />
-        <Circle cx={36} cy={30} r={15} fill="#C9EBDB" opacity={0.35} />
-        <Circle cx={36} cy={30} r={15} fill="none" stroke={g("forest")} strokeWidth={5} />
-        <Path d="M47 41 L57 51" stroke={g("gold")} strokeWidth={7} strokeLinecap="round" />
-      </>;
+      return "scan-search";
     case "mail":
-      return <>
-        <Rect x={8} y={18} width={48} height={34} rx={5} fill={g("bone", "0", "1")} />
-        <Path d="M8 22 L32 39 L56 22" stroke="#C9BEA4" strokeWidth={2.4} fill="none" strokeLinejoin="round" />
-        <Path d="M8 50 L26 35 M56 50 L38 35" stroke="#E3DAC6" strokeWidth={2} />
-        <Rect x={42} y={10} width={12} height={14} rx={2} fill={g("terracotta")} />
-        <Circle cx={48} cy={17} r={2.6} fill="#FFF3E8" />
-      </>;
+      return "mail";
     case "star":
-      return <>
-        <Path d="M32 8 L38.5 22.5 L54 24 L42.2 34.4 L45.6 50 L32 42 L18.4 50 L21.8 34.4 L10 24 L25.5 22.5 Z" fill={g("gold")} />
-        <Path d="M32 8 L38.5 22.5 L54 24 L42.2 34.4 L32 30 Z" fill="#FFF3D2" opacity={0.35} />
-        <Path d="M50 44 l1 2.4 2.4 1 -2.4 1 -1 2.4 -1 -2.4 -2.4 -1 2.4 -1 Z" fill="#C9EBDB" />
-      </>;
+      return "star";
   }
 }
 
-export function DimensionalIcon({ name, size = 44 }: { name: DimensionalName; size?: number }) {
-  const id = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const used = new Map<string, string>();
-  const g: Grad = (key, x2 = "0.9", y2 = "1") => {
-    const ref = id + key + x2 + y2;
-    used.set(ref, key + "|" + x2 + "|" + y2);
-    return "url(#" + ref + ")";
-  };
-  const body = draw(name, g);
+export function DimensionalIcon({ name, size = 44, color = themes.light.primary }: { name: DimensionalName; size?: number; color?: string }) {
+  const glyph = glyphFor(name);
+  const nodes: readonly Node[] = extraNodes[glyph] ?? iconNodes[glyph] ?? [];
   return (
     <View accessible={false} pointerEvents="none" {...(Platform.OS === "web" ? { dataSet: { dimensional: "1" } } : {})} style={{ width: size, height: size }}>
-      <Svg width={size} height={size} viewBox="0 0 64 64">
-        <Defs>
-          {[...used.entries()].map(([ref, spec]) => {
-            const [key, x2, y2] = spec.split("|");
-            const [light, dark] = C[key as keyof typeof C];
-            return <LinearGradient key={ref} id={ref} x1="0.1" y1="0" x2={x2} y2={y2}>
-              <Stop offset="0" stopColor={light} />
-              <Stop offset="1" stopColor={dark} />
-            </LinearGradient>;
-          })}
-          <RadialGradient id={id + "shadow"} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0" stopColor="#0B1714" stopOpacity={0.28} />
-            <Stop offset="1" stopColor="#0B1714" stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Ellipse cx={32} cy={58} rx={22} ry={4.2} fill={"url(#" + id + "shadow)"} />
-        {body}
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+        {nodes.map(([tag, attrs], index) => {
+          const Shape = shapes[tag as keyof typeof shapes];
+          return Shape ? <Shape key={index} {...attrs} {...(attrs.fill === "currentColor" ? { fill: color } : {})} /> : null;
+        })}
       </Svg>
     </View>
   );

@@ -1,7 +1,7 @@
 import { DimensionalIcon } from './DimensionalIcon';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
-import Svg, {Circle,Defs,Filter,FeGaussianBlur,Line,LinearGradient,Path,RadialGradient,Rect,Stop,Text as SvgText} from 'react-native-svg';
+import Svg, {Circle,Line,Path,Text as SvgText} from 'react-native-svg';
 import Feather from '@expo/vector-icons/Feather';
 import { todayColors, type todayPresentation } from '../../lib/today-presentation';
 import { pathLength, smoothArea, smoothPath } from '../../lib/report-graphs';
@@ -12,30 +12,10 @@ import { ChartTip, HoverColumns, useChartFocus } from './ChartTip';
 
 type Today=ReturnType<typeof todayPresentation>;
 
-// Forest gradient with two soft lights drifting slowly behind the Home hero.
-// Glow opacity stays low so hero text keeps its tested contrast.
+// The solid forest panel behind the Home hero.
 export function HeroGlow({palette:p}:{palette:Palette}) {
   const tone=todayColors[p.isDark?'dark':'light'];
-  const reduced=useReducedMotion();
-  const [drift]=useState(()=>new Animated.Value(0));
-  useEffect(()=>{
-    if(reduced){drift.stopAnimation();drift.setValue(0);return;}
-    const ease=Easing.inOut(Easing.sin),native=Platform.OS!=='web';
-    const loop=Animated.loop(Animated.sequence([
-      Animated.timing(drift,{toValue:1,duration:9000,easing:ease,useNativeDriver:native}),
-      Animated.timing(drift,{toValue:0,duration:9000,easing:ease,useNativeDriver:native}),
-    ]));
-    loop.start();return()=>loop.stop();
-  },[drift,reduced]);
-  const glow=(id:string,color:string,opacity:number,size:number)=><Svg width={size} height={size}><Defs><RadialGradient id={id} cx="50%" cy="50%" r="50%"><Stop offset="0" stopColor={color} stopOpacity={opacity}/><Stop offset="1" stopColor={color} stopOpacity={0}/></RadialGradient></Defs><Circle cx={size/2} cy={size/2} r={size/2} fill={`url(#${id})`}/></Svg>;
-  return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-    <Svg width="100%" height="100%" viewBox="0 0 600 300" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
-      <Defs><LinearGradient id="home-hero-base" x1="0" x2="1" y1="0" y2="1"><Stop offset="0" stopColor={tone.heroStart}/><Stop offset="1" stopColor={tone.heroEnd}/></LinearGradient></Defs>
-      <Rect width="600" height="300" fill="url(#home-hero-base)"/>
-    </Svg>
-    <Animated.View style={{position:'absolute',right:-120,top:-140,transform:[{translateX:drift.interpolate({inputRange:[0,1],outputRange:[0,-48]})},{translateY:drift.interpolate({inputRange:[0,1],outputRange:[0,36]})}]}}>{glow('home-hero-glow-a',tone.mint,0.2,380)}</Animated.View>
-    <Animated.View style={{position:'absolute',left:-140,bottom:-160,transform:[{translateX:drift.interpolate({inputRange:[0,1],outputRange:[0,40]})},{translateY:drift.interpolate({inputRange:[0,1],outputRange:[0,-28]})}]}}>{glow('home-hero-glow-b','#EFE9DB',0.08,340)}</Animated.View>
-  </View>;
+  return <View pointerEvents="none" style={[StyleSheet.absoluteFill,{backgroundColor:tone.heroStart}]}/>;
 }
 const AnimatedCircle=Animated.createAnimatedComponent(Circle);
 const AnimatedPath=Animated.createAnimatedComponent(Path);
@@ -56,11 +36,10 @@ export function TodayRing({completed,total,motionKey,size=88,palette:p}:{complet
   const ringTip=useChartFocus();
   return <View accessible accessibilityLabel={`${completed} of ${total} tasks done, ${total?Math.round(share*100):0} percent`} {...ringTip.hover(0)} style={{width:size,height:size,alignItems:'center',justifyContent:'center',gap:1,zIndex:ringTip.focus===null?0:20}}>
     <Svg width={size} height={size} style={{position:'absolute'}} viewBox="0 0 88 88">
-      <Defs><Filter id="today-ring-glow" x="-50%" y="-50%" width="200%" height="200%"><FeGaussianBlur stdDeviation={4}/></Filter></Defs>
       {/* Solid themed backing and track keep the progress stroke readable. */}
       <Circle cx={44} cy={44} r={42} fill={tone.ringBg}/>
       <Circle cx={44} cy={44} r={35} fill="none" stroke={tone.ringTrack} strokeWidth={6}/>
-      {share>0&&<><AnimatedCircle {...ring} opacity={0.4} filter="url(#today-ring-glow)"/><AnimatedCircle {...ring}/></>}
+      {share>0&&<AnimatedCircle {...ring}/>}
     </Svg>
     <Text style={{color:tone.heroText,fontSize:size>88?28:22,fontWeight:'600',letterSpacing:-0.7}}>{total?Math.round(share*100):0}%</Text><Text style={{color:tone.heroMuted,fontSize:12}}>done</Text>
     {/* Beside the ring: below it, the trend card paints over the tip. */}
@@ -100,10 +79,9 @@ export function OpenTasksTrend({data,motionKey,wide=false,palette:p}:{data:Today
       <Text style={{color:tone.heroText,fontSize:12,lineHeight:18}}>{total} currently open, recorded in these 7 days</Text>
       <View onLayout={event=>setWidth(Math.max(80,event.nativeEvent.layout.width))} style={{position:'relative'}} accessible accessibilityRole="image" accessibilityLabel={`Open tasks by recorded date. ${data.days.map(day=>`${day.date}: ${day.value}`).join('; ')}. ${data.changeLabel}. Counts use current task status, not historical backlog.`}>
         <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
-          <Defs><LinearGradient id="today-open-area" x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={tone.spark} stopOpacity={0.3}/><Stop offset="1" stopColor={tone.spark} stopOpacity={0}/></LinearGradient></Defs>
           {[0,max/2,max].map(value=><Line key={'grid-'+value} x1={28} x2={width} y1={y(value)} y2={y(value)} stroke={tone.grid} strokeOpacity={tone.gridOpacity} strokeDasharray="3 5"/>)}
           {[0,max/2,max].map(value=><SvgText key={'label-'+value} x={0} y={y(value)+4} fill={tone.heroText} fontSize={12} fontFamily="Montserrat_500Medium">{value}</SvgText>)}
-          <AnimatedPath d={smoothArea(pts,height-12)} fill="url(#today-open-area)" opacity={draw}/>
+          <AnimatedPath d={smoothArea(pts,height-12)} fill={tone.spark} fillOpacity={0.15} opacity={draw}/>
           <AnimatedPath d={smoothPath(pts)} fill="none" stroke={tone.spark} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={length||1} strokeDashoffset={draw.interpolate({inputRange:[0,1],outputRange:[length||1,0]})}/>
           {values.map((value,i)=><Circle key={data.days[i].date} cx={x(i)} cy={y(value)} r={3} fill={tone.spark}/>)}
           <Line x1={x(selected)} x2={x(selected)} y1={18} y2={height-12} stroke={tone.selectionLine} strokeOpacity={0.6} strokeDasharray="3 4"/>
@@ -151,10 +129,10 @@ export function TodayTiles({data,palette:p,onWaiting,onProperties,vertical=false
   const dayName=(key:string)=>new Date(key+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',timeZone:'Europe/London'});
   const card=(waiting:boolean)=>({minWidth:0,padding:vertical?22:16,borderRadius:26,borderWidth:1,borderColor:waiting?tone.waitingBorder:tone.propertyBorder,backgroundColor:waiting?tone.waitingBg:tone.propertyBg,gap:16,overflow:'hidden' as const});
   const header=(waiting:boolean)=>{const icon=waiting?tone.waitingIcon:tone.propertyIcon;return <View style={[ui.row,{gap:12}]}>
-    <View style={{width:52,height:52,borderRadius:17,backgroundColor:p.isDark?'#FFFFFF0D':'#FFFFFF8C',alignItems:'center',justifyContent:'center'}}><DimensionalIcon name={waiting?'hourglass':'house'} size={42}/></View>
+    <View style={{width:52,height:52,borderRadius:17,backgroundColor:p.isDark?'#FFFFFF0D':'#FFFFFF8C',alignItems:'center',justifyContent:'center'}}><DimensionalIcon name={waiting?'hourglass':'house'} size={42} color={icon}/></View>
     <View style={{flex:1,gap:2}}>
       <Text style={{fontSize:12,fontWeight:'600',letterSpacing:1.2,textTransform:'uppercase',color:p.muted}}>{waiting?'Waiting':'Properties'}</Text>
-      <View style={[ui.row,{gap:8,alignItems:'flex-end'}]}><Text style={{fontSize:34,lineHeight:40,fontWeight:'700',letterSpacing:-1.2,color:p.text}}>{waiting?data.waiting:data.properties??'—'}</Text><Text style={{fontSize:13,color:p.muted,paddingBottom:6}}>{waiting?'need a response':'managed'}</Text></View>
+      <View style={[ui.row,{gap:8,alignItems:'flex-end'}]}><Text style={{fontSize:34,lineHeight:40,fontWeight:'700',letterSpacing:-1.2,color:p.text}}>{waiting?data.waiting:data.properties??'Not known'}</Text><Text style={{fontSize:13,color:p.muted,paddingBottom:6}}>{waiting?'need a response':data.properties==null?'':'managed'}</Text></View>
     </View>
     <View style={{width:34,height:34,borderRadius:17,borderWidth:1,borderColor:icon+'40',alignItems:'center',justifyContent:'center'}}><Feather name="arrow-up-right" size={16} color={icon}/></View>
   </View>;};

@@ -25,7 +25,7 @@ function ToolTile({ tool, palette: p, compact, onPress }: { tool: HomeTool; pale
         ...(Platform.OS === "web" ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" } : { elevation: 1 }) }}>
       <Animated.View style={{ width: icon + 14, height: icon + 14, borderRadius: 18, backgroundColor: p.wash, alignItems: "center", justifyContent: "center",
         transform: [{ translateY: lift.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }, { scale: lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }, { rotate: lift.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "-6deg"] }) }] }}>
-        <DimensionalIcon name={tool.art} size={icon} />
+        <DimensionalIcon name={tool.art} size={icon} color={p.primary} />
       </Animated.View>
       <View style={{ gap: 2, alignSelf: "stretch" }}>
         <Text numberOfLines={2} style={{ color: p.text, fontSize: compact ? 13 : 14, lineHeight: compact ? 17 : 19, fontWeight: "700", textAlign: compact ? "center" : "left" }}>{tool.label}</Text>

@@ -3,7 +3,6 @@ import { PauseRules } from "./LiveShifts";
 import * as Crypto from "expo-crypto";
 import { Animated, Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import { Text } from "./Typography";
 import { Entrance, MotionPress, Pop, SwapIn, motionTokens, useReducedMotion } from "./motion";
 import { Button, Field, Loading, Notice, StatGrid, StatTile, Tag, addDays, london, message, useRequestId } from "./LiveKit";
@@ -108,19 +107,9 @@ export function LiveProductivity({ palette: p, account, initial = "days" }: { pa
 
 // The forest card at the top: hours are locked, and who is clocked in right now.
 function LockedHero({ p, onShift, direct }: { p: Palette; onShift: ProductivityPerson[]; direct: boolean }) {
-  const reduced = useReducedMotion();
-  const [pulse] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    if (reduced) { pulse.setValue(0); return; }
-    const loop = Animated.loop(Animated.sequence([Animated.timing(pulse, { toValue: 1, duration: 1400, useNativeDriver: Platform.OS !== "web" }), Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: Platform.OS !== "web" })]));
-    loop.start(); return () => loop.stop();
-  }, [pulse, reduced]);
   return (
     <Entrance sessionKey="productivity:hero">
-      <View style={{ borderRadius: 24, overflow: "hidden", backgroundColor: p.hero, padding: 20, gap: 14, ...depth.raised, ...web({ backgroundImage: "linear-gradient(140deg,#2A5248 0%,#1F3D38 52%,#17302B 100%)" }) }}>
-        <View pointerEvents="none" style={{ position: "absolute", right: -90, top: -110 }}>
-          <Svg width={280} height={280}><Defs><RadialGradient id="productivity-glow" cx="50%" cy="50%" r="50%"><Stop offset="0" stopColor="#A7D9C1" stopOpacity={0.4} /><Stop offset="1" stopColor="#A7D9C1" stopOpacity={0} /></RadialGradient></Defs><Circle cx={140} cy={140} r={140} fill="url(#productivity-glow)" /></Svg>
-        </View>
+      <View style={{ borderRadius: 24, overflow: "hidden", backgroundColor: p.hero, padding: 20, gap: 14, ...depth.raised }}>
         <View style={[ui.row, { gap: 12, alignItems: "flex-start" }]}>
           <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
             <Feather name="lock" size={19} color="#FFFFFF" />
@@ -135,7 +124,6 @@ function LockedHero({ p, onShift, direct }: { p: Palette; onShift: ProductivityP
         <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
           <View style={[ui.row, { gap: 8, paddingHorizontal: 12, minHeight: 32, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.1)" }]}>
             <View style={{ width: 10, height: 10, alignItems: "center", justifyContent: "center" }}>
-              {onShift.length > 0 && <Animated.View style={{ position: "absolute", width: 10, height: 10, borderRadius: 5, backgroundColor: "#7BE0A8", opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }), transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] }) }] }} />}
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onShift.length ? "#7BE0A8" : "rgba(255,255,255,0.4)" }} />
             </View>
             <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}>{onShift.length ? `${onShift.length} on shift now` : "Nobody on shift"}</Text>
@@ -637,7 +625,7 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
                   const at = (iso: string) => w ? Math.min(100, Math.max(0, (along(from + length(iso)) - along(from)) / w * 100)) : 0;
                   return (
                     <Animated.View key={s.id} {...shiftHover(s.id)} style={{ position: "absolute", left: `${along(from)}%`, top: 8, bottom: 8, borderRadius: 6, overflow: "hidden", width: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${w}%`] }),
-                      backgroundColor: s.clockedOutAt ? p.primary : p.success, ...web({ backgroundImage: "linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0))", boxShadow: "0 4px 10px -6px rgba(21,45,40,.55)" }) }}>
+                      backgroundColor: s.clockedOutAt ? p.primary : p.success, ...web({ boxShadow: "0 4px 10px -6px rgba(21,45,40,.55)" }) }}>
                       {!!s.overtimeFrom && <View accessibilityLabel={`Overtime from ${londonClock(s.overtimeFrom)}`} style={{ position: "absolute", left: `${at(s.overtimeFrom)}%`, right: 0, top: 0, bottom: 0, backgroundColor: p.waiting, opacity: 0.85 }} />}
                       {s.pauses.map(x => <View key={x.startedAt} accessibilityLabel={`${PAUSE_LABEL[x.kind]} ${londonClock(x.startedAt)}`} style={{ position: "absolute", left: `${at(x.startedAt)}%`, width: `${Math.max(1, at(x.endedAt ?? s.clockedOutAt ?? new Date().toISOString()) - at(x.startedAt))}%`, top: 0, bottom: 0, backgroundColor: x.kind === "emergency" ? p.danger : p.surface, opacity: x.kind === "emergency" ? 0.75 : 0.6 }} />)}
                       {w > 14 && <Text numberOfLines={1} style={{ color: p.onPrimary, fontSize: 10, fontWeight: "700", paddingHorizontal: 6, lineHeight: 18, fontVariant: ["tabular-nums"] }}>{londonClock(s.clockedInAt)}–{s.clockedOutAt ? londonClock(s.clockedOutAt) : "now"}</Text>}

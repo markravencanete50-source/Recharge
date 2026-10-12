@@ -50,7 +50,7 @@ export function LiveEnquiries({ palette: p, onOpenProperty }: { palette: Palette
       <PageHeading palette={p} title="Client enquiries" subtitle="Send landlords the New Property Enquiry Form, see their answers here, and value the property." />
       <Entrance sessionKey="enquiries:hero">
         <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel="Send the enquiry form to a landlord" onPress={() => setSending(true)}
-          style={[ui.row, { gap: 16, padding: 20, borderRadius: 24, backgroundColor: p.hero, overflow: "hidden", ...depth.raised, ...web({ backgroundImage: "linear-gradient(135deg,#2A5248 0%,#1F3D38 55%,#17302B 100%)" }) }]}>
+          style={[ui.row, { gap: 16, padding: 20, borderRadius: 24, backgroundColor: p.hero, overflow: "hidden", ...depth.raised }]}>
           <View style={{ width: 52, height: 52, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
             <Feather name="send" size={22} color="#FFFFFF" />
           </View>

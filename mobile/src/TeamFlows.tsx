@@ -61,14 +61,13 @@ export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, chi
           <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onClose} disabled={!visible} style={StyleSheet.absoluteFill} {...(Platform.OS === "web" ? { tabIndex: -1 } : {})} />
         </Animated.View>
         <Animated.View accessibilityViewIsModal pointerEvents={visible ? "auto" : "none"} style={{ width: "100%", maxWidth: Math.min(580, width), minWidth: 0, maxHeight: wide ? "92%" : "92%", borderRadius: 30, borderBottomLeftRadius: wide ? 30 : 0, borderBottomRightRadius: wide ? 30 : 0, backgroundColor: p.surface, overflow: "hidden", ...depth.floating,
-          ...web({ backgroundImage: "radial-gradient(520px 180px at 0% 0%,var(--rc-canvas-a),transparent 70%)" }),
           opacity: wide ? progress : progress.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 1, 1] }),
           transform: [{ translateY: wide || reduced ? lift : Animated.add(lift, drag) }, { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [wide ? 0.96 : 1, 1] }) }] }}>
           <View {...(wide ? {} : pull.panHandlers)}>
             {!wide && <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 2 }}><View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: p.controlBorder, opacity: 0.45 }} /></View>}
             <View style={[ui.between, { gap: 12, paddingHorizontal: 20, paddingVertical: 16, paddingTop: wide ? 20 : 10, borderBottomWidth: 1, borderColor: p.border }]}>
               <View style={[ui.row, { gap: 14, flex: 1 }]}>
-                {!!content.icon && <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center", ...web({ backgroundImage: "linear-gradient(160deg,rgba(255,255,255,.6),rgba(255,255,255,0) 60%)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.6),0 8px 18px -12px rgba(21,45,40,.45)" }) }}><DimensionalIcon name={content.icon} size={36} /></View>}
+                {!!content.icon && <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={content.icon} size={36} color={p.primary} /></View>}
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text accessibilityRole="header" numberOfLines={2} style={{ color: p.text, fontSize: 18, lineHeight: 24, fontWeight: "700", letterSpacing: -0.3 }}>{content.title}</Text>
                   {!!content.subtitle && <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{content.subtitle}</Text>}
@@ -154,7 +153,7 @@ export function DailyRoutine({ palette: p, tools, onOpen }: { palette: Palette; 
   return (
     <View style={{ padding: 16, gap: 10, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
       <View style={[ui.row, { gap: 12 }]}>
-        <DimensionalIcon name="clipboard" size={40} />
+        <DimensionalIcon name="clipboard" size={40} color={p.primary} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Today&apos;s routine</Text>
           <Text style={[ui.small, { color: p.muted }]}>{done.length} of {items.length} daily reports done</Text>
@@ -194,7 +193,7 @@ export function CleansToApprove({ palette: p }: { palette: Palette }) {
         return (
           <View key={clean.id} style={{ padding: 16, gap: 12, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
             <View style={[ui.row, { gap: 12 }]}>
-              <DimensionalIcon name="spray" size={40} />
+              <DimensionalIcon name="spray" size={40} color={p.primary} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={{ color: p.text, fontSize: 15, fontWeight: "600" }}>{clean.property}</Text>
                 <Text style={[ui.small, { color: p.muted }]}>{clean.cleaner} · {clean.date} · {clean.photos} photos</Text>
@@ -238,7 +237,7 @@ export function CleanerPerformance({ palette: p, mine }: { palette: Palette; min
         <View style={{ flexDirection: "row", gap: 12 }}>
           {[["medal", String(me.approved), "Approved cleans"], ["clipboard", String(me.rejected), "Rejected"], ["coins", "£" + (me.approved * 65).toLocaleString("en-GB"), "On your invoice"]].map(([icon, value, label]) => (
             <View key={label} style={{ flex: 1, padding: 14, gap: 8, borderRadius: 20, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
-              <DimensionalIcon name={icon as DimensionalName} size={32} />
+              <DimensionalIcon name={icon as DimensionalName} size={32} color={p.primary} />
               <Text style={{ color: p.text, fontSize: 22, fontWeight: "700" }}>{value}</Text>
               <Text numberOfLines={2} style={{ color: p.muted, fontSize: 12 }}>{label}</Text>
             </View>
@@ -294,7 +293,7 @@ export function CleanJobSheet({ palette: p, visible, onClose, property, guests }
     <Sheet palette={p} visible={visible} onClose={close} title={property} subtitle={`Turnover clean · next stay: ${guests} guests`} icon="spray">
       {submitted ? (
         <View style={{ gap: 14 }}>
-          <View style={{ alignItems: "center", gap: 8 }}><DimensionalIcon name="medal" size={80} /><Text style={{ color: p.text, fontSize: 19, fontWeight: "700" }}>Clean submitted</Text></View>
+          <View style={{ alignItems: "center", gap: 8 }}><DimensionalIcon name="medal" size={80} color={p.primary} /><Text style={{ color: p.text, fontSize: 19, fontWeight: "700" }}>Clean submitted</Text></View>
           {[["check-circle", "Submitted with " + media + " photos or videos", true], ["clock", "The Stays team reviews it today", false], ["dollar-sign", "Once approved, it is added to your invoice and you are notified", false], ["alert-circle", "If rejected, you see the reason and management reviews it", false]].map(([icon, text, doneNow]) => (
             <View key={String(text)} style={[ui.row, { gap: 10 }]}>
               <Feather name={icon as "clock"} size={16} color={doneNow ? p.primary : p.muted} />
@@ -350,7 +349,7 @@ export function RepairPipeline({ palette: p }: { palette: Palette }) {
       <View style={{ borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
         {ROUTINE_VISITS.map((visit, index) => (
           <View key={visit.property} style={[ui.row, { gap: 12, padding: 14, borderTopWidth: index ? 1 : 0, borderColor: p.border }]}>
-            <DimensionalIcon name={visit.status === "done" ? "medal" : visit.status === "booked" ? "calendar" : "toolbox"} size={34} />
+            <DimensionalIcon name={visit.status === "done" ? "medal" : visit.status === "booked" ? "calendar" : "toolbox"} size={34} color={p.primary} />
             <View style={{ flex: 1 }}>
               <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{visit.property}</Text>
               <Text style={[ui.small, { color: p.muted }]}>{visit.when}</Text>
@@ -486,7 +485,7 @@ export function TrainingCentre({ palette: p, role }: { palette: Palette; role: W
       </Entrance>
       {admin && (
         <MotionPress accessibilityRole="button" onPress={upload} style={[ui.row, { gap: 12, padding: 16, borderRadius: 20, borderWidth: 1, borderStyle: "dashed", borderColor: p.controlBorder, backgroundColor: p.surface }]}>
-          <DimensionalIcon name="toolbox" size={40} />
+          <DimensionalIcon name="toolbox" size={40} color={p.primary} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Upload training material</Text>
             <Text style={[ui.small, { color: p.muted }]}>{uploaded ? `${uploaded} files ready (preview only)` : "Videos and images now; documents when storage is connected"}</Text>
@@ -507,7 +506,7 @@ export function TrainingCentre({ palette: p, role }: { palette: Palette; role: W
       {shown.map(course => (
         <MotionPress key={course.id} {...hover} accessibilityRole="button" accessibilityLabel={`${course.title}, ${course.minutes} minutes, ${Math.round(course.progress * 100)}% complete`} onPress={() => setOpen(course)} style={{ padding: 16, gap: 12, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
           <View style={[ui.row, { gap: 12 }]}>
-            <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={course.category === "Cleans" ? "spray" : course.category === "Ready" ? "hardhat" : course.category === "Stays" ? "chat" : "compass"} size={40} /></View>
+            <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={course.category === "Cleans" ? "spray" : course.category === "Ready" ? "hardhat" : course.category === "Stays" ? "chat" : "compass"} size={40} color={p.primary} /></View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{course.title}</Text>
               <Text style={[ui.small, { color: p.muted }]}>{course.category} · {course.minutes} min read</Text>

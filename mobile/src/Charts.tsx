@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Platform, View } from 'react-native';
-import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import Feather from '@expo/vector-icons/Feather';
 import { Text } from './Typography';
 import { ui, departmentColor, depth, type Palette } from './theme';
@@ -40,14 +40,13 @@ export function MetricSparkline({report,metric,color,palette:p,motionKey}:{repor
   const [width,setWidth]=useState(120),field=metric==='total'?'value':metric==='complete'?'completed':'waiting';
   const values=report.chartDays.map(day=>day[field]),g=graphGeometry(values,width,6,26);
   const pts=pointsOf(values,g),length=pathLength(pts)||1,draw=useDraw(motionKey,900);
-  const id='spark-'+motionKey.replace(/[^a-z0-9]/gi,''),point=useChartFocus();
+  const point=useChartFocus();
   const what=metric==='total'?'Tasks':metric==='complete'?'Completed':'Waiting';
   if(!report.available)return <Text style={[ui.small,{color:p.muted}]}>Data unavailable</Text>;
   if(!report.sparkReady[metric])return <Text style={[ui.small,{color:p.muted,minHeight:36}]}>Not enough days to chart</Text>;
   return <View onLayout={event=>setWidth(event.nativeEvent.layout.width)} style={{position:'relative'}} accessible accessibilityLabel={`${report.duration>31?'Weekly':'Daily'} ${metric==='total'?'tasks':metric==='complete'?'completed tasks':'waiting tasks'}. Start ${values[0]}, end ${values.at(-1)}.`}>
     <Svg width="100%" height={40} viewBox={`0 0 ${width} 40`}>
-      <Defs><LinearGradient id={id} x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={color} stopOpacity={0.24}/><Stop offset="1" stopColor={color} stopOpacity={0}/></LinearGradient></Defs>
-      <AnimatedPath d={smoothArea(pts,30)} fill={`url(#${id})`} opacity={draw}/>
+      <AnimatedPath d={smoothArea(pts,30)} fill={color} fillOpacity={0.12} opacity={draw}/>
       <AnimatedPath d={smoothPath(pts)} fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeDasharray={length} strokeDashoffset={draw.interpolate({inputRange:[0,1],outputRange:[length,0]})}/>
       <AnimatedCircle cx={pts.at(-1)!.x} cy={pts.at(-1)!.y} r={6} fill={color} opacity={draw.interpolate({inputRange:[0,0.85,1],outputRange:[0,0,0.18]})}/>
       <AnimatedCircle cx={pts.at(-1)!.x} cy={pts.at(-1)!.y} r={2.8} fill={color} opacity={draw.interpolate({inputRange:[0,0.85,1],outputRange:[0,0,1]})}/>
@@ -69,7 +68,6 @@ export function LineChart({report,palette:p,motionKey='report:line'}:{report:Rep
   const draw=useDraw(motionKey),lengthAll=pathLength(allPts)||1;
   const [focus,setFocus]=useState<number|null>(null);
   const peak=days[report.peak],shown=focus===null?null:days[focus];
-  const id='line-'+motionKey.replace(/[^a-z0-9]/gi,'');
   const ticks=[0,0.5,1].map(f=>Math.round(max*f));
   return <ChartReveal motionKey={motionKey}><View onLayout={event=>setWidth(event.nativeEvent.layout.width)} style={{gap:12}} accessible accessibilityLabel={`Work per ${report.duration>31?'week':'day'}. Recorded ${report.current.total}. Completed ${report.current.complete}. Peak ${peak.value} on ${peak.date}.`}>
     <View style={[ui.row,{gap:14,flexWrap:'wrap'}]}>
@@ -79,10 +77,9 @@ export function LineChart({report,palette:p,motionKey='report:line'}:{report:Rep
     </View>
     <View>
       <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
-        <Defs><LinearGradient id={id} x1="0" x2="0" y1="0" y2="1"><Stop offset="0" stopColor={p.isDark?'#A7D9C1':'#2F6F63'} stopOpacity={0.26}/><Stop offset="1" stopColor={p.isDark?'#A7D9C1':'#2F6F63'} stopOpacity={0}/></LinearGradient></Defs>
         {ticks.map((tick,i)=><Line key={'grid'+i} x1={28} x2={width-8} y1={all.y(tick)} y2={all.y(tick)} stroke={p.border} strokeDasharray={i?'2 6':undefined} strokeOpacity={i?0.9:1}/>)}
         {ticks.map((tick,i)=><SvgText key={'tick'+i} x={0} y={all.y(tick)+4} fill={p.muted} fontFamily="Montserrat_500Medium" fontSize={11}>{tick}</SvgText>)}
-        <AnimatedPath d={smoothArea(allPts,bottom)} fill={`url(#${id})`} opacity={draw}/>
+        <AnimatedPath d={smoothArea(allPts,bottom)} fill={p.isDark?'#A7D9C1':'#2F6F63'} fillOpacity={0.14} opacity={draw}/>
         <AnimatedPath d={smoothPath(donePts)} fill="none" stroke={p.success} strokeWidth={2} strokeDasharray={`5 5`} strokeLinecap="round" opacity={draw.interpolate({inputRange:[0,0.4,1],outputRange:[0,0.2,1]})}/>
         <AnimatedPath d={smoothPath(allPts)} fill="none" stroke={p.primary} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={lengthAll} strokeDashoffset={draw.interpolate({inputRange:[0,1],outputRange:[lengthAll,0]})}/>
         {focus===null&&<><Circle cx={all.x(report.peak)} cy={all.y(peak.value)} r={9} fill={p.primary} fillOpacity={0.14}/><Circle cx={all.x(report.peak)} cy={all.y(peak.value)} r={4} fill={p.primary}/></>}

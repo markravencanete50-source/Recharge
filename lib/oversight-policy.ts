@@ -63,6 +63,8 @@ const EVENT: Record<string, string> = {
   'journey.bookInspection': 'Inspection booked', 'journey.completeInspection': 'Inspection completed', 'journey.makeLive': 'Property made live',
   'journey.askQuestion': 'Question asked', 'journey.answerQuestion': 'Question answered',
 };
+// One recorded event in plain words; events the table does not know fall back to the notice copy.
+export const eventLabel = (event: string) => EVENT[event] ?? noticeCopy(event).title;
 const CREATION = new Set(['workspace_work_items.insert', 'handover.created', 'operations.createOperation']);
 const close = (a: string, b: string, seconds = 5) => Math.abs(Date.parse(a) - Date.parse(b)) <= seconds * 1000;
 
@@ -92,7 +94,7 @@ export function historyRows(history: History): HistoryRow[] {
       if (event.startsWith('finance.expense_') && hasExpense) return;
       const status = entries.find((x, j) => folded.has(j) && x.by === e.by && close(x.at, e.at));
       const evidence = [e.evidence, status ? STATUS[status.to ?? ''] : null].filter((v): v is string => !!v);
-      const label = event === 'operations.createOperation' ? CREATED[history.kind ?? ''] ?? 'Created' : EVENT[event] ?? noticeCopy(event).title;
+      const label = event === 'operations.createOperation' ? CREATED[history.kind ?? ''] ?? 'Created' : eventLabel(event);
       rows.push({ key, at: e.at, by, label, note: e.note ?? status?.note ?? null, evidence });
     } else if (e.type === 'review') {
       rows.push({ key, at: e.at, by, label: e.accepted ? 'Clean accepted' : 'Clean sent back', note: e.note ?? null, evidence: e.guestFeedback ? [`Guest feedback: ${e.guestFeedback}`] : [] });

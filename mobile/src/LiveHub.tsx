@@ -15,9 +15,12 @@ import { readTeams, writeTeams } from "./backend/client";
 import { routinePlanSchema, poundsToMinor } from "../../lib/repairs-live";
 import { formatDay, formatMoney } from "../../lib/format";
 import { readableStage, type PropertyView } from "../../lib/workspace-view";
-import { createOperationForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
+import { createOperationForms, workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
+import { trackerItemsFor } from "../../lib/tracker-sections";
+import type { TrackerItem } from "../../lib/tracker";
+import { TrackerList } from "./Tracker";
 import { DEPARTMENTS, hubSchema, type Hub, type HubItem } from "../../lib/workspace-teams-policy";
-import { DEPARTMENT_LABEL, HUB_FLOW, HUB_STATUS_LABEL, HUB_TAB_LABEL, dailyRows, hubOpen, hubTabsFor, onboardingRows, preventativeRows, purchaseRows, todoRows, type HubTab, type RoutinePlan } from "../../lib/hub";
+import { DEPARTMENT_LABEL, HUB_FLOW, HUB_STATUS_LABEL, HUB_TAB_LABEL, dailyRows, hubOpen, hubTabsFor, onboardingRows, preventativeRows, todoRows, type HubTab, type RoutinePlan } from "../../lib/hub";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // The hub: the business's trackers as rows, like a sheet you can tap into. To-dos per person and
@@ -59,6 +62,15 @@ export function LiveHub({ palette: p, account, properties, journeys, work, onFor
     return HUB_TAB_LABEL[t] + (n ? ` · ${n}` : "");
   });
   const current = tabs.includes(tab) ? tab : "todos";
+
+  // Purchase orders and licensing share the tracker rows. Staff see who last touched an item, owners do not.
+  const owner = account.role === "client";
+  const [purchaseItems, licensingItems] = useMemo(() => {
+    const ctx = { property: (id: string) => properties.find(x => x.id === id), forms: (w: OperationView) => workItemForms(account, w, journeys, work), now: new Date(), owner };
+    return [trackerItemsFor(work, ctx, "purchases"), trackerItemsFor(work, ctx, "licensing")];
+  }, [work, properties, journeys, account, owner]);
+  // Tapping a row opens the same work sheet as search, Home and Calendar.
+  const openTracked = useCallback((item: TrackerItem) => { const w = work.find(x => x.workId === item.workId); if (w) onOpenWork(w); }, [work, onOpenWork]);
 
   // A purchase order for a property chosen first, starting from what the row already knows.
   function purchaseFor(propertyId: string, text: string) {
@@ -108,16 +120,12 @@ export function LiveHub({ palette: p, account, properties, journeys, work, onFor
 
         {current === "purchases" && <>
           <Button label="New purchase order" icon="plus" primary p={p} onPress={() => setPicking({ title: "New purchase order", text: "" })} />
-          <SheetTable p={p} rows={purchaseRows(work)} keyOf={r => r.work.workId} onRow={r => onOpenWork(r.work)} empty="No purchase orders yet."
-            columns={[
-              { label: "Property", width: 140, cell: r => cellText(p, name(r.propertyId), true) },
-              { label: "Items", width: 200, cell: r => cellText(p, r.items) },
-              { label: "Budget", width: 80, cell: r => cellText(p, formatMoney(r.budgetMinor)) },
-              { label: "Approved", width: 80, cell: r => cellText(p, r.approvedMinor === null ? null : formatMoney(r.approvedMinor)) },
-              { label: "Stage", width: 100, cell: r => <Tag label={r.stage} tone={tone(r.stage)} p={p} /> },
-              { label: "Supplier", width: 120, cell: r => cellText(p, [r.supplier, r.orderReference].filter(Boolean).join(" · ")) },
-              { label: "Received", width: 90, cell: r => cellText(p, r.receivedOn ? formatDay(r.receivedOn) : null) },
-            ]} />
+          <TrackerList p={p} items={purchaseItems} empty="No purchase orders yet." owner={owner} onOpen={openTracked} />
+        </>}
+
+        {current === "licensing" && <>
+          <Text style={[ui.small, { color: p.muted }]}>Licence applications, safety checks and grants for each property. Tap one to record the next step.</Text>
+          <TrackerList p={p} items={licensingItems} empty="No licence applications yet." owner={owner} onOpen={openTracked} />
         </>}
 
         {current === "preventative" && <>

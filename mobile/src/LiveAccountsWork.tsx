@@ -15,6 +15,9 @@ import { cleanerRatesSchema } from "../../lib/cleans-live";
 import { formatDay, formatMoney, plural } from "../../lib/format";
 import { poundsToMinor } from "../../lib/repairs-live";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { trackerItemsFor } from "../../lib/tracker-sections";
+import { workItemForms } from "../../lib/workflow-forms";
+import { TrackerList } from "./Tracker";
 
 // Accounts' side of purchases and cleaning: purchase requests waiting on Accounts, accepted cleans
 // grouped by cleaner so several go on one invoice, and the budget chart purchases are approved against.
@@ -112,17 +115,19 @@ export function AccountsWork({ palette: p, account, properties, onOpenWork }: { 
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const nameOf = useCallback((id: string) => properties.find(x => x.id === id)?.name ?? "Property", [properties]);
   const purchases = work.filter(w => w.kind === "purchase" && typeof w.data.phase === "string" && w.data.phase in PURCHASE_STAGE && !["completed", "cancelled"].includes(w.status));
+  // Accounts is a staff screen, so the role decides whether staff names show on the rows.
+  const owner = account.role === "client";
+  const purchaseItems = useMemo(() => trackerItemsFor(purchases, {
+    property: id => properties.find(x => x.id === id), forms: w => workItemForms(account, w, [], work), now: new Date(), owner,
+  }, "purchases"), [purchases, properties, account, work, owner]);
   const groups = useMemo(() => cleanerInvoiceGroups(work, nameOf, rates), [work, nameOf, rates]);
   return (
     <View style={{ gap: 20 }}>
       {loading && <Loading p={p} rows={2} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Section title="Purchases" count={purchases.length} p={p}>
-        <List p={p} empty="No purchase requests waiting on Accounts.">
-          {purchases.map((w, i) => <Row key={w.workId} p={p} first={i === 0} icon="shopping-bag" tone="accounts" title={nameOf(w.propertyId)}
-            detail={[typeof w.data.requirements === "string" ? w.data.requirements : "Purchase", typeof w.data.budgetMinor === "number" ? "Budget " + formatMoney(w.data.budgetMinor) : ""].filter(Boolean).join(" · ")}
-            tags={[[PURCHASE_STAGE[String(w.data.phase)], "wait"]]} onPress={() => onOpenWork(w)} />)}
-        </List>
+        <TrackerList p={p} items={purchaseItems} empty="No purchase requests waiting on Accounts." owner={owner}
+          onOpen={item => { const w = purchases.find(x => x.workId === item.workId); if (w) onOpenWork(w); }} />
       </Section>
       <Section title="Cleaner invoices" count={groups.length} p={p}>
         <Text style={[ui.small, { color: p.muted }]}>Accepted cleans waiting to be invoiced, by cleaner. Put several on one invoice.</Text>

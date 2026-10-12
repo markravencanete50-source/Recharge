@@ -38,7 +38,7 @@ function Tag({ label, tone, palette: p }: { label: string; tone: "good" | "wait"
 function Stat({ icon, value, label, palette: p }: { icon: DimensionalName; value: string; label: string; palette: Palette }) {
   return (
     <View style={{ flex: 1, minWidth: 140, padding: 14, gap: 10, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, ...shadow }}>
-      <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={icon} size={34} /></View>
+      <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={icon} size={34} color={p.primary} /></View>
       <View><Text style={{ color: p.text, fontSize: 22, fontWeight: "700", letterSpacing: -0.6 }}>{value}</Text><Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{label}</Text></View>
     </View>
   );
@@ -100,7 +100,7 @@ export function AccountsApprovals({ palette: p, desktop }: { palette: Palette; d
               <Text style={[ui.small, { color: p.muted }]}>{expense.received}</Text>
             </View>
           </MotionPress>
-        )) : <View style={{ padding: 20, alignItems: "center", gap: 6 }}><DimensionalIcon name="medal" size={56} /><Text style={{ color: p.text, fontWeight: "700" }}>Nothing in this view</Text><Text style={[ui.small, { color: p.muted }]}>Try another status or property.</Text></View>}
+        )) : <View style={{ padding: 20, alignItems: "center", gap: 6 }}><DimensionalIcon name="medal" size={56} color={p.primary} /><Text style={{ color: p.text, fontWeight: "700" }}>Nothing in this view</Text><Text style={[ui.small, { color: p.muted }]}>Try another status or property.</Text></View>}
       </View>
       <Sheet palette={p} visible={!!open} onClose={() => setOpenId(null)} title={open?.supplier ?? ""} subtitle={open ? `${open.reference} · ${open.propertyName}` : ""} icon="coins">
         {open && <>
@@ -253,8 +253,8 @@ export function OwnerStatements({ palette: p, desktop }: { palette: Palette; des
                   <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{row.channel}{row.guest ? ` · ${row.guest}` : ""}{property ? ` · ${property.name}` : ""}</Text>
                 </View>
                 <View style={[ui.row, { flex: desktop ? 1.2 : undefined, gap: 16 }]}>
-                  <View><Text style={[ui.small, { color: p.muted }]}>Our system</Text><Text style={{ color: p.text, fontWeight: "600" }}>{row.expectedMinor === null ? "—" : pence(row.expectedMinor)}</Text></View>
-                  <View><Text style={[ui.small, { color: p.muted }]}>Report</Text><Text style={{ color: row.status === "different" ? p.waiting : p.text, fontWeight: "600" }}>{row.receivedMinor === null ? "—" : pence(row.receivedMinor)}</Text></View>
+                  <View><Text style={[ui.small, { color: p.muted }]}>Our system</Text><Text style={{ color: p.text, fontWeight: "600" }}>{row.expectedMinor === null ? "None" :pence(row.expectedMinor)}</Text></View>
+                  <View><Text style={[ui.small, { color: p.muted }]}>Report</Text><Text style={{ color: row.status === "different" ? p.waiting : p.text, fontWeight: "600" }}>{row.receivedMinor === null ? "None" :pence(row.receivedMinor)}</Text></View>
                 </View>
                 <View style={[ui.row, { flex: desktop ? 1.3 : undefined, gap: 8, justifyContent: desktop ? "flex-end" : "space-between" }]}>
                   <Tag label={resolved[row.code] ? "Agreed manually" : MATCH_LABEL[row.status][0]} tone={agreed ? "good" : MATCH_LABEL[row.status][1]} palette={p} />
@@ -342,7 +342,7 @@ export function ManagementOverview({ palette: p, desktop, onOpenWork }: { palett
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {teams.map(team => (
           <View key={team.name} style={{ flexBasis: desktop ? 0 : "46%", flexGrow: 1, minWidth: 0, padding: 14, gap: 10, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, ...shadow }}>
-            <View style={[ui.row, { gap: 10 }]}><DimensionalIcon name={team.icon} size={34} /><Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{team.name}</Text></View>
+            <View style={[ui.row, { gap: 10 }]}><DimensionalIcon name={team.icon} size={34} color={p.primary} /><Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{team.name}</Text></View>
             {team.lines.map(([value, label]) => <View key={label} style={[ui.row, { gap: 6, alignItems: "baseline" }]}><Text style={{ color: p.text, fontSize: 18, fontWeight: "700" }}>{value}</Text><Text numberOfLines={1} style={[ui.small, { color: p.muted, flex: 1 }]}>{label}</Text></View>)}
           </View>
         ))}
@@ -351,7 +351,7 @@ export function ManagementOverview({ palette: p, desktop, onOpenWork }: { palett
         <View style={[ui.between, { paddingVertical: 8, gap: 12 }]}><Text style={{ color: p.text, fontSize: 15, fontWeight: "700", flex: 1, minWidth: 0 }}>Needs a management decision</Text><Tag label={remaining ? `${remaining} open` : "All decided"} tone={remaining ? "wait" : "good"} palette={p} /></View>
         {DECISIONS.map(item => (
           <MotionPress key={item.id} accessibilityRole="button" onPress={() => setOpenId(item.id)} style={[ui.row, { gap: 12, paddingVertical: 12, borderTopWidth: 1, borderColor: p.border }]}>
-            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={item.icon} size={32} /></View>
+            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={item.icon} size={32} color={p.primary} /></View>
             <View style={{ flex: 1, gap: 2, minWidth: 0 }}><Text numberOfLines={1} style={{ color: p.text, fontSize: 14, fontWeight: "700" }}>{item.title}{item.amount ? ` · ${item.amount}` : ""}</Text><Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{item.team} · {item.detail}</Text></View>
             {decided[item.id] ? <Tag label={decided[item.id]} tone={decided[item.id] === "Approved" ? "good" : "bad"} palette={p} /> : <Feather name="chevron-right" size={18} color={p.muted} />}
           </MotionPress>
@@ -387,7 +387,7 @@ export function AccountsOverview({ palette: p, columns, onInvoices, onStatements
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {items.map(item => (
           <MotionPress key={item.label} accessibilityRole="button" accessibilityLabel={`${item.value} ${item.label}`} onPress={item.onPress} style={{ flexBasis: columns === 4 ? 0 : "46%", flexGrow: 1, minWidth: 0, padding: 14, gap: 10, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, ...shadow }}>
-            <View style={ui.between}><View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={item.icon} size={38} /></View><Feather name="chevron-right" size={18} color={p.muted} /></View>
+            <View style={ui.between}><View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={item.icon} size={38} color={p.primary} /></View><Feather name="chevron-right" size={18} color={p.muted} /></View>
             <View><Text style={{ color: p.text, fontSize: 24, fontWeight: "700", letterSpacing: -0.8 }}>{item.value}</Text><Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{item.label}</Text></View>
           </MotionPress>
         ))}

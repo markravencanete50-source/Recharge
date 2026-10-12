@@ -556,6 +556,51 @@ report objectionable content, a way to block abusive users, and timely action on
   demo data is recorded again; reporting and blocking are refused in Demo like every other save). **Admins should check Reported messages at least daily**; Apple expects action
   within 24 hours. Not yet applied to the live database.
 
+## Client feedback round 2: tracker rows and a calmer look, Phase 1 (12 October 2026)
+
+Source: `docs/CLIENT-FEEDBACK-2026-10-12.md` (35 asks from Alex's two videos and written Accounts
+brief, with the code audit and a build order). This is Phase 1 only: asks C1, C2 (shared row and
+detail view, piloted) and C9 (style). Decisions: no WhatsApp (all communication stays in the app);
+the ChatGPT "Management Hub" prototype is a functional reference, not the layout to copy.
+
+- **Tracker rows and detail.** `lib/tracker.ts` (types and pure helpers: `lastUpdateOf`,
+  `updateStamp`, `nextActionOf`, `progressOf`, `sortTracker`, `addressOf`), `lib/tracker-sections.ts`
+  (`TrackerContext`, `trackerItemFor`, `trackerItemsFor`), and the UI in `mobile/src/Tracker.tsx`
+  (`TrackerList`, `TrackerRow`, `TrackerDetail`, `TrackerDetailSheet`). A row shows full address,
+  next step, next action, last update (UK time, who) and progress; desktop is a table, phones are
+  cards. `SheetTable` gained `search` and `labelOf` props; `WorkHistory` gained `hideNames`.
+- **Adapters exist for purchase orders and licensing only** (`lib/tracker-purchases.ts`,
+  `lib/tracker-licensing.ts`). To convert another section: write an adapter that returns a
+  `TrackerItem`, register it in `trackerItemFor`, and render the list with `TrackerList`. The
+  shared open-work sheet in `LiveWorkspace.tsx` uses `TrackerDetail` for any kind with an adapter
+  and is unchanged for every other kind.
+- **Wiring.** Hub: Purchase orders tab uses `TrackerList`, plus a new Licensing tab (admin, super
+  admin and stays only, same roles as the licensing steps). Accounts Purchases section uses
+  `TrackerList`. `PURCHASE_STAGE` in `lib/hub.ts` now labels a reconciled purchase "Done".
+- **Last update.** Migration `20261012070000_work_last_update.sql` adds `updatedBy`, `updatedEvent`
+  and `lastActivityAt` to `private.workspace_operation_view` and a partial index on
+  `workspace_activity(work_id, created_at desc, id desc)`. **Written and tested against the
+  in-memory Postgres only; not applied to the live database.** Apply off-peak (the index build
+  briefly blocks writes). Owners (client role) get no staff name and no event name. The stamp uses
+  the later of `updatedAt` and `lastActivityAt`, because some steps (for example
+  `recordPurchaseInvoice`) write an activity row without touching `updated_at`. Until it is
+  applied, rows show the time only.
+- **Known gap.** `workspace_work_history` still returns staff full names to client accounts; they
+  are hidden only inside the tracker detail. Fixing it properly needs a new migration.
+- **Style pass.** Bold Montserrat is no longer used: `mobile/src/Typography.tsx` maps 700 to 900 to
+  SemiBold and 600 and 500 to Medium (the Bold font is not loaded; web CSS weights follow). Primary
+  buttons are solid; the sheen, spotlight and glow tokens in `lib/design-tokens.ts` are neutral.
+  There are no gradients and no ambient looping motion (`motion.tsx` entrances are short fades;
+  `Shimmer` is a static placeholder; the sign-in and splash art is static). `DimensionalIcon` draws
+  Lucide outline glyphs in one colour (`color` prop) and tiles are flat. Dark mode keeps the mint
+  primary for contrast. `tests/style-calm.test.mjs` fails on any gradient or any `Animated.loop`
+  in `motion.tsx`; its allowlist is empty.
+- **Checks.** `npm test`: 737 of 738 pass. The one failure, `guest-replies-database` ("conversations
+  show the tidy Airbnb booking code"), also fails on commit `5c566f3` without these changes (Guest
+  inbox work, not this build). The new Hub tabs and the detail sheet only render in the live app, so
+  they were not screenshotted in the sample-data preview; check them with a real staff login.
+- **Next.** Phases 2 to 7 of the build order in the feedback doc (management flag and one approvals
+  list, Home and navigation, section conversions, operations flows, calendar and inbox, Accounts).
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

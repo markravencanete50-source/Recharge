@@ -141,7 +141,7 @@ export function LiveClientReports({ palette: p, mailbox = false }: { palette: Pa
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {kpis.map(kpi => (
           <View key={kpi.key} accessibilityLabel={`${kpi.label}: ${kpi.value === null ? "not available" : kpi.format(kpi.value)}`} style={[card, { flexBasis: desktop ? "23%" : "46%", flexGrow: 1, minWidth: 0, gap: 12, padding: 16 }]}>
-            <View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={kpi.icon} size={38} /></View>
+            <View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={kpi.icon} size={38} color={p.primary} /></View>
             {kpi.value === null ? <Text style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700" }}>–</Text>
               : <TweenNumber value={kpi.value} format={kpi.format} numberOfLines={1} adjustsFontSizeToFit style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700", letterSpacing: -1, fontVariant: ["tabular-nums"] }} />}
             <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{kpi.label}</Text>

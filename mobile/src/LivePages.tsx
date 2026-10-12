@@ -70,7 +70,7 @@ export function PageHeading({ title, subtitle, palette: p, action }: { title: st
     <View style={[ui.between, { gap: 16, alignItems: "flex-end", flexWrap: "wrap" }]}>
       <View style={{ gap: 8, flexShrink: 1, minWidth: 220 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{title}</Text>
-        <DrawLine width={40} color={p.primary} sessionKey={"heading:" + title} style={{ opacity: 0.85, ...web({ backgroundImage: "linear-gradient(90deg,var(--rc-primary),var(--rc-heroGlow))" }) }} />
+        <DrawLine width={40} color={p.primary} sessionKey={"heading:" + title} style={{ opacity: 0.85 }} />
         <Text style={[ui.body, { color: p.muted, maxWidth: 680 }]}>{subtitle}</Text>
       </View>
       {action}
@@ -88,7 +88,7 @@ export function SoftButton({ label, icon, onPress, palette: p, primary = false, 
 // Nothing here yet: a floating illustration over a soft pool of light, and a short explanation.
 export function EmptyState({ title, detail, palette: p, icon = "check-circle" }: { title: string; detail: string; palette: Palette; icon?: "check-circle" | "home" | "inbox" | "activity" }) {
   return (
-    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 34, gap: 10, overflow: "hidden" }, web({ backgroundImage: "radial-gradient(420px 220px at 50% 0%,var(--rc-canvas-a),transparent 70%)" })]}>
+    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 34, gap: 10, overflow: "hidden" }]}>
       <Float distance={5}><StateGraphic palette={p} success={icon === "check-circle"} icon={icon} /></Float>
       <Text style={[ui.sectionTitle, { color: p.text, textAlign: "center" }]}>{title}</Text>
       <Text style={[ui.body, { color: p.muted, textAlign: "center", maxWidth: 520 }]}>{detail}</Text>
@@ -359,8 +359,8 @@ function PropertyCard({ property, index, palette: p, onPress }: { property: Prop
   const live = property.status === "active";
   return (
     <MotionPress {...hoverLift} accessibilityRole="button" accessibilityLabel={"Open " + property.name} onPress={onPress} style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, padding: 0, overflow: "hidden", borderRadius: 26, gap: 0 }]}>
-      {/* The property's "photo": its building on a soft wash with a pool of light, the status pinned on top. */}
-      <View style={[{ minHeight: 140, alignItems: "center", justifyContent: "center", backgroundColor: departmentColor(index % 2 ? "clients" : "stays", p).wash }, web({ backgroundImage: `radial-gradient(260px 140px at 70% 10%,rgba(255,255,255,.55),transparent 70%),linear-gradient(160deg,transparent 40%,color-mix(in srgb,${departmentColor(index % 2 ? "clients" : "stays", p).ink} 9%,transparent) 100%)` })]}>
+      {/* The property's "photo": its building on a soft wash, the status pinned on top. */}
+      <View style={[{ minHeight: 140, alignItems: "center", justifyContent: "center", backgroundColor: departmentColor(index % 2 ? "clients" : "stays", p).wash }]}>
         <Float distance={3} duration={3600} delay={(index % 4) * 400}><View style={{ width: 82, height: 90, backgroundColor: p.surface, borderRadius: 22, borderWidth: 1, borderColor: p.border, alignItems: "center", justifyContent: "center", ...web({ boxShadow: "0 16px 28px -18px rgba(21,45,40,.55)" }) }}><BuildingGlyph palette={p} variant={index} /></View></Float>
         <View style={[ui.row, { position: "absolute", left: 14, top: 14, backgroundColor: p.surface, borderRadius: 999, paddingLeft: 9, paddingRight: 11, paddingVertical: 5, gap: 6, ...web({ boxShadow: "0 6px 14px -10px rgba(21,45,40,.5)" }) }]}>
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: live ? p.success : p.waiting }} />

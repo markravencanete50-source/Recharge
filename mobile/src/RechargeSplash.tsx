@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Platform, View, useWindowDimensions } from "react-native";
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg";
+import Svg, { Circle, Ellipse, G, Path, Rect } from "react-native-svg";
 import { CompanyLogo } from "./CompanyLogo";
 import { MotionPress, useMotionPreference } from "./motion";
 import { Text } from "./Typography";
@@ -21,21 +21,7 @@ const TROUSERS = "#1B3E38";
 function Room() {
   return (
     <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}>
-      <Defs>
-        <LinearGradient id="rsWall" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#173A33" />
-          <Stop offset="1" stopColor="#10261F" />
-        </LinearGradient>
-        <RadialGradient id="rsLamp" cx="0.5" cy="0.5" r="0.5">
-          <Stop offset="0" stopColor="#F6D58A" stopOpacity={0.55} />
-          <Stop offset="1" stopColor="#F6D58A" stopOpacity={0} />
-        </RadialGradient>
-        <LinearGradient id="rsBlanket" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#E9906A" />
-          <Stop offset="1" stopColor="#B4512F" />
-        </LinearGradient>
-      </Defs>
-      <Rect x={0} y={0} width={W} height={H} fill="url(#rsWall)" />
+      <Rect x={0} y={0} width={W} height={H} fill="#143029" />
       {/* Window with moon and stars. */}
       <Rect x={26} y={24} width={66} height={56} rx={8} fill="#0B1A16" stroke="#3E6658" strokeWidth={3} />
       <Path d="M59 24 V80 M26 52 H92" stroke="#3E6658" strokeWidth={2} />
@@ -44,8 +30,8 @@ function Room() {
       <Circle cx={38} cy={34} r={1.4} fill="#F6E7BE" />
       <Circle cx={48} cy={66} r={1.1} fill="#F6E7BE" />
       <Circle cx={72} cy={68} r={1.2} fill="#F6E7BE" />
-      {/* Lamp glow and bedside table. */}
-      <Ellipse cx={247} cy={86} rx={46} ry={40} fill="url(#rsLamp)" />
+      {/* Lamp tint and bedside table. */}
+      <Ellipse cx={247} cy={86} rx={46} ry={40} fill="#F6D58A" opacity={0.14} />
       <Rect x={232} y={130} width={30} height={32} rx={4} fill="#3E6658" />
       <Rect x={244} y={98} width={4} height={32} fill="#C9BEA4" />
       <Path d="M234 98 L258 98 L252 82 L240 82 Z" fill="#F6D58A" />
@@ -87,13 +73,7 @@ function Sleeping({ scale }: { scale: number }) {
       <Circle cx={199} cy={114} r={9} fill={SKIN} />
       <Path d="M206 108 C210 116 204 123 197 122 C203 119 206 114 206 108 Z" fill={HAIR} />
       <Path d="M194 113 Q196 115 198 113" stroke="#6B4A2B" strokeWidth={1.4} fill="none" strokeLinecap="round" />
-      <Path d="M126 128 C126 115 150 113 172 116 C182 117 188 120 190 127 L190 136 L126 136 Z" fill="url(#rsBlanket2)" />
-      <Defs>
-        <LinearGradient id="rsBlanket2" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#E9906A" />
-          <Stop offset="1" stopColor="#B4512F" />
-        </LinearGradient>
-      </Defs>
+      <Path d="M126 128 C126 115 150 113 172 116 C182 117 188 120 190 127 L190 136 L126 136 Z" fill="#CC7050" />
       <Path d="M130 124 C150 120 170 121 188 126" stroke="#F5C2A8" strokeWidth={2} fill="none" opacity={0.6} />
     </Svg>
   );
@@ -128,8 +108,6 @@ export function RechargeSplash({ palette: p, onDone }: { palette: Palette; onDon
   const sceneWidth = Math.min(360, width - 48);
   const scale = sceneWidth / W;
   const [t] = useState(() => new Animated.Value(0));
-  const [bob] = useState(() => new Animated.Value(0));
-  const [zzz] = useState(() => new Animated.Value(0));
   const [exit] = useState(() => new Animated.Value(1));
   const [percent, setPercent] = useState(0);
   const [stride, setStride] = useState<0 | 1>(0);
@@ -147,12 +125,6 @@ export function RechargeSplash({ palette: p, onDone }: { palette: Palette; onDon
     t.setValue(reduced ? 1 : 0);
     const walk = setInterval(() => setStride(s => (s ? 0 : 1)), 220);
     const run = Animated.timing(t, { toValue: 1, duration: reduced ? 1 : DURATION, easing: Easing.linear, useNativeDriver: false });
-    const step = Animated.loop(Animated.sequence([
-      Animated.timing(bob, { toValue: 1, duration: 220, easing: Easing.inOut(Easing.sin), useNativeDriver: native }),
-      Animated.timing(bob, { toValue: 0, duration: 220, easing: Easing.inOut(Easing.sin), useNativeDriver: native }),
-    ]));
-    const float = Animated.loop(Animated.timing(zzz, { toValue: 1, duration: 1500, easing: Easing.out(Easing.quad), useNativeDriver: native }));
-    if (!reduced) { step.start(); float.start(); }
     run.start(({ finished }) => {
       if (!finished) return;
       setPercent(100);
@@ -160,14 +132,13 @@ export function RechargeSplash({ palette: p, onDone }: { palette: Palette; onDon
         Animated.timing(exit, { toValue: 0, duration: reduced ? 1 : 360, useNativeDriver: native }).start(() => done.current());
       }, reduced ? 500 : 650);
     });
-    return () => { t.removeListener(id); clearInterval(walk); clearTimeout(exitTimer); run.stop(); step.stop(); float.stop(); };
-  }, [bob, exit, ready, reduced, t, zzz]);
+    return () => { t.removeListener(id); clearInterval(walk); clearTimeout(exitTimer); run.stop(); };
+  }, [exit, ready, reduced, t]);
 
   // Walking 0 to 0.33 of the timeline, into bed by 0.42, then asleep.
   const walkerX = t.interpolate({ inputRange: [0, 0.33, 0.4], outputRange: [8, 150, 168], extrapolate: "clamp" });
   const walkerOpacity = t.interpolate({ inputRange: [0, 0.36, 0.42], outputRange: [1, 1, 0], extrapolate: "clamp" });
   const sleeperOpacity = t.interpolate({ inputRange: [0, 0.38, 0.46], outputRange: [0, 0, 1], extrapolate: "clamp" });
-  const lift = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -2.5] });
   const charged = percent >= 100;
   const fill = percent < 20 ? "#E9906A" : percent < 60 ? "#E8C27D" : "#86D99B";
   const message = [...MESSAGES].reverse().find(([at]) => percent >= at)?.[1] ?? MESSAGES[0][1];
@@ -175,8 +146,7 @@ export function RechargeSplash({ palette: p, onDone }: { palette: Palette; onDon
     position: "absolute" as const,
     left: (204 + delay * 14) * scale,
     top: (92 - delay * 10) * scale,
-    opacity: Animated.multiply(sleeperOpacity, zzz.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 1, 1, 0] })),
-    transform: [{ translateY: zzz.interpolate({ inputRange: [0, 1], outputRange: [6, -16] }) }, { translateX: zzz.interpolate({ inputRange: [0, 1], outputRange: [0, 8] }) }],
+    opacity: sleeperOpacity,
   });
   const ink = p.isDark ? "#1B3E38" : "#FAF7F0";
   const track = p.isDark ? "#1B3E3829" : "#FFFFFF24";
@@ -189,7 +159,7 @@ export function RechargeSplash({ palette: p, onDone }: { palette: Palette; onDon
           <Animated.View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width: sceneWidth, height: H * scale, opacity: sleeperOpacity }}>
             <Sleeping scale={scale} />
           </Animated.View>
-          <Animated.View pointerEvents="none" style={{ position: "absolute", top: (FLOOR - 70) * scale, left: 0, opacity: walkerOpacity, transform: [{ translateX: Animated.multiply(walkerX, scale) }, { translateY: lift }] }}>
+          <Animated.View pointerEvents="none" style={{ position: "absolute", top: (FLOOR - 70) * scale, left: 0, opacity: walkerOpacity, transform: [{ translateX: Animated.multiply(walkerX, scale) }] }}>
             <Standing stride={stride} scale={scale} />
           </Animated.View>
           {[0, 1, 2].map(i => (

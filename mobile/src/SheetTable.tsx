@@ -9,10 +9,11 @@ import { ui, type Palette } from "./theme";
 // Rows laid out like a sheet you can tap into, and the round choice chips used with them.
 export type Column<T> = { label: string; width: number; cell: (row: T) => ReactNode };
 
-export function SheetTable<T>({ p, columns, rows: all, keyOf, onRow, empty }: { p: Palette; columns: Column<T>[]; rows: T[]; keyOf: (row: T) => string; onRow?: (row: T) => void; empty: string }) {
+export function SheetTable<T>({ p, columns, rows: all, keyOf, onRow, labelOf, empty, search = true }: { p: Palette; columns: Column<T>[]; rows: T[]; keyOf: (row: T) => string; onRow?: (row: T) => void; labelOf?: (row: T) => string; empty: string; search?: boolean }) {
   const [query, setQuery] = useState("");
   if (!all.length) return <Notice text={empty} p={p} />;
-  const searchable = all.length > SEARCH_LIST_ABOVE;
+  // Lists under a page's own search box pass search={false}, so there is never a second box.
+  const searchable = search && all.length > SEARCH_LIST_ABOVE;
   // A row matches on its own values and on what its cells show.
   const rows = searchable && query.trim() ? all.filter(row => matchesSearch(searchTextOf(row as Record<string, unknown>) + " " + searchTextOf(columns.map(c => c.cell(row))), query)) : all;
   const table = (
@@ -22,7 +23,7 @@ export function SheetTable<T>({ p, columns, rows: all, keyOf, onRow, empty }: { 
           {columns.map(c => <Text key={c.label} style={[ui.small, { width: c.width, flexGrow: 1, paddingHorizontal: 10, paddingVertical: 8, color: p.muted, fontWeight: "700", letterSpacing: 0.3 }]}>{c.label}</Text>)}
         </View>
         {rows.map((row, i) => (
-          <MotionPress key={keyOf(row)} accessibilityRole={onRow ? "button" : undefined} disabled={!onRow} onPress={() => onRow?.(row)}
+          <MotionPress key={keyOf(row)} accessibilityRole={onRow ? "button" : undefined} accessibilityLabel={labelOf?.(row)} disabled={!onRow} onPress={() => onRow?.(row)}
             style={{ flexDirection: "row", alignItems: "center", minHeight: 44, borderTopWidth: i ? 1 : 0, borderTopColor: p.border }}>
             {columns.map(c => <View key={c.label} style={{ width: c.width, flexGrow: 1, paddingHorizontal: 10, paddingVertical: 8 }}>{c.cell(row)}</View>)}
           </MotionPress>

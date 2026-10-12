@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ONBOARDING_STEPS, stageIndex, type ClientProperty } from "./clientPortfolio";
-import { Animated, Easing, Modal, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import Svg, { Path } from "react-native-svg";
 import { designTokens } from "../../lib/design-tokens";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { HomeScene } from "./HomeScene";
-import { CountUp, Entrance, MotionPress, useReducedMotion } from "./motion";
+import { CountUp, Entrance, MotionPress } from "./motion";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 
@@ -32,30 +32,16 @@ export function WelcomeHeader({
   subtitle: string;
   onCalendar: () => void;
 }) {
-  const reduced = useReducedMotion();
-  const [float] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    if (reduced) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(float, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: Platform.OS !== "web" }),
-        Animated.timing(float, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: Platform.OS !== "web" }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [float, reduced]);
   const t = designTokens[p.isDark ? "dark" : "light"];
-  const bob = float.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   // Compact, so the person's tools sit in the first screen: greeting and date on one row,
   // one short line underneath, and the property pair tucked into the corner.
   return (
     <View testID="home-welcome" style={{ marginHorizontal: -20, marginTop: -24, backgroundColor: p.header, paddingHorizontal: 20, paddingTop: 6, paddingBottom: 34, overflow: "hidden" }}>
-      <Animated.View pointerEvents="none" style={{ position: "absolute", right: -4, bottom: 12, transform: [{ translateY: bob }] }}>
+      <View pointerEvents="none" style={{ position: "absolute", right: -4, bottom: 12 }}>
         <HomeScene width={118} />
-      </Animated.View>
+      </View>
       <View style={[ui.row, { gap: 12 }]}>
         <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: p.isDark ? "#1B3E38" : "#FAF7F0", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#A7D9C1" }}>
           <Text style={{ color: p.isDark ? "#FAF7F0" : "#1F3D38", fontSize: 16, fontWeight: "700", letterSpacing: -0.3 }}>{initials(name)}</Text>
@@ -118,7 +104,7 @@ export function QuickOverview({
           onPress={onReports}
           style={[ui.row, { gap: 8, minHeight: 44, paddingLeft: 6, paddingRight: 12, borderRadius: 999, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }]}
         >
-          <DimensionalIcon name="chart" size={32} />
+          <DimensionalIcon name="chart" size={32} color={p.primary} />
           <Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>Reports</Text>
           <Feather name="chevron-right" size={16} color={p.muted} />
         </MotionPress>
@@ -146,7 +132,7 @@ export function QuickOverview({
             >
               <View style={[ui.between, { alignItems: "flex-start" }]}>
                 <View style={{ width: 54, height: 54, borderRadius: 18, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}>
-                  <DimensionalIcon name={item.icon} size={42} />
+                  <DimensionalIcon name={item.icon} size={42} color={p.primary} />
                 </View>
                 <Feather name="chevron-right" size={18} color={p.muted} />
               </View>
@@ -154,7 +140,7 @@ export function QuickOverview({
                 <View style={[ui.row, { gap: 1, alignItems: "flex-end" }]}>
                   {!!item.prefix && item.value !== null && <Text style={{ color: p.text, fontSize: 18, lineHeight: 30, fontWeight: "700" }}>{item.prefix}</Text>}
                   {item.value === null ? (
-                    <Text style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700" }}>—</Text>
+                    <Text style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700" }}>-</Text>
                   ) : (
                     <CountUp value={item.value} sessionKey={sessionKey + ":" + item.key} style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700", letterSpacing: -1 }} />
                   )}
@@ -179,7 +165,7 @@ export function JumpBackIn({ palette: p, links }: { palette: Palette; links: { k
       <View style={{ flex: 1, justifyContent: "space-around", gap: 4 }}>
         {links.map(link => (
           <MotionPress key={link.key} {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={link.title + ". " + link.detail} onPress={link.onPress} style={[ui.row, { gap: 12, minHeight: 56, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 16 }]}>
-            <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={link.icon} size={36} /></View>
+            <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={link.icon} size={36} color={p.primary} /></View>
             <View style={{ flex: 1, gap: 1 }}>
               <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{link.title}</Text>
               <Text numberOfLines={1} style={{ color: p.muted, fontSize: 12 }}>{link.detail}</Text>
@@ -213,7 +199,7 @@ export function ClientPropertyProgress({ palette: p, properties, onOpen, title =
           <MotionPress key={property.id} {...hover} accessibilityRole="button" accessibilityLabel={`${property.name}, ${ONBOARDING_STEPS[step].label}. ${property.nextStep}`} onPress={onOpen} style={{ padding: 16, gap: 12, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
             <View style={[ui.row, { gap: 12 }]}>
               <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}>
-                <DimensionalIcon name={live ? "house" : "key"} size={38} />
+                <DimensionalIcon name={live ? "house" : "key"} size={38} color={p.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "600" }}>{property.name}</Text>
@@ -244,7 +230,7 @@ export function EnquiryCard({ palette: p, onStart, team = false }: { palette: Pa
   return (
     <MotionPress {...hover} accessibilityRole="button" accessibilityLabel="Start a new property enquiry" onPress={onStart} style={[ui.row, { gap: 14, padding: 18, borderRadius: 24, backgroundColor: p.primary }]}>
       <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: p.isDark ? "#1F3D3814" : "#FFFFFF1F", alignItems: "center", justifyContent: "center" }}>
-        <DimensionalIcon name="house" size={42} />
+        <DimensionalIcon name="house" size={42} color={p.onPrimary} />
       </View>
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={{ color: p.onPrimary, fontSize: 16, fontWeight: "700" }}>{team ? "New property enquiry" : "Have another property?"}</Text>
@@ -284,7 +270,7 @@ export function EnquirySheet({ palette: p, visible, onClose }: { palette: Palett
         <View accessibilityViewIsModal style={{ width: "100%", maxWidth: 520, maxHeight: "92%", borderRadius: 28, backgroundColor: p.surface, overflow: "hidden" }}>
           <View style={[ui.between, { gap: 12, padding: 20, borderBottomWidth: 1, borderColor: p.border }]}>
             <View style={[ui.row, { gap: 12, flex: 1 }]}>
-              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name="house" size={34} /></View>
+              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name="house" size={34} color={p.primary} /></View>
               <View style={{ flex: 1 }}>
                 <Text accessibilityRole="header" style={{ color: p.text, fontSize: 18, fontWeight: "700" }}>New property enquiry</Text>
                 <Text style={[ui.small, { color: p.muted }]}>Tell us about the property and we will prepare an estimate.</Text>
@@ -296,7 +282,7 @@ export function EnquirySheet({ palette: p, visible, onClose }: { palette: Palett
           </View>
           {sent ? (
             <View style={{ padding: 24, gap: 14, alignItems: "center" }}>
-              <DimensionalIcon name="medal" size={84} />
+              <DimensionalIcon name="medal" size={84} color={p.primary} />
               <Text style={{ color: p.text, fontSize: 20, fontWeight: "700", textAlign: "center" }}>Enquiry ready to send</Text>
               <Text style={[ui.body, { color: p.muted, textAlign: "center" }]}>This preview does not send anything. Once your account is live, {values.name || "your property"} goes straight to the Recharge team and appears in Your properties.</Text>
               <MotionPress accessibilityRole="button" onPress={close} style={[ui.between, { alignSelf: "stretch", minHeight: 52, paddingHorizontal: 18, borderRadius: 18, backgroundColor: p.primary }]}>
