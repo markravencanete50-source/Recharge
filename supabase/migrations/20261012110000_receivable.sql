@@ -6,7 +6,8 @@
 --    property assignments and statements use). The invoice reference is the existing `reference` column.
 --    Only invoices and AirCover claims link to a stay; only invoices link to a client.
 -- 2. The hub view returns reservationId and clientId, saveHubItem accepts them (checked: the stay exists
---    and the caller can see its property, the client is an active client profile on that property), and
+--    and the caller can see its property, the client is an active client profile on that property, and an
+--    invoice moved to another property keeps its client only when that client is on the new property), and
 --    moveHubItem records a payment on an invoice: settledMinor is the total received so far, paying the
 --    whole amount (or marking it paid with no figure) settles it, and a payment cannot exceed the invoice.
 -- 3. private.workspace_report_receivable(target_property, target_id, from_on, to_on, filters), reached
@@ -69,8 +70,10 @@ declare
    if link_prop is not null and link_prop<>res.property_id then raise exception 'That stay belongs to another property' using errcode='22023';end if;
    link_prop:=res.property_id;
   end if;
-  if link_client is not null and input ? 'clientId' then
-   if not exists(select 1 from public.workspace_profiles c where c.user_id=link_client and c.role='client' and c.status='active') then raise exception 'Choose a client' using errcode='22023';end if;
+  -- A client sent now must be an active client; the invoice's client (sent now or kept) must be linked to its
+  -- property whenever either changes, so moving an invoice to another property checks its client too.
+  if link_client is not null and (input ? 'clientId' or link_prop is distinct from item.property_id) then
+   if input ? 'clientId' and not exists(select 1 from public.workspace_profiles c where c.user_id=link_client and c.role='client' and c.status='active') then raise exception 'Choose a client' using errcode='22023';end if;
    if link_prop is not null and not exists(select 1 from public.workspace_property_assignments a where a.property_id=link_prop and a.user_id=link_client and a.assignment='client') then raise exception 'That client is not linked to this property' using errcode='22023';end if;
   end if;$q$,
    $q$link_client:=case when input ? 'clientId'$q$],

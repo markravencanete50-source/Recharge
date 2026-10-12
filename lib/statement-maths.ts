@@ -8,10 +8,18 @@ import { CHANNEL_LABEL } from './owner-reports';
 // daterange(period_start, period_end) in SQL. A night is named by its date: the night of 26 Nov is
 // inside a period when from <= 26 Nov < to. November 2026 is from 2026-11-01 to 2026-12-01, 30 nights.
 //
-// What the caller passes in: the property's confirmed (and cancelled, which are ignored) stays, the
+// What the caller passes in: the property's confirmed stays (cancelled or moved ones are ignored unless a
+// stored copy below still shares their money into the period), the
 // billable cleans (accepted and completed, mid-stay cleans included), the approved other payables
 // and, optionally, the owner's own expenses. Everything dated is filtered to the period here.
-// Revenue already counted in an older statement must be left out by the caller.
+// What other statements already did with a stay comes in on the stay (the database works it out):
+// * storedShare: the copy of the stay's money kept by the first issued (or paid) statement of the same
+//   method that put it on. From then on every period takes its share from that copy (its dates, nights,
+//   gross and fee), whatever happens to the stay or its payout later, so the parts across statements
+//   always add up to the copy. A stay that has changed since is flagged stay_changed_after_statement.
+// * alreadyCounted: the money is on a statement of the other method in full; this one counts nights only.
+// * sharedByNightsElsewhere / checkInStatementOverlaps / reliedOnBy: splits that would lose money,
+//   which block the statement (stay_method_conflict, stay_relied_on).
 
 // Assumption (b): VAT on the management fee only, applied to the rounded fee.
 export const VAT_BPS = 2000;
@@ -36,17 +44,36 @@ export type StatementTerms = {
   cleaningCostMinor: number;
   cleanChargeMode: CleanChargeMode;
 };
+// The stored copy of a stay's money (detail.stays[].stay* on the statement that first put it on).
+export type StoredStayShare = {
+  grossMinor: number; otaFeeMinor: number; settledMinor: number;
+  nights: number; checkIn: string; checkOut: string;
+  // The copy is on another property's statement (the stay has moved since): its money stays there.
+  otherProperty?: boolean;
+};
 export type StatementStayInput = {
   id: string;
   channel: string; // 'airbnb' | 'booking_com' | 'vrbo' | 'direct' | 'other'
   checkIn: string;
   checkOut: string;
-  status: string; // only 'confirmed' counts; 'cancelled' (or anything else) is left out
+  // Only 'confirmed' (at this property) is booked; anything else is left out unless a stored copy holds it.
+  status: string;
   settledMinor: number | null; // the amount received (net); null while unsettled
   itemisedFeesMinor?: number | null; // OTA fees itemised on the stay's payout lines
   grossMinor?: number | null; // gross from the payout file, used for gross minus net
   ownerStay?: boolean; // owner stays count as booked nights, with no money
   reference?: string;
+  storedShare?: StoredStayShare | null;
+  alreadyCounted?: boolean;
+  // A statement of the other method put part of the money on (by nights): splitting it again loses some.
+  sharedByNightsElsewhere?: boolean;
+  // A statement counted by check-in covers some of the stay's nights without counting it.
+  checkInStatementOverlaps?: boolean;
+  // Another live statement (of the method given) left the stay to a statement of the other method counting it in
+  // full (its alreadyCounted), and no statement but this one could. Checked for every listed stay, and for a stay
+  // no longer in the period that this statement counted when last prepared (countedBefore).
+  reliedOnBy?: StatementMethod | null;
+  countedBefore?: boolean;
 };
 export type StatementCleanInput = {
   id: string;
@@ -77,6 +104,7 @@ export type StatementLine = { kind: StatementLineKind; date: string; label: stri
 export type StatementStayShare = {
   id: string; channel: string; checkIn: string; checkOut: string; ownerStay: boolean;
   nights: number; nightsInPeriod: number; grossMinor: number; otaFeeMinor: number; payoutMinor: number;
+  counted: boolean; // this statement puts (a share of) the stay's money on
 };
 export type StatementResult = {
   lines: StatementLine[];
@@ -95,10 +123,10 @@ export type StatementResult = {
   nightsAvailable: number;
   // Machine-readable codes, 'code:id'. Internal: they can reveal cleaner costs, so never show owners.
   // clean_over_agreed:<cleanId>, clean_cost_unknown:<cleanId>, ota_fee_unknown:<stayId>,
-  // owner_stay_amount_ignored:<stayId>, nights_exceed_period
+  // owner_stay_amount_ignored:<stayId>, stay_changed_after_statement:<stayId>, nights_exceed_period
   flags: string[];
   blocked: boolean;
-  // clean_unreviewed:<cleanId>, stay_unsettled:<stayId>
+  // clean_unreviewed:<cleanId>, stay_unsettled:<stayId>, stay_method_conflict:<stayId>, stay_relied_on:<stayId>
   blockedReasons: string[];
 };
 
@@ -175,41 +203,74 @@ export function statementFor(input: StatementInput): StatementResult {
 
   // Stays: nights inside the period for occupancy, and the money share by the chosen method.
   const stays: StatementStayShare[] = [];
+  const listed = new Set<string>();
   let nightsBooked = 0;
-  for (const stay of [...input.stays].filter(s => s.status === 'confirmed').sort(byDateThenId(s => s.checkIn))) {
+  for (const stay of [...input.stays].sort(byDateThenId(s => s.checkIn))) {
     const checkIn = dayNumber(stay.checkIn, 'Check-in'), checkOut = dayNumber(stay.checkOut, 'Check-out');
     if (checkOut < checkIn) throw new RangeError(`Stay ${stay.id} checks out before it checks in`);
     const nights = checkOut - checkIn;
-    const nightsInPeriod = Math.max(0, Math.min(checkOut, to) - Math.max(checkIn, from));
+    const live = stay.status === 'confirmed';
+    const stored = stay.storedShare ?? null, here = stored !== null && stored.otherProperty !== true;
+    let storedIn = 0, storedOut = 0;
+    if (stored) {
+      storedIn = dayNumber(stored.checkIn, 'Stored check-in'); storedOut = dayNumber(stored.checkOut, 'Stored check-out');
+      if (!Number.isSafeInteger(stored.nights) || stored.nights <= 0) throw new RangeError(`Stay ${stay.id} has a stored copy with no nights`);
+    }
+    // The money window: the stored copy's dates and nights once a copy holds the stay, else the stay's own.
+    const windowIn = here ? storedIn : checkIn, windowNights = here ? stored.nights : nights;
     // A stay with no nights, and every stay under check_in_month, counts in full where it checks in.
-    const whole = input.method === 'check_in_month' || nights === 0;
-    const before = whole ? 0 : clamp(from - checkIn, 0, nights), through = whole ? nights : clamp(to - checkIn, 0, nights);
-    const inMoney = whole ? checkIn >= from && checkIn < to : through > before;
-    if (!inMoney && nightsInPeriod === 0) continue;
+    const whole = input.method === 'check_in_month' || windowNights === 0;
+    const before = whole ? 0 : clamp(from - windowIn, 0, windowNights), through = whole ? windowNights : clamp(to - windowIn, 0, windowNights);
+    const inMoney = whole ? windowIn >= from && windowIn < to : through > before;
+    const fullShare = whole || (before === 0 && through === windowNights);
+    const nightsInPeriod = live ? Math.max(0, Math.min(checkOut, to) - Math.max(checkIn, from)) : 0;
+    // Listed: a confirmed stay touching the period (with no nights: checking in inside it), or a stay whose copy shares into it.
+    const liveListed = live && (nightsInPeriod > 0 || (nights === 0 && checkIn >= from && checkIn < to));
+    if (!liveListed && !(here && storedIn < to && storedOut > from)) continue;
+    listed.add(stay.id);
     nightsBooked += nightsInPeriod;
-    const ownerStay = stay.ownerStay === true;
-    let grossMinor = 0, otaFeeMinor = 0;
+    const ownerStay = stay.ownerStay === true, ownerMoney = ownerStay && !stored;
+    let grossMinor = 0, otaFeeMinor = 0, counted = false;
     if (ownerStay && stay.settledMinor !== null && stay.settledMinor !== undefined && stay.settledMinor !== 0) flags.push(`owner_stay_amount_ignored:${stay.id}`);
-    if (inMoney && !ownerStay) {
+    // OTA fee: itemised fees, else gross minus net, else 0 (flagged for platform stays).
+    const liveFee = (settled: number) => stay.itemisedFeesMinor !== null && stay.itemisedFeesMinor !== undefined ? safeInteger(stay.itemisedFeesMinor, 'OTA fees')
+      : stay.grossMinor !== null && stay.grossMinor !== undefined ? safeInteger(stay.grossMinor, 'Gross') - settled : null;
+    if (stay.sharedByNightsElsewhere) blockedReasons.push(`stay_method_conflict:${stay.id}`);
+    else if (stay.alreadyCounted && inMoney && !ownerMoney) { /* its money is on the other statement: nights only */ }
+    else if (stored) {
+      if (here && inMoney) {
+        const gross = safeInteger(stored.grossMinor, 'Stored gross'), fee = safeInteger(stored.otaFeeMinor, 'Stored OTA fees');
+        grossMinor = fullShare ? gross : prorate(gross, before, through, windowNights);
+        otaFeeMinor = fullShare ? fee : prorate(fee, before, through, windowNights);
+        counted = true;
+      }
+      const settled = stay.settledMinor ?? null;
+      const changed = !here || !live || stay.checkIn !== stored.checkIn || stay.checkOut !== stored.checkOut || settled !== stored.settledMinor
+        || (settled !== null && (liveFee(settled) ?? 0) !== stored.otaFeeMinor);
+      if (changed) flags.push(`stay_changed_after_statement:${stay.id}`);
+    } else if (inMoney && !ownerStay) {
       if (stay.settledMinor === null || stay.settledMinor === undefined) blockedReasons.push(`stay_unsettled:${stay.id}`);
       else {
         const settled = safeInteger(stay.settledMinor, 'Settled amount');
-        // OTA fee: itemised fees, else gross minus net, else 0 (flagged for platform stays).
-        let fee: number;
-        if (stay.itemisedFeesMinor !== null && stay.itemisedFeesMinor !== undefined) fee = safeInteger(stay.itemisedFeesMinor, 'OTA fees');
-        else if (stay.grossMinor !== null && stay.grossMinor !== undefined) fee = safeInteger(stay.grossMinor, 'Gross') - settled;
-        else {
+        let fee = liveFee(settled);
+        if (fee === null) {
           fee = 0;
           if (OTA_CHANNELS.includes(stay.channel)) flags.push(`ota_fee_unknown:${stay.id}`);
         }
         const gross = safeInteger(settled + fee, 'Gross');
-        const full = whole || (before === 0 && through === nights);
-        grossMinor = full ? gross : prorate(gross, before, through, nights);
-        otaFeeMinor = full ? fee : prorate(fee, before, through, nights);
+        grossMinor = fullShare ? gross : prorate(gross, before, through, windowNights);
+        otaFeeMinor = fullShare ? fee : prorate(fee, before, through, windowNights);
+        counted = true;
       }
     }
-    stays.push({ id: stay.id, channel: stay.channel, checkIn: stay.checkIn, checkOut: stay.checkOut, ownerStay, nights, nightsInPeriod, grossMinor, otaFeeMinor, payoutMinor: grossMinor - otaFeeMinor });
+    // By nights, part of a stay whose other nights sit on a statement counted by check-in would never be paid.
+    if (input.method === 'nights' && counted && !fullShare && stay.checkInStatementOverlaps) blockedReasons.push(`stay_method_conflict:${stay.id}`);
+    // Another statement left this stay to a statement of the other method counting it in full: this one must do that.
+    if (stay.reliedOnBy && !(stay.reliedOnBy !== input.method && counted && fullShare)) blockedReasons.push(`stay_relied_on:${stay.id}`);
+    stays.push({ id: stay.id, channel: stay.channel, checkIn: stay.checkIn, checkOut: stay.checkOut, ownerStay, nights, nightsInPeriod, grossMinor, otaFeeMinor, payoutMinor: grossMinor - otaFeeMinor, counted });
   }
+  // A stay this statement used to count in full, no longer in its period, that another statement still relies on.
+  for (const stay of input.stays.filter(s => s.reliedOnBy && s.countedBefore && !listed.has(s.id)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) blockedReasons.push(`stay_relied_on:${stay.id}`);
   const nightsAvailable = to - from;
   if (nightsBooked > nightsAvailable) flags.push('nights_exceed_period');
 

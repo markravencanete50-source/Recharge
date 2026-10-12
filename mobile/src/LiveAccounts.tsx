@@ -49,7 +49,9 @@ export function NoteSheet({ p, ask, onClose, onDone }: { p: Palette; ask: NoteAs
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const request = useRequestId(ask ? ask.title + ":" + note.trim() + ":" + amount : null);
+  // The key follows the whole request, so editing anything after a lost reply starts a new one instead of reusing the old id.
+  const preview = ask ? ask.build(note.trim(), ask.amount ? poundsToMinor(amount) : null) : null;
+  const request = useRequestId(ask ? ask.title + ":" + JSON.stringify(preview) : null);
   useEffect(() => { queueMicrotask(() => { setNote(""); setError(""); setAmount(ask?.amount?.initial ?? ""); }); }, [ask]);
   async function save() {
     if (!ask || busy) return;

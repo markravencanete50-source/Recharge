@@ -57,10 +57,16 @@ test('a custom period shows the last day but is sent with the day after, as the 
 
 test('the request and the action carry exactly the dates that were checked', () => {
   const nov = S.monthRange('2026-11');
-  assert.deepEqual(S.previewQuery(PROPERTY, nov), { section: 'statementPreview', propertyId: PROPERTY, from: '2026-11-01', to: '2026-12-01', method: 'nights' });
+  // The check leaves the method to the database: the held statement's own, else nights (as Prepare below).
+  assert.deepEqual(S.previewQuery(PROPERTY, nov), { section: 'statementPreview', propertyId: PROPERTY, from: '2026-11-01', to: '2026-12-01' });
   assert.deepEqual(S.prepareAction(PROPERTY, nov), { action: 'prepareStatement', propertyId: PROPERTY, period: '2026-11', method: 'nights' });
   const mid = S.customRange('2026-11-10', '2026-11-20', '2026-12-02');
   assert.deepEqual(S.prepareAction(PROPERTY, mid), { action: 'prepareStatement', propertyId: PROPERTY, from: '2026-11-10', to: '2026-11-21', method: 'nights' });
+  // Preparing a held draft again never names a method, so an old monthly draft keeps counting by check-in.
+  const held = { id: crypto.randomUUID() };
+  assert.deepEqual(S.prepareAction(PROPERTY, nov, held), { action: 'prepareStatement', propertyId: PROPERTY, period: '2026-11' });
+  assert.deepEqual(S.prepareAction(PROPERTY, mid, held), { action: 'prepareStatement', propertyId: PROPERTY, from: '2026-11-10', to: '2026-11-21' });
+  assert.deepEqual(S.prepareAction(PROPERTY, nov, null), S.prepareAction(PROPERTY, nov));
   assert.notEqual(S.previewKey(PROPERTY, nov), S.previewKey(PROPERTY, mid));
   assert.equal(S.previewKey(PROPERTY, nov), S.previewKey(PROPERTY, S.customRange('2026-11-01', '2026-11-30', '2026-12-02')), 'the same dates are the same check');
 });
@@ -70,6 +76,7 @@ test('the actions pass the same schemas the server applies', async () => {
   const nov = S.monthRange('2026-11'), mid = S.customRange('2026-11-10', '2026-11-20', '2026-12-02');
   for (const r of [nov, mid]) {
     assert.ok(financeActionSchema.safeParse({ requestId: crypto.randomUUID(), ...S.prepareAction(PROPERTY, r) }).success);
+    assert.ok(financeActionSchema.safeParse({ requestId: crypto.randomUUID(), ...S.prepareAction(PROPERTY, r, { id: crypto.randomUUID() }) }).success);
     assert.ok(financeReadSchema.safeParse(S.previewQuery(PROPERTY, r)).success);
   }
 });

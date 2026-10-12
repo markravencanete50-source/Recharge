@@ -214,16 +214,18 @@ begin
  return private.workspace_cleaner_invoice_view(inv);
 end $$;
 
--- A day is locked once an issued or paid statement for the property covers it: its month, and (once
--- statements carry an end date, 20261012100000) the statement's own period.
+-- A day is locked once an issued or paid statement for the property covers it: the statement's own period, never
+-- the rest of the month a shorter statement starts in. Until statements carry an end date (20261012100000), each is
+-- the month it starts (as that migration backfills).
 create or replace function private.workspace_statement_day_locked(prop uuid,day date) returns boolean language plpgsql stable security definer set search_path='' as $$
 declare locked boolean;
 begin
- locked:=exists(select 1 from private.workspace_owner_statements s where s.property_id=prop and s.status in ('issued','paid')
-  and s.period_start<=day and day<(s.period_start+interval '1 month')::date);
- if not locked and exists(select 1 from pg_catalog.pg_attribute a where a.attrelid='private.workspace_owner_statements'::regclass and a.attname='period_end' and not a.attisdropped) then
-  execute 'select exists(select 1 from private.workspace_owner_statements s where s.property_id=$1 and s.status in (''issued'',''paid'') and s.period_end is not null and s.period_start<=$2 and $2<s.period_end)'
+ if exists(select 1 from pg_catalog.pg_attribute a where a.attrelid='private.workspace_owner_statements'::regclass and a.attname='period_end' and not a.attisdropped) then
+  execute 'select exists(select 1 from private.workspace_owner_statements s where s.property_id=$1 and s.status in (''issued'',''paid'') and s.period_start<=$2 and $2<coalesce(s.period_end,(s.period_start+interval ''1 month'')::date))'
    into locked using prop,day;
+ else
+  locked:=exists(select 1 from private.workspace_owner_statements s where s.property_id=prop and s.status in ('issued','paid')
+   and s.period_start<=day and day<(s.period_start+interval '1 month')::date);
  end if;
  return coalesce(locked,false);
 end $$;

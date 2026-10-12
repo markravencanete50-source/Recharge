@@ -51,6 +51,8 @@ export function databaseFailure(error: { code?: string; message?: string }) {
   if (error.code === "40001" || error.code === "23505") return businessResponse({ error: "This record changed or already exists. Refresh and try again." }, 409);
   if (error.code === "P0002") return businessResponse({ error: "Record not found" }, 404);
   if (error.code === "25006") return businessResponse({ error: VIEW_ONLY_ERROR }, 423);
+  // A report whose database function has not been added yet says so plainly instead of looking like an outage.
+  if (error.code === "0A000") return businessResponse({ error: readable(error.message) || "This part needs a database update first" }, 501);
   if (error.code?.startsWith("22") || error.code?.startsWith("23")) return businessResponse({ error: "Check the record details and assigned access" }, 400);
   return businessResponse({ error: "The workspace connection is temporarily unavailable" }, 503);
 }

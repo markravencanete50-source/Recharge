@@ -8,7 +8,9 @@ import { createServer } from 'vite';
 // the management fee, VAT and other payables on ordered lines, the blocks while stays are unsettled or
 // dear cleans unreviewed, overlap refusal, no double counting against old-style monthly statements, and the
 // owner's view without internal details. The SQL must give exactly the figures of statementFor in
-// lib/statement-maths.ts: the brief's worked example and 200 seeded random scenarios are checked against it.
+// lib/statement-maths.ts: the brief's worked example and 200 seeded random scenarios are checked against it,
+// including stays already counted on other statements (old monthly ones, issued ones holding a stored copy of
+// the stay's money, and statements that rely on another to count a stay in full).
 //
 // The worked example is the brief's November, set in November 2025 so the period has started (a statement
 // cannot be prepared for a period still to come); November and December have the same lengths in 2025.
@@ -74,7 +76,7 @@ const figures = r => ({ grossMinor: r.grossMinor, otaFeesMinor: r.otaFeesMinor, 
   vatMinor: r.vatMinor, payablesMinor: r.payablesMinor, payoutMinor: r.payoutMinor, nightsBooked: r.nightsBooked, nightsAvailable: r.nightsAvailable,
   flags: r.flags, blocked: r.blocked, blockedReasons: r.blockedReasons,
   lines: r.lines.map(l => ({ kind: l.kind, date: l.date, label: l.label, amountMinor: l.amountMinor, refId: l.refId })),
-  stays: r.stays.map(s => ({ id: s.id ?? s.reservationId, nights: s.nights, nightsInPeriod: s.nightsInPeriod, grossMinor: s.grossMinor, otaFeeMinor: s.otaFeeMinor, payoutMinor: s.payoutMinor })) });
+  stays: r.stays.map(s => ({ id: s.id ?? s.reservationId, nights: s.nights, nightsInPeriod: s.nightsInPeriod, counted: s.counted, grossMinor: s.grossMinor, otaFeeMinor: s.otaFeeMinor, payoutMinor: s.payoutMinor })) });
 const compute = async (prop, from, to, method = 'nights') => (await sql('select private.workspace_statement_compute($1,$2,$3,$4,null) c', [prop, from, to, method]))[0].c;
 
 await sql('insert into private.workspace_cleaner_rates(cleaner_id,rate_minor,updated_by) values($1,5500,$3),($2,5800,$3)', [users[CLEANER_A], users[CLEANER_B], users[ADMIN]]);
@@ -325,13 +327,15 @@ test('no double counting against old-style monthly statements', async () => {
   assert.equal(nov.nightsBooked, 1 + 2);
   assert.deepEqual(nov.detail.alreadyCounted, [S1]);
   assert.deepEqual(nov.detail.stays.map(x => [x.reservationId, x.counted, x.amountMinor]), [[S1, false, 0], [S2, true, 20000]]);
-  // statementFor with S1 as nights-only (the caller leaves already-counted revenue out).
+  // statementFor with S1 already counted (nights only).
   assert.deepEqual(figures(await compute(OLD, '2025-11-01', '2025-12-01')), figures(statementFor({ from: '2025-11-01', to: '2025-12-01', method: 'nights',
     terms: { managementFeeBps: 1500, vatOnFee: false, cleaningCostMinor: 6000, cleanChargeMode: 'agreed_fee' }, cleans: [], payables: [],
-    stays: [{ id: S1, channel: 'direct', checkIn: '2025-10-29', checkOut: '2025-11-02', status: 'confirmed', settledMinor: null, ownerStay: true },
+    stays: [{ id: S1, channel: 'direct', checkIn: '2025-10-29', checkOut: '2025-11-02', status: 'confirmed', settledMinor: 48000, alreadyCounted: true },
       { id: S2, channel: 'direct', checkIn: '2025-11-05', checkOut: '2025-11-07', status: 'confirmed', settledMinor: 20000 }] })));
 
-  // The other way: a nights statement took December's share first, then November is prepared by check-in.
+  // The other way: a nights statement took December's share first. November by check-in would count none of
+  // the stay (part of its money is on December's statement), so its other three nights would be on no
+  // statement: refused (stay_method_conflict) until December is voided.
   await as(ADMIN);
   const MIX = await property('Mixed methods house');
   await as(ADMIN); await terms(MIX, { vatOnFee: false });
@@ -339,10 +343,11 @@ test('no double counting against old-style monthly statements', async () => {
   await as(ACCOUNTS);
   const decMix = await finance({ action: 'prepareStatement', propertyId: MIX, period: '2025-12' });
   assert.equal(decMix.grossMinor, 20000, 'two of its five nights');
-  const novMix = await finance({ action: 'prepareStatement', propertyId: MIX, period: '2025-11', method: 'check_in_month' });
-  assert.equal(novMix.method, 'check_in_month');
-  assert.equal(novMix.grossMinor, 0, 'its money is already in December’s statement');
-  assert.deepEqual(novMix.detail.alreadyCounted, [X]);
+  await assert.rejects(finance({ action: 'prepareStatement', propertyId: MIX, period: '2025-11', method: 'check_in_month' }), /counted the other way/);
+  assert.deepEqual((await compute(MIX, '2025-11-01', '2025-12-01', 'check_in_month')).blockedReasons, [`stay_method_conflict:${X}`]);
+  // By nights it is the same way as December: three of the five nights.
+  assert.equal((await compute(MIX, '2025-11-01', '2025-12-01')).grossMinor, 30000);
+  await as(ACCOUNTS);
   // Voiding December frees it, and November counts it whole.
   await finance({ action: 'voidStatement', statementId: decMix.id, version: decMix.version, reason: 'Prepared by the wrong method' });
   assert.equal((await finance({ action: 'prepareStatement', propertyId: MIX, period: '2025-11', method: 'check_in_month' })).grossMinor, 50000);
@@ -381,7 +386,9 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
   const chance = p => random() < p;
   const day0 = Date.UTC(2024, 0, 1) / 86400000;
   const cleaners = [users[CLEANER_A], users[CLEANER_B], users[CLEANER_C]];
-  let prepared = 0, blockedCount = 0, withOldStatement = 0, withOwnerStay = 0, proRated = 0;
+  const dayN = iso => Date.parse(iso + 'T00:00:00Z') / 86400000;
+  let prepared = 0, blockedCount = 0, withOldStatement = 0, withOwnerStay = 0, proRated = 0, withStoredCopy = 0, withRelier = 0, withNeighbour = 0;
+  const seen = { changed: 0, conflict: 0, relied: 0, fromCopy: 0 };
   for (let i = 0; i < 200; i++) {
     const label = `scenario ${i}`;
     // Owner stays share one code index across the database: keep at most one alive.
@@ -439,14 +446,65 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
       } else if (!ota) settled = payout;
       tsStays.push({ id, channel: channel === 'owner' ? 'other' : channel, checkIn: isoDay(checkInN), checkOut: isoDay(checkOutN), status, settledMinor: settled, itemisedFeesMinor: fee, ownerStay: channel === 'owner' });
     }
-    // Sometimes an old statement of the other method already holds some of these stays' money.
+    const statement = (owner, start, end, statementMethod, status, detail) => sql(`insert into private.workspace_owner_statements(property_id,period_start,period_end,method,status,revenue_minor,cleaning_count,cleaning_minor,expenses_minor,fee_bps,fee_minor,payout_minor,detail,prepared_by,issued_at)
+      values($1,$2,$3,$4,$5,0,0,0,0,0,0,0,$6::jsonb,$7,case when $5='draft' then null else now() end)`, [owner, start, end, statementMethod, status, JSON.stringify(detail), users[ADMIN]]);
+    const otherMethod = method === 'nights' ? 'check_in_month' : 'nights';
+    // Sometimes an old statement of the other method already holds some of these stays' money: in full (this one
+    // counts their nights only), or for some only a share by nights (this one is blocked: stay_method_conflict).
+    let oldHeld = [];
     if (tsStays.length && chance(0.2)) {
       withOldStatement++;
-      const held = tsStays.filter(() => chance(0.5));
-      await sql(`insert into private.workspace_owner_statements(property_id,period_start,period_end,method,status,revenue_minor,cleaning_count,cleaning_minor,expenses_minor,fee_bps,fee_minor,payout_minor,detail,prepared_by)
-        values($1,'2020-01-01','2020-02-01',$2,'issued',0,0,0,0,0,0,0,$3::jsonb,$4)`, [prop, method === 'nights' ? 'check_in_month' : 'nights', JSON.stringify({ stays: held.map(s => ({ reservationId: s.id })) }), users[ADMIN]]);
-      // statementFor: the caller leaves that revenue out, so those stays count their nights only.
-      for (const s of held) if (!s.ownerStay) Object.assign(s, { ownerStay: true, settledMinor: null });
+      oldHeld = tsStays.filter(() => chance(0.5)).map(s => ({ s, whole: chance(0.85) }));
+      await statement(prop, '2020-01-01', '2020-02-01', otherMethod, 'issued', { stays: oldHeld.map(({ s, whole }) => whole ? { reservationId: s.id } : { reservationId: s.id, counted: true, wholeStay: false }) });
+      for (const { s, whole } of oldHeld) s[whole ? 'alreadyCounted' : 'sharedByNightsElsewhere'] = true;
+    }
+    // Sometimes an issued statement of this method already counted some of them and kept its copy of their money.
+    // This period then takes its share from the copy, whatever the stay is now: often the copy is the stay as it
+    // is, otherwise it has moved, changed or been paid differently since. Some copies are on another property's
+    // statement (the stay has moved here since); their money stays there.
+    let basisHeld = [];
+    if (tsStays.length && chance(0.3)) {
+      withStoredCopy++;
+      const elsewhere = chance(0.2);
+      basisHeld = tsStays.filter(() => chance(0.6)).map(s => {
+        let copy;
+        if (s.settledMinor !== null && chance(0.5)) {
+          const fee = s.itemisedFeesMinor ?? 0;
+          copy = { grossMinor: s.settledMinor + fee, otaFeeMinor: fee, settledMinor: s.settledMinor, nights: dayN(s.checkOut) - dayN(s.checkIn), checkIn: s.checkIn, checkOut: s.checkOut };
+        } else {
+          const inN = dayN(s.checkIn) + int(-5, 5), nights = int(1, 40), gross = int(0, 5000000), fee = chance(0.7) ? int(0, gross) : 0;
+          copy = { grossMinor: gross, otaFeeMinor: fee, settledMinor: chance(0.8) ? gross - fee : int(0, 5000000), nights, checkIn: isoDay(inN), checkOut: isoDay(inN + nights) };
+        }
+        return { s, copy, whole: chance(0.7) };
+      });
+      await statement(elsewhere ? await property(`Random ${i} before the move`) : prop, '2019-01-01', '2019-02-01', method, pick(['issued', 'paid']), {
+        stays: basisHeld.map(({ s, copy, whole }) => ({ reservationId: s.id, counted: true, stayGrossMinor: copy.grossMinor, stayOtaFeeMinor: copy.otaFeeMinor, staySettledMinor: copy.settledMinor,
+          stayNights: copy.nights, stayCheckIn: copy.checkIn, stayCheckOut: copy.checkOut, wholeStay: whole })) });
+      for (const { s, copy } of basisHeld) s.storedShare = { ...copy, otherProperty: elsewhere };
+    }
+    // Sometimes a statement relies on another to count some of them in full (its alreadyCounted). Unless another
+    // statement of the other method counts the stay in full, this one has to (or it is blocked: stay_relied_on).
+    if (tsStays.length && chance(0.15)) {
+      withRelier++;
+      const relierMethod = chance(0.5) ? 'nights' : 'check_in_month';
+      const relied = tsStays.filter(() => chance(0.5));
+      await statement(prop, '2018-01-01', '2018-02-01', relierMethod, pick(['draft', 'issued']), { stays: [], alreadyCounted: relied.map(s => s.id) });
+      for (const s of relied) {
+        const kept = oldHeld.some(h => h.s === s && h.whole && otherMethod !== relierMethod) || basisHeld.some(h => h.s === s && h.whole && method !== relierMethod);
+        if (!kept) s.reliedOnBy = relierMethod;
+      }
+    }
+    // Sometimes (by nights) a statement counted by check-in sits next to the period: taking part of a stay it
+    // also covers is blocked (stay_method_conflict), as its other nights would be on no statement.
+    if (method === 'nights' && chance(0.15)) {
+      withNeighbour++;
+      const length = int(1, 40), next = chance(0.5) ? [toN, toN + length] : [fromN - length, fromN];
+      await statement(prop, isoDay(next[0]), isoDay(next[1]), 'check_in_month', pick(['draft', 'issued']), { stays: [] });
+      for (const s of tsStays) {
+        const here = s.storedShare && !s.storedShare.otherProperty;
+        const a = dayN(here ? s.storedShare.checkIn : s.checkIn), b = dayN(here ? s.storedShare.checkOut : s.checkOut);
+        s.checkInStatementOverlaps = a < next[1] && next[0] < b;
+      }
     }
 
     const tsCleans = [];
@@ -487,6 +545,10 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
     const c = await compute(prop, from, to, method);
     assert.deepEqual(figures(c), figures(ts), label);
     if (ts.stays.some(s => s.grossMinor !== 0 && s.nightsInPeriod < s.nights)) proRated++;
+    if (ts.flags.some(x => x.startsWith('stay_changed_after_statement:'))) seen.changed++;
+    if (ts.blockedReasons.some(x => x.startsWith('stay_method_conflict:'))) seen.conflict++;
+    if (ts.blockedReasons.some(x => x.startsWith('stay_relied_on:'))) seen.relied++;
+    if (ts.stays.some(x => x.counted && tsStays.find(y => y.id === x.id)?.storedShare)) seen.fromCopy++;
     if (ts.blocked) { blockedCount++; continue; }
     // Prepared and stored: the same figures.
     await asDb(); await db.exec('delete from private.workspace_write_limits');
@@ -506,4 +568,6 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
   assert.ok(withOldStatement >= 20, `old statements ${withOldStatement}`);
   assert.ok(withOwnerStay >= 20, `owner stays ${withOwnerStay}`);
   assert.ok(proRated >= 20, `pro-rated ${proRated}`);
+  assert.ok(withStoredCopy >= 40 && withRelier >= 15 && withNeighbour >= 10, `stored copies ${withStoredCopy}, reliers ${withRelier}, neighbours ${withNeighbour}`);
+  assert.ok(seen.fromCopy >= 20 && seen.changed >= 20 && seen.conflict >= 8 && seen.relied >= 5, JSON.stringify(seen));
 });

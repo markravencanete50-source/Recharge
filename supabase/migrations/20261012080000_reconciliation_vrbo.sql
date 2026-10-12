@@ -90,16 +90,19 @@ create or replace function private.workspace_payout_minor_ok(value jsonb, requir
  select case when value is null or jsonb_typeof(value)='null' then not required
   else jsonb_typeof(value)='number' and value::text ~ '^-?\d{1,9}$' and abs(value::text::bigint)<=100000000 end;
 $$;
--- A stay is locked once a statement covering it has been issued or paid: the month it starts in, and
--- (once statements carry an end date) any issued period it overlaps.
+-- A stay is locked once a statement covering it has been issued or paid: any issued period its nights overlap.
+-- Never the whole month a statement starts in: an issued 1 to 9 November leaves a stay on 20 November free.
+-- Until statements carry an end date (20261012100000), each is the month it starts (as that migration backfills).
 create or replace function private.workspace_payout_stay_locked(target private.workspace_reservations) returns boolean language plpgsql stable security definer set search_path='' as $$
 declare locked boolean;
 begin
  if target.id is null then return false; end if;
- locked:=exists(select 1 from private.workspace_owner_statements s where s.property_id=target.property_id and s.status in ('issued','paid') and s.period_start=date_trunc('month',target.check_in)::date);
- if not locked and exists(select 1 from pg_catalog.pg_attribute a where a.attrelid='private.workspace_owner_statements'::regclass and a.attname='period_end' and not a.attisdropped) then
-  execute 'select exists(select 1 from private.workspace_owner_statements s where s.property_id=$1 and s.status in (''issued'',''paid'') and s.period_end is not null and daterange(s.period_start,s.period_end) && daterange($2,$3))'
+ if exists(select 1 from pg_catalog.pg_attribute a where a.attrelid='private.workspace_owner_statements'::regclass and a.attname='period_end' and not a.attisdropped) then
+  execute 'select exists(select 1 from private.workspace_owner_statements s where s.property_id=$1 and s.status in (''issued'',''paid'') and daterange(s.period_start,coalesce(s.period_end,(s.period_start+interval ''1 month'')::date)) && daterange($2,$3))'
    into locked using target.property_id,target.check_in,target.check_out;
+ else
+  locked:=exists(select 1 from private.workspace_owner_statements s where s.property_id=target.property_id and s.status in ('issued','paid')
+   and daterange(s.period_start,(s.period_start+interval '1 month')::date) && daterange(target.check_in,target.check_out));
  end if;
  return coalesce(locked,false);
 end $$;

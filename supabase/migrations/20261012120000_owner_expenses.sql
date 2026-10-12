@@ -17,7 +17,18 @@
 --    own rows only, no staff names or internal flags), netMinor (payout minus the owner's expenses;
 --    null when the owner has recorded none that month or the payout is not known yet) and
 --    ownerExpensesLocked. The existing expensesMinor (repairs and expenses on the statement) is unchanged.
--- 4. workspace_owner_expenses_read: staff with finance access (accounts, admin) can read them.
+-- 4. workspace_owner_expenses_read: staff with finance access (accounts, admin) and the owner statements tool can
+--    read them, for the properties they may finance.
+-- 5. The owner's months (private.workspace_owner_period_cell, patched below) for statements of any dates:
+--    * a month that is exactly one issued or paid statement shows that statement, as before;
+--    * a month any other issued or paid statement covers (a custom period, or one spanning months) is never
+--      estimated. It shows as a statement month ('statement' source, covered true), and each covering statement's
+--      figures count once, in the month its period starts; the other months it covers show it without figures, so
+--      a period summed across months never counts a payout twice. coveringStatements lists each one with only its
+--      dates, status and (in the month it starts) its payout; uncoveredNights says how much of the month is on no
+--      issued statement yet. Nothing staff-only (no detail, flags or costs) is added;
+--    * the estimate for every other month adds VAT on the fee where the property charges it (vatMinor) and takes it
+--      off the payout estimate. Statement months carry their statement's VAT too.
 
 create table if not exists private.workspace_owner_expenses (
  id uuid primary key default gen_random_uuid(),
@@ -132,13 +143,15 @@ begin
  return cell||private.workspace_owner_expense_keys(prop,month_start,nullif(cell->>'payoutMinor','')::bigint);
 end $$;
 
--- Finance staff read: every owner expense, optionally for one property and a span of months.
+-- Finance staff read: owner expenses, optionally for one property and a span of months. Finance roles with the
+-- owner statements tool only, and only for properties they may finance (each row is checked).
 create or replace function private.workspace_owner_expenses_read(target_property uuid default null, from_month date default null, to_month date default null) returns jsonb language plpgsql stable security definer set search_path='' as $$
 begin
- if not coalesce(private.workspace_finance_role(),false) then raise exception 'Finance access required' using errcode='42501';end if;
+ if not coalesce(private.workspace_finance_role(),false) or not coalesce(private.has_workspace_module('owner-statements'),false) then raise exception 'Finance access required' using errcode='42501';end if;
  return coalesce((select jsonb_agg(private.workspace_owner_expense_view(e)||jsonb_build_object('propertyName',p.name,'ownerName',o.full_name) order by e.month desc,p.name,e.created_at,e.id)
   from (select * from private.workspace_owner_expenses x where (target_property is null or x.property_id=target_property)
     and (from_month is null or x.month>=date_trunc('month',from_month)::date) and (to_month is null or x.month<=date_trunc('month',to_month)::date)
+    and private.workspace_can_property(x.property_id,'owner-statements')
     order by x.month desc,x.created_at desc limit 500) e
   join public.workspace_properties p on p.id=e.property_id join public.workspace_profiles o on o.user_id=e.owner_id),'[]'::jsonb);
 end $$;
@@ -170,4 +183,87 @@ begin
   execute replace(definition, anchor, sentinel);
   if position(sentinel in pg_get_functiondef(target::regprocedure)) = 0 then raise exception 'Patch did not take in %', target; end if;
  end if;
+end $$;
+
+-- 5. The owner's months for statements of any dates (see 5 at the top). A month covered by issued or paid
+-- statements of other dates: no estimate, each covering statement's figures once, in the month its period starts.
+-- booked: the month's booked nights (for occupancy), worked out by the caller as for every month.
+create or replace function private.workspace_owner_covered_cell(prop uuid, month_start date, booked bigint) returns jsonb language sql stable security definer set search_path='' as $$
+ with covering as (
+  select x.* from private.workspace_owner_statements x where x.property_id=prop and x.status in ('issued','paid')
+   and daterange(x.period_start,x.period_end) && daterange(month_start,(month_start+interval '1 month')::date)
+ ), starting as (
+  select * from covering c where c.period_start>=month_start and c.period_start<(month_start+interval '1 month')::date
+ )
+ select jsonb_build_object('month',to_char(month_start,'YYYY-MM'),'propertyId',prop,'source','statement',
+  'status',case when (select bool_and(c.status='paid') from covering c) then 'paid' else 'issued' end,
+  'preparing',exists(select 1 from private.workspace_owner_statements x where x.property_id=prop and x.status='draft'
+   and daterange(x.period_start,x.period_end) && daterange(month_start,(month_start+interval '1 month')::date)),
+  'revenueMinor',(select coalesce(sum(s.revenue_minor),0) from starting s),
+  'bookings',(select coalesce(sum(jsonb_array_length(case when jsonb_typeof(s.detail->'stays')='array' then s.detail->'stays' else '[]'::jsonb end)),0) from starting s),
+  'stayNights',(select coalesce(sum((y->>'checkOut')::date-(y->>'checkIn')::date),0) from starting s
+   cross join lateral jsonb_array_elements(case when jsonb_typeof(s.detail->'stays')='array' then s.detail->'stays' else '[]'::jsonb end) y),
+  'bookedNights',booked,
+  'cleaningCount',(select coalesce(sum(s.cleaning_count),0) from starting s),'cleaningMinor',(select coalesce(sum(s.cleaning_minor),0) from starting s),
+  'expensesMinor',(select coalesce(sum(s.expenses_minor),0) from starting s),
+  'feeBps',(select case when count(distinct s.fee_bps)=1 then min(s.fee_bps) end from starting s),
+  'feeMinor',(select coalesce(sum(s.fee_minor),0) from starting s),'vatMinor',(select coalesce(sum(s.vat_minor),0) from starting s),
+  'payoutMinor',(select coalesce(sum(s.payout_minor),0) from starting s),'missingAmounts',0,
+  'covered',true,
+  'coveringStatements',(select jsonb_agg(jsonb_build_object('periodStart',c.period_start,'periodLastDay',c.period_end-1,'status',c.status,
+    'payoutMinor',case when c.period_start>=month_start and c.period_start<(month_start+interval '1 month')::date then c.payout_minor end) order by c.period_start,c.id) from covering c),
+  'uncoveredNights',(select count(*) from generate_series(month_start::timestamp,((month_start+interval '1 month')::date-1)::timestamp,interval '1 day') d
+   where not exists(select 1 from covering c where d::date>=c.period_start and d::date<c.period_end)));
+$$;
+revoke all on function private.workspace_owner_covered_cell(uuid,date,bigint) from public,anon,authenticated;
+
+-- The month cell, patched from its latest definition. Each anchor must occur exactly once; the marker says the
+-- patch is already in place. A missing or repeated anchor stops the migration.
+do $$
+declare
+ fixes constant text[][] := array[
+  -- A statement cell only for a statement that is exactly the month.
+  ['private.workspace_owner_period_cell(uuid,date)',
+   $q$x.property_id=prop and x.period_start=month_start and x.status in ('issued','paid') order by x.issued_at desc nulls last,x.id limit 1);$q$,
+   $q$x.property_id=prop and x.period_start=month_start and x.period_end=month_end and x.status in ('issued','paid') order by x.issued_at desc nulls last,x.id limit 1);$q$,
+   $q$x.period_end=month_end and x.status in ('issued','paid')$q$],
+  ['private.workspace_owner_period_cell(uuid,date)',
+   $q$'feeBps',s.fee_bps,'feeMinor',s.fee_minor,'payoutMinor',s.payout_minor,'missingAmounts',0);$q$,
+   $q$'feeBps',s.fee_bps,'feeMinor',s.fee_minor,'vatMinor',s.vat_minor,'payoutMinor',s.payout_minor,'missingAmounts',0);$q$,
+   $q$'vatMinor',s.vat_minor$q$],
+  -- Covered by a statement of other dates: never an estimate.
+  ['private.workspace_owner_period_cell(uuid,date)',
+   $q$ f:=(select x from private.workspace_property_financials x where x.property_id=prop);$q$,
+   $q$ -- A month an issued or paid statement of other dates covers is never estimated (20261012120000).
+ if exists(select 1 from private.workspace_owner_statements x where x.property_id=prop and x.status in ('issued','paid')
+   and daterange(x.period_start,x.period_end) && daterange(month_start,month_end)) then
+  return private.workspace_owner_covered_cell(prop,month_start,booked);
+ end if;
+ f:=(select x from private.workspace_property_financials x where x.property_id=prop);$q$,
+   $q$private.workspace_owner_covered_cell(prop,month_start,booked)$q$],
+  -- "Being prepared": any draft touching the month, whatever its dates.
+  ['private.workspace_owner_period_cell(uuid,date)',
+   $q$x.period_start=month_start and x.status='draft')$q$,
+   $q$daterange(x.period_start,x.period_end) && daterange(month_start,month_end) and x.status='draft')$q$,
+   $q$daterange(month_start,month_end) and x.status='draft'$q$],
+  -- The estimate takes VAT on the fee off the payout where the property charges it.
+  ['private.workspace_owner_period_cell(uuid,date)',
+   $q$'feeBps',f.management_fee_bps,'feeMinor',fee,'payoutMinor',case when cleaning is null or fee is null then null else revenue-cleaning-costs-fee end,'missingAmounts',missing);$q$,
+   $q$'feeBps',f.management_fee_bps,'feeMinor',fee,
+  'vatMinor',case when fee is null then null when coalesce(f.vat_on_fee,false) then private.workspace_percent_of_minor(fee,private.workspace_vat_bps()) else 0 end,
+  'payoutMinor',case when cleaning is null or fee is null then null
+   else revenue-cleaning-costs-fee-(case when coalesce(f.vat_on_fee,false) then private.workspace_percent_of_minor(fee,private.workspace_vat_bps()) else 0 end) end,'missingAmounts',missing);$q$,
+   $q$'vatMinor',case when fee is null then null$q$]
+ ];
+ definition text;found_count integer;
+begin
+ for i in 1..array_length(fixes, 1) loop
+  definition := pg_get_functiondef(fixes[i][1]::regprocedure);
+  if position(fixes[i][4] in definition) = 0 then
+   found_count := (length(definition) - length(replace(definition, fixes[i][2], ''))) / length(fixes[i][2]);
+   if found_count <> 1 then raise exception 'Patch anchor found % times in % (%), expected once', found_count, fixes[i][1], i; end if;
+   execute replace(definition, fixes[i][2], fixes[i][3]);
+   if position(fixes[i][4] in pg_get_functiondef(fixes[i][1]::regprocedure)) = 0 then raise exception 'Patch did not take in % (%)', fixes[i][1], i; end if;
+  end if;
+ end loop;
 end $$;

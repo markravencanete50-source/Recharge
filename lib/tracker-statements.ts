@@ -88,18 +88,22 @@ export const STATEMENT_METHOD_LABEL: Record<string, string> = {
   check_in_month: 'Each stay counts in full in the period it checks in',
 };
 
-// The request that checks a period (a 'statementPreview' report) and the action that prepares it. Both always
-// say how stays are counted, so the figures you checked are the figures that get prepared. A whole month is
-// sent as the month; other dates as from and to (`to` not included).
+// The request that checks a period (a 'statementPreview' report) and the action that prepares it. Neither names
+// how stays are counted once a statement is held for the dates: the database then keeps that statement's own
+// method (an old monthly draft counts stays by check-in) for both, so the figures you checked are the figures
+// that get prepared. A new statement shares stays by nights (STATEMENT_METHOD, the database default too). A whole
+// month is sent as the month; other dates as from and to (`to` not included).
 export const STATEMENT_METHOD = 'nights' as const;
 export function previewQuery(propertyId: string, range: StatementRange): Record<string, string> {
-  return { section: 'statementPreview', propertyId, from: range.from, to: range.to, method: STATEMENT_METHOD };
+  return { section: 'statementPreview', propertyId, from: range.from, to: range.to };
 }
 export type PrepareStatement = Omit<Extract<FinanceAction, { action: 'prepareStatement' }>, 'requestId'>;
-export function prepareAction(propertyId: string, range: StatementRange): PrepareStatement {
+// existing: the statement already held for these dates, if any (preparing it again keeps its method).
+export function prepareAction(propertyId: string, range: StatementRange, existing?: { id: string } | null): PrepareStatement {
+  const method = existing ? {} : { method: STATEMENT_METHOD };
   return range.month
-    ? { action: 'prepareStatement', propertyId, period: range.month, method: STATEMENT_METHOD }
-    : { action: 'prepareStatement', propertyId, from: range.from, to: range.to, method: STATEMENT_METHOD };
+    ? { action: 'prepareStatement', propertyId, period: range.month, ...method }
+    : { action: 'prepareStatement', propertyId, from: range.from, to: range.to, ...method };
 }
 // Two checks are the same check when they ask for the same property, dates and method.
 export const previewKey = (propertyId: string, range: StatementRange) => [propertyId, range.from, range.to, STATEMENT_METHOD].join('|');

@@ -10,7 +10,7 @@ import { OwnerExpenses } from "./OwnerExpenses";
 import { readOwner } from "./backend/client";
 import { formatCount, formatMoney, formatMoneyShort } from "../../lib/format";
 import { monthName } from "../../lib/owner-reports";
-import { changeLabel, changeOf, OWNER_PERIOD_LABEL, OWNER_PERIODS, ownerPeriodsSchema, periodRange, readRange, summarisePeriod, type Change, type OwnerPeriod, type OwnerPeriods, type PeriodSummary } from "../../lib/owner-periods";
+import { changeLabel, changeOf, coverNotes, OWNER_PERIOD_LABEL, OWNER_PERIODS, ownerPeriodsSchema, periodRange, readRange, summarisePeriod, type Change, type OwnerPeriod, type OwnerPeriods, type PeriodSummary } from "../../lib/owner-periods";
 
 // The owner's figures for a period they choose, statement style: booking income, what came off it
 // and their payout, each against the period before. Months with an issued statement show its
@@ -103,6 +103,7 @@ function Statement({ p, now, before, title, versus, feeBps, months: shown, cells
         {line(`Cleaning (${formatCount(now.cleaningCount)} ${now.cleaningCount === 1 ? "clean" : "cleans"})`, cost(now.cleaningMinor), ch(s => s.cleaningMinor))}
         {line("Repairs and expenses", cost(now.expensesMinor), ch(s => s.expensesMinor))}
         {line(`Management fee${feeBps !== null ? ` (${feeBps / 100}%)` : ""}`, cost(now.feeMinor), ch(s => s.feeMinor))}
+        {!!now.vatMinor && line("VAT on the management fee", cost(now.vatMinor), ch(s => s.vatMinor))}
         <View style={{ height: 1, backgroundColor: p.border, marginVertical: 4 }} />
         {line(owed ? "You owe" : "Your payout", now.payoutMinor === null ? "Not set yet" : formatMoney(Math.abs(now.payoutMinor)), ch(s => s.payoutMinor), { strong: true, good: true })}
         {now.netMinor !== null && <>
@@ -135,6 +136,8 @@ function Statement({ p, now, before, title, versus, feeBps, months: shown, cells
         {now.missingAmounts ? ` ${formatCount(now.missingAmounts)} ${now.missingAmounts === 1 ? "stay has" : "stays have"} no payout recorded yet.` : ""}
         {now.payoutMinor === null ? " The management fee or cleaning cost from your agreement is not set up yet, so there is no payout estimate." : ""}
       </Text>}
+      {/* Statements of other dates: where their figures are shown, and months only partly on one. */}
+      {coverNotes(cells, shown).map(note => <Text key={note} style={[ui.small, { color: p.muted }]}>{note}</Text>)}
       {now.basis === "empty" && <Text style={[ui.small, { color: p.muted }]}>Your figures appear here once your properties take bookings.</Text>}
     </View>
   );

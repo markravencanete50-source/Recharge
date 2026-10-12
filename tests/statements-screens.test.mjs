@@ -40,9 +40,10 @@ test('figures are checked before anything is prepared', () => {
   assert.match(screen, /disabled=\{stopped \|\| !!busyStatement\}/);
   assert.match(screen, /if \(!picked \|\| !propertyId \|\| stopped \|\| busyStatement\) return;/);
   // The prepare action is built from the very range that was checked.
-  assert.match(screen, /prepareAction\(propertyId, picked\)/);
+  // A held draft is prepared again with its own method (existing is the statement for the same dates).
+  assert.match(screen, /prepareAction\(propertyId, picked, existing\)/);
   // Once Prepare has finished the period is checked again, so the screen shows the stored state and not the figures from before.
-  assert.match(screen, /\.\.\.prepareAction\(propertyId, picked\), requestId: "" \}\)\.then\(\(\) => runCheck\(propertyId, picked\)\)/);
+  assert.match(screen, /\.\.\.prepareAction\(propertyId, picked, existing\), requestId: "" \}\)\.then\(\(\) => runCheck\(propertyId, picked\)\)/);
   assert.match(screen, /const key = propertyId && picked \? previewKey\(propertyId, picked\) : "";/);
   assert.match(screen, /check\.key === key/);
 });

@@ -229,7 +229,8 @@ export function AccountsStatements({ p, role, period, statements, loading, busyS
   function prepare() {
     if (!picked || !propertyId || stopped || busyStatement) return;
     // Once the statement is stored the period is checked again, so the screen shows what is held now and not the figures from before.
-    void statementAction(`prepare:${key}:${existing?.version ?? 0}`, { ...prepareAction(propertyId, picked), requestId: "" }).then(() => runCheck(propertyId, picked));
+    // Preparing a held draft again keeps its own method (prepareAction leaves the method out).
+    void statementAction(`prepare:${key}:${existing?.version ?? 0}`, { ...prepareAction(propertyId, picked, existing), requestId: "" }).then(() => runCheck(propertyId, picked));
   }
   function chooseCustom() {
     const month = monthRange(period);

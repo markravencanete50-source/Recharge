@@ -15,6 +15,11 @@
 --      else 0 and flagged for a platform stay.
 --    * a stay whose money is already in a statement of the other method (an old-style monthly statement) is
 --      counted for its nights only, so its money is never in two statements.
+--    * once an issued or paid statement has counted a stay, later statements take their share of it from the
+--      copy stored on that statement, never from the stay as it is now (see the compute function below), so a
+--      stay moved, extended or paid differently afterwards is never counted twice and never blocks again.
+--    * a split that would lose money is refused: a stay shared by nights on one statement and by check-in on
+--      another, or a period that a later statement relies on to count a stay in full.
 --    * changeovers: accepted, completed cleans in the period at the agreed value, or at the actual cost when
 --      the clean's current review (else the property's mode) says so.
 --    * the management fee on the payout after OTA fees, halves rounded away from zero; VAT on the rounded fee.
@@ -23,12 +28,16 @@
 --    * it is blocked while a stay in the period is unsettled, or a clean that cost more than agreed waits for
 --      a review on an agreed-fee property.
 -- 3. prepareStatement goes to private.workspace_prepare_statement_v2: a month ({period}) or a date range
---    ({from, to}, to not included), method 'nights' unless the request says 'check_in_month'. It refuses a
---    period overlapping another statement for the property, refuses while blocked (a clear message, the
---    reasons in the error detail) and, for the same period, prepares the same draft again (an issued
---    statement must be voided first).
+--    ({from, to}, to not included). A new statement shares stays by nights unless the request says
+--    'check_in_month'; preparing a draft again keeps its own method unless the request names another. It
+--    refuses a period overlapping another statement for the property, refuses while blocked (a clear message,
+--    the reasons in the error detail) and, for the same period, prepares the same draft again (an issued
+--    statement must be voided first). issueStatement works the draft out again and refuses if anything changed;
+--    voidStatement refuses while a later statement relies on this one to count a stay in full.
 -- 4. A stay, payout or clean is locked once an issued or paid statement covers it: any period it overlaps
---    (daterange(period_start, period_end) && daterange(check_in, check_out)).
+--    (daterange(period_start, period_end) && daterange(check_in, check_out)), never the whole month a
+--    custom period starts in.
+--    Bulk approval leaves a stay whose payout lines repeat an amount for a person to check (repeatedAmountSkipped).
 -- 5. private.workspace_statement_view is replaced: the period, method, gross, OTA fees, VAT, nights and
 --    occupancy. Finance staff see the whole detail; everyone else (owners) gets it without 'internal' (the
 --    flags, which can reveal cleaner costs), 'cleanCosts' (each clean's real cost and review note) and
@@ -114,14 +123,55 @@ create or replace function private.workspace_is_owner_stay(r private.workspace_r
  select r.channel='other' and lower(trim(coalesce(r.channel_reference,'')))='owner stay';
 $$;
 
+-- One stay entry of a stored statement (detail.stays[]), read safely: null unless it names a stay. counted and
+-- wholeStay default to true (an old-style monthly statement counted every stay it lists, in full). The stored
+-- copy of the stay's money: the stay* keys a version 2 statement keeps on every stay it counts, else, for an
+-- old-style entry (no counted key), the amount it counted (the settled payout, no OTA fee) and the stay's dates.
+create or replace function private.workspace_statement_entry(e jsonb) returns jsonb language sql immutable set search_path='' as $$
+ select case when jsonb_typeof(e)='object' and coalesce(e->>'reservationId','')~'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then
+  jsonb_build_object('reservationId',lower(e->>'reservationId'),
+   'counted',case when jsonb_typeof(e->'counted')='boolean' then (e->>'counted')::boolean else true end,
+   'wholeStay',case when jsonb_typeof(e->'wholeStay')='boolean' then (e->>'wholeStay')::boolean else true end)
+  ||case
+   when jsonb_typeof(e->'stayGrossMinor')='number' and jsonb_typeof(e->'stayOtaFeeMinor')='number' and jsonb_typeof(e->'staySettledMinor')='number'
+    and jsonb_typeof(e->'stayNights')='number' and coalesce(e->>'stayCheckIn','')~'^\d{4}-\d{2}-\d{2}$' and coalesce(e->>'stayCheckOut','')~'^\d{4}-\d{2}-\d{2}$' then
+    jsonb_build_object('grossMinor',e->'stayGrossMinor','otaFeeMinor',e->'stayOtaFeeMinor','settledMinor',e->'staySettledMinor','nights',e->'stayNights',
+     'checkIn',e->>'stayCheckIn','checkOut',e->>'stayCheckOut')
+   when not e ? 'counted' and jsonb_typeof(e->'amountMinor')='number' and coalesce(e->>'checkIn','')~'^\d{4}-\d{2}-\d{2}$' and coalesce(e->>'checkOut','')~'^\d{4}-\d{2}-\d{2}$' then
+    jsonb_build_object('grossMinor',e->'amountMinor','otaFeeMinor',0,'settledMinor',e->'amountMinor','nights',to_jsonb((e->>'checkOut')::date-(e->>'checkIn')::date),
+     'checkIn',e->>'checkIn','checkOut',e->>'checkOut')
+   else '{}'::jsonb end
+ end;
+$$;
+
 -- One property and one period, worked out without writing anything. Callers check access first.
--- own_statement: the statement being prepared again, so its own stays are not "already counted".
+-- own_statement: the statement being prepared (or checked) again, so its own stays are not "already counted".
+--
+-- The stored copy (money defects M1 and M2 of the 12 October review). The first issued or paid statement of a
+-- method that counts a stay keeps a copy of the stay's money on it: the whole stay's gross, OTA fee, settled
+-- amount, nights and dates (stayGrossMinor, stayOtaFeeMinor, staySettledMinor, stayNights, stayCheckIn,
+-- stayCheckOut, and wholeStay when this statement took all of it). From then on every statement of that method
+-- takes its share of the stay from the copy (prorated over the copy's nights, or in full where the copy's
+-- check-in falls by check-in), never from the stay as it is now, and never waits for the stay to settle again.
+-- So the parts of a stay across statements always add up to the copy taken at the first issue, however the stay
+-- or its payout changes later (moved, extended, cancelled, paid a different amount); a change is flagged
+-- (internal) stay_changed_after_statement:<id>, and the money left over shows in lateMoneyAfterStatement.
+-- The copy belongs to the property of the statement that holds it: a stay moved to another property counts
+-- there for its nights only. Drafts never hold a copy for others (issueStatement checks a draft again).
+--
+-- Splits that would lose money block the statement (defects M3 and M7):
+--  * stay_method_conflict: a statement of the other method put part of the stay on by nights, or (by nights)
+--    part of the stay would be taken while a statement counted by check-in covers its other nights.
+--  * stay_relied_on: another live statement left the stay to a statement of the other method counting it in
+--    full (its alreadyCounted), and after this one nothing would.
 create or replace function private.workspace_statement_compute(prop uuid,from_on date,to_on date,statement_method text,own_statement uuid default null) returns jsonb
  language plpgsql stable security definer set search_path='' as $$
 declare
  f private.workspace_property_financials;mode text;vat_on boolean;vat_rate integer;whole boolean;
- r private.workspace_reservations;pr jsonb;n integer;nip integer;bef integer;thr integer;in_money boolean;is_owner boolean;elsewhere boolean;
- settled bigint;fee bigint;gross bigint;share_gross bigint;share_fee bigint;took boolean;
+ r private.workspace_reservations;pr jsonb;n integer;nip integer;bef integer;thr integer;in_money boolean;is_owner boolean;live boolean;
+ settled bigint;fee bigint;gross bigint;share_gross bigint;share_fee bigint;took boolean;full_share boolean;
+ ids uuid[];own_ids uuid[];id_texts text[];held jsonb;relying jsonb;b jsonb;b_here boolean;w_in date;w_out date;w_n integer;
+ stay_gross bigint;stay_fee bigint;stay_settled bigint;other_full boolean;other_part boolean;entry jsonb;listed uuid[]:='{}';rid uuid;
  c record;st jsonb;agreed bigint;actual bigint;reviewed boolean;flagged boolean;basis text;charge bigint;
  x private.workspace_expenses;
  flags jsonb:='[]';blocked jsonb:='[]';stays jsonb:='[]';ota_lines jsonb:='[]';clean_lines jsonb:='[]';payable_lines jsonb:='[]';vat_lines jsonb:='[]';fee_lines jsonb;
@@ -137,27 +187,78 @@ begin
  mode:=coalesce(f.clean_charge_mode,'agreed_fee');vat_on:=coalesce(f.vat_on_fee,false);vat_rate:=private.workspace_vat_bps();
  available:=to_on-from_on;whole:=statement_method='check_in_month';
 
+ -- The stays: confirmed stays of the property touching the period, and stays whose stored copy (on an issued or
+ -- paid statement of this property and method) shares money into it, whatever has happened to them since.
+ ids:=array(
+  select y.id from private.workspace_reservations y where y.property_id=prop and y.status='confirmed' and y.check_in<to_on and y.check_out>from_on
+  union
+  select (q.v->>'reservationId')::uuid from private.workspace_owner_statements o
+   cross join lateral jsonb_array_elements(case when jsonb_typeof(o.detail->'stays')='array' then o.detail->'stays' else '[]'::jsonb end) e
+   cross join lateral (select private.workspace_statement_entry(e) v) q
+   where o.property_id=prop and o.status in ('issued','paid') and o.method=statement_method and o.id is distinct from own_statement
+    and (q.v->>'counted')::boolean and q.v ? 'grossMinor' and (q.v->>'checkIn')::date<to_on and (q.v->>'checkOut')::date>from_on);
+ -- The stays this statement counted before it is worked out again (another statement may rely on them).
+ own_ids:=array(select distinct (q.v->>'reservationId')::uuid from private.workspace_owner_statements o
+   cross join lateral jsonb_array_elements(case when jsonb_typeof(o.detail->'stays')='array' then o.detail->'stays' else '[]'::jsonb end) e
+   cross join lateral (select private.workspace_statement_entry(e) v) q
+   where o.id=own_statement and (q.v->>'counted')::boolean);
+ id_texts:=array(select u::text from unnest(ids||own_ids) u);
+ -- What every other live statement (of any property) did with those stays, first issued first.
+ held:=coalesce((select jsonb_agg(jsonb_build_object('statementId',o.id,'propertyId',o.property_id,'method',o.method,'issued',o.status in ('issued','paid'))||q.v
+   order by o.issued_at nulls last,o.period_start,o.id)
+  from private.workspace_owner_statements o
+  cross join lateral jsonb_array_elements(case when jsonb_typeof(o.detail->'stays')='array' then o.detail->'stays' else '[]'::jsonb end) e
+  cross join lateral (select private.workspace_statement_entry(e) v) q
+  where o.status<>'void' and o.id is distinct from own_statement and q.v->>'reservationId'=any(id_texts)),'[]'::jsonb);
+ -- Live statements that left one of those stays to a statement of the other method (their alreadyCounted).
+ relying:=coalesce((select jsonb_agg(jsonb_build_object('statementId',o.id,'method',o.method,'reservationId',lower(a)))
+  from private.workspace_owner_statements o
+  cross join lateral jsonb_array_elements_text(case when jsonb_typeof(o.detail->'alreadyCounted')='array' then o.detail->'alreadyCounted' else '[]'::jsonb end) a
+  where o.status<>'void' and o.id is distinct from own_statement and lower(a)=any(id_texts)),'[]'::jsonb);
+
  -- Stays, in check-in order (then id): nights inside the period, and the money share by the method.
- for r in select * from private.workspace_reservations y where y.property_id=prop and y.status='confirmed' and y.check_in<to_on and y.check_out>from_on order by y.check_in,y.id loop
+ for r in select * from private.workspace_reservations y where y.id=any(ids) order by y.check_in,y.id loop
   n:=r.check_out-r.check_in;
-  nip:=greatest(0,least(r.check_out,to_on)-greatest(r.check_in,from_on));
-  bef:=case when whole then 0 else least(greatest(from_on-r.check_in,0),n) end;
-  thr:=case when whole then n else least(greatest(to_on-r.check_in,0),n) end;
-  in_money:=case when whole then r.check_in>=from_on and r.check_in<to_on else thr>bef end;
+  live:=r.property_id=prop and r.status='confirmed';
+  nip:=case when live then greatest(0,least(r.check_out,to_on)-greatest(r.check_in,from_on)) else 0 end;
   booked:=booked+nip;
   is_owner:=private.workspace_is_owner_stay(r);
-  -- Money already in a statement of the other method (a monthly statement counts a stay where it checks in).
-  elsewhere:=not is_owner and in_money and exists(select 1 from private.workspace_owner_statements o
-   cross join lateral jsonb_array_elements(case when jsonb_typeof(o.detail->'stays')='array' then o.detail->'stays' else '[]'::jsonb end) e
-   where o.property_id=prop and o.status<>'void' and o.method<>statement_method and o.id is distinct from own_statement
-    and e->>'reservationId'=r.id::text and coalesce((e->>'counted')::boolean,true));
+  -- The stored copy: the first issued or paid statement of this method that counted the stay.
+  b:=(select h.v from jsonb_array_elements(held) with ordinality h(v,k)
+   where h.v->>'reservationId'=r.id::text and (h.v->>'issued')::boolean and h.v->>'method'=statement_method and (h.v->>'counted')::boolean and h.v ? 'grossMinor'
+   order by h.k limit 1);
+  b_here:=b is not null and (b->>'propertyId')::uuid=prop;
+  -- The money window: the copy's dates and nights once a copy holds the stay, else the stay's own.
+  if b_here then w_in:=(b->>'checkIn')::date;w_out:=(b->>'checkOut')::date;w_n:=(b->>'nights')::integer;
+  else w_in:=r.check_in;w_out:=r.check_out;w_n:=n;end if;
+  bef:=case when whole then 0 else least(greatest(from_on-w_in,0),w_n) end;
+  thr:=case when whole then w_n else least(greatest(to_on-w_in,0),w_n) end;
+  in_money:=case when whole then w_in>=from_on and w_in<to_on else thr>bef end;
+  full_share:=whole or (bef=0 and thr=w_n);
+  -- Money already on a statement of the other method: in full (counted, nights only here), or part of it by nights.
+  other_full:=exists(select 1 from jsonb_array_elements(held) h where h->>'reservationId'=r.id::text and h->>'method'<>statement_method and (h->>'counted')::boolean and (h->>'wholeStay')::boolean);
+  other_part:=exists(select 1 from jsonb_array_elements(held) h where h->>'reservationId'=r.id::text and h->>'method'<>statement_method and (h->>'counted')::boolean and not (h->>'wholeStay')::boolean);
   if r.channel in ('airbnb','booking_com','vrbo') then
    pr:=private.workspace_payout_row(r);settled:=(pr->>'settledMinor')::bigint;fee:=(pr->>'otaFeesMinor')::bigint;
   else settled:=r.payout_minor;fee:=null;
   end if;
   if is_owner and settled is not null and settled<>0 then flags:=flags||to_jsonb('owner_stay_amount_ignored:'||r.id);end if;
-  share_gross:=0;share_fee:=0;took:=false;
-  if elsewhere then already:=already||to_jsonb(r.id::text);
+  share_gross:=0;share_fee:=0;took:=false;stay_gross:=null;stay_fee:=null;stay_settled:=null;
+  if other_part then blocked:=blocked||to_jsonb('stay_method_conflict:'||r.id);
+  elsif other_full and in_money and not (is_owner and b is null) then already:=already||to_jsonb(r.id::text);
+  elsif b is not null then
+   -- From the stored copy, never from the stay as it is now.
+   if b_here and in_money then
+    stay_gross:=(b->>'grossMinor')::bigint;stay_fee:=(b->>'otaFeeMinor')::bigint;stay_settled:=(b->>'settledMinor')::bigint;
+    if full_share then share_gross:=stay_gross;share_fee:=stay_fee;
+    else share_gross:=private.workspace_prorate(stay_gross,bef,thr,w_n);share_fee:=private.workspace_prorate(stay_fee,bef,thr,w_n);
+    end if;
+    took:=true;
+   end if;
+   if not b_here or not live or r.check_in<>(b->>'checkIn')::date or r.check_out<>(b->>'checkOut')::date
+    or settled is distinct from (b->>'settledMinor')::bigint or (settled is not null and coalesce(fee,0)<>(b->>'otaFeeMinor')::bigint) then
+    flags:=flags||to_jsonb('stay_changed_after_statement:'||r.id);
+   end if;
   elsif in_money and not is_owner then
    if settled is null then blocked:=blocked||to_jsonb('stay_unsettled:'||r.id);
    else
@@ -166,22 +267,50 @@ begin
      if r.channel in ('airbnb','booking_com','vrbo') then flags:=flags||to_jsonb('ota_fee_unknown:'||r.id);end if;
     end if;
     gross:=settled+fee;
-    if whole or (bef=0 and thr=n) then share_gross:=gross;share_fee:=fee;
-    else share_gross:=private.workspace_prorate(gross,bef,thr,n);share_fee:=private.workspace_prorate(fee,bef,thr,n);
+    if full_share then share_gross:=gross;share_fee:=fee;
+    else share_gross:=private.workspace_prorate(gross,bef,thr,w_n);share_fee:=private.workspace_prorate(fee,bef,thr,w_n);
     end if;
+    stay_gross:=gross;stay_fee:=fee;stay_settled:=settled;
     took:=true;
    end if;
+  end if;
+  -- By nights, part of a stay whose other nights sit on a statement counted by check-in would never be paid.
+  if statement_method='nights' and took and not full_share and exists(select 1 from private.workspace_owner_statements o where o.property_id=prop and o.status<>'void'
+    and o.id is distinct from own_statement and o.method='check_in_month' and daterange(o.period_start,o.period_end) && daterange(w_in,w_out)) then
+   blocked:=blocked||to_jsonb('stay_method_conflict:'||r.id);
+  end if;
+  -- A statement that left the stay to one of the other method counting it in full must still have one.
+  if exists(select 1 from jsonb_array_elements(relying) q where q->>'reservationId'=r.id::text
+    and not ((statement_method<>q->>'method' and took and full_share)
+     or exists(select 1 from jsonb_array_elements(held) h where h->>'reservationId'=r.id::text and h->>'statementId'<>q->>'statementId'
+      and h->>'method'<>q->>'method' and (h->>'counted')::boolean and (h->>'wholeStay')::boolean))) then
+   blocked:=blocked||to_jsonb('stay_relied_on:'||r.id);
   end if;
   gross_total:=gross_total+share_gross;
   if share_fee<>0 then
    ota_lines:=ota_lines||jsonb_build_array(jsonb_build_object('kind','ota_fee','date',r.check_in,'label',private.workspace_channel_label(r.channel)||' fees','amountMinor',share_fee,'refId',r.id));
    ota_total:=ota_total+share_fee;
   end if;
-  stays:=stays||jsonb_build_array(jsonb_build_object('reservationId',r.id,'reference',r.reference,'channel',r.channel,'channelReference',r.channel_reference,
+  entry:=jsonb_build_object('reservationId',r.id,'reference',r.reference,'channel',r.channel,'channelReference',r.channel_reference,
    'checkIn',r.check_in,'checkOut',r.check_out,'guests',r.guests,'nights',n,'nightsInPeriod',nip,'ownerStay',is_owner,'counted',took,
-   'grossMinor',share_gross,'otaFeeMinor',share_fee,'payoutMinor',share_gross-share_fee,'amountMinor',share_gross-share_fee));
+   'grossMinor',share_gross,'otaFeeMinor',share_fee,'payoutMinor',share_gross-share_fee,'amountMinor',share_gross-share_fee);
+  -- The copy of the whole stay's money this share was taken from (carried on unchanged from the first copy).
+  if took then
+   entry:=entry||jsonb_build_object('stayGrossMinor',stay_gross,'stayOtaFeeMinor',stay_fee,'staySettledMinor',stay_settled,'stayNights',w_n,
+    'stayCheckIn',w_in,'stayCheckOut',w_out,'wholeStay',full_share);
+  end if;
+  stays:=stays||jsonb_build_array(entry);
+  listed:=listed||r.id;
  end loop;
  if booked>available then flags:=flags||to_jsonb('nights_exceed_period'::text);end if;
+ -- A stay this statement used to count in full, no longer in its period, that another statement still relies on.
+ for rid in select y from unnest(own_ids) y where not y=any(listed) order by y::text loop
+  if exists(select 1 from jsonb_array_elements(relying) q where q->>'reservationId'=rid::text
+    and not exists(select 1 from jsonb_array_elements(held) h where h->>'reservationId'=rid::text and h->>'statementId'<>q->>'statementId'
+     and h->>'method'<>q->>'method' and (h->>'counted')::boolean and (h->>'wholeStay')::boolean)) then
+   blocked:=blocked||to_jsonb('stay_relied_on:'||rid);
+  end if;
+ end loop;
 
  -- Changeovers: billable cleans in the period, in date order (then id).
  for c in select w.id,w.due_on from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id
@@ -241,8 +370,8 @@ end $$;
 
 -- 3. Preparing a statement. Called by workspace_finance_action after its access and receipt checks.
 create or replace function private.workspace_prepare_statement_v2(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
-declare prop uuid:=(input->>'propertyId')::uuid;from_on date;to_on date;statement_method text:='nights';s private.workspace_owner_statements;c jsonb;statement_detail jsonb;
- unsettled integer;unreviewed integer;
+declare prop uuid:=(input->>'propertyId')::uuid;from_on date;to_on date;statement_method text;asked_method text;s private.workspace_owner_statements;c jsonb;statement_detail jsonb;
+ unsettled integer;unreviewed integer;relied integer;conflicts integer;
 begin
  perform private.workspace_json_keys(input,array['action','requestId','propertyId','period','from','to','method']);
  if input ? 'period' then
@@ -258,12 +387,15 @@ begin
  end if;
  if input ? 'method' and jsonb_typeof(input->'method')<>'null' then
   if coalesce(input->>'method','') not in ('nights','check_in_month') then raise exception 'Choose how stays are counted: by nights or by check-in' using errcode='22023';end if;
-  statement_method:=input->>'method';
+  asked_method:=input->>'method';
  end if;
  -- One statement change per property at a time, so the overlap check is exact.
  perform pg_advisory_xact_lock(hashtextextended('workspace_owner_statement:'||prop::text,77));
  select * into s from private.workspace_owner_statements where property_id=prop and status<>'void' and period_start=from_on and period_end=to_on for update;
  if found and s.status<>'draft' then raise exception 'This statement has been issued. Void it before preparing again' using errcode='42501';end if;
+ -- Preparing a draft again keeps the method it was prepared with (an old monthly draft counts stays by check-in)
+ -- unless the request asks for another one; a new statement shares stays by nights unless asked otherwise.
+ statement_method:=coalesce(asked_method,s.method,'nights');
  if exists(select 1 from private.workspace_owner_statements o where o.property_id=prop and o.status<>'void' and o.id is distinct from s.id
    and daterange(o.period_start,o.period_end) && daterange(from_on,to_on)) then
   raise exception 'Another statement already covers part of these dates. Void it or choose other dates' using errcode='22023';
@@ -272,7 +404,13 @@ begin
  if (c->>'blocked')::boolean then
   unsettled:=(select count(*) from jsonb_array_elements_text(c->'blockedReasons') b where b like 'stay\_unsettled:%');
   unreviewed:=(select count(*) from jsonb_array_elements_text(c->'blockedReasons') b where b like 'clean\_unreviewed:%');
-  raise exception '%',case when unsettled>0 and unreviewed>0 then 'Reconcile every stay in the period and review the cleans that cost more than agreed first'
+  relied:=(select count(*) from jsonb_array_elements_text(c->'blockedReasons') b where b like 'stay\_relied\_on:%');
+  conflicts:=(select count(*) from jsonb_array_elements_text(c->'blockedReasons') b where b like 'stay\_method\_conflict:%');
+  -- A split that would lose money comes first: no amount of reconciling fixes it.
+  raise exception '%',case
+    when relied>0 then 'A statement prepared later leaves a stay to this period to count in full. Void the later statement first'
+    when conflicts>0 then 'A stay in this period is on another statement counted the other way (by nights or by check-in). Prepare this period the same way, or void that statement first'
+    when unsettled>0 and unreviewed>0 then 'Reconcile every stay in the period and review the cleans that cost more than agreed first'
     when unsettled>0 then 'Reconcile every stay in the period first' else 'Review the cleans that cost more than agreed first' end
    using errcode='22023',detail=(c->'blockedReasons')::text;
  end if;
@@ -318,27 +456,87 @@ create or replace function private.workspace_statement_view(s private.workspace_
 $$;
 
 -- 6. 'statementPreview' (through public.workspace_finance_report): one property, from_on to to_on (to_on not
--- included, as prepareStatement), filters {method}. The figures, lines and reasons it would be blocked.
+-- included, as prepareStatement), filters {method}. The figures, lines and reasons it would be blocked. Without a
+-- method it uses the one prepareStatement would: the method of the statement already held for these dates, else
+-- nights, so the figures checked are the figures prepared.
+-- lateMoneyAfterStatement (internal, defect X3): the property's stays whose money has changed since an issued or
+-- paid statement stored its copy (a later adjustment line, a resolution payout, a payout that arrived different
+-- after it was approved, a direct stay's amount changed): the payout row's settled amount now differs from the
+-- copy's. That money is on no statement; nothing moves it onto one yet. workspace_payout_row already shows the
+-- difference (state 'different' with receivedMinor against expectedMinor). lateMoneyAfterStatementCount counts them.
 create or replace function private.workspace_report_statement_preview(target_property uuid,target_id uuid,from_on date,to_on date,filters jsonb) returns jsonb language plpgsql stable security definer set search_path='' as $$
-declare statement_method text:='nights';own uuid;
+declare statement_method text;own private.workspace_owner_statements;late jsonb;
 begin
  if target_property is null then raise exception 'Choose a property' using errcode='22023';end if;
  if from_on is null or to_on is null then raise exception 'Choose the statement dates' using errcode='22023';end if;
  if jsonb_typeof(filters)='object' then
   if exists(select 1 from jsonb_object_keys(filters) k where k not in ('method')) then raise exception 'Invalid report filters' using errcode='22023';end if;
-  statement_method:=coalesce(filters->>'method','nights');
+  statement_method:=filters->>'method';
  end if;
- own:=(select o.id from private.workspace_owner_statements o where o.property_id=target_property and o.status<>'void' and o.period_start=from_on and o.period_end=to_on limit 1);
- return private.workspace_statement_compute(target_property,from_on,to_on,statement_method,own)||jsonb_build_object('section','statementPreview','propertyId',target_property,
+ select * into own from private.workspace_owner_statements o where o.property_id=target_property and o.status<>'void' and o.period_start=from_on and o.period_end=to_on limit 1;
+ statement_method:=coalesce(statement_method,own.method,'nights');
+ late:=coalesce((select jsonb_agg(distinct q.v->>'reservationId') from private.workspace_owner_statements o
+   cross join lateral jsonb_array_elements(case when jsonb_typeof(o.detail->'stays')='array' then o.detail->'stays' else '[]'::jsonb end) e
+   cross join lateral (select private.workspace_statement_entry(e) v) q
+   join private.workspace_reservations r on r.id::text=q.v->>'reservationId'
+   where o.property_id=target_property and o.status in ('issued','paid') and (q.v->>'counted')::boolean and q.v ? 'settledMinor'
+    and (case when r.channel in ('airbnb','booking_com','vrbo') then (private.workspace_payout_row(r)->>'settledMinor')::bigint else r.payout_minor end)
+     is distinct from (q.v->>'settledMinor')::bigint),'[]'::jsonb);
+ return private.workspace_statement_compute(target_property,from_on,to_on,statement_method,own.id)||jsonb_build_object('section','statementPreview','propertyId',target_property,
   'statements',(select coalesce(jsonb_agg(private.workspace_statement_view(o) order by o.period_start,o.id),'[]'::jsonb) from private.workspace_owner_statements o
-   where o.property_id=target_property and o.status<>'void' and daterange(o.period_start,o.period_end) && daterange(from_on,to_on)));
+   where o.property_id=target_property and o.status<>'void' and daterange(o.period_start,o.period_end) && daterange(from_on,to_on)),
+  'lateMoneyAfterStatement',late,'lateMoneyAfterStatementCount',jsonb_array_length(late));
+end $$;
+
+-- Issuing checks the draft again (defect X1): the same compute must still give the same figures, line by line and
+-- stay by stay (the shares and the stored copies a later statement will take its share from), and must not be
+-- blocked. Otherwise the statement has to be prepared again first.
+create or replace function private.workspace_statement_money(d jsonb) returns jsonb language sql immutable set search_path='' as $$
+ select jsonb_build_object(
+  'stays',coalesce((select jsonb_agg(jsonb_build_array(e->>'reservationId',e->'counted',e->'nightsInPeriod',e->'grossMinor',e->'otaFeeMinor',e->'stayGrossMinor',e->'stayOtaFeeMinor',
+     e->'staySettledMinor',e->'stayNights',e->>'stayCheckIn',e->>'stayCheckOut',e->'wholeStay') order by e->>'reservationId')
+   from jsonb_array_elements(case when jsonb_typeof(d->'stays')='array' then d->'stays' else '[]'::jsonb end) e),'[]'::jsonb),
+  'lines',coalesce((select jsonb_agg(jsonb_build_array(l->>'kind',l->>'refId',l->'amountMinor') order by k)
+   from jsonb_array_elements(case when jsonb_typeof(d->'lines')='array' then d->'lines' else '[]'::jsonb end) with ordinality t(l,k)),'[]'::jsonb),
+  'alreadyCounted',coalesce(d->'alreadyCounted','[]'::jsonb));
+$$;
+create or replace function private.workspace_statement_issue_check(s private.workspace_owner_statements) returns void language plpgsql stable security definer set search_path='' as $$
+declare c jsonb;
+begin
+ c:=private.workspace_statement_compute(s.property_id,s.period_start,s.period_end,s.method,s.id);
+ if (c->>'blocked')::boolean
+  or (s.gross_minor,s.ota_fees_minor,s.revenue_minor,s.cleaning_count,s.cleaning_minor,s.expenses_minor,s.fee_bps,s.fee_minor,s.vat_bps,s.vat_minor,s.payout_minor,s.nights_booked,s.nights_available)
+   is distinct from ((c->>'grossMinor')::bigint,(c->>'otaFeesMinor')::bigint,(c->>'revenueMinor')::bigint,(c->>'cleaningCount')::integer,(c->>'changeoversMinor')::bigint,(c->>'payablesMinor')::bigint,
+    (c->'terms'->>'managementFeeBps')::integer,(c->>'feeMinor')::bigint,(c->'terms'->>'vatRateBps')::integer,(c->>'vatMinor')::bigint,(c->>'payoutMinor')::bigint,(c->>'nightsBooked')::integer,(c->>'nightsAvailable')::integer)
+  or private.workspace_statement_money(s.detail)<>private.workspace_statement_money(c) then
+  raise exception 'Figures changed, prepare the statement again' using errcode='22023',detail=(c->'blockedReasons')::text;
+ end if;
+end $$;
+-- Voiding a statement that another live statement relies on to count a stay in full (its alreadyCounted) would
+-- leave that stay's money on no statement (defect M3): the later statement has to be voided first, unless a third
+-- statement still counts the stay in full the other way.
+create or replace function private.workspace_statement_void_check(s private.workspace_owner_statements) returns void language plpgsql stable security definer set search_path='' as $$
+begin
+ if exists(select 1 from private.workspace_owner_statements n
+   cross join lateral jsonb_array_elements_text(case when jsonb_typeof(n.detail->'alreadyCounted')='array' then n.detail->'alreadyCounted' else '[]'::jsonb end) a
+   cross join lateral jsonb_array_elements(case when jsonb_typeof(s.detail->'stays')='array' then s.detail->'stays' else '[]'::jsonb end) e
+   cross join lateral (select private.workspace_statement_entry(e) v) q
+   where n.status<>'void' and n.id<>s.id and n.method<>s.method and lower(a)=q.v->>'reservationId' and (q.v->>'counted')::boolean and (q.v->>'wholeStay')::boolean
+    and not exists(select 1 from private.workspace_owner_statements w
+     cross join lateral jsonb_array_elements(case when jsonb_typeof(w.detail->'stays')='array' then w.detail->'stays' else '[]'::jsonb end) e2
+     cross join lateral (select private.workspace_statement_entry(e2) v) q2
+     where w.status<>'void' and w.id<>s.id and w.id<>n.id and w.method<>n.method and q2.v->>'reservationId'=q.v->>'reservationId'
+      and (q2.v->>'counted')::boolean and (q2.v->>'wholeStay')::boolean)) then
+  raise exception 'A statement prepared later leaves a stay to this one to count in full. Void the later statement first' using errcode='22023';
+ end if;
 end $$;
 
 revoke all on function private.workspace_floor_div(numeric,numeric),private.workspace_prorate(bigint,integer,integer,integer),private.workspace_percent_of_minor(bigint,integer),
  private.workspace_percent_label(integer),private.workspace_channel_label(text),private.workspace_statement_fee_base(),private.workspace_statement_waits_for_clean_review(),
  private.workspace_is_owner_stay(private.workspace_reservations),private.workspace_statement_compute(uuid,date,date,text,uuid),private.workspace_statement_date(jsonb,text),
  private.workspace_prepare_statement_v2(jsonb),private.workspace_statement_view(private.workspace_owner_statements),
- private.workspace_report_statement_preview(uuid,uuid,date,date,jsonb) from public,anon,authenticated;
+ private.workspace_report_statement_preview(uuid,uuid,date,date,jsonb),private.workspace_statement_entry(jsonb),private.workspace_statement_money(jsonb),
+ private.workspace_statement_issue_check(private.workspace_owner_statements),private.workspace_statement_void_check(private.workspace_owner_statements) from public,anon,authenticated;
 
 -- 7. Patches to the live finance functions. Each anchor must occur exactly once; the marker says the patch is
 -- already in place. A missing or repeated anchor stops the migration.
@@ -369,6 +567,33 @@ declare
    $q$elsif exists(select 1 from private.workspace_owner_statements where property_id=r.property_id and status in ('issued','paid') and period_start=date_trunc('month',r.check_in)::date) then reason:='locked';$q$,
    $q$elsif private.workspace_payout_stay_locked(r) then reason:='locked';$q$,
    $q$workspace_payout_stay_locked(r) then reason:='locked'$q$],
+  -- Issuing checks the draft again: the figures must not have changed since it was prepared (X1).
+  ['private.workspace_finance_action(jsonb)',
+   $q$if s.status<>'draft' then raise exception 'Only a draft statement can be issued' using errcode='42501';end if;$q$,
+   $q$if s.status<>'draft' then raise exception 'Only a draft statement can be issued' using errcode='42501';end if;
+   perform private.workspace_statement_issue_check(s);$q$,
+   $q$private.workspace_statement_issue_check(s)$q$],
+  -- Voiding refuses while a later statement relies on this one to count a stay in full.
+  ['private.workspace_finance_action(jsonb)',
+   $q$if s.status='issued' and actor not in ('admin','super_admin') then raise exception 'Management must void an issued statement' using errcode='42501';end if;$q$,
+   $q$if s.status='issued' and actor not in ('admin','super_admin') then raise exception 'Management must void an issued statement' using errcode='42501';end if;
+   perform private.workspace_statement_void_check(s);$q$,
+   $q$private.workspace_statement_void_check(s)$q$],
+  -- Bulk approval never agrees a stay whose payout lines repeat an amount (often an overlapping report, so the
+  -- amount received may be doubled): it is left as 'different' to check one by one, and counted (M6).
+  ['private.workspace_agree_payouts(jsonb)',
+   $q$include_different boolean:=false;$q$,
+   $q$include_different boolean:=false;repeated integer:=0;$q$,
+   $q$repeated integer:=0;$q$],
+  ['private.workspace_agree_payouts(jsonb)',
+   $q$elsif st='different' and not include_different then reason:='different';$q$,
+   $q$elsif st='different' and not include_different then reason:='different';
+   elsif st='different' and payout->>'repeatedAmount' is not null then reason:='different';repeated:=repeated+1;$q$,
+   $q$payout->>'repeatedAmount' is not null then reason:='different';repeated:=repeated+1;$q$],
+  ['private.workspace_agree_payouts(jsonb)',
+   $q$'atReceived',at_received,'skipped',skipped);$q$,
+   $q$'atReceived',at_received,'skipped',skipped,'repeatedAmountSkipped',repeated);$q$,
+   $q$'repeatedAmountSkipped',repeated$q$],
   -- The statements list: every statement overlapping the month, whatever its dates.
   ['private.workspace_finance_read(text,uuid,text,uuid,text)',
    $q$'unsettledPayouts',(select count(*) from private.workspace_reservations r where r.property_id=p.id$q$,

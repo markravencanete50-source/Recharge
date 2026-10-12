@@ -330,7 +330,8 @@ export function readPayoutLines(csv: string, channel: PayoutChannel): PayoutLine
         const value = first(row, field);
         if (!value) return null;
         const minor = amount(value, code);
-        return fee ? Math.abs(minor) : minor;
+        // A fee takes the sign of its own line whichever way the platform writes it: positive on a sale, negative on a refund, so refunded fees cancel the original.
+        return fee ? (amountMinor < 0 ? -Math.abs(minor) : Math.abs(minor)) : minor;
       };
       const date = first(row, "date")?.value ?? "";
       const lineType = first(row, "type")?.value.replace(/\s+/g, " ").slice(0, 60) ?? null;

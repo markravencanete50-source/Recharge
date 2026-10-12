@@ -268,3 +268,15 @@ test("percentOfMinor rounds halves away from zero on whole pence", () => {
   assert.throws(() => percentOfMinor(1.5, 1500), RangeError);
   assert.throws(() => percentOfMinor(100, 12.5), RangeError);
 });
+
+test("a refunded fee takes the sign of its refund line, whichever way the platform writes the fee", () => {
+  // Booking.com: a sale (net 85, gross 100, commission -15 written as a deduction) and its refund (net -42.50, gross -50, commission +7.50).
+  const signed = readPayoutLines("Reservation number,Net,Gross,Commission\n111,85.00,100.00,-15.00\n111,-42.50,-50.00,7.50\n", "booking_com");
+  assert.deepEqual(signed.lines.map(l => [l.amountMinor, l.grossMinor, l.commissionMinor]), [[8500, 10000, 1500], [-4250, -5000, -750]]);
+  // The same file with fees written as positive amounts on both lines gives the same result.
+  const plain = readPayoutLines("Reservation number,Net,Gross,Commission\n111,85.00,100.00,15.00\n111,-42.50,-50.00,7.50\n", "booking_com");
+  assert.deepEqual(plain.lines.map(l => l.commissionMinor), [1500, -750]);
+  // Over the stay the fee nets to 750 and the gross to 5000, so the statement shows the right fee.
+  assert.equal(signed.lines.reduce((s, l) => s + l.commissionMinor, 0), 750);
+  assert.equal(signed.lines.reduce((s, l) => s + l.grossMinor, 0), 5000);
+});
