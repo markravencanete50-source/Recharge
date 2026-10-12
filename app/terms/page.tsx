@@ -42,6 +42,7 @@ export default function Terms() {
           <li>try to reach data or tools you have not been given, test or get round our security, or overload, copy or scrape the service;</li>
           <li>use the messages to harass or mislead anyone.</li>
         </ul>
+        <p>Objectionable content is not allowed in Messages or anywhere else in Recharge. Anyone can report a message from its menu and block another person, and an administrator reviews every report promptly and removes anything that breaks these terms. We remove people who send abusive or unlawful content, and may pause or close their account straight away.</p>
       </section>
 
       <section>

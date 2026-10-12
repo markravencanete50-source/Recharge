@@ -501,6 +501,57 @@ database tool can run it, and it is safe to run more than once.
   shared rules `lib/team-feedback.ts`; tests `tests/team-feedback-database.test.mjs`.
 - Demo mode shows it once the demo data is recorded again.
 
+## Report a message, block a person, Reported messages (12 October 2026)
+
+For Apple App Review guideline 1.2 and Google Play's user-generated-content policy: a way to
+report objectionable content, a way to block abusive users, and timely action on reports.
+
+- **Report** (any conversation, from the `⋯` beside a message, or the `⋯` in the long-press
+  reaction bar): Offensive or abusive, Harassment, Inappropriate photo or video, Spam, Something
+  else, plus an optional note (500 characters). Not your own message; one open report per person
+  per message; 10 an hour and 30 a day. The reporter sees "Thanks — an admin will review this."
+  and is offered "Block". Every active admin and super admin is notified (`chat.reported`,
+  copy in `lib/notice-copy.ts`). Reporting is a chat action (`reportMessage`, with a request id).
+- **Block** (`blockUser` / `unblockUser`, read section `blocks`): from a message's menu, the
+  people list of a conversation, or undone from Profile & preferences → Blocked people. Anyone
+  can block anyone they share a conversation with (team members can block any team member; owners
+  can block the team members who answer them, shown as "Recharge · Fiona").
+  **Effect: for the blocker only.** The database withholds the blocked person's messages (no
+  words, photos, videos or reactions are sent; the app shows "Message from someone you blocked"
+  with an Unblock option), they are not unread and send no notification, and their photos cannot
+  be opened by the blocker. Neither side can start a *new* direct conversation with the other
+  (an existing one carries on; the blocker just never sees it). Blocking is silent. **Why this
+  shape:** in groups, team channels, property and job chats and owner conversations a block must
+  never stop someone doing their job or reaching the people they work with, so it is only ever
+  a filter on the blocker's own view. Work is handed out through jobs and notices, not chat, so
+  blocking an admin cannot stop work instructions; anyone who really must be kept out is dealt
+  with by an admin (Access control → block the account). Event lines ("added Alex") are never hidden.
+- **Reported messages** (admins and super admins; left panel → Management, Settings →
+  Reported messages, search): Open, Removed, Dismissed, All, newest first. Each report shows the
+  message (or "1 photo"), who wrote it, who reported it and why, how many people reported it and
+  how often its sender has been reported. **Remove message** hides it for everyone (including
+  its sender), replaced by "Removed by an admin", stops its reactions, and stops its photos and
+  videos being opened; the route (`decideChatReport` in `lib/chat-media-server.ts`) also deletes
+  the stored files, so signed links already handed out stop working too. **Dismiss report**
+  leaves it. Either decides every open report on that message together. An admin cannot decide a
+  report about their own message. While a report is open, admins may open its photos to judge it.
+  Removed text is kept in the database (hidden) as evidence.
+- Migration `20261012010000_chat_reports_blocks.sql` (`private.chat_reports`, `private.chat_blocks`,
+  `chat_messages.removed_at/removed_by`; chat actions `reportMessage`, `blockUser`, `unblockUser`;
+  chat read section `blocks`; team read section `chatReports`, team action `decideChatReport`).
+  Existing functions are patched by anchor and the migration is safe to run twice. Screens:
+  `mobile/src/ChatSafety.tsx`, `BlockedPeople.tsx`, `LiveModeration.tsx` (and `LiveChat.tsx`,
+  `ChatParts.tsx`); shared rules `lib/chat-moderation.ts`; tests
+  `tests/chat-moderation-database.test.mjs` and `tests/chat-moderation-policy.test.mjs`.
+- Terms of use now say objectionable content is not allowed, reports are reviewed and abusive
+  people are removed. The privacy page was not changed (it does not list reports; they hold the
+  reporter's name, the reason and an optional note, and are kept as business records).
+- Not done: telling the reporter or the sender what was decided; showing the messages around a
+  reported one; a reports badge in the navigation (admins get the notice and the Open count);
+  a seeded report in the demo business (Demo says "This part isn't in the demo business" until the
+  demo data is recorded again; reporting and blocking are refused in Demo like every other save). **Admins should check Reported messages at least daily**; Apple expects action
+  within 24 hours. Not yet applied to the live database.
+
 ## Runtime requirements
 
 - **Supabase project** `brixfalrrmzqoioggvfx`. Apply `supabase/migrations/` in order and never

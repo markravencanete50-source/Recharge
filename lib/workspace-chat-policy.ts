@@ -12,7 +12,13 @@ export const chatReadSchema = z.discriminatedUnion('section', [
   z.object({ section: z.literal('savedReplies') }).strict(),
   // Who is in a conversation (a group's members, a channel's team), with photos and who is online.
   z.object({ section: z.literal('members'), conversationId: uuid }).strict(),
+  // The people you have blocked.
+  z.object({ section: z.literal('blocks') }).strict(),
 ]);
+// Reporting a message: why, and an optional note for the admins who review it.
+export const REPORT_REASONS = ['offensive', 'harassment', 'media', 'spam', 'other'] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+export const MAX_REPORT_NOTE = 500;
 // Reactions, one per person per message; tapping yours again takes it off.
 export const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🎉', '✅'] as const;
 // Photos and a video in a message: up to 5 photos (15 MB each) and 1 video (50 MB).
@@ -54,6 +60,11 @@ export const chatActionSchema = z.discriminatedUnion('action', [
   // The app is open (every minute while in view), for who is online.
   z.object({ action: z.literal('heartbeat') }).strict(),
   z.object({ action: z.literal('react'), messageId: uuid, emoji: z.enum(REACTIONS) }).strict(),
+  // Safety: report a message that is not yours (one open report per message), and block or
+  // unblock a person. Blocking hides their messages from you; it changes nothing for anyone else.
+  z.object({ action: z.literal('reportMessage'), requestId: uuid, messageId: uuid, reason: z.enum(REPORT_REASONS), note: z.string().trim().max(MAX_REPORT_NOTE, `Keep the note to ${MAX_REPORT_NOTE} characters`).optional() }).strict(),
+  z.object({ action: z.literal('blockUser'), userId: uuid }).strict(),
+  z.object({ action: z.literal('unblockUser'), userId: uuid }).strict(),
   // One-off upload links for photos and a video, sent straight to storage; discardFiles lets go of
   // ones taken out before sending.
   z.object({ action: z.literal('prepareFiles'), conversationId: uuid, files: z.array(chatFileSchema).min(1).max(MAX_CHAT_PHOTOS + MAX_CHAT_VIDEOS) }).strict(),
@@ -98,7 +109,9 @@ export const messageSchema = z.object({ id: uuid, body: z.string(), at: z.string
   fromOwner: z.boolean().nullish().transform(v => v ?? false),
   authorId: uuid.optional(), authorPhoto: z.string().nullable().default(null),
   // An "event" is a line about the group ("added Alex"), shown in the middle.
-  kind: z.enum(['text', 'event']).default('text'), attachments: z.array(attachmentSchema).default([]), reactions: z.array(reactionSchema).default([]) });
+  kind: z.enum(['text', 'event']).default('text'), attachments: z.array(attachmentSchema).default([]), reactions: z.array(reactionSchema).default([]),
+  // Removed by an admin (for everyone), or written by someone you blocked (for you). Either way the words, photos and reactions are withheld.
+  removed: z.boolean().default(false), blocked: z.boolean().default(false) });
 export type ChatMessage = z.infer<typeof messageSchema>;
 export const threadSchema = z.object({ conversation: conversationSchema, messages: z.array(messageSchema) });
 const personSchema = z.object({ userId: uuid, fullName: z.string(), role: z.string(), photo: z.string().nullable().default(null), seenAt: seenSchema });
@@ -106,6 +119,11 @@ export const chatPeopleSchema = z.object({ team: z.array(personSchema), owners: 
 export const membersSchema = z.object({ kind: z.enum(['direct', 'group', 'owner']), department: channelSchema.nullable(), title: z.string().nullable(), canAdd: z.boolean(), canRemove: z.boolean(),
   members: z.array(personSchema.extend({ about: z.string().default(''), you: z.boolean(), creator: z.boolean() })) });
 export type ChatMembers = z.infer<typeof membersSchema>;
+// The people you have blocked, newest first.
+export const blockedPersonSchema = z.object({ userId: uuid, fullName: z.string(), role: z.string(), photo: z.string().nullable().default(null), blockedAt: z.string() });
+export type BlockedPerson = z.infer<typeof blockedPersonSchema>;
+export const blockedPeopleSchema = z.array(blockedPersonSchema);
+export const reportedSchema = z.object({ reported: z.literal(true), reportId: uuid, authorId: uuid, blocked: z.boolean() });
 export const preparedFilesSchema = z.object({ files: z.array(z.object({ id: uuid, path: z.string(), mime: z.string(), uploadUrl: z.string().url() })) });
 export const chatFileLinksSchema = z.record(z.string(), z.object({ url: z.string().url(), mime: z.string(), name: z.string(), kind: z.enum(['image', 'video']) }));
 

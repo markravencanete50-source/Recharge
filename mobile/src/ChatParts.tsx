@@ -8,7 +8,8 @@ import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
 import { avatarColors } from "./AccountSetup";
 import { ui, type Palette } from "./theme";
-import { chatFileLinks, profilePhotoSource, readChat, uploadToLink, writeChat } from "./backend/client";
+import { chatFileLinks, profilePhotoSource, readChat, uploadToLink, viewMode, writeChat } from "./backend/client";
+import { useBlocks } from "./ChatSafety";
 import { chatFilesProblem, chatPeopleSchema, conversationSchema, membersSchema, MAX_CHAT_PHOTOS, MAX_CHAT_VIDEOS, preparedFilesSchema, presenceLabel, presenceOf, REACTIONS,
   type ChatAttachment, type ChatMembers, type ChatReaction, type Conversation } from "../../lib/workspace-chat-policy";
 import { ROLE_LABEL } from "../../lib/admin-live";
@@ -139,7 +140,7 @@ export function ReactionChips({ p, reactions, mine, onToggle }: { p: Palette; re
     </View>
   );
 }
-export function ReactionPicker({ p, current, onPick }: { p: Palette; current: string | null; onPick: (emoji: string) => void }) {
+export function ReactionPicker({ p, current, onPick, onMore }: { p: Palette; current: string | null; onPick: (emoji: string) => void; onMore?: () => void }) {
   return (
     <Pop active>
       <View accessibilityRole="toolbar" style={[ui.row, { gap: 2, padding: 4, borderRadius: 999, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, ...(web ? { boxShadow: "var(--rc-elev-2)" } : {}) }]}>
@@ -149,6 +150,7 @@ export function ReactionPicker({ p, current, onPick }: { p: Palette; current: st
             <Text style={{ fontSize: 20 }}>{e}</Text>
           </MotionPress>
         ))}
+        {!!onMore && <MotionPress accessibilityRole="button" accessibilityLabel="Report or block" onPress={onMore} style={{ width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" }}><Feather name="more-horizontal" size={19} color={p.muted} /></MotionPress>}
       </View>
     </Pop>
   );
@@ -265,6 +267,8 @@ export function MembersSheet({ p, conversation, members, onClose, onChanged, onL
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [confirmLeave, setConfirmLeave] = useState(false);
   const group = conversation.kind === "group" && !conversation.department, direct = conversation.kind === "direct";
   const me = members?.members.find(m => m.you);
+  // Blocking someone from the people in a conversation: it only hides their messages for you.
+  const blocks = useBlocks(), [blocking, setBlocking] = useState<string | null>(null), readOnly = viewMode().readOnly;
   async function run(action: Parameters<typeof writeChat>[0], after?: (data: unknown) => void) {
     if (busy) return;
     setBusy(true); setError("");
@@ -277,16 +281,31 @@ export function MembersSheet({ p, conversation, members, onClose, onChanged, onL
       {!members ? <Loading p={p} rows={3} /> : <View style={{ gap: 4 }}>
         {members.members.map(m => {
           const status = presenceOf(m.seenAt), seen = presenceLabel(m.seenAt);
+          const blocked = blocks.ids.has(m.userId), first = m.fullName.split(/\s+/)[0] || "them";
           return (
-            <View key={m.userId} style={[ui.row, { gap: 12, minHeight: 58, paddingHorizontal: 6 }]}>
+            <View key={m.userId} style={{ gap: 6 }}>
+            <View style={[ui.row, { gap: 12, minHeight: 58, paddingHorizontal: 6 }]}>
               <PersonAvatar p={p} name={m.fullName} userId={m.userId} photo={m.photo} size={42} online={status === "online"} />
               <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
                 <Text numberOfLines={1} style={{ color: p.text, fontWeight: "700" }}>{m.fullName}{m.you ? " (you)" : ""}</Text>
-                <Text numberOfLines={1} style={[ui.small, { color: status === "online" && !m.you ? p.success : p.muted }]}>{[m.you ? null : seen || null, roleName(m.role), m.creator ? "Started the group" : null].filter(Boolean).join(" · ")}</Text>
+                <Text numberOfLines={1} style={[ui.small, { color: status === "online" && !m.you ? p.success : p.muted }]}>{[m.you ? null : seen || null, roleName(m.role), m.creator ? "Started the group" : null, blocked ? "Blocked" : null].filter(Boolean).join(" · ")}</Text>
                 {!!m.about && <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{m.about}</Text>}
               </View>
               {members.canRemove && group && !m.you && <MotionPress accessibilityRole="button" accessibilityLabel={`Remove ${m.fullName} from the group`} disabled={busy} onPress={() => void run({ action: "removeMember", conversationId: conversation.id, userId: m.userId })}
                 style={{ width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}><Feather name="user-minus" size={16} color={p.danger} /></MotionPress>}
+              {!m.you && !readOnly && <MotionPress accessibilityRole="button" accessibilityLabel={blocked ? `Unblock ${m.fullName}` : `Block ${m.fullName}`} disabled={busy}
+                onPress={() => blocked ? void run({ action: "unblockUser", userId: m.userId }, () => void blocks.reload()) : setBlocking(blocking === m.userId ? null : m.userId)}
+                style={{ width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: blocked ? p.primary : p.wash }}><Feather name={blocked ? "user-check" : "slash"} size={16} color={blocked ? p.onPrimary : p.muted} /></MotionPress>}
+            </View>
+            {blocking === m.userId && !blocked && (
+              <View style={{ gap: 8, padding: 12, borderRadius: 16, backgroundColor: p.wash }}>
+                <Text style={[ui.small, { color: p.text }]}>Block {first}? You won&apos;t see their messages and they can&apos;t start a new direct message with you. They aren&apos;t told. You can unblock them here or in Profile &amp; preferences.</Text>
+                <View style={[ui.row, { gap: 8 }]}>
+                  <Button label={busy ? "Blocking…" : `Block ${first}`} icon="slash" primary p={p} disabled={busy} onPress={() => void run({ action: "blockUser", userId: m.userId }, () => { setBlocking(null); void blocks.reload(); })} />
+                  <Button label="Cancel" p={p} onPress={() => setBlocking(null)} />
+                </View>
+              </View>
+            )}
             </View>
           );
         })}

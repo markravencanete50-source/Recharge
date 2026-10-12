@@ -13,6 +13,8 @@ import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
 import { channelsFirst, chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, presenceLabel, presenceOf, threadSchema, type ChatMessage, type ChatReaction, type Conversation } from "../../lib/workspace-chat-policy";
 import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
+import { MessageSafety } from "./ChatSafety";
+import { BLOCKED_LABEL, REMOVED_LABEL } from "../../lib/chat-moderation";
 import { inboxListSchema } from "../../lib/guest-inbox-policy";
 import { ALL_PROPERTIES, CHAT_CHIPS, chipCounts, conversationFacts, emptyMessage, filterInbox, propertyChips } from "../../lib/inbox-filters";
 import { InboxChips } from "./InboxChips";
@@ -79,23 +81,44 @@ function ConversationRow({ p, c, active, onPress }: { p: Palette; c: Conversatio
   );
 }
 
-function Bubble({ p, m, showName, readOnly, reacting, onReacting, onReact }: { p: Palette; m: ChatMessage; showName: boolean; readOnly: boolean; reacting: boolean; onReacting: (open: boolean) => void; onReact: (emoji: string) => void }) {
+function Bubble({ p, m, showName, readOnly, reacting, onReacting, onReact, onSafety }: { p: Palette; m: ChatMessage; showName: boolean; readOnly: boolean; reacting: boolean; onReacting: (open: boolean) => void; onReact: (emoji: string) => void; onSafety: () => void }) {
   // A line about the group ("Fiona added Isla"), in the middle.
   if (m.kind === "event") return <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 4 }]}>{m.authorName} {m.body} · {chatTime(m.at)}</Text>;
   const mine = m.mine, words = m.body.trim().length > 0, current = m.reactions.find(r => r.mine)?.emoji ?? null;
+  // Taken down by an admin: for everyone, including whoever wrote it.
+  if (m.removed) return (
+    <View style={{ alignItems: mine ? "flex-end" : "flex-start", gap: 3 }}>
+      <View style={[ui.row, { gap: 8, marginLeft: mine ? 0 : 38, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, borderWidth: 1, borderStyle: "dashed", borderColor: p.border }]}>
+        <Feather name="slash" size={14} color={p.muted} /><Text style={{ color: p.muted, fontSize: 14, fontStyle: "italic" }}>{REMOVED_LABEL}</Text>
+      </View>
+      <Text style={{ color: p.muted, fontSize: 11, marginHorizontal: mine ? 6 : 44 }}>{chatTime(m.at)}</Text>
+    </View>
+  );
+  // From someone you blocked: collapsed, with a way to unblock them.
+  if (m.blocked) return (
+    <MotionPress accessibilityRole="button" accessibilityLabel={`${BLOCKED_LABEL}. ${readOnly ? "" : "Options"}`} disabled={readOnly} onPress={onSafety}
+      style={[ui.row, { gap: 8, alignSelf: "flex-start", marginLeft: 38, minHeight: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderStyle: "dashed", borderColor: p.border }]}>
+      <Feather name="eye-off" size={14} color={p.muted} /><Text style={{ color: p.muted, fontSize: 14, fontStyle: "italic" }}>{BLOCKED_LABEL}</Text>
+      {!readOnly && <Text style={{ color: p.primary, fontSize: 12, fontWeight: "700" }}>Options</Text>}
+    </MotionPress>
+  );
   const react = !readOnly && (
-    <View {...(Platform.OS === "web" ? { dataSet: { chatTools: "true" } } : {})} style={{ alignSelf: "center" }}>
+    <View {...(Platform.OS === "web" ? { dataSet: { chatTools: "true" } } : {})} style={{ alignSelf: "center", flexDirection: "row" }}>
       <MotionPress accessibilityRole="button" accessibilityLabel="React to this message" onPress={() => onReacting(!reacting)}
         style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: reacting ? p.wash : "transparent" }}>
         <Feather name="smile" size={17} color={p.muted} />
       </MotionPress>
+      {!mine && <MotionPress accessibilityRole="button" accessibilityLabel="Report this message or block the sender" onPress={onSafety}
+        style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" }}>
+        <Feather name="more-horizontal" size={17} color={p.muted} />
+      </MotionPress>}
     </View>
   );
   return (
     // Each message rises in once, the first time it appears.
     <Entrance sessionKey={"chat:" + m.id} style={{ alignItems: mine ? "flex-end" : "flex-start", gap: 3 }}>
       {showName && !mine && <Text style={[ui.small, { color: p.muted, fontWeight: "700", marginLeft: 44 }]}>{m.authorName}</Text>}
-      {reacting && <View style={{ marginLeft: mine ? 0 : 38 }}><ReactionPicker p={p} current={current} onPick={e => { onReacting(false); onReact(e); }} /></View>}
+      {reacting && <View style={{ marginLeft: mine ? 0 : 38 }}><ReactionPicker p={p} current={current} onPick={e => { onReacting(false); onReact(e); }} onMore={mine || readOnly ? undefined : () => { onReacting(false); onSafety(); }} /></View>}
       <View {...(Platform.OS === "web" ? { dataSet: { chatRow: "true" } } : {})} style={[ui.row, { gap: 6, alignItems: "flex-end", width: "100%", flexDirection: mine ? "row-reverse" : "row" }]}>
         {!mine && <PersonAvatar p={p} name={m.authorName} userId={m.authorId} photo={m.authorPhoto} size={30} />}
         <Pressable onLongPress={readOnly ? undefined : () => onReacting(true)} delayLongPress={350} style={{ maxWidth: "78%", gap: 4, alignItems: mine ? "flex-end" : "flex-start" }}>
@@ -115,7 +138,7 @@ function Bubble({ p, m, showName, readOnly, reacting, onReacting, onReact }: { p
 function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false }: { p: Palette; id: string; onBack?: () => void; onChanged: () => void; onOpen: (c: Conversation) => void; onLeft: () => void; savedReplies?: boolean }) {
   const [thread, setThread] = useState<z.infer<typeof threadSchema> | null>(null);
   const [text, setText] = useState(""), [sending, setSending] = useState(false), [error, setError] = useState("");
-  const [reacting, setReacting] = useState<string | null>(null), [people, setPeople] = useState(false);
+  const [reacting, setReacting] = useState<string | null>(null), [people, setPeople] = useState(false), [safety, setSafety] = useState<ChatMessage | null>(null);
   const [readOnly] = useState(() => viewMode().readOnly);
   const narrow = useWindowDimensions().width < 560;
   const files = useChatUploads(id);
@@ -180,7 +203,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
         {c && c.kind === "direct" && !readOnly && <MotionPress accessibilityRole="button" accessibilityLabel="Add people (starts a group)" onPress={() => setPeople(true)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: p.border }}><Feather name="user-plus" size={17} color={p.text} /></MotionPress>}
       </View>
       <ScrollView ref={scroll} style={{ flex: 1, maxHeight: Platform.OS === "web" ? 560 : undefined }} contentContainerStyle={{ gap: 10, paddingVertical: 6 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
-        {!thread ? <Loading p={p} rows={2} /> : thread.messages.length ? thread.messages.map(m => <Bubble key={m.id} p={p} m={m} showName={c?.kind !== "direct"} readOnly={readOnly} reacting={reacting === m.id} onReacting={on => setReacting(on ? m.id : null)} onReact={e => void react(m.id, e)} />)
+        {!thread ? <Loading p={p} rows={2} /> : thread.messages.length ? thread.messages.map(m => <Bubble key={m.id} p={p} m={m} showName={c?.kind !== "direct"} readOnly={readOnly} reacting={reacting === m.id} onReacting={on => setReacting(on ? m.id : null)} onReact={e => void react(m.id, e)} onSafety={() => setSafety(m)} />)
           : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property. The team usually replies within minutes during the day." : c?.department ? (c.department === "all" ? "Everyone on the team can read and write here. Use it for announcements." : `Everyone in ${c.title} can read and write here. Admins can read it too.`) : "Say hello. Messages are only seen by the people in this conversation."}</Text>}
       </ScrollView>
       {!!error && <Notice text={error} p={p} tone="bad" />}
@@ -199,6 +222,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
           <Feather name="send" size={19} color={canSend ? p.onPrimary : p.muted} />
         </MotionPress>
       </View>
+      {safety && <MessageSafety key={safety.id} p={p} m={safety} onClose={() => setSafety(null)} onChanged={() => { void load(); onChanged(); }} />}
       {people && c && <MembersSheet p={p} conversation={c} members={members} onClose={() => setPeople(false)} onChanged={() => { void reloadMembers(); void load(); onChanged(); }}
         onLeft={() => { setPeople(false); onLeft(); }} onOpen={next => { setPeople(false); onOpen(next); }} />}
     </View>

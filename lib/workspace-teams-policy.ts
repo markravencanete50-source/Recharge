@@ -19,7 +19,7 @@ const https = z.string().url().max(1000).refine(value => {
 
 export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
-    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople', 'productivity', 'shiftChanges', 'clientEnquiries', 'feedback']),
+    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople', 'productivity', 'shiftChanges', 'clientEnquiries', 'feedback', 'chatReports']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -127,6 +127,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('savePausePolicy'), requestId: id, lunchPaid: z.boolean(), breakPaid: z.boolean(), emergencyPaid: z.boolean(), version: z.number().int().positive() }).strict(),
   // Team feedback: admins and Stays send it; super admins mark it seen or done and reply.
   z.object({ action: z.literal('sendFeedback'), requestId: id, category: z.enum(['idea', 'problem', 'praise', 'other']), message: text(5, 2000) }).strict(),
+  // Reported chat messages: admins and super admins remove the message (hidden for everyone) or dismiss the report.
+  z.object({ action: z.literal('decideChatReport'), requestId: id, reportId: id, version, decision: z.enum(['remove', 'dismiss']) }).strict(),
   z.object({ action: z.literal('updateFeedback'), requestId: id, feedbackId: id, version, status: z.enum(['new', 'seen', 'done']), reply: z.string().trim().max(1000).optional() }).strict(),
   z.object({ action: z.literal('closeShift'), requestId: id, shiftId: id, endedAt: z.string().datetime({ offset: true }), note: text(3, 500).optional() }).strict(),
   z.object({ action: z.literal('saveTargets'), requestId: id, version, greenMinutes: z.number().int().min(1).max(120), amberMinutes: z.number().int().min(2).max(240),

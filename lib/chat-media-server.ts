@@ -6,6 +6,7 @@ import { businessContext, businessResponse, databaseFailure, viewAsFailure } fro
 import { isNativeRequest } from './native-request-policy';
 import type { RpcContext } from './workspace-rpc-route';
 import type { ChatAction } from './workspace-chat-policy';
+import type { TeamsAction } from './workspace-teams-policy';
 import { profileActionSchema } from './workspace-account-policy';
 
 // Photos and videos in Messages, and profile photos. Chat files go straight from the device to
@@ -49,6 +50,19 @@ export function chatFilesAction(context: RpcContext, input: ChatAction): Promise
     }
     return businessResponse({ data: { files }, ok: true });
   })();
+}
+
+// ---------------------------------------------------------------- Messages: moderation
+// An admin removes a reported message: the database hides it for everyone (and stops its files
+// being opened), then the stored copies are deleted here, so links already handed out stop
+// working too. A copy left behind is only unreachable, never shown.
+export async function decideChatReport(context: RpcContext, input: Extract<TeamsAction, { action: 'decideChatReport' }>) {
+  const result = await context.client.rpc('workspace_teams_action', { input });
+  if (result.error) return databaseFailure(result.error);
+  const { paths: found, ...data } = (result.data ?? {}) as Record<string, unknown>;
+  const paths = z.array(z.string()).catch([]).parse(found);
+  if (paths.length) await secretClient()?.storage.from(CHAT_BUCKET).remove(paths).catch(() => undefined);
+  return businessResponse({ data, ok: true });
 }
 
 // ---------------------------------------------------------------- Messages: opening

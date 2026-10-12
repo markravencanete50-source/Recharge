@@ -18,12 +18,12 @@ export type PanelLink =
 export type PanelGroup = { title: string; links: PanelLink[] };
 export type RolePanel = { title: string; tagline: string; icon: PanelIcon; groups: PanelGroup[] };
 
-type Page = 'home' | 'favorites' | 'properties' | 'analytics' | 'activity' | 'inbox' | 'help' | 'approvals' | 'statements' | 'enquiries' | 'feedback';
+type Page = 'home' | 'favorites' | 'properties' | 'analytics' | 'activity' | 'inbox' | 'help' | 'approvals' | 'statements' | 'enquiries' | 'feedback' | 'moderation';
 const PAGE: Record<Page, [string, PanelIcon]> = {
   home: ['Home', 'home'], favorites: ['Favorites', 'star'], properties: ['Properties', 'key'], analytics: ['Reports', 'bar-chart-2'],
   activity: ['Updates', 'bell'], inbox: ['Messages', 'message-circle'], help: ['Help & training', 'help-circle'],
   approvals: ['Approvals', 'check-circle'], statements: ['Owner statements', 'pie-chart'], enquiries: ['Client enquiries', 'mail'],
-  feedback: ['Feedback', 'message-square'],
+  feedback: ['Feedback', 'message-square'], moderation: ['Reported messages', 'flag'],
 };
 const AREA_ICON: Record<WorkView, PanelIcon> = {
   management: 'briefcase', hub: 'layers', calendar: 'calendar', stays: 'moon', cleans: 'check-square', repairs: 'tool', accounts: 'pie-chart', all: 'list',
@@ -44,7 +44,7 @@ export type PanelHue = 'forest' | 'ocean' | 'plum' | 'amber' | 'rose' | 'sky' | 
 const AREA_HUE: Record<WorkView, PanelHue> = { management: 'forest', hub: 'sky', calendar: 'ocean', stays: 'stays', cleans: 'cleans', repairs: 'ready', accounts: 'accounts', all: 'slate' };
 const KEY_HUE: Record<string, PanelHue> = {
   'page:home': 'forest', 'page:favorites': 'amber', 'page:inbox': 'ocean', 'page:analytics': 'plum', 'page:activity': 'amber', 'page:help': 'slate',
-  'page:properties': 'forest', 'page:approvals': 'rose', 'page:statements': 'accounts', 'page:enquiries': 'sky', 'page:feedback': 'plum',
+  'page:properties': 'forest', 'page:approvals': 'rose', 'page:statements': 'accounts', 'page:enquiries': 'sky', 'page:feedback': 'plum', 'page:moderation': 'rose',
   'tool:queue': 'rose', 'tool:people': 'ocean', 'tool:productivity': 'sage', 'tool:performance': 'amber', 'tool:access': 'rose', 'tool:training': 'plum',
   'tool:inbox': 'ocean', 'tool:checks': 'sage', 'tool:pricing': 'amber', 'tool:signoff': 'plum', 'tool:bookings': 'ocean', 'tool:aircover': 'rose',
   'tool:today': 'forest', 'tool:respond': 'rose', 'tool:month': 'plum', 'tool:restock': 'amber', 'tool:schedule': 'ocean', 'tool:review': 'sage',
@@ -61,7 +61,7 @@ type Layout = { title: string; tagline: string; icon: PanelIcon; groups: [string
 const MANAGEMENT_GROUPS: [string, string[]][] = [
   ['Overview', ['page:home', 'page:favorites', 'tool:queue', 'tool:enquiries', 'page:inbox', 'page:analytics', 'page:activity', 'page:feedback']],
   ['Departments', ['area:stays', 'area:cleans', 'area:repairs', 'area:accounts']],
-  ['Management', ['area:management=Management centre', 'tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:training']],
+  ['Management', ['area:management=Management centre', 'tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'page:moderation', 'tool:training']],
   ['Planning', ['area:hub', 'area:calendar', 'page:properties', 'page:statements', 'area:all']],
   ['Start something', ['start']],
 ];
@@ -125,7 +125,7 @@ const LAYOUTS: Record<string, Layout> = {
 const PAGE_ROLES: Partial<Record<Page, string[]>> = {
   favorites: ['super_admin', 'admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts'],
   approvals: ['client'], statements: ['accounts', 'admin', 'super_admin'], enquiries: ['admin', 'super_admin', 'stays'],
-  feedback: ['admin', 'super_admin', 'stays'],
+  feedback: ['admin', 'super_admin', 'stays'], moderation: ['admin', 'super_admin'],
 };
 
 // A Home tool that opens a Work area at its top is that area. (Tools kept in All work, such as
