@@ -289,6 +289,7 @@ export const enquiryFileLink = async (enquiryId: string, fileId: string) => z.ob
 export const readInbox = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/guest-inbox?' + new URLSearchParams(query))).json();
 // Owner reports: confirmed bookings, nights and payouts at the owner's properties, and statement figures by month (read only).
 export const readOwner = async (query: { section: 'bookings' | 'periods'; from: string; to: string }) => (await workspaceRequest('/api/mobile/owner?' + new URLSearchParams(query))).json();
+export const writeOwner = async (action: import('../../../lib/owner-policy').OwnerAction) => (await workspaceRequest('/api/mobile/owner', action)).json();
 export const writeInbox = async (action: InboxAction) => (await workspaceRequest('/api/mobile/guest-inbox', action)).json();
 // Management oversight: the business overview, an item's history, the decisions report and management's reminders.
 export const readOversight = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/oversight?' + new URLSearchParams(query))).json();

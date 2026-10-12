@@ -56,18 +56,60 @@ test('finance input rejects invented roles, fractional money and unconfirmed pla
   assert.ok(financeReadSchema.safeParse({ section: 'statements' }).success);
 });
 
-test('payout CSV uploads are parsed on the server and only code totals reach the database', async () => {
+test('payout CSV uploads are parsed on the server and only coded lines reach the database', async () => {
   reset();
   const csv = 'Date,Type,Confirmation Code,Guest,Amount,Paid Out\n10/01/2026,Payout,,,,"1,000.00"\n10/01/2026,Reservation,HMQ4K2T8XW,Guest A,460.00,\n10/02/2026,Adjustment,hmq4k2t8xw,Guest A,-10.00,';
   const response = await workspaceFinance(post({ action: 'importPayoutReport', requestId: uuid, channel: 'airbnb', fileName: 'airbnb.csv', csv }));
   assert.equal(response.status, 200);
-  assert.deepEqual(state.calls[0], { name: 'workspace_finance_action', args: { input: { action: 'importPayoutReport', requestId: uuid, channel: 'airbnb', fileName: 'airbnb.csv', lines: [{ reference: 'HMQ4K2T8XW', amountMinor: 45000 }] } } });
+  const none = { grossMinor: null, commissionMinor: null, hostFeeMinor: null, paymentFeeMinor: null, cleaningFeeMinor: null };
+  // Each line keeps its own signed amount and key; the transfer line (no code) never reaches the database, nor does the CSV.
+  assert.deepEqual(state.calls[0], { name: 'workspace_finance_action', args: { input: { action: 'importPayoutReport', requestId: uuid, channel: 'airbnb', fileName: 'airbnb.csv', lines: [
+    { reference: 'HMQ4K2T8XW', amountMinor: 46000, ...none, paidOn: '2026-10-01', lineType: 'Reservation', key: 'HMQ4K2T8XW|10-1-2026|reservation|46000||1' },
+    { reference: 'hmq4k2t8xw', amountMinor: -1000, ...none, paidOn: '2026-10-02', lineType: 'Adjustment', key: 'HMQ4K2T8XW|10-2-2026|adjustment|-1000||1' },
+  ] } } });
   reset();
   const wrong = await workspaceFinance(post({ action: 'importPayoutReport', requestId: uuid, channel: 'airbnb', fileName: 'booking.csv', csv: 'Reservation number,Payout amount\n4172839560,520.00' }));
   assert.equal(wrong.status, 400); assert.match((await wrong.json()).error, /Booking\.com/); assert.equal(state.calls.length, 0);
   reset();
   const empty = await workspaceFinance(post({ action: 'importPayoutReport', requestId: uuid, channel: 'airbnb', fileName: 'x.csv', csv: 'Foo,Bar\n1,2' }));
   assert.equal(empty.status, 400); assert.equal(state.calls.length, 0);
+  // Vrbo is reconciled too; a report in another currency, or with no net amount at all, is refused before the database.
+  reset();
+  const vrbo = await workspaceFinance(post({ action: 'importPayoutReport', requestId: uuid, channel: 'vrbo', fileName: 'vrbo.csv', csv: 'Reservation ID,Payout amount,Payout date\nHA-1,390.08,16/11/2026\n,5.00,16/11/2026' }));
+  assert.equal(vrbo.status, 200);
+  assert.deepEqual(state.calls[0].args.input.lines.map(l => [l.reference, l.amountMinor, l.paidOn]), [['HA-1', 39008, '2026-11-16']]);
+  for (const [channel, file, message] of [['booking_com', 'Reservation number,Currency,Net\n1,EUR,10.00', /GBP/], ['vrbo', 'Reservation ID,Gross amount\nHA-1,10.00', /net payout column/], ['booking_com', 'Reservation number,Net\n1,', /No reservation payouts.*1 row had no net amount/]]) {
+    reset();
+    const refused = await workspaceFinance(post({ action: 'importPayoutReport', requestId: uuid, channel, fileName: 'x.csv', csv: file }));
+    assert.equal(refused.status, 400); assert.match((await refused.json()).error, message); assert.equal(state.calls.length, 0);
+  }
+  for (const channel of ['direct', 'expedia']) assert.equal(financeActionSchema.safeParse({ action: 'importPayoutReport', requestId: uuid, channel, fileName: 'x.csv', csv: 'a' }).success, false, channel);
+});
+
+test('a Vrbo stay needs its platform code; set-aside and the payout lines report reach their own database calls', async () => {
+  const stay = { action: 'setReservationFinancials', requestId: uuid, propertyId: uuid, reservationId: uuid, version: 1, payoutMinor: 100 };
+  for (const channel of ['airbnb', 'booking_com', 'vrbo']) {
+    assert.equal(financeActionSchema.safeParse({ ...stay, channel }).success, false, channel);
+    assert.ok(financeActionSchema.safeParse({ ...stay, channel, channelReference: 'CODE-1' }).success, channel);
+  }
+  assert.ok(financeActionSchema.safeParse({ ...stay, channel: 'direct' }).success);
+  reset();
+  assert.equal((await workspaceFinance(post({ action: 'setAsidePayoutLine', requestId: uuid, lineId: uuid, note: 'Stay cancelled after payout' }))).status, 200);
+  assert.deepEqual(state.calls[0], { name: 'workspace_finance_action', args: { input: { action: 'setAsidePayoutLine', requestId: uuid, lineId: uuid, note: 'Stay cancelled after payout' } } });
+  assert.equal(financeActionSchema.safeParse({ action: 'setAsidePayoutLine', requestId: uuid, lineId: uuid, note: 'no' }).success, false, 'a reason is required');
+  reset();
+  assert.equal((await workspaceFinance(new Request(`https://recharge.example/api/workspace/finance?section=payoutLines&from=2026-10-01&to=2026-10-31&channel=vrbo&propertyId=${uuid}`))).status, 200);
+  assert.deepEqual(state.calls[0], { name: 'workspace_finance_report', args: { section: 'payoutLines', target_property: uuid, target_id: null, from_on: '2026-10-01', to_on: '2026-10-31', filters: { channel: 'vrbo' } } });
+  reset();
+  assert.equal((await workspaceFinance(new Request('https://recharge.example/api/workspace/finance?section=payoutLines'))).status, 200);
+  assert.deepEqual(state.calls[0].args, { section: 'payoutLines', target_property: null, target_id: null, from_on: null, to_on: null, filters: {} });
+  reset();
+  assert.equal((await workspaceFinance(new Request(`https://recharge.example/api/workspace/finance?section=payoutLines&state=noConfirmedStay&reportId=${uuid}&id=${uuid}`))).status, 200);
+  assert.deepEqual(state.calls[0].args, { section: 'payoutLines', target_property: null, target_id: uuid, from_on: null, to_on: null, filters: { reportId: uuid, state: 'noConfirmedStay' } });
+  for (const query of ['section=payoutLines&from=2026-10-31&to=2026-10-01', 'section=payoutLines&period=2026-10', 'section=payoutLines&channel=direct', 'section=expenses&from=2026-10-01',
+    'section=payoutLines&from=2026-02-30', 'section=payoutLines&state=deleted', 'section=reconciliation&period=2026-10&state=active', 'section=payoutLines&reportId=1']) {
+    assert.equal(financeReadSchema.safeParse(Object.fromEntries(new URLSearchParams(query))).success, false, query);
+  }
 });
 
 test('reads pass only validated filters to the database', async () => {

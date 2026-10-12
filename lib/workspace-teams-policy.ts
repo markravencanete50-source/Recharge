@@ -61,7 +61,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('saveHubItem'), requestId: id, id: id.optional(), version: version.optional(), kind: z.enum(HUB_KINDS), title: text(2, 200),
     details: z.string().trim().max(3000).optional(), propertyId: id.nullable().optional(), assigneeId: id.nullable().optional(), department: z.enum(DEPARTMENTS).nullable().optional(),
     dueOn: date.nullable().optional(), amountMinor: z.number().int().min(0).max(10000000).nullable().optional(), link: https.nullable().optional(),
-    reference: z.string().trim().max(120).optional() }).strict(),
+    // reference is the invoice number on an invoice. reservationId and clientId link the row to a stay or an owner.
+    reference: z.string().trim().max(120).optional(), reservationId: id.nullable().optional(), clientId: id.nullable().optional() }).strict(),
   z.object({ action: z.literal('moveHubItem'), requestId: id, id, version, status: z.enum(HUB_STATUSES), note: z.string().trim().max(2000).optional(),
     settledMinor: z.number().int().min(0).max(10000000).optional() }).strict(),
   // The responsibilities register, kept by admins.
@@ -162,6 +163,8 @@ export const hubItemSchema = z.object({
   id, kind: z.enum(HUB_KINDS), title: z.string(), details: z.string(), propertyId: id.nullable(), propertyName: z.string().nullable(),
   assigneeId: id.nullable(), assigneeName: z.string().nullable(), department: z.enum(DEPARTMENTS).nullable(), dueOn: z.string().nullable(),
   amountMinor: z.number().nullable(), settledMinor: z.number().nullable(), link: z.string().nullable(), reference: z.string(),
+  // Added with the hub links migration; optional so older answers still parse.
+  reservationId: id.nullable().optional(), clientId: id.nullable().optional(),
   status: z.enum(HUB_STATUSES), outcomeNote: z.string(), decidedBy: z.string().nullable(), decidedAt: z.string().nullable(),
   createdBy: id, createdByName: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(), version: z.number(),
 });

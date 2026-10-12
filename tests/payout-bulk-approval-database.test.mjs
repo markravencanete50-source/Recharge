@@ -184,6 +184,35 @@ test('who can approve, and what the request must look like', async () => {
   assert.equal(missing.approved, 0); assert.equal(missing.skipped.notFound, 1);
 });
 
+test('a Vrbo report, then an overlapping download, through the upload: lines already held are not counted twice', async () => {
+  await as(STAYS);
+  const checkIn = await plusDays(month.first, 20);
+  await rpc('workspace_operations_action', [operationsActionSchema.parse({ action: 'recordReservation', requestId: crypto.randomUUID(), propertyId: property, reference: 'Vrbo stay', checkIn, checkOut: await plusDays(checkIn, 3), status: 'confirmed' })]);
+  await as(ACCOUNTS);
+  const pending = live.reconciliationSchema.parse(await read({ section: 'reconciliation', period: month.m })).needsDetails.find(r => r.reference === 'Vrbo stay');
+  const details = { action: 'setReservationFinancials', propertyId: pending.propertyId, reservationId: pending.reservationId, version: pending.version, channel: 'vrbo', guests: 2, payoutMinor: 39008 };
+  assert.throws(() => write(details), /Add the platform reservation code/);
+  await write({ ...details, channelReference: 'HA-E2E001' });
+
+  const header = 'Reservation ID,Payout amount,Host service fee,Payout date,Payout ID';
+  const week = await write({ action: 'importPayoutReport', channel: 'vrbo', fileName: 'vrbo-week.csv', csv: `${header}\nHA-E2E001,200.00,-10.00,05/10/2026,VR-1\n` });
+  assert.equal(week.newLines, 1); assert.equal(week.alreadyHeld, 0); assert.equal(week.matchedReservations, 1);
+  assert.equal((await byRef('Vrbo stay')).state, 'different');
+  // The month's report repeats the week's line (written differently) and adds two more.
+  const monthCsv = `\uFEFF${header}\r\n"HA-E2E001","£200","(10.00)",5/10/2026,VR-1\r\nHA-E2E001,190.08,-9.50,12/10/2026,VR-2\r\nHA-OTHER9,50.00,,12/10/2026,VR-2\r\n`;
+  const whole = live.payoutImportSchema.parse(await write({ action: 'importPayoutReport', channel: 'vrbo', fileName: 'vrbo-month.csv', csv: monthCsv }));
+  assert.equal(whole.lineCount, 3); assert.equal(whole.newLines, 2); assert.equal(whole.alreadyHeld, 1); assert.equal(whole.newMinor, 24008);
+  assert.equal(whole.unexpectedLines, 1);
+  const row = await byRef('Vrbo stay');
+  assert.equal(row.state, 'matched'); assert.equal(row.receivedMinor, 39008);
+  assert.equal(row.lineCount, 2); assert.equal(row.otaFeesMinor, 1950); assert.equal(row.grossMinor, 40958); assert.equal(row.fundsReceived, true);
+  assert.equal(live.payoutStateLabel(row)[0], 'Matched');
+  await assert.rejects(write({ action: 'importPayoutReport', channel: 'vrbo', fileName: 'again.csv', csv: monthCsv }), /already been uploaded/);
+  // The payout lines report lists the stay's two lines, with their fees and dates.
+  const report = live.payoutLinesReportSchema.parse(await rpc('workspace_finance_report', ['payoutLines', property, null, null, null, { channel: 'vrbo' }]));
+  assert.deepEqual(report.lines.map(l => [l.reference, l.amountMinor, l.hostFeeMinor ?? l.commissionMinor, l.paidOn]).sort(), [['HA-E2E001', 19008, 950, '2026-10-12'], ['HA-E2E001', 20000, 1000, '2026-10-05']]);
+});
+
 test('a long list is one request, and counts as one change against the 60 a minute limit', async () => {
   const COUNT = 150;
   // Seeded directly as the database owner (no signed-in person), in the same month as the stays above.

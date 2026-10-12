@@ -20,7 +20,9 @@ test('the example payout files are read by the same upload as a real report',()=
   const example=files.payoutExampleCsv(channel,'2026-10');
   assert.match(example.fileName,/^Example-(Airbnb|Booking\.com)-payouts-2026-10\.csv$/);
   const prepared=prepareFinanceAction({action:'importPayoutReport',requestId:crypto.randomUUID(),channel,fileName:example.fileName,csv:example.csv});
-  assert.ok('input' in prepared,'the upload accepts the example');assert.equal(prepared.input.lines.length,2);
+  // Every coded line is sent on its own (Airbnb's adjustment too), each with its own key.
+  assert.ok('input' in prepared,'the upload accepts the example');assert.equal(prepared.input.lines.length,channel==='airbnb'?3:2);
+  assert.equal(new Set(prepared.input.lines.map(l=>l.key)).size,prepared.input.lines.length);
  }
 });
 

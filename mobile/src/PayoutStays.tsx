@@ -10,13 +10,14 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, Notice, Tag, message } from "./LiveKit";
 import { formatCount, formatDay, plural } from "../../lib/format";
+import { PAYOUT_CHANNEL_LABEL, RECONCILED_CHANNELS, type PayoutChannel } from "../../lib/payout-report-formats";
 import { writeFinance } from "./backend/client";
 import {
-  BULK_PAYOUT_CHUNK, CHANNEL_LABEL, PAYOUT_LABEL, bulkApprovalSchema, bulkPayoutPlan, chunk, filterPayouts, payoutApproval, payoutDates, payoutDifference, payoutMove, payoutSearchText, payoutTotals,
+  BULK_PAYOUT_CHUNK, CHANNEL_LABEL, bulkApprovalSchema, bulkPayoutPlan, chunk, filterPayouts, payoutApproval, payoutDates, payoutDifference, payoutMove, payoutSearchText, payoutStateLabel, payoutTotals,
   pounds, sumBulkApprovals, type BulkApproval, type PayoutRow, type PayoutStatusFilter,
 } from "../../lib/accounts-live";
 
-// The Platform stays list on the Payouts screen: figures that line up, an Approve button on each row so nothing has to be
+// The Platform stays list on the Reconciliation screen: figures that line up, an Approve button on each row so nothing has to be
 // opened, a search, a filter by check-in date, and "Approve all" for what is in view. Approving here makes the same checks as the
 // sheet behind each row (the database repeats them), and the amount is always printed on the button before anything is sent.
 // What is "in view" is one thing everywhere: the search, the status, then the dates. The figures, the counts on the chips, the
@@ -36,10 +37,11 @@ export type PayoutStaysProps = {
   p: Palette; rows: PayoutRow[]; periodLabel: string; canApprove: boolean;
   propertyName: (propertyId: string) => string | undefined;
   onOpen: (row: PayoutRow) => void;       // the sheet behind a row: approve with your own amount and note, or add what it is missing
+  onLines?: (row: PayoutRow) => void;     // the payout lines behind a stay (PayoutLinesSheet); finance roles only
   onChanged: () => Promise<void>;         // reload the screen's figures after something was approved
 };
 
-export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, onOpen, onChanged }: PayoutStaysProps) {
+export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, onOpen, onLines, onChanged }: PayoutStaysProps) {
   const celebrate = useCelebrate();
   const screen = useWindowDimensions();
   const [measured, setMeasured] = useState(0);
@@ -47,6 +49,7 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
   const wide = width >= WIDE, phone = width < PHONE;
   const [status, setStatus] = useState<PayoutStatusFilter>("open");
   const [query, setQuery] = useState("");
+  const [platform, setPlatform] = useState<"all" | PayoutChannel>("all");
   const [picked, setPicked] = useState<string[]>([]);
   const [shown, setShown] = useState(PAGE);
   const [local, setLocal] = useState<Record<string, PayoutRow>>({});
@@ -74,8 +77,12 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
   // what a row shows, so "pitt 1 oct" finds the stays at Pitt Street that check in on 1 October.
   const searchable = all.length > SEARCH_LIST_ABOVE;
   const needle = searchable ? query.trim() : "";
-  const searched = useMemo(() => needle ? all.filter(row => matchesSearch(payoutSearchText(row, propertyName(row.propertyId)), needle)) : all, [all, needle, propertyName]);
-  const byStatus = useMemo(() => filterPayouts(searched, status), [searched, status]);
+  const searched = useMemo(() => needle ? all.filter(row => matchesSearch(payoutSearchText(row, propertyName(row.propertyId)) + " " + stateOf(row)[0].toLowerCase(), needle)) : all, [all, needle, propertyName]);
+  // The platform filter narrows what the search found; its chips count the search, so a chip never promises more than it shows.
+  const perPlatform = useMemo(() => RECONCILED_CHANNELS.map(channel => ({ channel, count: searched.filter(row => row.channel === channel).length })), [searched]);
+  const platformsHeld = perPlatform.filter(x => x.count > 0).length;
+  const inPlatform = useMemo(() => platform === "all" ? searched : searched.filter(row => row.channel === platform), [searched, platform]);
+  const byStatus = useMemo(() => filterPayouts(inPlatform, status), [inPlatform, status]);
   const dates = useMemo(() => payoutDates(byStatus), [byStatus]);
   // A date with nothing left on it (everything there was just approved) drops out of the choice by itself.
   const chosen = useMemo(() => picked.filter(d => dates.some(x => x.date === d)), [picked, dates]);
@@ -83,7 +90,7 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
   const totals = useMemo(() => payoutTotals(scope), [scope]);
   const plan = useMemo(() => bulkPayoutPlan(scope, false), [scope]);
   const bulk = useMemo(() => bulkPayoutPlan(scope, includeDifferent), [scope, includeDifferent]);
-  const counts = useMemo(() => ({ open: filterPayouts(searched, "open").length, settled: filterPayouts(searched, "settled").length, all: searched.length }), [searched]);
+  const counts = useMemo(() => ({ open: filterPayouts(inPlatform, "open").length, settled: filterPayouts(inPlatform, "settled").length, all: inPlatform.length }), [inPlatform]);
   const visible = scope.slice(0, shown);
   const approvable = plan.items.length;
   const bulkMinor = bulk.atExpected.minor + bulk.atReceived.minor;
@@ -146,8 +153,9 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
 
   const bulkLabel = !approvable ? "Nothing to approve here" : chosen.length === 1 ? `Approve ${formatCount(approvable)} on ${formatDay(chosen[0])}` : chosen.length > 1 ? `Approve ${formatCount(approvable)} on ${chosen.length} dates`
     : needle ? `Approve ${formatCount(approvable)} matching` : `Approve all ${formatCount(approvable)}`;
-  const emptyText = !all.length ? "No Airbnb or Booking.com stays this month."
+  const emptyText = !all.length ? "No platform stays this month."
     : needle && !searched.length ? `Nothing matches “${needle.length > 40 ? needle.slice(0, 40) + "…" : needle}”. Try part of the property name, the platform code, the date or the amount.`
+    : platform !== "all" && !inPlatform.length ? `No ${PAYOUT_CHANNEL_LABEL[platform]} stays match.`
     : status === "open" && !chosen.length && !needle ? "Nothing is waiting for approval this month."
     : "No stays match. Choose All dates, or choose All.";
   const leftOut = [plan.heldBack && `${plural(plan.heldBack, "stay")} paid a different amount`, plan.needDetails && `${plural(plan.needDetails, "stay")} that ${plan.needDetails === 1 ? "needs" : "need"} details`].filter(Boolean).join(" and ");
@@ -178,6 +186,11 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
           ))}
         </View>
 
+        {platformsHeld > 1 && <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Chip p={p} role="radio" on={platform === "all"} label="All platforms" count={searched.length} onPress={() => { setPlatform("all"); setShown(PAGE); }} />
+          {perPlatform.filter(x => x.count > 0).map(x => <Chip key={x.channel} p={p} role="radio" on={platform === x.channel} label={PAYOUT_CHANNEL_LABEL[x.channel]} count={x.count} onPress={() => { setPlatform(x.channel); setShown(PAGE); }} />)}
+        </View>}
+
         {dates.length > 1 && <View style={{ gap: 8 }}>
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Check-in date. Choose one or more.</Text>
           {phone
@@ -204,7 +217,8 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
         )}
         {visible.map((row, i) => (
           <StayRow key={row.reservationId} p={p} wide={wide} phone={phone} first={i === 0} row={row} property={propertyName(row.propertyId)} canApprove={canApprove}
-            busy={busy.includes(row.reservationId)} onOpen={() => onOpen(row)} onApprove={() => void approveOne(row)} />
+            busy={busy.includes(row.reservationId)} onOpen={() => onOpen(row)} onApprove={() => void approveOne(row)}
+            onLines={canApprove && onLines && (row.lineCount ?? 0) > 0 ? () => onLines(row) : undefined} />
         ))}
         {!visible.length && <Text style={[ui.small, { color: p.muted, padding: 20 }]}>{emptyText}</Text>}
         {scope.length > visible.length && (
@@ -344,34 +358,72 @@ function RowAction({ p, kind, fit, row, busy, onOpen, onApprove }: { p: Palette;
   );
 }
 
-function StayRow({ p, wide, phone, first, row, property, canApprove, busy, onOpen, onApprove }: {
-  p: Palette; wide: boolean; phone: boolean; first: boolean; row: PayoutRow; property?: string; canApprove: boolean; busy: boolean; onOpen: () => void; onApprove: () => void;
+// The words on a row's status tag. "Missing" is a stay whose payout has not come at all; an approved stay whose money has not
+// arrived reads "Approved, not received" (lib/accounts-live payoutStateLabel).
+function stateOf(row: PayoutRow): [string, "good" | "wait" | "bad"] {
+  return row.state === "missing" ? ["Missing", "wait"] : payoutStateLabel(row);
+}
+// A line under the status that explains it: nothing to add for a matched stay.
+function hintOf(row: PayoutRow): { text: string; warn: boolean } | null {
+  if (row.state === "missing") return { text: "No payout yet", warn: false };
+  if (row.state === "different" && row.repeatedAmount != null) return { text: "Looks like the same payment twice", warn: true };
+  return null;
+}
+
+// Which platform a stay is on, as a quiet outlined chip beside its name.
+function ChannelChip({ p, channel }: { p: Palette; channel: string }) {
+  return (
+    <View style={{ alignSelf: "center", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, borderWidth: 1, borderColor: p.border }}>
+      <Text numberOfLines={1} style={{ color: p.muted, fontSize: 11, lineHeight: 15, fontWeight: "600" }}>{unbroken(CHANNEL_LABEL[channel] ?? channel)}</Text>
+    </View>
+  );
+}
+
+// Opens the payout lines behind a stay. A sibling of the row's own press area, never inside it.
+function LinesButton({ p, row, fit, onPress }: { p: Palette; row: PayoutRow; fit: ActionFit; onPress: () => void }) {
+  const count = row.lineCount ?? 0;
+  return (
+    <MotionPress accessibilityRole="button" accessibilityLabel={`Payout lines for ${row.reference}, ${count}`} onPress={onPress}
+      style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: p.controlBorder, ...(fit === "fill" ? { alignSelf: "stretch" as const } : { flexGrow: 1 }) }}>
+      <Feather name="list" size={14} color={p.text} />
+      <Text numberOfLines={1} style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>{count === 1 ? "1 payout line" : `${formatCount(count)} payout lines`}</Text>
+    </MotionPress>
+  );
+}
+
+function StayRow({ p, wide, phone, first, row, property, canApprove, busy, onOpen, onApprove, onLines }: {
+  p: Palette; wide: boolean; phone: boolean; first: boolean; row: PayoutRow; property?: string; canApprove: boolean; busy: boolean; onOpen: () => void; onApprove: () => void; onLines?: () => void;
 }) {
-  const [statusLabel, statusTone] = PAYOUT_LABEL[row.state];
+  const [statusLabel, statusTone] = stateOf(row);
   const openable = row.state !== "matched";
   const kind = actionKind(row, canApprove);
   const channel = CHANNEL_LABEL[row.channel] ?? row.channel;
-  const place = [property, channel].filter(Boolean).join(" · ");
+  const hint = hintOf(row);
+  const diff = payoutDifference(row);
   const approvedAt = row.state === "agreed" && row.agreedMinor !== null ? `at ${pounds(row.agreedMinor)}` : "";
-  const spoken = [row.reference, place, `check-in ${formatDay(row.checkIn)}`, `expected ${pounds(row.expectedMinor)}`, row.receivedMinor === null ? "not received" : `received ${pounds(row.receivedMinor)}`, statusLabel, approvedAt].filter(Boolean).join(", ");
+  const spoken = [row.reference, property, channel, `check-in ${formatDay(row.checkIn)}`, `expected ${pounds(row.expectedMinor)}`, row.receivedMinor === null ? "not received" : `received ${pounds(row.receivedMinor)}`,
+    diff !== null && diff !== 0 ? `difference ${pounds(diff)}` : "", statusLabel, approvedAt, hint?.text].filter(Boolean).join(", ");
   // The part of the row that opens the full form. Its Approve button is a sibling, never inside it.
   const main = {
     ...hover("rowhit"), accessibilityRole: openable ? ("button" as const) : undefined, disabled: !openable, accessibilityLabel: spoken, onPress: onOpen,
     accessibilityHint: !openable ? undefined : row.state === "no_reference" || row.state === "no_expected_amount" ? "Opens the form to add the missing details" : "Opens the form to approve with your own amount and note",
   };
   const action = kind && <RowAction p={p} kind={kind} fit={phone ? "grow" : "fill"} row={row} busy={busy} onOpen={onOpen} onApprove={onApprove} />;
+  const lines = onLines && <LinesButton p={p} row={row} fit={phone ? "grow" : "fill"} onPress={onLines} />;
   const wrapper = openable ? hover("row") : {};
   const statWidth = phone ? undefined : 150;
-  const title =<Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{row.reference}</Text>;
+  const title = <View style={{ flexDirection: "row", alignItems: "center", gap: 8, minWidth: 0 }}><View style={{ flexShrink: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{row.reference}</Text></View><ChannelChip p={p} channel={row.channel} /></View>;
   const state = <View style={{ gap: 3 }}><Tag label={statusLabel} tone={statusTone} p={p} />{!!approvedAt && <Text style={[ui.small, { color: p.muted }]}>{approvedAt}</Text>}</View>;
+  const note = hint && <Text style={[ui.small, { color: hint.warn ? p.waiting : p.muted, fontWeight: hint.warn ? "600" : "400" }]}>{hint.text}</Text>;
   if (wide) {
     return (
       <View {...wrapper} style={{ flexDirection: "row", alignItems: "center", borderTopWidth: first ? 0 : 1, borderColor: p.border }}>
         <MotionPress {...main} style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingLeft: 16 }}>
           <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
             {title}
-            {!!place && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{place}</Text>}
+            {!!property && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{property}</Text>}
             {!!row.channelReference && <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{row.channelReference}</Text>}
+            {note}
           </View>
           <Text numberOfLines={2} style={{ width: COLUMN.day, color: p.text, fontSize: 14, fontWeight: "600" }}>{formatDay(row.checkIn)}</Text>
           <View style={{ width: COLUMN.money }}><Amount p={p} value={row.expectedMinor} align="right" /></View>
@@ -379,22 +431,24 @@ function StayRow({ p, wide, phone, first, row, property, canApprove, busy, onOpe
           <View style={{ width: COLUMN.money }}><Gap p={p} row={row} align="right" /></View>
           <View style={{ width: COLUMN.status, paddingLeft: 8 }}>{state}</View>
         </MotionPress>
-        <View style={{ width: COLUMN.action, paddingHorizontal: 8 }}>{action}</View>
+        <View style={{ width: COLUMN.action, paddingHorizontal: 8, gap: 6 }}>{action}{lines}</View>
       </View>
     );
   }
-  // Stacked: the stay's lines run the full width, then the three figures. The action goes under them on a phone and beside them
+  // Stacked: the stay's lines run the full width, then the three figures. The actions go under them on a phone and beside them
   // on a tablet or a narrow laptop window.
+  const actions = !!action || !!lines;
   return (
     <View {...wrapper} style={{ flexDirection: phone ? "column" : "row", alignItems: phone ? "stretch" : "flex-end", borderTopWidth: first ? 0 : 1, borderColor: p.border }}>
-      <MotionPress {...main} style={{ flex: phone ? undefined : 1, minWidth: 0, gap: 10, paddingTop: 14, paddingBottom: phone && kind ? 8 : 14, paddingHorizontal: 16 }}>
+      <MotionPress {...main} style={{ flex: phone ? undefined : 1, minWidth: 0, gap: 10, paddingTop: 14, paddingBottom: phone && actions ? 8 : 14, paddingHorizontal: 16 }}>
         <View style={[ui.between, { gap: 12 }]}>
           <View style={{ flex: 1, minWidth: 0 }}>{title}</View>
           {state}
         </View>
         <View style={{ gap: 2 }}>
-          <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{[property, channel && unbroken(channel), unbroken(formatDay(row.checkIn))].filter(Boolean).join(" · ")}</Text>
+          <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{[property, unbroken(formatDay(row.checkIn))].filter(Boolean).join(" · ")}</Text>
           {!!row.channelReference && <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{row.channelReference}</Text>}
+          {note}
         </View>
         <View style={{ flexDirection: "row", gap: 12 }}>
           <Stat p={p} width={statWidth} label="Expected"><Amount p={p} value={row.expectedMinor} size={16} /></Stat>
@@ -402,7 +456,7 @@ function StayRow({ p, wide, phone, first, row, property, canApprove, busy, onOpe
           <Stat p={p} width={statWidth} label="Difference"><Gap p={p} row={row} size={16} /></Stat>
         </View>
       </MotionPress>
-      {!!action && <View style={phone ? { flexDirection: "row", paddingHorizontal: 16, paddingBottom: 14 } : { width: COLUMN.action, paddingRight: 16, paddingBottom: 14 }}>{action}</View>}
+      {actions && <View style={phone ? { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 14 } : { width: COLUMN.action, gap: 6, paddingRight: 16, paddingBottom: 14 }}>{action}{lines}</View>}
     </View>
   );
 }

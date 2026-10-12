@@ -1,6 +1,7 @@
 import { formatDay, formatMoney } from "./format";
 import { normalise } from "./search-options";
 import { z } from "zod";
+import { CLEAN_CHARGE_MODES, STATEMENT_METHODS } from "./workspace-finance-policy";
 
 // Response shapes and rules the live Accounts screens rely on, shared with the
 // tests that check them against the real database functions.
@@ -36,11 +37,22 @@ export const jobsSchema = z.array(z.object({
 }));
 export type Job = z.infer<typeof jobsSchema>[number];
 
+// The amounts itemised on one payout line (fees are positive), when the report had them.
+const payoutLineDetail = z.object({
+  grossMinor: nullableMinor.optional(), commissionMinor: nullableMinor.optional(), hostFeeMinor: nullableMinor.optional(), paymentFeeMinor: nullableMinor.optional(),
+  cleaningFeeMinor: nullableMinor.optional(), paidOn: z.string().nullable().optional(), lineType: z.string().nullable().optional(),
+});
 export const PAYOUT_STATES = ["matched", "agreed", "different", "missing", "no_reference", "no_expected_amount"] as const;
 export const payoutRowSchema = z.object({
   reservationId: z.string().uuid(), propertyId: z.string().uuid(), reference: z.string(), channel: z.string(), channelReference: z.string().nullable(),
   checkIn: z.string(), checkOut: z.string(), guests: z.number().nullable(), expectedMinor: nullableMinor, receivedMinor: nullableMinor, agreedMinor: nullableMinor,
   agreementNote: z.string().nullable(), state: z.enum(PAYOUT_STATES), version: z.number(), settledMinor: nullableMinor,
+  // Added by the payout-lines migration (20261012080000); optional so the screens work before and after it.
+  // lineCount: payout lines held for the stay. fundsReceived false on an agreed stay means approved, not received.
+  // agreedBeforeFunds: approved before any money arrived. repeatedAmount: on a different stay, an amount paid more
+  // than once (often an overlapping report). grossMinor and otaFeesMinor: the stay's gross and platform fees from its lines.
+  lineCount: z.number().optional(), fundsReceived: z.boolean().optional(), agreedBeforeFunds: z.boolean().optional(),
+  repeatedAmount: nullableMinor.optional(), grossMinor: nullableMinor.optional(), otaFeesMinor: nullableMinor.optional(),
 });
 export type PayoutRow = z.infer<typeof payoutRowSchema>;
 export const reconciliationSchema = z.object({
@@ -48,9 +60,56 @@ export const reconciliationSchema = z.object({
   rows: z.array(payoutRowSchema),
   needsDetails: z.array(z.object({ reservationId: z.string().uuid(), propertyId: z.string().uuid(), propertyName: z.string(), reference: z.string(), channel: z.string(),
     checkIn: z.string(), checkOut: z.string(), guests: z.number().nullable(), version: z.number() })),
-  unexpected: z.array(z.object({ lineId: z.string().uuid(), channel: z.string(), reference: z.string(), amountMinor: minor, fileName: z.string(), uploadedAt: z.string() })),
-  reports: z.array(z.object({ id: z.string().uuid(), channel: z.string(), fileName: z.string(), lineCount: z.number(), totalMinor: minor, uploadedAt: z.string() })),
+  // Lines with no confirmed stay. stayStatus says why when a stay has the code (for example cancelled or enquiry).
+  unexpected: z.array(z.object({ lineId: z.string().uuid(), channel: z.string(), reference: z.string(), amountMinor: minor, fileName: z.string(), uploadedAt: z.string(),
+    stayStatus: z.string().nullable().optional(), reservationId: z.string().uuid().nullable().optional() }).merge(payoutLineDetail)),
+  reports: z.array(z.object({ id: z.string().uuid(), channel: z.string(), fileName: z.string(), lineCount: z.number(), totalMinor: minor, uploadedAt: z.string(),
+    newLineCount: z.number().optional(), newMinor: minor.optional() })),
 });
+
+// What an upload answers. newLines, alreadyHeld and cancelledStay come with the payout-lines migration;
+// the skipped rows are counted on the screen with readPayoutLines (lib/payout-reconciliation.ts).
+export const payoutImportSchema = z.object({
+  reportId: z.string().uuid(), lineCount: z.number(), totalMinor: minor,
+  newLines: z.number().optional(), alreadyHeld: z.number().optional(), cancelledStay: z.number().optional(), newMinor: minor.optional(),
+  matchedReservations: z.number().optional(), unexpectedLines: z.number().optional(),
+}).passthrough();
+export type PayoutImport = z.infer<typeof payoutImportSchema>;
+
+// Every payout line (the 'payoutLines' report): what the platform paid for each stay, line by line.
+export const payoutLineSchema = z.object({
+  lineId: z.string().uuid(), channel: z.string(), reference: z.string(), amountMinor: minor,
+  reportId: z.string().uuid().optional(), fileName: z.string().optional(), uploadedAt: z.string().optional(),
+  reservationId: z.string().uuid().nullable().optional(), propertyId: z.string().uuid().nullable().optional(), propertyName: z.string().nullable().optional(),
+  stayReference: z.string().nullable().optional(), stayStatus: z.string().nullable().optional(), checkIn: z.string().nullable().optional(), checkOut: z.string().nullable().optional(),
+  // keyed: the file let this line be told apart from the same line in another upload. locked: its stay is in an issued statement.
+  keyed: z.boolean().optional(), active: z.boolean().optional(), locked: z.boolean().optional(), canSetAside: z.boolean().optional(),
+  setAsideAt: z.string().nullable().optional(), setAsideNote: z.string().nullable().optional(), setAsideBy: z.string().nullable().optional(),
+}).merge(payoutLineDetail).passthrough();
+export type PayoutLineRow = z.infer<typeof payoutLineSchema>;
+// The 'payoutLines' report: up to 500 lines, newest first; count and activeMinor cover every line that matched.
+export const payoutLinesReportSchema = z.object({ count: z.number(), activeMinor: minor, more: z.boolean(), lines: z.array(payoutLineSchema) }).passthrough();
+export type PayoutLinesReport = z.infer<typeof payoutLinesReportSchema>;
+export const PAYOUT_LINE_STATES = ["active", "setAside", "noConfirmedStay"] as const;
+
+// --- Owner statements with a period, VAT and ordered lines (migration 20261012100000). Every new field is optional so older answers still parse.
+// The lines are deductions from gross in this order, each category in date order.
+export const STATEMENT_LINE_KINDS = ["ota_fee", "changeover", "management_fee", "vat", "payable"] as const;
+export const STATEMENT_LINE_LABEL: Record<(typeof STATEMENT_LINE_KINDS)[number], string> = {
+  ota_fee: "Platform fees", changeover: "Changeover clean", management_fee: "Management fee", vat: "VAT on the fee", payable: "Other costs",
+};
+export const statementLineSchema = z.object({
+  kind: z.enum(STATEMENT_LINE_KINDS), label: z.string(), date: z.string().nullable().optional(), amountMinor: minor, refId: z.string().nullable().optional(),
+});
+export type StatementLineView = z.infer<typeof statementLineSchema>;
+// What the statement row adds. periodEnd is the first day not included; the occupancy is nightsBooked of nightsAvailable.
+export const statementPeriodSchema = z.object({
+  periodEnd: z.string().nullable().optional(), method: z.enum(STATEMENT_METHODS).nullable().optional(),
+  grossMinor: nullableMinor.optional(), otaFeesMinor: nullableMinor.optional(), vatRateBps: z.number().nullable().optional(), vatMinor: nullableMinor.optional(),
+  nightsBooked: z.number().nullable().optional(), nightsAvailable: z.number().nullable().optional(), cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).nullable().optional(),
+});
+// Added to the statement's detail: the ordered lines, and (staff only, never sent to owners) the flags that explain the figures.
+export const statementDetailExtraSchema = z.object({ lines: z.array(statementLineSchema).optional(), internal: z.array(z.string()).optional() });
 
 export const statementSchema = z.object({
   id: z.string().uuid(), propertyId: z.string().uuid(), propertyName: z.string(), period: z.string(), status: z.enum(["draft", "issued", "paid", "void"]),
@@ -60,14 +119,39 @@ export const statementSchema = z.object({
     stays: z.array(z.object({ reference: z.string(), channel: z.string(), checkIn: z.string(), checkOut: z.string(), amountMinor: minor })),
     expenses: z.array(z.object({ supplier: z.string(), reference: z.string(), amountMinor: minor })),
     cleaningCostMinor: minor,
-  }).passthrough(),
-});
+  }).merge(statementDetailExtraSchema).passthrough(),
+}).merge(statementPeriodSchema);
 export type Statement = z.infer<typeof statementSchema>;
 export const statementsSchema = z.array(z.object({
   propertyId: z.string().uuid(), propertyName: z.string(),
-  terms: z.object({ managementFeeBps: z.number().nullable(), cleaningCostMinor: nullableMinor }).nullable(),
+  terms: z.object({ managementFeeBps: z.number().nullable(), cleaningCostMinor: nullableMinor, vatOnFee: z.boolean().nullable().optional(), cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).nullable().optional() }).nullable(),
   statement: statementSchema.nullable(), unsettledPayouts: z.number(), missingDetails: z.number(),
 }));
+// --- Payables (migration 20261012090000): what each clean cost against what the owner is charged, and cleaner invoices.
+// A clean is flagged when its actual cost is above the agreed value; reviewing it picks which one the owner pays.
+// stale: the review no longer holds because the clean's actual cost changed since.
+export const CLEAN_REVIEW_STATES = ["flagged", "reviewed", "stale"] as const;
+export const cleanCostReviewSchema = z.object({
+  workId: z.string().uuid(), propertyId: z.string().uuid().nullable().optional(), propertyName: z.string(), cleanDate: z.string(),
+  agreedMinor: nullableMinor, actualMinor: nullableMinor, state: z.enum(CLEAN_REVIEW_STATES), decision: z.enum(CLEAN_CHARGE_MODES).nullable(),
+  cleanerName: z.string().nullable().optional(), note: z.string().nullable().optional(), reviewedAt: z.string().nullable().optional(),
+});
+export type CleanCostReview = z.infer<typeof cleanCostReviewSchema>;
+export const cleansToReviewReportSchema = z.object({ count: z.number().optional(), more: z.boolean().optional(), cleans: z.array(cleanCostReviewSchema) }).passthrough();
+export type CleansToReviewReport = z.infer<typeof cleansToReviewReportSchema>;
+
+export const cleanerInvoiceLineSchema = z.object({
+  workId: z.string().uuid(), amountMinor: minor, propertyName: z.string().nullable().optional(), cleanDate: z.string().nullable().optional(),
+});
+export const cleanerInvoiceSchema = z.object({
+  id: z.string().uuid(), supplier: z.string(), reference: z.string(), invoiceDate: z.string(), totalMinor: minor, status: z.string(),
+  lines: z.array(cleanerInvoiceLineSchema).optional(), lineCount: z.number().optional(), note: z.string().nullable().optional(), decisionNote: z.string().nullable().optional(),
+  decidedAt: z.string().nullable().optional(), createdAt: z.string().optional(), version: z.number().optional(),
+});
+export type CleanerInvoice = z.infer<typeof cleanerInvoiceSchema>;
+export const cleanerInvoicesReportSchema = z.object({ count: z.number().optional(), more: z.boolean().optional(), invoices: z.array(cleanerInvoiceSchema) }).passthrough();
+export type CleanerInvoicesReport = z.infer<typeof cleanerInvoicesReportSchema>;
+
 export const policySchema = z.object({ expenseApprovalLimitMinor: nullableMinor, version: z.number(), updatedAt: z.string().nullable(), managementRepairLimitMinor: nullableMinor.default(null) });
 
 // --- Rules mirrored from workspace_finance_action, so the screens only offer what can succeed.
@@ -109,6 +193,10 @@ export const PAYOUT_LABEL: Record<PayoutRow["state"], [string, "good" | "wait" |
   matched: ["Matched", "good"], agreed: ["Approved", "good"], different: ["Different amount", "bad"], missing: ["Not received", "wait"],
   no_reference: ["Needs platform code", "wait"], no_expected_amount: ["Needs expected payout", "wait"],
 };
+// An approved stay whose money has not arrived yet reads "Approved, not received".
+export function payoutStateLabel(row: Pick<PayoutRow, "state" | "fundsReceived">): [string, "good" | "wait" | "bad"] {
+  return row.state === "agreed" && row.fundsReceived === false ? ["Approved, not received", "wait"] : PAYOUT_LABEL[row.state];
+}
 export const CHANNEL_LABEL: Record<string, string> = { airbnb: "Airbnb", booking_com: "Booking.com", vrbo: "Vrbo", direct: "Direct", other: "Other" };
 
 // --- Platform stays on the Payouts screen: what each row can do, the numbers it shows, and approving many at once.
@@ -143,7 +231,7 @@ export function filterPayouts<T extends Pick<PayoutRow, "settledMinor" | "checkI
 // What a stay row shows, as one piece of text for the search box: its reference, property, platform, platform code, check-in
 // date, status and amounts. It is already normalised, so match it with matchesSearch (lib/search-options.ts).
 export function payoutSearchText(row: PayoutRow, propertyName?: string): string {
-  return normalise([row.reference, propertyName, CHANNEL_LABEL[row.channel] ?? row.channel, row.channelReference, row.checkIn, formatDay(row.checkIn), PAYOUT_LABEL[row.state][0],
+  return normalise([row.reference, propertyName, CHANNEL_LABEL[row.channel] ?? row.channel, row.channelReference, row.checkIn, formatDay(row.checkIn), payoutStateLabel(row)[0],
     pounds(row.expectedMinor), pounds(row.receivedMinor), row.agreedMinor === null ? "" : pounds(row.agreedMinor)].filter(Boolean).join(" "));
 }
 // The check-in dates present, earliest first, with how many stays each has.

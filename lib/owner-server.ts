@@ -1,14 +1,12 @@
-import { z } from 'zod';
 import { rpcRoute } from './workspace-rpc-route';
-import { businessResponse } from './business-server';
-import { ownerReadSchema } from './owner-policy';
+import { ownerActionSchema, ownerReadSchema } from './owner-policy';
 
-// Owner reports are read only: the routes answer GET, and any update is refused.
+// Owner reports are read only. The one update is an owner's own monthly expense (saved or removed), checked by the database.
 export const workspaceOwner = rpcRoute({
-  readSchema: ownerReadSchema, actionSchema: z.unknown(), bodyLimit: 1024, unavailable: 'Owner reports are temporarily unavailable',
+  readSchema: ownerReadSchema, actionSchema: ownerActionSchema, bodyLimit: 4096, unavailable: 'Owner reports are temporarily unavailable',
   read: (client, input) => input.section === 'periods'
     ? client.rpc('workspace_owner_periods', { start_month: input.from, end_month: input.to })
     : client.rpc('workspace_owner_bookings', { start_on: input.from, end_on: input.to }),
-  handle: () => Promise.resolve(businessResponse({ error: 'Owner reports are read only' }, 405)),
-  action: 'workspace_owner_bookings',
+  action: 'workspace_owner_save_expense',
+  actionFor: input => input.action === 'removeOwnerExpense' ? 'workspace_owner_remove_expense' : 'workspace_owner_save_expense',
 });

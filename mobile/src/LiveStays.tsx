@@ -9,7 +9,8 @@ import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Anchor, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
-import { List, Pills, Row } from "./LiveAccounts";
+import { List, Pills, platformCode, Row } from "./LiveAccounts";
+import { isPayoutChannel } from "../../lib/payout-report-formats";
 import { readOperations, readTeams, writeFinance, writeOperation, writeTeams, WorkspaceApiError } from "./backend/client";
 import { signoffSchema, type Signoff } from "../../lib/management-live";
 import { workDetails } from "../../lib/work-details";
@@ -63,7 +64,8 @@ function StaySheet({ p, visible, properties, onClose, onDone }: { p: Palette; vi
   // If the stay saved but its platform details didn't, a retry only resends the details.
   const [savedStay, setSavedStay] = useState<{ key: string; id: string; version: number } | null>(null);
   const detailsRequest = useRequestId(visible ? ["details", propertyId, reference.trim(), checkIn, channel, code, guests, payout].join(":") : null);
-  const platform = channel === "airbnb" || channel === "booking_com";
+  // A stay on Airbnb, Booking.com or Vrbo needs the platform's own reservation code, so its payout can be matched.
+  const platform = isPayoutChannel(channel);
   async function save() {
     if (busy) return;
     const payoutMinor = payout.trim() ? poundsToMinor(payout) : null, guestCount = guests.trim() ? Number(guests) : null;
@@ -101,7 +103,7 @@ function StaySheet({ p, visible, properties, onClose, onDone }: { p: Palette; vi
       </View>
       <Pills p={p} values={["confirmed", "enquiry"] as const} value={status} onChange={setStatus} label={v => v === "confirmed" ? "Confirmed" : "Enquiry"} />
       <Pills p={p} values={CHANNELS} value={channel} onChange={setChannel} label={v => CHANNEL_LABEL[v]} />
-      {platform && <Field label={channel === "airbnb" ? "Airbnb confirmation code" : "Booking.com reservation number"} value={code} onChange={setCode} p={p} placeholder={channel === "airbnb" ? "HM…" : "10 digits"} />}
+      {platform && <Field label={platformCode(channel).label} value={code} onChange={setCode} p={p} placeholder={platformCode(channel).placeholder} />}
       <View style={[ui.row, { gap: 10 }]}>
         <View style={{ flex: 1 }}><Field label="Guests (optional)" value={guests} onChange={setGuests} p={p} /></View>
         <View style={{ flex: 1 }}><Field label="Payout (optional)" value={payout} onChange={setPayout} p={p} placeholder="£0.00" /></View>

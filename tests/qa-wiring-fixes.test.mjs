@@ -43,7 +43,7 @@ test('Work-view buttons follow the same tool grants as Home', () => {
   assert.equal(canStart(account('accounts', DEFAULT_ROLE_MODULES.accounts), 'new-expense'), true);
   assert.equal(canStart(account('ready', MODULE_IDS), 'report-repair'), false);
   for (const form of ['record-stay', 'report-repair', 'new-clean', 'new-expense']) assert.equal(canStart(account('admin', MODULE_IDS), form), true, form);
-  for (const [file, form] of [['LiveStays.tsx', 'record-stay'], ['LiveRepairs.tsx', 'report-repair'], ['LiveCleans.tsx', 'new-clean'], ['LiveAccounts.tsx', 'new-expense']])
+  for (const [file, form] of [['LiveStays.tsx', 'record-stay'], ['LiveRepairs.tsx', 'report-repair'], ['LiveCleans.tsx', 'new-clean'], ['AccountsPayable.tsx', 'new-expense']])
     assert.match(source(file), new RegExp(`canStart\\(account, "${form}"\\) && <Button`), file);
 });
 

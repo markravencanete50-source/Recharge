@@ -10,6 +10,7 @@ import { ui, type Palette } from "./theme";
 import { clientPortfolio, formatMoney } from "./clientPortfolio";
 import { CLEAN_COST_MINOR, MANAGEMENT_FEE_BPS, samplePayoutReports, updateExpense, useExpenses, type Expense } from "./accountsSamples";
 import { ownerStatement, readPayoutReport, reconcile, type MatchRow, type PayoutRow } from "../../lib/payout-reconciliation";
+import { PAYOUT_CHANNEL_LABEL, RECONCILED_CHANNELS, type PayoutChannel } from "../../lib/payout-report-formats";
 import { exportReport } from "./exportReport";
 
 const pence = (minor: number) => "£" + (minor / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -150,25 +151,29 @@ const MATCH_LABEL: Record<MatchRow["status"], [string, "good" | "wait" | "bad" |
 export function OwnerStatements({ palette: p, desktop }: { palette: Palette; desktop: boolean }) {
   const portfolio = useMemo(() => clientPortfolio(), []);
   const expenses = useExpenses();
-  const [uploads, setUploads] = useState<Record<"Airbnb" | "Booking.com", Upload | null>>({ Airbnb: null, "Booking.com": null });
+  const [uploads, setUploads] = useState<Record<PayoutChannel, Upload | null>>({ airbnb: null, booking_com: null, vrbo: null });
   const [resolved, setResolved] = useState<Record<string, true>>({});
   const [method, setMethod] = useState("Bank transfer");
   const [paid, setPaid] = useState<Record<string, true>>({});
   const [preview, setPreview] = useState<string | null>(null);
   const samples = useMemo(() => samplePayoutReports(portfolio.bookings), [portfolio]);
 
-  const load = (channel: "Airbnb" | "Booking.com", name: string, text: string) => {
+  // The sample data has no Vrbo stays, so Vrbo has no example file here: upload a real one to try it.
+  const example: Partial<Record<PayoutChannel, string>> = { airbnb: samples.airbnbCsv, booking_com: samples.bookingCsv };
+  const load = (channel: PayoutChannel, name: string, text: string) => {
     const report = readPayoutReport(text);
-    setUploads(current => ({ ...current, [channel]: { name, rows: report.rows, error: report.error } }));
+    // A file from another platform is turned away with the reason, as the live screen does.
+    const wrong = !report.error && report.source !== "Unknown" && report.source !== PAYOUT_CHANNEL_LABEL[channel] ? `This looks like a report from ${report.source}. Upload it under ${report.source}.` : undefined;
+    setUploads(current => ({ ...current, [channel]: { name, rows: wrong ? [] : report.rows, error: wrong ?? report.error } }));
   };
-  const upload = async (channel: "Airbnb" | "Booking.com") => {
+  const upload = async (channel: PayoutChannel) => {
     try { const file = await pickCsv(); if (file) load(channel, file.name, file.text); }
     catch { setUploads(current => ({ ...current, [channel]: { name: "", rows: [], error: "The file could not be read. Download the CSV again and retry." } })); }
   };
 
   const platformBookings = portfolio.bookings.filter(booking => booking.channel !== "Direct");
-  const received = [...(uploads.Airbnb?.rows ?? []), ...(uploads["Booking.com"]?.rows ?? [])];
-  const loaded = !!(uploads.Airbnb?.rows.length || uploads["Booking.com"]?.rows.length);
+  const received = RECONCILED_CHANNELS.flatMap(channel => uploads[channel]?.rows ?? []);
+  const loaded = received.length > 0;
   const rows = loaded ? reconcile(platformBookings.map(booking => ({ code: booking.code, amountMinor: booking.payoutMinor, propertyId: booking.propertyId, guest: booking.guest, channel: booking.channel })), received) : [];
   const open = rows.filter(row => row.status !== "matched" && !resolved[row.code]);
   const step = !loaded ? 1 : open.length ? 2 : Object.keys(paid).length === portfolio.perProperty.length ? 4 : 3;
@@ -218,18 +223,18 @@ export function OwnerStatements({ palette: p, desktop }: { palette: Palette; des
       </View>
 
       <View style={{ flexDirection: desktop ? "row" : "column", gap: 12 }}>
-        {(["Airbnb", "Booking.com"] as const).map(channel => {
-          const file = uploads[channel];
+        {RECONCILED_CHANNELS.map(channel => {
+          const file = uploads[channel], label = PAYOUT_CHANNEL_LABEL[channel], sample = example[channel];
           return (
             <View key={channel} style={[ui.card, { flex: desktop ? 1 : undefined, backgroundColor: p.surface, borderColor: p.border, gap: 12 }]}>
               <View style={[ui.row, { gap: 12 }]}>
                 <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name="upload-cloud" size={20} color={p.primary} /></View>
-                <View style={{ flex: 1 }}><Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{channel} payout report</Text><Text style={[ui.small, { color: p.muted }]}>{file?.error ? file.error : file ? `${file.name} · ${file.rows.length} reservations read` : "Download the CSV from " + channel + ", then upload it here."}</Text></View>
+                <View style={{ flex: 1 }}><Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{label} payout report</Text><Text style={[ui.small, { color: p.muted }]}>{file?.error ? file.error : file ? `${file.name} · ${file.rows.length} reservations read` : "Download the CSV from " + label + ", then upload it here."}</Text></View>
                 {!!file && !file.error && <Feather name="check-circle" size={20} color={p.success} />}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 <MotionPress accessibilityRole="button" onPress={() => void upload(channel)} style={[ui.button, { flex: 1, backgroundColor: p.primary }]}><Feather name="upload" size={16} color={p.onPrimary} /><Text style={[ui.buttonText, { color: p.onPrimary }]}>{file ? "Replace CSV" : "Upload CSV"}</Text></MotionPress>
-                <MotionPress accessibilityRole="button" onPress={() => load(channel, `example-${channel.toLowerCase().replace(/\W/g, "")}-payouts.csv`, channel === "Airbnb" ? samples.airbnbCsv : samples.bookingCsv)} style={[ui.button, { flex: 1, backgroundColor: p.wash }]}><Text style={[ui.buttonText, { color: p.primary }]}>Use example</Text></MotionPress>
+                {!!sample && <MotionPress accessibilityRole="button" onPress={() => load(channel, `example-${channel.replace(/_/g, "")}-payouts.csv`, sample)} style={[ui.button, { flex: 1, backgroundColor: p.wash }]}><Text style={[ui.buttonText, { color: p.primary }]}>Use example</Text></MotionPress>}
               </View>
             </View>
           );

@@ -1,16 +1,23 @@
 import { rpcRoute } from './workspace-rpc-route';
-import { ACCOUNTS_ACTIONS, ACCOUNTS_SECTIONS, financeActionSchema, financeReadSchema, prepareFinanceAction } from './workspace-finance-policy';
+import { ACCOUNTS_ACTIONS, ACCOUNTS_SECTIONS, PAYABLES_ACTIONS, REPORT_SECTIONS, financeActionSchema, financeReadSchema, prepareFinanceAction } from './workspace-finance-policy';
 import { teamsActionSchema, teamsReadSchema } from './workspace-teams-policy';
 import { adminActionSchema, adminReadSchema } from './workspace-admin-policy';
 import { integrationConfiguration } from './integration-policy';
 
+// Only the filters asked for are sent; the database refuses any other key.
+const reportFilters = (input: { channel?: string; region?: string; reportId?: string; state?: string }) =>
+  Object.fromEntries(Object.entries({ channel: input.channel, region: input.region, reportId: input.reportId, state: input.state }).filter(([, value]) => value));
 export const workspaceFinance = rpcRoute({
   readSchema: financeReadSchema, actionSchema: financeActionSchema, bodyLimit: 300_000, unavailable: 'Accounts is temporarily unavailable',
   read: (client, input) => ACCOUNTS_SECTIONS.includes(input.section) ? client.rpc('workspace_accounts_read', { section: input.section, target_property: input.propertyId || null, target_id: input.id || null })
+    // Reports (payout lines, cleans to review, cleaner invoices, receivable, performance) take from and to dates and filters.
+    : REPORT_SECTIONS.includes(input.section) ? client.rpc('workspace_finance_report', { section: input.section, target_property: input.propertyId || null, target_id: input.id || null,
+      from_on: input.from || null, to_on: input.to || null, filters: reportFilters(input) })
     : client.rpc('workspace_finance_read', { section: input.section, target_property: input.propertyId || null, period: input.period || null, target_id: input.id || null, status_filter: input.status || null }),
+  // Payout reports are read here and reach the database as lines (prepareFinanceAction).
   prepare: prepareFinanceAction, action: 'workspace_finance_action',
-  // Expense paperwork and purchase invoices have their own database function.
-  actionFor: input => ACCOUNTS_ACTIONS.includes(input.action) ? 'workspace_accounts_action' : 'workspace_finance_action',
+  // Expense paperwork and purchase invoices, and cleaner invoices with the clean cost review, have their own database functions.
+  actionFor: input => ACCOUNTS_ACTIONS.includes(input.action) ? 'workspace_accounts_action' : PAYABLES_ACTIONS.includes(input.action) ? 'workspace_payables_action' : 'workspace_finance_action',
 });
 
 export const workspaceTeams = rpcRoute({
