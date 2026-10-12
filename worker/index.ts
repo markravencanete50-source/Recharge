@@ -10,6 +10,8 @@ interface Env {
   HOSTAWAY_ACCOUNT_ID?: string;
   HOSTAWAY_API_KEY?: string;
   HOSTAWAY_SYNC_ENABLED?: string;
+  // Replies written in the Guest inbox reach the guest through Hostaway only when this is 'true' (read by lib/guest-reply-server.ts).
+  HOSTAWAY_REPLIES_ENABLED?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;

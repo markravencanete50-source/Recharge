@@ -75,6 +75,18 @@ export function hostawayCancelErrorMessage(error: unknown) {
   return "Hostaway could not be reached. Nothing was cancelled; try again in a minute.";
 }
 
+// Shown to the person who pressed Send. A timeout is the one case where the message may still have gone out.
+export function hostawayReplyErrorMessage(error: unknown) {
+  if (error instanceof HostawayApiError) {
+    if (error.step === "sign-in" || error.status === 401 || error.status === 403) return "Hostaway did not accept the saved API key. Add a fresh Hostaway API key, then try again.";
+    if (error.status === 429) return "Hostaway is limiting requests. Wait a minute and try again.";
+    return `Hostaway refused the message (HTTP ${error.status}: ${withoutCredentials(error.message)}). Nothing was sent; reply in Hostaway instead.`;
+  }
+  const name = error instanceof Error ? error.name : "";
+  if (name === "TimeoutError" || name === "AbortError") return "Hostaway took too long to answer. The message may have been sent: check the conversation in a minute before sending it again.";
+  return "Hostaway could not be reached. Nothing was sent; try again in a minute.";
+}
+
 export function hostawayPropertyErrorMessage(error: unknown) {
   if (error instanceof HostawayApiError) {
     if (error.status === 401 || error.status === 403) {
@@ -338,6 +350,19 @@ export async function cancelHostawayReservation(id: string): Promise<void> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ cancelledBy: "host" }),
   });
+}
+
+// Sends a message to the guest through the booking channel (Airbnb, Booking.com, Vrbo) of a Hostaway
+// conversation. Returns the new message's id when Hostaway gives one back.
+export async function sendHostawayConversationMessage(conversationId: string, body: string): Promise<string | null> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  if (!/^\d{1,20}$/.test(conversationId)) throw new HostawayApiError("Invalid Hostaway conversation", 400);
+  const result = asObject(await hostawayRequest<unknown>(`/conversations/${conversationId}/messages`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ body, communicationType: "channel" }),
+  }));
+  return firstString(result.id, result.messageId) || null;
 }
 
 // Guest conversations, newest activity first (100 a page), with their reservation embedded.

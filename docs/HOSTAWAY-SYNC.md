@@ -9,7 +9,8 @@
 > acknowledged and ignored, and the sync card is hidden. The replacement channel manager will
 > reuse the same database functions.
 
-Recharge reads Hostaway and keeps itself up to date. Nothing is written back to Hostaway.
+Recharge reads Hostaway and keeps itself up to date. The one thing it writes back is a reply to a
+guest, sent from the Guest inbox (see "Replying to guests"), which is off until switched on.
 
 ## What it does
 
@@ -37,8 +38,8 @@ Recharge reads Hostaway and keeps itself up to date. Nothing is written back to 
 
 ## Guest messages
 
-Guest conversations from Hostaway come into the Guest inbox (Stays → Guest inbox) by themselves,
-read only: nothing is ever sent or written to Hostaway.
+Guest conversations from Hostaway come into the Guest inbox (Stays → Guest inbox) by themselves.
+Replies can be sent from the app too, once switched on (see "Replying to guests" below).
 
 - **What comes in:** each guest message and each reply the team sends in Hostaway (or that
   Hostaway sends automatically), grouped into one conversation per guest with the property, the
@@ -57,9 +58,10 @@ read only: nothing is ever sent or written to Hostaway.
   24 hours old is added as Done, so the first import doesn't fill "Waiting" with old chats. A
   newer guest message reopens it, as for any done conversation. A conversation Hostaway shows but
   with nothing in the last 14 days is not added.
-- **Replies are still sent in Hostaway** (or on the platform). The reply comes back into the inbox
-  within a minute and ends the wait. "Save reply" in the app only records one; nothing is sent.
-  The "Log a guest message" option stays for WhatsApp, email and anything else outside Hostaway.
+- **Replies:** with sending switched on, staff reply from the app (below). While it is off, replies are
+  sent in Hostaway (or on the platform): the reply comes back into the inbox within a minute and
+  ends the wait, and "Save reply" in the app only records one; nothing is sent. The "Log a guest
+  message" option stays for WhatsApp, email and anything else outside Hostaway.
 - **Properties and stays:** a conversation is matched to the property by its Hostaway listing ID,
   and to the stay (`HA:<reservation id>`) for the booking reference, dates and platform. If the
   listing isn't in Recharge yet the conversation is shared with everyone with the inbox until a
@@ -68,6 +70,30 @@ read only: nothing is ever sent or written to Hostaway.
   not `true`, or the database sync state is paused, nothing is fetched or stored.
 - **If something goes wrong,** the error is logged and the next minute retries. It doesn't change
   the Hostaway card's "last error", which belongs to the reservation sync.
+
+## Replying to guests (off by default)
+
+With sending switched on, staff write the reply in the Guest inbox and press **Send**. Recharge
+posts it to Hostaway (`POST /conversations/{id}/messages` with `communicationType: "channel"`), and
+Hostaway delivers it through the guest's channel (Airbnb, Booking.com, Vrbo).
+
+- **Switch:** the Worker variable `HOSTAWAY_REPLIES_ENABLED` must be `true`, on top of the Hostaway
+  keys and `HOSTAWAY_SYNC_ENABLED` being on, and the database sync state being unpaused. Add it in
+  the Cloudflare dashboard (Workers → recharge-backend → Settings → Variables; `--keep-vars` keeps it
+  across deploys). Without it the app shows today's "Save reply" and Send is refused.
+- **Who:** anyone who can see the conversation in the Guest inbox. Hostaway conversations only;
+  conversations logged by hand are never sent.
+- **Sent once:** each press of Send has a request id, kept in `workspace_guest_reply_requests`. A
+  retried request is not sent again. A request stuck "sending" for over 2 minutes, or one that
+  failed, may be tried again.
+- **Stored only when Hostaway took it.** The message then appears in the conversation as the
+  team's reply, credited to whoever pressed Send, and ends the wait. If Hostaway refuses it, nothing
+  is stored; the person sees why (a wrong key, rate limit, or Hostaway's own reason) and the text stays in
+  the box. If Hostaway's reply has no message id, the message is stored with a Recharge id and the
+  next import merges the same message (same text within 10 minutes) instead of adding a second copy.
+- **Check once switched on:** send one message to a test booking and confirm the guest receives it, that
+  it shows once in the inbox, and that its sender is named. The request shape (`communicationType:
+  "channel"`, the new message's `id` in `result`) is from Hostaway's documentation and untested.
 
 ## Setting it up (about 10 minutes)
 
@@ -115,6 +141,10 @@ sync state is unpaused (`update private.workspace_hostaway_sync_state set paused
   (`workspace_hostaway_conversations_due` and `workspace_hostaway_messages_ingest`, service role
   only; they store through `workspace_guest_messages_ingest`; `remote_marker` on
   `workspace_guest_threads`).
+- Replies: `supabase/migrations/20261012060000_guest_replies_via_hostaway.sql` (the `sendReply` inbox
+  action, `workspace_guest_reply_requests`, `workspace_guest_reply_result` service role only), server
+  flow in `lib/guest-reply-server.ts`, Hostaway call `sendHostawayConversationMessage` in
+  `lib/hostaway.ts`. Tests: `tests/guest-replies-database.test.mjs`, `tests/guest-replies-http.test.mjs`.
 - Mapping: `lib/hostaway-sync-policy.ts` (reservations, listings), `lib/hostaway-messages-policy.ts`
   (conversations, messages, the message webhook; every Hostaway field name for messages is there).
   Runner and webhook: `lib/hostaway-sync.ts` (`runHostawayMessages`, `syncHostawayConversation`).

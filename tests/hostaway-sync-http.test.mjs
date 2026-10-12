@@ -62,6 +62,12 @@ test('reservations map to the platform, confirmation code, guests and platform p
   assert.deepEqual([owner.status, owner.channel, owner.payoutMinor, owner.channelReference, owner.guests], ['confirmed', 'other', 0, 'Owner stay', 3]);
 });
 
+test('a stay keeps the full Airbnb reference: one booking can sit under two Airbnb accounts', () => {
+  const ref = id => policy.syncReservation({ ...airbnb, channelReservationId: id }).channelReference;
+  assert.equal(ref('579754-guest-40852018-confirmation-HM8T9KM2YD'), '579754-guest-40852018-confirmation-HM8T9KM2YD');
+  assert.notEqual(ref('579754-guest-40852018-confirmation-HM8T9KM2YD'), ref('507365-guest-40852018-confirmation-HM8T9KM2YD'));
+});
+
 test('listings map to a name, address, bedrooms and access notes', () => {
   assert.deepEqual(policy.syncListing({ id: 501, internalListingName: 'Harbour View Flat', name: 'Lovely flat by the harbour', address: '1 Quay Street', city: 'Bristol', zipcode: 'BS1 4SB',
     bedroomsNumber: 2, doorSecurityCode: '4821', checkInInstructions: 'Key safe left of the door' }),

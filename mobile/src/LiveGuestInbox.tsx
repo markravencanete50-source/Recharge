@@ -21,8 +21,9 @@ import type { PropertyView } from "../../lib/workspace-view";
 
 // The guest inbox (Stays → Guest inbox): every conversation with guests, the longest wait first.
 // Hostaway fills it by itself (guest messages and the team's replies there, within about a minute).
-// Messages from anywhere else (WhatsApp, email) are logged by hand, and a reply can be recorded
-// here, so reply times and bonuses count either way. Replies are never sent from here.
+// When sending is switched on (canSend), a reply to a Hostaway conversation is sent to the guest through
+// Hostaway. Messages from anywhere else (WhatsApp, email) are logged by hand, and a reply can be recorded
+// here, so reply times and bonuses count either way; those replies are never sent from here.
 // Channel colours, darkened or given dark letters where needed so each letter reads at 4.5:1.
 const CHANNEL_STYLE: Record<GuestChannel, { bg: string; fg: string; letter: string }> = {
   airbnb: { bg: "#D0353B", fg: "#FFFFFF", letter: "A" }, booking_com: { bg: "#003580", fg: "#FFFFFF", letter: "B." }, vrbo: { bg: "#245ABC", fg: "#FFFFFF", letter: "V" },
@@ -143,6 +144,8 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
     return () => { active = false; clearInterval(timer); };
   }, [load]);
   const t = data?.thread;
+  // Sending is on and this is a Hostaway conversation: Send delivers the reply to the guest.
+  const viaHostaway = !!data?.canSend && t?.source === "hostaway";
   // Returns whether the write was saved, so nothing after it claims success when it failed.
   async function run(body: Parameters<typeof writeInbox>[0], done: string, after?: () => void): Promise<boolean> {
     if (busy) return false;
@@ -164,6 +167,16 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
     } else if (text && t?.source === "manual") setNote(`Remember to send it on ${CHANNEL_LABEL[t.channel]} too.`);
     else if (text && t?.source === "hostaway") setNote("Recorded. Send it to the guest in Hostaway; it then appears here by itself.");
   }
+  // One request id per reply text, kept until it is sent, so pressing Send again never sends it twice.
+  const sendId = useRef<{ text: string; id: string } | null>(null);
+  async function sendToGuest() {
+    const text = reply.trim();
+    if (!text || !t || busy) return;
+    if (sendId.current?.text !== text) sendId.current = { text, id: Crypto.randomUUID() };
+    // On a failure the text stays in the box and the error shows, so Send can be pressed again.
+    const sent = await run({ action: "sendReply", requestId: sendId.current.id, threadId, body: text }, "Reply sent", () => { setReply(""); setNote(`Sent to the guest through Hostaway on ${CHANNEL_LABEL[t.channel]}.`); });
+    if (sent) sendId.current = null;
+  }
   const wait = t && t.status === "open" && data ? waitGrade(t.waitingSince, data.targets) : null;
   return (
     <Sheet palette={p} visible onClose={onClose} title={t?.guestName ?? "Conversation"} subtitle={t ? [CHANNEL_LABEL[t.channel], t.propertyName ?? "No property yet", t.reservationRef].filter(Boolean).join(" · ") : undefined} icon="chat">
@@ -182,7 +195,7 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
                 <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomRightRadius: team ? 6 : 18, borderBottomLeftRadius: team ? 18 : 6, backgroundColor: team ? p.primary : p.surface, borderWidth: team ? 0 : 1, borderColor: p.border }}>
                   <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20, fontStyle: m.body ? "normal" : "italic" }}>{m.body ?? "Replied on the platform"}</Text>
                 </View>
-                <Text style={[ui.small, { color: p.muted, fontSize: 11, textAlign: team ? "right" : "left" }]}>{team ? `${m.author ?? "Team"} · ` : ""}{chatTime(m.sentAt)}</Text>
+                <Text style={[ui.small, { color: p.muted, fontSize: 11, textAlign: team ? "right" : "left" }]}>{team ? `${m.author ? (m.delivery === "sent" ? `Sent by ${m.author}` : m.author) : "Team"} · ` : ""}{chatTime(m.sentAt)}</Text>
               </View>
             );
           })}
@@ -195,11 +208,13 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
               style={{ minHeight: 88, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, color: p.text, backgroundColor: p.background, textAlignVertical: "top", fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
           </View>
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-            <Button label={busy ? "Saving…" : "Save reply"} icon="send" primary p={p} disabled={busy || !reply.trim()} onPress={() => void sendReply(false)} />
-            {!!wait && <Button label="I replied on the platform" icon="check" p={p} disabled={busy} onPress={() => void sendReply(true)} />}
+            {viaHostaway ? <Button label={busy ? "Sending…" : "Send"} icon="send" primary p={p} disabled={busy || !reply.trim()} onPress={() => void sendToGuest()} />
+              : <Button label={busy ? "Saving…" : "Save reply"} icon="send" primary p={p} disabled={busy || !reply.trim()} onPress={() => void sendReply(false)} />}
+            {!!wait && !viaHostaway && <Button label="I replied on the platform" icon="check" p={p} disabled={busy} onPress={() => void sendReply(true)} />}
           </View>
           {t.source === "manual" && <Text style={[ui.small, { color: p.muted }]}>Replies aren’t sent to {CHANNEL_LABEL[t.channel]} from here. Saving one records when you replied, for reply times.</Text>}
-          {t.source === "hostaway" && <Text style={[ui.small, { color: p.muted }]}>Send your reply in Hostaway (or on {CHANNEL_LABEL[t.channel]}): it shows up here by itself within a minute and the wait ends. Saving one here only records it; nothing is sent to the guest.</Text>}
+          {viaHostaway && <Text style={[ui.small, { color: p.muted }]}>Send delivers your reply to the guest through Hostaway on {CHANNEL_LABEL[t.channel]}. Their replies show up here by themselves.</Text>}
+          {t.source === "hostaway" && !viaHostaway && <Text style={[ui.small, { color: p.muted }]}>Send your reply in Hostaway (or on {CHANNEL_LABEL[t.channel]}): it shows up here by itself within a minute and the wait ends. Saving one here only records it; nothing is sent to the guest.</Text>}
         </> : null}
         {!!note && <Notice text={note} p={p} />}
         {t.source === "manual" && t.status === "open" && <View style={{ gap: 6 }}>

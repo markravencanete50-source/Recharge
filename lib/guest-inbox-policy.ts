@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
 // The guest inbox: conversations with guests from Airbnb, Booking.com, Vrbo and direct. Hostaway
-// fills it by itself (guest messages and the team's replies sent there); messages from elsewhere,
-// such as WhatsApp or email, are logged by hand, and a reply can be recorded here, so reply times
-// count either way. Replies are never sent from the app. The database decides who sees each conversation.
+// fills it by itself (guest messages and the team's replies sent there) and, when switched on
+// (HOSTAWAY_REPLIES_ENABLED), delivers replies written here. Messages from elsewhere, such as WhatsApp
+// or email, are logged by hand, and a reply can be recorded here, so reply times count either way.
+// The database decides who sees each conversation.
 const uuid = z.string().uuid();
 export const GUEST_CHANNELS = ['airbnb', 'booking_com', 'vrbo', 'direct', 'whatsapp', 'email', 'other'] as const;
 export type GuestChannel = (typeof GUEST_CHANNELS)[number];
@@ -21,6 +22,8 @@ export const inboxActionSchema = z.discriminatedUnion('action', [
     guestName: z.string().trim().max(120).optional(), reservationRef: z.string().trim().max(100).optional(), body: body.min(1, 'Add the guest’s message'), sentAt: when }).strict(),
   // The team's reply; empty when it was sent on the platform and only the time is recorded.
   z.object({ action: z.literal('reply'), requestId: uuid, threadId: uuid, body: body.default(''), sentAt: when }).strict(),
+  // A reply delivered to the guest through Hostaway (Hostaway conversations only, and only while sending is switched on).
+  z.object({ action: z.literal('sendReply'), requestId: uuid, threadId: uuid, body: body.min(1, 'Write the reply') }).strict(),
   z.object({ action: z.literal('setStatus'), requestId: uuid, threadId: uuid, status: z.enum(['open', 'done']) }).strict(),
   z.object({ action: z.literal('editThread'), requestId: uuid, threadId: uuid, propertyId: uuid.nullable(), guestName: z.string().trim().min(1, 'Add the guest’s name').max(120), reservationRef: z.string().trim().max(100).default('') }).strict(),
 ]).superRefine((value, context) => {
@@ -37,9 +40,10 @@ export const guestThreadSchema = z.object({
 });
 export type GuestThread = z.infer<typeof guestThreadSchema>;
 const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() });
-export const inboxListSchema = z.object({ threads: z.array(guestThreadSchema), waiting: z.number(), targets, connected: z.boolean() });
+// canSend: replies written here are delivered to the guest through Hostaway (decided by the server, not the database).
+export const inboxListSchema = z.object({ threads: z.array(guestThreadSchema), waiting: z.number(), targets, connected: z.boolean(), canSend: z.boolean().default(false) });
 export const guestMessageSchema = z.object({ id: uuid, direction: z.enum(['guest', 'team']), body: z.string().nullable(), sentAt: z.string(), delivery: z.string().nullable(), author: z.string().nullable() });
-export const inboxThreadSchema = z.object({ thread: guestThreadSchema, targets, messages: z.array(guestMessageSchema) });
+export const inboxThreadSchema = z.object({ thread: guestThreadSchema, targets, messages: z.array(guestMessageSchema), canSend: z.boolean().default(false) });
 
 // How long a guest has been waiting, graded like reply times: green, amber, then red.
 export function waitGrade(since: string | null, t: { greenMinutes: number; amberMinutes: number }, now = Date.now()) {
