@@ -99,6 +99,15 @@ test('access revoked after a batch claim is checked again before the individual 
  await db.exec('reset role');await db.query("update public.workspace_profiles set status='active' where user_id=$1",[users[1]]);
  await as(1);await assert.rejects(rpc('integration_check_notification',[jobs[0].id,jobs[0].lease]),/permission denied/);
 });
+test('email and push are only queued for notices from the last 24 hours',async()=>{
+ await db.exec('reset role');
+ const mk=async(age)=>{const event=(await db.query("insert into public.workspace_activity(actor_id,property_id,work_id,event_type,created_at) values($1,$2,$3,'test.recent',now()-$4::interval) returning id",[users[0],property,clean.workId,age])).rows[0].id;
+  return (await db.query('insert into private.workspace_notification_outbox(user_id,work_id,event_id) values($1,$2,$3) returning id',[users[1],clean.workId,event])).rows[0].id;};
+ const old=await mk('3 days'),fresh=await mk('1 hour');
+ await as('service');await rpc('integration_claim_notifications',[true,false]);await db.exec('reset role');
+ const rows=async id=>(await db.query("select 1 from private.workspace_notification_deliveries where outbox_id=$1 and channel='email'",[id])).rows.length;
+ assert.equal(await rows(old),0);assert.equal(await rows(fresh),1);
+});
 test('new private tables have RLS and exposed RPCs do not become public security definers',async()=>{
  const tables=await db.query("select relname,relrowsecurity from pg_class where relname in ('workspace_upload_intents','workspace_notification_deliveries')");assert.equal(tables.rows.length,2);assert.ok(tables.rows.every(t=>t.relrowsecurity));
  const functions=await db.query("select p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef");assert.equal(functions.rows.length,0);

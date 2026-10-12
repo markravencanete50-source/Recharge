@@ -37,6 +37,7 @@ planned.
   app comes back to the front. It pauses while a form or sheet is open.
 - **Update wording.** `lib/notice-copy.ts` titles every update in the app, and gives the subject and
   message for email and push. `integration_claim_notifications` now passes `eventType`.
+- **Email/push only for recent notices.** `integration_claim_notifications` only creates email and push delivery rows for notices whose `workspace_activity` event is under 24 hours old, so switching the channels on never sends the backlog; older notices stay readable in the app.
 - **Weekly report notice.** `workspace_weekly_report_notices()` runs on the backend schedule. It
   sends owners an in-app notice on Mondays from 8am UK time, once per property per week.
 - **Repair quotes.** The `reviseQuote` step updates the quote. A higher quote above the owner's

@@ -6,7 +6,7 @@ const config={name:'recharge-backend',main:'index.js',compatibility_date:source.
  assets:{directory:'../client',binding:'ASSETS',run_worker_first:true},
  vars:{BACKEND_ONLY:'true',SUPABASE_URL:'https://brixfalrrmzqoioggvfx.supabase.co'},
  triggers:{crons:['*/15 * * * *','* * * * *']},
- dev:{ip:'127.0.0.1',local_protocol:'http'},observability:{enabled:true,head_sampling_rate:0.1}};
+ dev:{ip:'127.0.0.1',local_protocol:'http'},observability:{enabled:true,head_sampling_rate:1}};
 // Attach the app to its own address only when asked. The domain's DNS must already be on Cloudflare,
 // or the deploy is refused. Example: BACKEND_CUSTOM_DOMAIN=app.rechargegroup.co.uk npm run backend:config
 const domain=process.env.BACKEND_CUSTOM_DOMAIN?.trim();
