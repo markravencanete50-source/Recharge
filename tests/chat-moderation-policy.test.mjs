@@ -53,6 +53,16 @@ test('the words people read', () => {
   assert.equal(moderation.attachmentSummary([], 3), '3 photos or videos', 'after removal only the count is left');
 });
 
+test('reporters and senders are told the outcome, without names', () => {
+  for (const type of ['chat.report_reviewed', 'chat.report_removed', 'chat.message_removed']) {
+    const copy = noticeCopy(type);
+    assert.notEqual(copy.title, noticeCopy('nothing.here').title, type);
+    assert.doesNotMatch(copy.message, /@|£|\d{4}/, type);
+  }
+  assert.equal(noticeCopy('chat.report_removed').title, 'Your report was reviewed');
+  assert.equal(noticeCopy('chat.message_removed').title, 'An admin removed one of your messages');
+});
+
 test('admins are told, and find Reported messages in the left panel and search', () => {
   const copy = noticeCopy('chat.reported');
   assert.equal(copy.title, 'A message was reported');

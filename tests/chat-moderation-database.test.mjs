@@ -269,6 +269,12 @@ test('an admin removes a reported message for everyone, with its photos; every o
   const done = await decide(first, 'remove', { requestId });
   assert.equal(done.status, 'actioned'); assert.equal(done.removed, true); assert.equal(done.handledByName, 'Maria Cole'); assert.deepEqual(done.paths, []);
   assert.deepEqual(await decide(first, 'remove', { requestId }), done, 'the same request replays');
+  // Both reporters are told it was reviewed and removed; the sender is told once; nobody is named; replays add nothing.
+  const tally = async () => Promise.all([ACCOUNTS, STAYS, CLEANS, ADMIN].map(async i => [await notified(i, 'chat.report_removed'), await notified(i, 'chat.report_reviewed'), await notified(i, 'chat.message_removed')]));
+  assert.deepEqual(await tally(), [[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 0]]);
+  await decide(first, 'remove', { requestId });
+  assert.deepEqual(await tally(), [[1, 0, 0], [1, 0, 0], [0, 0, 1], [0, 0, 0]], 'replaying the request does not repeat the notices');
+  assert.equal((await owner("select count(*)::int n from public.workspace_activity where event_type in ('chat.report_removed','chat.report_reviewed','chat.message_removed') and actor_id is not null"))[0].n, 0, 'no admin is named');
   const after = await reports();
   const sameMessage = after.items.filter(r => r.messageId === first.messageId);
   assert.deepEqual(sameMessage.map(r => r.status), ['actioned', 'actioned'], 'both reporters\' reports are closed');
@@ -317,8 +323,12 @@ test('dismissing a report leaves the message; nobody decides a report about thei
   await report(said['Spam spam spam'], 'spam');
   await as(ADMIN2);
   const item = (await reports()).items.find(r => r.messageId === said['Spam spam spam']);
+  const senderTold = await notified(CLEANS, 'chat.message_removed');
   const dismissed = await decide(item, 'dismiss');
   assert.equal(dismissed.status, 'dismissed'); assert.equal(dismissed.removed, false); assert.equal(dismissed.paths, undefined);
+  // The reporter hears it was left in place; the sender is not told anything more.
+  assert.deepEqual([await notified(STAYS, 'chat.report_reviewed'), await notified(STAYS, 'chat.message_removed'), await notified(CLEANS, 'chat.message_removed')], [1, 0, senderTold]);
+  assert.equal(await notified(CLEANS, 'chat.report_reviewed'), 0);
   await as(CLEANS);
   assert.equal(find(await thread(group.id), 'Spam spam spam').body, 'Spam spam spam');
   await as(ADMIN2);
@@ -343,8 +353,8 @@ test('dismissing a report leaves the message; nobody decides a report about thei
 
 test('applying the migration again changes nothing', async () => {
   const before = (await owner("select md5(string_agg(pg_get_functiondef(p.oid),'' order by p.oid::text)) h from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname like any(array['workspace_chat_%','chat_%','workspace_teams_%'])"))[0].h;
-  await db.exec(await fs.readFile('supabase/migrations/20261012010000_chat_reports_blocks.sql', 'utf8'));
+  for (const file of ['20261012010000_chat_reports_blocks.sql', '20261012030000_chat_report_outcomes.sql']) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   const after2 = (await owner("select md5(string_agg(pg_get_functiondef(p.oid),'' order by p.oid::text)) h from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname like any(array['workspace_chat_%','chat_%','workspace_teams_%'])"))[0].h;
   assert.equal(after2, before);
-  assert.ok(migrations.includes('20261012010000_chat_reports_blocks.sql'));
+  assert.ok(migrations.includes('20261012010000_chat_reports_blocks.sql') && migrations.includes('20261012030000_chat_report_outcomes.sql'));
 });

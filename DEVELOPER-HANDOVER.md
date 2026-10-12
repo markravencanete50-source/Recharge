@@ -536,6 +536,9 @@ report objectionable content, a way to block abusive users, and timely action on
   leaves it. Either decides every open report on that message together. An admin cannot decide a
   report about their own message. While a report is open, admins may open its photos to judge it.
   Removed text is kept in the database (hidden) as evidence.
+  Deciding also tells each reporter whose open report it closed (`chat.report_removed` or
+  `chat.report_reviewed`) and, on removal, the sender (`chat.message_removed`); the notices carry no
+  actor, so neither side learns which admin decided or who reported. Migration `20261012030000_chat_report_outcomes.sql`.
 - Migration `20261012010000_chat_reports_blocks.sql` (`private.chat_reports`, `private.chat_blocks`,
   `chat_messages.removed_at/removed_by`; chat actions `reportMessage`, `blockUser`, `unblockUser`;
   chat read section `blocks`; team read section `chatReports`, team action `decideChatReport`).
