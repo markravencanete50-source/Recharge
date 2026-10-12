@@ -1,16 +1,22 @@
 {
   "expo": {
-    "name": "Recharge Mobile Preview",
+    "name": "Recharge",
     "slug": "recharge-mobile-preview",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.rechargestays.preview"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.rechargegroup.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.rechargegroup.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -39,7 +45,7 @@
         }
       ]
     ],
-    "scheme": "recharge-preview",
+    "scheme": "recharge",
     "extra": {
       "router": {},
       "eas": {

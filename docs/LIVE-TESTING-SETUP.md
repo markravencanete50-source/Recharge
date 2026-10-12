@@ -90,3 +90,8 @@ The native API (`/api/mobile/*`) deliberately refuses browser requests (no cooki
 cross-site requests, no CORS), and the browser workspace uses HTTP-only cookies on the backend's
 own origin. Bringing the redesigned screens onto live data means serving them from that origin
 with the cookie transport, centre by centre, as part of the planned legacy-to-app port.
+
+The phone app is different: it already reads live data. Builds from the `production` and `pilot`
+EAS profiles in `mobile/eas.json` set `RECHARGE_LIVE_ONLY=1` and `EXPO_PUBLIC_WORKSPACE_API_ORIGIN`
+to `https://app.rechargegroup.co.uk`, so the sample-data preview is left out and the app signs in
+to the live workspace. The `preview-ios` profile is still a sample-data simulator build.

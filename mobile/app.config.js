@@ -1,8 +1,8 @@
 // app.json holds the app's settings. When the live workspace is built for the web and
 // served by the backend at /workspace (scripts/build-workspace-web.mjs), its files must
 // be addressed under that path, so the build sets RECHARGE_WEB_BASE_URL=/workspace.
-// The live build (RECHARGE_LIVE_ONLY) is the real app, so its browser tab says "Recharge"; the sample
-// preview keeps its own name.
+// app.json carries the store identity ("Recharge", com.rechargegroup.app); the live build
+// (RECHARGE_LIVE_ONLY) also names the browser tab and web app "Recharge".
 module.exports = ({ config }) => {
   const baseUrl = process.env.RECHARGE_WEB_BASE_URL;
   const live = process.env.RECHARGE_LIVE_ONLY === "1";
