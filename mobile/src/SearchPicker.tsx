@@ -16,7 +16,7 @@ export function SearchBox({ p, value, onChange, placeholder }: { p: Palette; val
   // border in the primary colour, with the padding one pixel less so the text does not move.
   const [focused, setFocused] = useState(false);
   return (
-    <View style={[ui.row, { gap: 10, paddingHorizontal: focused ? 13 : 14, minHeight: 48, borderRadius: 14, borderWidth: focused ? 2 : 1, borderColor: focused ? p.primary : p.controlBorder, backgroundColor: p.background }]}>
+    <View {...(Platform.OS === "web" ? { dataSet: { bareInput: "true" } } : {})} style={[ui.row, { gap: 10, paddingHorizontal: focused ? 13 : 14, minHeight: 48, borderRadius: 14, borderWidth: focused ? 2 : 1, borderColor: focused ? p.primary : p.controlBorder, backgroundColor: p.background }]}>
       <Feather name="search" size={18} color={p.muted} />
       <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={p.muted} accessibilityLabel={placeholder} autoCapitalize="none" autoCorrect={false}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}

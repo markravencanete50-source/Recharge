@@ -31,7 +31,7 @@ function Input({ label, value, onChange, p, kind, onSubmit }: { label: string; v
   return (
     <View style={{ gap: 8 }}>
       <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{label}</Text>
-      <View style={[ui.row, { minHeight: 52, borderRadius: 16, borderWidth: focused ? 1.5 : 1, borderColor: focused ? p.primary : p.controlBorder, backgroundColor: p.background, paddingLeft: 14, gap: 10 },
+      <View {...(Platform.OS === "web" ? { dataSet: { bareInput: "true" } } : {})} style={[ui.row, { minHeight: 52, borderRadius: 16, borderWidth: focused ? 1.5 : 1, borderColor: focused ? p.primary : p.controlBorder, backgroundColor: p.background, paddingLeft: 14, gap: 10 },
         Platform.OS === "web" ? ({ transitionProperty: "border-color, box-shadow", transitionDuration: "200ms", boxShadow: focused ? `0 0 0 4px ${p.primary}26` : "none" } as object) : null]}>
         <Feather name={k.icon} size={17} color={focused ? p.primary : p.muted} />
         <TextInput
