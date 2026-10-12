@@ -1,10 +1,20 @@
-# Recharge mobile preview
+# Recharge mobile app
 
-This is a native React Native and Expo SDK 57 app, with Expo Router navigation. The preferred Windows preview is an iOS simulator hosted by Appetize. It does not embed the website or a WebView. The local Android emulator boots, but its Expo Go connection has not been verified.
+This is the Recharge native React Native and Expo SDK 57 app, with Expo Router navigation. The preferred Windows preview is an iOS simulator hosted by Appetize. It does not embed the website or a WebView. The local Android emulator boots, but its Expo Go connection has not been verified.
+
+## Build profiles
+
+The app is Recharge (com.rechargegroup.app on iOS and Android). Its Expo project keeps the EAS slug `recharge-mobile-preview`. The slug is tied to the EAS project id, so do not change it, even though the app is no longer only a preview.
+
+eas.json has three build profiles:
+
+- `production` makes store builds. It points at https://app.rechargegroup.co.uk with RECHARGE_LIVE_ONLY=1.
+- `pilot` makes internal device test builds against the same live site, with RECHARGE_LIVE_ONLY=1.
+- `preview-ios` makes the sample-data iOS Simulator build described below.
 
 ## Preferred iOS preview on Windows
 
-The user chose a cloud iPhone simulator. The app is linked to the Expo project `@mrkrvn/recharge-mobile-preview`. Sign in to Expo and Appetize. The preview-ios profile in eas.json creates a standalone iOS Simulator app with its JavaScript bundled, without needing a local Metro connection, TestFlight or Apple Developer membership. Run `npx eas-cli@latest build --platform ios --profile preview-ios` from this folder. Download its simulator .app archive and upload it to Appetize as a compressed .app bundle. An IPA store build is not accepted by Appetize. Select an iPhone and open its live stream in a separate browser window. Keep live account configuration disabled until the backend is configured and audited.
+The user chose a cloud iPhone simulator. Sign in to Expo and Appetize. The preview-ios profile in eas.json creates a sample-data standalone iOS Simulator app with its JavaScript bundled, without needing a local Metro connection, TestFlight or Apple Developer membership. Run `npx eas-cli@latest build --platform ios --profile preview-ios` from this folder. Download its simulator .app archive and upload it to Appetize as a compressed .app bundle. An IPA store build is not accepted by Appetize. Select an iPhone and open its live stream in a separate browser window. Keep live account configuration disabled until the backend is configured and audited.
 
 The first standalone EAS iOS Simulator build was uploaded to Appetize and ran successfully on an iPhone 14 Pro with iOS 17.2. Home, tools, native search, tool sheets, analytics and theme switching were exercised in the live native app. Each updated binary needs its own runtime check. The current free account limits each simulator session to three minutes; restart a session when its timer expires. Confirm the remaining account allowance before extended testing.
 

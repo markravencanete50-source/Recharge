@@ -765,6 +765,15 @@ async function chat(s) {
       await s.chat('fiona', { action: 'saveReply', title, body, audience });
     }
   });
+  // Reports for the admin Reported messages page: one open for review, one an admin has dismissed.
+  const messageId = (conversationId, body) => s.sql('select id from private.chat_messages where conversation_id = $1 and body = $2 order by created_at desc limit 1', [conversationId, body]).then(rows => rows[0]?.id);
+  if (channels.cleaning) {
+    const openId = await messageId(channels.cleaning, 'Can I start Stockbridge at 10:30? Guests leave late.');
+    if (openId) await s.step('chat report', () => s.chat('kirsty', { action: 'reportMessage', requestId: randomUUID(), messageId: openId, reason: 'other', note: 'Rota questions should go to the scheduling chat.' }));
+    const dismissedId = await messageId(channels.cleaning, 'Running 15 minutes late, traffic on the M8.');
+    const reported = dismissedId ? await s.step('chat report to dismiss', () => s.chat('isla', { action: 'reportMessage', requestId: randomUUID(), messageId: dismissedId, reason: 'other', note: 'Running late again.' })) : undefined;
+    if (reported?.reportId) await s.step('chat report dismissed', () => s.teams('sam', { action: 'decideChatReport', reportId: reported.reportId, version: 1, decision: 'dismiss' }));
+  }
 }
 
 // The guest inbox: messages logged from the platforms, team replies, some still waiting.

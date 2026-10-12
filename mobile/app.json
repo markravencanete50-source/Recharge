@@ -37,6 +37,18 @@
       "expo-sharing",
       "expo-secure-store",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#F3EEE4",
+          "dark": {
+            "backgroundColor": "#101614"
+          }
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Recharge uses your photo library to attach photos of cleans, deliveries, repairs, receipts and training materials.",
