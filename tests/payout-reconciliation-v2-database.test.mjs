@@ -245,7 +245,17 @@ test('new-shape lines are checked before anything is stored', async () => {
     [{ ...ok, currency: 'GBP' }, /Invalid payout line 1/],
   ]) await assert.rejects(upload('vrbo', [bad]), reason);
   await assert.rejects(upload('vrbo', [ok, ok]), /repeats a payout line/);
-  await assert.rejects(upload('vrbo', Array.from({ length: 2001 }, (_, i) => line('vrbo', 'HA-MANY', i + 1))), /between 1 and 2,000/);
+  // Checked in one pass: the first bad line in file order is named.
+  const more = n => line('vrbo', 'HA-CHECK', 100 + n);
+  await assert.rejects(upload('vrbo', [more(1), more(2), { ...more(3), paidOn: '2026-13-01' }, { ...more(4), amountMinor: 'x' }]), /Invalid payout line 3$/);
+  await assert.rejects(upload('vrbo', [more(1), 5, { ...more(3), paidOn: '1999-12-31' }]), /Invalid payout line 2$/);
+  await assert.rejects(upload('vrbo', [more(1), { ...more(2), paidOn: '2028-02-30' }]), /Invalid payout line 2$/);
+  await assert.rejects(upload('vrbo', [more(1), { ...more(2), lineType: '  ' }]), /Invalid payout line 2$/);
+  // A year of a larger portfolio fits (8,000 lines); old-shape files keep their old limit of 2,000.
+  await assert.rejects(upload('vrbo', Array.from({ length: 8001 }, (_, i) => line('vrbo', 'HA-MANY', i + 1))), /between 1 and 8,000/);
+  await assert.rejects(upload('vrbo', Array.from({ length: 2001 }, (_, i) => ({ reference: `HA-OLD${i}`, amountMinor: 1 }))), /between 1 and 2,000/);
+  await assert.rejects(upload('vrbo', []), /between 1 and 2,000/);
+  await assert.rejects(upload('vrbo', 'not a list'), /between 1 and 8,000/);
   assert.equal((await linesFor('HA-CHECK')).length, 0);
 });
 

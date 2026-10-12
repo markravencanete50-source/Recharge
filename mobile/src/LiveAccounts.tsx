@@ -10,7 +10,7 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, Loading, london, message, Notice, Section, StatGrid, StatTile, useRequestId, useWorkFocus, type IconName } from "./LiveKit";
 import { formatCount, formatDay, formatMoney, plural } from "../../lib/format";
-import { readPayoutLines } from "../../lib/payout-reconciliation";
+import { fitsPayoutUpload, MAX_PAYOUT_LINES, readPayoutLines, transferSummary } from "../../lib/payout-reconciliation";
 import { isPayoutChannel, PAYOUT_CHANNEL_LABEL, RECONCILED_CHANNELS, type PayoutChannel } from "../../lib/payout-report-formats";
 import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
 import { PayoutExamples } from "./AccountsFiles";
@@ -18,6 +18,8 @@ import { PayoutStays } from "./PayoutStays";
 import { PayoutLinesSheet, type LinesStay } from "./PayoutLinesSheet";
 import { AccountsPayable, ExpenseSheet, List, NewExpenseSheet, Pills, Row, type LimitState, type NoteAsk, type Overview } from "./AccountsPayable";
 import { AccountsStatements, TermsSheet, type StatementRow } from "./AccountsStatements";
+import { AccountsReceivable } from "./AccountsReceivable";
+import { AccountsPerformance } from "./AccountsPerformance";
 export { ExpenseSheet, Initials, Line, List, Pills, Row, type NoteAsk } from "./AccountsPayable";
 import { CHANNEL_LABEL, expensesSchema, isFinanceRole, monthLabel, overviewSchema, payoutImportSchema, policySchema, pounds, reconciliationSchema, shiftMonth, statementsSchema, type Expense, type PayoutImport, type PayoutRow } from "../../lib/accounts-live";
 import { poundsToMinor } from "../../lib/repairs-live";
@@ -32,7 +34,7 @@ import type { z } from "zod";
 // Airbnb, Booking.com and Vrbo and shows, stay by stay, whether the money arrived.
 type Reconciliation = z.infer<typeof reconciliationSchema>;
 type NeedsDetails = Reconciliation["needsDetails"][number];
-type Tab = "expenses" | "payouts" | "statements";
+type Tab = "expenses" | "payouts" | "statements" | "receivable" | "performance";
 
 // What the platform calls its reservation code, as staff will see it on the payout report.
 export function platformCode(channel: string): { label: string; placeholder: string } {
@@ -126,7 +128,9 @@ const READ_LABEL: Record<string, string> = {
   code: "Reservation code", net: "Net payout (money received)", gross: "Gross", commission: "Commission", hostFee: "Host fee", paymentFee: "Payment fee",
   cleaningFee: "Cleaning fee", date: "Date", type: "Type", currency: "Currency", payoutRef: "Payout reference",
 };
-type UploadResult = { channel: PayoutChannel; fileName: string; summary: string; used: Record<string, string> };
+type TransferWords = ReturnType<typeof transferSummary>;
+type UploadResult = { channel: PayoutChannel; fileName: string; summary: string; used: Record<string, string>; transfers: TransferWords };
+const TOO_LARGE = "This report is too large. Split it into parts of up to 8,000 lines and upload each part.";
 
 // "12 new, 3 already uploaded, 2 skipped" (and "1 for cancelled stays" when there are any). New and already uploaded come from the
 // server, which holds every line it has seen; skipped are the rows this screen could not use (no code, or no net amount).
@@ -140,8 +144,21 @@ function noLinesNote(skipped: { noCode: number; noAmount: number }) {
   const why = [skipped.noCode ? `${plural(skipped.noCode, "row")} had no reservation code` : "", skipped.noAmount ? `${plural(skipped.noAmount, "row")} had no net amount` : ""].filter(Boolean).join(" and ");
   return "No reservation payouts were found in this report" + (why ? `: ${why}.` : ".");
 }
+// Whether each payout date's lines add up to the bank transfer the file lists for it (Airbnb files). Information only:
+// a difference never stops the upload.
+function TransferCheck({ p, words }: { p: Palette; words: NonNullable<TransferWords> }) {
+  return (
+    <View style={[ui.row, { gap: 8, alignItems: "flex-start" }]}>
+      <Feather name={words.allMatched ? "check-circle" : "info"} size={16} color={p.primary} style={{ marginTop: 1 }} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[ui.small, { color: p.text }]}>{words.text}</Text>
+        {words.details.map(line => <Text key={line} style={[ui.small, { color: p.muted }]}>{line}</Text>)}
+      </View>
+    </View>
+  );
+}
 // Which columns the file was read from, folded away until wanted, so a wrong column is easy to spot on a new kind of file.
-function HowRead({ p, used }: { p: Palette; used: Record<string, string> }) {
+function HowRead({ p, used, transfers }: { p: Palette; used: Record<string, string>; transfers?: TransferWords }) {
   const [open, setOpen] = useState(false);
   const rows = Object.entries(used).filter(([field]) => READ_LABEL[field]);
   return (
@@ -152,6 +169,7 @@ function HowRead({ p, used }: { p: Palette; used: Record<string, string> }) {
       </MotionPress>
       {open && <View style={{ gap: 4 }}>
         {rows.map(([field, column]) => <Text key={field} style={[ui.small, { color: p.muted }]}>{READ_LABEL[field]}: <Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>{column}</Text></Text>)}
+        {!!transfers && <Text style={[ui.small, { color: p.muted }]}>Bank transfers: <Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>{[transfers.text, ...transfers.details].join(" ")}</Text></Text>}
         <Text style={[ui.small, { color: p.muted }]}>If the net payout column is not the money you received, tell the team before you rely on this report.</Text>
       </View>}
     </View>
@@ -170,7 +188,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
   const thisMonth = london(new Date()).slice(0, 7);
   const [period, setPeriod] = useState(thisMonth);
   const focus = useWorkFocus();
-  const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements"] as const).find(v => v === focus?.sub) ?? "expenses");
+  const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements", "receivable", "performance"] as const).find(v => v === focus?.sub && ((v !== "receivable" && v !== "performance") || isFinanceRole(account.role))) ?? "expenses");
   const [status, setStatus] = useState<Expense["status"]>("to_approve");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [limit, setLimit] = useState<LimitState | null>(null);
@@ -224,16 +242,17 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
     try {
       const file = await pickCsv();
       if (!file) return;
-      if (file.text.length > 250000) { setUploadNote("This report is too large. Split it by month and upload each part."); return; }
+      if (!fitsPayoutUpload(file.text)) { setUploadNote(TOO_LARGE); return; }
       // The file is read here first, so a wrong platform or a missing column is turned away with the reason before anything is sent.
       const read = readPayoutLines(file.text, channel);
       if (read.error) { setUploadNote(read.error); return; }
       if (!read.lines.length) { setUploadNote(noLinesNote(read.skipped)); return; }
+      if (read.lines.length > MAX_PAYOUT_LINES) { setUploadNote(TOO_LARGE); return; }
       setUploading(channel);
       const key = "upload:" + channel + ":" + file.name + ":" + file.text.length;
       const reply = payoutImportSchema.parse((await writeFinance({ action: "importPayoutReport", requestId: idFor(key), channel, fileName: file.name.slice(0, 200), csv: file.text })).data);
       ids.current.delete(key);
-      setUploadResult({ channel, fileName: file.name, summary: uploadSummary(reply, read.skipped), used: read.used });
+      setUploadResult({ channel, fileName: file.name, summary: uploadSummary(reply, read.skipped), used: read.used, transfers: transferSummary(read.transfers) });
       await load();
     } catch (e) { setUploadNote(message(e)); } finally { setUploading(null); }
   }
@@ -282,10 +301,11 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
       {loading && <Loading p={p} />}
 
       <View style={[ui.row, { gap: 8 }]}>
-        {(["expenses", "payouts", "statements"] as const).map(v => <Button key={v} label={{ expenses: "Expenses", payouts: "Reconciliation", statements: "Statements" }[v]} primary={view === v} p={p} onPress={() => setView(v)} />)}
+        {(isFinanceRole(role) ? ["expenses", "payouts", "statements", "receivable"] as const : ["expenses", "payouts", "statements"] as const).map(v => <Button key={v} label={{ expenses: "Expenses", payouts: "Reconciliation", statements: "Statements", receivable: "Receivable" }[v]} primary={view === v} p={p} onPress={() => setView(v)} />)}
+        {isFinanceRole(role) && <Button key="performance" label="Performance" primary={view === "performance"} p={p} onPress={() => setView("performance")} />}
       </View>
 
-      {view === "expenses" && <AccountsPayable p={p} account={account} role={role} management={management} overview={overview} status={status} setStatus={setStatus} expenses={expenses} limit={limit} loading={loading} load={load} setAsk={setAsk} setOpenExpense={setOpenExpense} setCreating={setCreating} />}
+      {view === "expenses" && <AccountsPayable p={p} account={account} role={role} management={management} overview={overview} status={status} setStatus={setStatus} expenses={expenses} limit={limit} loading={loading} load={load} setAsk={setAsk} setOpenExpense={setOpenExpense} setCreating={setCreating} properties={properties} />}
 
       {view === "payouts" && rec && <>
         <View style={{ gap: 4 }}>
@@ -299,7 +319,8 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
           {!!uploadNote && <Notice text={uploadNote} p={p} tone="bad" />}
           {!!uploadResult && <View key={uploadResult.fileName + uploadResult.summary} style={{ gap: 4 }}>
             <Notice text={`${PAYOUT_CHANNEL_LABEL[uploadResult.channel]} · ${uploadResult.fileName}: ${uploadResult.summary}`} p={p} />
-            <HowRead p={p} used={uploadResult.used} />
+            {!!uploadResult.transfers && <TransferCheck p={p} words={uploadResult.transfers} />}
+            <HowRead p={p} used={uploadResult.used} transfers={uploadResult.transfers} />
           </View>}
           <Text style={[ui.small, { color: p.muted }]}>Not sure which file? Download an example: the upload reads the same columns (the reservation code and the net payout). Uploading the same file twice is safe: lines already held are not added again.</Text>
           <PayoutExamples p={p} period={period} />
@@ -326,7 +347,11 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
         </Section>}
       </>}
 
-      {view === "statements" && <AccountsStatements p={p} role={role} management={management} period={period} statements={statements} loading={loading} expanded={expanded} setExpanded={setExpanded} busyStatement={busyStatement} statementAction={statementAction} setTerms={setTerms} setAsk={setAsk} />}
+      {view === "statements" && <AccountsStatements p={p} role={role} management={management} period={period} statements={statements} loading={loading} expanded={expanded} setExpanded={setExpanded} busyStatement={busyStatement} statementAction={statementAction} setTerms={setTerms} setAsk={setAsk} properties={properties} onPeriod={setPeriod} onOpenTab={tab => setView(tab === "payouts" ? "payouts" : "expenses")} />}
+
+      {view === "receivable" && <AccountsReceivable p={p} account={account} properties={properties} />}
+
+      {view === "performance" && <AccountsPerformance p={p} account={account} properties={properties} />}
 
       <ExpenseSheet p={p} role={role} id={openExpense} limit={limit?.minor ?? null} onClose={() => setOpenExpense(null)} onAsk={a => { setOpenExpense(null); setAsk(a); }} onDone={saved(load)} />
       <NewExpenseSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={saved(load)} />

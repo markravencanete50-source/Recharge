@@ -8,7 +8,8 @@ import { isNativeRequest } from './native-request-policy';
 // Shared transport for checked database read/action pairs. Authority lives in the
 // database; this layer verifies transport, session, quota and strict input shape.
 export type RpcRoute<R extends z.ZodTypeAny, A extends z.ZodTypeAny> = {
-  readSchema: R; actionSchema: A; bodyLimit: number; unavailable: string;
+  // The largest request body read, in bytes; a function when it depends on who is signed in (checked after sign-in).
+  readSchema: R; actionSchema: A; bodyLimit: number | ((account: RpcContext['account']) => number); unavailable: string;
   read: (client: SupabaseClient, input: z.infer<R>) => PromiseLike<{ data: unknown; error: { code?: string } | null }>;
   // Returns the RPC input, or a message describing why the request cannot be sent.
   prepare?: (input: z.infer<A>) => { input: unknown } | { error: string };
@@ -41,7 +42,8 @@ export function rpcRoute<R extends z.ZodTypeAny, A extends z.ZodTypeAny>(spec: R
         response.headers.set('Retry-After', String(quota.retryAfter));
         return response;
       }
-      const input = spec.actionSchema.safeParse(await boundedJson(request, spec.bodyLimit));
+      const limit = typeof spec.bodyLimit === 'function' ? spec.bodyLimit(session.account) : spec.bodyLimit;
+      const input = spec.actionSchema.safeParse(await boundedJson(request, limit));
       if (!input.success) return businessResponse({ error: input.error.issues[0]?.message || 'Check the update' }, 400);
       const handled = spec.handle?.({ request, client: session.client, account: session.account }, input.data);
       if (handled) return await handled;

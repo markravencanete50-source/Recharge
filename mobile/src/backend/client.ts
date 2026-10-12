@@ -48,8 +48,9 @@ async function call(path: string, body?: unknown, accessToken?: string, viewAs?:
   const origin = liveApiOrigin();
   if (!origin) throw new WorkspaceApiError("The live mobile backend is awaiting configuration.", 503);
   const multipart = body instanceof FormData;
-  // Photo uploads and a manual Hostaway sync (which pages through every listing and stay) take longer.
-  const slow = multipart || (body !== undefined && /\/integrations(?:[?]|$)/.test(path));
+  // Photo uploads, a manual Hostaway sync (which pages through every listing and stay) and a payout report (up to about 2.5 MB) take longer.
+  const slow = multipart || (body !== undefined && /\/integrations(?:[?]|$)/.test(path))
+    || (typeof body === "object" && body !== null && (body as { action?: unknown }).action === "importPayoutReport");
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), slow ? 120000 : 15000);
   try {
     const response = await fetch(sameOriginWeb ? path : origin + path, {

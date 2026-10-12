@@ -163,6 +163,19 @@ test('payouts and statements: reconcile, prepare, issue and record the payout', 
   let statement = live.statementSchema.parse(await write({ action: 'prepareStatement', propertyId: property, period: day.m }));
   assert.equal(statement.revenueMinor, 45000); assert.equal(statement.feeMinor, 9000);
   assert.equal(statement.payoutMinor, 45000 - 9000 - statement.expensesMinor - statement.cleaningMinor);
+  // The period fields, the ordered lines and the figures before preparing all parse, and agree with the statement.
+  const nextMonth = (await db.query("select (date_trunc('month',current_date)+interval '1 month')::date::text d")).rows[0].d;
+  assert.deepEqual([statement.periodStart, statement.periodEnd, statement.method], [day.m + '-01', nextMonth, 'nights']);
+  assert.equal(statement.periodLastDay < nextMonth && statement.periodLastDay >= statement.periodStart, true);
+  assert.equal(typeof statement.occupancyBps, 'number');
+  assert.equal(statement.grossMinor - statement.otaFeesMinor, statement.revenueMinor);
+  assert.ok(Array.isArray(statement.detail.lines) && statement.detail.lines.length > 0);
+  assert.equal(statement.detail.lines.reduce((sum, l) => sum + l.amountMinor, 0), statement.grossMinor - statement.payoutMinor, 'the lines are exactly what comes off gross');
+  const query = financeReadSchema.parse({ section: 'statementPreview', propertyId: property, from: day.m + '-01', to: nextMonth, method: 'nights' });
+  const preview = live.statementPreviewSchema.parse(await rpc('workspace_finance_report', [query.section, property, null, query.from, query.to, { method: query.method }]));
+  assert.deepEqual([preview.payoutMinor, preview.grossMinor, preview.feeMinor, preview.blocked], [statement.payoutMinor, statement.grossMinor, statement.feeMinor, false]);
+  assert.deepEqual(preview.statements.map(x => x.id), [statement.id]);
+  assert.deepEqual(live.statementsSchema.parse(await read({ section: 'statements', period: day.m })).find(s => s.propertyId === property).periodStatements.map(x => x.id), [statement.id]);
   mine = live.statementsSchema.parse(await read({ section: 'statements', period: day.m })).find(s => s.propertyId === property);
   assert.deepEqual(live.statementMoves('accounts', mine).moves, ['prepare', 'issue', 'void']);
   statement = live.statementSchema.parse(await write({ action: 'issueStatement', statementId: statement.id, version: mine.statement.version }));

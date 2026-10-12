@@ -1,24 +1,34 @@
-import { Children, isValidElement, useCallback, useEffect, useState, type ReactNode } from "react";
+import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Platform, ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
+import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
-import { matchesSearch, PropertySelect, SEARCH_LIST_ABOVE, SearchBox, searchTextOf } from "./SearchPicker";
-import { MotionPress, Pop, Stagger, SwapIn } from "./motion";
+import { ListSearchBox, matchesSearch, PropertySelect, SEARCH_LIST_ABOVE, SearchBox, searchTextOf, useListSearch } from "./SearchPicker";
+import { ExpandChevron, MotionPress, Pop, Stagger, SwapIn } from "./motion";
+import { useSaved } from "./Celebrate";
 import { Sheet } from "./TeamFlows";
+import { TrackerDetailSheet, TrackerList } from "./Tracker";
+import { CleanCostReviewSheet } from "./CleanCostReview";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { departmentColor, primaryFill, ui, type Palette } from "./theme";
 import { Button, Field, IconChip, london, message, Loading, Notice, RefreshButton, Section, Tag, useRequestId, type IconName, type Tone } from "./LiveKit";
-import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
+import { readFinance, readOperations, readTeams, writeFinance, writeOperation, WorkspaceApiError } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
-import { EVIDENCE_KINDS, EXPENSE_CATEGORIES, expenseMoves, expenseSchema, isFinanceRole, jobsSchema, overviewSchema, pounds, type Expense, type Job } from "../../lib/accounts-live";
+import { cleanerInvoicesReportSchema, cleansToReviewReportSchema, EVIDENCE_KINDS, EXPENSE_CATEGORIES, expenseMoves, expenseSchema, isFinanceRole, jobsSchema, overviewSchema, pounds, type CleanCostReview, type Expense, type Job } from "../../lib/accounts-live";
+import { awaitingCleans, cleansFreedByRejection, cleansOnLiveInvoices, decideInvoiceAction, invoiceMismatch, invoiceTasksToClose, overrunMinor, recordInvoiceAction, reviewTag, splitCleansToReview, sumMinor, type AwaitingClean } from "../../lib/accounts-work";
+import { cleanerRatesSchema } from "../../lib/cleans-live";
+import { formatDay, formatMoney, plural } from "../../lib/format";
 import { poundsToMinor } from "../../lib/repairs-live";
 import { canStart } from "../../lib/home-tools";
-import { readableStage, type PropertyView } from "../../lib/workspace-view";
+import { cleanerInvoiceTrackerItems, type PayableInvoice } from "../../lib/tracker-payables";
+import { addressOf } from "../../lib/tracker";
+import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
+import type { OperationView } from "../../lib/workflow-forms";
 import type { FinanceAction } from "../../lib/workspace-finance-policy";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { z } from "zod";
 
-// Expenses tab of Live Accounts: supplier invoices and expenses, with evidence, approval and links to a job.
+// Payable tab of Live Accounts: cleans to review, cleaner invoices, and supplier invoices and expenses (with evidence, approval and links to a job).
 export type Overview = z.infer<typeof overviewSchema>;
 export type LimitState = { minor: number | null; version: number; repairMinor: number | null };
 
@@ -135,14 +145,18 @@ export function ExpenseSheet({ p, role, id, limit, onClose, onAsk, onDone }: { p
   const jobs = useJobs(expense && isFinanceRole(role) ? expense.propertyId : null);
   const evidenceRequest = useRequestId(expense ? "evidence:" + expense.id + ":" + kind + ":" + label + ":" + checked + ":" + linkJob + ":" + photos.join(",") : null);
   const approveRequest = useRequestId(expense ? "approve:" + expense.id + ":" + expense.version : null);
-  const linkRequest = useRequestId(expense ? "link:" + expense.id + ":" + expense.version : null);
+  // The job is chosen when the button is pressed, so each choice keeps its own request id (the key names the job, or "none" to unlink).
+  const linkIds = useRef(new Map<string, string>());
+  const linkKey = (job: Job | null) => "link:" + (expense?.id ?? "") + ":" + (expense?.version ?? "") + ":" + (job?.workId ?? "none");
   const submitRequest = useRequestId(expense ? "submit:" + expense.id + ":" + expense.version + ":" + JSON.stringify(draft) : null);
-  const load = useCallback(async () => {
+  // keepDraft: reload the expense after adding evidence or linking a job without throwing away what was typed into the draft invoice form.
+  const load = useCallback(async (options?: { keepDraft?: boolean }) => {
     if (!id) return;
     setError("");
     try {
       const value = expenseSchema.parse((await readFinance({ section: "expense", id })).data);
       setExpense(value);
+      if (options?.keepDraft) return;
       // A draft's invoice number is a placeholder until the supplier's invoice arrives.
       setDraft({ supplier: value.supplier, reference: value.status === "draft" && value.reference.startsWith("REPAIR-") ? "" : value.reference, amount: (value.amountMinor / 100).toFixed(2), receivedOn: london(new Date()), description: value.description });
     } catch (e) { setError(e instanceof WorkspaceApiError ? e.message : "This expense could not be loaded."); }
@@ -156,13 +170,15 @@ export function ExpenseSheet({ p, role, id, limit, onClose, onAsk, onDone }: { p
     try {
       if (photos.length) await writeFinance({ action: "attachExpensePhotos", requestId: evidenceRequest.get(), expenseId: expense.id, kind, label: label.trim().slice(0, 180), mediaIds: photos, ...(checked.trim() ? { note: checked.trim() } : {}) });
       else await writeFinance({ action: "addExpenseEvidence", requestId: evidenceRequest.get(), expenseId: expense.id, kind, label: label.trim(), ...(linkJob && expense.workId ? { workId: expense.workId } : {}), ...(checked.trim() ? { note: checked.trim() } : {}) });
-      evidenceRequest.done(); setLabel(""); setChecked(""); setLinkJob(false); setPhotos([]); setPickerKey(k => k + 1); setAdding(false); await load(); await onDone();
+      evidenceRequest.done(); setLabel(""); setChecked(""); setLinkJob(false); setPhotos([]); setPickerKey(k => k + 1); setAdding(false); await load({ keepDraft: true }); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   async function link(job: Job | null) {
     if (!expense || busy) return;
     setBusy(true); setError("");
-    try { await writeFinance({ action: "linkExpenseJob", requestId: linkRequest.get(), expenseId: expense.id, version: expense.version, workId: job ? job.workId : null }); linkRequest.done(); setLinking(false); await load(); await onDone(); }
+    const key = linkKey(job);
+    if (!linkIds.current.has(key)) linkIds.current.set(key, Crypto.randomUUID());
+    try { await writeFinance({ action: "linkExpenseJob", requestId: linkIds.current.get(key)!, expenseId: expense.id, version: expense.version, workId: job ? job.workId : null }); linkIds.current.delete(key); setLinking(false); await load({ keepDraft: true }); await onDone(); }
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   async function submitDraft() {
@@ -280,7 +296,7 @@ export function NewExpenseSheet({ p, visible, properties, onClose, onDone }: { p
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const jobs = useJobs(visible && propertyId ? propertyId : null);
-  const request = useRequestId(visible ? ["expense", propertyId, supplier, reference, amount, job?.workId ?? ""].join(":") : null);
+  const request = useRequestId(visible ? "expense:" + JSON.stringify([propertyId, supplier.trim(), reference.trim(), category, description.trim(), amount, receivedOn, job?.workId ?? ""]) : null);
   // Choosing the job fills in what it already knows.
   function choose(next: Job | null) {
     setJob(next);
@@ -321,8 +337,290 @@ export function NewExpenseSheet({ p, visible, properties, onClose, onDone }: { p
   );
 }
 
-// The Expenses tab body, rendered by LiveAccounts while that tab is selected.
-export function AccountsPayable({ p, account, role, management, overview, status, setStatus, expenses, limit, loading, load, setAsk, setOpenExpense, setCreating }: {
+// --- Payable: what cleans cost against what owners are charged, and the invoices cleaners send. Finance roles only.
+// Both lists read the finance reports 'cleansToReview' and 'cleanerInvoices' (supabase/migrations/20261012090000_clean_costs_terms.sql).
+const parseCleans = (data: unknown) => { const r = cleansToReviewReportSchema.safeParse(data); return r.success ? r.data : null; };
+const parseInvoices = (data: unknown) => { const r = cleanerInvoicesReportSchema.safeParse(data); return r.success ? r.data : null; };
+const NO_PROPERTIES: readonly PropertyView[] = [];
+const NO_QUERY: Record<string, string> = {};
+const QUERY_ALL: Record<string, string> = { state: "all" };
+
+// One finance report: read when the screen opens and again whenever `tick` changes or reload() is called.
+function useReport<T>(section: string, query: Record<string, string>, parse: (data: unknown) => T | null, tick: number, failure: string) {
+  const [state, setState] = useState<{ data: T | null; error: string; loading: boolean }>({ data: null, error: "", loading: true });
+  const load = useCallback(async () => {
+    setState(s => ({ ...s, loading: true, error: "" }));
+    try {
+      const data = parse((await readFinance({ section, ...query })).data);
+      setState({ data, error: data ? "" : failure, loading: false });
+    } catch (e) { setState(s => ({ ...s, error: message(e), loading: false })); }
+  }, [section, query, parse, failure]);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load, tick]);
+  return { ...state, reload: load };
+}
+
+function CleanRow({ p, clean, address, first, onPress }: { p: Palette; clean: CleanCostReview; address: string; first: boolean; onPress: () => void }) {
+  const over = overrunMinor(clean), [tagLabel, tagTone] = reviewTag(clean);
+  return (
+    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "row" } } : {})} accessibilityRole="button" onPress={onPress}
+      accessibilityLabel={[address, formatDay(clean.cleanDate), `charged ${formatMoney(clean.agreedMinor)}`, `actual cost ${formatMoney(clean.actualMinor)}`, over !== null ? `${formatMoney(over)} over` : "", clean.cleanerName ?? "", tagLabel].filter(Boolean).join(", ")}
+      style={[ui.row, { gap: 12, alignItems: "flex-start", paddingVertical: 14, borderTopWidth: first ? 0 : 1, borderTopColor: p.border }]}>
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+        <View style={[ui.row, { gap: 10, alignItems: "flex-start" }]}>
+          <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, color: p.text, fontSize: 15, lineHeight: 21, fontWeight: "600" }}>{address}</Text>
+          <Tag label={tagLabel} tone={tagTone} p={p} />
+        </View>
+        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{formatDay(clean.cleanDate)}{clean.cleanerName ? ` · ${clean.cleanerName}` : ""}</Text>
+        <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>Charged {formatMoney(clean.agreedMinor)} · Actual {formatMoney(clean.actualMinor)}{over !== null && <Text style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{` · ${formatMoney(over)} over`}</Text>}</Text>
+      </View>
+      <Feather name="chevron-right" size={18} color={p.muted} style={{ alignSelf: "center" }} />
+    </MotionPress>
+  );
+}
+
+// Cleans whose actual cost is more than the owner is charged, flagged for a manual review. To review first, then reviewed.
+function CleansToReview({ p, properties, tick }: { p: Palette; properties: readonly PropertyView[]; tick: number }) {
+  const saved = useSaved();
+  const report = useReport("cleansToReview", QUERY_ALL, parseCleans, tick, "The cleans to review could not be read. Refresh to try again.");
+  const [open, setOpen] = useState<CleanCostReview | null>(null), [showReviewed, setShowReviewed] = useState(false);
+  const { toReview, reviewed } = useMemo(() => splitCleansToReview(report.data?.cleans ?? []), [report.data]);
+  const addressFor = useCallback((c: CleanCostReview) => addressOf(properties.find(x => x.id === c.propertyId)) || c.propertyName, [properties]);
+  const search = useListSearch(toReview, c => [addressFor(c), c.cleanerName ?? "", c.propertyName]);
+  const card = (rows: CleanCostReview[]) => (
+    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
+      {rows.map((c, n) => <CleanRow key={c.workId} p={p} clean={c} address={addressFor(c)} first={!n} onPress={() => setOpen(c)} />)}
+    </View>
+  );
+  return (
+    <Section title="Cleans to review" count={toReview.length} p={p}>
+      <Text style={[ui.small, { color: p.muted }]}>Cleans that cost more than the owner is charged. For each one, choose whether the owner pays the agreed fee or the actual cost.</Text>
+      {!!report.error && <Notice text={report.error} p={p} tone="bad" />}
+      {report.loading && !report.data && <Loading p={p} rows={2} />}
+      {!report.loading && !report.error && !toReview.length && <Notice text="No cleans are waiting for a cost review." p={p} />}
+      {!!toReview.length && <ListSearchBox p={p} search={search} nouns="cleans" />}
+      {!!search.shown.length && card([...search.shown])}
+      {!!reviewed.length && <View style={{ gap: 10 }}>
+        <MotionPress accessibilityRole="button" accessibilityState={{ expanded: showReviewed }} accessibilityLabel={`Reviewed, ${reviewed.length}`} onPress={() => setShowReviewed(v => !v)} style={[ui.row, { gap: 6, minHeight: 44, alignSelf: "flex-start" }]}>
+          <Text style={{ color: p.muted, fontSize: 13, fontWeight: "600" }}>Reviewed · {reviewed.length}</Text>
+          <ExpandChevron open={showReviewed} size={16} color={p.muted} />
+        </MotionPress>
+        {showReviewed && card(reviewed)}
+      </View>}
+      <CleanCostReviewSheet p={p} clean={open} address={open ? addressFor(open) : undefined} onClose={() => setOpen(null)} onDone={saved(async () => { setOpen(null); await report.reload(); })} />
+    </Section>
+  );
+}
+// Approve or reject a cleaner invoice that is waiting. Rejecting needs a reason; the invoice's cleans are then free for a corrected one.
+// Approving also closes the "invoice accepted clean" task of each clean on the invoice, as the older single-invoice flow did, so they stop
+// showing as waiting for an invoice. That happens on approval and not when the invoice is recorded, so a rejected invoice leaves its tasks open.
+// If a task cannot be closed the invoice stays approved and the button finishes the rest, never approving twice.
+function InvoiceDecision({ p, invoice, onDone }: { p: Palette; invoice: PayableInvoice; onDone: () => Promise<void> }) {
+  const [rejecting, setRejecting] = useState(false), [note, setNote] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  // Set once the approval is saved: the invoice tasks may still need closing.
+  const [approved, setApproved] = useState(false);
+  const taskIds = useRef(new Map<string, string>());
+  const approveId = useRequestId("decide:" + invoice.id + ":approve");
+  const rejectId = useRequestId("decide:" + invoice.id + ":reject:" + note.trim());
+  if (invoice.status !== "to_approve") return null;
+  // Closes the tasks still open for this invoice's cleans. Each keeps its own request id, so a retry never closes the same task twice.
+  async function closeTasks(): Promise<boolean> {
+    try {
+      const ops = operationViewSchema.array().safeParse((await readOperations()).data);
+      if (!ops.success) throw new Error("The invoice tasks could not be read.");
+      const tasks = invoiceTasksToClose(ops.data, invoice);
+      const evidence = `Included in cleaner invoice ${invoice.reference.trim()} from ${invoice.supplier.trim()}: ${plural(invoice.lines?.length || invoice.lineCount || tasks.length, "clean")}, ${formatMoney(invoice.totalMinor)} in total.`;
+      let failed = 0, why = "";
+      for (const t of tasks) {
+        const key = t.workId + ":" + t.version;
+        if (!taskIds.current.has(key)) taskIds.current.set(key, Crypto.randomUUID());
+        try { await writeOperation({ action: "updateOperation", requestId: taskIds.current.get(key)!, workId: t.workId, version: t.version, step: "completeHandover", data: { evidence } }); }
+        catch (e) { failed++; why = message(e); }
+      }
+      if (failed) throw new Error(`${plural(failed, "invoice task")} could not be closed: ${why}`);
+      return true;
+    } catch (e) { setError(`The invoice is approved, but its invoice tasks are not all closed. ${message(e)} Press the button to try again.`); return false; }
+  }
+  async function decide(decision: "approve" | "reject") {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      if (!(decision === "approve" && approved)) {
+        const id = decision === "approve" ? approveId : rejectId;
+        const built = decideInvoiceAction({ requestId: id.get(), invoiceId: invoice.id, decision, note: decision === "reject" ? note : "" });
+        if ("error" in built) { setError(built.error); return; }
+        await writeFinance(built.action); id.done();
+        if (decision === "approve") setApproved(true);
+      }
+      if (decision === "approve" && !(await closeTasks())) return;
+      await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  if (approved) return (
+    <View style={{ gap: 12 }}>
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <Button label={busy ? "Closing…" : "Close the remaining invoice tasks"} icon="check" primary p={p} disabled={busy} onPress={() => void decide("approve")} />
+    </View>
+  );
+  return (
+    <View style={{ gap: 12 }}>
+      {rejecting
+        ? <>
+          <Field label="Why is it rejected? (at least 5 characters)" value={note} onChange={setNote} p={p} multiline placeholder="For example: the date does not match the clean" />
+          {!!error && <Notice text={error} p={p} tone="bad" />}
+          <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
+            <Button label="Cancel" p={p} disabled={busy} onPress={() => { setRejecting(false); setError(""); }} />
+            <Button label={busy ? "Rejecting…" : "Reject invoice"} icon="x" primary p={p} disabled={busy} onPress={() => void decide("reject")} />
+          </View>
+        </>
+        : <>
+          {!!error && <Notice text={error} p={p} tone="bad" />}
+          <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
+            <Button label={busy ? "Approving…" : "Approve invoice"} icon="check" primary p={p} disabled={busy} onPress={() => void decide("approve")} />
+            <Button label="Reject" icon="x" p={p} disabled={busy} onPress={() => { setRejecting(true); setError(""); }} />
+          </View>
+        </>}
+    </View>
+  );
+}
+
+// Record an invoice a cleaner sent: who, the reference and date, then the completed cleans it covers with the amount charged for each.
+// The cleans' amounts must add up to the invoice total. Saving only records the invoice: the cleans' "invoice accepted clean" tasks
+// stay open until the invoice is approved (InvoiceDecision), so a rejected invoice's cleans can go on a corrected one.
+function RecordInvoiceForm({ p, properties, initialCleanerId, onDone }: { p: Palette; properties: readonly PropertyView[]; initialCleanerId: string | null; onDone: () => Promise<void> }) {
+  const today = london(new Date());
+  const [supplier, setSupplier] = useState(""), [reference, setReference] = useState(""), [invoiceDate, setInvoiceDate] = useState(today), [total, setTotal] = useState("");
+  const [propertyId, setPropertyId] = useState(""), [cleanerId, setCleanerId] = useState(initialCleanerId ?? "");
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [source, setSource] = useState<{ work: OperationView[]; rates: ReadonlyMap<string, number>; onInvoice: ReadonlySet<string>; freed: ReadonlySet<string> } | null>(null), [loadError, setLoadError] = useState("");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const nameOf = useCallback((id: string) => properties.find(x => x.id === id)?.name ?? "Property", [properties]);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const [o, i, r] = await Promise.allSettled([readOperations(), readFinance({ section: "cleanerInvoices" }), readTeams({ section: "cleanerRates" })]);
+      if (!active) return;
+      const ops = o.status === "fulfilled" ? operationViewSchema.array().safeParse(o.value.data) : null;
+      if (!ops?.success) { setLoadError(o.status === "rejected" ? message(o.reason) : "The cleans could not be read. Close this and try again."); return; }
+      // If the invoices could not be read, the database still refuses a clean that is already on a live invoice.
+      const invoices = i.status === "fulfilled" ? parseInvoices(i.value.data) : null;
+      const pay = r.status === "fulfilled" ? cleanerRatesSchema.safeParse(r.value.data) : null;
+      setSource({ work: ops.data, rates: new Map(pay?.success ? pay.data.map(x => [x.cleanerId, x.rateMinor]) : []), onInvoice: cleansOnLiveInvoices(invoices?.invoices ?? []), freed: cleansFreedByRejection(invoices?.invoices ?? []) });
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const all = useMemo(() => source ? awaitingCleans(source.work, nameOf, source.rates, source.onInvoice, source.freed) : [], [source, nameOf]);
+  const cleaners = useMemo(() => [...new Map(all.map(c => [c.cleanerId, c.cleanerName])).entries()].map(([id, name]) => ({ id, name })), [all]);
+  // A cleaner opened from the work list starts the form with their name.
+  useEffect(() => {
+    const first = cleaners.find(c => c.id === initialCleanerId);
+    if (first) queueMicrotask(() => setSupplier(s => s || first.name));
+  }, [cleaners, initialCleanerId]);
+  const shown = all.filter(c => (!propertyId || c.propertyId === propertyId) && (!cleanerId || c.cleanerId === cleanerId));
+  const propertyOptions = properties.filter(x => all.some(c => c.propertyId === x.id));
+  const lines = all.filter(c => c.cleanWorkId in picked);
+  const amounts = lines.map(c => poundsToMinor(picked[c.cleanWorkId] ?? ""));
+  const valid = amounts.filter((n): n is number => !!n);
+  const sum = sumMinor(valid), totalMinor = poundsToMinor(total);
+  const mismatch = valid.length === lines.length ? invoiceMismatch(totalMinor, valid) : null;
+  const request = useRequestId("record:" + JSON.stringify([supplier.trim(), reference.trim(), invoiceDate, total, lines.map((c, n) => [c.cleanWorkId, amounts[n]])]));
+
+  function toggle(c: AwaitingClean) {
+    setPicked(prev => { const next = { ...prev }; if (c.cleanWorkId in next) delete next[c.cleanWorkId]; else next[c.cleanWorkId] = c.rateMinor ? (c.rateMinor / 100).toFixed(2) : ""; return next; });
+  }
+  function chooseCleaner(id: string) {
+    setCleanerId(id);
+    const name = cleaners.find(c => c.id === id)?.name;
+    if (name && (!supplier.trim() || cleaners.some(c => c.name === supplier))) setSupplier(name);
+  }
+  async function save() {
+    if (busy) return;
+    const built = recordInvoiceAction({ requestId: request.get(), supplier, reference, invoiceDate, today, totalMinor, lines: lines.map((c, n) => ({ workId: c.cleanWorkId, amountMinor: amounts[n] })) });
+    if ("error" in built) { setError(built.error); return; }
+    setBusy(true); setError("");
+    try { await writeFinance(built.action); request.done(); }
+    catch (e) { setError(message(e)); setBusy(false); return; }
+    setBusy(false); await onDone();
+  }
+
+  return (
+    <>
+      <Field label="Cleaner or company (as on the invoice)" value={supplier} onChange={setSupplier} p={p} placeholder="For example: Cara Cleaning" />
+      <Field label="Invoice reference" value={reference} onChange={setReference} p={p} placeholder="For example: CARA-2026-10" />
+      <Field label="Invoice date (YYYY-MM-DD)" value={invoiceDate} onChange={setInvoiceDate} p={p} />
+      <Field label="Invoice total" value={total} onChange={setTotal} p={p} placeholder="£0.00" />
+      <View style={{ gap: 10 }}>
+        <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "600" }}>Which cleans does it cover?</Text>
+        {!source && !loadError && <Loading p={p} rows={2} />}
+        {!!loadError && <Notice text={loadError} p={p} tone="bad" />}
+        {!!source && !all.length && <Notice text="No completed cleans are waiting for an invoice." p={p} />}
+        {cleaners.length > 1 && <Pills p={p} values={["", ...cleaners.map(c => c.id)] as readonly string[]} value={cleanerId} onChange={chooseCleaner} label={v => v ? cleaners.find(c => c.id === v)?.name ?? "Cleaner" : "All cleaners"} />}
+        {propertyOptions.length > 1 && <PropertySelect p={p} properties={propertyOptions} value={propertyId} onChange={setPropertyId} clearable />}
+        {shown.map(c => {
+          const on = c.cleanWorkId in picked;
+          return (
+            <View key={c.cleanWorkId} style={{ gap: 8 }}>
+              <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={`${c.propertyName}, ${formatDay(c.cleanedOn)}, ${c.cleanerName}`} onPress={() => toggle(c)}
+                style={[ui.row, { gap: 12, minHeight: 52, padding: 10, borderRadius: 14, borderWidth: on ? 2 : 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.wash : p.surface }]}>
+                <Feather name={on ? "check-square" : "square"} size={20} color={p.primary} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600" }}>{c.propertyName}</Text>
+                  <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{formatDay(c.cleanedOn)} · {c.cleanerName}</Text>
+                </View>
+              </MotionPress>
+              {on && <View style={{ paddingLeft: 12 }}><Field label="Amount on the invoice for this clean" value={picked[c.cleanWorkId] ?? ""} onChange={v => setPicked(prev => ({ ...prev, [c.cleanWorkId]: v }))} p={p} placeholder="£0.00" /></View>}
+            </View>
+          );
+        })}
+        {!!source && !!all.length && !shown.length && <Text style={[ui.small, { color: p.muted }]}>No cleans match that choice.</Text>}
+      </View>
+      {!!lines.length && <View style={{ gap: 8, padding: 14, borderRadius: 14, backgroundColor: p.wash }}>
+        <Line p={p} label={`${plural(lines.length, "clean")} picked`} value={formatMoney(sum)} />
+        {totalMinor !== null && <Line p={p} label="Invoice total" value={formatMoney(totalMinor)} />}
+        {mismatch ? <Text style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{mismatch}</Text>
+          : totalMinor !== null && valid.length === lines.length ? <Text style={[ui.small, { color: p.success, fontWeight: "600" }]}>The cleans add up to the invoice total.</Text> : null}
+        {sum > 0 && totalMinor !== sum && valid.length === lines.length && <Button label={`Use ${formatMoney(sum)} as the invoice total`} p={p} onPress={() => setTotal((sum / 100).toFixed(2))} />}
+      </View>}
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <Button label={busy ? "Saving…" : "Record invoice"} icon="check" primary p={p} disabled={busy} onPress={() => void save()} />
+    </>
+  );
+}
+
+export function RecordCleanerInvoiceSheet({ p, visible, properties, initialCleanerId = null, onClose, onDone }: { p: Palette; visible: boolean; properties: readonly PropertyView[]; initialCleanerId?: string | null; onClose: () => void; onDone: () => Promise<void> }) {
+  return (
+    <Sheet palette={p} visible={visible} onClose={onClose} title="Record a cleaner invoice" subtitle="Match it to the cleans it covers" icon="coins">
+      {visible && <RecordInvoiceForm p={p} properties={properties} initialCleanerId={initialCleanerId} onDone={onDone} />}
+    </Sheet>
+  );
+}
+
+// Invoices from cleaners, each followed through received, matched, approved and settled (lib/tracker-payables.ts).
+function CleanerInvoices({ p, properties, tick }: { p: Palette; properties: readonly PropertyView[]; tick: number }) {
+  const saved = useSaved();
+  const report = useReport("cleanerInvoices", NO_QUERY, parseInvoices, tick, "The cleaner invoices could not be read. Refresh to try again.");
+  const [openId, setOpenId] = useState<string | null>(null), [recording, setRecording] = useState(false);
+  const ctx = useMemo(() => ({ property: (id: string) => properties.find(x => x.id === id), now: new Date(), owner: false, canDecide: true }), [properties]);
+  const items = useMemo(() => cleanerInvoiceTrackerItems(report.data?.invoices ?? [], ctx), [report.data, ctx]);
+  const open = items.find(i => i.id === openId) ?? null;
+  return (
+    <Section title="Cleaner invoices received" count={items.filter(i => !i.closed).length} p={p}>
+      <Text style={[ui.small, { color: p.muted }]}>Invoices cleaners have sent, matched to the cleans they cover. Approve or reject each one.</Text>
+      <Button label="Record cleaner invoice" icon="plus" primary p={p} onPress={() => setRecording(true)} />
+      <TrackerList p={p} items={items} onOpen={item => setOpenId(item.id)} empty="No cleaner invoices have been recorded yet." loading={report.loading} error={report.error} />
+      <TrackerDetailSheet p={p} item={open} onClose={() => setOpenId(null)}>
+        {open && <InvoiceDecision key={open.id} p={p} invoice={open.source} onDone={saved(async () => { setOpenId(null); await report.reload(); })} />}
+      </TrackerDetailSheet>
+      <RecordCleanerInvoiceSheet p={p} visible={recording} properties={properties} onClose={() => setRecording(false)} onDone={saved(async () => { setRecording(false); await report.reload(); })} />
+    </Section>
+  );
+}
+
+// The Payable tab body, rendered by LiveAccounts while that tab is selected: cleans to review and cleaner invoices (finance roles),
+// then the supplier invoices and expenses, which are the repair and purchase invoices matched to approved work.
+// properties is optional so LiveAccounts need not pass it; with it, rows show full addresses and the invoice form can narrow by property.
+export function AccountsPayable({ p, account, role, management, overview, status, setStatus, expenses, limit, loading, load, setAsk, setOpenExpense, setCreating, properties = NO_PROPERTIES }: {
   p: Palette;
   account: WorkspaceAccount;
   role: WorkspaceAccount["role"];
@@ -337,24 +635,36 @@ export function AccountsPayable({ p, account, role, management, overview, status
   setAsk: (ask: NoteAsk) => void;
   setOpenExpense: (id: string) => void;
   setCreating: (creating: boolean) => void;
+  properties?: readonly PropertyView[];
 }) {
+  const [tick, setTick] = useState(0);
+  const finance = isFinanceRole(role);
   return (
     <>
       <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
         {canStart(account, "new-expense") && <Button label="New expense" icon="plus" primary p={p} onPress={() => setCreating(true)} />}
-        <RefreshButton p={p} loading={loading} onPress={() => void load()} />
+        <RefreshButton p={p} loading={loading} onPress={() => { void load(); setTick(t => t + 1); }} />
       </View>
       {(overview?.overLimitCount ?? 0) > 0 && <Notice text={`${overview!.overLimitCount} expense${overview!.overLimitCount === 1 ? " is" : "s are"} above the approval limit and need${overview!.overLimitCount === 1 ? "s" : ""} management approval.`} p={p} />}
       {(overview?.draftCount ?? 0) > 0 && status !== "draft" && <MotionPress accessibilityRole="button" onPress={() => setStatus("draft")} style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}>
         <Feather name="tool" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{overview!.draftCount === 1 ? "A completed repair is waiting as a draft" : `${overview!.draftCount} completed repairs are waiting as drafts`}: add the supplier’s invoice and send for approval.</Text><Feather name="chevron-right" size={16} color={p.muted} />
       </MotionPress>}
-      <Pills p={p} values={["draft", "to_approve", "queried", "approved", "rejected"] as const} value={status} onChange={setStatus} label={v => v === "draft" ? "Drafts" : STATUS_LABEL[v][0]} />
-      <List p={p} empty="Nothing in this view.">
-        {expenses.map((e, i) => (
-          <Row key={e.id} p={p} first={i === 0} title={e.supplier} detail={`${e.propertyName} · ${readableStage(e.category)} · ${new Date(e.receivedOn + "T12:00:00Z").toLocaleDateString("en-GB")}`} amount={pounds(e.amountMinor)}
-            tags={[STATUS_LABEL[e.status], [e.hasInvoice && e.hasProof ? "Evidence complete" : `${e.evidenceCount} document${e.evidenceCount === 1 ? "" : "s"}`, e.hasInvoice && e.hasProof ? "good" : "wait"]]} onPress={() => setOpenExpense(e.id)} />
-        ))}
-      </List>
+      {finance && <CleansToReview p={p} properties={properties} tick={tick} />}
+      {finance && <CleanerInvoices p={p} properties={properties} tick={tick} />}
+      <Section title="Matched to work" p={p}>
+        <Text style={[ui.small, { color: p.muted }]}>Supplier invoices for repairs and purchases. An invoice is matched when it is linked to a finished job: open it to link one.</Text>
+        <Pills p={p} values={["draft", "to_approve", "queried", "approved", "rejected"] as const} value={status} onChange={setStatus} label={v => v === "draft" ? "Drafts" : STATUS_LABEL[v][0]} />
+        <List p={p} empty="Nothing in this view.">
+          {expenses.map((e, i) => {
+            const evidenceDone = e.hasInvoice && e.hasProof;
+            // An invoice is matched once it is linked to a finished repair or purchase.
+            const matched: [string, "good" | "wait"] = e.workId ? ["Matched to work", "good"] : ["Not matched to work", "wait"];
+            const tags: [string, "good" | "wait" | "bad" | "plain"][] = [STATUS_LABEL[e.status], [evidenceDone ? "Evidence complete" : `${e.evidenceCount} document${e.evidenceCount === 1 ? "" : "s"}`, evidenceDone ? "good" : "wait"]];
+            if (e.status !== "rejected") tags.push(matched);
+            return <Row key={e.id} p={p} first={i === 0} title={e.supplier} detail={`${e.propertyName} · ${readableStage(e.category)} · ${new Date(e.receivedOn + "T12:00:00Z").toLocaleDateString("en-GB")}`} amount={pounds(e.amountMinor)} tags={tags} onPress={() => setOpenExpense(e.id)} />;
+          })}
+        </List>
+      </Section>
       <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 10 }]}>
         <Text style={{ color: p.text, fontWeight: "700" }}>Approval limit for Accounts</Text>
         <Text style={[ui.small, { color: p.muted }]}>{limit?.minor == null ? "No limit set. Accounts can approve any evidenced expense." : `Accounts approves up to ${pounds(limit.minor)}. Larger costs need management.`}</Text>

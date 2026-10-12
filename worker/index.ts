@@ -70,6 +70,11 @@ const worker = {
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_routine_auto', {})).catch(() => {
       console.error('Routine visit schedule failed; the next run retries.');
     }));
+    // Stays of more than 14 nights get a mid-stay clean, and lose an unstarted one when the stay no longer needs it.
+    // Every stay, wherever it came from, so this runs whether or not the Hostaway sync is on (the sync also runs it).
+    ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_mid_stay_cleans', {})).catch(() => {
+      console.error('Mid-stay cleans failed; the next run retries.');
+    }));
     // Owners are reminded once an approval has waited 48 hours; client relations are told at 96.
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_chase_owner_approvals', {})).catch(() => {
       console.error('Owner approval reminders failed; the next run retries.');

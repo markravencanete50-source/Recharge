@@ -52,6 +52,9 @@ const day = (await db.query("select current_date::text d,to_char(current_date,'Y
 test('pounds are converted exactly and ambiguous amounts refused', () => {
   assert.equal(poundsToMinor('£1,240.5'), 124050); assert.equal(poundsToMinor('95'), 9500);
   for (const bad of ['', '12.345', '-3', 'abc', '1e3']) assert.equal(poundsToMinor(bad), null, bad);
+  // Exact pence for amounts that floating point gets wrong, and a comma only as a thousands separator.
+  for (const [text, minor] of [['19.99', 1999], ['0.29', 29], ['£1,234.50', 123450], ['1,234', 123400], ['12,345.6', 1234560], ['£0.5', 50]]) assert.equal(poundsToMinor(text), minor, text);
+  for (const bad of ['1.005', '1,50', '1,5', '1,2345', ',500', '1,,000', '12,34.50', '-5', '1e3', ' ', '£']) assert.equal(poundsToMinor(bad), null, bad);
   assert.ok(canReportRepair('client') && canReportRepair('stays') && !canReportRepair('ready') && !canReportRepair('cleans'));
 });
 

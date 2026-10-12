@@ -72,7 +72,8 @@ test('deciding an invoice and reviewing a clean cost', () => {
   const review = { action: 'reviewCleanCost', requestId: uuid, workId: uuid2, decision: 'agreed_fee', note: 'Extra hour was our delay' };
   assert.ok(accepts(financeActionSchema, review));
   assert.ok(accepts(financeActionSchema, { ...review, decision: 'actual_cost' }));
-  assert.ok(accepts(financeActionSchema, { ...review, note: undefined }));
+  assert.ok(!accepts(financeActionSchema, { ...review, note: undefined }), 'a review needs a reason, as the database requires');
+  assert.ok(!accepts(financeActionSchema, { ...review, note: 'ok' }));
   for (const patch of [{ decision: 'cheaper' }, { workId: 'x' }, { note: 'x'.repeat(2001) }, { amountMinor: 100 }]) assert.equal(accepts(financeActionSchema, { ...review, ...patch }), false, JSON.stringify(patch));
 });
 
@@ -113,8 +114,12 @@ test('report sections: statements and payables reads take dates and the filters 
   assert.ok(accepts(financeReadSchema, { section: 'receivable', from: '2026-11-01', to: '2026-11-30', region: 'Glasgow', channel: 'direct' }));
   assert.ok(accepts(financeReadSchema, { section: 'performance', from: '2026-01-01', to: '2026-12-31', propertyId: uuid, region: 'Edinburgh', channel: 'vrbo' }));
   assert.ok(accepts(financeReadSchema, { section: 'payoutLines', channel: 'vrbo', state: 'active', reportId: uuid }), 'payout lines keep their filters');
+  assert.ok(accepts(financeReadSchema, { section: 'cleansToReview', state: 'toReview', region: 'Edinburgh' }), 'cleans to review filter by state');
+  assert.ok(accepts(financeReadSchema, { section: 'cleanerInvoices', status: 'approved', cleanerId: uuid }), 'cleaner invoices filter by status and cleaner');
+  assert.ok(accepts(financeReadSchema, { section: 'statementPreview', propertyId: uuid, from: '2026-11-01', to: '2026-12-01', method: 'nights' }), 'a statement preview takes a method');
+  assert.ok(REPORT_SECTIONS.includes('statementPreview'));
   for (const query of [
-    { section: 'cleansToReview', channel: 'airbnb' }, { section: 'cleanerInvoices', channel: 'airbnb' }, { section: 'cleansToReview', state: 'active' }, { section: 'performance', reportId: uuid },
+    { section: 'cleansToReview', channel: 'airbnb' }, { section: 'cleanerInvoices', channel: 'airbnb' }, { section: 'cleansToReview', state: 'bogus' }, { section: 'cleansToReview', method: 'nights' }, { section: 'statementPreview', region: 'Edinburgh' }, { section: 'performance', reportId: uuid },
     { section: 'performance', state: 'active' }, { section: 'receivable', reportId: uuid }, { section: 'payoutLines', region: 'Edinburgh' }, { section: 'payoutLines', channel: 'direct' },
     { section: 'performance', period: '2026-11' }, { section: 'performance', from: '2026-02-30' }, { section: 'performance', from: '2026-12-01', to: '2026-11-01' },
     { section: 'performance', channel: 'phone' }, { section: 'performance', region: '' }, { section: 'performance', region: 'x'.repeat(81) }, { section: 'performance', propertyId: 'x' },

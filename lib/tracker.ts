@@ -8,7 +8,7 @@ export type TrackerTone = 'good' | 'wait' | 'bad' | 'plain';
 export type TrackerStep = { key: string; label: string; state: 'done' | 'current' | 'todo' | 'skipped'; detail?: string; actionKey?: string; checks?: { key: string; label: string; done: boolean }[] };
 export type TrackerUpdate = { at: string; by: string | null; what: string | null };
 export type TrackerItem<S = unknown> = {
-  id: string; section: 'purchases' | 'licensing' | 'onboarding'; source: S;
+  id: string; section: 'purchases' | 'licensing' | 'onboarding' | 'statements' | 'payables' | 'receivable'; source: S;
   propertyId: string | null; address: string; propertyName: string; title: string;
   status: { label: string; tone: TrackerTone }; closed: boolean;
   nextStep: string; nextAction: { label: string; actionKey?: string } | null;

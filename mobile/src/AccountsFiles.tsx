@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Platform, View } from "react-native";
 import { Button, message, Notice } from "./LiveKit";
+import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 import { exportReport } from "./exportReport";
 import { downloadReport } from "../../lib/download-report";
 import { payoutExampleCsv, statementCsv, statementDocument, statementFileName } from "../../lib/accounts-files";
+import { PAYOUT_CHANNEL_LABEL, RECONCILED_CHANNELS, type PayoutChannel } from "../../lib/payout-report-formats";
 import type { Statement } from "../../lib/accounts-live";
 
 // Statement and payout files, made on the device from what is already on screen.
@@ -48,7 +50,7 @@ export function StatementFiles({ p, statement, audience }: { p: Palette; stateme
 // Example payout reports, in exactly the layout the upload reads, for this month.
 export function PayoutExamples({ p, period }: { p: Palette; period: string }) {
   const [note, setNote] = useState("");
-  async function save(channel: "airbnb" | "booking_com") {
+  async function save(channel: PayoutChannel) {
     setNote("");
     try { const file = payoutExampleCsv(channel, period); await exportReport(file.csv, file.fileName); setNote(Platform.OS === "web" ? "Example downloaded. Its codes are made up, so uploading it matches no stays." : "Example ready to save or share."); }
     catch (e) { setNote(message(e)); }
@@ -56,9 +58,9 @@ export function PayoutExamples({ p, period }: { p: Palette; period: string }) {
   return (
     <View style={{ gap: 8 }}>
       <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-        <Button label="Example Airbnb file" icon="file-text" p={p} onPress={() => void save("airbnb")} />
-        <Button label="Example Booking.com file" icon="file-text" p={p} onPress={() => void save("booking_com")} />
+        {RECONCILED_CHANNELS.map(channel => <Button key={channel} label={`Example ${PAYOUT_CHANNEL_LABEL[channel]} file`} icon="file-text" p={p} onPress={() => void save(channel)} />)}
       </View>
+      <Text style={[ui.small, { color: p.muted }]}>Each example shows the columns we expect. The Vrbo one is our best guess at its layout, because we have not seen a real Vrbo file yet.</Text>
       {!!note && <Notice text={note} p={p} />}
     </View>
   );

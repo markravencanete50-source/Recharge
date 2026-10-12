@@ -62,6 +62,11 @@ alter table private.workspace_payout_lines
 update private.workspace_payout_lines l set channel=r.channel from private.workspace_payout_reports r where r.id=l.report_id and l.channel is null;
 alter table private.workspace_payout_lines alter column channel set not null;
 do $$ begin
+ -- A report may hold up to 8,000 lines (a year of a larger portfolio), not 2,000.
+ if position('8000' in coalesce((select pg_get_constraintdef(oid) from pg_constraint where conrelid='private.workspace_payout_reports'::regclass and conname='workspace_payout_reports_line_count_check'),''))=0 then
+  alter table private.workspace_payout_reports drop constraint if exists workspace_payout_reports_line_count_check;
+  alter table private.workspace_payout_reports add constraint workspace_payout_reports_line_count_check check(line_count between 1 and 8000);
+ end if;
  if not exists(select 1 from pg_constraint where conrelid='private.workspace_payout_reports'::regclass and conname='workspace_payout_reports_new_check') then
   alter table private.workspace_payout_reports add constraint workspace_payout_reports_new_check check(new_line_count between 0 and line_count);
  end if;
@@ -102,19 +107,20 @@ end $$;
 -- 4. Uploading a payout report. Called by workspace_finance_action after its access and receipt checks.
 create or replace function private.workspace_import_payout_report(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare
- lines jsonb:=input->'lines';line jsonb;line_no integer:=0;chan text:=input->>'channel';legacy boolean;hash text;total bigint;
- rep private.workspace_payout_reports;new_count integer;new_total bigint;inserted integer;result jsonb;
+ lines jsonb:=input->'lines';line jsonb;line_no bigint;chan text:=input->>'channel';legacy boolean;hash text;total bigint;
+ rep private.workspace_payout_reports;new_count integer;new_total bigint;cancelled bigint;matched bigint;unexpected bigint;result jsonb;
  line_keys constant text[]:=array['reference','amountMinor','grossMinor','commissionMinor','hostFeeMinor','paymentFeeMinor','cleaningFeeMinor','paidOn','lineType','key'];
- y integer;m integer;d integer;
 begin
  -- Lines are validated here, not by the generic 16 KiB workflow helper.
  perform private.workspace_json_keys(input-'lines',array['action','requestId','channel','fileName']);
- if coalesce(chan,'') not in ('airbnb','booking_com','vrbo') or jsonb_typeof(lines) is distinct from 'array' or jsonb_array_length(lines) not between 1 and 2000 then
-  raise exception 'Upload between 1 and 2,000 payout lines' using errcode='22023';
- end if;
- -- The old shape: every line is a reference and an amount, nothing else.
+ if jsonb_typeof(lines) is distinct from 'array' then raise exception 'Upload between 1 and 8,000 payout lines' using errcode='22023';end if;
+ -- The old shape: every line is a reference and an amount, nothing else. It keeps its old limits (2,000 lines, 256 KiB);
+ -- the new shape takes a year of a larger portfolio (8,000 lines, 4 MiB; MAX_PAYOUT_LINES in lib/payout-reconciliation.ts).
  legacy:=not exists(select 1 from jsonb_array_elements(lines) x where jsonb_typeof(x)<>'object' or exists(select 1 from jsonb_object_keys(x) k where k not in ('reference','amountMinor')));
- if octet_length(lines::text)>(case when legacy then 262144 else 1048576 end) then raise exception 'Upload between 1 and 2,000 payout lines' using errcode='22023';end if;
+ if coalesce(chan,'') not in ('airbnb','booking_com','vrbo') or jsonb_array_length(lines) not between 1 and (case when legacy then 2000 else 8000 end)
+  or octet_length(lines::text)>(case when legacy then 262144 else 4194304 end) then
+  raise exception 'Upload between 1 and % payout lines',case when legacy then '2,000' else '8,000' end using errcode='22023';
+ end if;
 
  if legacy then
   -- Today's rules, unchanged.
@@ -125,24 +131,25 @@ begin
   if (select count(distinct upper(trim(value->>'reference'))) from jsonb_array_elements(lines))<>jsonb_array_length(lines) then raise exception 'Combine repeated reservation codes before upload' using errcode='22023';end if;
   select md5(string_agg(upper(trim(value->>'reference'))||':'||(value->>'amountMinor'),',' order by upper(trim(value->>'reference')))),sum((value->>'amountMinor')::bigint) into hash,total from jsonb_array_elements(lines);
  else
-  for line in select value from jsonb_array_elements(lines) loop
-   line_no:=line_no+1;
-   if jsonb_typeof(line)<>'object' or exists(select 1 from jsonb_object_keys(line) k where not(k=any(line_keys)))
-    or jsonb_typeof(line->'reference') is distinct from 'string' or length(trim(line->>'reference')) not between 1 and 120
-    or not private.workspace_payout_minor_ok(line->'amountMinor',true)
-    or not private.workspace_payout_minor_ok(line->'grossMinor',false) or not private.workspace_payout_minor_ok(line->'commissionMinor',false)
-    or not private.workspace_payout_minor_ok(line->'hostFeeMinor',false) or not private.workspace_payout_minor_ok(line->'paymentFeeMinor',false)
-    or not private.workspace_payout_minor_ok(line->'cleaningFeeMinor',false)
-    or (line ? 'lineType' and jsonb_typeof(line->'lineType')<>'null' and (jsonb_typeof(line->'lineType')<>'string' or length(trim(line->>'lineType')) not between 1 and 60))
-    or (line ? 'key' and jsonb_typeof(line->'key')<>'null' and (jsonb_typeof(line->'key')<>'string' or length(line->>'key') not between 1 and 300 or trim(line->>'key')=''))
-    or (line ? 'paidOn' and jsonb_typeof(line->'paidOn')<>'null' and (jsonb_typeof(line->'paidOn')<>'string' or line->>'paidOn'!~'^\d{4}-\d{2}-\d{2}$')) then
-    raise exception 'Invalid payout line %',line_no using errcode='22023';
-   end if;
-   if jsonb_typeof(line->'paidOn')='string' then
-    y:=substr(line->>'paidOn',1,4)::integer;m:=substr(line->>'paidOn',6,2)::integer;d:=substr(line->>'paidOn',9,2)::integer;
-    if y not between 2000 and 2100 or m not between 1 and 12 or d<1 or d>extract(day from make_date(y,m,1)+interval '1 month'-interval '1 day') then raise exception 'Invalid payout line %',line_no using errcode='22023';end if;
-   end if;
-  end loop;
+  -- Every line is checked in one pass (a loop over 8,000 lines is too slow for the API's statement
+  -- timeout); the first bad line in file order is named. The CASEs keep each cast safe.
+  select min(n) into line_no from jsonb_array_elements(lines) with ordinality t(x,n) where case when jsonb_typeof(x)<>'object' then true else
+    exists(select 1 from jsonb_object_keys(x) k where not(k=any(line_keys)))
+    or jsonb_typeof(x->'reference') is distinct from 'string' or length(trim(x->>'reference')) not between 1 and 120
+    or not private.workspace_payout_minor_ok(x->'amountMinor',true)
+    or not private.workspace_payout_minor_ok(x->'grossMinor',false) or not private.workspace_payout_minor_ok(x->'commissionMinor',false)
+    or not private.workspace_payout_minor_ok(x->'hostFeeMinor',false) or not private.workspace_payout_minor_ok(x->'paymentFeeMinor',false)
+    or not private.workspace_payout_minor_ok(x->'cleaningFeeMinor',false)
+    or (x ? 'lineType' and jsonb_typeof(x->'lineType')<>'null' and (jsonb_typeof(x->'lineType')<>'string' or length(trim(x->>'lineType')) not between 1 and 60))
+    or (x ? 'key' and jsonb_typeof(x->'key')<>'null' and (jsonb_typeof(x->'key')<>'string' or length(x->>'key') not between 1 and 300 or trim(x->>'key')=''))
+    or (x ? 'paidOn' and jsonb_typeof(x->'paidOn')<>'null' and (jsonb_typeof(x->'paidOn')<>'string' or x->>'paidOn'!~'^\d{4}-\d{2}-\d{2}$'))
+    -- A real calendar day from 2000 to 2100.
+    or case when jsonb_typeof(x->'paidOn')='string' and x->>'paidOn'~'^\d{4}-\d{2}-\d{2}$' then
+     case when substr(x->>'paidOn',1,4)::integer not between 2000 and 2100 or substr(x->>'paidOn',6,2)::integer not between 1 and 12 then true
+      else substr(x->>'paidOn',9,2)::integer<1 or substr(x->>'paidOn',9,2)::integer>extract(day from make_date(substr(x->>'paidOn',1,4)::integer,substr(x->>'paidOn',6,2)::integer,1)+interval '1 month'-interval '1 day') end
+     else false end
+   end;
+  if line_no is not null then raise exception 'Invalid payout line %',line_no using errcode='22023';end if;
   -- Keys are unique within a file (they carry an occurrence number), so a repeat means the file is wrong.
   if exists(select 1 from jsonb_array_elements(lines) x where jsonb_typeof(x->'key')='string' group by x->>'key' having count(*)>1) then
    raise exception 'The file repeats a payout line. Export the report again and upload that' using errcode='22023';
@@ -153,35 +160,34 @@ begin
 
  -- One upload at a time per channel, so "already held" is exact.
  perform pg_advisory_xact_lock(hashtextextended('workspace_payout_import:'||chan,0));
- select count(*),coalesce(sum((x->>'amountMinor')::bigint),0) into new_count,new_total from jsonb_array_elements(lines) x
-  where jsonb_typeof(x->'key') is distinct from 'string' or not exists(select 1 from private.workspace_payout_lines h where h.channel=chan and h.line_key=x->>'key');
+ -- The report row first (its new counts are filled in below), then every line in one statement: a line
+ -- whose key is already held in the channel is skipped by the unique index, unkeyed lines are always added.
  insert into private.workspace_payout_reports(channel,file_name,content_hash,line_count,total_minor,new_line_count,new_minor,uploaded_by,request_id)
-  values(chan,private.workspace_required_text(input,'fileName',1,200),hash,jsonb_array_length(lines),total,new_count,new_total,auth.uid(),(input->>'requestId')::uuid) returning * into rep;
- insert into private.workspace_payout_lines(report_id,channel,reference,amount_minor,gross_minor,commission_minor,host_fee_minor,payment_fee_minor,cleaning_fee_minor,paid_on,line_type,line_key)
-  select rep.id,chan,trim(x->>'reference'),(x->>'amountMinor')::bigint,
-   case when jsonb_typeof(x->'grossMinor')='number' then (x->>'grossMinor')::bigint end,
-   case when jsonb_typeof(x->'commissionMinor')='number' then (x->>'commissionMinor')::bigint end,
-   case when jsonb_typeof(x->'hostFeeMinor')='number' then (x->>'hostFeeMinor')::bigint end,
-   case when jsonb_typeof(x->'paymentFeeMinor')='number' then (x->>'paymentFeeMinor')::bigint end,
-   case when jsonb_typeof(x->'cleaningFeeMinor')='number' then (x->>'cleaningFeeMinor')::bigint end,
-   case when jsonb_typeof(x->'paidOn')='string' then (x->>'paidOn')::date end,
-   case when jsonb_typeof(x->'lineType')='string' then trim(x->>'lineType') end,
-   case when jsonb_typeof(x->'key')='string' then x->>'key' end
-  from jsonb_array_elements(lines) with ordinality t(x,n)
-  where jsonb_typeof(x->'key') is distinct from 'string' or not exists(select 1 from private.workspace_payout_lines h where h.channel=chan and h.line_key=x->>'key')
-  order by n
-  on conflict (channel,line_key) where line_key is not null do nothing;
- get diagnostics inserted = row_count;
- if inserted<>new_count then raise exception 'Payout lines changed during the upload. Try again' using errcode='40001';end if;
-
- -- Counts over the lines this upload added. A stay "matches" only when it is confirmed.
- select jsonb_build_object('reportId',rep.id,'channel',rep.channel,'lineCount',rep.line_count,'totalMinor',rep.total_minor,
+  values(chan,private.workspace_required_text(input,'fileName',1,200),hash,jsonb_array_length(lines),total,0,0,auth.uid(),(input->>'requestId')::uuid) returning * into rep;
+ -- Counts over the lines this upload added. A stay "matches" only when it is confirmed (one stay per code in a channel).
+ with added as (
+  insert into private.workspace_payout_lines(report_id,channel,reference,amount_minor,gross_minor,commission_minor,host_fee_minor,payment_fee_minor,cleaning_fee_minor,paid_on,line_type,line_key)
+   select rep.id,chan,trim(x->>'reference'),(x->>'amountMinor')::bigint,
+    case when jsonb_typeof(x->'grossMinor')='number' then (x->>'grossMinor')::bigint end,
+    case when jsonb_typeof(x->'commissionMinor')='number' then (x->>'commissionMinor')::bigint end,
+    case when jsonb_typeof(x->'hostFeeMinor')='number' then (x->>'hostFeeMinor')::bigint end,
+    case when jsonb_typeof(x->'paymentFeeMinor')='number' then (x->>'paymentFeeMinor')::bigint end,
+    case when jsonb_typeof(x->'cleaningFeeMinor')='number' then (x->>'cleaningFeeMinor')::bigint end,
+    case when jsonb_typeof(x->'paidOn')='string' then (x->>'paidOn')::date end,
+    case when jsonb_typeof(x->'lineType')='string' then trim(x->>'lineType') end,
+    case when jsonb_typeof(x->'key')='string' then x->>'key' end
+   from jsonb_array_elements(lines) with ordinality t(x,n)
+   order by n
+   on conflict (channel,line_key) where line_key is not null do nothing
+   returning reference,amount_minor)
+ select count(*),coalesce(sum(a.amount_minor),0),count(*) filter(where x.id is not null and x.status<>'confirmed'),
+  count(distinct x.id) filter(where x.status='confirmed'),count(*) filter(where x.status is distinct from 'confirmed')
+  into new_count,new_total,cancelled,matched,unexpected
+  from added a left join private.workspace_reservations x on x.channel=chan and upper(x.channel_reference)=upper(a.reference);
+ update private.workspace_payout_reports set new_line_count=new_count,new_minor=new_total where id=rep.id returning * into rep;
+ result:=jsonb_build_object('reportId',rep.id,'channel',rep.channel,'lineCount',rep.line_count,'totalMinor',rep.total_minor,
   'newLines',rep.new_line_count,'newMinor',rep.new_minor,'alreadyHeld',rep.line_count-rep.new_line_count,
-  'cancelledStay',count(*) filter(where x.id is not null and x.status<>'confirmed'),
-  'matchedReservations',count(distinct x.id) filter(where x.status='confirmed'),
-  'unexpectedLines',count(*) filter(where x.status is distinct from 'confirmed')) into result
- from private.workspace_payout_lines l left join private.workspace_reservations x on x.channel=l.channel and upper(x.channel_reference)=upper(l.reference)
- where l.report_id=rep.id;
+  'cancelledStay',cancelled,'matchedReservations',matched,'unexpectedLines',unexpected);
  insert into public.workspace_activity(actor_id,event_type) values(auth.uid(),'finance.payout_report_uploaded');
  return result;
 end $$;

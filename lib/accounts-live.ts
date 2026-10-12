@@ -102,31 +102,82 @@ export const statementLineSchema = z.object({
   kind: z.enum(STATEMENT_LINE_KINDS), label: z.string(), date: z.string().nullable().optional(), amountMinor: minor, refId: z.string().nullable().optional(),
 });
 export type StatementLineView = z.infer<typeof statementLineSchema>;
-// What the statement row adds. periodEnd is the first day not included; the occupancy is nightsBooked of nightsAvailable.
+// What the statement row adds (workspace_statement_view). periodStart is the first day included, periodEnd the first day NOT included and
+// periodLastDay the last day included (what people read as "to"). The occupancy is nightsBooked of nightsAvailable, occupancyBps in hundredths
+// of a percent (5000 is 50%). period stays the month the statement starts in, as before.
 export const statementPeriodSchema = z.object({
-  periodEnd: z.string().nullable().optional(), method: z.enum(STATEMENT_METHODS).nullable().optional(),
+  periodStart: z.string().optional(), periodEnd: z.string().nullable().optional(), periodLastDay: z.string().nullable().optional(), method: z.enum(STATEMENT_METHODS).nullable().optional(),
   grossMinor: nullableMinor.optional(), otaFeesMinor: nullableMinor.optional(), vatRateBps: z.number().nullable().optional(), vatMinor: nullableMinor.optional(),
-  nightsBooked: z.number().nullable().optional(), nightsAvailable: z.number().nullable().optional(), cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).nullable().optional(),
+  nightsBooked: z.number().nullable().optional(), nightsAvailable: z.number().nullable().optional(), occupancyBps: z.number().nullable().optional(),
+  cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).nullable().optional(), updatedAt: z.string().nullable().optional(),
 });
-// Added to the statement's detail: the ordered lines, and (staff only, never sent to owners) the flags that explain the figures.
-export const statementDetailExtraSchema = z.object({ lines: z.array(statementLineSchema).optional(), internal: z.array(z.string()).optional() });
+// Each clean the statement charged, as only finance staff see it (detail.cleanCosts): what it really cost against the agreed value. Owners never receive it.
+export const statementCleanCostSchema = z.object({
+  workId: z.string().uuid(), cleanDate: z.string().nullable().optional(), agreedMinor: nullableMinor.optional(), actualMinor: nullableMinor.optional(), costSource: z.string().nullable().optional(),
+  flagged: z.boolean().optional(), reviewed: z.boolean().optional(), state: z.string().nullable().optional(), decision: z.string().nullable().optional(), note: z.string().nullable().optional(),
+  basis: z.string().nullable().optional(), chargedMinor: nullableMinor.optional(),
+}).passthrough();
+// Added to the statement's detail: the ordered lines, and (staff only, never sent to owners) the flags that explain the figures,
+// what each clean cost and the stays already counted in an older statement.
+export const statementDetailExtraSchema = z.object({
+  lines: z.array(statementLineSchema).optional(), feeBaseMinor: nullableMinor.optional(), feeBase: z.string().nullable().optional(),
+  internal: z.array(z.string()).optional(), cleanCosts: z.array(statementCleanCostSchema).optional(), alreadyCounted: z.array(z.string()).optional(),
+});
+// One stay in a statement. A v2 statement shares a stay by nights: nightsInPeriod of nights fall in the period and grossMinor, otaFeeMinor and
+// payoutMinor (= amountMinor) are this period's share. counted false: its money is in another statement (nights only). ownerStay: no money.
+export const statementStaySchema = z.object({
+  reference: z.string(), channel: z.string(), checkIn: z.string(), checkOut: z.string(), amountMinor: minor,
+  reservationId: z.string().nullable().optional(), channelReference: z.string().nullable().optional(), guests: z.number().nullable().optional(),
+  nights: z.number().optional(), nightsInPeriod: z.number().optional(), ownerStay: z.boolean().optional(), counted: z.boolean().optional(),
+  grossMinor: nullableMinor.optional(), otaFeeMinor: nullableMinor.optional(), payoutMinor: nullableMinor.optional(),
+}).passthrough();
 
 export const statementSchema = z.object({
   id: z.string().uuid(), propertyId: z.string().uuid(), propertyName: z.string(), period: z.string(), status: z.enum(["draft", "issued", "paid", "void"]),
   revenueMinor: minor, cleaningCount: z.number(), cleaningMinor: minor, expensesMinor: minor, feeBps: z.number(), feeMinor: minor, payoutMinor: minor,
   payoutMethod: z.string().nullable(), payoutReference: z.string().nullable(), paidAt: z.string().nullable(), issuedAt: z.string().nullable(), version: z.number(),
   detail: z.object({
-    stays: z.array(z.object({ reference: z.string(), channel: z.string(), checkIn: z.string(), checkOut: z.string(), amountMinor: minor })),
-    expenses: z.array(z.object({ supplier: z.string(), reference: z.string(), amountMinor: minor })),
+    stays: z.array(statementStaySchema),
+    expenses: z.array(z.object({ supplier: z.string(), reference: z.string(), amountMinor: minor }).passthrough()),
     cleaningCostMinor: minor,
   }).merge(statementDetailExtraSchema).passthrough(),
 }).merge(statementPeriodSchema);
 export type Statement = z.infer<typeof statementSchema>;
+// The statements list (one row per property for a month). statement is the one that STARTS in the month; periodStatements is every live
+// statement overlapping the month, whatever its dates (the 20261012100000 migration). cleansToReview counts the month's cleans that cost more
+// than agreed and are still unreviewed (20261012090000). terms.vatRateBps is the VAT rate in hundredths of a percent (2000 is 20%).
+export const statementTermsSchema = z.object({
+  managementFeeBps: z.number().nullable(), cleaningCostMinor: nullableMinor, vatOnFee: z.boolean().nullable().optional(), vatRateBps: z.number().nullable().optional(),
+  cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).nullable().optional(),
+});
 export const statementsSchema = z.array(z.object({
   propertyId: z.string().uuid(), propertyName: z.string(),
-  terms: z.object({ managementFeeBps: z.number().nullable(), cleaningCostMinor: nullableMinor, vatOnFee: z.boolean().nullable().optional(), cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).nullable().optional() }).nullable(),
-  statement: statementSchema.nullable(), unsettledPayouts: z.number(), missingDetails: z.number(),
+  terms: statementTermsSchema.nullable(),
+  statement: statementSchema.nullable(), periodStatements: z.array(statementSchema).optional(), unsettledPayouts: z.number(), missingDetails: z.number(), cleansToReview: z.number().optional(),
 }));
+
+// --- The figures for a period before it is prepared (the 'statementPreview' report: one property, from and to, to NOT included).
+// The money fields are required on purpose: a screen that cannot read a figure must say so, never show it as nothing. blockedReasons say why
+// preparing would be refused: 'stay_unsettled:<reservation id>' (a stay in the period has no settled payout) and 'clean_unreviewed:<work id>'
+// (a clean cost more than the owner is charged and nobody has decided which applies). flags never block: 'ota_fee_unknown:<id>' (a platform
+// stay with no fee on its payout, counted as 0), 'clean_over_agreed:<id>', 'clean_cost_unknown:<id>', 'owner_stay_amount_ignored:<id>' and 'nights_exceed_period'.
+export const statementPreviewSchema = z.object({
+  section: z.literal('statementPreview').optional(), propertyId: z.string().uuid().optional(),
+  periodStart: z.string(), periodEnd: z.string(), method: z.enum(STATEMENT_METHODS),
+  terms: z.object({
+    managementFeeBps: z.number(), cleaningCostMinor: minor, vatOnFee: z.boolean(), vatRateBps: z.number(),
+    cleanChargeMode: z.enum(CLEAN_CHARGE_MODES), feeBase: z.string().optional(),
+  }).passthrough(),
+  lines: z.array(statementLineSchema),
+  stays: z.array(statementStaySchema).optional(), expenses: z.array(z.object({ supplier: z.string(), reference: z.string(), amountMinor: minor }).passthrough()).optional(),
+  cleans: z.array(statementCleanCostSchema).optional(), alreadyCounted: z.array(z.string()).optional(),
+  grossMinor: minor, otaFeesMinor: minor, revenueMinor: minor, changeoversMinor: minor, cleaningCount: z.number(), feeBaseMinor: minor, feeMinor: minor, vatMinor: minor,
+  payablesMinor: minor, payoutMinor: minor, nightsBooked: z.number(), nightsAvailable: z.number(),
+  flags: z.array(z.string()), blocked: z.boolean(), blockedReasons: z.array(z.string()),
+  // Statements already covering part of these dates (any status but void), as the list shows them.
+  statements: z.array(statementSchema).optional(),
+}).passthrough();
+export type StatementPreview = z.infer<typeof statementPreviewSchema>;
 // --- Payables (migration 20261012090000): what each clean cost against what the owner is charged, and cleaner invoices.
 // A clean is flagged when its actual cost is above the agreed value; reviewing it picks which one the owner pays.
 // stale: the review no longer holds because the clean's actual cost changed since.
@@ -135,6 +186,10 @@ export const cleanCostReviewSchema = z.object({
   workId: z.string().uuid(), propertyId: z.string().uuid().nullable().optional(), propertyName: z.string(), cleanDate: z.string(),
   agreedMinor: nullableMinor, actualMinor: nullableMinor, state: z.enum(CLEAN_REVIEW_STATES), decision: z.enum(CLEAN_CHARGE_MODES).nullable(),
   cleanerName: z.string().nullable().optional(), note: z.string().nullable().optional(), reviewedAt: z.string().nullable().optional(),
+  // The rest of what workspace_clean_review_state returns. Optional so older answers still parse; zod would strip them otherwise.
+  workStatus: z.string().nullable().optional(), cleanerId: z.string().uuid().nullable().optional(), costSource: z.string().nullable().optional(),
+  chargeMode: z.enum(CLEAN_CHARGE_MODES).nullable().optional(), flagged: z.boolean().optional(), reviewed: z.boolean().optional(),
+  reviewedActualMinor: nullableMinor.optional(), reviewVersion: z.number().nullable().optional(),
 });
 export type CleanCostReview = z.infer<typeof cleanCostReviewSchema>;
 export const cleansToReviewReportSchema = z.object({ count: z.number().optional(), more: z.boolean().optional(), cleans: z.array(cleanCostReviewSchema) }).passthrough();
@@ -142,11 +197,15 @@ export type CleansToReviewReport = z.infer<typeof cleansToReviewReportSchema>;
 
 export const cleanerInvoiceLineSchema = z.object({
   workId: z.string().uuid(), amountMinor: minor, propertyName: z.string().nullable().optional(), cleanDate: z.string().nullable().optional(),
+  // lineId, propertyId, live (false once the invoice is rejected), agreedMinor and overAgreed come from workspace_cleaner_invoice_view; optional so older answers parse.
+  lineId: z.string().uuid().optional(), propertyId: z.string().uuid().nullable().optional(), live: z.boolean().optional(),
+  agreedMinor: nullableMinor.optional(), overAgreed: z.boolean().optional(),
 });
 export const cleanerInvoiceSchema = z.object({
   id: z.string().uuid(), supplier: z.string(), reference: z.string(), invoiceDate: z.string(), totalMinor: minor, status: z.string(),
   lines: z.array(cleanerInvoiceLineSchema).optional(), lineCount: z.number().optional(), note: z.string().nullable().optional(), decisionNote: z.string().nullable().optional(),
   decidedAt: z.string().nullable().optional(), createdAt: z.string().optional(), version: z.number().optional(),
+  cleanerId: z.string().uuid().nullable().optional(), cleanerName: z.string().nullable().optional(), currency: z.string().optional(),
 });
 export type CleanerInvoice = z.infer<typeof cleanerInvoiceSchema>;
 export const cleanerInvoicesReportSchema = z.object({ count: z.number().optional(), more: z.boolean().optional(), invoices: z.array(cleanerInvoiceSchema) }).passthrough();

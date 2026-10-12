@@ -6,6 +6,7 @@ import { ui, type Palette } from "./theme";
 import { Loading, london, message, Notice, StatGrid, StatTile, Tag } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { SoftButton } from "./LivePages";
+import { OwnerExpenses } from "./OwnerExpenses";
 import { readOwner } from "./backend/client";
 import { formatCount, formatMoney, formatMoneyShort } from "../../lib/format";
 import { monthName } from "../../lib/owner-reports";
@@ -26,13 +27,16 @@ export function OwnerPeriodSummary({ palette: p, onStatements }: { palette: Pale
   const range = useMemo(() => periodRange(period, today), [period, today]);
   const key = period + ":" + today;
   const [loaded, setLoaded] = useState<{ key: string; data: OwnerPeriods | null; error: string } | null>(null);
+  // Bumped after an expense is added or removed: the figures reload in place, without a loading flash.
+  const [reloads, setReloads] = useState(0);
   useEffect(() => {
     let active = true;
     readOwner({ section: "periods", ...readRange(range) })
       .then(r => { if (active) setLoaded({ key, data: ownerPeriodsSchema.parse(r.data), error: "" }); })
-      .catch(e => { if (active) setLoaded({ key, data: null, error: message(e) }); });
+      // A reload that fails keeps the last good figures for this period (and says so); a first load has none to keep.
+      .catch(e => { if (active) setLoaded(prev => prev?.key === key && prev.data ? { key, data: prev.data, error: "Your figures could not be refreshed, so these may be out of date. " + message(e) } : { key, data: null, error: message(e) }); });
     return () => { active = false; };
-  }, [range, key]);
+  }, [range, key, reloads]);
   const current = loaded?.key === key ? loaded : null;
   const data = current?.data ?? null;
   const count = data?.properties.length ?? 0;
@@ -58,6 +62,7 @@ export function OwnerPeriodSummary({ palette: p, onStatements }: { palette: Pale
           <StatTile p={p} icon="calendar" tone="clients" label="Bookings" value={now.bookings} detail={detail(change(s => s.bookings))} />
         </StatGrid>
         <Statement p={p} now={now} before={before} title={OWNER_PERIOD_LABEL[period]} versus={range.versus} feeBps={feeBps.length === 1 ? feeBps[0] : null} months={range.months} cells={data?.months ?? []} />
+        {!!data && <OwnerExpenses palette={p} properties={data.properties} cells={data.months} months={range.months} onChanged={() => setReloads(n => n + 1)} />}
         <SoftButton label="See your statements" icon="arrow-right" palette={p} onPress={onStatements} />
       </>}
     </Entrance>
@@ -100,6 +105,11 @@ function Statement({ p, now, before, title, versus, feeBps, months: shown, cells
         {line(`Management fee${feeBps !== null ? ` (${feeBps / 100}%)` : ""}`, cost(now.feeMinor), ch(s => s.feeMinor))}
         <View style={{ height: 1, backgroundColor: p.border, marginVertical: 4 }} />
         {line(owed ? "You owe" : "Your payout", now.payoutMinor === null ? "Not set yet" : formatMoney(Math.abs(now.payoutMinor)), ch(s => s.payoutMinor), { strong: true, good: true })}
+        {now.netMinor !== null && <>
+          {line("Your expenses", cost(now.ownerExpensesMinor), null, { muted: true })}
+          {line("Net after your expenses", formatMoney(now.netMinor), ch(s => s.netMinor), { strong: true, good: true })}
+          <Text style={[ui.small, { color: p.muted }]}>The expenses you entered come off this figure only. They do not change what Recharge pays you.</Text>
+        </>}
       </View>
       {/* Legend: which months are from issued statements and which are estimates. */}
       <View style={{ gap: 8 }}>

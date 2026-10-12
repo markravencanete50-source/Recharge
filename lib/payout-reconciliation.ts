@@ -1,5 +1,6 @@
 // Owner statements: read platform payout reports, reconcile them against reservations,
 // then build a statement per property. Pure functions; no I/O.
+import { formatCount, formatMoney } from "./format";
 import { PAYOUT_CHANNEL_LABEL, PAYOUT_COLUMNS, PAYOUT_FIELDS, RECONCILED_CHANNELS, headerKey, isPayoutChannel, type PayoutChannel, type PayoutField } from "./payout-report-formats";
 
 export { RECONCILED_CHANNELS, type PayoutChannel } from "./payout-report-formats";
@@ -16,7 +17,36 @@ export type PayoutLine = {
   reference: string; amountMinor: number; grossMinor: number | null; commissionMinor: number | null; hostFeeMinor: number | null;
   paymentFeeMinor: number | null; cleaningFeeMinor: number | null; paidOn: string | null; lineType: string | null; key: string | null;
 };
-export type PayoutLinesReport = { lines: PayoutLine[]; used: Record<string, string>; skipped: { noCode: number; noAmount: number }; error?: string };
+// The bank transfer check, for files that list each transfer (Airbnb's "Payout" rows, with the amount in "Paid out").
+// Transfers and coded lines are grouped by their date: a date is matched when the transfers on it add up exactly to
+// the net of the coded lines on it. `linesWithoutTransfer` counts coded lines on a date with no transfer in the file
+// (for example lines not paid out yet). Null when the file has no transfer rows (Booking.com and Vrbo files today).
+export type TransferMismatch = { date: string; paidOutMinor: number; linesMinor: number };
+export type TransferCheck = { checked: number; matched: number; mismatches: TransferMismatch[]; linesWithoutTransfer: number };
+export type PayoutLinesReport = { lines: PayoutLine[]; used: Record<string, string>; skipped: { noCode: number; noAmount: number }; transfers: TransferCheck | null; error?: string };
+
+// The largest payout report accepted: characters in the file and coded lines in it (a year of a larger portfolio; a
+// real Airbnb year for one portfolio was about 406,000 characters and 2,066 lines). The database takes the same number
+// of lines (up to 4 MiB of them), and the finance route reads a request body of up to PAYOUT_UPLOAD_BODY_LIMIT bytes
+// for the finance roles, which leaves room for the quotes and line breaks a CSV gains when sent as JSON.
+export const MAX_PAYOUT_CSV_CHARS = 2_000_000;
+export const MAX_PAYOUT_LINES = 8000;
+export const PAYOUT_UPLOAD_BODY_LIMIT = 2_600_000;
+// Whether a file fits one upload: its characters, and the bytes it takes as JSON (quotes and line breaks are escaped,
+// letters such as "é" take two bytes or more), with room for the rest of the request.
+export function fitsPayoutUpload(csv: string): boolean {
+  if (csv.length > MAX_PAYOUT_CSV_CHARS) return false;
+  const json = JSON.stringify(csv);
+  let bytes = 1024;
+  for (let i = 0; i < json.length; i++) {
+    const unit = json.charCodeAt(i);
+    if (unit < 0x80) bytes += 1;
+    else if (unit < 0x800) bytes += 2;
+    else if (unit >= 0xd800 && unit <= 0xdbff) { bytes += 4; i++; }
+    else bytes += 3;
+  }
+  return bytes <= PAYOUT_UPLOAD_BODY_LIMIT;
+}
 
 // RFC 4180-style CSV: quoted fields (with commas, quotes and line breaks inside), CRLF or LF, a leading BOM.
 export function parseCsv(text: string, delimiter = ","): string[][] {
@@ -193,6 +223,11 @@ const named = (headers: readonly string[]) => {
   return list.length > 1 ? `${list.slice(0, -1).join(", ")} or ${list[list.length - 1]}` : list[0] ?? "";
 };
 const MONEY_FIELDS = ["net", "gross", "commission", "hostFee", "paymentFee", "cleaningFee"] as const;
+// Rows that record a bank transfer, not a line: no reservation code, this type, and the amount sent to the bank in
+// one of these columns. Only Airbnb files list transfers; add a platform here when its export does.
+const TRANSFER_ROWS: Partial<Record<PayoutChannel, { types: readonly string[]; paidOut: readonly string[] }>> = {
+  airbnb: { types: ["Payout"], paidOut: ["Paid out"] },
+};
 const isPounds = (value: string) => /^(?:gbp|£|gbp£|£gbp|sterling|poundsterling|poundssterling|britishpounds?)$/.test(value.toLowerCase().replace(/[\s.]+/g, ""));
 class ReportError extends Error {}
 
@@ -210,7 +245,7 @@ export function detectPayoutChannel(csv: string): PayoutChannel | null {
 // that cannot be read.
 export function readPayoutLines(csv: string, channel: PayoutChannel): PayoutLinesReport {
   const used: Record<string, string> = {}, skipped = { noCode: 0, noAmount: 0 };
-  const fail = (error: string): PayoutLinesReport => ({ lines: [], used: {}, skipped: { noCode: 0, noAmount: 0 }, error });
+  const fail = (error: string): PayoutLinesReport => ({ lines: [], used: {}, skipped: { noCode: 0, noAmount: 0 }, transfers: null, error });
   if (!isPayoutChannel(channel)) return fail("Choose Airbnb, Booking.com or Vrbo.");
   const label = PAYOUT_CHANNEL_LABEL[channel];
   const tables = readTables(csv);
@@ -261,10 +296,32 @@ export function readPayoutLines(csv: string, channel: PayoutChannel): PayoutLine
   };
   const lines: PayoutLine[] = [];
   const occurrences = new Map<string, number>();
+  // The bank transfer check: transfers and coded lines added up by date (an unreadable date keeps its own text).
+  const transferRows = TRANSFER_ROWS[channel];
+  const transferTypes = new Set(transferRows?.types.map(headerKey) ?? []);
+  const paidOutColumns = transferRows ? header.flatMap((text, index) => transferRows.paidOut.some(alias => headerKey(alias) === headerKey(text)) ? [index] : []) : [];
+  const transferDay = (text: string) => readDay(text, order) ?? dayText(text);
+  const paidOutByDay = new Map<string, number>(), linesByDay = new Map<string, { minor: number; count: number }>();
+  const transferOf = (row: string[]) => {
+    const type = first(row, "type")?.value;
+    if (!type || !transferTypes.has(headerKey(type))) return null;
+    for (const index of paidOutColumns) {
+      const value = cell(row, index);
+      if (!value || PLACEHOLDER.test(value)) continue;
+      const money = readMoney(value, european);
+      return money.kind === "ok" ? money.minor : null;
+    }
+    return null;
+  };
   try {
     for (const row of rows) {
       const code = first(row, "code")?.value ?? "";
-      if (!code) { skipped.noCode++; continue; }
+      if (!code) {
+        skipped.noCode++;
+        const paidOut = transferRows ? transferOf(row) : null;
+        if (paidOut !== null) { const day = transferDay(first(row, "date")?.value ?? ""); paidOutByDay.set(day, (paidOutByDay.get(day) ?? 0) + paidOut); }
+        continue;
+      }
       if (code.length > 120) return fail("A reservation code is longer than 120 characters. Check the file is a payout report.");
       const net = first(row, "net");
       if (!net) { skipped.noAmount++; continue; }
@@ -291,12 +348,47 @@ export function readPayoutLines(csv: string, channel: PayoutChannel): PayoutLine
         reference: code, amountMinor, grossMinor: optional("gross", false), commissionMinor: optional("commission", true), hostFeeMinor: optional("hostFee", true),
         paymentFeeMinor: optional("paymentFee", true), cleaningFeeMinor: optional("cleaningFee", true), paidOn: date ? readDay(date, order) : null, lineType, key,
       });
+      if (transferRows) {
+        const day = transferDay(date), sum = linesByDay.get(day) ?? { minor: 0, count: 0 };
+        linesByDay.set(day, { minor: sum.minor + amountMinor, count: sum.count + 1 });
+      }
     }
   } catch (error) {
     if (error instanceof ReportError) return fail(error.message);
     throw error;
   }
-  return { lines, used, skipped };
+  let transfers: TransferCheck | null = null;
+  if (paidOutByDay.size) {
+    const days = [...paidOutByDay.keys()].sort();
+    const mismatches = days.flatMap(date => {
+      const paidOutMinor = paidOutByDay.get(date) ?? 0, linesMinor = linesByDay.get(date)?.minor ?? 0;
+      return paidOutMinor === linesMinor ? [] : [{ date, paidOutMinor, linesMinor }];
+    });
+    let linesWithoutTransfer = 0;
+    for (const [day, sum] of linesByDay) if (!paidOutByDay.has(day)) linesWithoutTransfer += sum.count;
+    transfers = { checked: days.length, matched: days.length - mismatches.length, mismatches, linesWithoutTransfer };
+  }
+  return { lines, used, skipped, transfers };
+}
+
+// Words for the bank transfer check, for the upload summary: one sentence, then up to `shown` dates that do not add up
+// (the difference is the transfer less the lines). A difference never stops an upload; it only tells staff to look.
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shortDay = (date: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  return match ? `${Number(match[3])} ${SHORT_MONTHS[Number(match[2]) - 1]} ${match[1]}` : date || "No date";
+};
+export function transferSummary(transfers: TransferCheck | null, shown = 3): { text: string; details: string[]; allMatched: boolean } | null {
+  if (!transfers || !transfers.checked) return null;
+  const { checked, mismatches, linesWithoutTransfer } = transfers, off = mismatches.length;
+  const dates = (n: number) => `${formatCount(n)} payout date${n === 1 ? "" : "s"}`;
+  const text = !off
+    ? (checked === 1 ? "The 1 payout date adds up to the bank transfer." : `All ${dates(checked)} add up to the bank transfers.`)
+    : `${formatCount(off)} of ${dates(checked)} ${off === 1 ? "does" : "do"} not add up to the bank transfer.`;
+  const details = mismatches.slice(0, shown).map(m => `${shortDay(m.date)}: transfer ${formatMoney(m.paidOutMinor)}, lines ${formatMoney(m.linesMinor)}, difference ${formatMoney(m.paidOutMinor - m.linesMinor)}`);
+  if (off > shown) details.push(`And ${dates(off - shown)} more.`);
+  if (linesWithoutTransfer) details.push(`${formatCount(linesWithoutTransfer)} line${linesWithoutTransfer === 1 ? " has" : "s have"} no bank transfer in this file yet.`);
+  return { text, details, allMatched: !off };
 }
 
 const SOURCE: Record<PayoutChannel, PayoutRow["source"]> = { airbnb: "Airbnb", booking_com: "Booking.com", vrbo: "Vrbo" };

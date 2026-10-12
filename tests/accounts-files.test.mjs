@@ -51,3 +51,43 @@ test('the printable statement is branded, plain English and escaped',()=>{
  const draft=files.statementDocument({...statement,status:'draft',detail:{...statement.detail,stays:[],expenses:[]}},'accounts');
  assert.ok(draft.includes('Draft, not yet issued')&&draft.includes('No stays this month.')&&draft.includes('No repairs or supplies this month.'));
 });
+
+test('the Vrbo example is clearly an example and reads cleanly through the same upload',()=>{
+ const vrbo=files.payoutExampleCheck('vrbo','2026-10');
+ assert.equal(vrbo.source,'Vrbo');assert.equal(vrbo.error,undefined);
+ assert.deepEqual(vrbo.rows.map(r=>[r.code,r.amountMinor]),[['HA-EXAMPLE1',44160],['HA-EXAMPLE2',23920]]);
+ const example=files.payoutExampleCsv('vrbo','2026-10');
+ assert.equal(example.fileName,'Example-Vrbo-payouts-2026-10.csv');
+ const prepared=prepareFinanceAction({action:'importPayoutReport',requestId:crypto.randomUUID(),channel:'vrbo',fileName:example.fileName,csv:example.csv});
+ assert.ok('input' in prepared,'the upload accepts the Vrbo example');
+ assert.equal(prepared.input.lines.length,2);
+ assert.equal(new Set(prepared.input.lines.map(l=>l.key)).size,2,'each line has its own key');
+ // Net is the payout column, and gross less the fees is exactly that net (the file adds up).
+ assert.deepEqual(prepared.input.lines.map(l=>[l.grossMinor,l.commissionMinor,l.paymentFeeMinor,l.amountMinor,l.paidOn]),[[48000,2400,1440,44160,'2026-10-10'],[26000,1300,780,23920,'2026-10-14']]);
+ for(const l of prepared.input.lines) assert.equal(l.grossMinor-l.commissionMinor-l.paymentFeeMinor,l.amountMinor);
+ assert.match(example.csv,/Reservation ID/);
+});
+
+const v2={...statement,id:'33333333-3333-4333-8333-333333333333',period:'2026-11',status:'issued',issuedAt:'2026-12-01T09:00:00Z',paidAt:null,payoutMethod:null,payoutReference:null,
+ revenueMinor:162002,cleaningCount:3,cleaningMinor:18000,expensesMinor:8500,feeBps:1500,feeMinor:24300,payoutMinor:106342,
+ periodStart:'2026-11-01',periodEnd:'2026-12-01',grossMinor:175374,otaFeesMinor:13372,vatRateBps:2000,vatMinor:4860,
+ detail:{stays:[],expenses:[{supplier:'Boiler Co',reference:'B-1',amountMinor:8500}],cleaningCostMinor:6000}};
+
+test('a statement with VAT and platform fees shows every line that comes off, and they add up to the payout',()=>{
+ assert.equal(v2.grossMinor-v2.otaFeesMinor-v2.cleaningMinor-v2.expensesMinor-v2.feeMinor-v2.vatMinor,v2.payoutMinor);
+ const csv=files.statementCsv(v2);
+ assert.ok(csv.includes('"Period","November 2026"'));
+ for(const row of ['"Gross booking income","1753.74"','"Platform fees","(133.72)"','"Cleaning (3 at £60.00)","(180.00)"','"Repairs and supplies","(85.00)"','"Management fee (15%)","(243.00)"','"VAT on the management fee (20%)","(48.60)"','"Due to owner","1063.42"']) assert.ok(csv.includes(row),row);
+ assert.ok(!csv.includes('Payouts received'),'the v2 summary starts from gross');
+ const html=files.statementDocument(v2,'owner');
+ for(const text of ['November 2026','Gross booking income','Platform fees','VAT on the management fee (20%)','plus VAT','£1,063.42']) assert.ok(html.includes(text),text);
+ const custom=files.statementCsv({...v2,periodStart:'2026-11-10',periodEnd:'2026-11-21'});
+ assert.ok(custom.includes('"Period","10 Nov to 20 Nov"')||/"Period","10 Nov( 2026)? to 20 Nov( 2026)?"/.test(custom));
+});
+
+test('an older statement downloads exactly as before: no VAT row, still a month',()=>{
+ const csv=files.statementCsv(statement);
+ assert.ok(csv.includes('"Month","September 2026"')&&csv.includes('"Payouts received","1200.00"'));
+ assert.ok(!csv.includes('VAT')&&!csv.includes('Gross booking income'));
+ assert.ok(!files.statementDocument(statement,'owner').includes('VAT'));
+});

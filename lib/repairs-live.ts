@@ -79,8 +79,13 @@ export function visitMoves(role: string, status: string): VisitMove[] {
 }
 
 // Pounds typed by a person, converted to whole pence. Rejects anything ambiguous.
+// A comma counts only as a thousands separator (groups of exactly three digits after it, like 1,234.50); "1,50" is refused, never read as 150.
 export function poundsToMinor(input: string): number | null {
-  const value = input.trim().replace(/^£/, "").replace(/,/g, "");
+  let value = input.trim().replace(/^£/, "");
+  if (value.includes(",")) {
+    if (!/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(value)) return null;
+    value = value.replace(/,/g, "");
+  }
   if (!/^\d{1,6}(\.\d{1,2})?$/.test(value)) return null;
   const [whole, fraction = ""] = value.split(".");
   return Number(whole) * 100 + Number((fraction + "00").slice(0, 2));
