@@ -2,12 +2,15 @@ import { z } from 'zod';
 
 // The guest inbox: conversations with guests from Airbnb, Booking.com, Vrbo and direct. Hostaway
 // fills it by itself (guest messages and the team's replies sent there) and, when switched on
-// (HOSTAWAY_REPLIES_ENABLED), delivers replies written here. Messages from elsewhere, such as WhatsApp
-// or email, are logged by hand, and a reply can be recorded here, so reply times count either way.
+// (HOSTAWAY_REPLIES_ENABLED), delivers replies written here. Messages from elsewhere, such as email,
+// are logged by hand, and a reply can be recorded here, so reply times count either way.
+// GUEST_CHANNELS is everything a stored conversation may carry, so a WhatsApp thread logged earlier still
+// opens and keeps its label. OFFERED_CHANNELS is what a person can pick in the app: WhatsApp is not offered.
 // The database decides who sees each conversation.
 const uuid = z.string().uuid();
 export const GUEST_CHANNELS = ['airbnb', 'booking_com', 'vrbo', 'direct', 'whatsapp', 'email', 'other'] as const;
 export type GuestChannel = (typeof GUEST_CHANNELS)[number];
+export const OFFERED_CHANNELS = GUEST_CHANNELS.filter(channel => channel !== 'whatsapp');
 export const CHANNEL_LABEL: Record<GuestChannel, string> = { airbnb: 'Airbnb', booking_com: 'Booking.com', vrbo: 'Vrbo', direct: 'Direct', whatsapp: 'WhatsApp', email: 'Email', other: 'Other' };
 export const INBOX_FILTERS = ['waiting', 'open', 'done', 'all'] as const;
 export const inboxReadSchema = z.discriminatedUnion('section', [

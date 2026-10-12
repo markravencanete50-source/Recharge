@@ -1,14 +1,14 @@
 import { MODULES, type ModuleId } from './modules';
 
 // Where each tool lives in the live app, so every tool a person holds opens somewhere real.
-export type WorkView = 'management' | 'hub' | 'calendar' | 'stays' | 'cleans' | 'repairs' | 'accounts' | 'all';
+export type WorkView = 'management' | 'hub' | 'calendar' | 'stays' | 'clients' | 'cleans' | 'repairs' | 'accounts' | 'all';
 export type ToolPlace =
   | { kind: 'work'; view: WorkView; where: string }
   | { kind: 'tab'; tab: 'home' | 'properties' | 'analytics'; where: string }
   | { kind: 'tracker'; where: string }
   | { kind: 'calculator'; where: string };
 
-export const WORK_VIEW_LABEL: Record<WorkView, string> = { management: 'Management', hub: 'Hub', calendar: 'Calendar', stays: 'Stays', cleans: 'Cleans', repairs: 'Maintenance', accounts: 'Accounts', all: 'All work' };
+export const WORK_VIEW_LABEL: Record<WorkView, string> = { management: 'Management', hub: 'Hub', calendar: 'Calendar', stays: 'Stays', clients: 'Client relations', cleans: 'Cleans', repairs: 'Maintenance', accounts: 'Accounts', all: 'All work' };
 
 // The Work views each role can open, the first being the default. Team roles have the Hub (to-dos
 // and trackers) and the Calendar after their main view. Owners' stays, earnings, statements and mailbox are in Reports

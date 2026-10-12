@@ -6,7 +6,7 @@ import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { Sheet } from "./TeamFlows";
 import { Entrance, MotionPress, TweenNumber } from "./motion";
-import { departmentColor, ui, web, type Palette } from "./theme";
+import { departmentColor, ui, type Palette } from "./theme";
 import { Button, Field, IconChip, Loading, Notice, Section, Tag, dayLabel, london, message, useRequestId, type IconName, type Tone } from "./LiveKit";
 import { List, Pills } from "./LiveAccounts";
 import { StateGraphic } from "./StateGraphic";
@@ -18,6 +18,8 @@ import { AREA_LABEL, decisionsCsv, decisionsSchema, outcomeLabel, overviewSchema
 import { formatCount, formatMoney } from "../../lib/format";
 import { sectionAnchor, type HomeToolTarget } from "../../lib/home-tools";
 import type { Expense } from "../../lib/accounts-live";
+import { hubSchema, type HubItem } from "../../lib/workspace-teams-policy";
+import { parseApprovalFlags, type ApprovalFlag } from "../../lib/tracker-approvals";
 
 // Management oversight in the live app: the business at a glance on admins' Home, the decisions
 // waiting on management (decided in place), owners waiting on approvals, yesterday's missed Stays
@@ -25,13 +27,13 @@ import type { Expense } from "../../lib/accounts-live";
 type Stalled = Management["stalledOwnerApprovals"][number];
 type Unusual = Management["unusualPayouts"][number];
 type Missed = Management["missedYesterday"][number];
-type Pending =
+export type Pending =
   | { kind: "decision"; decision: Decision; outcome: string | null }
   | { kind: "expense"; expense: Expense; approve: boolean }
   | { kind: "payout"; payout: Unusual; approve: boolean };
 type Action = { label: string; icon?: IconName; primary?: boolean; disabled?: boolean; onPress: () => void };
 
-const work = (view: "stays" | "cleans" | "repairs" | "accounts" | "management", extra: { sub?: string; section?: string } = {}): HomeToolTarget =>
+const work = (view: "stays" | "clients" | "cleans" | "repairs" | "accounts" | "management", extra: { sub?: string; section?: string } = {}): HomeToolTarget =>
   ({ kind: "work", view, ...(extra.sub ? { sub: extra.sub } : {}), ...(extra.section ? { anchor: sectionAnchor(extra.section) } : {}) });
 const QUEUE = work("management", { sub: "queue" });
 const since = (iso: string) => waitedLabel(iso) + " ago";
@@ -76,7 +78,7 @@ function ActionRow({ p, first, icon, tone, title, detail, amount, tags, actions 
 
 // Record one decision: uphold or overturn a rejected clean, decide a cleaner review, approve or
 // decline a cost above the limit, approve an unusual payout or void it for Accounts to redo.
-function DecideSheet({ p, pending, onClose, onDone }: { p: Palette; pending: Pending | null; onClose: () => void; onDone: () => Promise<void> }) {
+export function DecideSheet({ p, pending, onClose, onDone }: { p: Palette; pending: Pending | null; onClose: () => void; onDone: () => Promise<void> }) {
   const [outcome, setOutcome] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -187,8 +189,8 @@ function missedRows(p: Palette, items: Missed[], seen: (m: Missed) => void, busy
   });
 }
 
-// The reminders and "seen" marks, shared by Home and the Management queue.
-function useQueueActions(load: () => Promise<void>) {
+// The reminders and "seen" marks, shared by Home and the Management approvals list.
+export function useQueueActions(load: () => Promise<void>) {
   const saved = useSaved();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -202,30 +204,6 @@ function useQueueActions(load: () => Promise<void>) {
     remind: (a: Stalled) => void run(a.workId, () => writeOversight({ action: "remindOwner", requestId: Crypto.randomUUID(), workId: a.workId })),
     seen: (m: Missed) => void run(m.userId + m.day, () => writeOversight({ action: "markMissedSeen", requestId: Crypto.randomUUID(), userId: m.userId, day: m.day })),
   };
-}
-
-// Management → Waiting on you: owner approvals (with reminders), unusual payouts and missed days.
-export function QueueExtras({ p, queue, onDone }: { p: Palette; queue: Management; onDone: () => Promise<void> }) {
-  const saved = useSaved();
-  const [pending, setPending] = useState<Pending | null>(null);
-  const actions = useQueueActions(onDone);
-  return (
-    <>
-      {!!actions.error && <Notice text={actions.error} p={p} tone="bad" />}
-      <Section title="Owner approvals waiting over 48 hours" count={queue.stalledOwnerApprovals.length} p={p}>
-        <Text style={[ui.small, { color: p.muted }]}>Owners are reminded automatically after 48 hours, and client relations are told after 96.</Text>
-        <List p={p} empty="Nothing is stuck with an owner.">{stalledRows(p, queue.stalledOwnerApprovals, actions.remind, actions.busy)}</List>
-      </Section>
-      <Section title="Unusual owner payouts" count={queue.unusualPayouts.length} p={p}>
-        <Text style={[ui.small, { color: p.muted }]}>Payouts that are negative, or more than half above or below the property’s last three statements.</Text>
-        <List p={p} empty="No unusual payouts.">{decisionRows(p, { ...queue, cleaningDecisions: [], expensesOverLimit: [] }, setPending)}</List>
-      </Section>
-      <Section title="Missed yesterday" count={queue.missedYesterday.length} p={p}>
-        <List p={p} empty="Every Stays sign-off and listing check was done.">{missedRows(p, queue.missedYesterday, actions.seen, actions.busy)}</List>
-      </Section>
-      <DecideSheet p={p} pending={pending} onClose={() => setPending(null)} onDone={saved(onDone)} />
-    </>
-  );
 }
 
 // One department's numbers: each line opens the place the work happens.
@@ -262,11 +240,12 @@ function DepartmentCard({ p, tone, icon, title, metrics, onOpen, target }: { p: 
 }
 
 function departments(o: Overview): { tone: Tone; icon: IconName; title: string; target: HomeToolTarget; metrics: Metric[] }[] {
-  const stays = work("stays", { section: "Daily checks" });
+  // Listing checks and pricing now live under Client relations → Listings.
+  const listings: HomeToolTarget = { kind: "work", view: "clients", sub: "listings" };
   return [
     { tone: "stays", icon: "calendar", title: "Stays", target: work("stays"), metrics: [
-      { label: "Listings to check today", value: o.stays.listingsToCheck, attention: o.stays.listingsToCheck > 0, target: stays },
-      { label: "Empty nights to price this week", value: o.stays.emptyNights, attention: o.stays.emptyNights > 0, target: stays },
+      { label: "Listings to check today", value: o.stays.listingsToCheck, attention: o.stays.listingsToCheck > 0, target: listings },
+      { label: "Empty nights to price this week", value: o.stays.emptyNights, attention: o.stays.emptyNights > 0, target: listings },
       { label: "Re-listings open", value: o.stays.relistingsOpen, attention: o.stays.relistingsOpen > 0, target: work("stays", { section: "Re-listings" }) },
       ...(o.stays.guestsWaiting != null ? [{ label: "Guests waiting for a reply", value: o.stays.guestsWaiting, attention: o.stays.guestsWaiting > 0, target: work("stays", { sub: "inbox" }) }] : []),
     ] },
@@ -299,16 +278,25 @@ export function AdminHome({ palette: p, desktop, onTool }: { palette: Palette; d
   const { queue, error, load: loadQueue } = useQueue();
   const [pending, setPending] = useState<Pending | null>(null);
   const [repair, setRepair] = useState<{ decision: CostDecision; start: "approve" | "decline" } | null>(null);
+  // Flags and approval tickets also wait on management; they are decided in Management → Waiting on you.
+  const [flags, setFlags] = useState<ApprovalFlag[]>([]);
+  const [tickets, setTickets] = useState<HubItem[]>([]);
   const load = useCallback(async () => {
-    const [o] = await Promise.allSettled([readOversight({ section: "overview" }).then(r => overviewSchema.parse(r.data)), loadQueue()]);
+    const [o, f, h] = await Promise.allSettled([readOversight({ section: "overview" }).then(r => overviewSchema.parse(r.data)), readTeams({ section: "flags" }), readTeams({ section: "hub" }), loadQueue()]);
     if (o.status === "fulfilled") { setOverview(o.value); setOverviewError(""); } else setOverviewError(message(o.reason));
+    if (f.status === "fulfilled") setFlags(parseApprovalFlags(f.value.data).flags.filter(x => x.status === "open"));
+    if (h.status === "fulfilled") { const parsed = hubSchema.safeParse(h.value.data); setTickets(parsed.success ? parsed.data.items.filter(i => i.kind === "approval" && i.status === "pending") : []); }
   }, [loadQueue]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const actions = useQueueActions(load);
   const columns = desktop ? 4 : width >= 600 ? 2 : 1;
   const decisions = queue ? queue.cleaningDecisions.length + queue.expensesOverLimit.length + queue.repairApprovals.length + queue.unusualPayouts.length : 0;
   // The same total as Management → Waiting on you, so "See all" matches what is there.
-  const waiting = queue ? queueCount(queue) : 0;
+  const waiting = (queue ? queueCount(queue) + queue.cleanerWarnings.filter(w => w.warning).length : 0) + flags.length + tickets.length;
+  const flagRows = [
+    ...flags.map(f => ({ key: "flag:" + f.id, at: f.createdAt, title: f.title, detail: `${f.source === "request" ? "Request" : "Flagged"}${f.raisedByName ? " by " + f.raisedByName : ""} · ${f.propertyName ?? "no property"} · ${since(f.createdAt)}`, amount: f.amountMinor, badge: f.source === "request" ? "Request" : "Flag" })),
+    ...tickets.map(t => ({ key: "ticket:" + t.id, at: t.createdAt, title: t.title, detail: `Approval ticket${t.createdByName ? " from " + t.createdByName : ""} · ${t.propertyName ?? "no property"} · ${since(t.createdAt)}`, amount: t.amountMinor, badge: "Approval" })),
+  ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).slice(0, 3);
   const cards = overview ? departments(overview) : [];
   return (
     <>
@@ -344,13 +332,17 @@ export function AdminHome({ palette: p, desktop, onTool }: { palette: Palette; d
           <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 22 }]}>
             <StateGraphic palette={p} success icon="check-circle" />
             <Text style={[ui.sectionTitle, { color: p.text, textAlign: "center" }]}>Nothing needs a decision</Text>
-            <Text style={[ui.body, { color: p.muted, textAlign: "center" }]}>Contested cleans, quotes and repairs over the limit, warnings and unusual payouts appear here.</Text>
+            <Text style={[ui.body, { color: p.muted, textAlign: "center" }]}>Flags and requests from the team, contested cleans, quotes and repairs over the limit, warnings and unusual payouts appear here.</Text>
           </View>
         )}
         {queue && !!decisions && <List p={p} empty="">{decisionRows(p, queue, setPending, 6, (r, start) => setRepair({ decision: managementCostDecision(r), start }))}</List>}
+        {!!flagRows.length && <List p={p} empty="">{flagRows.map((r, i) => (
+          <ActionRow key={r.key} p={p} first={i === 0} icon="flag" tone="stays" title={r.title} detail={r.detail} amount={r.amount != null ? formatMoney(r.amount) : undefined} tags={[[r.badge, "wait"]]}
+            actions={[{ label: "Decide", icon: "arrow-right", primary: true, onPress: () => onTool(QUEUE) }]} />
+        ))}</List>}
         {queue && !!queue.stalledOwnerApprovals.length && <List p={p} empty="">{stalledRows(p, queue.stalledOwnerApprovals, actions.remind, actions.busy, 3)}</List>}
         {queue && !!queue.missedYesterday.length && <List p={p} empty="">{missedRows(p, queue.missedYesterday, actions.seen, actions.busy, 3)}</List>}
-        {queue && waiting > Math.min(decisions, 6) + Math.min(queue.stalledOwnerApprovals.length, 3) + Math.min(queue.missedYesterday.length, 3) && (
+        {queue && waiting > Math.min(decisions, 6) + Math.min(queue.stalledOwnerApprovals.length, 3) + Math.min(queue.missedYesterday.length, 3) + flagRows.length && (
           <Button label={`See all ${formatCount(waiting)} in Management`} icon="arrow-right" p={p} onPress={() => onTool(QUEUE)} />
         )}
       </Entrance>

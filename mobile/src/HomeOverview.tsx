@@ -86,26 +86,33 @@ export function QuickOverview({
   sessionKey,
   onReports,
   columns = 2,
+  title = "Quick overview",
+  actionLabel = "Reports",
+  actionHint = "Open reports",
 }: {
   palette: Palette;
   items: OverviewItem[];
   sessionKey: string;
   onReports: () => void;
-  columns?: 2 | 4;
+  columns?: 2 | 3 | 4;
+  title?: string;
+  actionLabel?: string;
+  actionHint?: string;
 }) {
-  const rows = columns === 4 ? [items] : [items.slice(0, 2), items.slice(2, 4)];
+  // Two to a row on a phone; three or four share one row on a computer.
+  const rows = columns >= 3 ? [items] : [items.slice(0, 2), items.slice(2, 4)].filter(row => row.length);
   return (
     <Entrance sessionKey={sessionKey} style={{ gap: 14, marginTop: -6 }}>
       <View style={ui.between}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Quick overview</Text>
+        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>{title}</Text>
         <MotionPress
           accessibilityRole="button"
-          accessibilityLabel="Open reports"
+          accessibilityLabel={actionHint}
           onPress={onReports}
           style={[ui.row, { gap: 8, minHeight: 44, paddingLeft: 6, paddingRight: 12, borderRadius: 999, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }]}
         >
           <DimensionalIcon name="chart" size={32} color={p.primary} />
-          <Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>Reports</Text>
+          <Text style={{ color: p.text, fontSize: 13, fontWeight: "700" }}>{actionLabel}</Text>
           <Feather name="chevron-right" size={16} color={p.muted} />
         </MotionPress>
       </View>
@@ -150,6 +157,7 @@ export function QuickOverview({
               </View>
             </MotionPress>
           ))}
+          {Array.from({ length: Math.max(0, (columns >= 3 ? columns : 2) - row.length) }, (_, i) => <View key={"gap" + i} style={{ flex: 1 }} />)}
         </View>
       ))}
     </Entrance>

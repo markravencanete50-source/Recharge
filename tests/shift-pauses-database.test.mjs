@@ -71,6 +71,8 @@ test('lunch, a break and an emergency while clocked in; back to work; overtime; 
   assert.equal(await notified(SUPER, 'team.emergency'), 1);
   assert.equal(await notified(ADMIN, 'team.emergency'), 1);
   assert.equal(await notified(DAN, 'team.emergency'), 0);
+  // Staying roles write their end-of-day reflection before clocking out (migration 20261012150000).
+  await act({ action: 'saveReflection', wentWell: 'A steady day', notWell: '', feedback: '', completed: [] });
   await act({ action: 'clockOut' });
   const open = (await owner('select count(*)::int n from private.workspace_shift_pauses where ended_at is null'))[0].n;
   assert.equal(open, 0, 'clocking out ends the emergency');

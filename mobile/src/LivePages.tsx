@@ -17,6 +17,7 @@ import { PropertyAccess, ToolDirectory } from "./LiveTools";
 import { LocalEvents } from "./LocalEvents";
 import { PropertyProfile } from "./LivePropertyProfile";
 import { OnboardingPipeline, PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
+import { PropertiesTable } from "./PropertiesTable";
 import { EstimateExplorer } from "./LiveEstimate";
 import { ScotlandMap } from "./ScotlandMap";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
@@ -26,6 +27,7 @@ import type { BudgetItem } from "../../lib/accounts-work";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
 import { propertyPoints } from "../../lib/property-points";
+import { usesPropertyTable } from "../../lib/property-table";
 import { formatCount, formatMoney } from "../../lib/format";
 import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
@@ -470,6 +472,46 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
     } catch (e) { setExportMessage(message(e)); } finally { setExporting(false); }
   }
   const columns = desktop ? 3 : 1;
+  // Staff get the Properties table; owners and cleaners keep the cards.
+  const table = usesPropertyTable(account.role);
+  const openForm = (form: WorkflowForm) => { setSelected(null); onForm(form); };
+  const closeDetail = () => { setSelected(null); setExportMessage(""); };
+  const journeyBlock = (property: PropertyView) => journey ? <JourneyDetails j={journey} p={p} account={account} propertyName={property.name} onForm={openForm} work={work} /> : null;
+  // What follows the profile in a property's detail: new work, work at the property, reports and invoices.
+  const moreFor = (property: PropertyView) => (
+    <>
+      {createOperationForms(account, property.id).map(f => <SoftButton key={f.key} label={f.title} icon="plus" palette={p} onPress={() => openForm(f)} />)}
+      {!!propertyWork.length && <View style={{ gap: 4 }}>
+        <Text style={{ color: p.text, fontWeight: "700" }}>Work at this property · {propertyWork.length}</Text>
+        {/* Open items first; each opens with every step available to you. */}
+        {[...propertyWork].sort((a, b) => Number(isDone(a.status)) - Number(isDone(b.status))).slice(0, 30).map(item => <View key={item.workId} style={{ gap: 6 }}><LiveWorkRow item={item} palette={p} onPress={() => {
+          if (onOpenWork) { setSelected(null); onOpenWork(item); return; }
+          const form = operationForms(account, item)[0]; if (form) openForm(form);
+        }} /></View>)}
+        {propertyWork.length > 30 && <Text style={[ui.small, { color: p.muted }]}>The rest are in Work → All work.</Text>}
+      </View>}
+      {account.modules.includes(account.role === "client" ? "client-dashboard" : "weekly-performance") && ["client", "stays", "admin", "super_admin"].includes(account.role) && <View style={{ gap: 8 }}>
+        <SoftButton label={exporting ? "Preparing report…" : "Weekly report to read or print"} icon="external-link" palette={p} disabled={exporting} onPress={() => void downloadProperty("page")} />
+        <SoftButton label="Spreadsheet (CSV)" icon="download" palette={p} disabled={exporting} onPress={() => void downloadProperty("csv")} />
+        <Text style={[ui.small, { color: p.muted }]}>Pricing, listing checks and local events for {periodLabel(period)}. Choose up to 31 days in Reports.</Text>
+        {account.role !== "client" && <LocalEvents p={p} propertyId={property.id} refreshKey={work} />}
+        {account.role !== "client" && <SoftButton label="Add a local event" icon="calendar" palette={p} onPress={() => onForm(localEventForm(property.id))} />}
+        {!!exportMessage && <Text style={[ui.small, { color: p.text }]}>{exportMessage}</Text>}
+      </View>}
+      {invoices.some(invoice => invoice.property_id === property.id) && <View style={{ gap: 8 }}>
+        <Text style={{ color: p.text, fontWeight: "700" }}>Invoices</Text>
+        {invoices.filter(invoice => invoice.property_id === property.id).map(invoice => (
+          <View key={invoice.id} style={[ui.between, { gap: 12, paddingVertical: 8, borderTopWidth: 1, borderColor: p.border }]}>
+            <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+              <Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text>
+              <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{invoice.currency === "GBP" ? money(invoice.amount_minor) : `${invoice.currency} ${(invoice.amount_minor / 100).toFixed(2)}`}</Text>
+            </View>
+            <Tag label={invoice.status === "paid" ? "Settled" : readableStage(invoice.status)} tone={invoice.status === "paid" ? "good" : invoice.status === "issued" ? "wait" : "plain"} p={p} />
+          </View>
+        ))}
+      </View>}
+    </>
+  );
   return (
     <>
       <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Properties"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
@@ -483,64 +525,41 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       {!!filter && <MotionPress accessibilityRole="button" onPress={() => setFilter(null)} style={[ui.row, { gap: 8, alignSelf: "flex-start", maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.wash }]}>
         <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", flexShrink: 1 }}>Showing: {filter.label} · {filter.ids.length}</Text><Feather name="x" size={16} color={p.text} />
       </MotionPress>}
-      <View {...(Platform.OS === "web" ? { dataSet: { searchShell: "true" } } : {})} style={[ui.row, { borderRadius: 14, minHeight: 50, borderWidth: 1, borderColor: p.controlBorder, paddingHorizontal: 14, backgroundColor: p.surface, gap: 10 }]}>
-        <Feather name="search" size={18} color={p.muted} />
-        <TextInput accessibilityLabel="Search properties" placeholder="Search by name, street, area or postcode" placeholderTextColor={p.muted} value={query} onChangeText={value => { setQuery(value); setShown(24); }} autoCorrect={false} style={{ flex: 1, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular", minHeight: 48 }} />
-        {!!query && <MotionPress accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery("")} style={{ width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={18} color={p.text} /></MotionPress>}
-      </View>
-      {visible.length ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
-          {visible.slice(0, shown).map((property, index) => (
-            <Entrance key={property.id} sessionKey={"live:property:" + property.id} delay={Math.min(index, 8) * 40} style={{ flexBasis: columns === 3 ? "30%" : "100%", flexGrow: 1, minWidth: 0 }}>
-              <PropertyCard property={property} index={index} palette={p} onPress={() => setSelected(property)} />
-            </Entrance>
-          ))}
+      {table ? <>
+        <PropertiesTable palette={p} account={account} properties={filter ? properties.filter(x => filter.ids.includes(x.id)) : properties} journeys={journeys} work={work} loading={loading}
+          selected={selected} onSelect={setSelected} onClose={closeDetail} onOpenWork={onOpenWork} extra={property => <>{journeyBlock(property)}{moreFor(property)}</>} />
+        {!loading && !properties.length && <EmptyState palette={p} icon="home" title="No properties yet" detail="Properties appear here once they are added or onboarded." />}
+      </> : <>
+        <View {...(Platform.OS === "web" ? { dataSet: { searchShell: "true" } } : {})} style={[ui.row, { borderRadius: 14, minHeight: 50, borderWidth: 1, borderColor: p.controlBorder, paddingHorizontal: 14, backgroundColor: p.surface, gap: 10 }]}>
+          <Feather name="search" size={18} color={p.muted} />
+          <TextInput accessibilityLabel="Search properties" placeholder="Search by name, street, area or postcode" placeholderTextColor={p.muted} value={query} onChangeText={value => { setQuery(value); setShown(24); }} autoCorrect={false} style={{ flex: 1, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular", minHeight: 48 }} />
+          {!!query && <MotionPress accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery("")} style={{ width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={18} color={p.text} /></MotionPress>}
         </View>
-      ) : !loading && <EmptyState palette={p} icon="home" title={query ? "No matching properties" : "No properties yet"} detail={query ? "Try another name or area." : account.role === "client" ? "Start an enquiry to begin your property journey." : "Properties appear here once they are added or onboarded."} />}
-      {visible.length > shown && <SoftButton label={`Show more (${visible.length - shown} more)`} icon="arrow-right" palette={p} onPress={() => setShown(shown + 24)} />}
-      <Sheet palette={p} visible={!!selected} onClose={() => { setSelected(null); setExportMessage(""); }} title={selected?.name ?? ""} subtitle={selected ? [selected.address, selected.region].filter(Boolean).join(" · ") : undefined} icon="house">
+        {visible.length ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
+            {visible.slice(0, shown).map((property, index) => (
+              <Entrance key={property.id} sessionKey={"live:property:" + property.id} delay={Math.min(index, 8) * 40} style={{ flexBasis: columns === 3 ? "30%" : "100%", flexGrow: 1, minWidth: 0 }}>
+                <PropertyCard property={property} index={index} palette={p} onPress={() => setSelected(property)} />
+              </Entrance>
+            ))}
+          </View>
+        ) : !loading && <EmptyState palette={p} icon="home" title={query ? "No matching properties" : "No properties yet"} detail={query ? "Try another name or area." : account.role === "client" ? "Start an enquiry to begin your property journey." : "Properties appear here once they are added or onboarded."} />}
+        {visible.length > shown && <SoftButton label={`Show more (${visible.length - shown} more)`} icon="arrow-right" palette={p} onPress={() => setShown(shown + 24)} />}
+      </>}
+      {!table && <Sheet palette={p} visible={!!selected} onClose={closeDetail} title={selected?.name ?? ""} subtitle={selected ? [selected.address, selected.region].filter(Boolean).join(" · ") : undefined} icon="house">
         {selected && <>
           <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
             <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: selected.status === "active" ? p.successWash : p.cautionWash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.status === "active" ? "Live" : readableStage(selected.status)}</Text></View>
             {!!selected.bedrooms && <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: p.wash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.bedrooms} {selected.bedrooms === 1 ? "bedroom" : "bedrooms"}</Text></View>}
             {account.role !== "client" && <FavoriteButton entryKey={"property:" + selected.id} label={selected.name} palette={p} />}
           </View>
-          {journey && selected.status !== "active" && <JourneyDetails j={journey} p={p} account={account} propertyName={selected.name} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
+          {journey && selected.status !== "active" && journeyBlock(selected)}
           <PropertyProfile palette={p} account={account} propertyId={selected.id} journey={journey} />
           <PropertyAccess palette={p} account={account} propertyId={selected.id} />
-          {journey && selected.status === "active" && <JourneyDetails j={journey} p={p} account={account} propertyName={selected.name} onForm={form => { setSelected(null); onForm(form); }} work={work} />}
-          {createOperationForms(account, selected.id).map(f => <SoftButton key={f.key} label={f.title} icon="plus" palette={p} onPress={() => { setSelected(null); onForm(f); }} />)}
-          {!!propertyWork.length && <View style={{ gap: 4 }}>
-            <Text style={{ color: p.text, fontWeight: "700" }}>Work at this property · {propertyWork.length}</Text>
-            {/* Open items first; each opens with every step available to you. */}
-            {[...propertyWork].sort((a, b) => Number(isDone(a.status)) - Number(isDone(b.status))).slice(0, 30).map(item => <View key={item.workId} style={{ gap: 6 }}><LiveWorkRow item={item} palette={p} onPress={() => {
-              if (onOpenWork) { setSelected(null); onOpenWork(item); return; }
-              const form = operationForms(account, item)[0]; if (form) { setSelected(null); onForm(form); }
-            }} /></View>)}
-            {propertyWork.length > 30 && <Text style={[ui.small, { color: p.muted }]}>The rest are in Work → All work.</Text>}
-          </View>}
-          {account.modules.includes(account.role === "client" ? "client-dashboard" : "weekly-performance") && ["client", "stays", "admin", "super_admin"].includes(account.role) && <View style={{ gap: 8 }}>
-            <SoftButton label={exporting ? "Preparing report…" : "Weekly report to read or print"} icon="external-link" palette={p} disabled={exporting} onPress={() => void downloadProperty("page")} />
-            <SoftButton label="Spreadsheet (CSV)" icon="download" palette={p} disabled={exporting} onPress={() => void downloadProperty("csv")} />
-            <Text style={[ui.small, { color: p.muted }]}>Pricing, listing checks and local events for {periodLabel(period)}. Choose up to 31 days in Reports.</Text>
-            {account.role !== "client" && <LocalEvents p={p} propertyId={selected.id} refreshKey={work} />}
-            {account.role !== "client" && <SoftButton label="Add a local event" icon="calendar" palette={p} onPress={() => onForm(localEventForm(selected.id))} />}
-            {!!exportMessage && <Text style={[ui.small, { color: p.text }]}>{exportMessage}</Text>}
-          </View>}
-          {invoices.some(invoice => invoice.property_id === selected.id) && <View style={{ gap: 8 }}>
-            <Text style={{ color: p.text, fontWeight: "700" }}>Invoices</Text>
-            {invoices.filter(invoice => invoice.property_id === selected.id).map(invoice => (
-              <View key={invoice.id} style={[ui.between, { gap: 12, paddingVertical: 8, borderTopWidth: 1, borderColor: p.border }]}>
-                <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-                  <Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text>
-                  <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{invoice.currency === "GBP" ? money(invoice.amount_minor) : `${invoice.currency} ${(invoice.amount_minor / 100).toFixed(2)}`}</Text>
-                </View>
-                <Tag label={invoice.status === "paid" ? "Settled" : readableStage(invoice.status)} tone={invoice.status === "paid" ? "good" : invoice.status === "issued" ? "wait" : "plain"} p={p} />
-              </View>
-            ))}
-          </View>}
+          {journey && selected.status === "active" && journeyBlock(selected)}
+          {moreFor(selected)}
         </>}
-      </Sheet>
+      </Sheet>}
     </>
   );
 }

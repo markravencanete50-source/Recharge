@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
@@ -10,12 +10,15 @@ import { followUpsDue } from "../../lib/portfolio-overview";
 import { ShiftCard } from "./LiveShifts";
 import { CleanerMonthCard } from "./CleanerPay";
 import { OwnerHome } from "./LiveOwnerHome";
-import { HomeTools } from "./HomeTools";
+import { HomeFavorites, HomeTools } from "./HomeTools";
+import { MyPerformance } from "./MyPerformance";
+import { MySchedule } from "./MySchedule";
 import { ReadyHome } from "./ReadyHome";
 import { TodayBoard } from "./TodayBoard";
 import { boardRole } from "../../lib/today-board";
 import { AdminHome } from "./LiveOversight";
 import type { HomeToolTarget } from "../../lib/home-tools";
+import type { SearchEntry } from "../../lib/workspace-search";
 import { ui, type Palette } from "./theme";
 import { LiveNoticeRow, LiveWorkRow, isDone, isWaitingWork, workDate } from "./LiveRows";
 import { todayColors, todayPresentation } from "../../lib/today-presentation";
@@ -42,10 +45,16 @@ const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/L
 const todayLabel = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
 const longToday = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" });
 
-export function LiveHome({ palette: p, desktop, account, snapshot, period, properties, journeys = [], work, notices, loading, onNavigate, onTool }: {
+// Home is each person's own area. Team members see their clock, their Favorites, their to-do summary
+// (the `tasks` slot), their own performance and their own schedule; owners keep the home they had.
+// `favoriteEntries` is the workspace search index and `onOpenEntry` opens one of its entries, both
+// from the host; `tasks` is the To-do summary the host mounts. All three are optional.
+export function LiveHome({ palette: p, desktop, account, snapshot, period, properties, journeys = [], work, notices, loading, onNavigate, onTool, favoriteEntries, onOpenEntry, tasks }: {
   palette: Palette; desktop: boolean; account: WorkspaceAccount; snapshot: AnalyticsSnapshot | null; period: AnalyticsPeriod;
   properties: PropertyView[]; journeys?: JourneyView[]; work: OperationView[]; notices: NoticeView[]; loading: boolean; onNavigate: (section: WorkspaceSection) => void; onTool: (target: HomeToolTarget) => void;
+  favoriteEntries?: SearchEntry[]; onOpenEntry?: (entry: SearchEntry) => void; tasks?: ReactNode;
 }) {
+  const isClient = account.role === "client";
   // Clients who asked for more time, whose check-in date has arrived (onboarding team only).
   const followUps = account.role !== "client" && account.modules.includes("property-onboarding") ? followUpsDue(journeys, properties, londonToday()) : [];
   const tone = todayColors[p.isDark ? "dark" : "light"];
@@ -55,8 +64,9 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
   const attention = [...open].sort((a, b) => Number(isWaitingWork(b.status)) - Number(isWaitingWork(a.status)) || (workDate(a) || "9999").localeCompare(workDate(b) || "9999")).slice(0, 4);
   const names = new Map(properties.map(property => [property.id, property.name]));
   const firstName = account.fullName.trim().split(/\s+/)[0] || "there";
+  // Owners keep a count of their properties; the team's overview is about tasks only.
   const items: OverviewItem[] = [
-    { key: "properties", icon: "house", value: loading ? null : properties.length, label: account.role === "client" ? "Your properties" : "Properties", hint: "Open properties", onPress: () => onNavigate("properties") },
+    ...(isClient ? [{ key: "properties", icon: "house" as const, value: loading ? null : properties.length, label: "Your properties", hint: "Open properties", onPress: () => onNavigate("properties") }] : []),
     { key: "work", icon: "clipboard", value: loading ? null : open.length, label: WORK_LABEL[account.role] ?? "Open work", hint: "Open your work", onPress: () => onNavigate("work") },
     { key: "waiting", icon: "hourglass", value: today ? today.waiting : null, label: "Waiting", hint: "Open your work", onPress: () => onNavigate("work") },
     { key: "updates", icon: "chat", value: loading ? null : unreadNotices(notices).length, label: "Updates", hint: "Open recent activity", onPress: () => onNavigate("activity") },
@@ -113,12 +123,20 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
       {/* Cleaners, cleaning managers and Ready land on their day: Today, Tomorrow and Overdue. */}
       {!!boardRole(account.role) && <TodayBoard palette={p} account={account} properties={properties} work={work} desktop={desktop} onTool={onTool} />}
       {(account.role === "admin" || account.role === "super_admin") && <AdminHome palette={p} desktop={desktop} onTool={onTool} />}
-      {/* The tools for this person's role come first, so nobody has to look for them. */}
-      <HomeTools palette={p} account={account} properties={properties} desktop={desktop} onOpen={onTool} onAll={() => onNavigate("help")} />
+      {/* Clock in and out and pauses come first for the team. */}
+      {!isClient && <ShiftCard palette={p} account={account} />}
+      {/* Owners keep their tools; the team's own Favorites replace them (no action pills any more). */}
+      {isClient && <HomeTools palette={p} account={account} properties={properties} desktop={desktop} onOpen={onTool} onAll={() => onNavigate("help")} />}
+      {!isClient && <HomeFavorites palette={p} account={account} properties={properties} entries={favoriteEntries} onOpenEntry={onOpenEntry} onTool={onTool} onSection={onNavigate} />}
+      {/* The To-do summary, mounted by the host, sits above the performance card. */}
+      {!isClient && tasks}
       {account.role === "cleans" && <CleanerMonthCard palette={p} onOpen={() => onTool({ kind: "work", view: "cleans" })} />}
       {account.role === "ready" && <ReadyHome palette={p} desktop={desktop} onTool={onTool} />}
-      {account.role !== "client" && <ShiftCard palette={p} account={account} />}
-      {account.role === "client" && <OwnerHome palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onNavigate={onNavigate} />}
+      {!isClient && <View style={{ flexDirection: desktop ? "row" : "column", gap: 16, alignItems: "stretch" }}>
+        <View style={{ flex: desktop ? 1 : undefined, minWidth: 0 }}><MyPerformance palette={p} account={account} work={work} onOpen={() => onNavigate("analytics")} /></View>
+        <View style={{ flex: desktop ? 1 : undefined, minWidth: 0 }}><MySchedule palette={p} account={account} onOpen={() => onNavigate("calendar")} /></View>
+      </View>}
+      {isClient && <OwnerHome palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onNavigate={onNavigate} />}
       {!!followUps.length && <Entrance sessionKey={"live:home:followups"} style={{ gap: 8 }}>
         <View style={ui.between}>
           <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Client check-ins due</Text>
@@ -138,8 +156,10 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
           ))}
         </View>
       </Entrance>}
-      <QuickOverview palette={p} items={items} columns={desktop ? 4 : 2} sessionKey={"live:home:overview"} onReports={() => onNavigate("analytics")} />
-      <View style={{ flexDirection: desktop ? "row" : "column", gap: 20, alignItems: "stretch" }}>
+      <QuickOverview palette={p} items={items} columns={desktop ? (items.length === 4 ? 4 : 3) : 2} sessionKey={"live:home:overview"} onReports={() => onNavigate("analytics")}
+        {...(isClient ? {} : { title: "Task overview", actionLabel: "My performance", actionHint: "Open my performance" })} />
+      {/* The big numbers and the property tile are the owners' picture; the team's is above. */}
+      {isClient && <View style={{ flexDirection: desktop ? "row" : "column", gap: 20, alignItems: "stretch" }}>
         {hero}
         {desktop && today && (
           <TodayTiles vertical data={today} palette={p} onWaiting={() => onNavigate("work")} onProperties={() => onNavigate("properties")}>
@@ -150,7 +170,7 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
             ]} />
           </TodayTiles>
         )}
-      </View>
+      </View>}
       <View style={{ flexDirection: desktop ? "row" : "column", gap: 20, alignItems: "flex-start" }}>
         <Entrance sessionKey={"live:home:attention"} delay={55} style={{ gap: 8, flex: desktop ? 3 : undefined, alignSelf: "stretch", minWidth: 0 }}>
           <View style={ui.between}>

@@ -101,7 +101,7 @@ test('the terms sheet has 12% and 15%, a VAT switch and a clean charge choice, a
 });
 
 test('the tracker knows the new sections', () => {
-  assert.match(tracker, /section: 'purchases' \| 'licensing' \| 'onboarding' \| 'statements' \| 'payables' \| 'receivable';/);
+  assert.match(tracker, /TrackerSection = 'purchases' \| 'licensing' \| 'onboarding' \| 'statements' \| 'payables' \| 'receivable'/);
   assert.match(adapter, /STATEMENT_SECTION: TrackerItem\['section'\] = 'statements'/);
 });
 

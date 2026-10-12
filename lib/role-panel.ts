@@ -26,7 +26,7 @@ const PAGE: Record<Page, [string, PanelIcon]> = {
   feedback: ['Feedback', 'message-square'], moderation: ['Reported messages', 'flag'],
 };
 const AREA_ICON: Record<WorkView, PanelIcon> = {
-  management: 'briefcase', hub: 'layers', calendar: 'calendar', stays: 'moon', cleans: 'check-square', repairs: 'tool', accounts: 'pie-chart', all: 'list',
+  management: 'briefcase', hub: 'layers', calendar: 'calendar', stays: 'moon', clients: 'users', cleans: 'check-square', repairs: 'tool', accounts: 'pie-chart', all: 'list',
 };
 const ART_ICON: Record<ToolArt, PanelIcon> = {
   house: 'home', building: 'briefcase', hardhat: 'tool', spray: 'droplet', people: 'users', coins: 'dollar-sign', clipboard: 'clipboard',
@@ -41,7 +41,7 @@ const TOOL_ICON: Record<string, PanelIcon> = { productivity: 'activity', perform
 // The colour of each link's icon tile: departments in their own colours, everything else in one of
 // the panel hues (lib/design-tokens.ts navHueTokens), so similar places look alike across roles.
 export type PanelHue = 'forest' | 'ocean' | 'plum' | 'amber' | 'rose' | 'sky' | 'sage' | 'slate' | 'stays' | 'cleans' | 'ready' | 'accounts' | 'clients';
-const AREA_HUE: Record<WorkView, PanelHue> = { management: 'forest', hub: 'sky', calendar: 'ocean', stays: 'stays', cleans: 'cleans', repairs: 'ready', accounts: 'accounts', all: 'slate' };
+const AREA_HUE: Record<WorkView, PanelHue> = { management: 'forest', hub: 'sky', calendar: 'ocean', stays: 'stays', clients: 'clients', cleans: 'cleans', repairs: 'ready', accounts: 'accounts', all: 'slate' };
 const KEY_HUE: Record<string, PanelHue> = {
   'page:home': 'forest', 'page:favorites': 'amber', 'page:inbox': 'ocean', 'page:analytics': 'plum', 'page:activity': 'amber', 'page:help': 'slate',
   'page:properties': 'forest', 'page:approvals': 'rose', 'page:statements': 'accounts', 'page:enquiries': 'sky', 'page:feedback': 'plum', 'page:moderation': 'rose',

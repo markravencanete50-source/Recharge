@@ -19,7 +19,9 @@ const https = z.string().url().max(1000).refine(value => {
 
 export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
-    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople', 'productivity', 'shiftChanges', 'clientEnquiries', 'feedback', 'chatReports']),
+    'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople', 'productivity', 'shiftChanges', 'clientEnquiries', 'feedback', 'chatReports',
+    // Client feedback build, October 2026: management flags, day reflections, daily to-dos, AirCover claims, team calendar.
+    'flags', 'reflection', 'reflections', 'dailyTasks', 'aircover', 'teamEvents']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -33,6 +35,14 @@ export const teamsReadSchema = z.object({
   if (value.section === 'productivity') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 366 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to a year' });
+  }
+  if (value.section === 'reflections') {
+    if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
+    else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 31 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 31 days' });
+  }
+  if (value.section === 'teamEvents') {
+    if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
+    else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
   }
   if (value.section === 'teamPerformance') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
@@ -52,6 +62,19 @@ export const dailyTargetsSchema = z.object({ signOffs: perDay, listingChecks: pe
 export const favoriteItemSchema = z.object({ key: z.string().min(3).max(160).regex(/^[a-z]+:[A-Za-z0-9_.:-]+$/), label: z.string().trim().min(1).max(120) }).strict();
 export const favoritesSchema = z.array(favoriteItemSchema).max(40);
 export type FavoriteItem = z.infer<typeof favoriteItemSchema>;
+// Management flags: anyone on the team can flag work or a hub item (or ask management something free-standing);
+// admins resolve or decline; the person who raised it can withdraw it. The 'clean_form' source is raised only
+// by the database sweep, never by a person.
+export const FLAG_SOURCES = ['work', 'hub', 'request'] as const;
+export const FLAG_DECISIONS = ['resolved', 'declined'] as const;
+// Team calendar entries: your own absences, meetings and so on. Owners never see them.
+export const TEAM_EVENT_KINDS = ['absence', 'meeting', 'away', 'training', 'other'] as const;
+// Day of the week as the database counts it: 1 is Monday and 7 is Sunday (ISO).
+export const WEEKDAY_NUMBERS = [1, 2, 3, 4, 5, 6, 7] as const;
+const reflectionNote = z.string().trim().max(2000);
+// One thing the person says they got done today (a ticket, a to-do, a guest reply...). The label is the words they see.
+export const reflectionItemSchema = z.object({ kind: z.string().trim().min(1).max(40), ref: z.string().trim().max(80).nullable().optional(), label: text(1, 200) }).strict();
+export const visitAnswerSchema = z.object({ item: text(1, 200), done: z.boolean(), note: z.string().trim().max(500).optional() }).strict();
 export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('decideComplaint'), requestId: id, workId: id, version, outcome: z.enum(['upheld', 'overturned']), note }).strict(),
   z.object({ action: z.literal('decideCleanerReview'), requestId: id, workId: id, version, outcome: z.enum(['no_action', 'supervised', 'removed_from_rota']), note }).strict(),
@@ -137,7 +160,46 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
     // How much daily work counts in the score (0-100%), and what's expected on each Stays shift day.
     workWeight: z.number().int().min(0).max(100).optional(), dailyTargets: dailyTargetsSchema.optional() }).strict(),
   z.object({ action: z.literal('signContract'), requestId: id, contractId: id, version, signedName: text(2, 200), agree: z.literal(true, { errorMap: () => ({ message: 'Tick the box to agree to the contract' }) }) }).strict(),
+  // Flag something for management (work, a hub item, or a free-standing request with an optional amount).
+  z.object({ action: z.literal('flagForManagement'), requestId: id, workId: id.optional(), hubItemId: id.optional(), title: text(2, 200), reason: text(5, 2000),
+    amountMinor: z.number().int().min(0).max(10000000).nullable().optional(), source: z.enum(FLAG_SOURCES) }).strict(),
+  // Admins decide a flag; declining needs a reason. The person who raised a flag can withdraw it while it is open.
+  z.object({ action: z.literal('decideFlag'), requestId: id, flagId: id, version, decision: z.enum(FLAG_DECISIONS), note: z.string().trim().max(2000).default('') }).strict(),
+  z.object({ action: z.literal('withdrawFlag'), requestId: id, flagId: id, version }).strict(),
+  // The end-of-day reflection (needed to clock out for some roles) and an admin marking reflections as read.
+  z.object({ action: z.literal('saveReflection'), requestId: id, shiftId: id.optional(), wentWell: reflectionNote, notWell: reflectionNote, feedback: reflectionNote,
+    completed: z.array(reflectionItemSchema).max(100) }).strict(),
+  z.object({ action: z.literal('markReflectionsReviewed'), requestId: id, ids: z.array(id).min(1).max(100) }).strict(),
+  // Daily to-dos: make today's (or another day's) from the templates, and the admins' list of templates.
+  z.object({ action: z.literal('ensureDailyTodos'), requestId: id, day: date.optional() }).strict(),
+  z.object({ action: z.literal('saveDailyTask'), requestId: id, id: id.optional(), department: z.enum(DEPARTMENTS), title: text(2, 200),
+    details: z.string().trim().max(3000).default(''), weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7), active: z.boolean() }).strict(),
+  z.object({ action: z.literal('removeDailyTask'), requestId: id, id }).strict(),
+  // Link an AirCover claim to the maintenance or visit it came from.
+  z.object({ action: z.literal('flagAirCover'), requestId: id, workId: id, title: text(2, 200).optional(), amountMinor: z.number().int().min(0).max(10000000).nullable().optional(),
+    reference: z.string().trim().max(120).optional() }).strict(),
+  // A routine visit's form: one answer per checklist item, in order, a note, and photos already uploaded.
+  z.object({ action: z.literal('recordVisitForm'), requestId: id, workId: id, version, answers: z.array(visitAnswerSchema).min(1).max(30),
+    note: z.string().trim().max(2000).default(''), photoIds: z.array(id).max(20).optional() }).strict(),
+  // The team calendar: your own absences, meetings and so on (admins can change anyone's).
+  z.object({ action: z.literal('saveTeamEvent'), requestId: id, id: id.optional(), userId: id.optional(), kind: z.enum(TEAM_EVENT_KINDS), title: text(2, 200), startsOn: date, endsOn: date,
+    startTime: clockTime.nullable().optional(), endTime: clockTime.nullable().optional(), location: z.string().trim().max(200).optional() }).strict(),
+  z.object({ action: z.literal('cancelTeamEvent'), requestId: id, id }).strict(),
 ]).superRefine((value, context) => {
+  if (value.action === 'flagForManagement') {
+    if (value.source === 'work' && (!value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'Flag work with its work id only' });
+    if (value.source === 'hub' && (!value.hubItemId || value.workId)) context.addIssue({ code: 'custom', message: 'Flag a hub item with its id only' });
+    if (value.source === 'request' && (value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'A request is not linked to anything' });
+  }
+  if (value.action === 'decideFlag' && value.decision === 'declined' && value.note.length < 5) context.addIssue({ code: 'custom', message: 'Say why it is declined' });
+  if (value.action === 'saveReflection' && value.wentWell.length < 3 && value.notWell.length < 3) context.addIssue({ code: 'custom', message: 'Say what went well or what did not' });
+  if (value.action === 'saveDailyTask' && new Set(value.weekdays).size !== value.weekdays.length) context.addIssue({ code: 'custom', message: 'Each day once' });
+  if (value.action === 'saveTeamEvent') {
+    if (value.endsOn < value.startsOn) context.addIssue({ code: 'custom', message: 'The end date must be on or after the start date' });
+    else if (Date.parse(value.endsOn) - Date.parse(value.startsOn) > 365 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to a year' });
+    if (value.endTime && !value.startTime) context.addIssue({ code: 'custom', message: 'Add the start time too' });
+    if (value.startTime && value.endTime && value.startsOn === value.endsOn && value.endTime <= value.startTime) context.addIssue({ code: 'custom', message: 'The end time must be after the start time' });
+  }
   if (value.action === 'saveFavorites' && new Set(value.items.map(i => i.key)).size !== value.items.length) context.addIssue({ code: 'custom', message: 'Each favorite once' });
   if (value.action === 'saveRoutinePlan' && Boolean(value.planId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a plan needs its current version' });
   if (value.action === 'saveHubItem' && Boolean(value.id) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing needs the current version' });

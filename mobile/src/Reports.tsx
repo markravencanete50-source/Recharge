@@ -8,7 +8,12 @@ import { LineChart, StatusChart, QueueChart, MetricSparkline, ReportSymbol } fro
 import { CountUp, Entrance, MotionPress } from './motion';
 import { Text } from './Typography';
 import { primaryFill, ui, type Palette } from './theme';
-export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporting,exportMessage}:{snapshot:AnalyticsSnapshot;period:AnalyticsPeriod;role:WorkspaceRole;palette:Palette;onDates:()=>void;onExport:()=>void;exporting:boolean;exportMessage:string}) {
+import { MyPerformance } from './MyPerformance';
+import type { WorkspaceAccount } from '../../lib/workspace-account-policy';
+import type { OperationView } from '../../lib/workflow-forms';
+// The team's "My performance" page: the person's own numbers first (when the host passes `account`), then the
+// task trends within their access (admins can still export them). Without `account` it is the plain reports page.
+export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporting,exportMessage,account,work}:{snapshot:AnalyticsSnapshot;period:AnalyticsPeriod;role:WorkspaceRole;palette:Palette;onDates:()=>void;onExport:()=>void;exporting:boolean;exportMessage:string;account?:WorkspaceAccount;work?:OperationView[]}) {
   const report=useMemo(()=>reportPresentation(snapshot,period),[snapshot,period]);
   const {width}=useWindowDimensions(),desktop=width>=1024;
   const [table,setTable]=useState(false),metrics=report.current,card={backgroundColor:p.surface,borderColor:p.border};
@@ -19,7 +24,9 @@ export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporti
     {label:'Properties',metric:'property' as const,kind:'property',value:metrics.properties,color:p.primary},
   ];
   return <View style={{gap:24}}>
-    <Entrance sessionKey={'reports:'+role+':heading'}><View style={{gap:8}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>{snapshot.title}</Text><Text style={[ui.body,{color:p.muted}]}>{snapshot.description}</Text></View></Entrance>
+    <Entrance sessionKey={'reports:'+role+':heading'}><View style={{gap:8}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>{account?'My performance':snapshot.title}</Text><Text style={[ui.body,{color:p.muted}]}>{account?'Your own numbers: replies, tasks done, time worked and your bonus tier.':snapshot.description}</Text></View></Entrance>
+    {account&&<MyPerformance palette={p} account={account} work={work} page/>}
+    {account&&<View style={{gap:4}}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{snapshot.title}</Text><Text style={[ui.small,{color:p.muted}]}>{snapshot.description}</Text></View>}
     <View style={[ui.row,{gap:12,flexWrap:'wrap'}]}>
       <MotionPress accessibilityRole="button" accessibilityLabel="Choose analytics date range" onPress={onDates} style={[ui.button,card,{borderWidth:1,flexGrow:desktop?0:1,gap:10}]}><Feather name="calendar" size={18} color={p.primary}/><Text style={[ui.small,{color:p.text,flexShrink:1,fontWeight:'600'}]}>{periodLabel(period)}</Text><Feather name="chevron-down" size={16} color={p.muted}/></MotionPress>
       {isWorkspaceAdmin(role)&&<MotionPress accessibilityRole="button" accessibilityLabel="Export analytics CSV" accessibilityState={{busy:exporting,disabled:exporting}} disabled={exporting} onPress={onExport} {...(Platform.OS==='web'?{dataSet:{sheen:''}}:{})} style={[ui.button,primaryFill(p),{flexGrow:desktop?0:1}]}>{exporting?<ActivityIndicator color={p.onPrimary}/>:<Feather name="download" size={18} color={p.onPrimary}/>}<Text style={[ui.buttonText,{color:p.onPrimary}]}>{exporting?'Preparing report...':'Export CSV report'}</Text></MotionPress>}

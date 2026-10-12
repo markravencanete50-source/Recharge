@@ -57,8 +57,13 @@ test('team members clock in and out; one open shift each; owners cannot', async 
   await assert.rejects(act({ action: 'clockIn', department: 'guest_relations' }), /already clocked in/);
   let mine = myShiftSchema.parse(await read('shift'));
   assert.equal(mine.open.id, shift.id);
+  // Anna writes her end-of-day reflection first (migration 20261012150000); it also counts as the day's sign-off, which this test adds by hand later.
+  await act({ action: 'saveReflection', wentWell: 'A steady day', notWell: '', feedback: '', completed: [] });
   const out = await act({ action: 'clockOut' });
   assert.ok(out.clockedOutAt);
+  await db.exec('reset role');
+  await db.query("delete from private.workspace_daily_signoffs where user_id=$1", [users[ANNA]]);
+  await as(ANNA);
   await assert.rejects(act({ action: 'clockOut' }), /not clocked in/);
   mine = myShiftSchema.parse(await read('shift'));
   assert.deepEqual([mine.open, mine.today.length], [null, 1]);

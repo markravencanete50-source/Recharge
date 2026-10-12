@@ -12,6 +12,7 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { readTeams, writeTeams } from "./backend/client";
 import { defaultCleanersSchema, type DefaultCleaners } from "../../lib/workspace-teams-policy";
+import { FORM_STATE_LABEL, FORM_STATE_TONE, isMissing, type FormState } from "../../lib/clean-forms";
 
 // Who usually cleans each property. New cleans there (by hand or from a Hostaway stay) go straight to
 // that cleaner, and choosing one hands them the property's upcoming cleans nobody has yet.
@@ -88,8 +89,23 @@ export function DefaultCleanersSheet({ p, visible, admin, onClose, onChanged }: 
   );
 }
 
-// Today's cleans by cleaner, for the office: who is cleaning where, and how far each clean has got.
-export type TodayClean = { workId: string; propertyName: string; assigneeId: string | null; assigneeName: string | null; phase: string };
+// Where a clean's form stands (Submitted, Outstanding, Warning, Not due yet), as a calm pill with an
+// outline icon. The wording and tone come from lib/clean-forms.ts; `late` reads "Submitted late".
+const FORM_ICON = { submitted: "check-circle", outstanding: "clock", warning: "alert-triangle", not_due: "minus-circle" } as const;
+export function FormStateTag({ p, state, late = false }: { p: Palette; state: FormState; late?: boolean }) {
+  const [bg, fg] = { good: [p.successWash, p.success], wait: [p.cautionWash, p.waiting], bad: [p.dangerWash, p.danger], plain: [p.wash, p.muted] }[FORM_STATE_TONE[state]];
+  const label = late && state === "submitted" ? "Submitted late" : FORM_STATE_LABEL[state];
+  return (
+    <View accessible accessibilityLabel={`Forms: ${label}`} style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, paddingLeft: 8, paddingRight: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: bg }}>
+      <Feather name={FORM_ICON[state]} size={13} color={fg} />
+      <Text style={{ color: fg, fontSize: 12, lineHeight: 16, fontWeight: "600" }}>{label}</Text>
+    </View>
+  );
+}
+
+// Today's cleans by cleaner, for the office: who is cleaning where, how far each clean has got, and
+// whether its form is in. `formState` is left out when the form state is not known.
+export type TodayClean = { workId: string; propertyName: string; assigneeId: string | null; assigneeName: string | null; phase: string; formState?: FormState; late?: boolean };
 export function WhoIsCleaning({ p, cleans, onOpen }: { p: Palette; cleans: TodayClean[]; onOpen: (workId: string) => void }) {
   const groups = new Map<string, { name: string; cleans: TodayClean[] }>();
   for (const c of cleans) {
@@ -109,12 +125,15 @@ export function WhoIsCleaning({ p, cleans, onOpen }: { p: Palette; cleans: Today
               {key ? <Initials p={p} name={g.name} tone="cleans" size={36} /> : <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: p.dangerWash }}><Feather name="user-x" size={16} color={p.danger} /></View>}
               <Text numberOfLines={1} style={{ color: key ? p.text : p.danger, fontWeight: "700", fontSize: 15, flex: 1 }}>{g.name}</Text>
             </View>
-            <View style={{ paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, backgroundColor: p.background }}><Text style={[ui.small, { color: p.muted, fontWeight: "700", fontVariant: ["tabular-nums"] }]}>{g.cleans.length} {g.cleans.length === 1 ? "clean" : "cleans"}</Text></View>
+            <View style={{ paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, backgroundColor: p.background }}><Text style={[ui.small, { color: p.muted, fontWeight: "700", fontVariant: ["tabular-nums"] }]}>{g.cleans.length} {g.cleans.length === 1 ? "clean" : "cleans"}{formsDue(g.cleans) ? ` · ${formsDue(g.cleans)} outstanding` : ""}</Text></View>
           </View>
           {g.cleans.map(c => (
-            <MotionPress key={c.workId} {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={`${c.propertyName}, ${PHASE[c.phase]?.[0] ?? "Open"}`} onPress={() => onOpen(c.workId)} style={[ui.between, { gap: 8, minHeight: 40, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 10 }]}>
+            <MotionPress key={c.workId} {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={`${c.propertyName}, ${PHASE[c.phase]?.[0] ?? "Open"}${c.formState ? `, forms ${FORM_STATE_LABEL[c.formState].toLowerCase()}` : ""}`} onPress={() => onOpen(c.workId)} style={[ui.between, { gap: 8, minHeight: 40, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 10 }]}>
               <Text numberOfLines={1} style={{ color: p.text, flex: 1, minWidth: 0 }}>{c.propertyName}</Text>
-              <Tag label={PHASE[c.phase]?.[0] ?? "Open"} tone={PHASE[c.phase]?.[1] ?? "plain"} p={p} />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 6 }}>
+                <Tag label={PHASE[c.phase]?.[0] ?? "Open"} tone={PHASE[c.phase]?.[1] ?? "plain"} p={p} />
+                {!!c.formState && <FormStateTag p={p} state={c.formState} late={c.late} />}
+              </View>
             </MotionPress>
           ))}
         </View>
@@ -122,4 +141,6 @@ export function WhoIsCleaning({ p, cleans, onOpen }: { p: Palette; cleans: Today
     </View>
   );
 }
+// How many of these cleans have a form that is outstanding or has become a warning.
+const formsDue = (cleans: TodayClean[]) => cleans.filter(c => c.formState && isMissing(c.formState)).length;
 const PHASE: Record<string, [string, "good" | "wait" | "plain"]> = { assigned: ["To do", "plain"], review: ["Done, to review", "wait"], accepted: ["Accepted", "good"] };

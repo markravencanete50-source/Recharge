@@ -27,7 +27,7 @@ export function stageOf(property: PropertyView, journey?: JourneyView) {
   return journey ? journeyPhase(journey.stage) : "Not onboarding";
 }
 
-function Chip({ p, label, count, on, onPress }: { p: Palette; label: string; count: number; on: boolean; onPress: () => void }) {
+export function Chip({ p, label, count, on, onPress }: { p: Palette; label: string; count: number; on: boolean; onPress: () => void }) {
   return (
     <Pop active={on}><MotionPress accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress}
       style={[ui.row, { gap: 8, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, backgroundColor: on ? p.primary : p.background, borderWidth: 1, borderColor: on ? p.primary : p.border }]}>

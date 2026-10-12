@@ -114,6 +114,23 @@ const EXACT: Record<string, NoticeCopy> = {
   'team.shift_change_requested': copy('Timesheet change to approve', 'An admin has asked to change someone\'s clock in or clock out. It reaches their hours only once you approve it.'),
   'team.shift_change_approved': copy('Timesheet change approved', 'A super admin has approved your change to someone\'s hours. It now counts in their timesheet and productivity.'),
   'team.shift_change_declined': copy('Timesheet change declined', 'A super admin has declined your change to someone\'s hours and said why. Their hours stay as they were.'),
+  // Flags for management: raised by the team, decided by admins.
+  'management.flag_raised': copy('Flagged for management', 'Someone on the team has flagged something for management. Open Approvals to read why and decide.'),
+  'management.flag_resolved': copy('Your flag was resolved', 'Management has looked at what you flagged and resolved it.'),
+  'management.flag_declined': copy('Your flag was declined', 'Management has declined what you flagged and said why.'),
+  'management.flag_withdrawn': copy('A flag was withdrawn', 'The person who flagged this has withdrawn it.'),
+  'cleaning.form_missing': copy('Clean form missing', 'A clean has passed its day with no form sent, so it has been flagged for management. The cleaner can still send the form.'),
+  // Day reflections, daily to-dos, AirCover, direct bookings and the team calendar.
+  'reflection.saved': copy('Day reflection sent', 'A team member has written their end-of-day reflection. Open Reflections to read it.'),
+  'reflection.reviewed': copy('Your reflection was read', 'Management has read your end-of-day reflection.'),
+  'todo.daily_created': copy('Today’s to-dos are ready', 'Your daily to-dos have been added to your list.'),
+  'aircover.flagged': copy('Possible AirCover claim', 'A maintenance issue has been flagged as a possible AirCover claim. Open AirCover claims to take it on.'),
+  'stays.direct_booking_follow_up': copy('Direct booking to follow up', 'A long stay booked through a booking site is ready for a direct-booking follow-up.'),
+  'team.event_added': copy('Team calendar updated', 'An absence or meeting has been added to the team calendar.'),
+  'team.event_set': copy('Your calendar was changed', 'Someone has added or changed an entry on your calendar.'),
+  'team.event_cancelled': copy('Team calendar entry cancelled', 'An absence or meeting on the team calendar has been cancelled.'),
+  'operations.updateOperation.resolveRepair': copy('Repair resolved', 'A repair has been resolved without a visit.'),
+  'routine.visit_form_recorded': copy('Visit form recorded', 'The form for a preventative maintenance visit has been filled in.'),
   // People who delete their own account (admins are told).
   'account.owner_deleted': copy('An owner deleted their account', 'An owner has deleted their Recharge account. Their properties stay with the business, no longer linked to a login. Check whether their management agreement should end.'),
   'account.staff_deleted': copy('A team member deleted their account', 'A team member has deleted their Recharge account. Their access has been removed and their work stays on record as “Deleted user”.'),
@@ -125,6 +142,9 @@ const BY_AREA: [string, NoticeCopy][] = [
   ['cleaning.', copy('Cleaning update', 'There is an update on a clean.')],
   ['reservation.', copy('Booking update', 'There is an update on a booking.')],
   ['hub.', copy('Hub update', 'There is an update in the hub.')],
+  ['management.', copy('Management update', 'There is an update on something flagged for management.')],
+  ['reflection.', copy('Reflection update', 'There is an update on a day reflection.')],
+  ['aircover.', copy('AirCover update', 'There is an update on an AirCover claim.')],
   ['team.', copy('Team update', 'There is an update to the team’s rota or responsibilities.')],
   ['property_details.', copy('Property details updated', 'A property’s details have been updated.')],
 ];

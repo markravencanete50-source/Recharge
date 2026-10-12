@@ -12,7 +12,7 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton } from "./LiveKit";
 import { formatMoney } from "../../lib/format";
-import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeOperation, writeTeams, writeWorkspace } from "./backend/client";
+import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeOperation, writeTeams } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { PropertyAccess } from "./LiveTools";
 import { REPAIR_GUIDES, SAFETY_STOP, repairTypeLabel, troubleshootingNote, type RepairType } from "../../lib/repair-guides";
@@ -20,7 +20,8 @@ import { profileAccess, reservationsSchema, stayLines, type StayLine } from "../
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import { scheduleSchema } from "../../lib/cleans-live";
 import { canStart } from "../../lib/home-tools";
-import { canCloseRepair, canReportRepair, canReviseQuote, declineNote, poundsToMinor, repairClosed, repairStage, repairStep, REPAIR_STAGES, routinePlanSchema, visitMoves, type RepairStep } from "../../lib/repairs-live";
+import { canCloseRepair, canReportRepair, canResolveRepair, canReviseQuote, daysFromNow, declineNote, londonDayOf, poundsToMinor, repairClosed, repairStage, repairStep, REPAIR_STAGES, RESOLUTION_MAX, RESOLUTION_MIN, routinePlanSchema, visitChecklist, visitDates, visitFormOf, type RepairStep } from "../../lib/repairs-live";
+import { VisitDates, VisitForm, VisitMoves } from "./VisitForm";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Live repairs: the maintenance pipeline from report to completed repair, and
@@ -28,6 +29,8 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 type Operation = z.infer<typeof operationViewSchema>;
 type Visit = z.infer<typeof scheduleSchema>["work"][number];
 const pounds = (minor: unknown) => typeof minor === "number" ? formatMoney(minor) : "–";
+// A repair reported with no estimate waits in triage; say so rather than showing £0.00.
+const estimateText = (data: Record<string, unknown>) => data.estimatedCostMinor === 0 && data.phase === "triage" ? "Cost not known yet" : `Estimate ${pounds(data.estimatedCostMinor)}`;
 const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", approveManagement: "Approve the cost (management)", referReady: "Refer to Ready", bookRepair: "Book the repair", completeRepair: "Complete the repair" };
 
 export function LiveRepairs({ palette: p, account, properties }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
@@ -36,6 +39,9 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   const [repairs, setRepairs] = useState<Operation[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [plans, setPlans] = useState<z.infer<typeof routinePlanSchema>>([]);
+  // The routine visits as work items: they carry the checklist, the visit form and the last done and next due dates.
+  const [visitOps, setVisitOps] = useState<Operation[]>([]);
+  const [recordingId, setRecordingId] = useState<string | null>(null);
   const focus = useWorkFocus();
   // Ready Home opens this page on one stage of the pipeline.
   const [stage, setStage] = useState<string>(() => focus?.sub && ["action", "open", ...REPAIR_STAGES.map(s => s.phase)].includes(focus.sub) ? focus.sub : "open");
@@ -51,8 +57,9 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const ops = z.array(operationViewSchema).parse((await readOperations()).data).filter(op => op.kind === "maintenance");
+      const all = z.array(operationViewSchema).parse((await readOperations()).data), ops = all.filter(op => op.kind === "maintenance");
       setRepairs(ops);
+      setVisitOps(all.filter(op => op.kind === "routine_visit"));
       if (routines) {
         const [s, r] = await Promise.all([readTeams({ section: "schedule", from: addDays(today, -14), to: addDays(today, 45) }), readTeams({ section: "routines" })]);
         setVisits(scheduleSchema.parse(s.data).work.filter(w => w.kind === "routine_visit"));
@@ -85,6 +92,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
   }
   const open = repairs.find(r => r.workId === openId);
   const visit = visits.find(v => v.workId === visitId);
+  const recording = visits.find(v => v.workId === recordingId), recordingOp = visitOps.find(o => o.workId === recordingId);
 
   return (
     <View style={{ gap: 20 }}>
@@ -117,11 +125,11 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
               <View style={ui.between}><Text numberOfLines={1} style={{ color: p.text, fontWeight: "700", flex: 1 }}>{nameOf(r.propertyId)}</Text><Feather name="chevron-right" size={18} color={p.muted} /></View>
               <Text numberOfLines={2} style={[ui.small, { color: p.text }]}>{typeof r.data.issue === "string" ? r.data.issue : r.title}</Text>
               <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-                <Tag label={label} tone={stageNow === "paid" || phase === "completed" ? "good" : step ? "wait" : "plain"} p={p} />
+                <Tag label={label} tone={stageNow === "paid" || phase === "completed" || phase === "resolved" ? "good" : step ? "wait" : "plain"} p={p} />
                 {r.data.urgent === true && <Tag label="Urgent" tone="bad" p={p} />}
                 {r.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
                 {typeof r.data.repairType === "string" && <Tag label={repairTypeLabel(r.data.repairType)} tone="plain" p={p} />}
-                <Text style={[ui.small, { color: p.muted }]}>Estimate {pounds(r.data.estimatedCostMinor)}</Text>
+                <Text style={[ui.small, { color: p.muted }]}>{estimateText(r.data)}</Text>
               </View>
               {!!declined && <Text numberOfLines={2} style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{declined}</Text>}
               {step && <Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Next for you: {STEP_TITLE[step]}</Text>}
@@ -137,12 +145,15 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
             <Button label="New routine" icon="repeat" p={p} onPress={() => setPlanning(true)} />
             <Button label={creatingVisits ? "Creating visits…" : "Create this month's visits"} icon="calendar" p={p} disabled={!plans.length || creatingVisits} onPress={() => void createVisits()} />
           </View>
-          {visits.filter(v => v.status !== "completed").length ? visits.filter(v => v.status !== "completed").map(v => (
+          {visits.filter(v => v.status !== "completed").length ? visits.filter(v => v.status !== "completed").map(v => {
+            const last = londonDayOf(visitDates(visitOps.find(o => o.workId === v.workId)?.data).lastDoneAt);
+            return (
             <MotionPress key={v.workId} accessibilityRole="button" onPress={() => setVisitId(v.workId)} style={[ui.card, ui.between, { gap: 10, backgroundColor: p.surface, borderColor: p.border }]}>
-              <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "700" }}>{v.title}</Text><Text style={[ui.small, { color: p.muted }]}>{v.propertyName} · {v.dueOn ? dayLabel(v.dueOn) : "No date"}{v.assigneeName ? ` · ${v.assigneeName}` : ""}</Text></View>
+              <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "700" }}>{v.title}</Text><Text style={[ui.small, { color: p.muted }]}>{v.propertyName} · {v.dueOn ? dayLabel(v.dueOn) : "No date"}{v.assigneeName ? ` · ${v.assigneeName}` : ""}{last ? ` · last done ${daysFromNow(last, today)}` : ""}</Text></View>
               <Tag label={v.status === "in_review" ? "Awaiting sign-off" : v.status === "in_progress" ? "In progress" : v.status === "approved" ? "Signed off" : "To do"} tone={v.status === "in_review" ? "wait" : "plain"} p={p} />
             </MotionPress>
-          )) : !loading && <Notice text={plans.length ? "No open visits. Visits are created automatically for this month and next; create them now if one is missing." : "No routines yet. Add bins, garden or safety checks as a routine."} p={p} />}
+            );
+          }) : !loading && <Notice text={plans.length ? "No open visits. Visits are created automatically for this month and next; create them now if one is missing." : "No routines yet. Add bins, garden or safety checks as a routine."} p={p} />}
           {plans.map(plan => <Text key={plan.id} style={[ui.small, { color: p.muted }]}>{plan.propertyName}: {plan.title} · {plan.frequency} on day {plan.dayOfMonth}{plan.active ? "" : " · paused"}</Text>)}
         </Section>
       )}
@@ -150,7 +161,8 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
       <RepairSheet p={p} account={account} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today} onClose={() => setOpenId(null)} onDone={saved(async () => { setOpenId(null); await load(); })} />
       <ReportSheet p={p} account={account} visible={reporting} properties={properties} onClose={() => setReporting(false)} onDone={saved(async () => { setReporting(false); await load(); })} />
       <PlanSheet p={p} visible={planning} properties={properties} account={account} onClose={() => setPlanning(false)} onDone={saved(async () => { setPlanning(false); await load(); })} />
-      <VisitSheet p={p} role={account.role} visit={visit} plans={plans} onClose={() => setVisitId(null)} onDone={saved(async () => { setVisitId(null); await load(); })} />
+      <VisitSheet p={p} role={account.role} visit={visit} op={visitOps.find(o => o.workId === visitId)} plans={plans} today={today} onClose={() => setVisitId(null)} onRecord={() => { setRecordingId(visitId); setVisitId(null); }} onDone={saved(async () => { setVisitId(null); await load(); })} />
+      <VisitForm p={p} today={today} visit={recording ? { workId: recording.workId, version: recordingOp?.version ?? recording.version, title: recording.title, propertyName: recording.propertyName, status: recording.status, data: recordingOp?.data ?? {} } : null} onClose={() => setRecordingId(null)} onDone={async () => { await load(); }} />
     </View>
   );
 }
@@ -194,14 +206,17 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
   const [quoting, setQuoting] = useState(false);
   // Saying no to the cost (the owner, or management), or closing a declined repair (Stays).
   const [declining, setDeclining] = useState<"decline" | "close" | null>(null);
+  // Closing a repair that is still in triage without a visit: Stays or management write what fixed it.
+  const [resolving, setResolving] = useState(false);
   const request = useRequestId(repair ? repair.workId + ":" + repair.version : null);
   const quoteRequest = useRequestId(repair && quoting ? ["quote", repair.workId, repair.version, fields.quote ?? "", fields.quoteReason ?? ""].join(":") : null);
+  const resolveRequest = useRequestId(repair && resolving ? ["resolve", repair.workId, repair.version, fields.resolution ?? ""].join(":") : null);
   const declineRequest = useRequestId(repair && declining ? [declining, repair.workId, repair.version, fields.declineReason ?? ""].join(":") : null);
   const set = (k: string) => (v: string) => setFields(f => ({ ...f, [k]: v }));
   const f = (k: string) => fields[k] ?? "";
   // Reset only when a different repair (or a newer version of it) opens, not on every refresh of the list.
   const resetKey = repair ? repair.workId + ":" + repair.version : "", urgentNow = repair?.data.urgent === true;
-  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(urgentNow); setError(""); setQuoting(false); setAfterIds([]); setAddingBefore(false); setUploading(false); setDeclining(null); } }); return () => { active = false; }; }, [resetKey, urgentNow, today]);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(urgentNow); setError(""); setQuoting(false); setAfterIds([]); setAddingBefore(false); setUploading(false); setDeclining(null); setResolving(false); } }); return () => { active = false; }; }, [resetKey, urgentNow, today]);
 
   function build(): Record<string, unknown> | string {
     if (step === "approveBudget" && forOwner) return consent && f("ownerAgreement").trim().length >= 5 ? { consent: true, ownerAgreement: f("ownerAgreement").trim().slice(0, 500) } : "Add how the owner agreed and tick to record their approval.";
@@ -245,6 +260,16 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
       quoteRequest.done(); setQuoting(false); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
+  async function resolve() {
+    if (!repair || busy) return;
+    const resolution = f("resolution").trim();
+    if (resolution.length < RESOLUTION_MIN || resolution.length > RESOLUTION_MAX) { setError(`Say what fixed it (${RESOLUTION_MIN} to ${RESOLUTION_MAX} characters).`); return; }
+    setBusy(true); setError("");
+    try {
+      await writeOperation({ action: "updateOperation", requestId: resolveRequest.get(), workId: repair.workId, version: repair.version, step: "resolveRepair", data: { resolution } } as Parameters<typeof writeOperation>[0]);
+      resolveRequest.done(); setResolving(false); await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
   async function decide() {
     if (!repair || !declining || busy) return;
     const text = f("declineReason").trim();
@@ -265,7 +290,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         <Detail label="Issue" value={repair.data.issue} p={p} />
         {!!declined && <Notice text={declined} p={p} tone="bad" />}
         <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-          <Tag label={`Estimate ${pounds(repair.data.estimatedCostMinor)}`} tone="plain" p={p} />
+          <Tag label={estimateText(repair.data)} tone="plain" p={p} />
           {typeof repair.data.repairType === "string" && <Tag label={repairTypeLabel(repair.data.repairType)} tone="plain" p={p} />}
           {repair.data.urgent === true && <Tag label="Urgent" tone="bad" p={p} />}
           {repair.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
@@ -283,6 +308,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
           </View>
         )}
         <Detail label="Checks made" value={repair.data.troubleshooting} p={p} />
+        <Detail label="How it was resolved" value={repair.data.resolution} p={p} />
         <Detail label="Contractor" value={repair.data.contractor} p={p} />
         <Detail label="Repair date" value={typeof repair.data.repairOn === "string" ? dayLabel(repair.data.repairOn) : undefined} p={p} />
         <Detail label="Repair report" value={repair.data.report} p={p} />
@@ -361,9 +387,18 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
             <Button label="Cancel" p={p} onPress={() => setQuoting(false)} />
           </View>
         </View> : <Button label="Update the quote" icon="edit-3" p={p} onPress={() => setQuoting(true)} />)}
-        {!step && <Notice text={phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will refer this to Ready." : "Nothing for you to do at this stage."} p={p} />}
+        {canResolveRepair(role, phase) && (resolving ? <View style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border }}>
+          <Text style={{ color: p.text, fontWeight: "700" }}>Resolved without a visit</Text>
+          <Text style={[ui.small, { color: p.muted }]}>Use this when troubleshooting fixed it and no one needs to attend. The repair is closed as resolved and the owner and team are told.</Text>
+          <Field label="What fixed it" value={f("resolution")} onChange={set("resolution")} p={p} multiline placeholder="For example: reset the boiler with the guest and the heating came back" />
+          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+            <Button label={busy ? "Saving…" : "Mark as resolved"} primary p={p} disabled={busy} onPress={() => void resolve()} />
+            <Button label="Cancel" p={p} onPress={() => setResolving(false)} />
+          </View>
+        </View> : <Button label="Resolved without a visit" icon="check-circle" p={p} onPress={() => { setResolving(true); setError(""); }} />)}
+        {!step && <Notice text={phase === "resolved" ? "This repair was resolved without a visit." : phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will refer this to Ready." : "Nothing for you to do at this stage."} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
-        {step && !declining && <Button label={busy ? "Saving…" : uploading ? "Saving photos…" : forOwner ? "Record the owner's approval" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading} onPress={() => void save()} />}
+        {step && !declining && !resolving && <Button label={busy ? "Saving…" : uploading ? "Saving photos…" : forOwner ? "Record the owner's approval" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading} onPress={() => void save()} />}
         {role !== "client" && <PropertyTeamChatButton palette={p} propertyId={repair.propertyId} workId={repair.workId} />}
       </>}
     </Sheet>
@@ -482,26 +517,23 @@ function PlanSheet({ p, visible, properties, account, onClose, onDone }: { p: Pa
   );
 }
 
-function VisitSheet({ p, role, visit, plans, onClose, onDone }: { p: Palette; role: string; visit?: Visit; plans: z.infer<typeof routinePlanSchema>; onClose: () => void; onDone: () => Promise<void> }) {
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const request = useRequestId(visit ? visit.workId + ":" + visit.version : null);
+function VisitSheet({ p, role, visit, op, plans, today, onClose, onRecord, onDone }: { p: Palette; role: string; visit?: Visit; op?: Operation; plans: z.infer<typeof routinePlanSchema>; today: string; onClose: () => void; onRecord: () => void; onDone: () => Promise<void> }) {
   const plan = plans.find(x => x.lastVisit?.workId === visit?.workId) ?? plans.find(x => x.title === visit?.title && x.propertyName === visit?.propertyName);
-  async function move(status: "in_progress" | "in_review" | "approved" | "completed") {
-    if (!visit || busy) return; setBusy(true); setError("");
-    try { await writeWorkspace({ action: "transitionWork", workId: visit.workId, version: visit.version, status, note: note.trim(), requestId: request.get() }); request.done(); setNote(""); await onDone(); }
-    catch (e) { setError(message(e)); } finally { setBusy(false); }
-  }
-  const moves = visit ? visitMoves(role, visit.status) : [];
+  const data = op?.data ?? {}, form = visitFormOf(data);
+  // The visit's own checklist (copied from its plan), else the plan's, else the list for its type.
+  const items = visit ? (op ? visitChecklist({ title: visit.title, data }) : plan?.checklist ?? visitChecklist({ title: visit.title })) : [];
   return (
     <Sheet palette={p} visible={!!visit} onClose={onClose} title={visit?.title ?? ""} subtitle={visit ? `${visit.propertyName} · ${visit.dueOn ? dayLabel(visit.dueOn) : ""}` : ""} icon="toolbox">
-      {plan && plan.checklist.map(item => <View key={item} style={[ui.row, { gap: 10 }]}><Feather name="check" size={16} color={p.primary} /><Text style={{ color: p.text, flex: 1 }}>{item}</Text></View>)}
-      {moves.length > 0 && <Field label="Note (optional)" value={note} onChange={setNote} p={p} multiline placeholder="Anything found on the visit" />}
-      {moves.map(m => <Button key={m.status} label={busy ? "Saving…" : m.label} primary p={p} disabled={busy} onPress={() => void move(m.status)} />)}
-      {!moves.length && <Notice text={visit?.status === "in_review" ? "Waiting for Stays to sign off this visit." : "Nothing for you to do on this visit."} p={p} />}
+      {form
+        ? <>
+          <Text style={{ color: p.text, fontWeight: "700" }}>Visit form · {form.doneCount} of {form.totalCount} done</Text>
+          {form.answers.map(a => <View key={a.item} style={[ui.row, { gap: 10, alignItems: "flex-start" }]}><Feather name={a.done ? "check-square" : "square"} size={16} color={a.done ? p.success : p.muted} style={{ marginTop: 2 }} /><Text style={{ color: a.done ? p.text : p.muted, flex: 1 }}>{a.item}{a.note ? `: ${a.note}` : ""}</Text></View>)}
+          {!!form.note && <Text style={[ui.small, { color: p.muted }]}>{form.note}</Text>}
+        </>
+        : items.map(item => <View key={item} style={[ui.row, { gap: 10 }]}><Feather name="check" size={16} color={p.primary} /><Text style={{ color: p.text, flex: 1 }}>{item}</Text></View>)}
+      <VisitDates p={p} data={data} today={today} />
+      {visit && <VisitMoves key={visit.workId + ":" + (op?.version ?? visit.version)} p={p} role={role} visit={{ workId: visit.workId, version: op?.version ?? visit.version, title: visit.title, propertyName: visit.propertyName, status: visit.status, data }} onRecord={onRecord} onDone={onDone} />}
       {visit && <PropertyTeamChatButton palette={p} propertyId={visit.propertyId} workId={visit.workId} />}
-      {!!error && <Notice text={error} p={p} tone="bad" />}
     </Sheet>
   );
 }

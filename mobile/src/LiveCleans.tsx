@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
@@ -8,6 +8,8 @@ import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
+import { Chip, SheetTable, cellText, type Column } from "./SheetTable";
+import { FlagButton } from "./ManagementFlag";
 import { PhotoPicker } from "./Photos";
 import { DisputeSheet, type DisputeTarget } from "./CleanDisputes";
 import { RateSheet } from "./CleanerPay";
@@ -15,7 +17,7 @@ import { ProblemForm } from "./CleanProblem";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { CleanChecklist, ChecklistReview, type ChecklistState } from "./CleanChecklist";
 import { ChecklistTemplatesSheet, useChecklistTemplates } from "./ChecklistTemplates";
-import { DefaultCleanersSheet, WhoIsCleaning } from "./DefaultCleaners";
+import { DefaultCleanersSheet, FormStateTag, WhoIsCleaning } from "./DefaultCleaners";
 import { CleanCheckForm, CleanCheckSummary, conditionOf, unanswered, type ItemRow } from "./CleanReport";
 import { ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
@@ -28,6 +30,9 @@ import { checklistProgress, submitBlockers, templateFor, type ChecklistTemplate 
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { readCleanCondition, type CleanCondition } from "../../lib/clean-report";
 import { createOperationForms, type WorkflowForm } from "../../lib/workflow-forms";
+import { addressOf, lastUpdateOf, updateStamp } from "../../lib/tracker";
+import { openFlagFor, parseFlags, type Flag } from "../../lib/management-flags";
+import { cleanNext, countForms, countFormsByDay, FORM_CHECKED_LABEL, FORM_STATE_LABEL, formsIn, formsText, formState, formStateNote, isMissing, managementLine, REJECT_NOTE, reviewBlockers, submittedLate, type CleanFormInput, type CleanNext, type FormState, type FormsIn } from "../../lib/clean-forms";
 
 // Live Cleans: the cleaner's own jobs and the cleaning team's schedule, reviews and
 // assignments, read from and written to the backend. Nothing here uses sample data.
@@ -37,6 +42,11 @@ type Performance = z.infer<typeof performanceSchema>;
 
 const checklistOf = (op?: Operation) => Array.isArray(op?.data.checklist) ? (op!.data.checklist as unknown[]).filter((v): v is string => typeof v === "string") : [];
 const phaseLabel: Record<string, string> = { assigned: "To do", review: "Waiting for review", accepted: "Accepted" };
+
+// One clean in the schedule list: the schedule row and its operation, with what the list shows about
+// them (address, cleaner, status, whether its form is in, what is next and when it last changed).
+type ScheduleWork = Schedule["work"][number];
+type CleanRow = { w: ScheduleWork; phase: string; address: string; state: FormState; late: boolean; forms: FormsIn; management: string | null; next: CleanNext | null; stamp: string; redo: boolean; problems: number; checks: number; people: string | null };
 
 export function LiveCleans({ palette: p, account, properties, onForm }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onForm?: (form: WorkflowForm) => void }) {
   const saved = useSaved();
@@ -63,13 +73,23 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   const templates = useChecklistTemplates(manager);
   const [editingChecklists, setEditingChecklists] = useState(false);
   const [editingCleaners, setEditingCleaners] = useState(false);
+  // Management flags, so a clean with no form can say it was sent to management. Read leniently: an
+  // older server, or a person who cannot see the flags, simply has none.
+  const [flags, setFlags] = useState<Flag[]>([]);
+  // Forms fall due at 18:00 UK time, so the screen keeps the time and looks again every minute.
+  const [now, setNow] = useState(() => new Date());
+  const [onlyOutstanding, setOnlyOutstanding] = useState(false);
+  const { width } = useWindowDimensions();
+  useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
     const from = addDays(today, -7), to = addDays(today, 28);
     const query: Record<string, string> = { section: "schedule", from, to };
     if (!manager) query.userId = account.userId;
-    const [s, o, perf] = await Promise.allSettled([readTeams(query), readOperations(), readTeams({ section: "performance" })]);
+    const [s, o, perf, flagged] = await Promise.allSettled([readTeams(query), readOperations(), readTeams({ section: "performance" }), readTeams({ section: "flags" })]);
+    setNow(new Date());
+    setFlags(flagged.status === "fulfilled" ? parseFlags(flagged.value.data) : []);
     try {
       if (s.status === "fulfilled") setSchedule(scheduleSchema.parse(s.value.data)); else throw s.reason;
       if (o.status === "fulfilled") {
@@ -101,6 +121,23 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   const unassignedSearch = useListSearch(unassigned, op => [propertyName(op.propertyId), op.title, typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""]);
   const cleanerName = (id: unknown) => performance.find(r => r.cleanerId === id)?.fullName ?? cleaners.find(([cid]) => cid === id)?.[1] ?? "Cleaner";
   const decided = !manager ? (mine?.decidedComplaints ?? []) : [];
+
+  // Where each clean's form stands. The operation holds the cleaner's submission, the schedule row the day and cleaner.
+  const inputOf = (w: ScheduleWork): CleanFormInput => { const op = byId.get(w.workId); return { dueOn: w.dueOn, status: op?.status ?? w.status, assigneeId: w.assigneeId, data: op?.data }; };
+  const counts = countForms(cleans.map(inputOf), now);
+  const byDay = countFormsByDay(cleans.map(inputOf), now);
+  const rowOf = (w: ScheduleWork): CleanRow => {
+    const op = byId.get(w.workId), input = inputOf(w), state = formState(input, now), property = properties.find(x => x.id === w.propertyId);
+    return {
+      w, phase: String(op?.data.phase ?? ""), address: addressOf(property) || w.propertyName, state, late: submittedLate(input), forms: formsIn(op?.data), management: managementLine(state, flags, w.workId),
+      next: op ? cleanNext({ ...input, data: op.data }, { manager, userId: account.userId }) : null, stamp: manager && op ? updateStamp(lastUpdateOf(op), now) : "",
+      redo: String(op?.data.phase ?? "") === "assigned" && op?.data.accepted === false, problems: op ? problemsOf(op.data).length : 0, checks: checklistOf(op).length, people: guestLine(guests.get(w.workId)),
+    };
+  };
+  // The Outstanding forms filter lists every clean in view whose form is outstanding or a warning, oldest day first.
+  const missing = cleans.filter(w => isMissing(formState(inputOf(w), now))).sort((a, b) => (a.dueOn ?? "").localeCompare(b.dueOn ?? "") || a.propertyName.localeCompare(b.propertyName));
+  const scheduleRows = (manager && onlyOutstanding ? missing : dayCleans).map(rowOf);
+  const asTable = manager && width >= 1024;
 
   return (
     <View style={{ gap: 20 }}>
@@ -160,7 +197,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       )}
 
       {manager && <Section title="Who's cleaning today" p={p}>
-        <WhoIsCleaning p={p} onOpen={setOpenJob} cleans={schedule.work.filter(w => w.kind === "cleaning" && w.dueOn === today).map(w => ({ workId: w.workId, propertyName: w.propertyName, assigneeId: w.assigneeId, assigneeName: w.assigneeName, phase: String(byId.get(w.workId)?.data.phase ?? "") }))} />
+        <WhoIsCleaning p={p} onOpen={setOpenJob} cleans={schedule.work.filter(w => w.kind === "cleaning" && w.dueOn === today).map(w => ({ workId: w.workId, propertyName: w.propertyName, assigneeId: w.assigneeId, assigneeName: w.assigneeName, phase: String(byId.get(w.workId)?.data.phase ?? ""), formState: formState(inputOf(w), now), late: submittedLate(inputOf(w)) }))} />
       </Section>}
 
       <Section title="Schedule" p={p}>
@@ -173,48 +210,35 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
             ))}
           </ScrollView>
         )}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+        {manager && (
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <Chip p={p} label="All cleans" on={!onlyOutstanding} onPress={() => setOnlyOutstanding(false)} />
+            <Chip p={p} label={`Outstanding forms · ${counts.missing}`} on={onlyOutstanding} onPress={() => setOnlyOutstanding(true)} />
+          </View>
+        )}
+        {!(manager && onlyOutstanding) && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {days.map(d => {
-            const on = d === day, count = cleans.filter(w => w.dueOn === d).length;
+            const on = d === day, count = cleans.filter(w => w.dueOn === d).length, due = manager ? byDay[d]?.missing ?? 0 : 0;
             return (
-              <MotionPress key={d} accessibilityRole="button" accessibilityLabel={`${dayLabel(d)}, ${count} cleans`} accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ width: 58, paddingVertical: 10, borderRadius: 16, alignItems: "center", gap: 4, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
+              <MotionPress key={d} accessibilityRole="button" accessibilityLabel={`${dayLabel(d)}, ${count} cleans${due ? `, ${due} ${due === 1 ? "form" : "forms"} outstanding` : ""}`} accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ width: 58, paddingVertical: 10, borderRadius: 16, alignItems: "center", gap: 4, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
                 <Text style={{ fontSize: 11, color: on ? p.onPrimary : p.muted }}>{dayLabel(d).split(" ")[0]}</Text>
                 <Text style={{ fontSize: 17, fontWeight: "700", color: on ? p.onPrimary : p.text }}>{dayLabel(d).split(" ")[1]}</Text>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: count ? (on ? p.onPrimary : p.primary) : "transparent" }} />
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: count ? (on ? p.onPrimary : due ? p.danger : p.primary) : "transparent" }} />
               </MotionPress>
             );
           })}
-        </ScrollView>
-        <Text style={[ui.small, { color: p.muted }]}>{dayLabel(day)} · {dayCleans.length} {dayCleans.length === 1 ? "clean" : "cleans"}</Text>
-        {dayStays.map(stay => (
+        </ScrollView>}
+        <Text style={[ui.small, { color: p.muted }]}>{manager && onlyOutstanding ? `${missing.length} ${missing.length === 1 ? "clean" : "cleans"} with a form outstanding` : `${dayLabel(day)} · ${dayCleans.length} ${dayCleans.length === 1 ? "clean" : "cleans"}`}</Text>
+        {!(manager && onlyOutstanding) && dayStays.map(stay => (
           <View key={stay.reservationId + day} style={[ui.row, { gap: 10, paddingHorizontal: 4 }]}>
             <Feather name={stay.checkOut === day ? "log-out" : "log-in"} size={16} color={p.muted} />
             <Text style={[ui.small, { color: p.muted, flex: 1 }]}>{stay.propertyName} · {stay.checkOut === day ? "Guests leave" : "Guests arrive"}{stay.guests ? ` · ${stay.guests} guests` : ""}</Text>
           </View>
         ))}
-        {dayCleans.length ? dayCleans.map(w => {
-          const op = byId.get(w.workId), phase = String(op?.data.phase ?? "");
-          const people = guestLine(guests.get(w.workId)), redo = phase === "assigned" && op?.data.accepted === false, problems = op ? problemsOf(op.data).length : 0;
-          return (
-            <MotionPress key={w.workId} accessibilityRole="button" accessibilityLabel={`${w.propertyName}, ${phaseLabel[phase] ?? readableStage(w.status)}`} onPress={() => setOpenJob(w.workId)} style={[ui.card, { gap: 8, backgroundColor: p.surface, borderColor: p.border }]}>
-              <View style={ui.between}>
-                <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700", flex: 1 }}>{w.propertyName}</Text>
-                <Feather name="chevron-right" size={18} color={p.muted} />
-              </View>
-              <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-                <Tag label={phaseLabel[phase] ?? readableStage(w.status)} tone={phase === "accepted" ? "good" : phase === "review" ? "wait" : "plain"} p={p} />
-                {redo && <Tag label="Not accepted" tone="bad" p={p} />}
-                {manager && <Tag label={w.assigneeName ?? "Unassigned"} tone={w.assigneeName ? "plain" : "bad"} p={p} />}
-                {problems > 0 && <Tag label={problems === 1 ? "Problem reported" : `${problems} problems reported`} tone="wait" p={p} />}
-                <Text style={[ui.small, { color: p.muted }]}>{checklistOf(op).length} checks</Text>
-              </View>
-              {!!people && <View style={[ui.row, { gap: 8 }]}>
-                <Feather name="users" size={14} color={p.muted} />
-                <Text style={[ui.small, { color: p.muted, flex: 1 }]}>{people}</Text>
-              </View>}
-            </MotionPress>
-          );
-        }) : !loading && <Notice text={manager ? "No cleans scheduled for this day." : "Nothing booked for you on this day."} p={p} />}
+        {scheduleRows.length ? (asTable
+          ? <SheetTable p={p} columns={cleanColumns(p, onlyOutstanding)} rows={scheduleRows} keyOf={r => r.w.workId} onRow={r => setOpenJob(r.w.workId)} labelOf={cleanLabel} empty="No cleans." search={false} />
+          : scheduleRows.map(r => <CleanCard key={r.w.workId} p={p} row={r} manager={manager} showDate={manager && onlyOutstanding} onOpen={setOpenJob} />))
+          : !loading && <Notice text={manager && onlyOutstanding ? "No forms are outstanding." : manager ? "No cleans scheduled for this day." : "Nothing booked for you on this day."} p={p} />}
       </Section>
 
       {manager && (
@@ -225,6 +249,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
               <MotionPress key={op.workId} accessibilityRole="button" onPress={() => setOpenJob(op.workId)} style={[ui.card, { gap: 6, backgroundColor: p.surface, borderColor: p.border }]}>
                 <Text style={{ color: p.text, fontWeight: "700" }}>{properties.find(x => x.id === op.propertyId)?.name ?? op.title}</Text>
                 <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{typeof op.data.report === "string" ? op.data.report : "Report submitted"}</Text>
+                <Text style={[ui.small, { color: p.muted }]}>Forms: {formsText(formsIn(op.data))}</Text>
               </MotionPress>
             )) : <Notice text="Every submitted clean has been reviewed." p={p} />}
           </Section>
@@ -289,7 +314,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       )}
       {!manager && <RefreshButton p={p} loading={loading} onPress={() => void load()} />}
 
-      <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
+      <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} flags={flags} now={now} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
         onRespond={id => { setOpenJob(null); setStatementFor(id); }} onChanged={load} onForm={onForm && (f => { setOpenJob(null); onForm(f); })} />
       <CreateSheet p={p} visible={creating} properties={properties} templates={templates.data?.templates ?? []} onClose={() => setCreating(false)} onDone={saved(async () => { setCreating(false); await load(); })} today={today} />
       <DefaultCleanersSheet p={p} visible={editingCleaners} admin={["admin", "super_admin"].includes(account.role)} onClose={() => setEditingCleaners(false)} onChanged={load} />
@@ -298,6 +323,69 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       <DisputeSheet p={p} target={dispute} onClose={() => setDispute(null)} onDone={saved(load)} />
       <RateSheet p={p} cleaner={rateFor} onClose={() => setRateFor(null)} onDone={saved(load)} />
     </View>
+  );
+}
+
+// The wide-screen table: address, cleaner, status, submitted forms, next action and last update.
+const cleanLabel = (r: CleanRow) => [r.address, r.w.assigneeName ?? "Unassigned", phaseLabel[r.phase] ?? readableStage(r.w.status), "Forms " + FORM_STATE_LABEL[r.state].toLowerCase(), r.next?.label ?? ""].filter(Boolean).join(", ");
+function StatusTags({ p, row }: { p: Palette; row: CleanRow }) {
+  return (
+    <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
+      <Tag label={phaseLabel[row.phase] ?? readableStage(row.w.status)} tone={row.phase === "accepted" ? "good" : row.phase === "review" ? "wait" : "plain"} p={p} />
+      {row.redo && <Tag label="Not accepted" tone="bad" p={p} />}
+      {row.problems > 0 && <Tag label={row.problems === 1 ? "Problem reported" : `${row.problems} problems reported`} tone="wait" p={p} />}
+    </View>
+  );
+}
+function FormsCell({ p, row }: { p: Palette; row: CleanRow }) {
+  return (
+    <View style={{ gap: 4 }}>
+      <FormStateTag p={p} state={row.state} late={row.late} />
+      <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{formsText(row.forms)}</Text>
+      {!!row.management && <Tag label={row.management} tone="wait" p={p} />}
+    </View>
+  );
+}
+function cleanColumns(p: Palette, showDate: boolean): Column<CleanRow>[] {
+  return [
+    { label: "Property", width: 260, cell: r => <View style={{ gap: 2 }}><Text numberOfLines={2} style={{ color: p.text, fontWeight: "600" }}>{r.address}</Text>{(showDate && !!r.w.dueOn) && <Text style={[ui.small, { color: p.muted }]}>{dayLabel(r.w.dueOn!)}</Text>}</View> },
+    { label: "Cleaner", width: 150, cell: r => r.w.assigneeName ? cellText(p, r.w.assigneeName) : <Tag label="Unassigned" tone="bad" p={p} /> },
+    { label: "Status", width: 190, cell: r => <StatusTags p={p} row={r} /> },
+    { label: "Submitted forms", width: 240, cell: r => <FormsCell p={p} row={r} /> },
+    { label: "Next action", width: 210, cell: r => r.next ? <Text numberOfLines={2} style={[ui.small, { color: r.next.mine ? p.primary : p.muted, fontWeight: "600" }]}>{r.next.label}</Text> : cellText(p, "") },
+    { label: "Last update", width: 200, cell: r => cellText(p, r.stamp) },
+  ];
+}
+
+// The same clean as a phone card.
+function CleanCard({ p, row, manager, showDate, onOpen }: { p: Palette; row: CleanRow; manager: boolean; showDate: boolean; onOpen: (workId: string) => void }) {
+  const { w } = row, sub = [showDate && w.dueOn ? dayLabel(w.dueOn) : "", w.propertyName !== row.address ? w.propertyName : ""].filter(Boolean).join(" · ");
+  return (
+    <MotionPress accessibilityRole="button" accessibilityLabel={cleanLabel(row)} onPress={() => onOpen(w.workId)} style={[ui.card, { gap: 8, backgroundColor: p.surface, borderColor: p.border }]}>
+      <View style={[ui.between, { gap: 8 }]}>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text numberOfLines={2} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{row.address}</Text>
+          {!!sub && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{sub}</Text>}
+        </View>
+        <Feather name="chevron-right" size={18} color={p.muted} />
+      </View>
+      <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+        <StatusTags p={p} row={row} />
+        {manager && <Tag label={w.assigneeName ?? "Unassigned"} tone={w.assigneeName ? "plain" : "bad"} p={p} />}
+        <Text style={[ui.small, { color: p.muted }]}>{row.checks} checks</Text>
+      </View>
+      <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+        <FormStateTag p={p} state={row.state} late={row.late} />
+        <Text style={[ui.small, { color: p.muted }]}>{formsText(row.forms)}</Text>
+        {!!row.management && <Tag label={row.management} tone="wait" p={p} />}
+      </View>
+      {!!row.next && <Text numberOfLines={2} style={[ui.small, { color: row.next.mine ? p.primary : p.muted, fontWeight: "600" }]}>{row.next.label}</Text>}
+      {manager && !!row.stamp && <Text numberOfLines={1} style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{row.stamp}</Text>}
+      {!!row.people && <View style={[ui.row, { gap: 8 }]}>
+        <Feather name="users" size={14} color={p.muted} />
+        <Text style={[ui.small, { color: p.muted, flex: 1 }]}>{row.people}</Text>
+      </View>}
+    </MotionPress>
   );
 }
 
@@ -311,7 +399,7 @@ function followUp(account: WorkspaceAccount, propertyId: string, workId: string,
   return { ...form, key: `${kind}-from-clean-${workId}`, fields: form.fields.map(f => f.name === field ? { ...f, defaultValue: text } : f) };
 }
 
-function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone, onRespond, onChanged, onForm }: { p: Palette; account: WorkspaceAccount; manager: boolean; op?: Operation; mine?: CleanerMonth; propertyName: string; onClose: () => void; onDone: () => Promise<void>; onRespond: (complaintWorkId: string) => void; onChanged: () => Promise<void>; onForm?: (form: WorkflowForm) => void }) {
+function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onClose, onDone, onRespond, onChanged, onForm }: { p: Palette; account: WorkspaceAccount; manager: boolean; op?: Operation; mine?: CleanerMonth; flags: Flag[]; now: Date; propertyName: string; onClose: () => void; onDone: () => Promise<void>; onRespond: (complaintWorkId: string) => void; onChanged: () => Promise<void>; onForm?: (form: WorkflowForm) => void }) {
   const checklist = checklistOf(op), phase = String(op?.data.phase ?? "");
   // The last review's reason when it was a rejection, where its dispute is up to, and problems reported.
   const rejection = op?.data.accepted === false && typeof op.data.reviewNote === "string" ? op.data.reviewNote : null;
@@ -339,6 +427,8 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState<boolean | null>(null);
+  // The reviewer ticks that the cleaner's form was checked and the guest is happy before a clean can be accepted.
+  const [formChecked, setFormChecked] = useState(false);
   const [guestFeedback, setGuestFeedback] = useState("");
   const [reviewNote, setReviewNote] = useState("");
   const [candidates, setCandidates] = useState<z.infer<typeof candidatesSchema>>([]);
@@ -352,7 +442,7 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   const workId = op?.workId;
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setAnswers({}); setItems([]); setList(null); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
+    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setAnswers({}); setItems([]); setList(null); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setFormChecked(false); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
     return () => { active = false; };
   }, [workId]);
   useEffect(() => {
@@ -378,10 +468,23 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
   const purchaseForm = op && submitted ? followUp(account, op.propertyId, op.workId, "purchase", "") : null;
   const repairForm = op && submitted ? followUp(account, op.propertyId, op.workId, "maintenance", "") : null;
   const ready = !blockers.length;
+  // Where this clean's form stands, and whether management already holds a flag for it.
+  const formInput: CleanFormInput = { dueOn: op?.dueOn ?? (typeof op?.data.dueOn === "string" ? op.data.dueOn : null), status: op?.status, assigneeId: op?.assigneeId, data: op?.data };
+  const state = formState(formInput, now), late = submittedLate(formInput), openFlag = op ? openFlagFor(flags, { workId: op.workId }) : null;
+  const reviewProblems = reviewBlockers({ accepted, formChecked, guestFeedback, reviewNote });
 
   return (
     <Sheet palette={p} visible={!!op} onClose={onClose} title={propertyName} subtitle={op ? `${typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""} · ${phaseLabel[phase] ?? readableStage(op.status)}` : ""} icon="spray">
       {op && <>
+        <View style={{ gap: 8, padding: 12, borderRadius: 14, backgroundColor: p.wash }}>
+          <View style={[ui.between, { gap: 8 }]}>
+            <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700", flex: 1 }}>Submitted forms</Text>
+            <FormStateTag p={p} state={state} late={late} />
+          </View>
+          <Text style={[ui.small, { color: p.muted }]}>{formsText(formsIn(op.data))}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{formStateNote(state, late)}</Text>
+          {managementLine(state, flags, op.workId) && <Tag label="Sent to management" tone="wait" p={p} />}
+        </View>
         {!!rejection && <View style={{ gap: 6 }}>
           <Notice text={`${dispute?.status === "overturned" ? "Rejected, then overturned" : phase === "assigned" ? "Not accepted" : "Earlier review, not accepted"}: ${rejection}`} p={p} tone={dispute?.status !== "overturned" && phase === "assigned" ? "bad" : "plain"} />
           {!!feedback && <Text style={[ui.small, { color: p.muted }]}>Guest feedback: {feedback}</Text>}
@@ -436,14 +539,19 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
         {canReview && <>
           <Notice text={typeof op.data.report === "string" ? `Cleaner's report: ${op.data.report}` : "The cleaner has submitted this clean."} p={p} />
           <ChecklistReview key={op.workId} p={p} workId={op.workId} checklist={checklist} />
+          <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: formChecked }} onPress={() => { if (formChecked && accepted === true) setAccepted(null); setFormChecked(v => !v); }} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: formChecked ? p.successWash : p.elevated }]}>
+            <Feather name={formChecked ? "check-square" : "square"} size={20} color={formChecked ? p.success : p.muted} />
+            <Text style={{ color: p.text, flex: 1 }}>{FORM_CHECKED_LABEL}</Text>
+          </MotionPress>
+          {!formChecked && <Text style={[ui.small, { color: p.muted }]}>Tick the box to accept this clean. You can reject it without ticking.</Text>}
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true }} onPress={() => setAccepted(true)} style={[ui.button, { flex: 1, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? "#FFFFFF" : p.primary }]}>Accept</Text></MotionPress>
+            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true, disabled: !formChecked }} disabled={!formChecked} onPress={() => { if (formChecked) setAccepted(true); }} style={[ui.button, { flex: 1, opacity: formChecked ? 1 : 0.5, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? "#FFFFFF" : p.primary }]}>Accept</Text></MotionPress>
             <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === false }} onPress={() => setAccepted(false)} style={[ui.button, { flex: 1, backgroundColor: accepted === false ? p.danger : p.wash }]}><Text style={[ui.buttonText, { color: accepted === false ? p.onPrimary : p.primary }]}>Reject</Text></MotionPress>
           </View>
           <Field label="Guest feedback" value={guestFeedback} onChange={setGuestFeedback} p={p} multiline placeholder="What guests said, or 'No comments'" />
           <Field label="Your review" value={reviewNote} onChange={setReviewNote} p={p} multiline placeholder={accepted === false ? "What was not up to standard" : "What you checked"} />
-          {accepted === false && <Text style={[ui.small, { color: p.muted }]}>A rejection is shared with the cleaner, who can respond before management decides.</Text>}
-          <Button label={busy ? "Saving…" : "Save review"} primary p={p} disabled={busy || accepted === null || guestFeedback.trim().length < 5 || reviewNote.trim().length < 5}
+          {accepted === false && <Text style={[ui.small, { color: p.muted }]}>{REJECT_NOTE}</Text>}
+          <Button label={busy ? "Saving…" : accepted === false ? "Reject and send to management" : "Save review"} primary p={p} disabled={busy || reviewProblems.length > 0}
             onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "reviewCleaning", data: { accepted: accepted === true, guestFeedback: guestFeedback.trim(), reviewNote: reviewNote.trim() } }))} />
         </>}
 
@@ -461,6 +569,8 @@ function JobSheet({ p, account, manager, op, mine, propertyName, onClose, onDone
           ? <ProblemForm p={p} clean={{ workId: op.workId, version: op.version }} onCancel={() => setReporting(false)} onSent={async () => { setReporting(false); celebrate("Sent to the Stays team"); await onChanged(); }} />
           : <Button label="Report a problem" icon="alert-triangle" p={p} onPress={() => setReporting(true)} />)}
         <PropertyTeamChatButton palette={p} propertyId={op.propertyId} workId={op.workId} />
+        {openFlag ? <Notice text={openFlag.source === "clean_form" ? "Sent to management because no form came in." : "Flagged for management. They will decide."} p={p} />
+          : <FlagButton p={p} role={account.role} target={{ workId: op.workId, propertyId: op.propertyId, title: `Clean at ${propertyName}` }} onDone={() => void onChanged()} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
       </>}
     </Sheet>

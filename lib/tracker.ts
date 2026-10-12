@@ -7,13 +7,19 @@ import { eventLabel } from './oversight-policy';
 export type TrackerTone = 'good' | 'wait' | 'bad' | 'plain';
 export type TrackerStep = { key: string; label: string; state: 'done' | 'current' | 'todo' | 'skipped'; detail?: string; actionKey?: string; checks?: { key: string; label: string; done: boolean }[] };
 export type TrackerUpdate = { at: string; by: string | null; what: string | null };
+// Every section that follows items through steps. The later ones are the client-feedback sections of
+// October 2026; each gets its own adapter in lib/tracker-*.ts.
+export type TrackerSection = 'purchases' | 'licensing' | 'onboarding' | 'statements' | 'payables' | 'receivable'
+  | 'direct_bookings' | 'aircover' | 'listing_health' | 'pricing' | 'reviews' | 'relisting' | 'approvals' | 'cleans' | 'repairs' | 'preventative';
 export type TrackerItem<S = unknown> = {
-  id: string; section: 'purchases' | 'licensing' | 'onboarding' | 'statements' | 'payables' | 'receivable'; source: S;
+  id: string; section: TrackerSection; source: S;
   propertyId: string | null; address: string; propertyName: string; title: string;
   status: { label: string; tone: TrackerTone }; closed: boolean;
   nextStep: string; nextAction: { label: string; actionKey?: string } | null;
   lastUpdate: TrackerUpdate | null; progress: { done: number; total: number } | null;
   steps: TrackerStep[]; details: Detail[]; workId?: string; version?: number; search: string;
+  // True while management holds an open flag on this item (set by withFlags in lib/management-flags.ts).
+  flagged?: boolean;
 };
 
 // The last change to a work item: any change counts, and the person is known only to staff.

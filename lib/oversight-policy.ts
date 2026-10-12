@@ -62,6 +62,9 @@ const EVENT: Record<string, string> = {
   'journey.publishAgreement': 'Agreement published', 'journey.signAgreement': 'Agreement signed', 'journey.submitForm': 'Set-up form submitted', 'journey.linkInvoice': 'Onboarding invoice linked', 'journey.recordInvoiceOutside': 'Invoice handled outside the app',
   'journey.bookInspection': 'Inspection booked', 'journey.completeInspection': 'Inspection completed', 'journey.makeLive': 'Property made live',
   'journey.askQuestion': 'Question asked', 'journey.answerQuestion': 'Question answered',
+  'management.flag_raised': 'Flagged for management', 'management.flag_resolved': 'Management resolved the flag', 'management.flag_declined': 'Management declined the flag', 'management.flag_withdrawn': 'Flag withdrawn',
+  'cleaning.form_missing': 'Clean form missing', 'aircover.flagged': 'Flagged as an AirCover claim', 'stays.direct_booking_follow_up': 'Direct booking follow-up added',
+  'operations.updateOperation.resolveRepair': 'Resolved without a visit', 'routine.visit_form_recorded': 'Visit form recorded',
 };
 // One recorded event in plain words; events the table does not know fall back to the notice copy.
 export const eventLabel = (event: string) => EVENT[event] ?? noticeCopy(event).title;

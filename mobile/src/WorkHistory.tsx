@@ -6,8 +6,7 @@ import { ui, type Palette } from "./theme";
 import { Button, Loading, Notice, Tag, message } from "./LiveKit";
 import { readOversight } from "./backend/client";
 import { historyRows, historySchema, type HistoryRow } from "../../lib/oversight-policy";
-import { sectionAnchor, type HomeToolTarget } from "../../lib/home-tools";
-import { workViewsFor } from "../../lib/tool-directory";
+import type { HomeToolTarget } from "../../lib/home-tools";
 import type { OperationView } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
@@ -60,8 +59,9 @@ export function WorkHistory({ p, workId, version, hideNames = false }: { p: Pale
   );
 }
 
-// A "price the empty nights" ticket opens Stays at the daily checks, where each night is priced.
+// A "price the empty nights" ticket opens Client relations at its Pricing tab, where each night is priced.
+// Only the people who may price a night (the Stays role and admins) are offered the button.
 export function PriceNightsLink({ p, account, item, onOpen }: { p: Palette; account: WorkspaceAccount; item: OperationView; onOpen: (target: HomeToolTarget) => void }) {
-  if (item.kind !== "pricing_gap" || ["completed", "cancelled"].includes(item.status) || !workViewsFor(account.role).includes("stays")) return null;
-  return <Button label="Price these nights in Stays" icon="tag" primary p={p} onPress={() => onOpen({ kind: "work", view: "stays", anchor: sectionAnchor("Daily checks") })} />;
+  if (item.kind !== "pricing_gap" || ["completed", "cancelled"].includes(item.status) || !["stays", "admin", "super_admin"].includes(account.role)) return null;
+  return <Button label="Price these nights in Client relations" icon="tag" primary p={p} onPress={() => onOpen({ kind: "work", view: "clients", sub: "pricing" })} />;
 }

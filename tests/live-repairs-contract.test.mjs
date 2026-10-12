@@ -9,7 +9,7 @@ import { createServer } from 'vite';
 // succeeds in the database for that role, and the stage rules match the database.
 const root = fileURLToPath(new URL('..', import.meta.url));
 const vite = await createServer({ configFile: false, root, resolve: { alias: { '@': root } }, server: { middlewareMode: true, hmr: false } });
-const { repairStep, visitMoves, poundsToMinor, routinePlanSchema, canReportRepair } = await vite.ssrLoadModule('/lib/repairs-live.ts');
+const { repairStep, visitMoves, poundsToMinor, routinePlanSchema, canReportRepair, canResolveRepair, repairClosed, visitChecklist, visitFormAction, VISIT_FORM_FIRST } = await vite.ssrLoadModule('/lib/repairs-live.ts');
 const { scheduleSchema } = await vite.ssrLoadModule('/lib/cleans-live.ts');
 const { operationsActionSchema } = await vite.ssrLoadModule('/lib/operations-policy.ts');
 const { businessWriteSchema } = await vite.ssrLoadModule('/lib/business-policy.ts');
@@ -112,9 +112,40 @@ test('routine visits are planned, created, done by Ready and signed off by Stays
     return scheduleSchema.parse(await rpc('workspace_teams_read', [q.section, q.from, q.to, null, null])).work.find(w => w.workId === v.workId);
   };
   visit = await move('ready', visit); assert.equal(visit.status, 'in_progress');
+  // Sending the visit for review needs its visit form: the app blocks the move, and the database refuses it.
+  assert.equal(visitMoves('ready', 'in_progress', false)[0].blocked, VISIT_FORM_FIRST);
+  assert.equal(visitMoves('ready', 'in_progress', true)[0].blocked, undefined);
+  await assert.rejects(move('ready', visit), /visit form/);
+  const op = (await rpc('workspace_operations_read', [property])).map(o => operationViewSchema.parse(o)).find(o => o.workId === visit.workId);
+  assert.deepEqual(visitChecklist(op), ['Bins out', 'Lawn cut'], 'the visit carries its plan checklist');
+  const form = visitFormAction({ workId: visit.workId, version: visit.version, title: visit.title, data: op.data }, [{ done: true, note: '' }, { done: false, note: 'Mower needs fuel' }], 'Visited today', crypto.randomUUID());
+  assert.ok('action' in form);
+  await rpc('workspace_teams_action', [teamsActionSchema.parse(form.action)]);
+  visit = scheduleSchema.parse(await rpc('workspace_teams_read', [q.section, q.from, q.to, null, null])).work.find(w => w.workId === visit.workId);
   visit = await move('ready', visit); assert.equal(visit.status, 'in_review');
   assert.deepEqual(visitMoves('ready', 'in_review'), [], 'Ready cannot sign off its own visit');
   await as(STAYS);
   visit = await move('stays', visit); assert.equal(visit.status, 'approved');
   visit = await move('stays', visit); assert.equal(visit.status, 'completed');
+});
+
+test('a repair still in triage is resolved without a visit, and then counts as closed', async () => {
+  assert.ok(canResolveRepair('stays', 'triage') && canResolveRepair('admin', 'triage') && canResolveRepair('super_admin', 'triage'));
+  for (const [role, phase] of [['ready', 'triage'], ['client', 'triage'], ['stays', 'referred'], ['stays', 'owner_approval'], ['stays', 'resolved']]) assert.ok(!canResolveRepair(role, phase), `${role} at ${phase}`);
+  assert.ok(repairClosed('resolved'));
+  assert.equal(operationsActionSchema.safeParse({ action: 'updateOperation', requestId: crypto.randomUUID(), workId: crypto.randomUUID(), version: 1, step: 'resolveRepair', data: { resolution: 'Hi' } }).success, false, 'a resolution is at least five characters');
+  assert.equal(operationsActionSchema.safeParse({ action: 'updateOperation', requestId: crypto.randomUUID(), workId: crypto.randomUUID(), version: 1, step: 'resolveRepair', data: { resolution: 'Reset the boiler', cost: 1 } }).success, false, 'no extra fields');
+  await as(ADMIN);
+  const property = await rpc('workspace_save_property', [{ requestId: crypto.randomUUID(), name: 'Resolve property' }]);
+  for (const [u, kind] of [[STAYS, 'staff'], [READY, 'staff'], [OWNER, 'client']]) await rpc('workspace_assign_property', [property, users[u], kind]);
+  await as(STAYS);
+  await operation({ action: 'createOperation', requestId: crypto.randomUUID(), propertyId: property, kind: 'maintenance', data: { issue: 'Radiator cold in the hall', estimatedCostMinor: 0, hazard: false } });
+  let [repair] = await repairsFor(property);
+  assert.equal(repair.data.phase, 'triage');
+  assert.ok(canResolveRepair('stays', repair.data.phase));
+  await operation({ action: 'updateOperation', requestId: crypto.randomUUID(), workId: repair.workId, version: repair.version, step: 'resolveRepair', data: { resolution: 'Bled the radiator and the hall is warm' } });
+  [repair] = await repairsFor(property);
+  assert.equal(repair.data.phase, 'resolved'); assert.equal(repair.status, 'completed');
+  assert.ok(repairClosed(repair.data.phase));
+  assert.ok(!canResolveRepair('stays', repair.data.phase));
 });

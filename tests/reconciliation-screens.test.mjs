@@ -6,8 +6,8 @@ import { readFileSync } from 'node:fs';
 // and the local read of an uploaded file before anything is sent.
 const DASH = String.fromCharCode(0x2014);
 const read = name => readFileSync(new URL(`../mobile/src/${name}.tsx`, import.meta.url), 'utf8');
-const files = Object.fromEntries(['LiveAccounts', 'PayoutStays', 'PayoutLinesSheet', 'LiveStays', 'AccountsFlows'].map(name => [name, read(name)]));
-const { LiveAccounts, PayoutStays, PayoutLinesSheet, LiveStays, AccountsFlows } = files;
+const files = Object.fromEntries(['LiveAccounts', 'PayoutStays', 'PayoutLinesSheet', 'LiveStays', 'StaySheet', 'AccountsFlows'].map(name => [name, read(name)]));
+const { LiveAccounts, PayoutStays, PayoutLinesSheet, LiveStays, StaySheet, AccountsFlows } = files;
 
 test('every platform has its own upload button, driven by the shared list', () => {
   assert.match(LiveAccounts, /RECONCILED_CHANNELS\.map\(channel => <Button key=\{channel\}/);
@@ -35,9 +35,9 @@ test('no two-platform leftovers remain', () => {
 
 test('a stay on any reconciled platform needs the platform reservation code', () => {
   assert.match(LiveAccounts, /const platform = isPayoutChannel\(channel\)/);
-  assert.match(LiveStays, /const platform = isPayoutChannel\(channel\)/);
+  assert.match(StaySheet, /const platform = isPayoutChannel\(channel\)/);
   assert.match(LiveAccounts, /Vrbo reservation ID/);
-  assert.match(LiveStays, /platformCode\(channel\)\.label/);
+  assert.match(StaySheet, /platformCode\(channel\)\.label/);
 });
 
 test('an uploaded file is read on the screen first, then sent, then summarised', () => {

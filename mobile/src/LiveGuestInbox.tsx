@@ -12,7 +12,7 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Tag, Loading, RefreshButton } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { readInbox, writeInbox } from "./backend/client";
-import { CHANNEL_LABEL, GUEST_CHANNELS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
+import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
 import { ALL_PROPERTIES, chipCounts, emptyMessage, filterInbox, GUEST_CHIPS, guestFacts, propertyChips } from "../../lib/inbox-filters";
 import { InboxChips } from "./InboxChips";
 import { chatTime } from "../../lib/workspace-chat-policy";
@@ -22,7 +22,7 @@ import type { PropertyView } from "../../lib/workspace-view";
 // The guest inbox (Stays → Guest inbox): every conversation with guests, the longest wait first.
 // Hostaway fills it by itself (guest messages and the team's replies there, within about a minute).
 // When sending is switched on (canSend), a reply to a Hostaway conversation is sent to the guest through
-// Hostaway. Messages from anywhere else (WhatsApp, email) are logged by hand, and a reply can be recorded
+// Hostaway. Messages from anywhere else (email, for one) are logged by hand, and a reply can be recorded
 // here, so reply times and bonuses count either way; those replies are never sent from here.
 // Channel colours, darkened or given dark letters where needed so each letter reads at 4.5:1.
 const CHANNEL_STYLE: Record<GuestChannel, { bg: string; fg: string; letter: string }> = {
@@ -112,7 +112,7 @@ function LogMessageSheet({ p, properties, onClose, onDone }: { p: Palette; prope
   return (
     <Sheet palette={p} visible onClose={onClose} title="Log a guest message" subtitle="A message that arrived on Airbnb, Booking.com or elsewhere" icon="chat">
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Where it came from</Text>
-      <Pills p={p} values={GUEST_CHANNELS} value={channel} onChange={setChannel} label={c => CHANNEL_LABEL[c]} />
+      <Pills p={p} values={OFFERED_CHANNELS} value={channel} onChange={setChannel} label={c => CHANNEL_LABEL[c]} />
       <Field label="Guest’s name" value={guest} onChange={setGuest} p={p} placeholder="As shown on the booking" />
       <PropertyPicker p={p} properties={properties} value={property} onChange={setProperty} />
       <Field label="Booking reference (optional)" value={booking} onChange={setBooking} p={p} />

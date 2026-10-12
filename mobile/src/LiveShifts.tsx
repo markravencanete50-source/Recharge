@@ -16,6 +16,8 @@ import { DAILY_WORK, DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { formatCount, formatDay, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { londonInstant, validClock } from "../../lib/team-time";
+import { isReflectionRefusal, needsReflection } from "../../lib/reflection";
+import { DayReflection } from "./DayReflection";
 
 // Clocking in and out, and the team's guest reply times. Guest relations replies are timed:
 // green within the green limit, amber within the amber limit, red after that.
@@ -33,6 +35,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
   const [error, setError] = useState("");
   const [unavailable, setUnavailable] = useState(false);
   const [emergency, setEmergency] = useState(false), [note, setNote] = useState("");
+  const [reflecting, setReflecting] = useState(false);
   const celebrate = useCelebrate();
   // Keyed per shift: after a clock-out the next clock-in gets a new request, even if an earlier
   // response was lost.
@@ -43,13 +46,26 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   if (unavailable) return null;
+  // Some roles write an end-of-day reflection before they clock out; the others clock out as before.
+  const needsReflectionNow = needsReflection(account.role);
+  // Throws when the clock-out fails, so the reflection sheet can show why.
+  async function clockOut() {
+    await writeTeams({ action: "clockOut", requestId: request.get() });
+    request.done(); celebrate("Clocked out"); await load();
+  }
   async function toggle() {
     if (!shift || busy) return;
+    if (shift.open && needsReflectionNow) { setError(""); setReflecting(true); return; }
     setBusy(true); setError("");
     try {
-      await writeTeams(shift.open ? { action: "clockOut", requestId: request.get() } : { action: "clockIn", requestId: request.get(), department: department as never });
-      request.done(); celebrate(shift.open ? "Clocked out" : "Clocked in"); await load();
-    } catch (e) { setError(message(e)); await load(); } finally { setBusy(false); }
+      if (shift.open) await clockOut();
+      else { await writeTeams({ action: "clockIn", requestId: request.get(), department: department as never }); request.done(); celebrate("Clocked in"); await load(); }
+    } catch (e) {
+      // The database wants a reflection from this person after all: ask for it instead of failing.
+      const text = message(e);
+      if (shift.open && isReflectionRefusal(text)) setReflecting(true); else setError(text);
+      await load();
+    } finally { setBusy(false); }
   }
   // Pausing for lunch, a break or an emergency, going back to work, and overtime.
   async function pause(action: "startPause" | "endPause" | "startOvertime", kind?: PauseKind) {
@@ -77,6 +93,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
             {!shift ? "Checking…" : open ? `${DEPARTMENT_LABEL[open.department] ?? open.department} · since ${time(open.clockedInAt)}` : "You’re clocked out"}
           </Text>
           {!!open && <Text style={{ color: p.headerMuted, fontSize: 13 }}>{shiftName(open.clockedInAt)} · {hoursLabel(worked)} worked so far{open.overtimeFrom ? ` · overtime since ${time(open.overtimeFrom)}` : ""}</Text>}
+          {!!open && needsReflectionNow && <Text style={{ color: p.headerMuted, fontSize: 13 }}>Clocking out starts your end-of-day reflection.</Text>}
           {!!onPause && <View style={[ui.row, { gap: 8, marginTop: 2 }]}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onPause.kind === "emergency" ? p.danger : p.waiting }} />
             <Text style={{ color: p.headerText, fontSize: 14, fontWeight: "700" }}>On {PAUSE_LABEL[onPause.kind].toLowerCase()} since {time(onPause.startedAt)} · {hoursLabel(sinceMinutes(onPause.startedAt))}{unpaid(onPause.kind) ? " (unpaid)" : ""}</Text>
@@ -122,6 +139,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
       </View>}
       {shift && !open && <Pills p={p} values={DEPARTMENTS} value={department as (typeof DEPARTMENTS)[number]} onChange={setDepartment} label={d => DEPARTMENT_LABEL[d]} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
+      <DayReflection palette={p} visible={reflecting} onClose={() => setReflecting(false)} onClockOut={async () => { try { await clockOut(); } catch (e) { await load(); throw e; } }} />
     </View>
   );
 }

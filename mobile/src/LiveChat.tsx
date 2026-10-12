@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { ListSearchBox, PropertySelect, useListSearch } from "./SearchPicker";
-import { Entrance, MotionPress, Pop, SwapIn } from "./motion";
+import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
 import { depth, primaryFill, ui, type Palette } from "./theme";
@@ -26,12 +26,13 @@ import { z } from "zod";
 
 // Messages: one inbox for the team, in three tabs: Guests (the guest inbox, for people with the
 // guest communication tool), Clients (each owner's conversation with Recharge) and Team (one-to-one
-// and group conversations). Owners only see their conversation with Recharge. While a conversation
-// is open it checks for new messages every few seconds.
+// and group conversations), plus Updates when the caller passes the updates page to mount there.
+// Owners only see their conversation with Recharge. While a conversation is open it checks for new
+// messages every few seconds. Nothing here animates by itself.
 const LIST_EVERY = 15000, THREAD_EVERY = 3000, GUESTS_EVERY = 60000;
-type Tab = "guests" | "clients" | "team";
-const TAB_LABEL: Record<Tab, string> = { guests: "Guests", clients: "Clients", team: "Team" };
-const TAB_ICON = { guests: "globe", clients: "home", team: "users" } as const;
+type Tab = "guests" | "clients" | "team" | "updates";
+const TAB_LABEL: Record<Tab, string> = { guests: "Guests", clients: "Clients", team: "Team", updates: "Updates" };
+const TAB_ICON = { guests: "globe", clients: "home", team: "users", updates: "bell" } as const;
 const tabOf = (c: Conversation): Tab => c.kind === "owner" ? "clients" : "team";
 const roleName = (role: string) => ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role;
 
@@ -115,8 +116,7 @@ function Bubble({ p, m, showName, readOnly, reacting, onReacting, onReact, onSaf
     </View>
   );
   return (
-    // Each message rises in once, the first time it appears.
-    <Entrance sessionKey={"chat:" + m.id} style={{ alignItems: mine ? "flex-end" : "flex-start", gap: 3 }}>
+    <View style={{ alignItems: mine ? "flex-end" : "flex-start", gap: 3 }}>
       {showName && !mine && <Text style={[ui.small, { color: p.muted, fontWeight: "700", marginLeft: 44 }]}>{m.authorName}</Text>}
       {reacting && <View style={{ marginLeft: mine ? 0 : 38 }}><ReactionPicker p={p} current={current} onPick={e => { onReacting(false); onReact(e); }} onMore={mine || readOnly ? undefined : () => { onReacting(false); onSafety(); }} /></View>}
       <View {...(Platform.OS === "web" ? { dataSet: { chatRow: "true" } } : {})} style={[ui.row, { gap: 6, alignItems: "flex-end", width: "100%", flexDirection: mine ? "row-reverse" : "row" }]}>
@@ -131,7 +131,7 @@ function Bubble({ p, m, showName, readOnly, reacting, onReacting, onReact, onSaf
       </View>
       <View style={{ marginHorizontal: mine ? 0 : 38 }}><ReactionChips p={p} reactions={m.reactions} mine={mine} onToggle={e => { if (!readOnly) onReact(e); }} /></View>
       <Text style={{ color: p.muted, fontSize: 11, marginHorizontal: mine ? 6 : 44 }}>{chatTime(m.at)}</Text>
-    </Entrance>
+    </View>
   );
 }
 
@@ -204,7 +204,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
       </View>
       <ScrollView ref={scroll} style={{ flex: 1, maxHeight: Platform.OS === "web" ? 560 : undefined }} contentContainerStyle={{ gap: 10, paddingVertical: 6 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
         {!thread ? <Loading p={p} rows={2} /> : thread.messages.length ? thread.messages.map(m => <Bubble key={m.id} p={p} m={m} showName={c?.kind !== "direct"} readOnly={readOnly} reacting={reacting === m.id} onReacting={on => setReacting(on ? m.id : null)} onReact={e => void react(m.id, e)} onSafety={() => setSafety(m)} />)
-          : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property. The team usually replies within minutes during the day." : c?.department ? (c.department === "all" ? "Everyone on the team can read and write here. Use it for announcements." : `Everyone in ${c.title} can read and write here. Admins can read it too.`) : "Say hello. Messages are only seen by the people in this conversation."}</Text>}
+          : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property." : c?.department ? (c.department === "all" ? "Everyone on the team can read and write here." : `Everyone in ${c.title} can read and write here. Admins can read it too.`) : "Say hello."}</Text>}
       </ScrollView>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.title, property: c.propertyName }} onInsert={reply => setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply)} />}
@@ -282,7 +282,7 @@ function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette;
   );
 }
 
-export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, openConversation }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; openConversation?: string }) {
+export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, openConversation, updates }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; openConversation?: string; updates?: ReactNode }) {
   const owner = account.role === "client", guests = hasGuestInbox(account);
   // While a super admin views as someone nothing can be started or saved. A role preview (no person) reads the super admin's
   // own Messages, so it keeps only what that role could have (lib/view-as.ts). The workspace remounts when the view changes.
@@ -309,10 +309,10 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const changed = useCallback(() => { void loadList(); onUnread(); }, [loadList, onUnread]);
   // The team's tabs: Clients for the people who answer owners, Guests for the guest inbox.
   const showClients = ["admin", "super_admin", "stays"].includes(account.role) || !!list?.some(c => c.kind === "owner");
-  const tabs: Tab[] = owner ? [] : [...(guests ? ["guests" as const] : []), ...(showClients ? ["clients" as const] : []), "team"];
+  const tabs: Tab[] = owner ? [] : [...(guests ? ["guests" as const] : []), ...(showClients ? ["clients" as const] : []), "team", ...(updates ? ["updates" as const] : [])];
   const [chosenTab, setTab] = useState<Tab>(openConversation ? "team" : guests ? "guests" : "team");
   const tab: Tab = tabs.includes(chosenTab) ? chosenTab : "team";
-  const count = (t: Tab) => t === "guests" ? guestWaiting ?? 0 : (list ?? []).filter(c => tabOf(c) === t).reduce((sum, c) => sum + c.unread, 0);
+  const count = (t: Tab) => t === "guests" ? guestWaiting ?? 0 : t === "updates" ? 0 : (list ?? []).filter(c => tabOf(c) === t).reduce((sum, c) => sum + c.unread, 0);
   // The first time the list arrives, open the first tab that needs attention, unless one was chosen.
   const picked = useRef(!!openConversation);
   const attention = list && !owner ? tabs.find(t => count(t) > 0) ?? null : undefined;
@@ -335,7 +335,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const listView = (
     <View style={{ gap: 4, width: desktop ? 340 : "100%" }}>
       <View style={[ui.between, { paddingBottom: 6, gap: 12 }]}>
-        <Text accessibilityRole="header" numberOfLines={1} style={[ui.sectionTitle, { color: p.text, flex: 1, minWidth: 0 }]}>{tabs.length > 1 ? TAB_LABEL[tab] : "Messages"}</Text>
+        {tabs.length > 1 ? <View style={{ flex: 1 }} /> : <Text accessibilityRole="header" numberOfLines={1} style={[ui.sectionTitle, { color: p.text, flex: 1, minWidth: 0 }]}>Messages</Text>}
         <MotionPress accessibilityRole="button" accessibilityLabel={tab === "clients" ? "New message to an owner" : "New message"} onPress={() => setCreating(true)}
           style={[ui.row, { gap: 8, minHeight: 40, paddingHorizontal: 14, borderRadius: 12, backgroundColor: p.primary }]}>
           <Feather name="edit-3" size={15} color={p.onPrimary} /><Text style={{ color: p.onPrimary, fontWeight: "700" }}>New</Text>
@@ -352,12 +352,12 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       {tabs.map(t => {
         const on = t === tab, n = count(t);
         return (
-          <Pop key={t} active={on}><MotionPress accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={`${TAB_LABEL[t]}${n ? `, ${n} ${t === "guests" ? "waiting" : "unread"}` : ""}`} onPress={() => choose(t)}
+          <MotionPress key={t} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={`${TAB_LABEL[t]}${n ? `, ${n} ${t === "guests" ? "waiting" : "unread"}` : ""}`} onPress={() => choose(t)}
             style={[ui.row, { gap: 8, minHeight: 42, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.primary : p.surface }]}>
             <Feather name={TAB_ICON[t]} size={15} color={on ? p.onPrimary : p.text} />
             <Text style={{ color: on ? p.onPrimary : p.text, fontWeight: "700", fontSize: 14 }}>{TAB_LABEL[t]}</Text>
             {n > 0 && <View style={{ minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, alignItems: "center", justifyContent: "center", backgroundColor: on ? p.onPrimary : p.primary }}><Text style={{ color: on ? p.primary : p.onPrimary, fontSize: 12, fontWeight: "800" }}>{n > 99 ? "99+" : n}</Text></View>}
-          </MotionPress></Pop>
+          </MotionPress>
         );
       })}
     </View>
@@ -367,7 +367,6 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const openChannel = (c: Conversation) => { picked.current = true; setTab("team"); setChip("all"); setProperty(ALL_PROPERTIES); setOpen(c.id); };
   const channelBar = channels.length > 0 && (
     <View style={{ gap: 6 }}>
-      <Text style={[ui.small, { color: p.muted, fontWeight: "700", letterSpacing: 0.3 }]}>Departments</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {channels.map(c => {
           const on = tab === "team" && open === c.id;
@@ -389,10 +388,11 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       {tabBar}
       {channelBar}
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      <SwapIn swapKey={owner ? "owner" : tab}>
+      <View>
         {owner ? (open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View>
           : mode.readOnly && (list || preview) ? <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{preview ? "An owner's Messages is their conversation with Recharge. Choose an owner under View as to see theirs." : "This owner has not messaged Recharge yet."}</Text>
           : <Loading p={p} />)
+          : tab === "updates" ? <View>{updates}</View>
           : tab === "guests" ? <GuestInbox palette={p} properties={properties} onChanged={onUnread} />
           : desktop ? (
             <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: "row", gap: 18, alignItems: "stretch" }]}>
@@ -403,7 +403,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
             </View>
           ) : open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open, () => { setOpen(null); void loadList(); })}</View>
             : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{listView}</View>}
-      </SwapIn>
+      </View>
       {creating && <NewConversation p={p} properties={properties} only={tabs.length < 2 ? undefined : tab === "clients" ? "owners" : "team"} onClose={() => setCreating(false)} onOpen={c => { setCreating(false); setOpen(c.id); void loadList(); }} />}
     </View>
   );

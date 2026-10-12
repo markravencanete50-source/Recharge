@@ -30,6 +30,8 @@ export const operationsActionSchema=z.union([
  // The owner's approval; in the team beta the team records it with how the owner agreed.
  step('approveBudget',{consent:z.literal(true),ownerAgreement:text(500).min(5).optional()}),
  step('referReady',{troubleshooting:text(2000).min(5),warrantyContactEvidence:text(2000).optional(),guestUpdate:text(2000).min(5),urgent:z.boolean().optional()}),
+ // A repair still in triage closed without a visit: what fixed it (Stays or management; resolveRepair in the database).
+ step('resolveRepair',{resolution:text(2000).min(5)}),
  step('bookRepair',{repairOn:date,contractor:text(200).min(2),guestUpdate:text(2000).min(5)}),
  step('completeRepair',{report:text(3000).min(10),actualCostMinor:money,guestUpdate:text(2000).min(5),photoIds:z.array(id).max(30).optional()}),
  step('reviseQuote',{quoteMinor:money,reason:text(2000).min(5)}),

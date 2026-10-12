@@ -1,0 +1,301 @@
+import { z } from 'zod';
+import type { HomeToolTarget } from './home-tools';
+import { DEPARTMENT_LABEL, onboardingRows } from './hub';
+import { LISTING_HEALTH_VIEW } from './feedback-defaults';
+import { addressOf } from './tracker';
+import { DEPARTMENTS, hubItemSchema, hubSchema } from './workspace-teams-policy';
+import type { JourneyView, OperationView } from './workflow-forms';
+import type { PropertyView } from './workspace-view';
+
+// The To-do list: one page that replaces "Daily checks". Every row sits under one of four headings.
+// Rows come from two places: the hub's to-dos (the ones a person adds, plus the daily and department
+// ones the database makes from the admins' templates) and a few DERIVED tasks worked out here from the
+// work the app already holds (repairs needing an update, listing checks due, pricing gaps, guests
+// waiting, onboarding and licensing next steps). Derived tasks are marked Automatic, cannot be ticked
+// and disappear on their own when the thing they point at is done.
+
+export const TODO_HEADINGS = ['guest_relations', 'client_relations', 'team', 'personal'] as const;
+export type TodoHeading = (typeof TODO_HEADINGS)[number];
+export const TODO_HEADING_LABEL: Record<TodoHeading, string> = {
+  guest_relations: 'Guest relations', client_relations: 'Client relations', team: 'Your team', personal: 'Personal',
+};
+// The department a listing health check belongs to, and the department pricing gaps belong to.
+export const LISTING_CHECKS_DEPARTMENT = 'client_relations' as const;
+export const PRICING_DEPARTMENT = 'client_relations' as const;
+// A repair with no update for this many days is put on the list.
+export const REPAIR_UPDATE_AFTER_DAYS = 3;
+// Each heading shows this many open rows before "Show more".
+export const ROWS_PER_HEADING = 8;
+// The summary card lists this many next items.
+export const SUMMARY_ROWS = 3;
+
+// Where an Automatic task opens when its work cannot be found in the list (the work itself opens by id).
+export const TODO_TARGETS = {
+  listingChecks: { kind: 'work', view: LISTING_HEALTH_VIEW, sub: 'listings' },
+  pricing: { kind: 'work', view: LISTING_HEALTH_VIEW, sub: 'pricing' },
+  guestInbox: { kind: 'work', view: 'stays', sub: 'inbox' },
+  onboarding: { kind: 'work', view: LISTING_HEALTH_VIEW, sub: 'onboarding' },
+  licensing: { kind: 'work', view: LISTING_HEALTH_VIEW, sub: 'licensing' },
+  repairs: { kind: 'work', view: 'repairs' },
+} as const satisfies Record<string, HomeToolTarget>;
+
+// The hub read, keeping the template link the database adds to a to-do made from a daily task.
+export const todoHubItemSchema = hubItemSchema.extend({ templateId: z.string().uuid().nullable().optional() });
+export const todoHubSchema = hubSchema.extend({ items: z.array(todoHubItemSchema) });
+export type TodoHubItem = z.infer<typeof todoHubItemSchema>;
+export type TodoHub = z.infer<typeof todoHubSchema>;
+
+export type DerivedKind = 'repair_update' | 'listing_check' | 'pricing_gap' | 'guest_reply' | 'onboarding' | 'licensing';
+export type TodoOpen = { workId?: string; target?: HomeToolTarget };
+export type TodoRow = {
+  id: string; source: 'hub' | 'derived'; heading: TodoHeading; title: string; details: string;
+  propertyId: string | null; address: string | null; dueOn: string | null; who: string | null;
+  done: boolean; automatic: boolean;
+  // When it was added (for "oldest first") and when it last changed (for the done list). ISO text, '' when unknown.
+  since: string; touched: string;
+  derived?: DerivedKind; open?: TodoOpen; item?: TodoHubItem;
+};
+
+// --- Headings ------------------------------------------------------------------------------------
+
+type Placement = { department: string | null; assigneeId: string | null; createdBy?: string | null };
+// Guest relations (or Stays) department: Guest relations. Client relations: Client relations. No
+// department and the person's own: Personal. Any other department, or something for someone else: Your team.
+export function headingOf(item: Placement, me: string): TodoHeading {
+  const department = item.department;
+  if (department === 'guest_relations' || department === 'stays') return 'guest_relations';
+  if (department === 'client_relations') return 'client_relations';
+  if (department) return 'team';
+  if (item.assigneeId === me) return 'personal';
+  if (!item.assigneeId && item.createdBy === me) return 'personal';
+  return 'team';
+}
+
+type PropertyLike = Pick<PropertyView, 'id' | 'name' | 'address'>;
+const propertyOf = (properties: readonly PropertyLike[], id: string | null | undefined) => (id ? properties.find(p => p.id === id) : undefined);
+
+// Who a to-do is for, in the words a person uses.
+export function whoFor(item: Pick<TodoHubItem, 'assigneeId' | 'assigneeName' | 'department'>, me: string): string | null {
+  if (item.assigneeId === me) return 'Me';
+  if (item.assigneeName) return item.assigneeName;
+  return item.department ? DEPARTMENT_LABEL[item.department] ?? null : null;
+}
+
+// The hub's to-dos as rows. A to-do the database made from a daily task has a template and reads Automatic.
+export function hubRows(items: readonly TodoHubItem[], me: string, properties: readonly PropertyLike[]): TodoRow[] {
+  return items.filter(i => i.kind === 'todo').map(i => {
+    const property = propertyOf(properties, i.propertyId);
+    return {
+      id: i.id, source: 'hub' as const, heading: headingOf(i, me), title: i.title, details: i.details, propertyId: i.propertyId,
+      address: (property ? addressOf(property) : '') || i.propertyName || null, dueOn: i.dueOn, who: whoFor(i, me),
+      done: i.status === 'done', automatic: !!i.templateId, since: i.createdAt, touched: i.updatedAt || i.createdAt, item: i,
+    };
+  });
+}
+
+// --- Derived tasks -------------------------------------------------------------------------------
+
+const ADMIN_ROLES = ['admin', 'super_admin'];
+const finished = (status: string) => status === 'completed' || status === 'cancelled';
+const text = (v: unknown) => typeof v === 'string' ? v : '';
+const daysBetween = (later: string, earlier: string) => Math.round((Date.parse(later.slice(0, 10) + 'T00:00:00Z') - Date.parse(earlier.slice(0, 10) + 'T00:00:00Z')) / 86_400_000);
+
+// Which Automatic tasks a role is given: Stays and admins get all of them, Ready only the repairs it
+// has been sent, everyone else none.
+export function derivedKindsFor(role: string): DerivedKind[] {
+  if (role === 'stays' || ADMIN_ROLES.includes(role)) return ['repair_update', 'listing_check', 'pricing_gap', 'guest_reply', 'onboarding', 'licensing'];
+  if (role === 'ready') return ['repair_update'];
+  return [];
+}
+
+const REPAIR_WATCHED = ['triage', 'referred', 'booked', 'owner_declined', 'management_declined'];
+const LICENCE_NEXT: Record<string, string> = { '': 'Submit the licence application', to_apply: 'Submit the licence application', applied: 'Record the safety checks', checks_done: 'Record the licence grant' };
+
+export type DeriveInput = {
+  role: string; today: string; properties: readonly (PropertyLike & { status?: string })[];
+  work: readonly OperationView[]; journeys: readonly JourneyView[];
+  // Guest conversations waiting for a reply: how many, and since when the longest wait began.
+  guestsWaiting?: { count: number; since: string | null } | null;
+};
+
+export function deriveTasks(input: DeriveInput): TodoRow[] {
+  const { role, today, work, journeys } = input;
+  const properties = input.properties;
+  const kinds = new Set(derivedKindsFor(role));
+  const out: TodoRow[] = [];
+  const addressFor = (id: string | null) => { const p = propertyOf(properties, id); return p ? addressOf(p) : null; };
+  const make = (kind: DerivedKind, key: string, heading: TodoHeading, row: Pick<TodoRow, 'title' | 'details' | 'propertyId' | 'dueOn' | 'since'> & { open: TodoOpen; address?: string | null }) => {
+    out.push({
+      id: `auto:${kind}:${key}`, source: 'derived', heading, title: row.title, details: row.details, propertyId: row.propertyId,
+      address: row.address === undefined ? addressFor(row.propertyId) : row.address, dueOn: row.dueOn, who: null,
+      done: false, automatic: true, since: row.since, touched: row.since, derived: kind, open: row.open,
+    });
+  };
+  const guestSide: TodoHeading = 'guest_relations';
+  const clientSide: TodoHeading = 'client_relations';
+  const listingSide = headingOf({ department: LISTING_CHECKS_DEPARTMENT, assigneeId: null }, '');
+  const pricingSide = headingOf({ department: PRICING_DEPARTMENT, assigneeId: null }, '');
+
+  if (kinds.has('repair_update')) {
+    for (const w of work) {
+      if (w.kind !== 'maintenance' || finished(w.status)) continue;
+      const phase = text(w.data.phase) || 'triage';
+      if (!REPAIR_WATCHED.includes(phase)) continue;
+      // Ready only hears about repairs it has been sent.
+      if (role === 'ready' && (phase === 'triage' || phase === 'owner_declined' || phase === 'management_declined')) continue;
+      const last = w.lastActivityAt || w.updatedAt || w.createdAt || '';
+      const days = last ? Math.max(0, daysBetween(today, last)) : 0;
+      const declined = phase === 'owner_declined' || phase === 'management_declined';
+      if (!declined && days < REPAIR_UPDATE_AFTER_DAYS) continue;
+      make('repair_update', w.workId, guestSide, {
+        title: declined ? 'Re-quote or close: ' + w.title : 'Update the repair: ' + w.title,
+        details: declined ? 'The cost was declined.' : days === 1 ? 'No update for 1 day.' : `No update for ${days} days.`,
+        propertyId: w.propertyId, dueOn: null, since: last, open: { workId: w.workId, target: TODO_TARGETS.repairs },
+      });
+    }
+  }
+
+  if (kinds.has('listing_check')) {
+    const checked = new Set(work.filter(w => w.kind === 'listing_health' && w.data.checkedOn === today).map(w => w.propertyId));
+    for (const p of properties) {
+      if (p.status !== undefined && p.status !== 'active') continue;
+      if (checked.has(p.id)) continue;
+      make('listing_check', p.id, listingSide, { title: 'Check the listing', details: 'Is it live, any new review, anything suspended.', propertyId: p.id, dueOn: today, since: '', open: { target: TODO_TARGETS.listingChecks } });
+    }
+  }
+
+  if (kinds.has('pricing_gap')) {
+    for (const w of work) {
+      if (w.kind !== 'pricing_gap' || finished(w.status)) continue;
+      const nights = Array.isArray(w.data.nights) ? w.data.nights.filter((n): n is string => typeof n === 'string').sort() : [];
+      if (!nights.length) continue;
+      make('pricing_gap', w.workId, pricingSide, {
+        title: nights.length === 1 ? 'Price 1 empty night' : `Price ${nights.length} empty nights`, details: 'Hold or change the price for each night, with a reason.',
+        propertyId: w.propertyId, dueOn: nights[0] ?? null, since: w.createdAt ?? '', open: { workId: w.workId, target: TODO_TARGETS.pricing },
+      });
+    }
+  }
+
+  if (kinds.has('guest_reply') && input.guestsWaiting && input.guestsWaiting.count > 0) {
+    const n = input.guestsWaiting.count;
+    make('guest_reply', 'inbox', guestSide, {
+      title: n === 1 ? '1 guest is waiting for a reply' : `${n} guests are waiting for a reply`, details: 'Open the guest messages and answer them.',
+      propertyId: null, address: null, dueOn: null, since: input.guestsWaiting.since ?? '', open: { target: TODO_TARGETS.guestInbox },
+    });
+  }
+
+  if (kinds.has('onboarding')) {
+    for (const r of onboardingRows(journeys)) {
+      if (r.stage === 'live' || r.stage === 'archived') continue;
+      const contact = r.contact && !addressFor(r.propertyId) ? r.contact : null;
+      make('onboarding', r.propertyId, clientSide, {
+        title: r.next, details: 'Onboarding next step.', propertyId: r.propertyId, address: addressFor(r.propertyId) ?? contact, dueOn: r.inspectionOn,
+        since: '', open: { workId: r.journey.workId, target: TODO_TARGETS.onboarding },
+      });
+    }
+  }
+
+  if (kinds.has('licensing')) {
+    for (const w of work) {
+      if (w.kind !== 'licensing' || finished(w.status)) continue;
+      const phase = text(w.data.phase);
+      if (phase === 'granted') continue;
+      make('licensing', w.workId, clientSide, {
+        title: LICENCE_NEXT[phase] ?? 'Licensing next step', details: text(w.data.authority) ? 'Licensing, ' + text(w.data.authority) + '.' : 'Licensing next step.',
+        propertyId: w.propertyId, dueOn: null, since: w.createdAt ?? '', open: { workId: w.workId, target: TODO_TARGETS.licensing },
+      });
+    }
+  }
+  return out;
+}
+
+// --- Ordering, groups and counts ---------------------------------------------------------------------
+
+// Open first. Among open rows: due today first, then overdue, then due later, then no date; within
+// each, the earlier due date, then the oldest. Done rows follow, the latest finished first.
+const dueRank = (r: TodoRow, today: string) => !r.dueOn ? 3 : r.dueOn === today ? 0 : r.dueOn < today ? 1 : 2;
+export function sortTodoRows(rows: readonly TodoRow[], today: string): TodoRow[] {
+  const age = (r: TodoRow) => r.since || '9999';
+  return [...rows].sort((a, b) =>
+    Number(a.done) - Number(b.done)
+    || (a.done ? b.touched.localeCompare(a.touched) : dueRank(a, today) - dueRank(b, today) || (a.dueOn ?? '9999').localeCompare(b.dueOn ?? '9999') || age(a).localeCompare(age(b)))
+    || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+}
+
+export type TodoGroup = { heading: TodoHeading; label: string; rows: TodoRow[]; open: number; always: boolean };
+// Guest and client relations are always shown to the people who work them; the others always.
+const WORKS_BOTH_SIDES = (role: string) => role === 'stays' || ADMIN_ROLES.includes(role);
+export function groupTodo(rows: readonly TodoRow[], role: string, today: string): TodoGroup[] {
+  const sorted = sortTodoRows(rows, today);
+  return TODO_HEADINGS.map(heading => {
+    const mine = sorted.filter(r => r.heading === heading);
+    return { heading, label: TODO_HEADING_LABEL[heading], rows: mine, open: mine.filter(r => !r.done).length, always: heading === 'team' || heading === 'personal' || WORKS_BOTH_SIDES(role) };
+  });
+}
+
+export type TodoCounts = { open: number; done: number; dueToday: number; overdue: number; automatic: number; byHeading: Record<TodoHeading, number> };
+export function todoCounts(rows: readonly TodoRow[], today: string): TodoCounts {
+  const byHeading = { guest_relations: 0, client_relations: 0, team: 0, personal: 0 } as Record<TodoHeading, number>;
+  let open = 0, done = 0, dueToday = 0, overdue = 0, automatic = 0;
+  for (const r of rows) {
+    if (r.done) { done++; continue; }
+    open++; byHeading[r.heading]++;
+    if (r.automatic) automatic++;
+    if (r.dueOn === today) dueToday++; else if (r.dueOn && r.dueOn < today) overdue++;
+  }
+  return { open, done, dueToday, overdue, automatic, byHeading };
+}
+
+// The next few open rows across all headings, in the same order as the page.
+export function nextRows(rows: readonly TodoRow[], today: string, count = SUMMARY_ROWS): TodoRow[] {
+  return sortTodoRows(rows.filter(r => !r.done), today).slice(0, count);
+}
+
+// "Due today", "Overdue", "Due Fri 16 Oct" is drawn by the screen; this only says which it is.
+export function dueState(row: Pick<TodoRow, 'dueOn' | 'done'>, today: string): 'today' | 'overdue' | 'later' | 'none' {
+  if (!row.dueOn) return 'none';
+  if (row.dueOn === today) return 'today';
+  return row.dueOn < today && !row.done ? 'overdue' : 'later';
+}
+
+// --- Once a day -------------------------------------------------------------------------------------------
+
+// Every team role asks the database to make the day's department to-dos, once per day on this device.
+// The call is idempotent in the database, so a second device or a repeat changes nothing.
+export const wantsDailyTodos = (role: string) => role !== 'client';
+export const ensureKey = (userId: string, day: string) => `${userId}:${day}`;
+export const needsEnsure = (role: string, userId: string, day: string, done: ReadonlySet<string>) => wantsDailyTodos(role) && !done.has(ensureKey(userId, day));
+
+// --- Daily task templates (admins) ---------------------------------------------------------------------
+
+export const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+export const WEEKDAY_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
+export const ALL_WEEKDAYS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
+export const WEEKDAYS_ONLY: readonly number[] = [1, 2, 3, 4, 5];
+
+// Weekdays are numbered the way the database counts them: 1 is Monday and 7 is Sunday.
+export function validWeekdays(days: readonly unknown[]): days is number[] {
+  return days.length >= 1 && days.length <= 7 && days.every(d => Number.isInteger(d) && (d as number) >= 1 && (d as number) <= 7) && new Set(days).size === days.length;
+}
+export const normaliseWeekdays = (days: readonly number[]): number[] => [...new Set(days)].filter(d => Number.isInteger(d) && d >= 1 && d <= 7).sort((a, b) => a - b);
+export const toggleWeekday = (days: readonly number[], day: number): number[] => normaliseWeekdays(days.includes(day) ? days.filter(d => d !== day) : [...days, day]);
+export function weekdaysSummary(days: readonly number[]): string {
+  const d = normaliseWeekdays(days);
+  if (d.length === 7) return 'Every day';
+  if (d.join() === WEEKDAYS_ONLY.join()) return 'Weekdays';
+  if (d.join() === '6,7') return 'Weekends';
+  return d.map(n => WEEKDAY_SHORT[n - 1]).join(', ') || 'No days';
+}
+// 1 (Monday) to 7 (Sunday) for a YYYY-MM-DD date.
+export function isoWeekday(day: string): number {
+  const n = new Date(day.slice(0, 10) + 'T12:00:00Z').getUTCDay();
+  return n === 0 ? 7 : n;
+}
+export const templateRunsOn = (t: { weekdays: readonly number[]; active: boolean }, day: string) => t.active && t.weekdays.includes(isoWeekday(day));
+
+export const dailyTaskSchema = z.object({
+  id: z.string().uuid(), department: z.enum(DEPARTMENTS), title: z.string(), details: z.string(), weekdays: z.array(z.number().int().min(1).max(7)), active: z.boolean(),
+  createdByName: z.string().nullable().optional(), createdAt: z.string().optional(), updatedAt: z.string().optional(), version: z.number().optional(), lastMadeOn: z.string().nullable().optional(),
+});
+export const dailyTasksSchema = z.object({ today: z.string().optional(), templates: z.array(dailyTaskSchema) });
+export type DailyTask = z.infer<typeof dailyTaskSchema>;
