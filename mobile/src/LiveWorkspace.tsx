@@ -135,7 +135,7 @@ const welcomeDay = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lo
 
 function IconButton({ label, icon, onPress, palette: p }: { label: string; icon: IconName; onPress: () => void; palette: Palette }) {
   return (
-    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [ui.iconButton, { width: 46, height: 46, borderRadius: 15, borderColor: p.border, backgroundColor: p.surface, opacity: pressed ? 0.7 : 1 }]}>
+    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [ui.iconButton, { width: 46, height: 46, borderColor: p.border, backgroundColor: p.surface, opacity: pressed ? 0.7 : 1 }]}>
       <Feather name={icon} size={19} color={p.text} />
     </MotionPress>
   );

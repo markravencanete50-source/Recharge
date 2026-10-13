@@ -45,6 +45,18 @@ export const depth = {
   raised: Platform.OS === "web" ? { boxShadow: "var(--rc-elev-2),var(--rc-sheen)" } : shadow(0.12, 20, 10, 5),
   floating: Platform.OS === "web" ? { boxShadow: "var(--rc-elev-3)" } : shadow(0.2, 32, 16, 12),
 };
+// One scale for corners, icons and spacing, so screens stop picking their own (the sweep found corners of 12, 14,
+// 15, 16, 18, 20, 22 and 24, and icons of 12 to 22, side by side). New code uses these; old literals move over when
+// a file is next touched (docs/notes-session-E.md).
+//   radius.control  buttons, fields, icon buttons, dropdowns, date fields
+//   radius.tile     stat tiles and cards inside a card
+//   radius.card     cards, tables and list panels
+//   radius.sheet    the top corners of a sheet
+export const radius = { tag: 8, control: 14, tile: 18, card: 24, sheet: 28, pill: 999 } as const;
+//   icon.inline  inside small text and tags · icon.row  in rows, buttons and fields · icon.header  header and tab bar
+export const icon = { inline: 14, row: 16, control: 18, header: 20 } as const;
+// Spacing steps: gaps inside a row, between fields, between sections of a sheet or page.
+export const space = { tight: 6, row: 10, field: 14, section: 20, page: 24 } as const;
 // The primary action: a flat solid fill, no gradient, sheen or coloured shadow.
 export const primaryFill = (p: { primary: string; isDark?: boolean }) => ({ backgroundColor: p.primary });
 export const ui = StyleSheet.create({
@@ -95,7 +107,7 @@ export const ui = StyleSheet.create({
   },
   card: {
     borderWidth: 1,
-    borderRadius: 24,
+    borderRadius: radius.card,
     padding: 18,
     gap: 12,
     ...(Platform.OS === "web"
@@ -104,7 +116,7 @@ export const ui = StyleSheet.create({
   },
   button: {
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: radius.control,
     paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: "row",
@@ -116,7 +128,7 @@ export const ui = StyleSheet.create({
   iconButton: {
     height: 48,
     width: 48,
-    borderRadius: 16,
+    borderRadius: radius.control,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -128,7 +140,7 @@ export const ui = StyleSheet.create({
     minHeight: 120,
     borderWidth: 1,
     padding: 16,
-    borderRadius: 18,
+    borderRadius: radius.tile,
     gap: 10,
   },
   statValue: {
@@ -140,7 +152,7 @@ export const ui = StyleSheet.create({
   tag: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     alignSelf: "flex-start",
   },
   tagText: { fontSize: 13, fontWeight: "500", lineHeight: 19 },
@@ -165,7 +177,7 @@ export const ui = StyleSheet.create({
   input: {
     minHeight: 52,
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: radius.control,
     paddingHorizontal: 14,
     fontSize: 15,
     fontFamily: "Montserrat_400Regular",
@@ -178,11 +190,11 @@ export const ui = StyleSheet.create({
   },
   modalSheet: {
     maxHeight: "92%",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     padding: 22,
     paddingBottom: 28,
-    gap: 18,
+    gap: space.section,
   },
   handle: {
     width: 40,

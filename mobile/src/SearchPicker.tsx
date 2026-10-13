@@ -73,7 +73,7 @@ export function PropertySelect({ p, properties, value, onChange, fixed, clearabl
 }) {
   const options = useMemo(() => properties.map(propertyOption), [properties]);
   return <SearchPicker p={p} options={options} value={value} onChange={onChange} fixed={fixed} clearable={clearable} empty={empty}
-    placeholder="Search for a property by name, street or postcode" nouns="properties" />;
+    placeholder="Search property, street or postcode" nouns="properties" />;
 }
 
 // Long lists and tables get a search box once they pass eight rows. A row matches when every word
