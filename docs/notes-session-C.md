@@ -486,6 +486,50 @@ renaming one of the two.
   - New: `updates-open-older.test.mjs`, `updates-open-older-database.test.mjs`, `help-round6.test.mjs`
   - Updated: `notice-details.test.mjs`, `notice-details-database.test.mjs`
 
+## Round 8 (18 October): the management bonus split, the help rename, the go-live note
+
+**1. Help rename** (`9a74589`). "What appears in Recent activity?" is now "What is in this device's history?", because the Updates
+page is also called Recent activity.
+
+**2. Admins set the management bonus split** (Lee: Alex sets the KPIs and numbers in the app, and the system follows).
+- `private.workspace_kpis.guest_share`: Guest relations' share of the combined measure, a whole percentage from 0 to 100.
+  Client relations gets the rest. It is nullable, null reads as 50, and it is used only by `teams_combined`.
+- The value:
+  - both teams measured: floor((guest × share + client × (100 − share)) / 100);
+  - one team with nothing to measure: the other counts alone, whatever the split;
+  - neither team measured: no value.
+- Each part carries its share. The bar reads "Guest relations 86% (60%) · Client relations 74% (40%)". When one team has nothing
+  to measure no share is shown, because the other counts alone.
+- Saving (`saveKpi` takes `guestShare`):
+  - a whole number from 0 to 100, or null, on the combined measure only; anything else is refused;
+  - an edit that leaves the share out keeps the stored one, so an older app cannot reset it;
+  - moving the KPI to another measure clears it;
+  - admins only, like every KPI change. The change history row has the share before and after.
+- The KPI sheet (`mobile/src/KpiAdmin.tsx`) shows "Guest relations share % (Client relations gets the rest)" only for the
+  combined measure. It is a plain number field like Target and Minutes, filled with 50 when unset.
+- The Help answer on the management bonus now says admins choose the split.
+- **Migration `20261018300000_management_bonus_weighting.sql`** (not applied):
+  - the column;
+  - `workspace_kpi_weighted`, which computes the value at a share;
+  - `workspace_kpi_result`, replaced whole (it carries over the round 6 parts patch);
+  - anchor-and-append patches to `workspace_kpi_action` (five) and `workspace_kpi_view` (one);
+  - safe to run twice (tested).
+  `tests/management-bonus-database.test.mjs` now checks the round 6 migration's second run before the later ones, and its
+  no-names check allows the new `share` key.
+- Tests:
+  - `management-bonus-weighting-database` (6): the default 50, 70/30 maths (65), 0 and 100, one team missing, validation
+    (101, −1, 50.5, "50", true), a share on another measure refused, moving off the measure clears it, admins only, the
+    history row, an edit that leaves it out, and running twice;
+  - `management-bonus-weighting` (3): the parts line, the form, and the sheet field.
+- Screenshots: `docs/screenshots/round8-bonus-bar-*.png` (the bar at 60/40) and `round8-kpi-sheet-*.png` (the field), light and
+  dark, with sample data.
+
+**3. The go-live note for rounds 6 and 7**: `docs/GO-LIVE-ROUND-6-7.md`, with only "Tell the team" and "Check as each role
+after go-live". It covers A, B, C, D and E's round 6 work and my round 7, from each session's notes and the merged lead branch.
+Work that was never pushed is left out: B's and D's later design-review items (the floating Favorites star, the phone header
+logo, the Maintenance filter, typed dates in Cleans and the calendar). The round 8 split is not in it; add one line for admins if
+it ships with rounds 6 and 7.
+
 ## Not done yet (waiting for the client)
 
 - Inbound email into Messages (design above; to be built later).
@@ -547,6 +591,9 @@ as today.
 Round 7: apply `20261017300000_updates_open_and_older.sql` after the round 6 migrations (it needs `20261016300000`), then redeploy
 the backend and the app. The app before it keeps working; the new app needs it for opening an item that is not loaded and for
 Show older updates (until then, those say the item could not be opened, or that older updates could not be loaded).
+
+Round 8: apply `20261018300000_management_bonus_weighting.sql` after `20261016310000` (it needs the combined measure), then
+redeploy the app. Before the app, the split works with its default of 50 and the KPI sheet has no field for it.
 
 Round 5: apply `20261015300000_chat_notice_every_message.sql`, `20261015310000_guest_message_notices.sql`,
 `20261015320000_owner_chat_closed.sql` and `20261015330000_guest_message_notices_onboarded.sql` in that order, then redeploy the backend and the app (the app's Close button and the
