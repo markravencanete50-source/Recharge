@@ -38,3 +38,5 @@ export const journeyActionSchema=z.discriminatedUnion('action',[
 ]);
 export type JourneyAction=z.infer<typeof journeyActionSchema>;
 export const journeyReadSchema=z.object({propertyId:id.optional()}).strict();
+// The work list, or one work item by its id (opened from an update, migration 20261017300000).
+export const operationsReadSchema=z.object({propertyId:id.optional(),workId:id.optional()}).strict().refine(v=>!(v.propertyId&&v.workId),{message:'Choose a property or a work item'});

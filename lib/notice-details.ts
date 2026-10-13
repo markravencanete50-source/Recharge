@@ -1,5 +1,7 @@
 import { noticeCopy, type NoticeCopy } from './notice-copy';
 import { MODULES } from './modules';
+import { operationViewSchema } from './workspace-view';
+import type { OperationView } from './workflow-forms';
 
 // The Updates feed, round 6 (Lee: "instead of saying new task for your team it should be specific what type of task"). Each row
 // says what it is: "<type of work>: <the work item's title>", then the property, who did it ("Automatic" for sweeps and feeds) and
@@ -97,4 +99,28 @@ export function noticeRows(notices: readonly NoticeDetail[]): NoticeRow[] {
 export function noticeCopyFor(eventType: string | null | undefined, workKind?: string | null): NoticeCopy {
   const copy = noticeCopy(eventType), label = workKind ? workKindLabel(workKind) : null;
   return label ? { title: `${label}: ${copy.title}`, message: copy.message } : copy;
+}
+
+// --- Round 7: open any update, and older updates -----------------------------------------------------------------------
+// The feed read gives the newest 50; "Show older" pages back 50 at a time from the oldest one shown (migration 20261017300000).
+export const NOTICE_PAGE = 50;
+// Two lists of updates as one, newest first, each update once.
+export function mergeNotices<T extends Pick<NoticeDetail, 'id' | 'created_at'>>(...lists: readonly (readonly T[])[]): T[] {
+  const byId = new Map<number, T>();
+  for (const list of lists) for (const n of list) if (!byId.has(n.id)) byId.set(n.id, n);
+  return [...byId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
+}
+// The update to page back from: the oldest one shown. Null when nothing is shown.
+export function oldestNoticeId(notices: readonly Pick<NoticeDetail, 'id' | 'created_at'>[]): number | null {
+  const all = mergeNotices(notices);
+  return all.length ? all[all.length - 1].id : null;
+}
+// Whether there may be older updates: the last page that came back was full.
+export const mayHaveOlder = (lastPage: number) => lastPage >= NOTICE_PAGE;
+// One work item from the single-item read. A demo answer may be the whole list, so the item is picked out of it. Null when
+// it is not there.
+export function workItemFrom(data: unknown, workId: string): OperationView | null {
+  const raw = Array.isArray(data) ? data.find(x => x && typeof x === 'object' && (x as { workId?: unknown }).workId === workId) : data;
+  const item = operationViewSchema.safeParse(raw);
+  return item.success && item.data.workId === workId ? item.data : null;
 }

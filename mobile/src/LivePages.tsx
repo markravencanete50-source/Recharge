@@ -34,7 +34,7 @@ import { usesPropertyTable } from "../../lib/property-table";
 import { formatCount, formatMoney } from "../../lib/format";
 import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveWorkRow, NoticeRowView, isDone, noticeIcon } from "./LiveRows";
-import { noticeRow, noticeRows, type NoticeRow } from "../../lib/notice-details";
+import { mayHaveOlder, mergeNotices, noticeRow, noticeRows, oldestNoticeId, workItemFrom, type NoticeRow } from "../../lib/notice-details";
 import { ListSearchBox, useListSearch } from "./SearchPicker";
 import { Calendar } from "./WorkspaceScreens";
 import { FavoriteButton } from "./Favorites";
@@ -43,7 +43,7 @@ import { StateGraphic } from "./StateGraphic";
 import { DrawLine, Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
 import { departmentColor, primaryFill, ui, web, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
-import { workspaceRequest, writeControls } from "./backend/client";
+import { WorkspaceApiError, readOlderNotices, readWorkItem, workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
 import { weeklyReportDocument, weeklyReportFileName } from "../../lib/weekly-report";
 import { isWorkspaceAdmin } from "../../lib/modules";
@@ -53,7 +53,7 @@ import { matchesSearch, normalise } from "../../lib/search-options";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import { faqsForAccess } from "../../lib/access-faq";
 import { dateKey, parseAnalyticsDate, periodError, periodLabel, presetPeriod, type AnalyticsPeriod } from "../../lib/analytics";
-import { estimateComparables, MARK_READ_PER_VISIT, onboardingProgress, readableStage, unreadNotices, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
+import { estimateComparables, MARK_READ_PER_VISIT, noticeViewSchema, onboardingProgress, readableStage, unreadNotices, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
 import { createOperationForms, inspectionReportFrom, journeyForms, newEnquiryForm, operationForms, workflowValues, type JourneyView, type OperationView, type WorkflowField, type WorkflowForm } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { PhotoPicker, WorkPhotos } from "./Photos";
@@ -587,15 +587,22 @@ function dayGroups(rows: readonly NoticeRow[]): [string, NoticeRow[]][] {
 // The Updates feed (round 6): each row says what it is ("Pricing: 3 empty nights to price"), then the property, who did it and when.
 // A row with a work item opens it; chat and guest notices open Messages; a burst of the same automatic kind is one row that opens
 // its list. Opening the feed marks the listed updates read.
+// Round 7: an item that is not in the loaded work list is read on its own and opened (the same rules as the work list, so an
+// item someone may not see is simply "no longer available"), and "Show older updates" pages back 50 at a time.
 export function LiveActivity({ palette: p, notices, loading, onRead, work = [], onOpenWork, onOpenMessages }: {
   palette: Palette; notices: NoticeView[]; loading: boolean; onRead?: (ids: number[]) => void;
   work?: readonly OperationView[]; onOpenWork?: (item: OperationView) => void; onOpenMessages?: () => void;
 }) {
+  // Older updates, 50 at a time from the oldest one shown.
+  const [older, setOlder] = useState<NoticeView[]>([]);
+  const [olderState, setOlderState] = useState<"idle" | "loading" | "failed">("idle");
+  const [more, setMore] = useState<boolean | null>(null);
+  const all = useMemo(() => mergeNotices(notices, older), [notices, older]);
   // Opening Activity marks the listed updates read (one request each, newest first, never twice),
-  // so Home's Updates count only shows what is new.
+  // so Home's Updates count only shows what is new. Older pages, once shown, are marked read the same way.
   const tried = useRef(new Set<number>());
   useEffect(() => {
-    const ids = unreadNotices(notices).map(n => n.id).filter(id => !tried.current.has(id)).slice(0, MARK_READ_PER_VISIT);
+    const ids = unreadNotices(all).map(n => n.id).filter(id => !tried.current.has(id)).slice(0, MARK_READ_PER_VISIT);
     if (!ids.length) return;
     ids.forEach(id => tried.current.add(id));
     void (async () => {
@@ -604,18 +611,38 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
         try { await writeControls({ action: "markNotificationRead", requestId: Crypto.randomUUID(), eventId: String(id) }); read.push(id); }
         catch { break; /* offline or rate-limited: try again next visit */ }
       }
-      if (read.length) onRead?.(read);
+      if (read.length) { onRead?.(read); setOlder(list => list.some(n => read.includes(n.id)) ? list.map(n => read.includes(n.id) ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n) : list); }
     })();
-  }, [notices, onRead]);
-  const rows = useMemo(() => noticeRows(notices), [notices]);
+  }, [all, onRead]);
+  const showOlder = async () => {
+    const before = oldestNoticeId(all);
+    if (before === null) return;
+    setOlderState("loading");
+    try {
+      const page = z.array(noticeViewSchema).parse((await readOlderNotices(before)).data);
+      // A page with nothing new (the demo answers every page alike) ends the paging too.
+      const known = new Set(all.map(n => n.id));
+      setOlder(list => mergeNotices(list, page)); setMore(mayHaveOlder(page.length) && page.some(n => !known.has(n.id))); setOlderState("idle");
+    } catch { setOlderState("failed"); }
+  };
+  const canShowOlder = more ?? mayHaveOlder(notices.length);
+  const [openNote, setOpenNote] = useState<string | null>(null);
+  const rows = useMemo(() => noticeRows(all), [all]);
   const search = useListSearch(rows, r => [r.title, r.line, ...r.notices.map(n => n.work_title ?? "")]);
   const [opened, setOpened] = useState<string | null>(null);
   const byId = useMemo(() => new Map(work.map(w => [w.workId, w] as const)), [work]);
-  // Where a row goes: its work item (when it is in the work already loaded), or Messages.
+  // Where a row goes: its work item (from the work already loaded, else read on its own), or Messages.
+  const openWork = async (workId: string) => {
+    setOpenNote(null);
+    try {
+      const item = workItemFrom((await readWorkItem(workId)).data, workId);
+      if (item && onOpenWork) onOpenWork(item); else setOpenNote("That item is no longer available to you.");
+    } catch (error) { setOpenNote(error instanceof WorkspaceApiError && error.status === 404 ? "That item is no longer available to you." : "That item could not be opened just now. Try again."); }
+  };
   const press = (row: NoticeRow) => {
     if (row.notices.length > 1) return () => setOpened(opened === row.key ? null : row.key);
     const t = row.target;
-    if (t?.kind === "work" && onOpenWork) { const item = byId.get(t.workId); return item ? () => onOpenWork(item) : undefined; }
+    if (t?.kind === "work" && onOpenWork) { const item = byId.get(t.workId); return item ? () => onOpenWork(item) : () => void openWork(t.workId); }
     if (t?.kind === "messages" && onOpenMessages) return onOpenMessages;
     return undefined;
   };
@@ -623,6 +650,7 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
     <>
       <PageHeading palette={p} title="Recent activity" subtitle="Updates on the work and properties within your access." />
       <ListSearchBox p={p} search={search} nouns="updates" />
+      {!!openNote && <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>{openNote}</Text>}
       {search.missed ? null : rows.length ? (
         dayGroups(search.shown).map(([day, list], g) => (
           <View key={day} style={{ gap: 8 }}>
@@ -647,6 +675,13 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
           </View>
         ))
       ) : <EmptyState palette={p} icon="activity" title={loading ? "Loading updates…" : "No updates yet"} detail="Changes to your work and properties appear here." />}
+      {!search.missed && rows.length > 0 && (canShowOlder || olderState === "failed") && (
+        <MotionPress accessibilityRole="button" accessibilityLabel="Show older updates" disabled={olderState === "loading"} onPress={() => void showOlder()}
+          style={{ alignSelf: "flex-start", minHeight: 44, justifyContent: "center" }}>
+          <Text style={{ color: p.primary, fontWeight: "600" }}>{olderState === "loading" ? "Loading older updates…" : olderState === "failed" ? "Older updates could not be loaded. Try again" : "Show older updates"}</Text>
+        </MotionPress>
+      )}
+      {!search.missed && more === false && <Text style={[ui.small, { color: p.muted }]}>That is every update.</Text>}
       <Text style={[ui.small, { color: p.muted }]}>Email and push notifications start once they are switched on.</Text>
     </>
   );
