@@ -267,7 +267,7 @@ properties", one chip per property, "Showing 12 of 63"). A guest conversation op
   an owner conversation, Team for everyone on the team; owners have no tabs, just their conversation with Recharge).
 - **No channel chips.** Department channels are ordinary conversations in the Team list, by latest message, with the group
   avatar and no `#`.
-- **Status** (Guests and Clients only): Needs a reply (the other side spoke last; attention colour), Waiting for reply (we
+- **Status** (Guests and Clients only): Needs a reply (the other side spoke last; attention colour), Engaged (renamed in round 6; was "Waiting for reply"; we
   answered last and it is open; green), Closed (done). Each shows its count. Team has no status filter. Guests use the existing wait
   and Done; Clients use who spoke last (`last.fromOwner`, already in the list) and a new Closed state (below).
 - **One search box**, filtering as you type: "Search guest or property" (guest's name, property name, property address, booking
@@ -407,6 +407,14 @@ with one team only, and with nothing to measure, and below it the Messages helpe
 hand." and "5 guests have waited longer than 30 minutes." were cut short with "…" on a phone. `QuietLine` in
 `mobile/src/MessagesLayout.tsx` no longer limits the text to one line, and its icon stays beside the first line.
 `tests/messages-redesign.test.mjs` checks it.
+
+**"Waiting for reply" is now "Engaged"** (Lee, round 6). It is the status of a conversation where we wrote last and it is still
+open, so nobody is waiting on us. This is a label change only: the key stays `waiting`, the logic and the green colour are the same.
+`MESSAGE_STATUS_LABEL` in `lib/inbox-filters.ts` is the one place it is written. The chips on Guests and Clients, the row tag and
+the tag at the top of an open guest conversation (`LiveGuestInbox.tsx`, which had the words typed in twice) all read it from there.
+Other places that say "waiting for a reply" mean guests or owners waiting on us (Needs a reply, the to-do, Oversight, the reply
+times), so they stay. The comment in `20261015320000_owner_chat_closed.sql` still says "Waiting for reply"; that migration is live
+and is left as it is.
 
 **Question for Alex:**
 - Weighting: is it 50/50 between Guest relations and Client relations, or should one count more?
