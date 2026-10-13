@@ -24,11 +24,14 @@ const STATUS: Record<string, { label: string; order: number }> = {
 export const statusLabelOf = (status: string) => STATUS[status]?.label ?? (readableStage(status) || 'Unknown');
 const statusOrderOf = (status: string) => STATUS[status]?.order ?? 3;
 
-// Which onboarding step an onboarding property has reached (Enquiry ... Live), when its journey is known.
+// Which onboarding step an onboarding property has reached (New enquiry, Estimate ... Live), when its journey
+// is known. A property still at the enquiry stage reads "New enquiry", as in the onboarding tracker: since
+// migration 20261015200000 every answered enquiry form is one of these straight away.
 // Active and archived properties are past it, so they have none.
 export function stageLabel(status: string, journey?: Pick<JourneyView, 'stage'> | null): string | null {
   if (status !== 'onboarding' || !journey) return null;
   if (journey.stage === 'declined' || journey.stage === 'archived') return 'Declined';
+  if (journey.stage === 'enquiry') return 'New enquiry';
   return journeyPhase(journey.stage);
 }
 

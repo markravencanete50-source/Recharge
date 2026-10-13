@@ -237,3 +237,98 @@ same way.
 **Either way:** follow-ups already open for stays of exactly seven nights stay open. The team can close them;
 this read-only query lists them:
 `select w.id, w.title from public.workspace_work_items w join private.workspace_domain_details d on d.work_id = w.id join private.workspace_reservations r on r.id::text = d.data->>'reservationId' where d.kind = 'direct_booking' and w.status not in ('completed','cancelled') and r.check_out - r.check_in = 7;`
+
+# Round 5 (15 October 2026): every new enquiry in Properties straight away (built)
+
+Lee approved section 5. Built on `claude/serene-babbage-xgqaus` after merging the lead branch
+(`claude/fervent-brahmagupta-8qd03b`, fast-forward to `5a113a3`). One migration:
+`20261015200000_enquiry_property_on_submit.sql`. Not applied anywhere.
+
+## What happens now
+
+- **Submit** (`workspace_enquiry_public`, action `submit`). In the same transaction as the answers, it creates:
+  - the property: status onboarding, named from the first line of the address by the same rule as
+    `valuationDraft`, region from the address, `created_by` = the sender;
+  - the journey: stage `enquiry`, no owner, and only the property's facts (WCs, parking, garden, photo link,
+    existing client);
+  - the "Property onboarding" work item, `created_by` = the sender.
+
+  The landlord's name, email, phone, correspondence address and notes stay on the enquiry. One submit per
+  link and the 30-day expiry are unchanged.
+- **Onboarding team:** the journey's existing insert trigger gives Guest relations staff with property
+  onboarding their usual assignment. Nobody is signed in during a public submit, so the trigger now falls
+  back to the work item's creator (the sender) for `granted_by`.
+- **Duplicates.** Flagged, never merged, using two new columns on the enquiry:
+  - `duplicate_of` is another property in use at the same address (case, punctuation, spacing, the
+    postcode's space and a trailing UK or Scotland are ignored);
+  - `duplicate_reason` is `same_address`, or `existing_client` when the landlord said they already work with
+    us.
+- **Start valuing** reuses the property. The team's corrections (name, address, region, type, rooms,
+  enquiry details) are saved onto it and no second property is made. If an estimate was already published
+  from the property, its details are left as they are. Enquiries answered before the migration have no
+  property and keep the old path.
+- **Closing** an enquiry whose property is still at the enquiry stage archives the journey and the property,
+  and cancels the work item. Nothing is deleted. A property that has moved on is left alone.
+- **Privacy.**
+  - Owners, cleaners, the cleaning manager and Ready have no assignment, so they never see it.
+  - Accounts could read every property (the table policy and `workspace_can_property`). Both now leave out
+    a property whose journey is still at stage `enquiry`. **This also hides enquiries the team adds by
+    hand from Accounts until they are valued**, which matches the rule; flagging it in case Accounts relied
+    on it.
+  - The `enquiry.received` notice is unchanged. Giving it a property would change who reads it under
+    `activity_scoped`, so `activity_scoped` and `workspace_activity` are untouched.
+- **App:**
+  - `LiveEnquiries.tsx`: the button reads "Check the details and value" when the property already exists
+    ("Start valuing" for older enquiries); a "Possible duplicate" badge on the row with a note in the sheet;
+    an "Open" link to the property; the close sheet says the property is archived too.
+  - `lib/tracker-onboarding.ts`: one row per property; the journey row carries "From: the enquiry form" and
+    the duplicate flag, for staff only.
+  - `lib/property-table.ts`: the Properties table shows the stage "New enquiry".
+  - `lib/client-enquiry.ts`: the new fields, with defaults so older reads still parse. Once the property
+    moves on, the enquiry's step follows the property.
+
+## Existing answered enquiries (no backfill, for Lee to decide)
+
+Enquiries answered before this migration and not yet valued keep today's flow: their property is made when
+someone presses Start valuing. To list them (not run; no contact details selected):
+
+```sql
+select e.id, e.status, e.submitted_at, e.sent_by
+from private.workspace_client_enquiries e
+where e.status = 'received' and e.property_id is null
+order by e.submitted_at;
+```
+
+If Lee wants them converted, one more migration in my range can call
+`private.workspace_enquiry_create_property(id)` for each of them.
+
+## Files outside my original list
+
+- `lib/client-enquiry.ts`: the enquiry schema and step.
+- New test files: `tests/enquiry-property-database.test.mjs` and `tests/enquiry-property.test.mjs`.
+
+## Tests
+
+- **App side:** `tests/enquiry-property.test.mjs`, 6 of 6 pass.
+- **Related non-database tests:** tracker-onboarding, property-table, enquiry-and-preview, tracker-sections,
+  navigation-v2 and wiring-v2: 87 of 88 pass. The 1 failure is the known CRLF check in `wiring-v2`.
+- **Types and lint:** `npx tsc --noEmit -p mobile/tsconfig.json` passes. ESLint on the changed files is
+  clean apart from an unused `web` import in `LiveEnquiries.tsx` that was already on `main`.
+- **Database tests:** `tests/enquiry-property-database.test.mjs` covers create, privacy per role,
+  duplicates, Start valuing reuse, closing, older enquiries, and running twice. It and the existing
+  `tests/client-enquiries-database.test.mjs` have **not been run yet**: running database tests was blocked
+  by this session's permission check midway through this round. See the open points.
+
+## Open points
+
+1. Run the two database tests above before merging. The first run of
+   `client-enquiries-database` against an early draft failed with a syntax error, which led to the
+   "Start valuing" patch being rewritten as one self-contained block. The rewritten version has not been
+   run.
+   Every patch anchor is a single line, so the migration does not depend on line endings. `.gitattributes`
+   now checks SQL out as CRLF, and a two-line anchor would not match a function that was created from LF
+   text on the live database.
+2. Lee: convert the enquiries answered before this change, or not (query above).
+3. Lee: should unvalued enquiries count in the portfolio summary and on the map? They currently do, as
+   onboarding.
+4. Accounts no longer see properties at the enquiry stage, including ones the team adds by hand.
