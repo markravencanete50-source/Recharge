@@ -155,6 +155,21 @@ E was asked to review the lead branch with A merged on top.
    queued in `private.workspace_storage_removals`.
 7. Once live, Lee can delete the "Mark Raven Canete · Optimal" test enquiry in the app.
 
+## 5a. All developers stopped (13 October 2026, 14:28)
+
+Lee asked for every developer to stop. Each session was interrupted and told to change nothing more.
+
+| Dev | Last pushed | Left unpushed in its cloud container (lost if the container is reclaimed) |
+|---|---|---|
+| A | `d560ed1`: E's items 1–4 and 11; the full suite was not run | nothing |
+| B | `f113abd` | a local merge of E's branch (`edb7c13`), plus 9 uncommitted files: E's items 5, 6, 8, 10, 12 and a test |
+| C | `71720a9` | the management bonus: 6 changed files and 3 new ones, including migration `20261016310000` and two tests |
+| D | `74cd69f` | a local merge of E's branch (`365efd8`), plus uncommitted `CalendarPicker.tsx` (an `empty` prop) and a new `DayField.tsx` (item 17) |
+| E | `41e6279` | nothing (only a review branch, `review/lead-cf59b6e`) |
+
+The lead branch is at `d3fde42` and later; its last full run passed 1475/1475 before B was merged. Anything unpushed
+has to be redone from these notes, unless Lee asks a developer to push it as work in progress.
+
 ## 6. Waiting on Lee
 
 - Switch A and D to Sonnet (`/model claude-sonnet-5-5` in each session).
