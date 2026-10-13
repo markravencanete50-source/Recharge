@@ -4,7 +4,7 @@ import { Text } from "./Typography";
 import { Entrance } from "./motion";
 import { ui, type Palette } from "./theme";
 import { Loading, london, message, Notice, StatGrid, StatTile, Tag } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { SoftButton } from "./LivePages";
 import { OwnerExpenses } from "./OwnerExpenses";
 import { readOwner } from "./backend/client";

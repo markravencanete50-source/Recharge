@@ -20,6 +20,8 @@ export const kpiSchema = z.object({
 export const kpiResultSchema = z.object({
   kpiId: z.string(), value: z.number().nullable(), measured: z.number(), count: z.number().nullable(),
   onTarget: z.boolean().nullable(), tier: z.number().nullable(), tierAt: z.number().nullable(),
+  // A measure made of team totals (teams_combined, migration 20261016310000): each team's own value. Never a name.
+  parts: z.array(z.object({ area: z.string(), value: z.number().nullable(), measured: z.number() })).optional(),
 });
 export const replyBandsSchema = z.object({
   waits: z.number(), stillWaiting: z.number(),
@@ -49,6 +51,7 @@ export function kpiMeasureLabel(kpi: Pick<Kpi, 'measure' | 'minutes'>): string {
     case 'daily_work_done': return 'Daily work done against its targets';
     case 'performance_score': return 'Performance score';
     case 'clean_forms_on_time': return 'Cleaning forms in by 18:00 on the day';
+    case 'teams_combined': return 'Guest relations and Client relations, combined';
     default: return kpi.measure;
   }
 }
@@ -70,12 +73,15 @@ export type KpiProgress = {
   // How many marks are reached: 0 short of the target, 1 the target, 2 tier 1, 3 tier 2.
   reached: number;
   headline: string; next: string;
+  // The teams a combined measure is made of, each with its own value (empty for any other measure).
+  parts: KpiPart[];
 };
+export type KpiPart = NonNullable<KpiResult['parts']>[number];
 
 const clamp = (v: number | null | undefined) => v == null || !Number.isFinite(v) ? null : Math.max(0, Math.min(100, Math.round(v)));
 
 // Where a value stands against a KPI's target and tiers. Null when the KPI has no target (tracked only).
-export function kpiProgress(kpi: Kpi, result: Pick<KpiResult, 'value'> | null | undefined): KpiProgress | null {
+export function kpiProgress(kpi: Kpi, result: Pick<KpiResult, 'value' | 'parts'> | null | undefined): KpiProgress | null {
   if (kpi.targetPercent === null) return null;
   const lower = kpi.direction === 'lower', target = kpi.targetPercent, value = clamp(result?.value);
   const meets = (at: number) => value !== null && (lower ? value <= at : value >= at);
@@ -87,7 +93,7 @@ export function kpiProgress(kpi: Kpi, result: Pick<KpiResult, 'value'> | null | 
     : reached === 0 ? (lower ? `${value - target}% above the target` : `${target - value}% to go to the target`)
     : reached === 1 ? 'Target reached'
     : `Bonus tier ${reached - 1} reached`;
-  return { kpiId: kpi.id, name: kpi.name, area: kpi.area, areaLabel: areaLabel(kpi.area), measureLabel: kpiMeasureLabel(kpi), placeholder: kpi.placeholder, direction: kpi.direction, value, marks, reached, headline, next };
+  return { kpiId: kpi.id, name: kpi.name, area: kpi.area, areaLabel: areaLabel(kpi.area), measureLabel: kpiMeasureLabel(kpi), placeholder: kpi.placeholder, direction: kpi.direction, value, marks, reached, headline, next, parts: result?.parts ?? [] };
 }
 
 // One line per KPI under the bar: the value and where it stands.

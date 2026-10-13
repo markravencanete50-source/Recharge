@@ -4,7 +4,8 @@ import { Text } from "./Typography";
 import { AccessControl } from "./LiveAccessControl";
 import { ui, type Palette } from "./theme";
 import { Button, Notice, Section, useWorkFocus, Loading } from "./LiveKit";
-import { List, Pills, Row } from "./LiveAccounts";
+import { List, Row } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { LiveTraining } from "./LiveTraining";
 import { LivePeople } from "./LivePeople";
 import { LiveTeamPerformance } from "./LiveShifts";
@@ -86,7 +87,7 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
       <ManagementChecklist p={p} account={account} onSetUp={() => { setDailyOnly("management"); setView("dailytasks"); }} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && view === "team" && <Loading p={p} />}
-      <Pills p={p} values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", productivity: "Productivity", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", reflections: "Day reflections", dailytasks: "Daily tasks", rota: "Rota", responsibilities: "Responsibilities", access: "Access control" })[v]} />
+      <Pills p={p} title="Management section" values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", productivity: "Productivity", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", reflections: "Day reflections", dailytasks: "Daily tasks", rota: "Rota", responsibilities: "Responsibilities", access: "Access control" })[v]} />
 
       {view === "access" && <AccessControl palette={p} account={account} />}
       {/* Flags, requests and every pending decision arrive in one list (ManagementApprovals). */}

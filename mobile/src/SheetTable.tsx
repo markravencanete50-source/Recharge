@@ -5,6 +5,7 @@ import { MotionPress } from "./motion";
 import { Notice } from "./LiveKit";
 import { matchesSearch, SEARCH_LIST_ABOVE, SearchBox, searchTextOf } from "./SearchPicker";
 import { ui, type Palette } from "./theme";
+import { pillBox, pillInk } from "./Pills";
 
 // Rows laid out like a sheet you can tap into, and the round choice chips used with them.
 export type Column<T> = { label: string; width: number; cell: (row: T) => ReactNode };
@@ -44,8 +45,8 @@ export const cellText = (p: Palette, value: string | null | undefined, strong = 
 export function Chip({ p, label, on, onPress }: { p: Palette; label: string; on: boolean; onPress: () => void }) {
   return (
     <MotionPress accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={onPress}
-      style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-      <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label}</Text>
+      style={[{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" }, pillBox(p, on)]}>
+      <Text style={{ color: pillInk(p, on), fontSize: 13, fontWeight: "600" }}>{label}</Text>
     </MotionPress>
   );
 }

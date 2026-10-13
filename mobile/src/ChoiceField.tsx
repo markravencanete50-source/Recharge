@@ -5,7 +5,7 @@ import { MotionPress } from "./motion";
 import { Dropdown, type DropdownOption } from "./Dropdown";
 import { ui, type Palette } from "./theme";
 import { choiceControl } from "../../lib/choice-control";
-import { Pills } from "./AccountsPayable";
+import { Pills } from "./Pills";
 
 // One choice in a form, drawn by how many options it has (lib/choice-control.ts, the "fewer buttons"
 // rule): up to 5 as compact radio choices, up to 10 as a dropdown, more as a dropdown with a search box.
@@ -34,8 +34,6 @@ export function ChoiceField<T extends string>({ p, label, value, options, onChan
 export function ChoicePills<T extends string>({ p, name, values, value, onChange, label, wrap }: {
   p: Palette; name: string; values: readonly T[]; value: T; onChange: (v: T) => void; label?: (v: T) => string; wrap?: boolean;
 }) {
-  const control = choiceControl(values.length);
-  if (control === "radio") return <Pills p={p} values={values} value={value} onChange={onChange} label={label} wrap={wrap} />;
-  const options = values.map(v => ({ value: v, label: label ? label(v) : v.replaceAll("_", " ") }));
-  return <Dropdown p={p} label={name} value={value} options={options} onChange={onChange} searchable={control === "search"} hideLabel />;
+  // Pills (Pills.tsx) applies the same rule itself; `name` names its dropdown.
+  return <Pills p={p} title={name} values={values} value={value} onChange={onChange} label={label} wrap={wrap} />;
 }

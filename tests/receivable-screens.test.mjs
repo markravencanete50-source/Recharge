@@ -160,7 +160,8 @@ test('a suggested direct booking starts the form with its stay and total', () =>
 test('the Receivable tab is wired for finance roles and uses only the existing hub actions', () => {
   assert.match(accounts, /import \{ AccountsReceivable \} from "\.\/AccountsReceivable"/);
   assert.match(accounts, /receivable: "Receivable"/);
-  assert.match(accounts, /isFinanceRole\(role\) \? \["expenses", "payouts", "statements", "receivable"\]/);
+  // The sections are one Pills row (round 6): Receivable, Performance and AirCover only for finance roles.
+  assert.match(accounts, /\.filter\(v => \(v !== "receivable" && v !== "performance" && v !== "aircover"\) \|\| \(isFinanceRole\(role\)/);
   assert.match(accounts, /view === "receivable" && <AccountsReceivable p=\{p\} account=\{account\} properties=\{properties\} \/>/);
   assert.match(screen, /readFinance\(\{ section: "receivable" \}\)/);
   // Anyone outside finance gets the notice and nothing else: the guard comes before any list is drawn.
