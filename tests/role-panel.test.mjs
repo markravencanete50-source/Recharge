@@ -54,7 +54,8 @@ test('team-only, owner-only and admin-only places stay with their roles', () => 
   assert.ok(has('super_admin', 'tool:access'));
   for (const role of roles.filter(r => r !== 'super_admin')) assert.ok(!has(role, 'tool:access'), role + ' has no Access control');
   for (const role of roles.filter(r => !['admin', 'super_admin'].includes(r))) assert.ok(!has(role, 'area:management'), role + ' has no Management');
-  assert.ok(has('client', 'page:approvals') && !has('client', 'page:favorites'));
+  // Round 6: owners have Favorites too (Lee: "regardless of which role").
+  assert.ok(has('client', 'page:approvals') && has('client', 'page:favorites'));
   assert.ok(!has('cleans', 'page:approvals') && !has('cleans', 'page:statements') && !has('cleans', 'area:accounts'));
   // A tool the person doesn't hold isn't offered.
   assert.ok(!has('stays', 'tool:aircover', []) && has('stays', 'tool:aircover', ['aircover-reporting']));
@@ -82,13 +83,14 @@ test('a role preview keeps only the records that role could be shown', () => {
   assert.ok(admin.work('anything') && admin.invoices && admin.journeys && admin.notices);
 });
 
-test('the team panel runs Home, To-do, the Work areas, Calendar, Messages, then the rest', () => {
+test('the team panel runs Home, Favorites, To-do, the Work areas, Calendar, Messages, then the rest', () => {
   for (const role of roles.filter(r => r !== 'client')) {
     const all = links(rolePanel(role, DEFAULT_ROLE_MODULES[role])), at = key => all.findIndex(l => l.key === key);
-    assert.deepEqual(all.slice(0, 2).map(l => l.key), ['page:home', 'page:todo'], role);
+    // Favorites straight after Home since round 6.
+    assert.deepEqual(all.slice(0, 3).map(l => l.key), ['page:home', 'page:favorites', 'page:todo'], role);
     const firstArea = all.findIndex(l => l.kind === 'area'), lastArea = all.map(l => l.kind).lastIndexOf('area');
-    assert.ok(firstArea === 2 && at('page:calendar') > lastArea && at('page:inbox') === at('page:calendar') + 1, role + ': areas, then Calendar, then Messages');
-    assert.ok(all.slice(2, at('page:calendar')).every(l => l.kind === 'area'), role + ': only Work areas between To-do and Calendar');
+    assert.ok(firstArea === 3 && at('page:calendar') > lastArea && at('page:inbox') === at('page:calendar') + 1, role + ': areas, then Calendar, then Messages');
+    assert.ok(all.slice(3, at('page:calendar')).every(l => l.kind === 'area'), role + ': only Work areas between To-do and Calendar');
   }
   const admin = links(rolePanel('admin', MODULE_IDS));
   assert.equal(admin.find(l => l.key === 'page:decisions').label, 'Management approvals');

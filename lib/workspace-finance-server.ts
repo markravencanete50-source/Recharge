@@ -34,6 +34,8 @@ export const workspaceTeams = rpcRoute({
   // Sending the enquiry form makes its link and sends the email on the server.
   // Deleting a course also deletes its stored files.
   handle: (context, input) => input.action === 'inviteEnquiry' || input.action === 'resendEnquiry' ? import('./client-enquiry-server').then(m => m.sendEnquiryForm(context, input))
+    // Deleting an enquiry also removes its stored photos and videos.
+    : input.action === 'deleteEnquiry' ? import('./client-enquiry-server').then(m => m.deleteEnquiry(context, input))
     : input.action === 'deleteCourse' ? import('./training-files-server').then(m => m.deleteCourse(context, input))
     // Removing a reported chat message also deletes its stored photos and videos.
     : input.action === 'decideChatReport' && input.decision === 'remove' ? import('./chat-media-server').then(m => m.decideChatReport(context, input)) : null,

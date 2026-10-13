@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { HomeToolTarget } from './home-tools';
 import { DEPARTMENT_LABEL, onboardingRows } from './hub';
 import { LISTING_HEALTH_VIEW } from './feedback-defaults';
-import { addressOf } from './tracker';
+import { addressOf, EMPTY_CELL, timeAgo } from './tracker';
 import { DEPARTMENTS, hubItemSchema, hubSchema } from './workspace-teams-policy';
 import type { JourneyView, OperationView } from './workflow-forms';
 import type { PropertyView } from './workspace-view';
@@ -24,8 +24,9 @@ export const LISTING_CHECKS_DEPARTMENT = 'client_relations' as const;
 export const PRICING_DEPARTMENT = 'client_relations' as const;
 // A repair with no update for this many days is put on the list.
 export const REPAIR_UPDATE_AFTER_DAYS = 3;
-// Each heading shows this many open rows before "Show more".
-export const ROWS_PER_HEADING = 8;
+// Each heading shows this many open rows before "Show all N" (round 6: ten thin rows, so the 180 automatic
+// pricing rows do not bury the rest).
+export const ROWS_PER_HEADING = 10;
 // The summary card lists this many next items.
 export const SUMMARY_ROWS = 3;
 
@@ -39,20 +40,35 @@ export const TODO_TARGETS = {
   repairs: { kind: 'work', view: 'repairs' },
 } as const satisfies Record<string, HomeToolTarget>;
 
-// The hub read, keeping the template link the database adds to a to-do made from a daily task.
-export const todoHubItemSchema = hubItemSchema.extend({ templateId: z.string().uuid().nullable().optional() });
+// One update on a to-do (round 6): what was said, who said it and when. "Marked done" and "Reopened" are
+// logged by the database when the to-do is ticked or unticked.
+export const todoUpdateSchema = z.object({
+  id: z.number(), text: z.string(), kind: z.enum(['note', 'done', 'reopened']).catch('note'),
+  byId: z.string().uuid().nullable(), byName: z.string().nullable(), at: z.string(),
+});
+export type TodoUpdate = z.infer<typeof todoUpdateSchema>;
+
+// The hub read, keeping the template link the database adds to a to-do made from a daily task, and the
+// to-do's updates (newest first) with their running total. Older answers without them still parse.
+export const todoHubItemSchema = hubItemSchema.extend({
+  templateId: z.string().uuid().nullable().optional(),
+  updateCount: z.number().int().min(0).default(0), updates: z.array(todoUpdateSchema).default([]),
+});
 export const todoHubSchema = hubSchema.extend({ items: z.array(todoHubItemSchema) });
 export type TodoHubItem = z.infer<typeof todoHubItemSchema>;
 export type TodoHub = z.infer<typeof todoHubSchema>;
 
 export type DerivedKind = 'repair_update' | 'listing_check' | 'pricing_gap' | 'guest_reply' | 'onboarding' | 'licensing';
 export type TodoOpen = { workId?: string; target?: HomeToolTarget };
+export type TodoLatest = { text: string; by: string | null; at: string };
 export type TodoRow = {
   id: string; source: 'hub' | 'derived'; heading: TodoHeading; title: string; details: string;
   propertyId: string | null; address: string | null; dueOn: string | null; who: string | null;
   done: boolean; automatic: boolean;
   // When it was added (for "oldest first") and when it last changed (for the done list). ISO text, '' when unknown.
   since: string; touched: string;
+  // The newest update and how many there are (hub to-dos only; Automatic tasks have none).
+  latest: TodoLatest | null; updateCount: number;
   derived?: DerivedKind; open?: TodoOpen; item?: TodoHubItem;
 };
 
@@ -81,6 +97,11 @@ export function whoFor(item: Pick<TodoHubItem, 'assigneeId' | 'assigneeName' | '
   return item.department ? DEPARTMENT_LABEL[item.department] ?? null : null;
 }
 
+const latestOf = (updates: readonly TodoUpdate[] | undefined): TodoLatest | null => {
+  const u = updates?.[0];
+  return u ? { text: u.text, by: u.byName, at: u.at } : null;
+};
+
 // The hub's to-dos as rows. A to-do the database made from a daily task has a template and reads Automatic.
 export function hubRows(items: readonly TodoHubItem[], me: string, properties: readonly PropertyLike[]): TodoRow[] {
   return items.filter(i => i.kind === 'todo').map(i => {
@@ -89,6 +110,7 @@ export function hubRows(items: readonly TodoHubItem[], me: string, properties: r
       id: i.id, source: 'hub' as const, heading: headingOf(i, me), title: i.title, details: i.details, propertyId: i.propertyId,
       address: (property ? addressOf(property) : '') || i.propertyName || null, dueOn: i.dueOn, who: whoFor(i, me),
       done: i.status === 'done', automatic: !!i.templateId, since: i.createdAt, touched: i.updatedAt || i.createdAt, item: i,
+      latest: latestOf(i.updates), updateCount: i.updateCount,
     };
   });
 }
@@ -128,7 +150,7 @@ export function deriveTasks(input: DeriveInput): TodoRow[] {
     out.push({
       id: `auto:${kind}:${key}`, source: 'derived', heading, title: row.title, details: row.details, propertyId: row.propertyId,
       address: row.address === undefined ? addressFor(row.propertyId) : row.address, dueOn: row.dueOn, who: null,
-      done: false, automatic: true, since: row.since, touched: row.since, derived: kind, open: row.open,
+      done: false, automatic: true, since: row.since, touched: row.since, derived: kind, open: row.open, latest: null, updateCount: 0,
     });
   };
   const guestSide: TodoHeading = 'guest_relations';
@@ -257,6 +279,75 @@ export function dueState(row: Pick<TodoRow, 'dueOn' | 'done'>, today: string): '
   if (row.dueOn === today) return 'today';
   return row.dueOn < today && !row.done ? 'overdue' : 'later';
 }
+
+// --- Thin rows (round 6, from Alex's video) --------------------------------------------------------------
+
+// One compact row per to-do, like a spreadsheet. On a computer the columns below, left to right, in rows about
+// 40 px high (clicking a row opens the detail); on a phone a two-line card with a 44 px tick. The automatic
+// sections use the same rows.
+export type TodoColumnKey = 'tick' | 'property' | 'task' | 'update' | 'by' | 'when' | 'due' | 'status';
+export const TODO_COLUMNS: readonly { key: TodoColumnKey; label: string; width: number; grow?: boolean }[] = [
+  { key: 'tick', label: '', width: 44 },
+  { key: 'property', label: 'Property', width: 220 },
+  { key: 'task', label: 'Task', width: 300, grow: true },
+  { key: 'update', label: 'Latest update', width: 220 },
+  { key: 'by', label: 'Updated by', width: 120 },
+  { key: 'when', label: 'When', width: 96 },
+  { key: 'due', label: 'Due', width: 96 },
+  { key: 'status', label: 'Status', width: 108 },
+];
+// The table from this window width up (the same width the trackers switch at); cards below it.
+export const TODO_TABLE_FROM = 1024;
+export const THIN_ROW_HEIGHT = 40;
+export const todoLayout = (width: number): 'table' | 'cards' => (width >= TODO_TABLE_FROM ? 'table' : 'cards');
+
+const oneLine = (value: string | null | undefined) => (value ?? '').replace(/\s+/g, ' ').trim();
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// "16 Oct", with the year when it is not this year's: "3 Jan 2027".
+export function shortDay(day: string, today: string): string {
+  const [y, m, d] = day.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return EMPTY_CELL;
+  return `${d} ${MONTHS[m - 1]}` + (day.slice(0, 4) === today.slice(0, 4) ? '' : ` ${y}`);
+}
+
+export type TodoCells = {
+  property: string; task: string; detail: string; update: string; by: string; when: string;
+  due: string; dueTone: 'overdue' | 'today' | 'plain'; status: 'Done' | 'Automatic' | 'To do'; statusTone: 'good' | 'plain' | 'wait';
+};
+// What each column shows for a row. Empty cells read "–". The person is the one who wrote the latest update.
+export function todoCells(row: TodoRow, today: string, now: Date = new Date()): TodoCells {
+  const state = dueState(row, today), latest = row.latest;
+  return {
+    property: oneLine(row.address) || EMPTY_CELL,
+    task: oneLine(row.title), detail: oneLine(row.details),
+    update: latest ? oneLine(latest.text) || EMPTY_CELL : EMPTY_CELL,
+    by: latest ? oneLine(latest.by) || 'Automatic' : EMPTY_CELL,
+    when: latest ? timeAgo(latest.at, now) || EMPTY_CELL : EMPTY_CELL,
+    due: !row.dueOn ? EMPTY_CELL : state === 'today' ? 'Today' : shortDay(row.dueOn, today),
+    dueTone: row.done ? 'plain' : state === 'overdue' ? 'overdue' : state === 'today' ? 'today' : 'plain',
+    status: row.done ? 'Done' : row.automatic ? 'Automatic' : 'To do',
+    statusTone: row.done ? 'good' : row.automatic ? 'plain' : 'wait',
+  };
+}
+
+// The phone card: the task on the first line with the due day; the property and the latest update (or the
+// description when there is none) on the second.
+export function todoCardLines(row: TodoRow, today: string, now: Date = new Date()): { top: string; due: string; bottom: string } {
+  const c = todoCells(row, today, now);
+  const said = row.latest ? [c.update, c.by, c.when].filter(v => v !== EMPTY_CELL).join(' · ') : c.detail;
+  return { top: c.task, due: c.due === EMPTY_CELL ? '' : c.due, bottom: [row.address ? c.property : '', said].filter(Boolean).join(' · ') };
+}
+
+// "Last update 2h ago by Dan", for the detail. Owners never see staff to-dos, so names are always shown here.
+export function lastUpdateWords(latest: TodoLatest | null, now: Date = new Date()): string {
+  if (!latest) return 'No updates yet';
+  const when = timeAgo(latest.at, now), who = oneLine(latest.by) || 'Automatic';
+  return `Last update ${when || 'at an unknown time'} by ${who}`;
+}
+// "1 update", "4 updates".
+export const updateTotal = (n: number) => (n === 1 ? '1 update' : `${n} updates`);
+// "Show all 180" under a heading with more open rows than it shows; "Show fewer" once open.
+export const showAllLabel = (open: number, expanded: boolean) => (expanded ? 'Show fewer' : `Show all ${open}`);
 
 // --- Once a day -------------------------------------------------------------------------------------------
 

@@ -184,3 +184,13 @@ export async function tokenHash(token: string) {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)));
   return Array.from(digest, b => b.toString(16).padStart(2, '0')).join('');
 }
+
+// Delete (round 6, Lee): admins and super admins, while the enquiry has not moved on. The button shows only
+// then; the database checks again (no owner, no signature, no stays, no money, no other work) and otherwise
+// answers ENQUIRY_MOVED_ON. Close stays as it is.
+export const canDeleteEnquiry = (role: string, e: Pick<ClientEnquiry, 'propertyId' | 'stage'>) =>
+  (role === 'admin' || role === 'super_admin') && (!e.propertyId || !e.stage || e.stage === 'enquiry' || e.stage === 'archived');
+export const deleteEnquiryWarning = (e: Pick<ClientEnquiry, 'propertyId'>) => e.propertyId
+  ? 'Delete this enquiry? This removes the enquiry, its answers and photos, and the property it created. This can’t be undone.'
+  : 'Delete this enquiry? This removes the enquiry, its answers and photos. This can’t be undone.';
+export const ENQUIRY_MOVED_ON = 'This enquiry has moved on. Close it instead.';

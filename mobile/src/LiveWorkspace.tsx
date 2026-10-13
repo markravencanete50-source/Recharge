@@ -102,7 +102,7 @@ type IconName = ComponentProps<typeof Feather>["name"];
 const SECTIONS: readonly WorkspaceSection[] = PAGE_SECTIONS;
 const TEAM_ROLES: Role[] = ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"];
 // Pages only some roles have.
-const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES, favorites: ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"] };
+const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES };
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
 type BookingPolicy = z.infer<typeof bookingPolicySchema>;
 // Direct-booking offers use this discount policy; only a super admin can set and confirm it.
@@ -376,7 +376,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const openView = (view: WorkView, sub?: string) => { setFocus(sub ? { sub, nonce: Date.now() } : null); setWorkView(view); setTab("work"); };
   // Search and Favorites: one list of everything this person can open, from what is already loaded.
   // A role preview has nobody's favorites (not the super admin's own); a person view shows theirs.
-  const favorites = useFavoritesStore(team && !(viewAs && !viewAs.person), demo && !demoInteractive() ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
+  // Every role keeps Favorites, owners too (round 6).
+  const favorites = useFavoritesStore(!(viewAs && !viewAs.person), demo && !demoInteractive() ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
   // Viewing as a team member who hasn't finished their start-up checklist: say why their tools are empty.
   const [viewNote, setViewNote] = useState("");
   useEffect(() => {
@@ -595,10 +596,10 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // Not in Messages, where it would sit over the send button.
   const showFaq = !faqShortcut.hidden && tab !== "help" && tab !== "inbox" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help")));
   // On phones the team's Favorites button floats just above Help (or where Help would be).
-  const showFavorites = !desktop && team && tab !== "favorites";
+  const showFavorites = !desktop && tab !== "favorites";
   return (
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
-      <FavoritesContext.Provider value={team ? favorites : null}><FlagRoleContext.Provider value={account.role}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
+      <FavoritesContext.Provider value={favorites}><FlagRoleContext.Provider value={account.role}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
         {desktop && !sidebarHidden && <RoleNavigation panel={panel} selected={panelSelected} palette={p} onOpen={openPanel} badges={{ "page:inbox": messagesBadge }} viewing={panelViewing} onBack={demo ? () => (viewAs ? void onViewAs(null) : onDemo(false)) : viewAs ? () => void onViewAs(null) : undefined} backLabel={demo && !viewAs ? "Switch to Live" : undefined} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} me={{ name: profile.displayName, userId: account.userId, photo: account.photo }} />}
@@ -724,7 +725,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           <TrackerDetail p={p} item={openTracker} owner={account.role === "client"} forms={formsFor(openWork)} onForm={f => { setOpenWork(null); setForm(f); }}>
             {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
             {openWork.kind === "direct_booking" && openWork.data.phase === "follow_up" && policy?.confirmed && <Text style={[ui.small, { color: p.muted }]}>Offer the guest {formatBps(policy.discount_bps).replace(".0%", "%")} off, up to {formatMoney(policy.discount_cap_minor)} off. The offer price is worked out when you prepare it.</Text>}
-            {team && <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />}
+            <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />
             <FlagButton p={p} role={account.role} target={flagTarget(openWork)} onDone={() => void refresh()} />
             <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
             {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}
@@ -736,7 +737,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           {openWork.kind === "direct_booking" && openWork.data.phase === "follow_up" && policy?.confirmed && <Text style={[ui.small, { color: p.muted }]}>Offer the guest {formatBps(policy.discount_bps).replace(".0%", "%")} off, up to {formatMoney(policy.discount_cap_minor)} off. The offer price is worked out when you prepare it.</Text>}
           {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
           {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: {formatMoney(Number(openWork.data.estimatedCostMinor))}</Text>}
-          {team && <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />}
+          <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />
           <FlagButton p={p} role={account.role} target={flagTarget(openWork)} onDone={() => void refresh()} />
           <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
           {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}

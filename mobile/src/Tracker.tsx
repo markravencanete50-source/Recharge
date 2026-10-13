@@ -1,16 +1,15 @@
 import { useState, type ReactNode } from "react";
-import { Platform, View, useWindowDimensions } from "react-native";
+import { Platform, ScrollView, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { ExpandChevron, GrowBar, MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Loading, Notice, Tag } from "./LiveKit";
 import { SoftButton } from "./LivePages";
-import { cellText, SheetTable, type Column } from "./SheetTable";
 import { ListSearchBox, useListSearch } from "./SearchPicker";
 import { WorkHistory } from "./WorkHistory";
 import { ui, type Palette } from "./theme";
-import { updateLine, type TrackerItem, type TrackerStep } from "../../lib/tracker";
+import { EMPTY_CELL, updateLine, type TrackerItem, type TrackerStep } from "../../lib/tracker";
 import { groupBySection, percentOf } from "../../lib/tracker-onboarding";
 import type { WorkflowForm } from "../../lib/workflow-forms";
 
@@ -77,15 +76,43 @@ export function TrackerRow({ p, item, onOpen, compact = false, owner = false, fi
   );
 }
 
-function columnsFor(p: Palette, owner: boolean, percent: boolean): Column<TrackerItem>[] {
+// Thin rows like a spreadsheet (round 6, from Alex's video): one line per row, 40 px high, the header in the
+// wash colour, wider columns than the screen scroll sideways. The trackers' table and the To-do list on a
+// computer use it; on a phone the screens draw cards with 44 px targets instead.
+export type ThinColumn<T> = { key: string; label: string; width: number; grow?: boolean; cell: (row: T) => ReactNode };
+export const THIN_ROW = 40;
+const cellBox = (c: { width: number; grow?: boolean }) => ({ width: c.width, flexGrow: c.grow ? 1 : 0, flexShrink: 0, paddingHorizontal: 10 });
+export function ThinTable<T>({ p, columns, rows, keyOf, onRow, labelOf }: { p: Palette; columns: readonly ThinColumn<T>[]; rows: readonly T[]; keyOf: (row: T) => string; onRow?: (row: T) => void; labelOf?: (row: T) => string }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: "100%" }}>
+      <View style={{ minWidth: "100%", borderWidth: 1, borderColor: p.border, borderRadius: 12, overflow: "hidden", backgroundColor: p.surface }}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 32, backgroundColor: p.wash }}>
+          {columns.map(c => <Text key={c.key} numberOfLines={1} style={[cellBox(c), { fontSize: 12, lineHeight: 16, color: p.muted, fontWeight: "700", letterSpacing: 0.3 }]}>{c.label}</Text>)}
+        </View>
+        {rows.map(row => (
+          <MotionPress key={keyOf(row)} {...(Platform.OS === "web" ? { dataSet: { hover: "row" } } : {})} accessibilityRole={onRow ? "button" : undefined} accessibilityLabel={labelOf?.(row)} disabled={!onRow} onPress={() => onRow?.(row)}
+            style={{ flexDirection: "row", alignItems: "center", height: THIN_ROW, borderTopWidth: 1, borderTopColor: p.border }}>
+            {columns.map(c => <View key={c.key} style={[cellBox(c), { height: THIN_ROW, justifyContent: "center", overflow: "hidden" }]}>{c.cell(row)}</View>)}
+          </MotionPress>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+// One line of text in a thin cell; empty reads "–".
+export const thinText = (p: Palette, value: string | null | undefined, opts: { strong?: boolean; color?: string } = {}) =>
+  <Text numberOfLines={1} style={{ fontSize: 13, lineHeight: 18, color: opts.color ?? (value && value !== EMPTY_CELL ? p.text : p.muted), fontWeight: opts.strong ? "600" : "400", fontVariant: ["tabular-nums"] }}>{value || EMPTY_CELL}</Text>;
+
+// The trackers' columns, in the same thin rows: the address with the title after it on one line.
+function columnsFor(p: Palette, owner: boolean, percent: boolean): ThinColumn<TrackerItem>[] {
   const now = new Date();
   return [
-    { label: "Property", width: 280, cell: i => <View style={{ gap: 2 }}><Text numberOfLines={2} style={{ color: p.text, fontWeight: "600" }}>{i.address}</Text>{i.title !== i.address && <Text numberOfLines={1} style={small(p)}>{i.title}</Text>}</View> },
-    { label: "Status", width: 150, cell: i => <View style={{ alignItems: "flex-start", gap: 4 }}><Tag label={i.status.label} tone={i.status.tone} p={p} />{!!i.flagged && <Tag label="Flagged" tone="bad" p={p} />}</View> },
-    { label: "Next step", width: 190, cell: i => cellText(p, i.closed ? "" : i.nextStep) },
-    { label: "Next action", width: 200, cell: i => i.nextAction ? <NextAction p={p} item={i} /> : cellText(p, "") },
-    { label: "Last update", width: 240, cell: i => cellText(p, updateLine(i.lastUpdate, now, owner)) },
-    { label: "Progress", width: percent ? 200 : 150, cell: i => i.progress ? <TrackerProgress p={p} progress={i.progress} compact decorative percent={percent} /> : cellText(p, "") },
+    { key: "property", label: "Property", width: 280, grow: true, cell: i => <Text numberOfLines={1} style={{ fontSize: 13, lineHeight: 18, color: p.text }}><Text style={{ fontWeight: "600" }}>{i.address}</Text>{i.title !== i.address && <Text style={{ color: p.muted }}>{"  " + i.title}</Text>}</Text> },
+    { key: "status", label: "Status", width: 170, cell: i => <View style={[ui.row, { gap: 4 }]}><Tag label={i.status.label} tone={i.status.tone} p={p} />{!!i.flagged && <Tag label="Flagged" tone="bad" p={p} />}</View> },
+    { key: "next", label: "Next step", width: 190, cell: i => thinText(p, i.closed ? "" : i.nextStep) },
+    { key: "action", label: "Next action", width: 200, cell: i => i.nextAction ? thinText(p, i.nextAction.label, { strong: true, color: i.nextAction.actionKey ? p.primary : p.muted }) : thinText(p, "") },
+    { key: "update", label: "Last update", width: 240, cell: i => thinText(p, updateLine(i.lastUpdate, now, owner)) },
+    { key: "progress", label: "Progress", width: percent ? 200 : 150, cell: i => i.progress ? <TrackerProgress p={p} progress={i.progress} compact decorative percent={percent} /> : thinText(p, "") },
   ];
 }
 
@@ -104,7 +131,7 @@ export function TrackerList({ p, items, onOpen, empty, loading = false, error = 
   const shown = [...search.shown], open = groups ? shown.filter(i => !i.closed) : shown, done = groups ? shown.filter(i => i.closed) : [];
   const doneShown = doneOpen || !!search.query.trim();
   const draw = (rows: TrackerItem[]) => table
-    ? <SheetTable p={p} columns={columnsFor(p, owner, percent)} rows={rows} keyOf={i => i.id} onRow={onOpen} labelOf={i => labelOf(i, updateLine(i.lastUpdate, new Date(), owner), percent)} empty={empty} search={false} />
+    ? <ThinTable p={p} columns={columnsFor(p, owner, percent)} rows={rows} keyOf={i => i.id} onRow={onOpen} labelOf={i => labelOf(i, updateLine(i.lastUpdate, new Date(), owner), percent)} />
     : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>{rows.map((i, n) => <TrackerRow key={i.id} p={p} item={i} onOpen={onOpen} owner={owner} first={!n} percent={percent} />)}</View>;
   const sections = sectionOf ? groupBySection(open, sectionOf) : [];
   return (
