@@ -16,7 +16,9 @@ import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import type { DeleteAccountInput } from '../../../lib/privacy-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 import { VIEW_AS_ENDED, VIEW_AS_HEADER, viewAsPeopleSchema } from '../../../lib/view-as';
-import { DEMO_SAVE_MESSAGE, demoAnswer, demoDataSchema, demoPeople, type DemoData, type DemoRole } from '../../../lib/demo-data';
+import { DEMO_ROLES, DEMO_SAVE_MESSAGE, demoAnswer, demoDataSchema, demoPeople, type DemoData, type DemoRole } from '../../../lib/demo-data';
+import { DemoEngine, demoEngineSupported, type DemoJobs, type DemoOpened } from '../demo/engine';
+import { emitDemoChanged } from '../demo/notes';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -122,25 +124,98 @@ let viewOnly = "", viewing: string | null = null, viewEnded: (() => void) | null
 export function setViewOnly(message: string, person?: { userId: string; onEnded: () => void } | null) {
   viewOnly = message; viewing = message && person ? person.userId : null; viewEnded = message && person ? person.onEnded : null;
 }
-// Demo mode (lib/demo-data.ts): a super admin's switch that answers every read from the recorded
-// sample business, as the persona being shown, and sends nothing to be saved.
+// Demo mode (lib/demo-data.ts): a super admin's switch to a sample business, as the persona being
+// shown. In the browser it is interactive: the demo backend (src/demo/engine.ts) runs the real routes
+// and database functions on a private copy kept in this browser, so every flow can be tried and
+// nothing reaches the live backend. Where that can't run (the phone app, or no WebAssembly) the
+// recorded answers are shown instead, read-only.
 let demo: { data: DemoData; role: DemoRole } | null = null;
-export function setDemo(next: { data: DemoData; role: DemoRole } | null) { demo = next; }
+let demoEngine: { engine: DemoEngine; opened: DemoOpened; personIds: Partial<Record<DemoRole, string>> } | null = null;
+// A tab that was in the demo opens it again after a reload (LiveWorkspace) once the signed-in account
+// is back. Until then the app's reads wait, so a reloaded demo tab never reads the live records first.
+// The same hold covers the moment Demo is being switched on.
+const demoHold = () => { let resolve = () => undefined as void; const done = new Promise<void>(r => { resolve = r; }); return { done, resolve }; };
+let demoResume: { done: Promise<void>; resolve: () => void } | null = (() => {
+  try { return Platform.OS === "web" && globalThis.sessionStorage?.getItem("rc-demo") === "on" ? demoHold() : null; } catch { return null; }
+})();
+const releaseDemoHold = () => { demoResume?.resolve(); demoResume = null; };
+let demoLoading = false;
+// Waits while the demo is opening; a tab whose demo never comes back (30 seconds without it starting) carries on.
+async function demoResumed() {
+  while (demoResume && !demo) {
+    const waiting = demoResume;
+    await Promise.race([waiting.done, new Promise(r => setTimeout(r, 30_000))]);
+    if (demoResume === waiting && !demoLoading) releaseDemoHold();
+  }
+}
+export function setDemo(next: { data: DemoData; role: DemoRole } | null) {
+  demo = next;
+  releaseDemoHold();
+  // The demo's files were links into its worker; they go with it.
+  if (!next && demoEngine) { demoEngine.engine.stop(); demoEngine = null; demoPhotos.clear(); fileLinks.clear(); }
+}
 export const demoMode = () => demo;
-// The sample business is a static file next to the app (mobile/web-static/demo-data.json), fetched
-// only when demo mode is switched on, so nobody else downloads it.
+// The interactive demo's state for the banner: whether it runs, and how it opened.
+export const demoInteractive = () => demoEngine ? { opened: demoEngine.opened } : null;
+// The demo business. Interactive: start the demo backend and take each sample person's account from
+// it. Otherwise the recording (mobile/web-static/demo-data.json). Both are static files next to the
+// app, fetched only when demo mode is switched on, so nobody else downloads them.
 export async function loadDemoData(): Promise<DemoData> {
+  demoResume ??= demoHold();
+  demoLoading = true;
+  try { return await openDemoData(); } catch (error) { releaseDemoHold(); throw error; } finally { demoLoading = false; }
+}
+async function startDemoEngine() {
+  demoEngine?.engine.stop();
+  const { engine, opened } = await DemoEngine.start();
+  demoEngine = { engine, opened, personIds: Object.fromEntries(Object.entries(opened.personas).map(([role, p]) => [role, p.personId])) };
+  return opened;
+}
+async function openDemoData(): Promise<DemoData> {
+  if (demoEngineSupported() && sameOriginWeb) {
+    try {
+      const opened = await startDemoEngine();
+      const personas = Object.fromEntries(DEMO_ROLES.filter(role => opened.personas[role]).map(role => [role, { account: opened.personas[role].account, responses: {}, loose: {} }]));
+      return demoDataSchema.parse({ version: 2, capturedOn: londonToday(), answers: {}, personas });
+    } catch (error) { demoEngine = null; console.warn('The interactive demo could not start; showing the recorded demo instead.', error); }
+  }
   const origin = sameOriginWeb ? globalThis.location?.origin : liveApiOrigin();
   if (!origin) throw new WorkspaceApiError("The demo business is not available yet.", 503);
   const response = await fetch(origin + "/workspace/demo-data.json", { credentials: "omit", cache: "no-cache" });
   if (!response.ok) throw new WorkspaceApiError("The demo business could not be loaded. Try again.", response.status);
   return demoDataSchema.parse(await response.json());
 }
+// "Reset demo": this browser's copy is wiped and opened again from the sample business as it was
+// built, in place (the screens load again; nothing is asked of the live backend).
+export async function resetDemo() {
+  if (!demoEngine) throw new WorkspaceApiError("The demo isn't running.", 409);
+  await demoEngine.engine.reset();
+  demoEngine = null; demoPhotos.clear(); fileLinks.clear();
+  await startDemoEngine();
+  emitDemoChanged();
+}
+// "Run today's automatic jobs": the backend's scheduled sweeps, on the demo's copy, now.
+export async function runDemoJobs(): Promise<DemoJobs> {
+  if (!demoEngine) throw new WorkspaceApiError("The demo isn't running.", 409);
+  const done = await demoEngine.engine.jobs();
+  emitDemoChanged();
+  return done;
+}
 const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
-function demoResponse(path: string, body: unknown) {
+async function demoResponse(path: string, body: unknown) {
   const { data, role } = demo!;
   // This device's notification link and the app's own housekeeping need no answer in the demo.
   if (path.startsWith("/api/mobile/devices")) return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+  if (demoEngine) {
+    const personId = demoEngine.personIds[role];
+    if (!personId) throw new WorkspaceApiError("That person isn't in the demo business.", 404);
+    const response = await demoEngine.engine.request(personId, body === undefined ? "GET" : "POST", webWorkspacePath(path), body);
+    if (!response.ok) {
+      const error = z.object({ error: z.string().max(500).optional() }).safeParse(await response.json().catch(() => ({})));
+      throw new WorkspaceApiError(error.success && error.data.error ? error.data.error : "The request could not be completed.", response.status);
+    }
+    return response;
+  }
   if (body !== undefined) throw new WorkspaceApiError(DEMO_SAVE_MESSAGE, 423);
   const answer = demoAnswer(data, role, path, londonToday());
   if (answer === null) throw new WorkspaceApiError("This part isn't in the demo business.", 404);
@@ -149,10 +224,11 @@ function demoResponse(path: string, body: unknown) {
     : new Response(JSON.stringify(answer), { status: 200, headers: { "content-type": "application/json" } });
 }
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
-export const viewMode = () => ({ readOnly: viewOnly !== "" || demo !== null, person: viewing });
+export const viewMode = () => ({ readOnly: viewOnly !== "" || (demo !== null && !demoEngine), person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
   if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|profile|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
-  if (demo) return demoResponse(path, body);
+  if (!demo && demoResume && !options.asSelf) await demoResumed();
+  if (demo) return await demoResponse(path, body);
   // While a super admin views the app as someone else nothing is saved (this device's own
   // notification link aside), so trying the screens never changes the business's records.
   if (viewOnly && body !== undefined && !options.asSelf && !path.startsWith("/api/mobile/devices")) throw new WorkspaceApiError(viewOnly, 423);
@@ -221,7 +297,14 @@ function demoPhoto(assetId: string) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${wash}"/><stop offset="1" stop-color="#FCFAF5"/></linearGradient></defs><rect width="400" height="300" fill="url(#g)"/><circle cx="310" cy="70" r="26" fill="${ink}" opacity=".18"/><path d="M0 230 L120 150 L200 205 L280 140 L400 225 L400 300 L0 300Z" fill="${ink}" opacity=".16"/><path d="M150 205 L200 165 L250 205 L250 255 L150 255Z" fill="${ink}" opacity=".55"/><rect x="188" y="222" width="24" height="33" rx="3" fill="#FCFAF5"/><text x="200" y="285" text-anchor="middle" font-family="Montserrat,Arial" font-size="15" font-weight="600" fill="${ink}" opacity=".7">Sample photo</text></svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
+// In the interactive demo a photo is read through the demo backend and shown from this browser's memory.
+const demoPhotos = new Map<string, Promise<string>>();
+function demoObjectUrl(key: string, path: string) {
+  if (!demoPhotos.has(key)) demoPhotos.set(key, workspaceRequest(path).then(async r => r.headers.get('x-demo-location') || URL.createObjectURL(await r.blob())).catch(error => { demoPhotos.delete(key); throw error; }));
+  return demoPhotos.get(key)!;
+}
 export async function photoSource(assetId: string): Promise<{ uri: string; headers?: Record<string, string> }> {
+  if (demo && demoEngine) return { uri: await demoObjectUrl('media:' + assetId, '/api/mobile/media?assetId=' + encodeURIComponent(assetId)) };
   if (demo) return { uri: demoPhoto(assetId) };
   const path = '/api/mobile/media?assetId=' + encodeURIComponent(assetId);
   if (sameOriginWeb) return { uri: webWorkspacePath(path) };
@@ -230,8 +313,8 @@ export async function photoSource(assetId: string): Promise<{ uri: string; heade
 }
 
 // Browser notifications (web push): Recharge's public key, and adding or removing this browser.
-export const readNotificationKey = async () => z.object({ publicKey: z.string().nullable() }).parse(await (await call('/api/workspace/notifications')).json()).publicKey;
-export const writeNotifications = async (body: { action: 'subscribe'; endpoint: string; p256dh: string; auth: string } | { action: 'unsubscribe'; endpoint: string }) => (await call('/api/workspace/notifications', body)).json();
+export const readNotificationKey = async () => demo || demoResume ? null : z.object({ publicKey: z.string().nullable() }).parse(await (await call('/api/workspace/notifications')).json()).publicKey;
+export const writeNotifications = async (body: { action: 'subscribe'; endpoint: string; p256dh: string; auth: string } | { action: 'unsubscribe'; endpoint: string }) => demo || demoResume ? { ok: true } : (await call('/api/workspace/notifications', body)).json();
 
 // Messages: conversations, a conversation's messages, people to message, and sending.
 export const readChat = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/chat?' + new URLSearchParams(query))).json();
@@ -241,7 +324,7 @@ export const writeChat = async (action: ChatAction) => (await workspaceRequest('
 const fileLinks = new Map<string, { url: string; mime: string; name: string; kind: 'image' | 'video'; until: number }>();
 export async function chatFileLinks(ids: string[]) {
   const now = Date.now(), wanted = [...new Set(ids)].filter(id => !((fileLinks.get(id)?.until ?? 0) > now));
-  if (demo) for (const id of wanted) fileLinks.set(id, { url: demoPhoto(id), mime: 'image/svg+xml', name: 'Sample photo', kind: 'image', until: now + 3600_000 });
+  if (demo && !demoEngine) for (const id of wanted) fileLinks.set(id, { url: demoPhoto(id), mime: 'image/svg+xml', name: 'Sample photo', kind: 'image', until: now + 3600_000 });
   else for (let i = 0; i < wanted.length; i += 60) {
     const found = chatFileLinksSchema.parse((await (await workspaceRequest('/api/mobile/chat-files?' + new URLSearchParams({ ids: wanted.slice(i, i + 60).join(',') }))).json()).data);
     for (const [id, link] of Object.entries(found)) fileLinks.set(id, { ...link, until: now + 50 * 60_000 });
@@ -250,6 +333,13 @@ export async function chatFileLinks(ids: string[]) {
 }
 export async function uploadToLink(uploadUrl: string, file: { uri: string; file?: File; type: string }, onProgress?: (share: number) => void) {
   const body: Blob = Platform.OS === 'web' && file.file ? file.file : await (await fetch(file.uri)).blob();
+  // The demo's upload links are kept by the demo backend, in this browser.
+  if (demo && demoEngine) {
+    if (!uploadUrl.startsWith('demo-upload://')) throw new WorkspaceApiError('The upload did not finish. Try again.', 400);
+    await demoEngine.engine.put(uploadUrl, body).catch(error => { throw new WorkspaceApiError(error?.message ?? 'The upload did not finish. Try again.', error?.status ?? 500); });
+    onProgress?.(1);
+    return;
+  }
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', uploadUrl);
@@ -262,6 +352,7 @@ export async function uploadToLink(uploadUrl: string, file: { uri: string; file?
 }
 // Profile photos: where to load someone's photo from (null in the demo), and changing your own.
 export async function profilePhotoSource(userId: string, version: string): Promise<{ uri: string; headers?: Record<string, string> } | null> {
+  if (demo && demoEngine) return demoObjectUrl('profile:' + userId + ':' + version, '/api/mobile/profile?' + new URLSearchParams({ userId, v: version })).then(uri => ({ uri })).catch(() => null);
   if (demo) return null;
   const path = '/api/mobile/profile?' + new URLSearchParams({ userId, v: version });
   if (sameOriginWeb) return { uri: webWorkspacePath(path) };

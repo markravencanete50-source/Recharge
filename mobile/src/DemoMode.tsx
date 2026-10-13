@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Modal, Platform, Switch, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress, useReducedMotion } from "./motion";
-import { depth, ui, web, type Palette } from "./theme";
+import { depth, ui, type Palette } from "./theme";
+import { demoInteractive, resetDemo, runDemoJobs } from "./backend/client";
+import { subscribeDemoNotes } from "./demo/notes";
+import { isDemoPerson } from "./demo/engine";
+import { uploads } from "./uploadQueue";
 
 // Demo mode's controls (lib/demo-data.ts). Only super admins see them.
 const native = Platform.OS !== "web";
@@ -33,25 +37,77 @@ export function ModeSwitch({ palette: p, demo, busy, onChange }: { palette: Pale
   );
 }
 
-// Shown at the top of every page while demo mode is on.
+// Shown at the top of every page while demo mode is on. In the interactive demo (the browser app)
+// it also has Reset demo, "Run today's automatic jobs", and the quiet "In demo, this would be sent
+// to …" notes for what Live would send to email, phones or Hostaway.
 export function DemoBanner({ viewing, onViewAs, onLive }: { palette: Palette; viewing: string | null; onViewAs: () => void; onLive: () => void }) {
+  const interactive = demoInteractive();
+  const [notes, setNotes] = useState<string[]>([]);
+  const [busy, setBusy] = useState<"jobs" | "reset" | null>(null), [confirmReset, setConfirmReset] = useState(false), [status, setStatus] = useState("");
+  useEffect(() => subscribeDemoNotes(next => setNotes(current => [...next, ...current].slice(0, 3))), []);
+  useEffect(() => { if (!notes.length) return; const t = setTimeout(() => setNotes([]), 30000); return () => clearTimeout(t); }, [notes]);
+  const runJobs = async () => {
+    setBusy("jobs"); setStatus("");
+    try {
+      const done = await runDemoJobs();
+      const failed = done.results.filter(r => !r.ok).length;
+      setStatus(failed ? `Today's automatic jobs ran; ${failed} could not run.` : "Today's automatic jobs ran: reminders, flags, to-dos and follow-ups are up to date.");
+      refreshScreens();
+    } catch (e) { setStatus(e instanceof Error ? e.message : "The jobs could not run."); } finally { setBusy(null); }
+  };
+  const reset = async () => {
+    setBusy("reset"); setStatus(""); setConfirmReset(false);
+    try {
+      await resetDemo();
+      // Photos the sample people took wait in this browser's upload line; they go too.
+      for (const item of uploads.getSnapshot().items.filter(x => isDemoPerson(x.ownerId))) await uploads.remove(item.id);
+      setNotes([]); setStatus("The demo is back to how it started.");
+      refreshScreens();
+    } catch (e) { setStatus(e instanceof Error ? e.message : "The demo could not be reset."); } finally { setBusy(null); }
+  };
+  const chip = (label: string, icon: React.ComponentProps<typeof Feather>["name"], onPress: () => void, working = false) => (
+    <MotionPress accessibilityRole="button" accessibilityLabel={label} disabled={!!busy} onPress={onPress} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: "#8C6E33", opacity: busy && !working ? 0.6 : 1 }]}>
+      {working ? <ActivityIndicator size="small" color="#FFF6E2" /> : <Feather name={icon} size={14} color="#FFF6E2" />}<Text style={{ color: "#FFF6E2", fontSize: 13, fontWeight: "600" }}>{label}</Text>
+    </MotionPress>
+  );
   return (
-    <View accessibilityRole="alert" style={[ui.row, { gap: 12, padding: 12, paddingLeft: 14, borderRadius: 18, backgroundColor: "#3A2C15", borderWidth: 1, borderColor: "#6B5326", flexWrap: "wrap", overflow: "hidden", ...depth.card }]}>
-      <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center" }}>
-        <View style={{ width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "#E8C27D" }}><Feather name="play" size={12} color="#3A2C15" /></View>
+    <View accessibilityRole="alert" style={{ gap: 10, padding: 12, paddingLeft: 14, borderRadius: 18, backgroundColor: "#3A2C15", borderWidth: 1, borderColor: "#6B5326", overflow: "hidden", ...depth.card }}>
+      <View style={[ui.row, { gap: 12, flexWrap: "wrap" }]}>
+        <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center" }}>
+          <View style={{ width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "#E8C27D" }}><Feather name="play" size={12} color="#3A2C15" /></View>
+        </View>
+        <View style={{ flex: 1, minWidth: 200, gap: 2 }}>
+          <Text style={{ color: "#FFF6E2", fontSize: 14, fontWeight: "700" }}>{viewing ? `Demo mode · viewing as ${viewing}` : "Demo mode · a sample business"}</Text>
+          <Text style={{ color: "#F3E2BD", fontSize: 12, lineHeight: 17 }}>{interactive
+            ? "Try anything: it all works on a private copy of a sample business kept in this browser. Your real records aren\u2019t shown or changed, and nothing is sent to anyone."
+            : "Every screen shows sample properties, people and money. Your real records aren\u2019t shown or changed, and nothing you do here is saved."}</Text>
+        </View>
+        {interactive && chip(busy === "jobs" ? "Running…" : "Run today\u2019s automatic jobs", "clock", () => void runJobs(), busy === "jobs")}
+        {interactive && (confirmReset
+          ? <>{chip("Reset: start again", "rotate-ccw", () => void reset(), busy === "reset")}{chip("Keep my changes", "x", () => setConfirmReset(false))}</>
+          : chip("Reset demo", "rotate-ccw", () => setConfirmReset(true), busy === "reset"))}
+        <MotionPress accessibilityRole="button" onPress={onViewAs} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: "#8C6E33" }]}>
+          <Feather name="eye" size={14} color="#FFF6E2" /><Text style={{ color: "#FFF6E2", fontSize: 13, fontWeight: "700" }}>{viewing ? "Change person" : "View as"}</Text>
+        </MotionPress>
+        <MotionPress accessibilityRole="button" onPress={onLive} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "#FFF6E2" }]}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#177A41" }} /><Text style={{ color: "#3A2C15", fontSize: 13, fontWeight: "800" }}>Switch to Live</Text>
+        </MotionPress>
       </View>
-      <View style={{ flex: 1, minWidth: 200, gap: 2 }}>
-        <Text style={{ color: "#FFF6E2", fontSize: 14, fontWeight: "700" }}>{viewing ? `Demo mode · viewing as ${viewing}` : "Demo mode · a sample business"}</Text>
-        <Text style={{ color: "#F3E2BD", fontSize: 12, lineHeight: 17 }}>Every screen shows sample properties, people and money. Your real records aren&apos;t shown or changed, and nothing you do here is saved.</Text>
-      </View>
-      <MotionPress accessibilityRole="button" onPress={onViewAs} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: "#8C6E33" }]}>
-        <Feather name="eye" size={14} color="#FFF6E2" /><Text style={{ color: "#FFF6E2", fontSize: 13, fontWeight: "700" }}>{viewing ? "Change person" : "View as"}</Text>
-      </MotionPress>
-      <MotionPress accessibilityRole="button" onPress={onLive} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "#FFF6E2" }]}>
-        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#177A41" }} /><Text style={{ color: "#3A2C15", fontSize: 13, fontWeight: "800" }}>Switch to Live</Text>
-      </MotionPress>
+      {confirmReset && <Text style={{ color: "#F3E2BD", fontSize: 12, lineHeight: 17 }}>Reset puts the sample business back as it started. Everything you did in the demo goes.</Text>}
+      {!!status && <Text accessibilityRole="alert" style={{ color: "#F3E2BD", fontSize: 12, lineHeight: 17 }}>{status}</Text>}
+      {notes.map((note, i) => (
+        <View key={i + note} style={[ui.row, { gap: 8, alignItems: "flex-start" }]}>
+          <Feather name="send" size={12} color="#E8C27D" style={{ marginTop: 3 }} /><Text style={{ flex: 1, color: "#F3E2BD", fontSize: 12, lineHeight: 17 }}>{note}</Text>
+        </View>
+      ))}
     </View>
   );
+}
+// Screens reload when the app comes back into view (LiveWorkspace listens to AppState); the demo's
+// jobs changed the records under them, so ask for that now. (onDemoChanged in ./demo/notes is the
+// direct hook for screens that want it.)
+function refreshScreens() {
+  try { globalThis.document?.dispatchEvent(new Event("visibilitychange")); } catch { /* not in a browser */ }
 }
 
 // The same choice in Profile, with what it does spelled out.
@@ -64,7 +120,7 @@ export function DemoSwitchRow({ palette: p, demo, busy, note, onChange }: { pale
           <View style={{ width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: demo ? "#F3E7CF" : p.wash }}><Feather name="play-circle" size={18} color={demo ? "#875A1C" : p.primary} /></View>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Demo mode</Text>
-            <Text style={[ui.small, { color: p.muted }]}>{demo ? "Showing a sample business. Turn off to go back to Live." : "Fill every screen with a sample business to show the app. Your real records stay untouched and nothing is saved."}</Text>
+            <Text style={[ui.small, { color: p.muted }]}>{demo ? "Showing a sample business. Turn off to go back to Live." : "Fill every screen with a sample business to show the app and try every flow. Your real records stay untouched; the demo is kept in this browser only."}</Text>
           </View>
           {busy ? <ActivityIndicator color={p.primary} /> : <Switch accessibilityLabel="Demo mode" value={demo} onValueChange={onChange} trackColor={{ false: p.controlBorder, true: "#C99A45" }} thumbColor={p.surface} />}
         </View>
