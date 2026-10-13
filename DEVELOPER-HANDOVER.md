@@ -2,6 +2,19 @@
 
 Start with `README.md`. It describes the parts of the platform and the commands.
 
+## Round 5 is live (13 October 2026)
+
+Four sessions (A: KPIs, Accounts calendars and dropdowns, payout summary; B: enquiry to property, menu order editor,
+search-only pickers, Updates bell; C: notices on every message, guest message notices, Messages redesign; D: interactive
+Demo mode) were integrated by the lead developer. Migrations `20261015100000` to `20261015330000` were installed in one
+transaction from `supabase/install-pending.sql`; `main` is `8329f37` (pull request #3), Worker `227817b6`. Full suite
+1433 of 1433. Pull request #3 lists every change; the detail is in `docs/notes-session-A.md` to `-D.md`.
+
+- **Guest replies from the app are on** (`HOSTAWAY_REPLIES_ENABLED` is a Worker *secret*, so Git builds keep it). The first
+  reply went through Hostaway on 13 October and was stored once, credited to its sender.
+- **Drift on live:** 21 older function groups on live differ from a local build of the migrations (none patched or
+  replaced in rounds 4 and 5). Worth a separate check before any migration replaces one of them whole.
+
 ## Round 4 is live (13 October 2026)
 
 Three parallel sessions (A: cleans and money, B: trackers and Client relations, C: team and people) were integrated by the
