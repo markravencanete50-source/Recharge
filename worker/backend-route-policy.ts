@@ -19,7 +19,7 @@ const endpoints = new Set([
   "/api/workspace/admin", "/api/mobile/admin",
   "/api/workspace/chat", "/api/mobile/chat", "/api/workspace/guest-inbox", "/api/mobile/guest-inbox", "/api/workspace/training-files", "/api/mobile/training-files",
   "/api/workspace/owner", "/api/mobile/owner",
-  "/api/hostaway/webhook", "/api/workspace/account", "/api/workspace/notifications",
+  "/api/hostaway/webhook", "/api/resend/webhook", "/api/workspace/email-files", "/api/mobile/email-files", "/api/workspace/email-inbox", "/api/mobile/email-inbox", "/api/workspace/account", "/api/workspace/notifications",
   "/api/workspace/oversight", "/api/mobile/oversight",
   "/api/workspace/checklists", "/api/mobile/checklists",
   // Client Enquiries: the landlord's form (no account), and the team opening the files sent with it.
