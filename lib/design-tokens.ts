@@ -7,11 +7,11 @@ export const designTokens = {
   light: {
     background: brandCanvas,
     surface: "#FCFAF5",
-    elevated: "#E7E0D0",
+    elevated: "#E3DBCA",
     text: "#152D28",
     muted: "#4E6259",
     // A hairline: cards stand off the canvas by soft depth (depthTokens), so outlines stay quiet.
-    border: "#DCD5C5",
+    border: "#D2CAB8",
     controlBorder: "#697A6D",
     primary: "#1F3D38",
     bright: "#315F50",
@@ -26,12 +26,14 @@ export const designTokens = {
     headerControlText: "#FFFFFF",
     headerBorder: "#79998C",
     chart: "#2F6F63",
-    waiting: "#9A5A12",
-    success: "#177A41",
+    waiting: "#8A5010",
+    success: "#136D3A",
     danger: "#A63A32",
     utilityArt: "#F1E8FF",
     utilityInk: "#7A3FD4",
     utilityAccent: "#7A3FD4",
+    // Text or a tick on a solid success fill.
+    onSuccess: "#FFFFFF",
     successWash: "#E1F5E8",
     cautionWash: "#FFF0D6",
     dangerWash: "#F6DEDA",
@@ -47,19 +49,36 @@ export const designTokens = {
     heroLine: "#A7D9C1",
     overlay: "#070D2280",
     shadow: "#152D2812",
+    // States. disabled: the label of a control that can't be used yet. primaryHover: the primary
+    // fill under the pointer. washBorder: the outline of a secondary (wash) button. selected,
+    // onSelected and selectedBorder: a chosen pill, tab or option, quieter than a primary button in
+    // dark mode so a row of pills doesn't read as a row of actions. hover: a row or option under the pointer.
+    disabled: "#6A786F",
+    primaryHover: "#315F50",
+    washBorder: "#C9D5C4",
+    selected: "#1F3D38",
+    onSelected: "#FAF7F0",
+    selectedBorder: "#1F3D38",
+    hover: "#EEE8DA",
   },
   dark: {
-    background: "#0F1E1A",
-    surface: "#182C26",
-    elevated: "#213A32",
-    text: "#FAF7F0",
-    muted: "#C7CBBE",
-    border: "#2F4B41",
-    controlBorder: "#79998C",
+    // A clear scale, darkest to lightest: page, card, raised (inputs, popovers, table heads), then the
+    // hairline and the control outline. Each step is visibly lighter than the one under it, so cards stand
+    // off the page without leaning on shadows (which barely show on a dark page).
+    background: "#0B1714",
+    surface: "#1A322B",
+    elevated: "#25453D",
+    text: "#F5F1E8",
+    muted: "#BFC9C2",
+    // Separators and card outlines: quiet, but visible against both the page and a card.
+    border: "#41655A",
+    // Outlines that mark a control (fields, outlined buttons, unselected pills): 3:1 against every surface.
+    controlBorder: "#8AAC9E",
+    // The brand mint: the one solid action colour, and links and icons on dark surfaces.
     primary: "#A7D9C1",
     bright: "#A7D9C1",
-    onPrimary: "#1F3D38",
-    wash: "#254538",
+    onPrimary: "#10302A",
+    wash: "#2A594A",
     accent: "#A7D9C1",
     // Client direction: dark mode reverses the light bar, bone with forest lettering, so the
     // two themes mirror each other and the bone logo artwork sits flush on it.
@@ -70,15 +89,16 @@ export const designTokens = {
     headerControlText: "#1B3E38",
     headerBorder: "#697A6D",
     chart: "#8FD3C2",
-    waiting: "#E8C27D",
-    success: "#86D99B",
-    danger: "#EDAAA1",
+    waiting: "#EBC687",
+    success: "#8ADBA0",
+    danger: "#F2B3AA",
     utilityArt: "#2A1F4A",
-    utilityInk: "#C4A2FF",
-    utilityAccent: "#C4A2FF",
-    successWash: "#142E22",
-    cautionWash: "#3A2A12",
-    dangerWash: "#3A201D",
+    utilityInk: "#C9AAFF",
+    utilityAccent: "#C9AAFF",
+    onSuccess: "#0B1714",
+    successWash: "#16392A",
+    cautionWash: "#3D2E14",
+    dangerWash: "#45241F",
     badge: "#A63A32",
     onBadge: "#FFFFFF",
     hero: "#1F3D38",
@@ -88,8 +108,16 @@ export const designTokens = {
     heroText: "#FFFFFF",
     heroMuted: "#FFFFFF",
     heroLine: "#A7D9C1",
-    overlay: "#070D22CC",
+    overlay: "#03080799",
     shadow: "#00000000",
+    // States (see the light theme for what each is for).
+    disabled: "#8E9F97",
+    primaryHover: "#C1E6D5",
+    washBorder: "#5A8F7C",
+    selected: "#356C5A",
+    onSelected: "#F5F1E8",
+    selectedBorder: "#A7D9C1",
+    hover: "#223E35",
   },
 };
 // Depth for the web: layered soft shadows (elev-1 resting cards, elev-2 raised and hovered,
@@ -177,12 +205,12 @@ const themeTransitionCss = `::view-transition-group(root){animation:none}::view-
 const headerCss = `:is([data-testid="workspace-toolbar"],[data-testid="sidebar-brand"],[data-testid="workspace-sidebar-collapsed"]),:is([data-testid="workspace-toolbar"],[data-testid="sidebar-brand"],[data-testid="workspace-sidebar-collapsed"]) *{color:var(--rc-headerText)}:is([data-testid="workspace-toolbar"],[data-testid="sidebar-brand"],[data-testid="workspace-sidebar-collapsed"]) [role="button"]:focus-visible{outline-color:var(--rc-headerText)}`;
 // Web-only hover feedback (no icon turns, no tile lifts). `translate` composes with the inline `transform`
 // that the press animation owns, so hover lift and press scale never fight.
-const hoverCss = `[data-hover]{transition:background-color 260ms cubic-bezier(.16,1,.3,1),box-shadow 420ms cubic-bezier(.16,1,.3,1),translate 420ms cubic-bezier(.16,1,.3,1),border-color 260ms ease}@media(hover:hover) and (pointer:fine){[data-hover="tint"]:hover{background-color:color-mix(in srgb,var(--rc-elevated) 70%,transparent)}[data-hover="lift"]:hover{translate:0 -3px;box-shadow:0 22px 44px -22px rgba(21,45,40,.42);border-color:var(--rc-controlBorder)}}[data-reduce-motion="true"] [data-hover]{transition:none}[data-reduce-motion="true"] [data-hover="lift"]:hover{translate:none}@media(prefers-reduced-motion:reduce){[data-hover]{transition:none}[data-hover="lift"]:hover{translate:none}}::selection{background:var(--rc-primary);color:var(--rc-onPrimary)}@media(hover:hover) and (pointer:fine){:is([role="button"],[role="radio"],[role="link"],[role="checkbox"]):not([data-hover]):not([aria-disabled="true"]){transition:box-shadow 160ms ease}:is([role="button"],[role="radio"],[role="link"],[role="checkbox"]):not([data-hover]):not([aria-disabled="true"]):hover{box-shadow:inset 0 0 0 999px rgba(127,127,127,.07)}}[data-reduce-motion="true"] [role]{transition:none!important}html{-webkit-tap-highlight-color:transparent}input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus,input:-webkit-autofill:active{-webkit-text-fill-color:var(--rc-text);caret-color:var(--rc-text);transition:background-color 600000s 0s,color 600000s 0s}input:autofill{background:transparent}@media(prefers-reduced-motion:no-preference){html:not([data-reduce-motion="true"]){scroll-behavior:smooth}}[data-overlay="blur"]{backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%)}`;
+const hoverCss = `[data-hover]{transition:background-color 260ms cubic-bezier(.16,1,.3,1),box-shadow 420ms cubic-bezier(.16,1,.3,1),translate 420ms cubic-bezier(.16,1,.3,1),border-color 260ms ease}@media(hover:hover) and (pointer:fine){[data-hover="tint"]:hover{background-color:var(--rc-hover)}[data-hover="primary"]:hover{background-color:var(--rc-primaryHover)!important}[data-hover="lift"]:hover{translate:0 -3px;box-shadow:0 22px 44px -22px rgba(21,45,40,.42);border-color:var(--rc-controlBorder)}}[data-reduce-motion="true"] [data-hover]{transition:none}[data-reduce-motion="true"] [data-hover="lift"]:hover{translate:none}@media(prefers-reduced-motion:reduce){[data-hover]{transition:none}[data-hover="lift"]:hover{translate:none}}::selection{background:var(--rc-primary);color:var(--rc-onPrimary)}@media(hover:hover) and (pointer:fine){:is([role="button"],[role="radio"],[role="link"],[role="checkbox"]):not([data-hover]):not([aria-disabled="true"]){transition:box-shadow 160ms ease}:is([role="button"],[role="radio"],[role="link"],[role="checkbox"]):not([data-hover]):not([aria-disabled="true"]):hover{box-shadow:inset 0 0 0 999px rgba(127,127,127,.07)}}[data-reduce-motion="true"] [role]{transition:none!important}html{-webkit-tap-highlight-color:transparent}input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus,input:-webkit-autofill:active{-webkit-text-fill-color:var(--rc-text);caret-color:var(--rc-text);transition:background-color 600000s 0s,color 600000s 0s}input:autofill{background:transparent}@media(prefers-reduced-motion:no-preference){html:not([data-reduce-motion="true"]){scroll-behavior:smooth}}[data-overlay="blur"]{backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%)}`;
 // List rows that open something, and may hold their own buttons (the payout stays). On hover the whole row takes one quiet wash.
 // On keyboard focus a bar runs down its leading edge and the row takes the same wash. They never get the 2px box that other
 // pressables get, which read as a frame around a payout. "row" is the row or its wrapper; "rowhit" is the part of a row that
 // opens it, inside a wrapper. The :has() rule stands alone so a browser without it ignores only that rule.
-const rowWash = "background-color:color-mix(in srgb,var(--rc-elevated) 60%,transparent)";
+const rowWash = "background-color:var(--rc-hover)";
 const rowCss = `@media(hover:hover) and (pointer:fine){[data-hover="row"]:hover{${rowWash}}}[data-hover="row"][role="button"]:focus-visible,[data-hover="rowhit"][role="button"]:focus-visible{outline:none;box-shadow:inset 3px 0 0 var(--rc-primary)}[data-hover="row"][role="button"]:focus-visible{${rowWash}}[data-hover="row"]:has([data-hover="rowhit"]:focus-visible){${rowWash}}`;
 // The finishing layer on the web, kept calm: raised cards take the deeper shadow on hover, inputs and
 // controls show focus, thin scrollbars. No spotlight, sheen sweep, shimmer or canvas light. A field

@@ -50,7 +50,7 @@ import { WorkspaceScreens, Calendar } from "./src/WorkspaceScreens";
 import { ToolDirectory } from "./src/ToolDirectory";
 import { CommandSearch } from "./src/CommandSearch";
 import { CompanyLogo } from "./src/CompanyLogo";
-import { FaqShortcut, useFaqShortcut } from "./src/FaqShortcut";
+import { useFaqShortcut } from "./src/FaqShortcut";
 import { useRecentActivity } from "./src/useRecentActivity";
 import { AccessHelp, RecentActivity } from "./src/AccessHelp";
 import { exportReport } from "./src/exportReport";
@@ -565,6 +565,7 @@ function AppContent() {
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 <IconButton label="Open quick search" icon="search" palette={headerPalette(p)} onPress={()=>setCommandOpen(true)}/>
+                {!faqShortcut.hidden&&tab!=='help'&&<IconButton label="Help and FAQs" icon="help-circle" palette={headerPalette(p)} onPress={()=>setTab('help')}/>}
                 <IconButton
                   label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
                   icon={theme === "dark" ? "sun" : "moon"}
@@ -701,7 +702,6 @@ function AppContent() {
               </Animated.View>
             </ScrollView>
           )}
-          {!faqShortcut.hidden&&<FaqShortcut palette={p} onOpen={()=>setTab('help')} onHide={()=>faqShortcut.setHidden(true)}/>}
           <View style={{ alignItems: "center", paddingTop: 4, paddingBottom: desktop ? 4 : 30 }}>
             <Text
               style={{
