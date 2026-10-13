@@ -12,6 +12,11 @@ interface Env {
   HOSTAWAY_SYNC_ENABLED?: string;
   // Replies written in the Guest inbox reach the guest through Hostaway only when this is 'true' (read by lib/guest-reply-server.ts).
   HOSTAWAY_REPLIES_ENABLED?: string;
+  // Email through Resend (Worker secrets): the key, the webhook signing secret, the switch for replies, and an escape for mail without an authentication header.
+  RESEND_API_KEY?: string;
+  RESEND_WEBHOOK_SECRET?: string;
+  EMAIL_REPLIES_ENABLED?: string;
+  EMAIL_ALLOW_UNVERIFIED?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
@@ -45,6 +50,12 @@ const worker = {
     ctx.waitUntil(import('../lib/web-push-server').then(module => module.runWebPush()).catch(() => {
       console.error('Web push batch failed; the next run retries.');
     }));
+    // Every minute too: replies to owners who wrote by email are sent through Resend (nothing happens unless EMAIL_REPLIES_ENABLED is true).
+    if (env.RESEND_API_KEY && env.EMAIL_REPLIES_ENABLED === 'true' && controller.cron !== '*/15 * * * *') {
+      ctx.waitUntil(import('../lib/email-inbound-server').then(module => module.runEmailOutbox()).catch(() => {
+        console.error('Owner email replies failed; the next run retries.');
+      }));
+    }
     // Every minute too: guests' messages from Hostaway (one request, plus the conversations that changed),
     // so the reply-time clock starts within about a minute. Off unless switched on, like the sync below.
     // (The 15-minute tick is also a minute tick; it leaves this to the every-minute cron.)

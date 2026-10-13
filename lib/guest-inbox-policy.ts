@@ -45,7 +45,9 @@ export type GuestThread = z.infer<typeof guestThreadSchema>;
 const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() });
 // canSend: replies written here are delivered to the guest through Hostaway (decided by the server, not the database).
 export const inboxListSchema = z.object({ threads: z.array(guestThreadSchema), waiting: z.number(), targets, connected: z.boolean(), canSend: z.boolean().default(false) });
-export const guestMessageSchema = z.object({ id: uuid, direction: z.enum(['guest', 'team']), body: z.string().nullable(), sentAt: z.string(), delivery: z.string().nullable(), author: z.string().nullable() });
+// files: attachments kept from an email (open them through /api/workspace/email-files).
+export const guestFileSchema = z.object({ id: uuid, filename: z.string(), mime: z.string(), bytes: z.number() });
+export const guestMessageSchema = z.object({ id: uuid, direction: z.enum(['guest', 'team']), body: z.string().nullable(), sentAt: z.string(), delivery: z.string().nullable(), author: z.string().nullable(), files: z.array(guestFileSchema).default([]) });
 export const inboxThreadSchema = z.object({ thread: guestThreadSchema, targets, messages: z.array(guestMessageSchema), canSend: z.boolean().default(false) });
 
 // How long a guest has been waiting, graded like reply times: green, amber, then red.
