@@ -185,7 +185,7 @@ has to be redone from these notes, unless Lee asks a developer to push it as wor
 
 ## 7. Questions for Alex
 
-- Managers' bonus: Guest relations and Client relations weighting (50/50?), and the real target and tiers.
+- Managers' bonus: settled by Lee. The guest part always uses the 5-minute reply rate. Targets, tiers and weighting are Alex's to set himself in the KPI screens (Management → KPIs, from round 5); the system follows whatever he sets. Don't ask Alex about it.
 - The Management daily checklist items. Lee or an admin can enter them in Management → Daily tasks; no code is needed.
 - Visitor levy: who collects it, its base, whether the fee is taken before or after it, which properties, and from when.
 - Referral commission.
