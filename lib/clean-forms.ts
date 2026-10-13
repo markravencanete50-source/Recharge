@@ -1,10 +1,10 @@
-import { CLEAN_FORM_DUE_BY, CLEAN_FORM_WARNING, CLEAN_FORM_ZONE } from './feedback-defaults';
+import { CLEAN_FORM_DUE_BY, CLEAN_FORM_ESCALATE_AT, CLEAN_FORM_WARNING, CLEAN_FORM_ZONE } from './feedback-defaults';
 import { openFlagFor, type Flag } from './management-flags';
 
-// Clean forms (client ask B1 and B2): after a clean the cleaner sends the checklist, the photos and a
-// report. Until they are in the clean is "Outstanding" after 18:00 UK time on its day, and a "Warning"
-// once that day has passed. A warning is also set by the database sweep (data.warning = 'no_form',
-// data.formWarningAt) together with a management flag. This file is the pure part: it reads only the
+// Clean forms (client ask B1 and B2, client answer 8): after a clean the cleaner sends the checklist, the
+// photos and a report. Until they are in, the clean is "Unsubmitted" after 18:00 UK time on its day (the
+// database sweep sets data.unsubmittedAt and reminds the cleaner), and a "Warning" from 09:00 the next day
+// (the sweep sets data.warning = 'no_form' and data.formWarningAt and flags it for management). This file is the pure part: it reads only the
 // clean's own fields (the schedule row plus the operation's data), so the screens and the tests share it.
 export type FormState = 'submitted' | 'outstanding' | 'warning' | 'not_due';
 
@@ -14,11 +14,16 @@ export type CleanFormInput = { dueOn?: string | null; status?: string | null; as
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-// The cut-off as seconds since midnight, from the 'HH:MM' constant (a bad value falls back to 18:00).
-export const DUE_SECONDS = (() => {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(CLEAN_FORM_DUE_BY);
-  return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? Number(m[1]) * 3600 + Number(m[2]) * 60 : 18 * 3600;
-})();
+// An 'HH:MM' constant as seconds since midnight (a bad value falls back to the given hour).
+const seconds = (clock: string, fallbackHour: number) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(clock);
+  return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? Number(m[1]) * 3600 + Number(m[2]) * 60 : fallbackHour * 3600;
+};
+// The cut-off on the clean day, and the time on the next day when management is told.
+export const DUE_SECONDS = seconds(CLEAN_FORM_DUE_BY, 18);
+export const ESCALATE_SECONDS = seconds(CLEAN_FORM_ESCALATE_AT, 9);
+// The calendar day after a YYYY-MM-DD day.
+const nextDay = (day: string) => new Date(Date.parse(day + 'T12:00:00Z') + 86_400_000).toISOString().slice(0, 10);
 
 const clock = new Intl.DateTimeFormat('en-GB', { timeZone: CLEAN_FORM_ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 
@@ -40,8 +45,9 @@ export function formSubmitted(data: Record<string, unknown> | null | undefined):
 
 // The clean's form state at `now`:
 //  - submitted: the form is in (even if it came late);
-//  - warning: the database marked it (data.warning = 'no_form'), or the day after the clean has begun;
-//  - outstanding: it is the clean's day and the time is past the cut-off (18:00 UK);
+//  - warning: the database marked it (data.warning = 'no_form'), or it is 09:00 UK the day after the clean or later;
+//  - outstanding ("Unsubmitted"): the database reminded the cleaner (data.unsubmittedAt), or the time is past the
+//    cut-off (18:00 UK) on the clean's day, or before 09:00 the next day;
 //  - not_due: everything else, including a clean nobody is assigned to, a cancelled clean, a clean
 //    with no date and a clean whose data is not known.
 export function formState(clean: CleanFormInput, now: Date = new Date()): FormState {
@@ -50,11 +56,12 @@ export function formState(clean: CleanFormInput, now: Date = new Date()): FormSt
   if (formSubmitted(data)) return 'submitted';
   if (data.warning === CLEAN_FORM_WARNING) return 'warning';
   const due = clean.dueOn;
-  if (!clean.assigneeId || !due || !DAY.test(due)) return 'not_due';
+  if (!clean.assigneeId || !due || !DAY.test(due)) return typeof data.unsubmittedAt === 'string' ? 'outstanding' : 'not_due';
   const at = ukClock(now);
   if (!at) return 'not_due';
-  if (at.day > due) return 'warning';
-  if (at.day === due && at.seconds > DUE_SECONDS) return 'outstanding';
+  const next = nextDay(due);
+  if (at.day > next || (at.day === next && at.seconds >= ESCALATE_SECONDS)) return 'warning';
+  if (at.day === next || (at.day === due && at.seconds > DUE_SECONDS) || typeof data.unsubmittedAt === 'string') return 'outstanding';
   return 'not_due';
 }
 
@@ -84,14 +91,14 @@ export function formsText(forms: FormsIn): string {
 }
 
 // The words for each state. The tone is the app's colour language: good, wait, bad, plain.
-export const FORM_STATE_LABEL: Record<FormState, string> = { submitted: 'Submitted', outstanding: 'Outstanding', warning: 'Warning', not_due: 'Not due yet' };
+export const FORM_STATE_LABEL: Record<FormState, string> = { submitted: 'Submitted', outstanding: 'Unsubmitted', warning: 'Warning', not_due: 'Not due yet' };
 export const FORM_STATE_TONE: Record<FormState, 'good' | 'wait' | 'bad' | 'plain'> = { submitted: 'good', outstanding: 'wait', warning: 'bad', not_due: 'plain' };
 
 // One line explaining the state, for the detail sheet.
 export function formStateNote(state: FormState, late = false): string {
   if (state === 'submitted') return late ? 'The form came in late, after management was told.' : 'The cleaner has sent the form.';
-  if (state === 'outstanding') return `The form was due by ${CLEAN_FORM_DUE_BY} on the day of the clean. It is still not in.`;
-  if (state === 'warning') return 'No form was sent for this clean. It is a warning and management has been told.';
+  if (state === 'outstanding') return `The form was due by ${CLEAN_FORM_DUE_BY} on the day of the clean and the cleaner has been reminded. If it is not in by ${CLEAN_FORM_ESCALATE_AT} the next day, management is told.`;
+  if (state === 'warning') return 'No form was sent for this clean. It is a warning and management has been told. The cleaner\'s invoice for it cannot be approved until the form is in.';
   return `The form is due by ${CLEAN_FORM_DUE_BY} on the day of the clean.`;
 }
 

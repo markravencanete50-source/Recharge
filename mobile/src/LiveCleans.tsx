@@ -134,7 +134,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       redo: String(op?.data.phase ?? "") === "assigned" && op?.data.accepted === false, problems: op ? problemsOf(op.data).length : 0, checks: checklistOf(op).length, people: guestLine(guests.get(w.workId)),
     };
   };
-  // The Outstanding forms filter lists every clean in view whose form is outstanding or a warning, oldest day first.
+  // The Unsubmitted forms filter lists every clean in view whose form is unsubmitted or a warning, oldest day first.
   const missing = cleans.filter(w => isMissing(formState(inputOf(w), now))).sort((a, b) => (a.dueOn ?? "").localeCompare(b.dueOn ?? "") || a.propertyName.localeCompare(b.propertyName));
   const scheduleRows = (manager && onlyOutstanding ? missing : dayCleans).map(rowOf);
   const asTable = manager && width >= 1024;
@@ -213,14 +213,14 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
         {manager && (
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             <Chip p={p} label="All cleans" on={!onlyOutstanding} onPress={() => setOnlyOutstanding(false)} />
-            <Chip p={p} label={`Outstanding forms · ${counts.missing}`} on={onlyOutstanding} onPress={() => setOnlyOutstanding(true)} />
+            <Chip p={p} label={`Unsubmitted forms · ${counts.missing}`} on={onlyOutstanding} onPress={() => setOnlyOutstanding(true)} />
           </View>
         )}
         {!(manager && onlyOutstanding) && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {days.map(d => {
             const on = d === day, count = cleans.filter(w => w.dueOn === d).length, due = manager ? byDay[d]?.missing ?? 0 : 0;
             return (
-              <MotionPress key={d} accessibilityRole="button" accessibilityLabel={`${dayLabel(d)}, ${count} cleans${due ? `, ${due} ${due === 1 ? "form" : "forms"} outstanding` : ""}`} accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ width: 58, paddingVertical: 10, borderRadius: 16, alignItems: "center", gap: 4, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
+              <MotionPress key={d} accessibilityRole="button" accessibilityLabel={`${dayLabel(d)}, ${count} cleans${due ? `, ${due} ${due === 1 ? "form" : "forms"} unsubmitted` : ""}`} accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ width: 58, paddingVertical: 10, borderRadius: 16, alignItems: "center", gap: 4, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
                 <Text style={{ fontSize: 11, color: on ? p.onPrimary : p.muted }}>{dayLabel(d).split(" ")[0]}</Text>
                 <Text style={{ fontSize: 17, fontWeight: "700", color: on ? p.onPrimary : p.text }}>{dayLabel(d).split(" ")[1]}</Text>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: count ? (on ? p.onPrimary : due ? p.danger : p.primary) : "transparent" }} />
@@ -228,7 +228,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
             );
           })}
         </ScrollView>}
-        <Text style={[ui.small, { color: p.muted }]}>{manager && onlyOutstanding ? `${missing.length} ${missing.length === 1 ? "clean" : "cleans"} with a form outstanding` : `${dayLabel(day)} · ${dayCleans.length} ${dayCleans.length === 1 ? "clean" : "cleans"}`}</Text>
+        <Text style={[ui.small, { color: p.muted }]}>{manager && onlyOutstanding ? `${missing.length} ${missing.length === 1 ? "clean" : "cleans"} with an unsubmitted form` : `${dayLabel(day)} · ${dayCleans.length} ${dayCleans.length === 1 ? "clean" : "cleans"}`}</Text>
         {!(manager && onlyOutstanding) && dayStays.map(stay => (
           <View key={stay.reservationId + day} style={[ui.row, { gap: 10, paddingHorizontal: 4 }]}>
             <Feather name={stay.checkOut === day ? "log-out" : "log-in"} size={16} color={p.muted} />
@@ -238,7 +238,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
         {scheduleRows.length ? (asTable
           ? <SheetTable p={p} columns={cleanColumns(p, onlyOutstanding)} rows={scheduleRows} keyOf={r => r.w.workId} onRow={r => setOpenJob(r.w.workId)} labelOf={cleanLabel} empty="No cleans." search={false} />
           : scheduleRows.map(r => <CleanCard key={r.w.workId} p={p} row={r} manager={manager} showDate={manager && onlyOutstanding} onOpen={setOpenJob} />))
-          : !loading && <Notice text={manager && onlyOutstanding ? "No forms are outstanding." : manager ? "No cleans scheduled for this day." : "Nothing booked for you on this day."} p={p} />}
+          : !loading && <Notice text={manager && onlyOutstanding ? "No forms are unsubmitted." : manager ? "No cleans scheduled for this day." : "Nothing booked for you on this day."} p={p} />}
       </Section>
 
       {manager && (

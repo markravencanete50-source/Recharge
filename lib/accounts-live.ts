@@ -202,6 +202,8 @@ export const cleanerInvoiceLineSchema = z.object({
   // lineId, propertyId, live (false once the invoice is rejected), agreedMinor and overAgreed come from workspace_cleaner_invoice_view; optional so older answers parse.
   lineId: z.string().uuid().optional(), propertyId: z.string().uuid().nullable().optional(), live: z.boolean().optional(),
   agreedMinor: nullableMinor.optional(), overAgreed: z.boolean().optional(),
+  // Whether the clean's form is in (20261014100000_clean_form_reminders); an older server sends none.
+  formIn: z.boolean().optional(),
 });
 export const cleanerInvoiceSchema = z.object({
   id: z.string().uuid(), supplier: z.string(), reference: z.string(), invoiceDate: z.string(), totalMinor: minor, status: z.string(),

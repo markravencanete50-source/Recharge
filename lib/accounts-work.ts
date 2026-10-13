@@ -100,6 +100,11 @@ export function recordInvoiceAction(input: { requestId: string; supplier: string
   if (mismatch) return { error: mismatch };
   return { action: { action: 'recordCleanerInvoice', requestId: input.requestId, supplier, reference, invoiceDate: input.invoiceDate, totalMinor: input.totalMinor, lines: input.lines.map(line => ({ workId: line.workId, amountMinor: line.amountMinor as number })) } };
 }
+// Client answer 8: a cleaner invoice is approved only once every clean on it has its clean form (the database
+// refuses otherwise). formIn comes from workspace_cleaner_invoice_view; a line without it (an older server) never blocks.
+export function cleansWithoutForm<L extends { live?: boolean; formIn?: boolean }>(lines: readonly L[] | null | undefined): L[] {
+  return (lines ?? []).filter(line => line.live !== false && line.formIn === false);
+}
 export const REJECT_NOTE_MIN = 5;
 export function decideInvoiceAction(input: { requestId: string; invoiceId: string; decision: 'approve' | 'reject'; note: string }): { error: string } | { action: DecideInvoice } {
   const note = input.note.trim();
