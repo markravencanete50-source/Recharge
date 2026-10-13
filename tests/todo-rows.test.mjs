@@ -160,7 +160,7 @@ test('the To-do page: thin table on a computer, two-line cards on a phone, 44 px
   const list = source('mobile/src/TodoList.tsx');
   assert.match(list, /const table = todoLayout\(useWindowDimensions\(\)\.width\) === "table";/);
   assert.match(list, /if \(table\) return <ThinTable p=\{p\} columns=\{todoColumns\(p, today, busy, onTick\)\}/);
-  assert.match(list, /TODO_COLUMNS\.map\(c => \(\{ key: c\.key, label: c\.label, width: c\.width, grow: c\.grow, cell: cell\[c\.key\] \}\)\)/);
+  assert.match(list, /TODO_COLUMNS\.map\(c => \(\{ \.\.\.c, cell: cell\[c\.key\] \}\)\)/);
   assert.match(list, /<Tick p=\{p\} row=\{row\} busy=\{busy\} size=\{44\} onTick=\{onTick\} \/>/, 'the phone tick is 44 px');
   assert.match(list, /minHeight: 44, justifyContent: "center"/, 'the phone card is at least 44 px');
   assert.match(list, /todoCardLines\(row, today\)/);

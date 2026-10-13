@@ -171,7 +171,7 @@ function todoColumns(p: Palette, today: string, busy: ReadonlySet<string>, onTic
     status: row => { const c = todoCells(row, today, now); return <Tag label={c.status} tone={c.statusTone} p={p} />; },
   };
   // The tick column's cell holds its own button, so the column is fixed and narrow.
-  return TODO_COLUMNS.map(c => ({ key: c.key, label: c.label, width: c.width, grow: c.grow, cell: cell[c.key] }));
+  return TODO_COLUMNS.map(c => ({ ...c, cell: cell[c.key] }));
 }
 
 // The rows of one section, as thin table rows on a computer or two-line cards on a phone.

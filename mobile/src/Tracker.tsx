@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Platform, ScrollView, View, useWindowDimensions } from "react-native";
+import { Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { ExpandChevron, GrowBar, MotionPress } from "./motion";
@@ -10,6 +10,7 @@ import { ListSearchBox, useListSearch } from "./SearchPicker";
 import { WorkHistory } from "./WorkHistory";
 import { ui, type Palette } from "./theme";
 import { EMPTY_CELL, updateLine, type TrackerItem, type TrackerStep } from "../../lib/tracker";
+import { thinWidths, type ThinColumnSize } from "../../lib/thin-table";
 import { groupBySection, percentOf } from "../../lib/tracker-onboarding";
 import type { WorkflowForm } from "../../lib/workflow-forms";
 
@@ -77,26 +78,32 @@ export function TrackerRow({ p, item, onOpen, compact = false, owner = false, fi
 }
 
 // Thin rows like a spreadsheet (round 6, from Alex's video): one line per row, 40 px high, the header in the
-// wash colour, wider columns than the screen scroll sideways. The trackers' table and the To-do list on a
-// computer use it; on a phone the screens draw cards with 44 px targets instead.
-export type ThinColumn<T> = { key: string; label: string; width: number; grow?: boolean; cell: (row: T) => ReactNode };
+// wash colour. The trackers' table and the To-do list on a computer use it; on a phone the screens draw cards with
+// 44 px targets instead. The table is never wider than its card (E's review): it measures its own width, the
+// fixed columns keep theirs and the text columns share the rest (lib/thin-table.ts), with "…" on long text.
+export type ThinColumn<T> = ThinColumnSize & { key: string; label: string; cell: (row: T) => ReactNode };
 export const THIN_ROW = 40;
-const cellBox = (c: { width: number; grow?: boolean }) => ({ width: c.width, flexGrow: c.grow ? 1 : 0, flexShrink: 0, paddingHorizontal: 10 });
+const cellBox = (c: ThinColumnSize, width: number | undefined) => width === undefined
+  ? { flexBasis: c.width, flexGrow: c.grow ? 1 : 0, flexShrink: c.fixed ? 0 : 1, minWidth: 0, paddingHorizontal: 10 }
+  : { width, flexGrow: 0, flexShrink: 0, paddingHorizontal: 10 };
 export function ThinTable<T>({ p, columns, rows, keyOf, onRow, labelOf }: { p: Palette; columns: readonly ThinColumn<T>[]; rows: readonly T[]; keyOf: (row: T) => string; onRow?: (row: T) => void; labelOf?: (row: T) => string }) {
+  // The card's inside width (less its 1 px border on each side); until it is measured the columns flex.
+  const [inner, setInner] = useState(0);
+  const widths = inner > 0 ? thinWidths(columns, inner) : null;
+  const box = (i: number) => cellBox(columns[i], widths?.[i]);
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: "100%" }}>
-      <View style={{ minWidth: "100%", borderWidth: 1, borderColor: p.border, borderRadius: 12, overflow: "hidden", backgroundColor: p.surface }}>
-        <View style={{ flexDirection: "row", alignItems: "center", height: 32, backgroundColor: p.wash }}>
-          {columns.map(c => <Text key={c.key} numberOfLines={1} style={[cellBox(c), { fontSize: 12, lineHeight: 16, color: p.muted, fontWeight: "700", letterSpacing: 0.3 }]}>{c.label}</Text>)}
-        </View>
-        {rows.map(row => (
-          <MotionPress key={keyOf(row)} {...(Platform.OS === "web" ? { dataSet: { hover: "row" } } : {})} accessibilityRole={onRow ? "button" : undefined} accessibilityLabel={labelOf?.(row)} disabled={!onRow} onPress={() => onRow?.(row)}
-            style={{ flexDirection: "row", alignItems: "center", height: THIN_ROW, borderTopWidth: 1, borderTopColor: p.border }}>
-            {columns.map(c => <View key={c.key} style={[cellBox(c), { height: THIN_ROW, justifyContent: "center", overflow: "hidden" }]}>{c.cell(row)}</View>)}
-          </MotionPress>
-        ))}
+    <View onLayout={event => { const next = Math.floor(event.nativeEvent.layout.width) - 2; if (next !== inner) setInner(next); }}
+      style={{ width: "100%", borderWidth: 1, borderColor: p.border, borderRadius: 12, overflow: "hidden", backgroundColor: p.surface }}>
+      <View style={{ flexDirection: "row", alignItems: "center", height: 32, backgroundColor: p.wash }}>
+        {columns.map((c, i) => <Text key={c.key} numberOfLines={1} style={[box(i), { fontSize: 12, lineHeight: 16, color: p.muted, fontWeight: "700", letterSpacing: 0.3 }]}>{c.label}</Text>)}
       </View>
-    </ScrollView>
+      {rows.map(row => (
+        <MotionPress key={keyOf(row)} {...(Platform.OS === "web" ? { dataSet: { hover: "row" } } : {})} accessibilityRole={onRow ? "button" : undefined} accessibilityLabel={labelOf?.(row)} disabled={!onRow} onPress={() => onRow?.(row)}
+          style={{ flexDirection: "row", alignItems: "center", height: THIN_ROW, borderTopWidth: 1, borderTopColor: p.border }}>
+          {columns.map((c, i) => <View key={c.key} style={[box(i), { height: THIN_ROW, justifyContent: "center", overflow: "hidden" }]}>{c.cell(row)}</View>)}
+        </MotionPress>
+      ))}
+    </View>
   );
 }
 // One line of text in a thin cell; empty reads "–".
@@ -107,12 +114,12 @@ export const thinText = (p: Palette, value: string | null | undefined, opts: { s
 function columnsFor(p: Palette, owner: boolean, percent: boolean): ThinColumn<TrackerItem>[] {
   const now = new Date();
   return [
-    { key: "property", label: "Property", width: 280, grow: true, cell: i => <Text numberOfLines={1} style={{ fontSize: 13, lineHeight: 18, color: p.text }}><Text style={{ fontWeight: "600" }}>{i.address}</Text>{i.title !== i.address && <Text style={{ color: p.muted }}>{"  " + i.title}</Text>}</Text> },
-    { key: "status", label: "Status", width: 170, cell: i => <View style={[ui.row, { gap: 4 }]}><Tag label={i.status.label} tone={i.status.tone} p={p} />{!!i.flagged && <Tag label="Flagged" tone="bad" p={p} />}</View> },
+    { key: "property", label: "Property", width: 280, grow: true, min: 140, cell: i => <Text numberOfLines={1} style={{ fontSize: 13, lineHeight: 18, color: p.text }}><Text style={{ fontWeight: "600" }}>{i.address}</Text>{i.title !== i.address && <Text style={{ color: p.muted }}>{"  " + i.title}</Text>}</Text> },
+    { key: "status", label: "Status", width: 170, fixed: true, cell: i => <View style={[ui.row, { gap: 4 }]}><Tag label={i.status.label} tone={i.status.tone} p={p} />{!!i.flagged && <Tag label="Flagged" tone="bad" p={p} />}</View> },
     { key: "next", label: "Next step", width: 190, cell: i => thinText(p, i.closed ? "" : i.nextStep) },
     { key: "action", label: "Next action", width: 200, cell: i => i.nextAction ? thinText(p, i.nextAction.label, { strong: true, color: i.nextAction.actionKey ? p.primary : p.muted }) : thinText(p, "") },
     { key: "update", label: "Last update", width: 240, cell: i => thinText(p, updateLine(i.lastUpdate, now, owner)) },
-    { key: "progress", label: "Progress", width: percent ? 200 : 150, cell: i => i.progress ? <TrackerProgress p={p} progress={i.progress} compact decorative percent={percent} /> : thinText(p, "") },
+    { key: "progress", label: "Progress", width: percent ? 200 : 150, fixed: true, cell: i => i.progress ? <TrackerProgress p={p} progress={i.progress} compact decorative percent={percent} /> : thinText(p, "") },
   ];
 }
 

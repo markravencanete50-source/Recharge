@@ -3,6 +3,7 @@ import type { HomeToolTarget } from './home-tools';
 import { DEPARTMENT_LABEL, onboardingRows } from './hub';
 import { LISTING_HEALTH_VIEW } from './feedback-defaults';
 import { addressOf, EMPTY_CELL, timeAgo } from './tracker';
+import type { ThinColumnSize } from './thin-table';
 import { DEPARTMENTS, hubItemSchema, hubSchema } from './workspace-teams-policy';
 import type { JourneyView, OperationView } from './workflow-forms';
 import type { PropertyView } from './workspace-view';
@@ -286,15 +287,17 @@ export function dueState(row: Pick<TodoRow, 'dueOn' | 'done'>, today: string): '
 // 40 px high (clicking a row opens the detail); on a phone a two-line card with a 44 px tick. The automatic
 // sections use the same rows.
 export type TodoColumnKey = 'tick' | 'property' | 'task' | 'update' | 'by' | 'when' | 'due' | 'status';
-export const TODO_COLUMNS: readonly { key: TodoColumnKey; label: string; width: number; grow?: boolean }[] = [
-  { key: 'tick', label: '', width: 44 },
-  { key: 'property', label: 'Property', width: 220 },
-  { key: 'task', label: 'Task', width: 300, grow: true },
-  { key: 'update', label: 'Latest update', width: 220 },
-  { key: 'by', label: 'Updated by', width: 120 },
-  { key: 'when', label: 'When', width: 96 },
-  { key: 'due', label: 'Due', width: 96 },
-  { key: 'status', label: 'Status', width: 108 },
+// The tick, When, Due and Status keep their width; the text columns shrink (with "…") so the table always fits
+// its card (lib/thin-table.ts). Every column stays, even when its cells read "–".
+export const TODO_COLUMNS: readonly ({ key: TodoColumnKey; label: string } & ThinColumnSize)[] = [
+  { key: 'tick', label: '', width: 44, fixed: true },
+  { key: 'property', label: 'Property', width: 220, min: 110 },
+  { key: 'task', label: 'Task', width: 300, grow: true, min: 160 },
+  { key: 'update', label: 'Latest update', width: 220, min: 110 },
+  { key: 'by', label: 'Updated by', width: 120, min: 80 },
+  { key: 'when', label: 'When', width: 96, fixed: true },
+  { key: 'due', label: 'Due', width: 96, fixed: true },
+  { key: 'status', label: 'Status', width: 116, fixed: true },
 ];
 // The table from this window width up (the same width the trackers switch at); cards below it.
 export const TODO_TABLE_FROM = 1024;

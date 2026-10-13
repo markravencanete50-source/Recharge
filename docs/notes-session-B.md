@@ -908,3 +908,40 @@ setter never changes, so behaviour is the same. The unused `web` import in `Live
   - **Shots:** home header (super admin, Guest relations, owner), cleaner home and Work, the Work strip,
     Properties, To-do, Client enquiries, and the Menu after (where the moved header buttons are).
 - **Missing before shot:** there is no before shot of the Menu; its server had been stopped.
+
+# Round 6, must-fix before the client demo: no thin table wider than its card (E's review)
+
+- **What was wrong:** at 1440 px with the sidebar open, the To-do table was wider than its card, so Status
+  was cut off ("Stat", "● T"). The Management approvals and Client relations trackers lost their last
+  column ("Progre…") the same way.
+- **The fix, in `lib/thin-table.ts` (new):**
+  - `thinWidths(columns, available)` sizes the columns from the card's real width. It never adds up to more
+    than the card.
+  - Fixed columns keep their width.
+  - Text columns share what is left: they grow (the task, or the tracker's property, takes the spare room)
+    or shrink in proportion, never below their minimum while there is room. Their text ends in "…".
+- **`ThinTable` (in `Tracker.tsx`):**
+  - It measures its own card with `onLayout` and uses those widths.
+  - Until the card is measured, the columns flex, so the first paint already fits.
+  - There is no sideways scroll any more.
+- **Columns:**
+  - **To-do:** the tick, When, Due and Status (116 px) are fixed. Property, Task, Latest update and Updated
+    by shrink. All of Alex's columns stay, even when a cell reads "–".
+  - **Trackers:** Status (170 px) and Progress (150 px, or 200 px with the percent badge) are fixed.
+    Property, Next step, Next action and Last update shrink.
+- **Tests:**
+  - **New, `tests/thin-table.test.mjs`:** 6 of 6 pass. It checks:
+    - which columns are fixed;
+    - the To-do and tracker tables, from 200 to 2,400 px: never wider than the card, every column there;
+    - at the widths the tables show: the fixed widths are kept and the text columns stay at or above their
+      minimums;
+    - spare room fills the card;
+    - the 1440 px case, about 1,080 px of card, with Status and Progress shown in full;
+    - the wiring: no ScrollView.
+  - **Updated:** `tests/todo-rows.test.mjs`, for the new column definition.
+  - **Related suites:** management-checklist, thin-table, todo-rows, todo-updates-database, todo,
+    tracker-onboarding and wiring-v2 all pass (82 of 82).
+- **Screenshots:** `docs/screenshots/session-b/wide/`, 1440×900 with the sidebar open, light and dark: To-do,
+  Management approvals and Client relations.
+  - The review server signed in as the super admin.
+  - A check in the browser found no box with hidden overflow inside these pages.
