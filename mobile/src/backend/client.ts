@@ -253,6 +253,9 @@ export const readWorkspace = async (query: Record<string, string>) => (await wor
 export const writeWorkspace = async (action: BusinessAction) => (await workspaceRequest("/api/mobile/workspace", action)).json();
 export const downloadReport = async (period: AnalyticsPeriod) => (await workspaceRequest("/api/mobile/reports/export?" + new URLSearchParams(period))).text();
 export const readOperations = async (propertyId?:string) => (await workspaceRequest('/api/mobile/operations'+(propertyId?'?propertyId='+encodeURIComponent(propertyId):''))).json();
+// One work item by its id (an update whose item is not in the loaded list), and the 50 updates before a given one.
+export const readWorkItem = async (workId: string) => (await workspaceRequest('/api/mobile/operations?workId=' + encodeURIComponent(workId))).json();
+export const readOlderNotices = async (before: number) => (await workspaceRequest('/api/mobile/portfolio?section=notifications&before=' + encodeURIComponent(String(before)))).json();
 export const writeOperation = async (action:OperationsAction) => (await workspaceRequest('/api/mobile/operations',action)).json();
 export const readControls = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/controls?'+new URLSearchParams(query))).json();
 export const writeControls = async (action: ControlsAction) => (await workspaceRequest('/api/mobile/controls',action)).json();

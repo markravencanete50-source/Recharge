@@ -97,7 +97,8 @@ test('a burst of the same automatic kind in one minute is one row that opens a l
 test('a row opens its work item, a chat or guest notice opens Messages, and a burst opens its list', () => {
   const pages = source('mobile/src/LivePages.tsx'), workspace = source('mobile/src/LiveWorkspace.tsx');
   assert.match(pages, /if \(row\.notices\.length > 1\) return \(\) => setOpened\(opened === row\.key \? null : row\.key\);/);
-  assert.match(pages, /if \(t\?\.kind === "work" && onOpenWork\) \{ const item = byId\.get\(t\.workId\); return item \? \(\) => onOpenWork\(item\) : undefined; \}/);
+  // Round 7: an item not in the loaded work list is read on its own (tests/updates-open-older*.test.mjs).
+  assert.match(pages, /if \(t\?\.kind === "work" && onOpenWork\) \{ const item = byId\.get\(t\.workId\); return item \? \(\) => onOpenWork\(item\) : \(\) => void openWork\(t\.workId\); \}/);
   assert.match(pages, /if \(t\?\.kind === "messages" && onOpenMessages\) return onOpenMessages;/);
   assert.equal((workspace.match(/<LiveActivity palette=\{p\} notices=\{notices\} loading=\{loading\} onRead=\{markRead\} work=\{work\} onOpenWork=\{setOpenWork\} onOpenMessages=\{\(\) => openMessages\(""\)\} \/>/g) ?? []).length, 2);
   // Thin rows: one line for what it is, one for where, who and when.
