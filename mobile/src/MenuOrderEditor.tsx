@@ -3,10 +3,10 @@ import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { ChoicePills } from "./ChoiceField";
 import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
 import { Button, Loading, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
 import { liveNavigationFor } from "./NavigationBar";
 import { readTeams, writeTeams } from "./backend/client";
 import { publishMenuLayout } from "./MenuLayoutStore";
@@ -88,7 +88,7 @@ export function MenuOrderEditor({ palette: p }: { palette: Palette }) {
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Menu order</Text>
         <Text style={[ui.small, { color: p.muted }]}>The order of the left panel and the phone menu for each role. Move the sections, the links inside a section, or a link to another section. This only arranges the menu: what each person can open still comes from their role and tools.</Text>
       </View>
-      <Pills p={p} values={MENU_ROLES} value={role} onChange={value => { setRole(value); setMoving(null); setNote(""); setError(""); }} label={v => MENU_ROLE_LABEL[v]} />
+      <ChoicePills p={p} name="Role" values={MENU_ROLES} value={role} onChange={value => { setRole(value); setMoving(null); setNote(""); setError(""); }} label={v => MENU_ROLE_LABEL[v]} />
       <Text style={[ui.small, { color: p.muted }]}>{current?.updatedAt ? `Last changed by ${current.updatedByName ?? "a super admin"} on ${when(current.updatedAt)}.` : "Default order. Nobody has changed it yet."}</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!!note && <Notice text={note} p={p} />}

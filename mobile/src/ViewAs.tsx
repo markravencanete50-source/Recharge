@@ -3,6 +3,8 @@ import { ActivityIndicator, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { Sheet } from "./TeamFlows";
+import { ChoiceField } from "./ChoiceField";
+import { SearchPicker } from "./SearchPicker";
 import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
 import { demoInteractive, readViewAsPeople, WorkspaceApiError } from "./backend/client";
@@ -52,17 +54,21 @@ export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose, d
         : "Pick a person to see the app exactly as they do: their Home, tools, properties, work and messages. Nothing can be changed while you look, private chats stay hidden, and each view is recorded in Access history."}</Text>
       {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text></View>}
       {option(null, demo ? "The demo's super admin" : "Myself", "Super admin, everything", "user")}
-      {!people ? <View style={{ paddingVertical: 20, alignItems: "center" }}><ActivityIndicator accessibilityLabel="Loading people" color={p.primary} /></View> : viewAsGroups(people).map(group => (
-        <View key={group.role} style={{ gap: 6 }}>
-          <View style={[ui.row, { gap: 8, paddingTop: 6 }]}>
-            <Text accessibilityRole="header" style={{ color: p.text, fontSize: 13, fontWeight: "800" }}>{group.label}</Text>
-            <Text style={{ color: p.muted, fontSize: 12, flex: 1 }} numberOfLines={1}>{group.detail}</Text>
-          </View>
-          {group.people.map(person => option({ role: group.role, person: { userId: person.userId, fullName: person.fullName } }, person.fullName, `Exactly what ${person.fullName.split(" ")[0]} sees`, "eye"))}
-          {option({ role: group.role, person: null }, group.people.length ? `${group.label} screens only` : "Nobody has this role yet",
-            `Preview the ${group.label} menus, tools and records only, without your own${group.people.length ? "" : ". Add someone in People to see their exact view"}.`, "layout")}
-        </View>
-      ))}
+      {!people ? <View style={{ paddingVertical: 20, alignItems: "center" }}><ActivityIndicator accessibilityLabel="Loading people" color={p.primary} /></View> : <>
+        {/* Everyone in one search-only picker (lists of people never show as cards), then one dropdown for a role's screens. */}
+        <Text accessibilityRole="header" style={{ color: p.text, fontSize: 13, fontWeight: "800", paddingTop: 6 }}>A person</Text>
+        <SearchPicker p={p} nouns="people" placeholder="Search people by name or role"
+          options={viewAsGroups(people).flatMap(group => group.people.map(person => ({ id: person.userId, label: `${person.fullName} · ${group.label}`, keywords: group.label })))}
+          value={current?.person?.userId ?? ""}
+          onChange={id => { const group = viewAsGroups(people).find(g => g.people.some(x => x.userId === id)), person = group?.people.find(x => x.userId === id); if (group && person) void choose({ role: group.role, person: { userId: person.userId, fullName: person.fullName } }); }}
+          empty="Nobody to view as yet." />
+        <Text accessibilityRole="header" style={{ color: p.text, fontSize: 13, fontWeight: "800", paddingTop: 6 }}>A role&apos;s screens only</Text>
+        <ChoiceField p={p} label="A role's screens only" value={current && !current.person ? current.role : ""}
+          options={[{ value: "", label: "Choose a role to preview" }, ...viewAsGroups(people).map(group => ({ value: group.role as string, label: group.people.length ? `${group.label} screens` : `${group.label} screens (nobody has this role yet)` }))]}
+          onChange={role => { const group = viewAsGroups(people).find(g => g.role === role); if (group) void choose({ role: group.role, person: null }); }} />
+        <Text style={[ui.small, { color: p.muted }]}>A role&apos;s screens show its menus, tools and records only, without your own updates or favorites.</Text>
+        {!!busy && <ActivityIndicator accessibilityLabel="Opening the view" color={p.primary} />}
+      </>}
     </Sheet>
   );
 }

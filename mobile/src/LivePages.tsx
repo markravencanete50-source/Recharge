@@ -6,6 +6,9 @@ import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { ChoiceField } from "./ChoiceField";
+import { Dropdown } from "./Dropdown";
+import { choiceControl } from "../../lib/choice-control";
 import { useCelebrate } from "./Celebrate";
 import { BuildingGlyph } from "./BuildingGlyph";
 import { EnquiryCard } from "./HomeOverview";
@@ -101,6 +104,13 @@ export function EmptyState({ title, detail, palette: p, icon = "check-circle" }:
 // Quick picks under a field: tapping one fills the field, and any other fields the pick implies (a studio has no bedrooms).
 function Suggestions({ p, label, items, value, disabled, onPick }: { p: Palette; label: string; items: Suggestion[]; value: string; disabled?: boolean; onPick: (item: Suggestion) => void }) {
   const current = value.trim().toLowerCase();
+  // More than a handful of quick picks become one dropdown (lib/choice-control.ts); the field stays free to type in.
+  if (choiceControl(items.length) !== "radio") {
+    const picked = items.find(s => s.value.toLowerCase() === current)?.value ?? "";
+    return <Dropdown p={p} label={`Quick pick for ${label}`} hideLabel disabled={disabled} searchable={choiceControl(items.length) === "search"} value={picked}
+      options={[...(picked ? [] : [{ value: "", label: "Or pick one" }]), ...items.map(s => ({ value: s.value, label: s.label }))]}
+      onChange={v => { const item = items.find(s => s.value === v); if (item) onPick(item); }} />;
+  }
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={`Suggestions for ${label}`} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       {items.map(s => {
@@ -197,12 +207,8 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
     <View style={{ gap: 8 }}>
       {label}
       {f.type === "select" ? (
-        <View style={{ gap: 8 }}>{f.options?.map(o => (
-          <MotionPress key={o.value} disabled={disabled} accessibilityRole="radio" accessibilityState={{ selected: value === o.value, disabled }} onPress={() => onChange(o.value)} style={[ui.row, { minHeight: 48, gap: 10, paddingHorizontal: 14, borderRadius: 14, borderWidth: value === o.value ? 2 : 1, borderColor: value === o.value ? p.primary : p.border, backgroundColor: value === o.value ? p.wash : p.background }]}>
-            <Feather name={value === o.value ? "check-circle" : "circle"} size={18} color={p.primary} />
-            <Text style={{ color: p.text, flexShrink: 1 }}>{o.label}</Text>
-          </MotionPress>
-        ))}</View>
+        // Few options as radio choices, more as a dropdown, a long list with a search box (ChoiceField).
+        <ChoiceField p={p} label={f.label} value={String(value ?? "")} options={f.options ?? []} onChange={onChange} disabled={disabled} />
       ) : (
         <TextInput accessibilityLabel={f.label} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
           style={{ borderWidth: 1, borderRadius: 14, padding: 13, minHeight: f.type === "textarea" ? 110 : 50, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: p.background, color: p.text, borderColor: p.controlBorder, textAlignVertical: "top" }} />

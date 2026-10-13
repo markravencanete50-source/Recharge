@@ -3,6 +3,7 @@ import { TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
+import { ChoicePills } from "./ChoiceField";
 import { PropertySelect, SearchPicker } from "./SearchPicker";
 import { useSaved } from "./Celebrate";
 import { ExpandChevron, MotionPress } from "./motion";
@@ -88,7 +89,7 @@ function PersonSheet({ p, actorRole, person, properties, onClose, onDone }: { p:
       {editable && <>
         <Field label="Full name" value={fullName} onChange={setFullName} p={p} />
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Role</Text>
-        <Pills p={p} values={roles} value={role} onChange={r => { setRole(r); setModules(toolsOnRoleChange(r)); }} label={roleLabel} />
+        <ChoicePills p={p} name="Role" values={roles} value={role} onChange={r => { setRole(r); setModules(toolsOnRoleChange(r)); }} label={roleLabel} />
         {role !== person.role && <Text style={[ui.small, { color: p.muted }]}>A new role brings that role’s usual tools{admin ? " (admins have every tool)" : `: ${modules.length} tools`}. Switch single tools on or off after saving. Property assignments stay; check they still fit.</Text>}
         {!admin && role === person.role && <>
           <MotionPress accessibilityRole="button" onPress={() => setShowTools(v => !v)} style={[ui.row, { gap: 8, minHeight: 44 }]}>
@@ -149,7 +150,7 @@ function OtaAccountsEditor({ p, accounts, onChange }: { p: Palette; accounts: Ot
       <Text style={[ui.small, { color: p.muted }]}>Never type a password here. Say where it’s kept (for example “1Password, Stays vault”) and who gets the security code.</Text>
       {accounts.map((a, i) => (
         <View key={i} style={{ gap: 8, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
-          <Pills p={p} values={OTA_PLATFORMS} value={(OTA_PLATFORMS as readonly string[]).includes(a.platform) ? a.platform as (typeof OTA_PLATFORMS)[number] : "Other"} onChange={v => set(i, { platform: v })} label={v => v} />
+          <ChoicePills p={p} name="Platform" values={OTA_PLATFORMS} value={(OTA_PLATFORMS as readonly string[]).includes(a.platform) ? a.platform as (typeof OTA_PLATFORMS)[number] : "Other"} onChange={v => set(i, { platform: v })} label={v => v} />
           <Pills p={p} values={["recharge", "owner"] as const} value={a.holder} onChange={v => set(i, { holder: v })} label={v => HOLDER_LABEL[v]} />
           <Field label="Login (email or username)" value={a.login} onChange={v => set(i, { login: v })} p={p} email />
           <Field label="Password kept in" value={a.passwordWhere} onChange={v => set(i, { passwordWhere: v })} p={p} placeholder="1Password, Stays vault" />

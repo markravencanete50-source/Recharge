@@ -68,7 +68,7 @@ export function HubItemSheet({ p, hub, account, properties, target, onClose, onS
     const assign = (f.assign || "me") as Assign;
     if (kind === "todo" && assign === "department" && !f.department) { setError("Choose the department."); return; }
     if (kind === "todo" && assign === "person" && !f.assigneeId) { setError("Choose the person."); return; }
-    if (f.dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(f.dueOn)) { setError("Enter the date as YYYY-MM-DD."); return; }
+    if (f.dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(f.dueOn)) { setError("Choose a valid date."); return; }
     if (f.link && !/^https:\/\//.test(f.link.trim())) { setError("Use a secure link starting https://"); return; }
     setBusy(true); setError("");
     try {

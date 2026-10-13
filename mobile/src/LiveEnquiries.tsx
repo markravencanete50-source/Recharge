@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Image, Linking, Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { ChoiceField } from "./ChoiceField";
 import { Entrance, MotionPress, motionTokens } from "./motion";
 import { Button, Field, Loading, Notice, StatGrid, StatTile, Tag, message, useRequestId } from "./LiveKit";
 import { Initials } from "./LiveAccounts";
 import { PageHeading } from "./LivePages";
 import { Segmented } from "./Segmented";
 import { Sheet } from "./TeamFlows";
-import { Chip } from "./SheetTable";
 import { useCelebrate } from "./Celebrate";
 import { depth, ui, web, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
@@ -329,12 +329,9 @@ function ValueSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: C
       <Field label="Property name" value={name} onChange={setName} p={p} placeholder="A short name the team will recognise" />
       <Field label="Property address" value={address} onChange={setAddress} p={p} multiline />
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Area</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <Chip p={p} label="Not sure" on={region === ""} onPress={() => setRegion("")} />
-        {SCOTTISH_REGIONS.map(r => <Chip key={r} p={p} label={r} on={region === r} onPress={() => setRegion(r)} />)}
-      </View>
+      <ChoiceField p={p} label="Area" value={region} onChange={setRegion} options={[{ value: "", label: "Not sure" }, ...SCOTTISH_REGIONS.map(r => ({ value: r as string, label: r as string }))]} />
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property type</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{[...new Set([type, ...PROPERTY_TYPES])].filter(Boolean).map(t => <Chip key={t} p={p} label={t} on={type === t} onPress={() => setType(t)} />)}</View>
+      <ChoiceField p={p} label="Property type" value={type} onChange={setType} options={[...(type ? [] : [{ value: "", label: "Not chosen yet" }]), ...[...new Set([type, ...PROPERTY_TYPES])].filter(Boolean).map(t => ({ value: t, label: t }))]} />
       <View style={[ui.row, { gap: 10 }]}>
         <View style={{ flex: 1 }}><Field label="Bedrooms" value={bedrooms} onChange={setBedrooms} p={p} /></View>
         <View style={{ flex: 1 }}><Field label="Full bathrooms" value={bathrooms} onChange={setBathrooms} p={p} /></View>

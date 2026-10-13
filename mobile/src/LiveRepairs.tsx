@@ -7,7 +7,8 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
 import { Text } from "./Typography";
-import { ListSearchBox, PropertySelect, useListSearch } from "./SearchPicker";
+import { ChoiceField } from "./ChoiceField";
+import { ListSearchBox, PropertySelect, SearchPicker, useListSearch } from "./SearchPicker";
 import { CHOOSE_PROPERTY_FIRST, saveDisabled } from "../../lib/search-picker";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
@@ -454,24 +455,11 @@ function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: 
     <Sheet palette={p} visible={visible} onClose={onClose} title="Report a repair" subtitle="Above the owner's limit, the owner approves the cost first" icon="hardhat">
       <PropertyChips p={p} properties={properties} value={propertyId} onChange={setPropertyId} />
       <Text style={{ color: p.text, fontWeight: "700" }}>Type of repair</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {(Object.keys(REPAIR_GUIDES) as RepairType[]).map(t => (
-          <MotionPress key={t} accessibilityRole="radio" accessibilityState={{ selected: type === t }} onPress={() => setType(t)} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, backgroundColor: type === t ? p.primary : p.surface, borderWidth: 1, borderColor: type === t ? p.primary : p.border }]}>
-            <Feather name={REPAIR_GUIDES[t].icon as "tool"} size={14} color={type === t ? p.onPrimary : p.muted} />
-            <Text style={{ color: type === t ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{REPAIR_GUIDES[t].label}</Text>
-          </MotionPress>
-        ))}
-      </View>
+      <ChoiceField p={p} label="Type of repair" value={type} onChange={setType} options={(Object.keys(REPAIR_GUIDES) as RepairType[]).map(t => ({ value: t, label: REPAIR_GUIDES[t].label }))} />
       <Field label="What is wrong" value={issue} onChange={setIssue} p={p} multiline placeholder="For example: kitchen tap leaking under the sink" />
       {!!stays.length && <>
         <Text style={{ color: p.text, fontWeight: "700" }}>Which stay is this for? (optional)</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {stays.map(s => (
-            <MotionPress key={s.id} accessibilityRole="radio" accessibilityState={{ selected: reservationId === s.id }} onPress={() => setReservationId(reservationId === s.id ? "" : s.id)} style={{ minHeight: 40, paddingHorizontal: 12, borderRadius: 12, justifyContent: "center", backgroundColor: reservationId === s.id ? p.primary : p.surface, borderWidth: 1, borderColor: reservationId === s.id ? p.primary : p.border }}>
-              <Text style={{ color: reservationId === s.id ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{s.dates}{s.when === "now" ? " · staying now" : ""}</Text>
-            </MotionPress>
-          ))}
-        </View>
+        <SearchPicker p={p} options={stays.map(s => ({ id: s.id, label: s.dates + (s.when === "now" ? " · staying now" : "") }))} value={reservationId} onChange={setReservationId} clearable placeholder="Search the stays by date" nouns="stays" />
       </>}
       <Field label="Estimated cost" value={estimate} onChange={setEstimate} p={p} placeholder="£0.00" />
       <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: hazard }} onPress={() => setHazard(h => !h)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: hazard ? p.dangerWash : p.elevated }]}>

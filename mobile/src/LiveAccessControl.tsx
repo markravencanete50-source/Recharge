@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Platform, Share, Switch, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { ChoiceField, ChoicePills } from "./ChoiceField";
 import { useCelebrate } from "./Celebrate";
 import { ExpandChevron, MotionPress, Pop, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -118,22 +119,9 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
       {!self && state !== "deleted" && <>
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Role</Text>
         <Text style={[ui.small, { color: p.muted }]}>Promote or move {firstName} to another role. They then see exactly what everyone in that role sees: the same Home, Work and tools.</Text>
-        <View accessibilityRole="radiogroup" style={{ gap: 6 }}>
-          {rolesFor("super_admin").map(r => {
-            const picked = r === role, current = r === person.role;
-            return (
-              <MotionPress key={r} accessibilityRole="radio" accessibilityState={{ checked: picked }} accessibilityLabel={`${roleLabel(r)}. ${ROLE_SUMMARY[r]}${current ? ". Current role" : ""}`}
-                onPress={() => { setRole(r); setModules(r === person.role ? person.modules as ModuleId[] : toolsOnRoleChange(r)); setError(""); }}
-                style={[ui.row, { gap: 12, minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: picked ? 2 : 1, borderColor: picked ? p.primary : p.border, backgroundColor: picked ? p.wash : p.surface }]}>
-                <Feather name={picked ? "check-circle" : "circle"} size={18} color={picked ? p.primary : p.muted} />
-                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                  <Text style={{ color: p.text, fontWeight: "700" }}>{roleLabel(r)}{current ? <Text style={[ui.small, { color: p.muted, fontWeight: "500" }]}>  · now</Text> : null}</Text>
-                  <Text style={[ui.small, { color: p.muted }]}>{ROLE_SUMMARY[r]}</Text>
-                </View>
-              </MotionPress>
-            );
-          })}
-        </View>
+        <ChoiceField p={p} label="Role" value={role} options={rolesFor("super_admin").map(r => ({ value: r, label: roleLabel(r) + (r === person.role ? " · now" : "") }))}
+          onChange={r => { setRole(r); setModules(r === person.role ? person.modules as ModuleId[] : toolsOnRoleChange(r)); setError(""); }} />
+        <Text style={[ui.small, { color: p.muted }]}>{ROLE_SUMMARY[role]}</Text>
         {!change.same && <SwapIn swapKey={role}><View style={{ gap: 10, padding: 14, borderRadius: 18, backgroundColor: p.background, borderWidth: 1, borderColor: p.primary }}>
           <View style={[ui.row, { gap: 8 }]}>
             <Feather name={change.promote ? "trending-up" : "repeat"} size={18} color={p.primary} />
@@ -274,21 +262,8 @@ function AddPersonSheet({ p, onClose, onDone }: { p: Palette; onClose: () => voi
         <Field label="Full name" value={name} onChange={setName} p={p} placeholder="First and last name" />
         <Field label="Email" value={email} onChange={setEmail} p={p} placeholder="name@example.com" email />
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Role</Text>
-        <View accessibilityRole="radiogroup" style={{ gap: 6 }}>
-          {rolesFor("super_admin").map(r => {
-            const picked = r === role;
-            return (
-              <MotionPress key={r} accessibilityRole="radio" accessibilityState={{ checked: picked }} accessibilityLabel={`${roleLabel(r)}. ${ROLE_SUMMARY[r]}`} onPress={() => { setRole(r); setError(""); }}
-                style={[ui.row, { gap: 12, minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: picked ? 2 : 1, borderColor: picked ? p.primary : p.border, backgroundColor: picked ? p.wash : p.surface }]}>
-                <Feather name={picked ? "check-circle" : "circle"} size={18} color={picked ? p.primary : p.muted} />
-                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                  <Text style={{ color: p.text, fontWeight: "700" }}>{roleLabel(r)}</Text>
-                  <Text style={[ui.small, { color: p.muted }]}>{ROLE_SUMMARY[r]}</Text>
-                </View>
-              </MotionPress>
-            );
-          })}
-        </View>
+        <ChoiceField p={p} label="Role" value={role} options={rolesFor("super_admin").map(r => ({ value: r, label: roleLabel(r) }))} onChange={r => { setRole(r); setError(""); }} />
+        <Text style={[ui.small, { color: p.muted }]}>{ROLE_SUMMARY[role]}</Text>
         <Text style={[ui.small, { color: p.muted }]}>They get the usual tools for this role. You can change them afterwards. No email is sent: you get a link to send them yourself.</Text>
         {!!planText && <Notice text={planText} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
@@ -355,7 +330,7 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
         <Feather name="search" size={18} color={p.muted} />
         <TextInput value={query} onChangeText={setQuery} placeholder="Search by name, email, phone or role" placeholderTextColor={p.muted} accessibilityLabel="Search people" autoCapitalize="none" style={{ flex: 1, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
       </View>
-      <Pills p={p} values={FILTERS} value={filter} onChange={setFilter} label={v => FILTER_LABEL[v] + (v === "pending" && summary.waiting ? ` (${summary.waiting})` : v === "online" ? ` (${summary.online})` : "")} />
+      <ChoicePills p={p} name="Show" values={FILTERS} value={filter} onChange={setFilter} label={v => FILTER_LABEL[v] + (v === "pending" && summary.waiting ? ` (${summary.waiting})` : v === "online" ? ` (${summary.online})` : "")} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading ? <Loading p={p} /> : (
         <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>

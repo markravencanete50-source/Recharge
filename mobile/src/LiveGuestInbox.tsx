@@ -3,6 +3,7 @@ import { Image, Platform, ScrollView, TextInput, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Text } from "./Typography";
+import { ChoicePills } from "./ChoiceField";
 import { PropertySelect } from "./SearchPicker";
 import { useCelebrate } from "./Celebrate";
 import { MotionPress } from "./motion";
@@ -113,7 +114,7 @@ function LogMessageSheet({ p, properties, onClose, onDone }: { p: Palette; prope
   return (
     <Sheet palette={p} visible onClose={onClose} title="Log a guest message" subtitle="A message that arrived on Airbnb, Booking.com or elsewhere" icon="chat">
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Where it came from</Text>
-      <Pills p={p} values={OFFERED_CHANNELS} value={channel} onChange={setChannel} label={c => CHANNEL_LABEL[c]} />
+      <ChoicePills p={p} name="Channel" values={OFFERED_CHANNELS} value={channel} onChange={setChannel} label={c => CHANNEL_LABEL[c]} />
       <Field label="Guest’s name" value={guest} onChange={setGuest} p={p} placeholder="As shown on the booking" />
       <PropertyPicker p={p} properties={properties} value={property} onChange={setProperty} />
       <Field label="Booking reference (optional)" value={booking} onChange={setBooking} p={p} />
