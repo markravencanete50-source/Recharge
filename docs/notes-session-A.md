@@ -290,6 +290,15 @@ Lee: "I'd rather have a drop down, so it's much cleaner." The Management tabs ra
 - **The KPI area in the KPI form** is a natural dropdown. Its list of areas is also a dropdown now, so admins see one area at a time, as before.
 - Two-option toggles all stay pills.
 
+## Round 6: Properties page, search only
+Lee: "in the properties remove those location buttons, it should be searchable only."
+- `mobile/src/PropertiesTable.tsx`: the region and status chip rows are gone. They were about 30 region chips running off the screen, plus Onboarding and Active.
+- The one search box already matches the address, region and status words. Typing "Glasgow" or "onboarding" narrows the table, and the count reads "22 of 102 properties".
+- No dropdown was added: the search covers both region and status.
+- The table columns, the column sorting, and the sort chips on the phone are kept.
+- `lib/property-table.ts` is unchanged; its region and status helpers stay tested.
+- Test: `tests/properties-search-only.test.mjs`.
+
 ## Deploy order for this session's migrations
 Apply in filename order, before deploying the Worker (the Worker code is unchanged by this session):
 
