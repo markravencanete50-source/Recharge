@@ -57,7 +57,14 @@ sender -> Fasthosts mailbox (kept there) -> forwarding rule -> guestrelations@in
 Client relations, Client enquiries, "Send the enquiry form" now emails the form by itself. It has **its own switch**, apart from the staff notice emails:
 
 - **Ready** when `RESEND_API_KEY` is set (it is) and `ENQUIRY_EMAIL_ENABLED` is not `false`. It does **not** need `NOTIFICATION_EMAIL_ENABLED` or `NOTIFICATION_FROM_EMAIL`, and it never turns staff notice emails on.
-- Sent as `Recharge Group <ownerrelations@rechargegroup.co.uk>` with reply-to `ownerrelations@rechargegroup.co.uk`, so a landlord's reply reaches that mailbox (and Messages, Clients, once inbound is on). Optional Worker secret `ENQUIRY_FROM_EMAIL` ("Name <address>" or an address on the verified domain) replaces the sender.
+- Sent as `Recharge Group <ownerrelations@rechargegroup.co.uk>` with reply-to `ownerrelations@rechargegroup.co.uk`, so a landlord's reply reaches that mailbox (and Messages, Clients, once inbound is on). There is no sender override: the form can never go out from the guest mailbox.
 - One request makes one link and one email (Resend idempotency key `recharge-enquiry/<user>/<request>`); 40 forms an hour per person.
 - The sheet has one button, "Send the form" (and "Send the new link"). The link with Copy and "Open my email app" appears only when email is not ready or the send failed. The enquiry row shows "Email failed" with **Try again**.
 - **Worker secrets to add:** none. To switch the form's email off: `ENQUIRY_EMAIL_ENABLED=false`. Because the key is already set and the domain is verified, enquiry emails start as soon as this is deployed.
+
+## Two addresses, never mixed (Lee's rule)
+
+- **Guests:** `guestrelations@rechargegroup.co.uk`. Comes in to Messages, Guests; every reply goes out from it, with reply-to the same.
+- **Owners and clients:** `ownerrelations@rechargegroup.co.uk`. Comes in to Messages, Clients; replies to owners and the automatic enquiry form email go out from it, reply-to the same.
+- Enforced in code and by `tests/email-sender-rule.test.mjs`: `sendMailboxEmail('guest'|'owner')` fixes From and Reply-To per mailbox and refuses a recipient that is one of our own mailboxes; the one-off sender (`sendEmail`) refuses guestrelations@; the staff notice sender `NOTIFICATION_FROM_EMAIL` is ignored (notice emails stay off) if it is set to either mailbox.
+- Not code, so not tested here: **sign-in, invite and password emails** are sent by Supabase Auth, whose sender is configured in the Supabase dashboard (Authentication, SMTP / emails). Nothing in this repo sends them from either address; check that dashboard setting says neither.

@@ -67,12 +67,10 @@ test('the switch is its own: ready with the key alone, off without it or when sw
   assert.equal(notices({ ...noticesOn, ENQUIRY_EMAIL_ENABLED: 'false' }), true, 'switching the form off leaves staff notices alone');
 });
 
-test('the sender is ownerrelations@ unless a valid override is given', () => {
+test('the sender is always ownerrelations@, with no override, and replies go to ownerrelations@', () => {
   assert.equal(policy.enquirySender(KEY), 'Recharge Group <ownerrelations@rechargegroup.co.uk>');
+  assert.equal(policy.enquirySender({ ...KEY, ENQUIRY_FROM_EMAIL: 'Recharge <guestrelations@rechargegroup.co.uk>' }), 'Recharge Group <ownerrelations@rechargegroup.co.uk>', 'a setting cannot move it to the guest mailbox');
   assert.equal(policy.ENQUIRY_REPLY_TO, 'ownerrelations@rechargegroup.co.uk');
-  assert.equal(policy.enquirySender({ ...KEY, ENQUIRY_FROM_EMAIL: 'Recharge <hello@rechargegroup.co.uk>' }), 'Recharge <hello@rechargegroup.co.uk>');
-  assert.equal(policy.enquirySender({ ...KEY, ENQUIRY_FROM_EMAIL: 'hello@rechargegroup.co.uk' }), 'hello@rechargegroup.co.uk');
-  for (const bad of ['not an address', 'x<y', '<a@b.c> <d@e.f>', 'Name <a@b>', 'a@b.c\nBcc: x@y.z', '']) assert.equal(policy.enquirySender({ ...KEY, ENQUIRY_FROM_EMAIL: bad }), 'Recharge Group <ownerrelations@rechargegroup.co.uk>', JSON.stringify(bad));
 });
 
 test('with only the key set, the form is emailed as ownerrelations@ with a reply-to and the link, once, and marked sent', async () => {
@@ -94,7 +92,7 @@ test('with only the key set, the form is emailed as ownerrelations@ with a reply
   assert.equal(state.rpc[0].args.input.tokenHash.length, 64);
 });
 
-test('a retry of the same request sends nothing again; an override replaces the sender', async () => {
+test('a retry of the same request sends nothing again', async () => {
   reset(KEY);
   const retry = await server.sendEnquiryForm(context('sent'), invite());
   assert.equal(retry.status, 200);
@@ -102,9 +100,6 @@ test('a retry of the same request sends nothing again; an override replaces the 
   // Same request, same link.
   const a = (await (await server.sendEnquiryForm(context('sent'), invite())).json()).data.link, b = (await (await server.sendEnquiryForm(context('sent'), invite())).json()).data.link;
   assert.equal(a, b);
-  reset({ ...KEY, ENQUIRY_FROM_EMAIL: 'Recharge <hello@rechargegroup.co.uk>' });
-  await server.sendEnquiryForm(context(), invite());
-  assert.equal(state.resend[0].body.from, 'Recharge <hello@rechargegroup.co.uk>');
 });
 
 test('sending a new link emails it too', async () => {

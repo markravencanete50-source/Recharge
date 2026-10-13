@@ -1,0 +1,113 @@
+import test, { after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
+
+// Lee's rule: two addresses, never mixed. Guests are written to as guestrelations@rechargegroup.co.uk; owners and clients (the client
+// enquiry form included) as ownerrelations@rechargegroup.co.uk. Every send path is checked here: guest replies, the owner outbox, the
+// enquiry form and its resend. Nothing else may send from either address.
+const root = fileURLToPath(new URL('..', import.meta.url));
+const state = { env: {}, sent: [], security: [] };
+globalThis.__senderRule = state;
+const mocks = {
+  'cloudflare:workers': `export const env=globalThis.__senderRule.env;`,
+  'auth-security': `const s=globalThis.__senderRule;export const authSecurityConfiguration=()=>({url:'https://db.test',key:'sb_secret_x',origin:'https://app.test'});
+    export const requestQuota=async()=>({allowed:true});export const securityHash=async(a,b)=>'h'.repeat(10)+Buffer.from(b).toString('hex').slice(0,54);
+    export const securityRpc=async(name,args)=>{s.security.push({name,args});if(name==='workspace_email_outbox_claim')return [{id:'11111111-1111-4111-8111-111111111111',to:'owner@example.com',subject:'Re: Boiler',body:'On it',inReplyTo:null,references:[]}];return {recorded:true};};`,
+  'business-server': `export const businessResponse=(body,status=200)=>Response.json(body,{status});export const businessContext=async()=>null;
+    export const databaseFailure=error=>Response.json({error:error.message},{status:400});export const viewAsFailure=()=>null;`,
+  'native-request-policy': `export const isNativeRequest=()=>true;`,
+  'bounded-form': `export const boundedFormData=async()=>null;`,
+  'integration-server': `export const integrationSettings=()=>globalThis.__senderRule.env;`,
+  hostaway: `export const hostawayReplyErrorMessage=()=>'x';export const sendHostawayConversationMessage=async()=>'1';`,
+  'hostaway-sync': `export const hostawaySyncConfigured=()=>false;`,
+  '@supabase/supabase-js': `export const createClient=()=>({storage:{from:()=>({})}});`,
+};
+const vite = await createServer({ configFile: false, root, resolve: { alias: { '@': root } }, server: { middlewareMode: true, hmr: false }, plugins: [{
+  name: 'isolated-sender-rule', enforce: 'pre',
+  transform(code, id) {
+    if (!/\/(client-enquiry-server|integration-providers|email-inbound-server|guest-reply-server|resend-email)\.ts$/.test(id.replaceAll('\\', '/'))) return;
+    for (const name of Object.keys(mocks)) code = code.replaceAll(`from '${name === '@supabase/supabase-js' || name === 'cloudflare:workers' ? name : './' + name}'`, `from 'sender-test:${name}'`);
+    return { code, map: null };
+  },
+  resolveId: id => id === 'cloudflare:workers' ? '\0sender-test:cloudflare:workers' : id.startsWith('sender-test:') ? '\0' + id : null,
+  load: id => id.startsWith('\0sender-test:') ? mocks[id.slice(13)] : null,
+}] });
+const policy = await vite.ssrLoadModule('/lib/integration-policy.ts');
+const enquiry = await vite.ssrLoadModule('/lib/client-enquiry-server.ts');
+const outbox = await vite.ssrLoadModule('/lib/email-inbound-server.ts');
+const replies = await vite.ssrLoadModule('/lib/guest-reply-server.ts');
+const providers = await vite.ssrLoadModule('/lib/integration-providers.ts');
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, init = {}) => {
+  if (String(url) === 'https://api.resend.com/emails' && init.method === 'POST') { state.sent.push(JSON.parse(String(init.body))); return Response.json({ id: 'r_' + state.sent.length }); }
+  throw new Error('Unexpected fetch ' + url);
+};
+after(async () => { globalThis.fetch = realFetch; delete globalThis.__senderRule; await vite.close(); });
+
+const GUEST = 'guestrelations@rechargegroup.co.uk', OWNER = 'ownerrelations@rechargegroup.co.uk';
+const reset = (env = { RESEND_API_KEY: 're_test', EMAIL_REPLIES_ENABLED: 'true' }) => { for (const k of Object.keys(state.env)) delete state.env[k]; Object.assign(state.env, env); state.sent = []; state.security = []; };
+const address = v => (String(v).match(/<([^>]+)>/)?.[1] ?? String(v)).toLowerCase();
+
+test('a guest reply goes out from guestrelations@ with reply-to guestrelations@, and only to the guest', async () => {
+  reset();
+  const REQUEST = '22222222-2222-4222-8222-222222222222';
+  const context = { request: new Request('https://app.test'), account: { userId: 'u', role: 'stays' }, client: { rpc: async name => name === 'workspace_guest_inbox_action'
+    ? { data: { send: true, conversationId: 'email:1', requestId: REQUEST, source: 'email', email: { to: 'guest@example.org', subject: 'Re: Hi', inReplyTo: 'a@b', references: [] } }, error: null } : { data: { thread: {} }, error: null } } };
+  await replies.sendGuestReply(context, { action: 'sendReply', requestId: REQUEST, threadId: '33333333-3333-4333-8333-333333333333', body: 'Hello' });
+  assert.equal(state.sent.length, 1);
+  assert.deepEqual([address(state.sent[0].from), address(state.sent[0].reply_to), state.sent[0].to], [GUEST, GUEST, ['guest@example.org']]);
+});
+
+test('the owner outbox, the enquiry form and a resent form all go out from ownerrelations@ with reply-to ownerrelations@', async () => {
+  reset();
+  assert.deepEqual(await outbox.runEmailOutbox(), { sent: 1 });
+  const context = () => ({ request: new Request('https://app.test'), account: { userId: '11111111-1111-4111-8111-111111111111', role: 'admin' }, client: { rpc: async (name, args) =>
+    ({ data: { id: 'e1', recipientEmail: 'alex@example.com', emailStatus: args.input.action === 'markEnquiryEmail' ? args.input.emailStatus : 'pending' }, error: null }) } });
+  await enquiry.sendEnquiryForm(context(), { action: 'inviteEnquiry', requestId: '22222222-2222-4222-8222-222222222222', name: 'Alex', email: 'alex@example.com', subject: 'Form', body: 'Hi\n\n{link}', delivery: 'email' });
+  await enquiry.sendEnquiryForm(context(), { action: 'resendEnquiry', requestId: '44444444-4444-4444-8444-444444444444', enquiryId: '33333333-3333-4333-8333-333333333333', version: 1, subject: 'Again', body: 'Hi\n\n{link}', delivery: 'email' });
+  assert.equal(state.sent.length, 3);
+  for (const mail of state.sent) assert.deepEqual([address(mail.from), address(mail.reply_to)], [OWNER, OWNER], mail.subject);
+});
+
+test('nothing mixes: the enquiry sender cannot be set to the guest mailbox, the one-off sender refuses it, and no email is sent to our own mailboxes', async () => {
+  reset({ RESEND_API_KEY: 're_test', EMAIL_REPLIES_ENABLED: 'true', ENQUIRY_FROM_EMAIL: `Recharge <${GUEST}>` });
+  assert.equal(address(policy.enquirySender(state.env)), OWNER);
+  await assert.rejects(providers.sendEmail(state.env, { to: 'a@b.co', subject: 's', text: 't', html: 'h', idempotencyKey: 'k', from: `Recharge <${GUEST}>`, replyTo: OWNER }));
+  await assert.rejects(providers.sendEmail(state.env, { to: 'a@b.co', subject: 's', text: 't', html: 'h', idempotencyKey: 'k', from: OWNER, replyTo: GUEST }));
+  await assert.rejects(providers.sendEmail(state.env, { to: GUEST, subject: 's', text: 't', html: 'h', idempotencyKey: 'k', from: OWNER }));
+  const resendEmail = await vite.ssrLoadModule('/lib/resend-email.ts');
+  await assert.rejects(resendEmail.sendMailboxEmail('guest', { to: OWNER, subject: 's', text: 't', idempotencyKey: 'k/1' }));
+  await assert.rejects(resendEmail.sendMailboxEmail('owner', { to: 'Someone <GuestRelations@rechargegroup.co.uk>', subject: 's', text: 't', idempotencyKey: 'k/2' }));
+  assert.deepEqual(state.sent, []);
+});
+
+test('staff notice emails may not use either mailbox as their sender', () => {
+  const on = from => policy.integrationConfiguration({ NOTIFICATION_EMAIL_ENABLED: 'true', RESEND_API_KEY: 're_test', NOTIFICATION_FROM_EMAIL: from }).email;
+  assert.equal(on('notices@rechargegroup.co.uk'), true);
+  assert.equal(on(GUEST), false);
+  assert.equal(on(OWNER), false);
+  assert.equal(on('GuestRelations@RechargeGroup.co.uk'), false);
+});
+
+test('only the known places send through Resend, and each names its own mailbox', async () => {
+  const files = (await fs.readdir('lib')).filter(f => f.endsWith('.ts'));
+  const senders = [];
+  for (const file of files) if ((await fs.readFile('lib/' + file, 'utf8')).includes('api.resend.com')) senders.push(file);
+  // The notification and one-off senders live in integration-providers.ts; the mailbox sender in resend-email.ts (which also reads received mail).
+  assert.deepEqual(senders.sort(), ['integration-providers.ts', 'resend-email.ts']);
+  // Callers: guests through the 'guest' mailbox, owners through 'owner'.
+  const read = async f => (await fs.readFile(f, 'utf8')).replace(/\r\n/g, '\n');
+  assert.match(await read('lib/guest-reply-server.ts'), /sendMailboxEmail\('guest',/);
+  assert.doesNotMatch(await read('lib/guest-reply-server.ts'), /sendMailboxEmail\('owner'/);
+  assert.match(await read('lib/email-inbound-server.ts'), /sendMailboxEmail\('owner',/);
+  assert.doesNotMatch(await read('lib/email-inbound-server.ts'), /sendMailboxEmail\('guest'/);
+  const server = await read('lib/client-enquiry-server.ts');
+  assert.match(server, /from: enquirySender\(settings\), replyTo: ENQUIRY_REPLY_TO/);
+  // Nothing else in the app or the worker names either address as a sender.
+  for (const file of ['lib/account-invite-server.ts', 'lib/integration-server.ts', 'lib/registration-provider.ts', 'worker/index.ts']) {
+    const text = await read(file).catch(() => '');
+    assert.doesNotMatch(text, /guestrelations@|ownerrelations@/, file);
+  }
+});
