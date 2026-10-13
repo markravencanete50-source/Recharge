@@ -135,6 +135,15 @@ the guard stops a second run, and functions 557/557 and policies 13/13 show 0 di
 | D | Merged up to `dd3a4a6`: the forms rule (`ChoiceField`, 16 screens); Sheet fragment spacing fix (Rejected clean overlap); public enquiry form (option colours, no focus box or animation); **Management "Today's checklist"** (Alex: "a daily checklist for management centre, which shows up in to-do list as well"), built from Management daily tasks and ticking the same to-dos; e2e fix. | `74cd69f` (calendar faded days use `p.disabled`) is pushed but **not merged**. It also merges E's `0da9cd7`. Nothing else is assigned. |
 | E | `fb3657a` and `0da9cd7`: dark-mode scale and new state tokens; `tests/contrast-tokens.test.mjs` (161 pairs, both themes); Help moved into the header and Menu; 76 before and after screenshots. **Not merged directly**; it comes in through D's `74cd69f`. | Design review of the lead branch (D's and C's screens), then the full UI sweep. A list of taste calls for Lee. |
 
+**E's sweep, second batch** (`6e5053c` and `41e6279`, items 13–21 in `docs/notes-session-E.md`). E took the screenshots
+from `main`, so 14, 15, 16 (teams) and 18 are already fixed on round 6 branches. They are routed:
+- D: 13 (Maintenance filter dropdown, thin rows, no Refresh), 16 (calendar views as a Segmented control), 17 (13 typed
+  "YYYY-MM-DD" dates become DateField, except AccountsPayable), 21.
+- A: 17 (AccountsPayable dates), 20 (phone Accounts tiles), and checking 14 and 15.
+- C: 19 (Messages helper lines wrap), after the bonus.
+
+E was asked to review the lead branch with A merged on top.
+
 **To finish round 6:**
 1. Merge D's `74cd69f` (which brings E), then A, B's E-fixes and C's bonus, as each reports.
 2. Run `npm test`, `cd mobile && npx tsc -p . --noEmit`, and ESLint.
