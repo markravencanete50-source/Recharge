@@ -59,3 +59,22 @@ Alex: "if not done by 6pm, prompt the cleaner with reminder notifications and ch
 
 ## For other sessions
 - Nothing needed from Session B or C.
+
+## Integration check (14 October)
+- Trial merge of A (`cf9834e`), B (`2d3ffbc`) and C (`0409b80`) onto A: no conflicts (only `lib/feedback-defaults.ts` is shared, in different sections).
+- Combined: TypeScript has no errors in the app; the root has only the 5 known `remotion` errors in `landing/`. Tests: 1,289 of 1,302 pass. The 13 failures are the same on every branch and on `main`:
+  - 7 need the build output (`dist/`, `preview-dist/`). After `npm run build` and `npm run preview:build` all of them pass (checked on A).
+  - 6 expect Windows line endings (CRLF). Git stores these files with Unix line endings, so they fail on any Linux checkout; they pass in a Windows checkout that converts line endings.
+
+## Go-live order (each step needs Lee's approval; approval for one step does not cover the next)
+1. Merge A, B and C into `main` through pull requests, one at a time, re-running the tests after each. Pushing `main` also updates the sample preview through the GitHub Action, so treat the merge itself as a live step.
+2. Apply the migrations to the live database in filename order:
+   1. `20261014100000_clean_form_reminders.sql` (A)
+   2. `20261014110000_mid_stay_switch.sql` (A, switch stays on)
+   3. `20261014120000_fee_base_after_changeovers.sql` (A, base unchanged)
+   4. `20261014130000_owner_history_internal_events.sql` (A)
+   5. `20261014200000_region_whole_words.sql` (B, function only, no stored region changed)
+   6. `20261014300000_team_calendar_anyone_edits.sql` (C)
+3. Build (`npm run build`) and deploy the Worker with `dist/server/wrangler.backend.json` and `--keep-vars`. Check that the live `/workspace/` page references the same bundle file as the local build, and look for Worker versions that are not ours (Codex).
+4. After deploy: set the bonus tiers to "90, 95" with the target at 80% in Team performance (Session C's note), and warn the team that clean form reminders start at 18:00 and that invoices for cleans without a form cannot be approved.
+5. Phone app: a new EAS build is still needed for installed phones to see any of this.
