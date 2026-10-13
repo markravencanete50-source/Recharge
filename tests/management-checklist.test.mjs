@@ -66,7 +66,7 @@ test("ticking is the To-do list's own action, valid for the server", () => {
 
 test('the card sits at the top of Management, and "Set up the checklist" opens Daily tasks showing Management only', () => {
   const management = readFileSync('mobile/src/LiveManagement.tsx', 'utf8'), card = readFileSync('mobile/src/ManagementChecklist.tsx', 'utf8');
-  assert.ok(management.indexOf('<ManagementChecklist ') < management.indexOf('<Pills p={p} values={MANAGEMENT_VIEWS'), 'above the view picker');
+  assert.ok(management.indexOf('<ManagementChecklist ') < management.search(/<Pills p=\{p\}[^>]*values=\{MANAGEMENT_VIEWS/), 'above the view picker');
   assert.match(management, /onSetUp=\{\(\) => \{ setDailyOnly\("management"\); setView\("dailytasks"\); \}\}/);
   assert.match(management, /<DailyTaskSettings p=\{p\} account=\{account\} only=\{dailyOnly\}/);
   assert.match(card, /No daily checklist yet\./);
