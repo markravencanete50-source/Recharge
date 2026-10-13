@@ -67,13 +67,13 @@ declare
    $q$change:='created';
    update private.workspace_kpis set guest_share=share where id=k.id returning * into k;$q$,
    $q$change:='created';
-   update private.workspace_kpis set guest_share=share$q$],
+   update private.workspace_kpis set guest_share=share where id=k.id$q$],
   ['private.workspace_kpi_action(jsonb)',
    $q$change:='edited';$q$,
    $q$change:='edited';
    update private.workspace_kpis set guest_share=share where id=k.id returning * into k;$q$,
    $q$change:='edited';
-   update private.workspace_kpis set guest_share=share$q$],
+   update private.workspace_kpis set guest_share=share where id=k.id$q$],
   -- The view: the share for the combined measure (50 when unset), null for any other.
   ['private.workspace_kpi_view(private.workspace_kpis,boolean)',
    $q$'version',k.version,'updatedAt',k.updated_at)$q$,
