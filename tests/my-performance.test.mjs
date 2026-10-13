@@ -6,9 +6,10 @@ import { createServer } from 'vite';
 // A team member's own Home: their performance (bonus as a tier only, no pay), their own schedule and
 // the places that are no longer on Home (the action pills and the property count).
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
-const { ownPerson, bonusFor, workCompleted, shapeOwnNumbers, standingLine, performanceWindow, ownEvents, scheduleDays } = await vite.ssrLoadModule('/lib/my-performance.ts');
+const { ownPerson, bonusFor, workCompleted, shapeOwnNumbers, standingLine, performanceWindow, ownEvents, scheduleDays, bonusArea, bonusProgress } = await vite.ssrLoadModule('/lib/my-performance.ts');
 const { teamPerformanceSchema } = await vite.ssrLoadModule('/lib/management-live.ts');
-const { BONUS_DISPLAY } = await vite.ssrLoadModule('/lib/feedback-defaults.ts');
+const { BONUS_DISPLAY, BONUS_SCHEMES } = await vite.ssrLoadModule('/lib/feedback-defaults.ts');
+const { DEPARTMENTS } = await vite.ssrLoadModule('/lib/workspace-teams-policy.ts');
 after(() => vite.close());
 const source = file => readFileSync('mobile/src/' + file, 'utf8');
 
@@ -36,6 +37,53 @@ test('the bonus is a tier and nothing in pounds', () => {
   const text = JSON.stringify(numbers) + standingLine(numbers);
   assert.doesNotMatch(text, /£|pound|pay|wage|salary|amountMinor|rate/i);
   assert.deepEqual(Object.keys(numbers).sort(), ['bonus', 'daily', 'minutes', 'onTrack', 'replies', 'repliesGreen', 'repliesGreenPercent', 'score', 'shifts', 'tasksDone', 'workCompleted']);
+});
+
+test('the bonus is a bar towards the target: the client\'s example for guest relations (80% target, 90% tier 1, 95% tier 2)', () => {
+  const at = percentGreen => bonusProgress(person(ME, { percentGreen, department: 'guest_relations' }), 5);
+  const below = at(74);
+  assert.deepEqual([below.area, below.areaLabel, below.measure, below.measureLabel], ['guest_relations', 'Guest relations', 'replies', 'Guest messages answered within 5 minutes']);
+  assert.deepEqual(below.marks, [{ label: 'Target', at: 80, reached: false }, { label: 'Tier 1', at: 90, reached: false }, { label: 'Tier 2', at: 95, reached: false }]);
+  assert.deepEqual([below.value, below.reached, below.headline, below.next], [74, 0, '6% to go to the target', 'The target is 80%.']);
+  assert.deepEqual([at(80).reached, at(80).headline, at(80).next], [1, 'Target reached', 'Tier 1 starts at 90%.']);
+  assert.deepEqual([at(89).reached, at(89).headline], [1, 'Target reached']);
+  assert.deepEqual([at(90).reached, at(90).headline, at(90).next], [2, 'Bonus tier 1 reached', 'Tier 2 starts at 95%.']);
+  assert.deepEqual([at(95).reached, at(95).headline, at(95).next], [3, 'Bonus tier 2 reached', 'That is the top tier.']);
+  assert.deepEqual([at(100).reached, at(100).value], [3, 100]);
+  const none = at(null);
+  assert.deepEqual([none.value, none.reached, none.headline, none.next], [null, 0, 'Nothing to measure yet', 'The target is 80%.']);
+  assert.equal(bonusProgress(person(ME, { percentGreen: 90, department: 'guest_relations' }), 10).measureLabel, 'Guest messages answered within 10 minutes', 'the green time comes from the targets');
+});
+
+test('every area has a placeholder bonus scheme, the bar follows the right measure, and none of it is in pounds', () => {
+  for (const area of DEPARTMENTS) {
+    const scheme = BONUS_SCHEMES[area];
+    assert.ok(scheme, area + ' has a scheme');
+    assert.equal(scheme.placeholder, true, area + ' is labelled a placeholder until the client sets it');
+    assert.ok(scheme.tiers.every(t => t > scheme.target && t <= 100), area + ' tiers sit above the target');
+  }
+  assert.deepEqual({ ...BONUS_SCHEMES.guest_relations, tiers: [...BONUS_SCHEMES.guest_relations.tiers] }, { measure: 'replies', target: 80, tiers: [90, 95], placeholder: true });
+  // The rota department wins; without one, the role decides; owners and unknown roles get no bar.
+  assert.equal(bonusArea('stays', 'client_relations'), 'client_relations');
+  assert.equal(bonusArea('stays', null), 'guest_relations');
+  assert.equal(bonusArea('cleans', undefined), 'cleaning');
+  assert.equal(bonusArea('cleaning_manager', 'nonsense'), 'cleaning');
+  assert.equal(bonusArea('client', null), null);
+  assert.equal(bonusArea(null, null), null);
+  assert.equal(bonusProgress(person(ME, { role: 'client', department: null }), 5), null);
+  const daily = bonusProgress(person(ME, { department: 'client_relations', workPercent: 92, percentGreen: 10, score: 10 }), 5);
+  assert.deepEqual([daily.measure, daily.value, daily.headline], ['dailyWork', 92, 'Bonus tier 1 reached']);
+  const cleaner = bonusProgress(person(ME, { role: 'cleans', department: null, score: null }), 5);
+  assert.deepEqual([cleaner.area, cleaner.measure, cleaner.value, cleaner.headline], ['cleaning', 'score', null, 'Nothing to measure yet']);
+  assert.equal(bonusProgress(person(ME, { department: 'accounts', score: 130 }), 5).value, 100, 'the bar never runs past 100%');
+  for (const area of DEPARTMENTS) {
+    const text = JSON.stringify(bonusProgress(person(ME, { department: area }), 5));
+    assert.doesNotMatch(text, /£|pound|wage|salary|amountMinor/i, area);
+  }
+  const card = source('MyPerformance.tsx');
+  assert.match(card, /<BonusBar/);
+  assert.match(card, /accessibilityRole="progressbar"/);
+  assert.match(card, /label="Placeholder"/);
 });
 
 test('numbers: replies, minutes worked and tasks done (finished work plus the daily work logged)', () => {

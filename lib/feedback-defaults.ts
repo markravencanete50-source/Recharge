@@ -68,6 +68,10 @@ export const guestNameVisible = (role: string | null | undefined): boolean => !!
 // team sees them; owners never do.
 export const TEAM_EVENTS_WINDOW_DAYS = 62;
 export const TEAM_EVENTS_HIDDEN_FROM_ROLES = ['client'] as const;
+// SQL: private.workspace_team_events_anyone_edits() (migration 20261014300000). Confirmed by Lee on 13 October
+// 2026, and it replaces "admins can change anyone's" above: anyone on the team, cleaners and the cleaning manager
+// included, adds, changes and cancels anyone's entry. Each entry records and shows who last edited it and when.
+export const TEAM_EVENTS_ANYONE_EDITS = true;
 
 // --- B7: management flags (migration 20261012140000_management_flags) -------------------------------
 // SQL: private.workspace_flag_rules(). A reason (and a decline note) needs this many characters. Admins
@@ -86,6 +90,28 @@ export const LISTING_HEALTH_VIEW = 'clients';
 // --- A3: bonus display ------------------------------------------------------------------------------
 // People see their bonus tier only, never a figure in pounds.
 export const BONUS_DISPLAY = 'tier_only';
+// PLACEHOLDER bonus schemes, one per area, for the client to change. Nothing here is in the database yet:
+// only "My performance" (its progress bar) reads them, and it labels each one as a placeholder while
+// `placeholder` is true. Each scheme is a measure the team performance read already returns, the target and
+// the bonus tiers above it, all as percentages. Never a figure in pounds. Guest relations follows the
+// client's own example: 80% of guest messages answered within 5 minutes is the target, 90% is tier 1 and
+// 95% or more is tier 2. The other areas copy those numbers until the client sends theirs.
+// Measures: 'replies' is guest messages answered within the green time (5 minutes, Team performance
+// targets); 'dailyWork' is daily work done against its targets; 'score' is the blended performance score.
+export type BonusMeasure = 'replies' | 'dailyWork' | 'score';
+export type BonusScheme = { measure: BonusMeasure; target: number; tiers: readonly number[]; placeholder: boolean };
+export const BONUS_SCHEMES: Readonly<Record<string, BonusScheme>> = {
+  guest_relations: { measure: 'replies', target: 80, tiers: [90, 95], placeholder: true },
+  client_relations: { measure: 'dailyWork', target: 80, tiers: [90, 95], placeholder: true },
+  cleaning: { measure: 'score', target: 80, tiers: [90, 95], placeholder: true },
+  ready: { measure: 'score', target: 80, tiers: [90, 95], placeholder: true },
+  accounts: { measure: 'score', target: 80, tiers: [90, 95], placeholder: true },
+  management: { measure: 'score', target: 80, tiers: [90, 95], placeholder: true },
+};
+// The area a person's bonus follows when their rota has no department: by role.
+export const BONUS_AREA_BY_ROLE: Readonly<Record<string, string>> = {
+  stays: 'guest_relations', cleans: 'cleaning', cleaning_manager: 'cleaning', ready: 'ready', accounts: 'accounts', admin: 'management', super_admin: 'management',
+};
 
 // --- C3: onboarding checklist -------------------------------------------------------------------------
 // Today's seven phases until the client sends his own list (lib/workspace-view.ts is the source).

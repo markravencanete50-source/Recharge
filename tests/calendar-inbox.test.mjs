@@ -82,6 +82,10 @@ test('saved replies fill in the guest and the property', () => {
   assert.ok(chat.hasGuestInbox({ role: 'stays', modules: ['guest-communication'] }));
   assert.ok(!chat.hasGuestInbox({ role: 'cleans', modules: ['guest-communication'] }));
   assert.ok(!chat.hasGuestInbox({ role: 'ready', modules: [] }));
+  // Client answer 12: owners, cleaners and Ready (maintenance) never get guest messaging, even holding the tool.
+  for (const role of ['client', 'cleans', 'ready']) assert.ok(!chat.hasGuestInbox({ role, modules: ['guest-communication'] }), role);
+  for (const role of ['admin', 'super_admin', 'stays', 'accounts', 'cleaning_manager']) assert.ok(chat.hasGuestInbox({ role, modules: ['guest-communication'] }), role);
+  assert.deepEqual([...chat.GUEST_MESSAGING_BLOCKED_ROLES], ['client', 'cleans', 'ready']);
 });
 
 test('the new Messages requests are strict', () => {
