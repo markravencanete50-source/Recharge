@@ -60,120 +60,180 @@ Branch `claude/serene-babbage-xgqaus`, from `main` at `f17c4bf`. No migrations, 
   root `tsconfig.json` has 5 errors, all about the missing `remotion` packages in `landing/`. They are
   the same on `main`. ESLint is clean on the changed files.
 
-## Waiting for the client's answers (not started)
+## Waiting for the client's answers
 
-- **Direct-booking cutoff: exactly seven nights, or more than seven?** The rule is in the database:
-  `check_out - check_in >= policy.minimum_nights` in `workspace_direct_booking_sweep`
-  (migration `20261012180000`), in `recordReservation` and in the reservation-change trigger. The
-  setting is `private.workspace_booking_policy.minimum_nights`. `StaySheet.tsx` defaults to 7
-  (`DEFAULT_MINIMUM_NIGHTS`). If the answer is "more than seven", one option needs no SQL change: set
-  `minimum_nights` to 8. The other option is to change `>=` to `>` in a migration between
-  `20261014200000` and `20261014299999`. Also check the record-a-stay hint wording in `StaySheet.tsx`.
-- **Public enquiries creating a property immediately.** Today a submitted enquiry waits as "New: ready
-  to value" until **Start valuing** creates the property and its onboarding journey
-  (`LiveEnquiries.tsx`, `lib/client-enquiry*.ts`). Doing it on submit means the public
-  `workspace_enquiry_public` submit path (service key) creates the property. That needs a migration
-  in this session's range, and a decision on who owns a property nobody has valued yet.
+- **Direct-booking cutoff** (exactly seven nights, or more than seven): both answers are ready in section 6.
+- **Public enquiries creating a property immediately**: the proposal is in section 5, waiting for Lee.
 
 # Round 2 (13 October 2026)
 
+Changes to files outside my original list: `lib/regions.ts` (the region rules) and
+`tests/property-region-database.test.mjs` (its tests). Both were needed for the region fix.
+
 ## 4. Region data: Dunbartonshire filed as East Lothian
 
-**Cause (code).** A property's region comes from `normaliseRegion` in `lib/regions.ts` (app) and its twin
-`private.workspace_infer_region` (database; the trigger fills a blank region on save and import and never
-replaces a set one). Both test the place names in a fixed order and the first match anywhere in the text wins.
-East Lothian's list has `dunbar`, which also matches inside "Dunbartonshire" and "Dunbarton", and East Lothian
-is checked before Dunbartonshire. So any address, or council name, with "West Dunbartonshire" or
-"East Dunbartonshire" was filed as East Lothian. The postcode lookup has the same fault: it turns the council
-name from postcodes.io into a region with the same function (`regionForCouncil` in `lib/postcode-lookup.ts`).
-Edinburgh's `leith` had the same problem with Innerleithen (Scottish Borders).
+**Cause (confirmed).** A property's region comes from `normaliseRegion` in `lib/regions.ts` (app) and its twin
+`private.workspace_infer_region` (database, migration `20261010140000`). The database trigger fills a blank
+region when a property is saved or imported and never replaces a set one. The postcode lookup
+(`regionForCouncil` in `lib/postcode-lookup.ts`) uses the same app function on the council name. Both took the
+first rule in a fixed list that matched anywhere in the text, inside words too. East Lothian's `dunbar` is
+inside "Dunbartonshire", and East Lothian came first, so "West Dunbartonshire Council" read East Lothian.
+The same kind of clash existed for Innerleithen (`leith`, Edinburgh). Street names also beat towns:
+"Huntly Terrace, Paisley" read Aberdeenshire and Moray, and "Edinburgh Rd, Glasgow" read Edinburgh.
 
-**Fix.** `dunbar` and `leith` now match whole words only, in `lib/regions.ts` and in migration
-`20261014200000_region_whole_words.sql` (it replaces `workspace_infer_region` only and changes no stored data).
-Not applied to any database. `lib/regions.ts` was outside my original file list; the region task needed it.
+**Fix** (`lib/regions.ts`, migration `20261014200000_region_whole_words.sql`, not applied anywhere):
+- The names live in one list, `REGION_RULES`: per area, council and county names (`councils`: "West
+  Dunbartonshire" matches `dunbartonshire`, also "Perthshire", "Clackmannanshire", "Na h-Eileanan Siar") and
+  towns and other places (`places`).
+- Every name matches as whole words only.
+- A council name wins over any place. Among names of the same kind, the one furthest to the right wins,
+  because an address runs street, town, council. At the same spot the longer name wins, then the earlier area.
+- The migration replaces only `workspace_infer_region`. Its name lists are generated from `REGION_RULES`, and a
+  test fails if they ever differ. It changes no stored region.
 
-**Tests** (`tests/property-region-database.test.mjs`): Dunbartonshire and Innerleithen addresses and council
-names in the app and the database, a new property in West Dunbartonshire filed under Dunbartonshire, and every
-place name in the rules plus all 32 council names mapping to their own area. They fail without the fix. The
-six region-related test files pass (49 tests).
+**Tests** (`tests/property-region-database.test.mjs`, each address checked in the app and the database):
+- the reported address shape, both Dunbartonshire councils, and Dunbar itself (still East Lothian);
+- 49 real Scottish addresses (public buildings and landmarks), at least one for each of the 21 areas;
+- 10 street-name clashes ("Huntly Terrace, Paisley", "Glasgow Road, Dumbarton", "Moray Place, Edinburgh");
+- every name in the rules and all 32 council names;
+- the migration's name lists equal the app's.
 
-**Affected live properties** (read with one SELECT on 13 October; nothing written). 101 properties checked.
-Street addresses are left out of this file on purpose (no live records in the repository); Lee can see them in
-Properties.
+The new tests fail on the old rules and pass on the new. The region-related test files pass (9 files, 69 tests).
 
-| Property id | Name | Stored region | Region from its address |
-| --- | --- | --- | --- |
-| `292802c6-13ad-4b01-865a-d6f6b69b0369` | 416 Main | East Lothian | Dunbartonshire (West Dunbartonshire, G83) |
-| `1946216c-40da-4b10-a4b8-77fa0cfc178d` | Townend v2 | East Lothian | Dunbartonshire (Dumbarton, G82) |
+**Listing the affected properties.** I wrote no repair UPDATE. Once the migration is applied, this query lists
+every property whose stored region differs from what its address now gives:
 
-There are two, not one. Applying the migration does not move them, because the trigger never replaces a set
-region. If Lee agrees, either edit the region on each property in the app, or run this (not run):
-`update public.workspace_properties set region='Dunbartonshire' where id in ('292802c6-13ad-4b01-865a-d6f6b69b0369','1946216c-40da-4b10-a4b8-77fa0cfc178d') and region='East Lothian';`
+```sql
+select id, name, status, region as stored_region, private.workspace_infer_region(address) as from_address
+from public.workspace_properties
+where private.workspace_infer_region(address) <> ''
+  and region is distinct from private.workspace_infer_region(address)
+order by name;
+```
 
-**Also seen, not changed (the stored regions are right):**
-- A street named after a town wins over the real town, because the first rule to match wins: "65 Huntly"
-  (Huntly Terrace, Paisley) and "80 Huntly" (Huntly Ave, Livingston) would be filed as Aberdeenshire and
-  Moray if their region were blank. Both have the right region typed in. A sturdier rule would take the match
-  furthest to the right (the town and council come after the street) or use the postcode district. That
-  changes more results, so it is a separate decision.
-- "5 Eden" is stored as Aberdeen, but its address is in Peterhead (AB42), which the rules file under
-  Aberdeenshire and Moray. It was typed in, so it may be on purpose.
+I ran the same comparison read-only on 13 October, with the new rule written inline because the migration is
+not applied. It covered all 101 live properties and wrote nothing. Four disagree. Each one is the new rule being
+right (I checked the addresses). Street addresses are left out here on purpose, so no live records are in the
+repository:
 
-## 5. Proposal: a property from a public enquiry, before valuation (not built)
+| Property id | Name | Stored region | From its address | Why |
+| --- | --- | --- | --- | --- |
+| `292802c6-13ad-4b01-865a-d6f6b69b0369` | 416 Main | East Lothian | Dunbartonshire | West Dunbartonshire Council, G83 (the reported one) |
+| `1946216c-40da-4b10-a4b8-77fa0cfc178d` | Townend v2 | East Lothian | Dunbartonshire | Dumbarton G82, West Dunbartonshire |
+| `de9b3438-33e1-4d57-8ab3-ffe4ecda03e3` | 329 Edinburgh | Edinburgh | Glasgow | Edinburgh Rd, Glasgow G33 (street name won) |
+| `88f090fa-87eb-4b57-8724-663596c8a840` | 9 Iona v2 | Inverness and Highlands | Fife | Skye Rd, Dunfermline KY11, Fife (street name won) |
 
-Today a submitted landlord form waits as *New: ready to value*. **Start valuing** (`startValuing` in
-`workspace_client_enquiry_action`) runs `createEnquiry` as the staff member. That creates the property, the
-onboarding journey (stage `enquiry`) and the "Property onboarding" work item. The proposal is to do the same at
-the moment the landlord submits.
+- **Repair:** Lee to approve. The migration will not move them, because the trigger never replaces a set
+  region. Each can be corrected in the app, or with one approved UPDATE written then.
+- **Huntly rows:** "65 Huntly" and "80 Huntly" were typed correctly. Under the old rule their addresses read
+  Aberdeenshire and Moray; the new rule agrees with what is stored.
+- **"5 Eden":** stored Aberdeen. The address names both Peterhead and Aberdeen, and the new rule now agrees
+  with what is stored.
 
-**What the property looks like before valuation**
-- `workspace_properties.status = 'onboarding'`, the journey at stage `enquiry`. No new status: the check
-  constraint allows only onboarding, active and archived, and every screen already treats "onboarding, stage
-  enquiry" as a new enquiry (the Properties table shows the stage "New enquiry"; the onboarding tracker shows it
-  first).
-- Name: the first line of the property address, address and room counts from the answers, the same as the
-  draft `lib/client-enquiry.ts` already builds for Start valuing. Region left blank so the trigger works it out
-  from the address (this is where the region fix above matters).
-- `created_by` = the staff member who sent the link (`sent_by`), since the landlord has no account and the
-  submit runs with the service key (`auth.uid()` is null).
+## 5. Proposal: every new enquiry in Properties straight away (design only, not built)
 
-**Owner link**
-- None. `journeys.client_id` stays null and no `client` assignment is made, exactly as for an enquiry the team
-  adds for someone without an account. The form never creates an account. When the landlord later gets one,
-  the existing owner assignment links it.
-- If the landlord answered "existing client: yes", or the address matches an existing property, the enquiry is
-  flagged as a possible duplicate for the team, not merged automatically.
+Today a landlord's answers wait as *New: ready to value*. **Start valuing** (`startValuing`) runs `createEnquiry`
+as the staff member, which creates the property, the onboarding journey (stage `enquiry`) and the "Property
+onboarding" work item. The proposal: do the same when the landlord submits the form.
 
-**Who can see it**
-- Admins and super admins; the sender, by a `staff` assignment when they are Guest relations (`stays`), as
-  `createEnquiry` does today; anyone else only through the usual property-onboarding access.
-- Never owners, cleaners, Ready or Accounts (no assignment, and no stays or cleans exist for it).
-- It shows in the Properties table and the onboarding tracker. It is also counted in the portfolio summary
-  under "onboarding" (`portfolioSummary` counts every property that is not archived). Lee to decide whether an
-  unvalued enquiry should count there.
+**What submit creates** (`workspace_enquiry_public`, action `submit`, runs with the service key, no signed-in user):
+- **Property:** `workspace_properties` with `status = 'onboarding'`. The name is the first line of the
+  property address (as `lib/client-enquiry.ts` already drafts it), plus the address and bedrooms. The region
+  is left blank, so the trigger fills it from the address. `created_by` is the staff member who sent the link
+  (`sent_by`).
+- **Journey and work item:** `workspace_journeys` at stage `enquiry` with `client_id` null, holding the
+  property type, bathrooms and answers. The "Property onboarding" work item as today.
+- **Enquiry link:** the enquiry keeps status `received` and gains `property_id`.
 
-**Closing**: closing or declining such an enquiry archives the property and cancels its onboarding work item,
-as long as the journey is still at stage `enquiry`. Nothing is deleted.
+**Status shown:** "Onboarding", stage "New enquiry". There is no new property status: the check constraint
+allows onboarding, active and archived, and every screen already reads stage `enquiry` that way.
 
-**Migration and functions** (one file, `20261014210000_enquiry_property_on_submit.sql`, anchor and append like
-the round 3 migrations, safe to run twice)
+**Who owns an unvalued property:** no owner. There is no `client` assignment and the form never creates an
+account. The landlord is linked later through the usual owner assignment, once they have an account. The
+sender gets a `staff` assignment when they are Guest relations, as `createEnquiry` does today.
+
+**Spam and duplicates:**
+- **Spam:** the form only works through a private link the team sent: one link, one submit (the status must be
+  "sent" or "opened"), and the link expires after 30 days. So spam needs a leaked link and can create at most
+  one property per link.
+- **Duplicates:** if the address matches an existing property, after case, spacing and postcode tidying, or the
+  landlord answered "existing client: yes", the property is still created, but the enquiry is marked
+  "possible duplicate" with the other property's id. The team then closes one; nothing is merged
+  automatically.
+- **Closing:** closing or declining the enquiry archives its property and cancels the work item, only while the
+  journey is at stage `enquiry`. Nothing is deleted.
+
+**PropertiesTable and OnboardingTracker:**
+- **PropertiesTable:** shows the row at once, with status "Onboarding", stage "New enquiry", the region from
+  the address, and last update = the submit time, shown as "Recharge" to owners.
+- **Portfolio summary:** counts it under onboarding (`portfolioSummary` counts everything not archived).
+  Open question: should unvalued enquiries count there, and on the map?
+- **OnboardingTracker:** shows it as a property in the *New enquiry* group. It already drops an enquiry row
+  once the enquiry has a property (`onboardingTrackerItems`), so nothing is listed twice. Start valuing becomes
+  "Check the details and value": the team corrects the name, address and region on the property, then values
+  it as now.
+
+**Privacy:**
+- Owners never see these properties. Nor do cleaners, Ready or Accounts: they have no assignment, and there
+  are no stays or cleans.
+- The landlord's contact details stay on the enquiry, read only by people with enquiry access
+  (`workspace_can_enquiries`). They are not copied onto the property.
+- The public submit returns nothing about the property.
+- Files stay in the private `enquiry-files` bucket.
+
+**Migration outline:** one file, `20261014210000_enquiry_property_on_submit.sql`, anchor and append, safe to
+run twice:
 1. New `private.workspace_enquiry_create_property(e private.workspace_client_enquiries)`, security definer, no
-   grants. Inserts the property, the optional staff assignment, the work item and the journey (the same rows as
-   `createEnquiry`, without its role checks, which need a signed-in actor). Sets `property_id` on the enquiry.
-2. Patch `private.workspace_enquiry_public`, `submit` branch: after the `update ... set status='received'` line,
-   call (1). The activity event `enquiry.received` gets the property id.
-3. Patch `private.workspace_client_enquiry_action`:
-   - `startValuing`: when the enquiry already has a property, update its name, address, region, type and rooms
-     from the team's corrections and move the enquiry to `valuing`. Do not create a second property.
-   - `closeEnquiry`: archive the property and cancel the work item (stage `enquiry` only). The rule
-     "already being valued" stays as it is.
-4. No backfill: enquiries already received keep today's flow, unless Lee wants them converted.
-- App: `LiveEnquiries.tsx` says "Check the details and value" and opens the property; the onboarding tracker
-  already drops an enquiry row once it has a property (`onboardingTrackerItems`), so no double rows.
-- Test: a new `tests/enquiry-property-database.test.mjs` covering submit creating exactly one property with no
-  owner; who can and cannot read it; startValuing reusing it; closing archiving it; a second submit refused.
+   grants. It inserts the same rows as `createEnquiry`, without its signed-in role checks, and runs the
+   duplicate check.
+2. Patch the `submit` branch of `workspace_enquiry_public`: call (1) after the `set status='received'` update.
+   The `enquiry.received` activity carries the property id.
+3. Patch `workspace_client_enquiry_action`. `startValuing` reuses the existing property and applies the team's
+   corrections instead of creating another one. `closeEnquiry` archives the property while the journey is at
+   stage `enquiry`.
+4. New column `possible_duplicate_of uuid` on `private.workspace_client_enquiries`, shown in the enquiry view.
+5. No backfill, unless Lee wants enquiries already received converted.
+6. App: `LiveEnquiries.tsx` gets the new button wording and the duplicate badge.
+7. Test: `tests/enquiry-property-database.test.mjs`. It checks one property per submit, with no owner, and
+   who can read it; the duplicate flag; startValuing reuse; close archives; a second submit is refused.
 
-**Decisions for Lee before building**: (a) status `onboarding` at stage `enquiry` (recommended) or a new
-status; (b) count unvalued enquiries in the portfolio summary and the map, or hide them until valued;
-(c) the sender's staff assignment; (d) archive on close (recommended) or delete; (e) convert enquiries already
-received.
+**Decisions for Lee or Alex:**
+- (a) status `onboarding` at stage `enquiry` (recommended);
+- (b) count unvalued enquiries in the portfolio summary and the map, or not;
+- (c) give the sender a staff assignment;
+- (d) archive on close (recommended), or delete;
+- (e) convert enquiries already received.
+
+## 6. Direct-booking cutoff: ready for Alex's answer (not applied)
+
+Today a confirmed booking-site stay of `check_out - check_in >= minimum_nights` gets a follow-up, and the
+setting is 7, so **exactly seven nights qualifies**. If Alex says "seven or more", nothing changes.
+
+If Alex says **"more than seven"**, there are two ways to do it:
+
+- **A. Change the setting to 8 (recommended).** No code and no migration. A super admin opens the
+  direct-booking policy form in the app ("Minimum nights for an offer", action `configureBookingPolicy`) and
+  enters 8. The equivalent one line, for the record only (the app is the right place, because it keeps the
+  version and the activity log):
+  `update private.workspace_booking_policy set minimum_nights = 8, version = version + 1 where singleton;`
+  Everything that reads the setting follows at once: the six-hourly sweep (`workspace_direct_booking_sweep`),
+  `recordReservation`, the Hostaway import (`workspace_import_reservation`), the reservation-change path
+  (`workspace_controls_action`), the offer's own night check in `prepareQuote` (`not between
+  policy.minimum_nights and …`) and the record-a-stay hint. `StaySheet.tsx` reads `minimumNights` from the
+  policy, so the hint becomes "8 nights. Stays of 8 nights or more get a direct-booking follow-up for the
+  team." This is correct, and no wording change is needed. Watch out: the same form also holds the
+  discount-policy "confirmed" tick, so leave it as it is when saving.
+- **B. Change `>=` to `>`** in a migration in my range. This is not one line. The comparison is in four
+  database functions (`workspace_operations_action` twice, for `recordReservation` and for `prepareQuote`'s
+  `not between`; `workspace_import_reservation`; `workspace_controls_action`; `workspace_direct_booking_sweep`),
+  each patched by anchor. Then in `StaySheet.tsx` (outside my files): `nights >= minimumNights` becomes
+  `nights > minimumNights`, and the hint becomes "Stays of more than ${minimumNights} nights get a
+  direct-booking follow-up for the team." The setting label "Minimum nights for an offer" would then be
+  wrong and would need renaming too.
+
+**Recommendation: A.** It is one value, consistent everywhere, takes effect immediately and can be undone the
+same way.
+
+**Either way:** follow-ups already open for stays of exactly seven nights stay open. The team can close them;
+this read-only query lists them:
+`select w.id, w.title from public.workspace_work_items w join private.workspace_domain_details d on d.work_id = w.id join private.workspace_reservations r on r.id::text = d.data->>'reservationId' where d.kind = 'direct_booking' and w.status not in ('completed','cancelled') and r.check_out - r.check_in = 7;`
