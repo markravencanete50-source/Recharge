@@ -17,7 +17,8 @@ import { ALL_WEEKDAYS, WEEKDAYS_ONLY, WEEKDAY_LONG, WEEKDAY_SHORT, dailyTasksSch
 // each one to the department's to-do list on those days. Mounted in Management.
 type Department = (typeof DEPARTMENTS)[number];
 
-export function DailyTaskSettings({ p, account }: { p: Palette; account: WorkspaceAccount }) {
+// `only` shows one department's tasks (Management's "Set up the checklist"), with a way back to all of them.
+export function DailyTaskSettings({ p, account, only = null, onShowAll }: { p: Palette; account: WorkspaceAccount; only?: Department | null; onShowAll?: () => void }) {
   const saved = useSaved();
   const admin = account.role === "admin" || account.role === "super_admin";
   const [templates, setTemplates] = useState<DailyTask[] | null>(null);
@@ -27,7 +28,7 @@ export function DailyTaskSettings({ p, account }: { p: Palette; account: Workspa
     try { setTemplates(dailyTasksSchema.parse((await readTeams({ section: "dailyTasks" })).data).templates); setError(""); } catch (e) { setError(message(e)); }
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active && admin) void load(); }); return () => { active = false; }; }, [load, admin]);
-  const byDepartment = useMemo(() => DEPARTMENTS.map(d => ({ department: d, tasks: (templates ?? []).filter(t => t.department === d) })).filter(g => g.tasks.length), [templates]);
+  const byDepartment = useMemo(() => DEPARTMENTS.map(d => ({ department: d, tasks: (templates ?? []).filter(t => t.department === d) })).filter(g => g.tasks.length && (!only || g.department === only)), [templates, only]);
 
   if (!admin) return <Notice text="Only admins can change the daily tasks." p={p} />;
   return (
@@ -39,6 +40,10 @@ export function DailyTaskSettings({ p, account }: { p: Palette; account: Workspa
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!templates && !error && <Loading p={p} />}
       {templates && <>
+        {!!only && <View style={[ui.between, { gap: 12 }]}>
+          <Text style={[ui.small, { color: p.muted, flex: 1 }]}>Showing {DEPARTMENT_LABEL[only]} only: these make up its daily checklist.</Text>
+          {onShowAll && <MotionPress accessibilityRole="button" onPress={onShowAll} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Show every department</Text></MotionPress>}
+        </View>}
         <Button label="Add a daily task" icon="plus" primary p={p} onPress={() => setEditing({})} />
         {!templates.length && <Notice text="No daily tasks yet. Add the jobs each department does regularly and they will turn up on its list." p={p} />}
         {byDepartment.map(g => (
@@ -59,12 +64,12 @@ export function DailyTaskSettings({ p, account }: { p: Palette; account: Workspa
           </View>
         ))}
       </>}
-      <DailyTaskSheet p={p} target={editing} onClose={() => setEditing(null)} onSaved={saved(async () => { setEditing(null); await load(); })} />
+      <DailyTaskSheet p={p} target={editing} department={only} onClose={() => setEditing(null)} onSaved={saved(async () => { setEditing(null); await load(); })} />
     </View>
   );
 }
 
-function DailyTaskSheet({ p, target, onClose, onSaved }: { p: Palette; target: { task?: DailyTask } | null; onClose: () => void; onSaved: () => Promise<void> }) {
+function DailyTaskSheet({ p, target, department: preset = null, onClose, onSaved }: { p: Palette; target: { task?: DailyTask } | null; department?: Department | null; onClose: () => void; onSaved: () => Promise<void> }) {
   const task = target?.task;
   const [department, setDepartment] = useState<Department>("guest_relations");
   const [title, setTitle] = useState(""), [details, setDetails] = useState("");
@@ -77,11 +82,11 @@ function DailyTaskSheet({ p, target, onClose, onSaved }: { p: Palette; target: {
     let live = true;
     queueMicrotask(() => {
       if (!live) return;
-      setDepartment(task?.department ?? "guest_relations"); setTitle(task?.title ?? ""); setDetails(task?.details ?? "");
+      setDepartment(task?.department ?? preset ?? "guest_relations"); setTitle(task?.title ?? ""); setDetails(task?.details ?? "");
       setDays(task ? normaliseWeekdays(task.weekdays) : [...WEEKDAYS_ONLY]); setActive(task?.active ?? true); setConfirm(false); setError("");
     });
     return () => { live = false; };
-  }, [task, target]);
+  }, [task, target, preset]);
 
   async function save() {
     if (busy) return;

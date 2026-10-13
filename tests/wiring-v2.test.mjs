@@ -148,7 +148,7 @@ test('the phone bar, management and the routine card use the new names', () => {
   const management = mobile('LiveManagement.tsx');
   assert.match(management, /"reflections", "dailytasks"/);
   assert.match(management, /view === "reflections" && <ReflectionReview palette=\{p\} \/>/);
-  assert.match(management, /view === "dailytasks" && <DailyTaskSettings p=\{p\} account=\{account\} \/>/);
+  assert.match(management, /view === "dailytasks" && <DailyTaskSettings p=\{p\} account=\{account\}.*?\/>/);
   assert.match(management, /<ManagementApprovals palette=\{p\} account=\{account\} properties=\{properties\} work=\{work\} onOpenWork=\{onOpenWork\} \/>/, 'the approvals list is intact');
   assert.match(management, /view === "productivity" && <LiveProductivity /, 'rota and timesheets stay reachable');
   assert.match(management, /view === "performance" && <LiveTeamPerformance /);

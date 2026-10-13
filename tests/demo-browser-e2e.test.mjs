@@ -82,7 +82,10 @@ test('in Demo, nothing is sent to the live API, and every flow runs in the brows
     // Viewing as a cleaner signs in as the sample cleaner, still in the browser.
     await menu.click();
     await page.getByRole('menuitem', { name: 'View as someone' }).click();
-    await page.getByText('Exactly what Ewan sees').click();
+    // People are in the search picker: search when the list is long enough to show the box, then pick Ewan.
+    const search = page.getByPlaceholder('Search people by name or role');
+    if (await search.isVisible()) await search.fill('Ewan');
+    await page.getByRole('radio', { name: /^Ewan Stewart · / }).click();
     await page.getByText(/viewing as Ewan Stewart/).waitFor({ timeout: 30_000 });
     await page.waitForTimeout(3000);
     assert.deepEqual(apiCalls.slice(before), [], 'no /api request while Demo is on');

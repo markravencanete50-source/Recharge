@@ -262,3 +262,78 @@ For the Lead to route (not mine this round):
 - Every existing test that reads the changed files passes (305). `tsc -p mobile` and ESLint are clean.
 
 Screenshots: `docs/session-D-screenshots/round6-*`.
+
+## Round 6, first fix: sheets whose body is a fragment had no space between blocks
+
+Lee: the "Rejected clean" sheet (`CleanDisputes`) "has so much overlapping". `Sheet` (`mobile/src/TeamFlows.tsx`)
+spaces its children 16px apart, one `Stagger` each, but it took them with `Children.toArray`, which does not open
+fragments: a body like `{target && <>…</>}` was one child, so the gap never applied inside it.
+
+- `lib/sheet-children.ts` (new): `flattenSheetChildren` opens fragments and arrays recursively, drops empty slots and
+  keeps stable keys (the element's own key, else its position, prefixed by the fragment it sat in). `Sheet` maps
+  that instead. The 16px gap and 20px padding are unchanged. `CleanDisputes.tsx` needed no change.
+- Every sheet whose body is (or contains) a fragment now spaces its blocks like the rest: Accounts flows (3 sheets),
+  expense sheet, calendar picker sheets, chat safety menu, checklist templates, Rejected clean, day reflection, hub
+  item, access control (link made), team calendar work, clean sheet, client enquiries (2), onboarding (4), oversight
+  decision, property page selection, privacy copy, productivity person, repairs (2), team time (2), training course,
+  team events, visit form. None relied on the old tight grouping: their tight groups are already inside their own
+  `View`s (e.g. the decision buttons in `<View style={{ gap: 8 }}>`).
+- Test: `tests/sheet-children.test.mjs` (a fragment's children are spaced like direct children; nested fragments,
+  arrays and empty slots; stable unique keys; Sheet uses it with the gap and padding unchanged).
+- Screenshots: `round6-sheet-1/2` (Rejected clean before and after), `round6-sheet-3/4` (the oversight decision
+  sheet, same bug).
+
+## Round 6, second fix: the public New Property Enquiry Form (app/enquiry)
+
+1. **Invisible options.** A select's open list is drawn by the browser. In the dark theme the page's light text was
+   inherited by `<option>` on the browser's own white list (only the highlighted row showed). The options and
+   optgroups now get the page's colours explicitly (`--rc-surface` behind `--rc-text`), and in the dark theme the
+   selects take `color-scheme: dark`. The closed select is unchanged.
+2. **The second box on the address fields.** The app-wide focus outline (`input:focus-visible, textarea:focus-visible
+   { outline … !important }` in `lib/design-tokens.ts`) drew a light-green rectangle inside the field's own frame.
+   Each field's frame now carries `data-bare-input` (the existing switch for fields that show focus themselves), and
+   the form's inputs, textareas and selects lose any focus outline or shadow, so the frame's border is the one focus
+   style. Autofill paints no box: the `:-webkit-autofill` / `:autofill` inset box-shadow in the field's own background
+   with its own text colour, and a 600000s transition delay. The field frame no longer animates (no transition).
+   Same for every field on the page.
+- The form's choices already follow the rule: the long lists are styled native selects (property type 9, rooms 16,
+  start, enquiry type), the yes/no questions are pills.
+- Test: `tests/enquiry-form-fields.test.mjs` (option colours, dark color-scheme, the autofill rule, one focus
+  style and no motion, the selects).
+- Screenshots (`round6-enquiry-*`, Chromium): before and after, dark and light, with the address focused and typed
+  in and the Property type select shown open as a list (a headless screenshot can't draw the native pop-up list, so
+  the select is given `size=9` for the picture; the option colours are the same ones the pop-up uses). Autofill can't
+  be triggered in a headless browser; the test checks its rule. Checked in Chromium only here; Edge is Chromium,
+  Firefox honours option colours and `:autofill`, Safari draws its own pop-up list and ignores option colours (it
+  was already readable there).
+
+## Round 6: management checklist
+
+Alex: "Can we add a daily checklist for management centre, which shows up in to-do list as well?" The data side
+already existed (Management → Daily tasks: the database adds each task to its department's to-do every day it is
+due). This adds the checklist inside the Management centre. No migration.
+
+- **"Today's checklist"** (`mobile/src/ManagementChecklist.tsx`), at the top of Management above the view picker:
+  today's to-dos made from the Management daily tasks, in the order they were made, each with a tick box. "3 of 5
+  done" in the corner. A ticked item stays, struck through, with one thin line under it: "Ticked by Morag Campbell
+  at 09:14" (UK time, from the to-do's own `decidedBy` / `decidedAt`).
+- **The same to-dos as the To-do list**: it reads the same hub (`readTeams({ section: "hub" })`) and ticks with the
+  To-do list's own action (`moveHubItem`, status done or open, with a request id kept for retries), so the two
+  always agree. Unticking reopens it. Opening Management asks the database to make today's daily to-dos
+  (`ensureDailyTodos`, idempotent, as the To-do list does), so a task set up a minute ago shows today.
+- **Which rows** (`lib/management-checklist.ts`, `managementChecklist`): kind to-do, department management, made
+  from a daily task (has a template), due today, open or done. Hand-made to-dos, other departments' and other days'
+  are left out.
+- **Who sees it**: admins, super admins, and anyone whose department (on the rota) is management, which the hub read
+  already returns. Nobody else: the card renders nothing.
+- **Empty state**: "No daily checklist yet." Admins also get "Set up the checklist", which opens Daily tasks showing
+  Management only ("Showing Management only… Show every department"), with new tasks preset to Management
+  (`DailyTaskSettings` gains `only` and `onShowAll`).
+- Theme tokens only (surface, border, text, muted, success, primary); checked in light and dark.
+- Not touched: `lib/todo.ts`, `HubItemSheet.tsx`, the To-do list, the view picker row.
+- Tests: `tests/management-checklist.test.mjs` (which rows count; who sees it and who may set it up; ticking is the
+  To-do list's `moveHubItem`, valid for the server's schema, and the same call the To-do list makes; the card's place
+  and the set-up link; no hard-coded colours).
+- Tried in the interactive demo (Playwright): empty state, Set up the checklist → three Management tasks added →
+  back in Management the three appear, one ticked ("1 of 3 done", "Ticked by Sam Taylor at 14:54"), dark mode, and
+  the open ones are on the To-do list with the ticked one under Done. Screenshots `round6-checklist-*`.
