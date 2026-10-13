@@ -70,6 +70,10 @@ test('the constants are the brief\'s assumptions', () => {
   assert.deepEqual([...DEDUCTION_ORDER], ['ota_fee', 'changeover', 'management_fee', 'vat', 'payable']);
   assert.equal(feeBaseMinor(1000, 150), 850);
   assert.equal(feeBaseMinor(1000, 150, 'gross'), 1000);
+  // Client answer 1, prepared: after platform fees and changeovers. Plain subtraction, like the SQL.
+  assert.equal(feeBaseMinor(1000, 150, 'payout_after_ota_fees_and_changeovers', 300), 550);
+  assert.equal(feeBaseMinor(100, 0, 'payout_after_ota_fees_and_changeovers', 300), -200);
+  assert.equal(feeBaseMinor(1000, 150, 'payout_after_ota_fees', 300), 850, 'changeovers only count in the new base');
 });
 
 test('worked example: November 2026 matches the hand arithmetic', () => {

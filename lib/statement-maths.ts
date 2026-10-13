@@ -23,8 +23,10 @@ import { CHANNEL_LABEL } from './owner-reports';
 
 // Assumption (b): VAT on the management fee only, applied to the rounded fee.
 export const VAT_BPS = 2000;
-// The fee is charged on the payout after OTA fees (today's behaviour), or on gross. One switch.
-export type FeeBase = 'payout_after_ota_fees' | 'gross';
+// The fee is charged on the payout after OTA fees (today's behaviour), on gross, or on the payout after OTA fees and
+// changeovers (client answer 1: "after Airbnb fees and the cleaning fees", ready until the client confirms what the
+// cleaning fees are). One switch, private.workspace_statement_fee_base() in SQL; terms.feeBase overrides it here.
+export type FeeBase = 'payout_after_ota_fees' | 'gross' | 'payout_after_ota_fees_and_changeovers';
 export const FEE_BASE: FeeBase = 'payout_after_ota_fees';
 // An unreviewed clean whose actual cost is above the agreed value blocks the statement.
 export const STATEMENT_WAITS_FOR_CLEAN_REVIEW = true;
@@ -43,6 +45,8 @@ export type StatementTerms = {
   vatOnFee: boolean;
   cleaningCostMinor: number;
   cleanChargeMode: CleanChargeMode;
+  // What the fee is charged on; FEE_BASE when absent (the SQL reads its own switch).
+  feeBase?: FeeBase;
 };
 // The stored copy of a stay's money (detail.stays[].stay* on the statement that first put it on).
 export type StoredStayShare = {
@@ -169,9 +173,10 @@ export function prorate(x: number, before: number, through: number, nights: numb
   return fromBig(floorDiv(big * BigInt(through), n) - floorDiv(big * BigInt(before), n), 'Share');
 }
 
-// The amount the management fee is charged on.
-export function feeBaseMinor(grossMinor: number, otaFeesMinor: number, base: FeeBase = FEE_BASE): number {
-  return base === 'gross' ? grossMinor : grossMinor - otaFeesMinor;
+// The amount the management fee is charged on. Like the SQL it is plain subtraction, so it can be negative.
+export function feeBaseMinor(grossMinor: number, otaFeesMinor: number, base: FeeBase = FEE_BASE, changeoversMinor = 0): number {
+  if (base === 'gross') return grossMinor;
+  return base === 'payout_after_ota_fees_and_changeovers' ? grossMinor - otaFeesMinor - changeoversMinor : grossMinor - otaFeesMinor;
 }
 
 const DAY_MS = 86400000;
@@ -303,7 +308,7 @@ export function statementFor(input: StatementInput): StatementResult {
   const otaFeesMinor = total(otaLines.map(l => l.amountMinor), 'OTA fees');
   const changeoversMinor = total(changeovers.map(l => l.amountMinor), 'Changeovers');
   const payablesMinor = total(payables.map(l => l.amountMinor), 'Payables');
-  const base = feeBaseMinor(grossMinor, otaFeesMinor);
+  const base = feeBaseMinor(grossMinor, otaFeesMinor, terms.feeBase ?? FEE_BASE, changeoversMinor);
   const feeMinor = percentOfMinor(base, terms.managementFeeBps);
   const vatMinor = terms.vatOnFee ? percentOfMinor(feeMinor, VAT_BPS) : 0;
   const feeLines: StatementLine[] = [{ kind: 'management_fee', date: input.from, label: `Management fee (${percentLabel(terms.managementFeeBps)})`, amountMinor: feeMinor, refId: null }];

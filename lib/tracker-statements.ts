@@ -196,7 +196,7 @@ export function previewSummary(p: StatementPreview): PreviewSummary {
     { key: 'gross', label: 'Gross revenue', value: formatMoney(p.grossMinor), note: 'Guest payments for the stays in this period, before platform fees' },
     { key: 'ota_fee', label: 'Platform fees', value: deduct(p.otaFeesMinor), note: 'Airbnb, Booking.com and Vrbo fees' },
     { key: 'changeover', label: `Changeovers (${p.cleaningCount})`, value: deduct(p.changeoversMinor), note: `Charged at the ${(CLEAN_MODE_LABEL[terms.cleanChargeMode] ?? terms.cleanChargeMode).toLowerCase()}, unless a review decided otherwise` },
-    { key: 'management_fee', label: `Management fee (${formatBps(terms.managementFeeBps)})`, value: deduct(p.feeMinor), note: `${formatMoney(p.feeBaseMinor)}, ${terms.feeBase === 'gross' ? 'the gross revenue' : 'the payout after platform fees'}, at ${formatBps(terms.managementFeeBps)}` },
+    { key: 'management_fee', label: `Management fee (${formatBps(terms.managementFeeBps)})`, value: deduct(p.feeMinor), note: `${formatMoney(p.feeBaseMinor)}, ${terms.feeBase === 'gross' ? 'the gross revenue' : terms.feeBase === 'payout_after_ota_fees_and_changeovers' ? 'the payout after platform fees and changeovers' : 'the payout after platform fees'}, at ${formatBps(terms.managementFeeBps)}` },
     ...(terms.vatOnFee ? [{ key: 'vat', label: `VAT on the management fee (${vatRateText(terms.vatRateBps)})`, value: deduct(p.vatMinor) }] : []),
     { key: 'payable', label: 'Other payables', value: deduct(p.payablesMinor), note: 'Approved repairs and supplies received in this period' },
   ];

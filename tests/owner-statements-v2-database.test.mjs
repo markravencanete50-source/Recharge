@@ -381,8 +381,16 @@ function generator(seed) {
 }
 const isoDay = n => new Date(n * 86400000).toISOString().slice(0, 10);
 
-test('200 seeded random scenarios: the SQL statement equals statementFor', async () => {
-  const random = generator(20261012), int = (low, high) => low + Math.floor(random() * (high - low + 1)), pick = list => list[int(0, list.length - 1)];
+// The SQL fee base switch, set the way a one-line migration would.
+const setFeeBase = base => sql(`create or replace function private.workspace_statement_fee_base() returns text language sql immutable set search_path='' as $$ select '${base}'::text $$`);
+test('200 seeded random scenarios: the SQL statement equals statementFor', () => randomScenarios('payout_after_ota_fees', 20261012, 'Random'));
+// Client answer 1: the fee charged on the payout after platform fees and changeovers, prepared but not switched on.
+test('200 seeded random scenarios with the fee charged after platform fees and changeovers: the SQL equals statementFor', async () => {
+  await setFeeBase('payout_after_ota_fees_and_changeovers');
+  try { await randomScenarios('payout_after_ota_fees_and_changeovers', 20261015, 'After changeovers'); } finally { await setFeeBase('payout_after_ota_fees'); }
+});
+async function randomScenarios(feeBase, seed, name) {
+  const random = generator(seed), int = (low, high) => low + Math.floor(random() * (high - low + 1)), pick = list => list[int(0, list.length - 1)];
   const chance = p => random() < p;
   const day0 = Date.UTC(2024, 0, 1) / 86400000;
   const cleaners = [users[CLEANER_A], users[CLEANER_B], users[CLEANER_C]];
@@ -390,10 +398,10 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
   let prepared = 0, blockedCount = 0, withOldStatement = 0, withOwnerStay = 0, proRated = 0, withStoredCopy = 0, withRelier = 0, withNeighbour = 0;
   const seen = { changed: 0, conflict: 0, relied: 0, fromCopy: 0 };
   for (let i = 0; i < 200; i++) {
-    const label = `scenario ${i}`;
+    const label = `${name} scenario ${i}`;
     // Owner stays share one code index across the database: keep at most one alive.
     await sql("delete from private.workspace_reservations where channel='other' and channel_reference='Owner stay'");
-    const prop = await property(`Random ${i}`);
+    const prop = await property(`${name} ${i}`);
     const t = { managementFeeBps: pick([1200, 1500, 1250, 0, 10000, int(0, 10000)]), vatOnFee: chance(0.6), cleaningCostMinor: pick([0, 6000, int(1, 20000)]), cleanChargeMode: chance(0.6) ? 'agreed_fee' : 'actual_cost' };
     await sql('insert into private.workspace_property_financials(property_id,management_fee_bps,cleaning_cost_minor,vat_on_fee,clean_charge_mode) values($1,$2,$3,$4,$5)',
       [prop, t.managementFeeBps, t.cleaningCostMinor, t.vatOnFee, t.cleanChargeMode]);
@@ -516,12 +524,12 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
       let actual = assignee && rates[assignee] !== undefined ? rates[assignee] : null;
       const invoiceBy = assignee ?? cleaners[0];
       if (chance(0.15)) {
-        const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,status,created_by,request_id) values('Random cleaner',$1,$2,'2025-01-01',$3,'rejected',$4,gen_random_uuid()) returning id", [invoiceBy, `X-${i}-${k}`, 100, users[ACCOUNTS]]);
+        const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,status,created_by,request_id) values('Random cleaner',$1,$2,'2025-01-01',$3,'rejected',$4,gen_random_uuid()) returning id", [invoiceBy, `${name} X-${i}-${k}`, 100, users[ACCOUNTS]]);
         await sql('insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor,live) values($1,$2,$3,$4,false)', [inv.id, id, prop, int(1, 30000)]);
       }
       if (chance(0.4)) {
         const amount = int(1, 30000);
-        const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,created_by,request_id) values('Random cleaner',$1,$2,'2025-01-01',$3,$4,gen_random_uuid()) returning id", [invoiceBy, `L-${i}-${k}`, amount, users[ACCOUNTS]]);
+        const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,created_by,request_id) values('Random cleaner',$1,$2,'2025-01-01',$3,$4,gen_random_uuid()) returning id", [invoiceBy, `${name} L-${i}-${k}`, amount, users[ACCOUNTS]]);
         await sql('insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor) values($1,$2,$3,$4)', [inv.id, id, prop, amount]);
         actual = amount;
       }
@@ -541,8 +549,9 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
       if (status === 'approved') tsPayables.push({ id, date, description: `Expense ${i}-${k}`, amountMinor: amount });
     }
 
-    const ts = statementFor({ from, to, method, terms: t, stays: tsStays, cleans: tsCleans, payables: tsPayables });
+    const ts = statementFor({ from, to, method, terms: { ...t, feeBase }, stays: tsStays, cleans: tsCleans, payables: tsPayables });
     const c = await compute(prop, from, to, method);
+    assert.equal(c.terms?.feeBase ?? feeBase, feeBase, label);
     assert.deepEqual(figures(c), figures(ts), label);
     if (ts.stays.some(s => s.grossMinor !== 0 && s.nightsInPeriod < s.nights)) proRated++;
     if (ts.flags.some(x => x.startsWith('stay_changed_after_statement:'))) seen.changed++;
@@ -570,4 +579,4 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
   assert.ok(proRated >= 20, `pro-rated ${proRated}`);
   assert.ok(withStoredCopy >= 40 && withRelier >= 15 && withNeighbour >= 10, `stored copies ${withStoredCopy}, reliers ${withRelier}, neighbours ${withNeighbour}`);
   assert.ok(seen.fromCopy >= 20 && seen.changed >= 20 && seen.conflict >= 8 && seen.relied >= 5, JSON.stringify(seen));
-});
+}
