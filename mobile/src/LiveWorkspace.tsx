@@ -15,7 +15,7 @@ import { ProfileEditor, usePresenceHeartbeat } from "./ProfileSettings";
 import { FeatureTile } from "./Artwork";
 import { RoleNavigation } from "./RoleNavigation";
 import { rolePanel, type PanelLink } from "../../lib/role-panel";
-import { NavigationBar, type NavigationItem } from "./NavigationBar";
+import { NavigationBar, liveNavigationFor } from "./NavigationBar";
 import { FaqShortcut, useFaqShortcut } from "./FaqShortcut";
 import { FilterBar } from "./FilterBar";
 import { RechargeSplash } from "./RechargeSplash";
@@ -29,13 +29,17 @@ import { exportReport } from "./exportReport";
 import { LiveSignIn } from "./LiveSignIn";
 import { LiveHome } from "./LiveHome";
 import { LiveWorkRow, isDone, isWaitingWork, workDate } from "./LiveRows";
-import { LiveHub } from "./LiveHub";
 import { DateRangeSheet, EmptyState, LiveActivity, LiveHelp, LiveProperties, PageHeading, SoftButton, WorkflowSheet, liveApi, message } from "./LivePages";
 import { LiveCleans } from "./LiveCleans";
 import { LiveRepairs } from "./LiveRepairs";
 import { LiveAccounts } from "./LiveAccounts";
 import { LiveManagement } from "./LiveManagement";
-import { LiveStays } from "./LiveStays";
+import { GuestRelations } from "./GuestRelations";
+import { ClientRelations } from "./ClientRelations";
+import { TodoList, TodoSummary } from "./TodoList";
+import { ManagementApprovals } from "./ManagementApprovals";
+import { FlagButton, FlagRoleContext } from "./ManagementFlag";
+import type { SectionProps } from "./SectionProps";
 import { OnboardingGate } from "./LiveOnboarding";
 import { PropertyAccess } from "./LiveTools";
 import { ROLE_LABEL } from "../../lib/admin-live";
@@ -43,7 +47,7 @@ import { WORK_VIEW_LABEL, workViewsFor, type WorkView } from "../../lib/tool-dir
 import { formatBps, formatMoney } from "../../lib/format";
 import { liveApiOrigin, readChat, readTeams, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import { workspaceAccountSchema, type WorkspaceAccount } from "../../lib/workspace-account-policy";
-import { ownerNavigation, type WorkspaceSection } from "../../lib/workspace-map";
+import { PAGE_SECTIONS, deepLinkFor, type DeepLink, type WorkspaceSection } from "../../lib/workspace-map";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import { periodError, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot } from "../../lib/analytics";
 import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSchema, propertyViewSchema, readableStage, reportViewSchema, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
@@ -90,9 +94,11 @@ import { onboardingSchema } from "../../lib/management-live";
 
 type Role = WorkspaceAccount["role"];
 type IconName = ComponentProps<typeof Feather>["name"];
-const SECTIONS: WorkspaceSection[] = ["home", "work", "properties", "analytics", "activity", "help", "inbox", "approvals", "statements", "favorites", "enquiries", "feedback", "moderation"];
+// Every page a link can name (lib/workspace-map.ts). "activity" is not a page any more: for the team it opens Messages on its Updates tab.
+const SECTIONS: readonly WorkspaceSection[] = PAGE_SECTIONS;
+const TEAM_ROLES: Role[] = ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"];
 // Pages only some roles have.
-const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], favorites: ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"] };
+const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES, favorites: ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"] };
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
 type BookingPolicy = z.infer<typeof bookingPolicySchema>;
 // Direct-booking offers use this discount policy; only a super admin can set and confirm it.
@@ -110,27 +116,15 @@ function bookingPolicyForm(policy: BookingPolicy): WorkflowForm {
   };
 }
 
-// The live workspace's bottom bar on phones for each role: five items, the middle one the raised
-// action. (Favorites is a floating button next to Help there; desktop has the role's left panel.)
-function liveNavigation(role: Role): NavigationItem[] {
-  const item = (value: WorkspaceSection, label: string, icon: NavigationItem["icon"]): NavigationItem => ({ value, label, icon });
-  const home = item("home", "Home", "home"), properties = item("properties", "Properties", "key"), reports = item("analytics", "Reports", "bar-chart-2"), activity = item("activity", "Activity", "activity"), help = item("help", "Help", "help-circle");
-  // Owners: messages in the centre; stays, earnings, statements and mailbox are in Reports (once).
-  if (role === "client") return [...ownerNavigation()];
-  const [work, ...rest]: NavigationItem[] =
-    role === "cleans" || role === "cleaning_manager" ? [item("work", "Cleans", "check-square"), properties, activity, help]
-    : role === "ready" ? [item("work", "Maintenance", "tool"), properties, activity, help]
-    // Accounts: invoices and owner statements are the daily work (both in Work → Accounts).
-    : role === "accounts" ? [item("work", "Invoices", "file-text"), item("statements", "Statements", "pie-chart"), item("inbox", "Inbox", "message-circle"), item("help", "Tools", "grid")]
-    : [item("work", "Work", "check-square"), properties, reports, activity];
-  return [home, work, ...rest];
-}
 const WORK_TITLE: Record<Role, [string, string]> = {
   super_admin: ["Work", "Management, repairs and accounts in one place."], admin: ["Work", "Management, repairs and accounts in one place."],
   stays: ["Your work", "Stays, guests and repairs for your properties."], client: ["Repairs and requests", "Repairs and other requests at your properties."],
   cleans: ["Your cleans", "Today's cleans, checklists and photos."], cleaning_manager: ["Cleans", "Your team's cleans, reviews and schedule."],
   ready: ["Maintenance", "Reactive repairs, quotes, bookings and preventative visits."], accounts: ["Accounts", "Expenses, payouts and owner statements."],
 };
+
+// A number that differs each time a link is followed, so the same link opens its place again.
+const freshNonce = () => Date.now();
 
 // The welcome intro plays once a day on each device (and after signing in), not on every visit.
 const welcomeDay = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
@@ -155,9 +149,13 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const logoWidth = Math.max(88, Math.min(144, width - 52 - headerButtons * 56 - 44));
   const reduced = useReducedMotion(), motionPreference = useMotionPreference(), faqShortcut = useFaqShortcut();
   const { section } = useLocalSearchParams<{ section?: string }>();
-  const tab: WorkspaceSection = SECTIONS.includes(section as WorkspaceSection) && (ROLE_SECTIONS[section as WorkspaceSection]?.includes(account.role) ?? true) ? section as WorkspaceSection : "home";
+  const team = account.role !== "client";
+  // Old links still land: "messages" is the inbox page, and Updates (activity) is a tab inside Messages for the team.
+  const requested = section === "messages" ? "inbox" : section;
+  const updatesLink = requested === "activity" && team;
+  const tab: WorkspaceSection = updatesLink ? "inbox" : SECTIONS.includes(requested as WorkspaceSection) && (ROLE_SECTIONS[requested as WorkspaceSection]?.includes(account.role) ?? true) ? requested as WorkspaceSection : "home";
   const setTab = (value: WorkspaceSection) => router.setParams({ section: value });
-  const nav = useMemo(() => liveNavigation(account.role), [account.role]);
+  const nav = useMemo(() => liveNavigationFor(account.role), [account.role]);
   // On desktop the left panel is the role's own (lib/role-panel.ts): its heading, groups and everyday
   // tools. It follows the account shown, so View as shows the viewed person's or role's panel.
   const panel = useMemo(() => rolePanel(account.role, account.modules), [account.role, account.modules]);
@@ -174,8 +172,18 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active"), [workQuery, setWorkQuery] = useState("");
   // The bottom bar and sidebar open each page at its start, not where a Home tool last pointed.
   // Accounts' Invoices opens Work → Accounts on its expenses.
+  // Opens a place named by a deep link (lib/workspace-map.ts deepLinkFor): a page, or a Work area and its sub-page.
+  const openLink = (link: DeepLink) => {
+    const { section: to, view, sub, anchor, open, workId } = link;
+    if (to === "work" && view) setWorkView(view);
+    setFocus(to === "work" || anchor || open || workId ? { sub, anchor, open, workId, nonce: freshNonce() } : null);
+    setChatUpdates(link.messagesTab === "updates" ? freshNonce() : null);
+    setTab(to);
+  };
   const navigate = (value: WorkspaceSection) => {
+    if (value === "activity" && team) { openLink({ section: "inbox", messagesTab: "updates" }); return; }
     if (account.role === "accounts" && value === "work") { setWorkView("accounts"); setFocus(f => ({ sub: "expenses", nonce: (f?.nonce ?? 0) + 1 })); } else setFocus(null);
+    if (value === "inbox") setChatUpdates(null);
     setTab(value);
   };
   const [fade] = useState(() => new Animated.Value(1));
@@ -222,7 +230,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const messagesBadge = chatUnread + (guestWaiting ?? 0);
   // "Message the property team" (and similar) opens Messages on one conversation.
   const [chatTarget, setChatTarget] = useState<{ id: string; nonce: number } | null>(null);
-  const openMessages = (id: string) => { setOpenWork(null); setChatTarget({ id, nonce: Date.now() }); setFocus(null); router.setParams({ section: "inbox" }); };
+  // Set when Messages should open on its Updates tab (an old Updates link or a notice).
+  const [chatUpdates, setChatUpdates] = useState<number | null>(null);
+  const openMessages = (id: string) => { setOpenWork(null); setChatTarget({ id, nonce: Date.now() }); setChatUpdates(null); setFocus(null); router.setParams({ section: "inbox" }); };
   const lastRefresh = useRef(0), editing = useRef(false);
   // A super admin can change someone's role or tools while they are signed in. Every read carries
   // the current account, so the app switches to the new role's Home, Work and tools on the next refresh.
@@ -326,13 +336,13 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [tracker, setTracker] = useState<Tool | null>(null), [calculator, setCalculator] = useState(false), [viewAsOpen, setViewAsOpen] = useState(false);
   // A Home tool opens its place: the Work view (and tab inside it), or another page, then the section.
   const openTool = (target: HomeToolTarget) => {
-    if (target.kind === "work") { setWorkView(target.view); setFocus({ sub: target.sub, anchor: target.anchor, open: target.open, workId: target.workId, nonce: Date.now() }); setTab("work"); }
-    else if (target.kind === "tab") { setFocus(target.anchor ? { anchor: target.anchor, nonce: Date.now() } : null); setTab(target.tab); }
-    else if (target.kind === "tracker") setTracker(toolsFor(account.role, account.modules).find(t => t.id === target.module) ?? null);
+    if (target.kind === "tracker") setTracker(toolsFor(account.role, account.modules).find(t => t.id === target.module) ?? null);
     else if (target.kind === "calculator") setCalculator(true);
+    else { const link = deepLinkFor(target); if (link) openLink(link); }
   };
+  // The Calendar page and the other Work areas open each other (a changeover opens its Work area).
+  const openView = (view: WorkView, sub?: string) => { setFocus(sub ? { sub, nonce: Date.now() } : null); setWorkView(view); setTab("work"); };
   // Search and Favorites: one list of everything this person can open, from what is already loaded.
-  const team = account.role !== "client";
   // A role preview has nobody's favorites (not the super admin's own); a person view shows theirs.
   const favorites = useFavoritesStore(team && !(viewAs && !viewAs.person), demo ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
   // Viewing as a team member who hasn't finished their start-up checklist: say why their tools are empty.
@@ -421,7 +431,12 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [panelPick, setPanelPick] = useState<{ key: string; tab: WorkspaceSection; view: WorkView | "" } | null>(null);
   const openPanel = (link: PanelLink) => {
     if (link.kind === "page") { navigate(link.section); setPanelPick({ key: link.key, tab: link.section, view: "" }); return; }
-    if (link.kind === "area") { setFocus(null); setWorkView(link.view); setTab("work"); setPanelPick({ key: link.key, tab: "work", view: link.view }); return; }
+    if (link.kind === "area") {
+      // Calendar is a page of its own now; the other areas open inside Work.
+      const to = deepLinkFor({ kind: "work", view: link.view });
+      if (to && to.section !== "work") { navigate(to.section); setPanelPick({ key: link.key, tab: to.section, view: "" }); return; }
+      setFocus(null); setWorkView(link.view); setTab("work"); setPanelPick({ key: link.key, tab: "work", view: link.view }); return;
+    }
     openTool(link.target);
     const t = link.target;
     if (t.kind === "work") setPanelPick({ key: link.key, tab: "work", view: t.view });
@@ -440,11 +455,17 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     if (node && content.current) node.measureLayout(content.current, (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: !reduced }), () => undefined);
   };
   const names = new Map(properties.map(property => [property.id, property.name]));
+  // "Flag for management" on an open work item: the title says which item and where.
+  const flagTarget = (w: OperationView) => ({ workId: w.workId, propertyId: w.propertyId, title: `${w.title} at ${names.get(w.propertyId) ?? "the property"}` });
   // An inspection booked for a later day: say when the report can be filed instead of offering it.
   const openJourney = openWork && !isDone(openWork.status) ? journeys.find(j => j.propertyId === openWork.propertyId && (j.workId === openWork.workId || openWork.kind === "inspection")) : undefined;
   const reportFrom = openJourney ? inspectionReportFrom(account, openJourney) : null;
   // Kinds with a tracker adapter (purchase orders, licensing) open with the shared tracker detail; the rest keep the plain sheet.
-  const openTracker = openWork ? trackerItemFor(openWork, { property: id => properties.find(x => x.id === id), forms: w => workItemForms(account, w, journeys, work), now: new Date(), owner: account.role === "client" }) : null;
+  // Direct-booking offers wait for the confirmed discount policy, so that step shows as unavailable until then.
+  const formsFor = (w: OperationView): WorkflowForm[] => workItemForms(account, w, journeys, work).map(f => f.key === "prepareQuote" && !policyConfirmed && !f.unavailable ? { ...f, unavailable: "The discount policy awaits confirmation." } : f);
+  const openTracker = openWork ? trackerItemFor(openWork, { property: id => properties.find(x => x.id === id), forms: formsFor, now: new Date(), owner: account.role === "client", role: account.role }) : null;
+  // What every section list is given, built once here (mobile/src/SectionProps.ts).
+  const sectionProps: SectionProps = { palette: p, account, properties, journeys, work, onForm: setForm, onOpenWork: setOpenWork, onTool: openTool };
   // Every word typed must appear in the title, the property (name or street) or the stage.
   const workWords = normalise(workQuery).split(" ").filter(Boolean);
   const places = new Map(properties.map(property => [property.id, `${property.name} ${property.address ?? ""} ${property.region ?? ""}`]));
@@ -471,11 +492,11 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const workPage = (
     <>
       {/* The Work areas are listed in the left panel on desktop, so the row of tabs shows only without it (phones, or the panel hidden). */}
-      {workViews.length > 1 && !(desktop && !sidebarHidden) && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => setWorkView((Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(view => WORK_VIEW_LABEL[view] === label) ?? "")} palette={p} />}
-      {currentView === "hub" && <LiveHub palette={p} account={account} properties={properties} journeys={journeys} work={work} onForm={setForm} onOpenWork={setOpenWork} />}
-      {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} onOpenWork={setOpenWork} onOpenView={(view, sub) => { setFocus(sub ? { sub, nonce: Date.now() } : null); setWorkView(view); }} />}
-      {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} />}
-      {currentView === "stays" && <LiveStays key={"stays:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onOpenRepairs={() => setWorkView("repairs")} onOpenWork={setOpenWork} />}
+      {workViews.length > 1 && !(desktop && !sidebarHidden) && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => { const view = (Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(v => WORK_VIEW_LABEL[v] === label) ?? ""; if (view === "calendar") navigate("calendar"); else setWorkView(view); }} palette={p} />}
+      {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} properties={properties} onOpenWork={setOpenWork} onOpenView={openView} />}
+      {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />}
+      {currentView === "stays" && <GuestRelations key={"stays:" + (focus?.nonce ?? "")} {...sectionProps} onRefresh={() => refresh(true)} minimumNights={policy?.minimum_nights} />}
+      {currentView === "clients" && <ClientRelations key={"clients:" + (focus?.nonce ?? "")} {...sectionProps} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} />}
       {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onForm={setForm} />}
       {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
       {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
@@ -504,14 +525,17 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   );
   const reportsPage = (
     <>
-      {snapshot ? <Reports snapshot={snapshot} period={period} role={account.role} palette={p} onDates={() => setDates(true)} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} /> : (
+      {snapshot ? <Reports snapshot={snapshot} period={period} role={account.role} account={account} work={work} palette={p} onDates={() => setDates(true)} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} /> : (
         <><PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." />{reportError ? <View style={{ gap: 12 }}><EmptyState palette={p} icon="activity" title="Reports could not be loaded" detail={reportError} /><SoftButton label="Try again" icon="refresh-cw" palette={p} onPress={() => void loadReport(period)} /></View> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View>}</>
       )}
       {(isWorkspaceAdmin(account.role) || account.role === "accounts") && !!invoices.length && invoiceList}
     </>
   );
   const page = tab === "home"
-    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={setTab} onTool={openTool} />
+    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={section => (section === "activity" ? navigate(section) : setTab(section))} onTool={openTool} favoriteEntries={entries} onOpenEntry={openEntry} tasks={team ? <TodoSummary {...sectionProps} onOpenAll={() => navigate("todo")} /> : undefined} />
+    : tab === "todo" ? <TodoList {...sectionProps} />
+    : tab === "decisions" ? <ManagementApprovals palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />
+    : tab === "calendar" ? <LiveCalendar palette={p} account={account} work={work} desktop={desktop} properties={properties} onOpenWork={setOpenWork} onOpenView={openView} />
     : tab === "favorites" ? <FavoritesPage palette={p} desktop={desktop} entries={entries} onOpen={openEntry} onSearch={() => setSearchOpen(true)} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} focusProperty={propertyFocus} />
@@ -522,13 +546,14 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
     : tab === "moderation" ? <LiveModeration palette={p} />
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} />
-    : tab === "inbox" ? <LiveChat key={chatTarget?.nonce ?? 0} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} openConversation={chatTarget?.id} />
+    : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} openConversation={chatTarget?.id}
+        updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view) => { setTab(next); if (view) setWorkView(view); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;
   const header = headerPalette(p);
   const ownerActions = { unread: chatUnread, openForm: setForm };
-  const title = tab === "work" && currentView ? WORK_VIEW_LABEL[currentView] : panel.groups.flatMap(g => g.links).find(l => l.kind === "page" && l.section === tab)?.label ?? nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : "Home");
+  const title = tab === "work" && currentView ? WORK_VIEW_LABEL[currentView] : panel.groups.flatMap(g => g.links).find(l => l.kind === "page" && l.section === tab)?.label ?? nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : tab === "todo" ? "To-do list" : tab === "calendar" ? "Calendar" : tab === "decisions" ? (isWorkspaceAdmin(account.role) ? "Management approvals" : "Your requests") : "Home");
   // The floating Help button; the page leaves room under its last item while it shows.
   // Not in Messages, where it would sit over the send button.
   const showFaq = !faqShortcut.hidden && tab !== "help" && tab !== "inbox" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help")));
@@ -536,7 +561,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const showFavorites = !desktop && team && tab !== "favorites";
   return (
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
-      <FavoritesContext.Provider value={team ? favorites : null}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
+      <FavoritesContext.Provider value={team ? favorites : null}><FlagRoleContext.Provider value={account.role}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
         {desktop && !sidebarHidden && <RoleNavigation panel={panel} selected={panelSelected} palette={p} onOpen={openPanel} badges={{ "page:inbox": messagesBadge }} viewing={panelViewing} onBack={demo ? () => (viewAs ? void onViewAs(null) : onDemo(false)) : viewAs ? () => void onViewAs(null) : undefined} backLabel={demo && !viewAs ? "Switch to Live" : undefined} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} me={{ name: profile.displayName, userId: account.userId, photo: account.photo }} />}
@@ -638,9 +663,11 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <WorkflowSheet spec={form} invoices={invoices} budget={budget} palette={p} onClose={() => setForm(null)} onSaved={refresh} />
       <Sheet palette={p} visible={!!openWork} onClose={() => setOpenWork(null)} title={openWork?.title ?? ""} subtitle={openWork ? [names.get(openWork.propertyId), readableStage(openWork.status)].filter(Boolean).join(" · ") : undefined} icon="clipboard">
         {openWork && openTracker && (
-          <TrackerDetail p={p} item={openTracker} owner={account.role === "client"} forms={workItemForms(account, openWork, journeys, work)} onForm={f => { setOpenWork(null); setForm(f); }}>
+          <TrackerDetail p={p} item={openTracker} owner={account.role === "client"} forms={formsFor(openWork)} onForm={f => { setOpenWork(null); setForm(f); }}>
             {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
+            {openWork.kind === "direct_booking" && openWork.data.phase === "follow_up" && policy?.confirmed && <Text style={[ui.small, { color: p.muted }]}>Offer the guest {formatBps(policy.discount_bps).replace(".0%", "%")} off, up to {formatMoney(policy.discount_cap_minor)} off. The offer price is worked out when you prepare it.</Text>}
             {team && <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />}
+            <FlagButton p={p} role={account.role} target={flagTarget(openWork)} onDone={() => void refresh()} />
             <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
             {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}
             <PriceNightsLink p={p} account={account} item={openWork} onOpen={target => { setOpenWork(null); openTool(target); }} />
@@ -652,6 +679,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
           {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: {formatMoney(Number(openWork.data.estimatedCostMinor))}</Text>}
           {team && <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />}
+          <FlagButton p={p} role={account.role} target={flagTarget(openWork)} onDone={() => void refresh()} />
           <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
           {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}
           <PriceNightsLink p={p} account={account} item={openWork} onOpen={target => { setOpenWork(null); openTool(target); }} />
@@ -668,7 +696,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       {canViewAs(realAccount) && <ViewAsSheet palette={p} visible={viewAsOpen} current={viewAs} onClose={() => setViewAsOpen(false)} onChoose={onViewAs} demo={demo} />}
       <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
       {welcome === "splash" && <RechargeSplash palette={p} onDone={() => setWelcome("greeting")} />}
-      </OpenMessagesContext.Provider></CelebrateProvider></FavoritesContext.Provider>
+      </OpenMessagesContext.Provider></CelebrateProvider></FlagRoleContext.Provider></FavoritesContext.Provider>
       {welcome === "greeting" && <GreetingCard palette={p} profile={profile} openTasks={work.filter(item => !isDone(item.status)).length} waiting={work.filter(item => isWaitingWork(item.status)).length} onClose={finishWelcome} onWork={() => { finishWelcome(); setTab("work"); }} />}
     </SafeAreaView>
   );

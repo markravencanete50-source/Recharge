@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 // to-do lists, purchase orders, preventative maintenance dates, and each day's reviews and pricing.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 after(() => vite.close());
-const { hubTabsFor, todoRows, purchaseRows, preventativeRows, nextDue, dailyRows, onboardingRows } = await vite.ssrLoadModule('/lib/hub.ts');
+const { todoRows, purchaseRows, preventativeRows, nextDue, dailyRows, onboardingRows } = await vite.ssrLoadModule('/lib/hub.ts');
 const { teamsReadSchema } = await vite.ssrLoadModule('/lib/workspace-teams-policy.ts');
 const { workViewsFor } = await vite.ssrLoadModule('/lib/tool-directory.ts');
 
@@ -14,19 +14,10 @@ const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const op = (n, kind, data, extra = {}) => ({ workId: id(n), propertyId: id(900), moduleId: 'x', title: kind, kind, status: 'waiting', version: 1, assigneeId: null, data, ...extra });
 const todo = (n, extra) => ({ id: id(n), kind: 'todo', title: 'T' + n, details: '', propertyId: null, propertyName: null, assigneeId: null, assigneeName: null, department: null, dueOn: null, amountMinor: null, settledMinor: null, link: null, reference: '', status: 'open', outcomeNote: '', decidedBy: null, decidedAt: null, createdBy: id(1), createdByName: 'A', createdAt: '2026-10-0' + (n % 9 + 1) + 'T09:00:00Z', updatedAt: '', version: 1, ...extra });
 
-test('every team role has the Hub; each sees the trackers for their work', () => {
-  for (const role of ['admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts']) assert.ok(workViewsFor(role).includes('hub'), role);
-  assert.equal(workViewsFor('client').includes('hub'), false);
-  assert.deepEqual(hubTabsFor('admin', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'invoices', 'onboarding', 'licensing', 'responsibilities', 'rota', 'timesheets']);
-  assert.deepEqual(hubTabsFor('super_admin', ['todo']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'onboarding', 'licensing', 'responsibilities', 'rota', 'timesheets']);
-  assert.deepEqual(hubTabsFor('cleans', ['todo', 'approval']), ['todos', 'approvals', 'responsibilities', 'rota', 'timesheets']);
-  assert.deepEqual(hubTabsFor('accounts', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'aircover', 'invoices', 'responsibilities', 'rota', 'timesheets']);
-  // A super admin previewing Ready gets the database's answer for themselves (all four kinds), but only Ready's trackers show.
-  assert.deepEqual(hubTabsFor('ready', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'responsibilities', 'rota', 'timesheets']);
-  assert.deepEqual(hubTabsFor('stays', ['todo', 'approval', 'aircover', 'invoice']), ['todos', 'approvals', 'purchases', 'preventative', 'daily', 'aircover', 'onboarding', 'licensing', 'responsibilities', 'rota', 'timesheets']);
-  // Only the roles the database lets record licensing steps (stays, admin, super admin) get the tab.
-  for (const role of ['accounts', 'ready', 'cleans', 'cleaning_manager', 'client']) assert.equal(hubTabsFor(role, ['todo', 'approval', 'aircover', 'invoice']).includes('licensing'), false, role);
-  assert.ok(teamsReadSchema.safeParse({ section: 'hub' }).success);
+test('the Hub is no Work view for any role; its trackers live in To-do, Management approvals and the two relations areas', () => {
+  for (const role of ['super_admin', 'admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts', 'client']) assert.equal(workViewsFor(role).includes('hub'), false, role);
+  assert.deepEqual(workViewsFor('admin'), ['management', 'stays', 'clients', 'calendar', 'cleans', 'repairs', 'accounts', 'all']);
+  assert.ok(teamsReadSchema.safeParse({ section: 'hub' }).success, 'the hub read still serves its rows to the new screens');
 });
 
 test('to-do lists: mine, my department\'s, one person\'s; open first, soonest due first', () => {

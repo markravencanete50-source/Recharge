@@ -33,7 +33,7 @@ const pounds = (minor: unknown) => typeof minor === "number" ? formatMoney(minor
 const estimateText = (data: Record<string, unknown>) => data.estimatedCostMinor === 0 && data.phase === "triage" ? "Cost not known yet" : `Estimate ${pounds(data.estimatedCostMinor)}`;
 const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", approveManagement: "Approve the cost (management)", referReady: "Refer to Ready", bookRepair: "Book the repair", completeRepair: "Complete the repair" };
 
-export function LiveRepairs({ palette: p, account, properties }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
+export function LiveRepairs({ palette: p, account, properties, showRoutines = true }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; showRoutines?: boolean }) {
   const saved = useSaved();
   const today = london(new Date());
   const [repairs, setRepairs] = useState<Operation[]>([]);
@@ -139,7 +139,7 @@ export function LiveRepairs({ palette: p, account, properties }: { palette: Pale
         }) : !loading && <Notice text={stage === "action" ? "Nothing is waiting for you." : "No repairs in this view."} p={p} />}
       </Section>
 
-      {routines && (
+      {routines && showRoutines && (
         <Section title="Preventative maintenance" p={p}>
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <Button label="New routine" icon="repeat" p={p} onPress={() => setPlanning(true)} />

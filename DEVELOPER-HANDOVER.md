@@ -610,3 +610,320 @@ the ChatGPT "Management Hub" prototype is a functional reference, not the layout
   is switched on. `lib/hostaway.ts` is the API client.
 
 Secrets and live records are never stored in this repository.
+
+## Accounts and reconciliation (2026-10-12)
+
+Source: Alex's written Accounts brief (asks D1 to D8 in `docs/CLIENT-FEEDBACK-2026-10-12.md`). Built on
+the local branch `feedback-2026-10-12` in commits `7fd4f46`, `d3612ac` and `a588fff`. **None of the
+migrations 20261012070000 onward is applied to any live database** (see "Deploy order and risks"
+below). Money is integer pence throughout.
+
+### Payout CSV import, per channel
+
+- `lib/payout-report-formats.ts` holds one header list per channel (`PAYOUT_COLUMNS` for `airbnb`,
+  `booking_com`, `vrbo`) and `RECONCILED_CHANNELS`. `readPayoutLines` in
+  `lib/payout-reconciliation.ts` reads a file for one channel; `detectPayoutChannel` recognises a
+  file uploaded under the wrong platform.
+- **Airbnb:** the header layout is the real "Transaction history" export (Confirmation Code, Amount,
+  Paid out, Service fee, Fast Pay Fee, Cleaning fee, Gross earnings, Reference code and so on), and
+  the reader was proven on a real-shape file. The repository holds no real data: the test fixture
+  `tests/payout-real-shape-fixture.mjs` is generated from a seed to the same layout and size (about
+  2,100 coded lines over about 150 payout dates).
+- **Booking.com and VRBO: the header names are best guesses.** No real export of either was available.
+  The lists are deliberately generous and tolerant of case, spaces and punctuation. When a real file
+  arrives, add its exact headers to the right list and a few of its rows to
+  `tests/payout-reconciliation.test.mjs`. Do not trust either channel until that has been done.
+- Reader rules: the first non-empty net column on a row is the money received, and a gross column is
+  never read as money received. A file with no net column is refused. A file with any non-GBP row is
+  refused. Fees are stored as positive amounts. Rows without a code or amount are skipped and counted
+  (`noCode`, `noAmount`). A generic "Reference" column is never a booking code (on Airbnb it is the
+  bank transfer).
+- **Line keys for re-import.** Each line gets a key built from the code, date, type, amount, payout
+  reference and an occurrence number. The unique index on `(channel, line_key)` means an overlapping
+  report adds only the lines not already held; the rest are counted as "already held". A line with no
+  date and no reference has no key and is never de-duplicated, so only a byte-identical file is
+  refused. The upload summary reports new, already held, skipped and cancelled-stay lines.
+- **Transfers check.** `transferSummary` and the transfer rows of an Airbnb export compare each
+  payout date's coded lines with the bank transfer rows for that date, so a missing or doubled line
+  shows up before anything is approved.
+- Set-aside: any active line can be set aside with a reason (a duplicate, a line for another
+  business) unless its stay is in an issued or paid statement (`setAsidePayoutLine`).
+- States on a stay: matched (received equals expected exactly, `PAYOUT_TOLERANCE_MINOR` is 0),
+  different (shows the difference and a repeated-amount hint), "Approved, not received" (agreed with
+  no funds), and unmatched lines (no confirmed stay has the code; tagged "Stay cancelled" where a
+  cancelled stay has it). Two stays can never share a code within a channel. Bulk approval skips a
+  stay whose lines repeat an amount.
+- Migration `20261012080000_reconciliation_vrbo.sql`. Tests: `tests/payout-reconciliation.test.mjs`,
+  `tests/payout-reconciliation-v2-database.test.mjs`, `tests/payout-real-shape.test.mjs`,
+  `tests/payout-real-shape-database.test.mjs`, `tests/payout-bulk-approval-database.test.mjs`,
+  `tests/finance-schemas-v2.test.mjs`, `tests/reconciliation-screens.test.mjs`.
+
+### Owner statements, version 2
+
+- **Any period.** A statement covers `period_start` (included) to `period_end` (not included). Old
+  monthly statements are backfilled and keep the method `check_in_month`. New ones default to the
+  method `nights`. `prepareStatement` takes a month or a from and to.
+- **Pro-rating.** For a stay of N nights with `before` nights before the period and `through` nights
+  up to its end, share(x) = floor(x * through / N) minus floor(x * before / N), applied to gross and
+  OTA fee. The payout share is gross share minus fee share, so the parts of a stay always add up
+  exactly. The SQL (`private.workspace_statement_compute`) and TypeScript (`statementFor` in
+  `lib/statement-maths.ts`) must give identical figures; a shared worked example (November 2026, one
+  property at 15% plus VAT) is tested on both sides.
+- **Fee base.** The management fee is charged on the payout after OTA fees (the previous behaviour).
+  This is an assumption and is one switch. Fee = round(base x bps / 10000), halves away from zero.
+- **VAT.** 20% (`workspace_vat_bps()`), on the management fee only, per property flag `vat_on_fee`.
+  VAT is worked out on the rounded fee. The 12% or 15% rate is `management_fee_bps` per property.
+- **Order of deductions.** OTA fees, changeovers, management fee, VAT, other payables (approved
+  expenses), each category in date order. Payout = gross less every line. Occupancy % = nights
+  booked / nights in the period; owner stays count as booked nights.
+- **Changeovers** are accepted, completed cleans in the period, at the agreed value
+  (`cleaning_cost_minor`) or at the actual cost, per property `clean_charge_mode` or a clean's own
+  review.
+- **Stored-copy design.** Once an issued or paid statement has counted a stay, later statements take
+  their share from the copy of the stay stored on that statement, never from the stay as it is now.
+  A stay that is later extended, moved or paid differently therefore cannot be paid twice and cannot
+  block a later statement; the change is flagged internally.
+- **Refusals.** Preparing is refused or blocked when: a period overlaps another statement for the
+  property; a stay in the period is unsettled; a clean that cost more than agreed waits for a review
+  on an agreed-fee property; a stay is split by nights on one statement and by check-in month on
+  another; a later statement relies on this one to count a stay in full (re-preparing and voiding
+  both check this). Issuing works the figures out again and refuses if anything changed. A stay,
+  payout or clean is locked only when an issued or paid statement overlaps its dates (no month-start
+  locks). Owners receive the statement without `internal`, `cleanCosts` and `alreadyCounted`.
+- Migrations `20261012090000_clean_costs_terms.sql` (terms, cleaner invoices, clean cost reviews) and
+  `20261012100000_owner_statements_v2.sql`. Tests: `tests/statement-maths.test.mjs`,
+  `tests/clean-costs-database.test.mjs`, `tests/owner-statements-v2-database.test.mjs`,
+  `tests/accounts-money-regressions-database.test.mjs` (fails on the pre-review code),
+  `tests/tracker-statements.test.mjs`, `tests/statements-screens.test.mjs`.
+
+### Receivable, payables, owner expenses
+
+- **Receivable** (`20261012110000_receivable.sql`, `AccountsReceivable.tsx`, `lib/tracker-receivable.ts`):
+  hub items gain `reservation_id` and `client_id`. "To send" and "To settle" lists, plus direct stays
+  that still need an invoice. `moveHubItem` records payments (the total received so far; a payment
+  cannot exceed the invoice). Finance roles only, no staff names.
+- **Payables** (`AccountsPayable.tsx`, `lib/tracker-payables.ts`, `CleanCostReview.tsx`):
+  supplier invoices and cleaner invoices (a total that must equal its lines, one live line per
+  clean; a rejected invoice frees its cleans) plus "Cleans to review" where the actual cost is above
+  the agreed value. Cleaner invoices never become `workspace_expenses` rows and never reach owners.
+  The actual cost of a clean is its line on a live cleaner invoice, else the assigned cleaner's rate.
+- **Owner expenses** (`20261012120000_owner_expenses.sql`, `OwnerExpenses.tsx`): an owner records what
+  they spent on a property in a month. It changes only the net figure the owner sees (payout minus
+  their expenses) and is never an input to a statement. A month is locked once an issued or paid
+  statement covers any part of it. The owner's month view now understands period statements: a
+  covered month is never an estimate, and VAT is included in estimates.
+- **Mid-stay cleans** (`20261012130000`): a confirmed stay of more than 14 nights gets one clean at
+  check-in plus half the nights (rounded down), `cleanType` `mid_stay`, never carrying
+  `reservationId` (so the Hostaway sync cannot move it). Owner stays get one too (one switch). It is
+  cancelled if the stay no longer needs it and nobody has started it. Charged like any changeover.
+  Runs from `worker/index.ts` every 15 minutes (`workspace_mid_stay_cleans`) and at the end of each
+  Hostaway sync.
+- **Performance** (`AccountsPerformance.tsx`, `lib/performance.ts`, finance report `performance`,
+  finance roles and admins only): management fee income (issued or paid statements starting in the
+  window, VAT shown separately), cleaning charged against actual cost and margin, occupancy, gross
+  revenue and average nightly rate, filtered by dates, property, region and channel (366 days at
+  most).
+- Tests: `tests/receivable-database.test.mjs`, `tests/receivable-screens.test.mjs`,
+  `tests/payables-screens.test.mjs`, `tests/tracker-payables.test.mjs`,
+  `tests/owner-expenses-database.test.mjs`, `tests/mid-stay-cleans-database.test.mjs`,
+  `tests/performance-database.test.mjs`, `tests/performance.test.mjs`,
+  `tests/accounts-files.test.mjs`, `tests/live-accounts-contract.test.mjs`.
+
+### The money rules, in one list
+
+1. Integer pence only. A file with any non-GBP coded row is refused.
+2. Fee = round(base x bps / 10000), halves rounded away from zero. VAT = round(fee x 2000 / 10000)
+   on the already rounded fee, management fee only.
+3. Pro-rating uses the floor formula above, so a stay's shares across periods add up exactly.
+4. OTA fee = the itemised fees on the stay's payout lines, else gross minus net, else 0 with a flag
+   (for a platform stay). Gross = settled amount + OTA fee.
+5. A payout line's key is built from code, date, type, amount, payout reference and an occurrence
+   number. No date and no reference means no key and no de-duplication.
+6. Matched means received equals expected exactly. No tolerance.
+7. Deductions run in the fixed order OTA fees, changeovers, management fee, VAT, other payables.
+8. A stay's money is counted in one statement only. Later statements use the stored copy.
+9. Owners never see cleaner costs, review notes, payout lines, internal flags or staff names.
+10. Owner-entered expenses change the owner's net figure only, never a payout.
+11. Statements wait for stays to be settled and for flagged cleans to be reviewed
+    (`STATEMENT_WAITS_FOR_CLEAN_REVIEW`).
+
+## Client feedback round 3 (2026-10-12/13)
+
+Source: `docs/CLIENT-FEEDBACK-2026-10-12.md` (asks A, B and C). Wave 1 (everything below except the
+navigation work) is committed as `dfa2cac`. The navigation and Guest relations / Client relations
+screens are in the working tree and were **not committed** when this was written (see "Navigation
+changes"). Every new database test applies all `supabase/migrations/*.sql` in order and then the
+migration under test, so a half-written migration breaks everyone's tests. The assumptions chosen
+for the client to confirm are one constant each in `lib/feedback-defaults.ts` and one immutable SQL
+function each.
+
+All migrations from `20261012140000` patch shared functions by **anchor and append**: the anchor text
+stays word for word at the start of the replacement, each patch has its own sentinel (a second run
+does nothing), and a missing or repeated anchor raises. The two route anchors used throughout are
+`elsif section='hub' then result:=private.workspace_hub_read();` (reads, in `workspace_teams_read`)
+and `if a in ('saveHubItem','moveHubItem') then return private.workspace_hub_action(input);end if;`
+(actions, in `workspace_teams_action`). The client (owner) role is refused every new read and action
+and never receives a staff name.
+
+### Migrations, in order
+
+- **`20261012140000_management_flags.sql` (B7).** Table `private.workspace_management_flags`
+  (source work, hub, request or clean_form; status open, resolved, declined or withdrawn). Partial
+  unique indexes allow one open flag per work item and per hub item. Actions `flagForManagement`
+  (any team role who can see the item), `decideFlag` (admins; declining needs a note of 5 or more
+  characters), `withdrawFlag` (the raiser). Read section `flags`: admins see open flags plus 90 days
+  of decided ones, everyone else only their own. Activity events `management.flag_raised`,
+  `flag_resolved`, `flag_declined`, `flag_withdrawn` carry the work id. Anchors patched: the two hub
+  route anchors. Test: `tests/management-flags-database.test.mjs`, plus
+  `tests/management-approvals.test.mjs` for the merged list.
+- **`20261012150000_day_reflection.sql` (A7).** Table `workspace_day_reflections`; day summary
+  (tickets touched or completed, to-dos done, guest replies); read sections `reflection` and
+  `reflections` (admins, up to 31 days); actions `saveReflection` and `markReflectionsReviewed`.
+  Saving also writes a `workspace_daily_signoffs` row so sign-off counts and the missed-day roll-over
+  keep working. Required for stays, ready, accounts and cleaning_manager (not cleaners or admins).
+  **Clock-out gate:** `workspace_shift_action` refuses `clockOut` when a reflection is required and
+  none exists for the open shift; the admin `closeShift` is not affected. Anchors patched: the
+  `elsif a='clockOut' then` branch (with its json_keys line) and the two hub route anchors. Test:
+  `tests/day-reflection-database.test.mjs`, `tests/reflection.test.mjs`; `tests/shift-pauses-database.test.mjs`
+  and `tests/team-performance-database.test.mjs` were adjusted.
+- **`20261012160000_daily_tasks_notice_routes.sql` (A6 and B8).** Table
+  `workspace_daily_task_templates` (department, title, weekdays, active; none seeded), hub items gain
+  `template_id` with a unique index on (template_id, due_on), `workspace_ensure_daily_todos(day)`
+  (idempotent; also a service-role wrapper for the cron). Actions `ensureDailyTodos`,
+  `saveDailyTask`, `removeDailyTask`; read `dailyTasks` (admins). Notice routes: table
+  `workspace_notice_routes(event_type, role)` seeded for purchase, licensing, cleaning, repair and
+  direct-booking steps, and an AFTER INSERT trigger on `public.workspace_activity` that notifies
+  active staff of the routed role assigned to the property, plus admins; never the actor, never
+  owners or cleaners, and it swallows its own errors. There is no editor for the routes yet. Anchors
+  patched: the two hub route anchors. Test: `tests/daily-tasks-notice-routes-database.test.mjs`.
+- **`20261012170000_clean_form_warnings.sql` (B2).** `workspace_clean_form_sweep(at)` (at most 200 a
+  run, 14 day lookback, due after 18:00 London on the clean day): an assigned clean with no
+  submitted form gets `data.warning='no_form'`, an open `clean_form` flag and the event
+  `cleaning.form_missing`. It bumps the clean's version. It never changes pay and never blocks the
+  clean. No anchors patched (whole new functions plus a service-role wrapper). Test:
+  `tests/clean-form-warnings-database.test.mjs`, `tests/clean-forms.test.mjs`.
+- **`20261012180000_direct_booking_followups.sql` (B3).** `workspace_direct_booking_sweep(at)` (at
+  most 50 a run): confirmed Airbnb, Booking.com or VRBO stays not entered by hand, checking in today
+  or later, at least the booking policy's `minimum_nights`, with no `direct_booking` item for the
+  stay. Creates the item through `workspace_handover`. A cron sweep, not a trigger, so it cannot
+  slow the Hostaway sync. No anchors patched. Test: `tests/direct-booking-followups-database.test.mjs`,
+  `tests/tracker-guest-relations.test.mjs`.
+- **`20261012190000_aircover_links.sql` (B4).** `hub_items.work_id` (AirCover rows only), at most one
+  live claim per work item, a guard trigger, action `flagAirCover`, read section `aircover` (claims
+  with the linked issue). Stays, accounts and admins see every claim; other roles see the ones they
+  flagged. Anchors patched: the two hub route anchors, plus the hub view (returns `workId`). Test:
+  `tests/aircover-links-database.test.mjs`.
+- **`20261012200000_repairs_visit_forms.sql` (B5 and B6).** Prepends a `resolveRepair` branch (stays
+  or admin, phase `triage` only, a resolution of 5 to 2000 characters; the repair becomes resolved
+  and completed). A routine visit cannot move to in review or completed without `data.visitForm`
+  (trigger `visit_form_guard`). Action `recordVisitForm` takes one answer per checklist item, in
+  order. Anchors patched: `elsif kind='maintenance' and step='referReady' then` and the action route
+  anchor. Test: `tests/repairs-visit-forms-database.test.mjs`, `tests/maintenance-forms.test.mjs`,
+  `tests/live-repairs-contract.test.mjs`.
+- **`20261012210000_team_calendar.sql` (A9).** Guest name on calendar stays for staff other than
+  cleaners (matched from the guest conversation on booking code, else property and dates; owners and
+  cleaners get null). Table `workspace_team_events` (absence, meeting, away, training, other); actions
+  `saveTeamEvent` and `cancelTeamEvent` (your own; admins anyone's); read `teamEvents` (team roles,
+  up to 62 days; owners never). Anchors patched: the schedule branch anchor
+  `'checkIn',r.check_in,'checkOut',r.check_out,'guests',r.guests,` plus the two hub route anchors.
+  Test: `tests/team-calendar-database.test.mjs`, `tests/team-calendar.test.mjs`.
+
+Other tests added or changed in this round: `tests/feedback-contracts.test.mjs`,
+`tests/todo.test.mjs`, `tests/my-performance.test.mjs`, `tests/property-table.test.mjs`,
+`tests/tracker-listings.test.mjs`, `tests/tracker-onboarding.test.mjs`,
+`tests/guest-inbox-policy.test.mjs`, `tests/navigation-v2.test.mjs` (new, working tree), and the
+updated navigation tests (`role-panel`, `home-tools`, `tool-directory`, `hub-policy`,
+`calendar-inbox`, `access-control`, `followups`, `tracker-sections`).
+
+### Screens added
+
+All under `mobile/src/` unless stated.
+
+- `ManagementApprovals.tsx`: one Management approvals list (open flags, pending hub approvals and the management queue), with "Ask management".
+- `ManagementFlag.tsx`: `FlagButton`, used in the shared work sheet and every detail view.
+- `DayReflection.tsx`: the end-of-day reflection shown before clocking out.
+- `ReflectionReview.tsx`: admins read and mark reflections as reviewed.
+- `TodoList.tsx`: To-do with Guest relations, Client relations, Your team and Personal headings.
+- `DailyTaskSettings.tsx`: admins keep the daily department task templates.
+- `MyPerformance.tsx`: a person's own score, bonus tier and time (team Reports page).
+- `MySchedule.tsx`: a person's own shifts and events on Home.
+- `DirectBookings.tsx`: direct booking follow-ups in the tracker format.
+- `AirCoverList.tsx`: AirCover claims with the linked issue.
+- `PreventativeList.tsx`: routine, garden and bin visits with last done, next due and the form.
+- `VisitForm.tsx`: the preventative visit form.
+- `OnboardingTracker.tsx`: property onboarding in stage groups, enquiries first, percentage complete.
+- `LicensingList.tsx`, `PurchaseOrdersList.tsx`: licensing and purchase orders in the tracker format.
+- `ListingsTabs.tsx`, `ListingSheets.tsx`: listing health, pricing, reviews and re-listing lists, and their sheets.
+- `PropertiesTable.tsx`: staff properties table (address, Scotland region, status, onboarding stage, last update); owners keep cards.
+- `TeamEvents.tsx`: add and cancel absences, meetings and other events on the calendar.
+- `LiveCalendar.tsx` (changed): guest names, changeovers view, team events.
+- `LiveCleans.tsx`, `DefaultCleaners.tsx` (changed): submitted-forms column, "form checked, guest happy" tick, who is cleaning.
+- `HubItemSheet.tsx`, `StaySheet.tsx`: sheets moved out of `LiveHub.tsx` and `LiveStays.tsx` so those screens can be retired.
+- `SectionProps.ts`: the shared props type every section list takes.
+- `GuestRelations.tsx`, `ClientRelations.tsx`: the two Work areas (working tree, not committed). Subsections come from `lib/relations-subs.ts`.
+
+### Navigation changes
+
+- "Stays" is now **Guest relations** (cleans, bookings, AirCover, reactive, preventative) and a new
+  **Client relations** area holds onboarding, enquiries, licensing, listing health, pricing, reviews,
+  re-listing and purchases. `WorkView` gained `clients` (`lib/tool-directory.ts`, `lib/role-panel.ts`).
+- **My performance** replaces Reports for team roles (`lib/role-panel.ts`); admins keep Reports.
+- Calendar, Messages and To-do sit near the top of the menu. Updates is now a tab inside Messages.
+- **Hub, Stays and Updates are retired but their files are kept, unrouted**: `mobile/src/LiveHub.tsx`,
+  `mobile/src/LiveStays.tsx` and the Updates page are not deleted. Delete them in a later clean-up
+  once nothing imports them.
+- Guest inbox no longer offers WhatsApp (`OFFERED_CHANNELS` in `lib/guest-inbox-policy.ts`);
+  `GUEST_CHANNELS` still accepts it so a legacy thread keeps its label and opens.
+- Home no longer shows the quick-action pills or property count; a team member's own Favorites
+  replace the tools list.
+
+### Crons added in `worker/index.ts`
+
+All are idempotent and bounded per run, so a late or doubled tick is harmless.
+
+- Every 15 minutes: `workspace_mid_stay_cleans` (also run at the end of each Hostaway sync).
+- Hourly (first tick of each hour, which includes the first tick after midnight London):
+  `workspace_ensure_daily_todos` and `workspace_clean_form_sweep`.
+- Every six hours: `workspace_direct_booking_sweep`.
+
+## Deploy order and risks
+
+- **Migrations 20261012070000 onward are NOT applied to any live database.** That is
+  `20261012070000_work_last_update.sql` (Phase 1) and everything in the two sections above, up to
+  `20261012210000_team_calendar.sql`. The earlier chat and block migrations (`20261012010000`,
+  `20261012030000`) are also still marked not applied elsewhere in this file.
+- **Order matters.** Apply the migrations in filename order on the client Supabase first, then
+  redeploy the backend. Deploying the backend first breaks reads, because it asks for sections and
+  columns that do not exist yet. Report sections that run ahead of the database say "needs a
+  database update" rather than reporting an outage.
+- The direct booking sweep's first run can create up to 50 follow-up items at once (it is capped
+  per run, and the next run does the rest). Warn the team before switching it on.
+- The clean form sweep has a 14 day lookback, so switching it on warns about recent cleans only. It
+  raises a flag and tells admins for each; the first run can add up to 200.
+- The clean sweeps (form warning and mid-stay) bump work item versions when they change an item. A
+  screen left open on an old version will be asked to reload before saving.
+- The Hostaway sync window is 30 days back (`londonDay(-30)` in `lib/hostaway-sync.ts`). The sync was
+  paused when the Accounts brief was written, so there may be little to match until it is on; check
+  before relying on reconciliation.
+- **Booking.com and VRBO payout headers are unverified.** Treat a first upload of either as a trial
+  and check the "used columns" it reports against the real file before approving anything.
+- **Next task: `workspace_work_history` leaks owner-facing staff names.** It still returns staff
+  full names to client (owner) accounts; they are hidden only inside the tracker detail. Fix it with
+  a new migration. Not done in this round.
+- **Activity row visibility.** Owners can read activity event names, for example
+  `management.flag_raised`, on work that is visible to them. No staff name is attached, but the
+  event name reveals that management was flagged. Decide whether to hide these event names from
+  owners.
+- The cleaning manager does not see clean-form flags (flags are admin only). Whether they should is
+  an open question for the client.
+- **Upstream test failure** `guest-replies-database`, "conversations show the tidy Airbnb booking
+  code". It splits a migration on CRLF and fails on the base commit too (`5c566f3`), so it is not
+  caused by this work. At the end of the Accounts work `npm test` gave 949 of 950; the suite has not
+  been run in full since wave 1 and the navigation work.
+- **WhatsApp:** it is no longer offered, but legacy threads still show it. Other WhatsApp mentions
+  remain and should be cleaned up: `lib/access-faq.ts`, `lib/workspace-search.ts` (history),
+  `mobile/src/LiveAccessControl.tsx:222`, `mobile/src/teamSamples.ts`, `mobile/src/TeamFlows.tsx:455`,
+  `mobile/src/WorkspaceScreens.tsx:910` and `mobile/src/sampleFixtures.ts:49`.
+- Nothing here has been run against a live service. Screens that only render with a real login (the
+  new lists and sheets) were not screenshotted in the sample-data preview; check them with real staff
+  and owner accounts after the migrations are applied.

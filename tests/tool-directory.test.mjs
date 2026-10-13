@@ -23,11 +23,12 @@ test('every default tool of every role has a place the role can open', () => {
   }
 });
 
-test('team roles all have All work, and admins can open the Stays screens', () => {
+test('team roles all have All work, and admins can open the Guest relations and Client relations screens', () => {
   for (const role of ['stays', 'cleans', 'cleaning_manager', 'ready', 'accounts', 'admin']) assert.ok(workViewsFor(role).includes('all'), role);
-  assert.ok(workViewsFor('admin').includes('stays'));
+  assert.ok(workViewsFor('admin').includes('stays') && workViewsFor('admin').includes('clients'));
   assert.deepEqual(toolsFor('client', ['client-furnishing']).map(t => t.place.kind), ['calculator'], 'the calculator runs inside the app');
-  assert.deepEqual(toolsFor('stays', ['aircover-reporting']).map(t => t.place.kind), ['tracker']);
+  assert.deepEqual(toolsFor('stays', ['aircover-reporting']).map(t => [t.place.kind, t.place.view, t.place.sub]), [['work', 'stays', 'aircover']], 'AirCover is its own Guest relations section');
+  assert.deepEqual(toolsFor('accounts', ['aircover-reporting']).map(t => t.place.kind), ['tracker'], 'a role without Guest relations keeps the simple tracker');
 });
 
 test('Accounts are not sent to a Properties tab they cannot open', () => {

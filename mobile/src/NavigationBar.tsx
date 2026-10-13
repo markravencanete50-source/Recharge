@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentProps } from "react";
 import { Animated, Platform, View } from "react-native";
-import { navigationFor, type WorkspaceSection } from "../../lib/workspace-map";
+import { PHONE_BAR_MAX, navigationFor, phoneBarFor, type WorkspaceSection } from "../../lib/workspace-map";
 import type { WorkspaceRole } from "./model";
 import { MotionPress, NavSymbol, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
@@ -21,6 +21,14 @@ function ActivePill({ color }: { color: string }) {
 }
 
 export type NavigationItem = { value: WorkspaceSection; label: string; icon: ComponentProps<typeof NavSymbol>["name"] };
+
+// The live workspace's bar on phones (lib/workspace-map.ts phoneBarFor): the team gets Home, To-do, Work,
+// Calendar and Messages (Ready: Home, Maintenance, Calendar, To-do, Messages; Accounts keep Invoices and
+// Statements), five items at most, the middle one the raised action. Hub, Stays and Updates are not on it:
+// Updates is a tab inside Messages. Owners keep theirs. Favorites floats next to Help, not in the bar.
+export function liveNavigationFor(role: string): NavigationItem[] {
+  return phoneBarFor(role).slice(0, PHONE_BAR_MAX) as NavigationItem[];
+}
 export function NavigationBar({
   role,
   section,

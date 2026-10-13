@@ -9,6 +9,7 @@ export type ToolArt =
   | 'tag' | 'relist' | 'signature' | 'shield' | 'box' | 'bell' | 'receipt' | 'wallet' | 'pie' | 'cart' | 'sofa' | 'search' | 'mail' | 'star';
 export type HomeToolTarget =
   | { kind: 'work'; view: WorkView; sub?: string; anchor?: string; open?: HomeForm; workId?: string }
+  // 'activity' stays a valid deep-link target so old links work; it opens Messages → Updates now.
   | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals' | 'enquiries'; anchor?: string }
   | { kind: 'tracker'; module: ModuleId }
   | { kind: 'calculator' };
@@ -22,12 +23,11 @@ export const sectionAnchor = (title: string) => 'section-' + title.toLowerCase()
 
 const work = (view: WorkView, extra: { sub?: string; section?: string; anchor?: string } = {}): HomeToolTarget =>
   ({ kind: 'work', view, ...(extra.sub ? { sub: extra.sub } : {}), ...(extra.section ? { anchor: sectionAnchor(extra.section) } : extra.anchor ? { anchor: extra.anchor } : {}) });
-const tab = (name: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals'): HomeToolTarget => ({ kind: 'tab', tab: name });
+const tab = (name: 'properties' | 'analytics' | 'help' | 'approvals'): HomeToolTarget => ({ kind: 'tab', tab: name });
 const tool = (key: string, label: string, detail: string, art: ToolArt, target: HomeToolTarget, needs?: ModuleId[]): Candidate => ({ key, label, detail, art, target, ...(needs ? { needs } : {}) });
 
 const PROPERTIES = tool('properties', 'Properties', 'Every property and its details', 'house', tab('properties'));
 const HELP = tool('help', 'Help & training', 'Guides for your role', 'compass', tab('help'));
-const UPDATES = tool('updates', 'Updates', 'What changed recently', 'bell', tab('activity'));
 const RESTOCK = tool('restock', 'Restock requests', 'Ask for supplies', 'box', { kind: 'tracker', module: 'replenishment-requests' }, ['replenishment-requests']);
 // Training for every team role; admins land where courses and their files are added.
 const TRAINING = tool('training', 'Training', 'Courses for your role', 'star', { kind: 'tab', tab: 'help', anchor: sectionAnchor('Training') });
@@ -38,7 +38,8 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('queue', 'Waiting on you', 'Decisions and approvals', 'hourglass', work('management', { sub: 'queue' })),
     tool('people', 'People', 'Accounts, roles and tools', 'people', work('management', { sub: 'people' })),
     tool('performance', 'Performance', 'Shifts, replies and sign-offs', 'medal', work('management', { sub: 'performance' })),
-    tool('stays', 'Stays', 'Checks, pricing and re-listings', 'building', work('stays')),
+    tool('stays', 'Guest relations', 'Bookings, AirCover and repairs', 'building', work('stays')),
+    tool('clients', 'Client relations', 'Onboarding, licensing, listings', 'key', work('clients')),
     tool('cleans', 'Cleans', 'Schedule, reviews and cleaners', 'spray', work('cleans')),
     tool('repairs', 'Maintenance', 'Reactive and preventative', 'toolbox', work('repairs')),
     tool('accounts', 'Accounts', 'Expenses, payouts, statements', 'coins', work('accounts')),
@@ -46,14 +47,15 @@ const BY_ROLE: Record<string, Candidate[]> = {
     TRAINING_ADMIN,
   ],
   stays: [
-    tool('inbox', 'Guest inbox', 'Guests waiting for a reply', 'chat', work('stays', { sub: 'inbox' }), ['guest-communication']),
-    tool('checks', 'Daily checks', 'Listings live and reviewed', 'clipboard', work('stays', { section: 'Daily checks' }), ['listing-health']),
-    tool('pricing', 'Pricing', 'Empty nights this week', 'tag', work('stays', { section: 'Daily checks' }), ['daily-pricing']),
-    tool('signoff', 'Today’s sign-off', 'Close the day', 'signature', work('stays', { anchor: 'stays-signoff' }), ['listing-health']),
+    // Guests reply in Messages; the daily checks are listing health and pricing in Client relations,
+    // and the end of the day is the reflection at clock-out.
+    tool('checks', 'Listing health', 'Listings live and reviewed', 'clipboard', work('clients', { sub: 'listings' }), ['listing-health']),
+    tool('pricing', 'Pricing', 'Empty nights this week', 'tag', work('clients', { sub: 'pricing' }), ['daily-pricing']),
     tool('repairs', 'Reactive maintenance', 'Report and chase repairs', 'toolbox', work('repairs'), ['stays-maintenance-reporting', 'maintenance-reporting']),
     tool('cleans', 'Cleans', 'Cleans at your properties', 'spray', work('cleans'), ['cleaning-schedule', 'clean-reporting']),
-    tool('bookings', 'Bookings & licences', 'Direct offers and licensing', 'calendar', work('all'), ['direct-bookings', 'licensing']),
-    tool('aircover', 'AirCover claims', 'Add and close claims', 'shield', { kind: 'tracker', module: 'aircover-reporting' }, ['aircover-reporting']),
+    tool('bookings', 'Direct bookings', 'Follow up long stays', 'calendar', work('stays', { sub: 'bookings' }), ['direct-bookings']),
+    tool('licensing', 'Licensing', 'Licences and renewals', 'signature', work('clients', { sub: 'licensing' }), ['licensing']),
+    tool('aircover', 'AirCover claims', 'Add and close claims', 'shield', work('stays', { sub: 'aircover' }), ['aircover-reporting']),
     // Properties is always in the navigation, so its tile makes room for training.
     TRAINING,
   ],
@@ -62,7 +64,6 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('respond', 'Needs a reply', 'Complaints to answer', 'chat', work('cleans', { section: 'Needs your response' })),
     tool('month', 'My month', 'Cleans done and pay', 'medal', work('cleans', { section: 'Your month' })),
     RESTOCK,
-    UPDATES,
     TRAINING,
     HELP,
   ],
@@ -108,7 +109,6 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('mailbox', 'Mailbox', 'Post at your properties', 'mail', { kind: 'tab', tab: 'analytics', anchor: sectionAnchor('Mailbox') }, ['client-mailbox']),
     tool('furnishing', 'Furnishing calculator', 'What each room needs', 'sofa', { kind: 'calculator' }, ['client-furnishing']),
     { ...PROPERTIES, label: 'My properties', detail: 'Onboarding and details' },
-    UPDATES,
     HELP,
   ],
 };
@@ -139,7 +139,9 @@ export function homeToolsFor(role: string, modules: readonly string[]): HomeTool
   return allowed(role, modules, BY_ROLE[role] ?? []);
 }
 
-// Shortcuts under the tools that open a form straight away, for the things each role starts most.
+// Forms each role starts most (Record a stay, Report a repair…). Home no longer shows them as pills for
+// the team (their Home is their own area), but the left panel's "Start something", search and each Work
+// view's own button still use them.
 export type HomeAction = { key: HomeForm; label: string; icon: 'plus' | 'alert-triangle' | 'repeat'; target: HomeToolTarget };
 const ACTIONS: Record<HomeForm, Omit<HomeAction, 'key'>> = {
   'record-stay': { label: 'Record a stay', icon: 'plus', target: { kind: 'work', view: 'stays', open: 'record-stay' } },
@@ -160,17 +162,19 @@ const ACTIONS_BY_ROLE: Record<string, [HomeForm, ModuleId[]?][]> = {
   client: [['report-repair', ['client-property-maintenance']]],
 };
 ACTIONS_BY_ROLE.super_admin = ACTIONS_BY_ROLE.admin;
-export function homeActionsFor(role: string, modules: readonly string[]): HomeAction[] {
+export function startActionsFor(role: string, modules: readonly string[]): HomeAction[] {
   const views = workViewsFor(role);
   return (ACTIONS_BY_ROLE[role] ?? []).filter(([key, needs]) => (!needs || needs.some(m => modules.includes(m))) && views.includes((ACTIONS[key].target as { view: WorkView }).view))
     .map(([key]) => ({ key, ...ACTIONS[key] }));
 }
+// Home's quick-action pills: owners only (to report a repair). Team roles have none.
+export const homeActionsFor = (role: string, modules: readonly string[]): HomeAction[] => role === 'client' ? startActionsFor(role, modules) : [];
 
 // Whether someone can start one of these forms. The Work views' own buttons (Record a stay,
 // Report a repair, New clean, New expense) follow the same grants as Home, so nobody fills in a
 // form the database will refuse.
 export const canStart = (account: { role: string; modules: readonly string[] }, form: HomeForm) =>
-  homeActionsFor(account.role, account.modules).some(a => a.key === form);
+  startActionsFor(account.role, account.modules).some(a => a.key === form);
 
 // The illustrated icon for each tool in the full tools list.
 export const MODULE_ART: Record<ModuleId, ToolArt> = {

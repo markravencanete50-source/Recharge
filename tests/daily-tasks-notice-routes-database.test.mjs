@@ -301,6 +301,7 @@ test('safe to run twice; every patch anchor found once', async () => {
   assert.equal(count(view, "'templateId',item.template_id"), 1);
   assert.equal(Number((await sql("select count(*) n from pg_trigger where tgrelid='public.workspace_activity'::regclass and tgname='workspace_notice_routes'"))[0].n), 1);
   // And it still works after the second run.
+  await ensure(MONDAY); // settles templates added since (the test for today runs on the real date)
   assert.equal((await ensure(MONDAY)).created, 0);
   assert.deepEqual(await recipients(await step(await work('After the rerun'), 'operations.updateOperation.recordDelivery', RORY)), ['Ada Admin', 'Aileen Accounts', 'Alex Admin']);
 });

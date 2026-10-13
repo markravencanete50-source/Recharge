@@ -9,6 +9,8 @@ export const HUB_TAB_LABEL: Record<HubTab, string> = {
   todos: 'To-dos', approvals: 'Approvals', purchases: 'Purchase orders', preventative: 'Preventative', daily: 'Reviews & pricing',
   aircover: 'AirCover', invoices: 'Invoices to send', onboarding: 'Onboarding', licensing: 'Licensing', responsibilities: 'Responsibilities', rota: 'Rota', timesheets: 'Timesheets',
 };
+// @deprecated The Hub is no longer a menu entry for any role (no Work view lists it). Only the unrouted
+// LiveHub.tsx still calls this; delete it together with that screen. Nothing in navigation uses it.
 export function hubTabsFor(role: string, keeps: readonly string[]): HubTab[] {
   const admin = role === 'admin' || role === 'super_admin';
   const tabs: HubTab[] = ['todos', 'approvals'];

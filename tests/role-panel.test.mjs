@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 // shows the viewed role's panel with nothing from the super admin's.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 const { rolePanel } = await vite.ssrLoadModule('/lib/role-panel.ts');
-const { homeToolsFor, homeActionsFor } = await vite.ssrLoadModule('/lib/home-tools.ts');
+const { homeToolsFor, homeActionsFor, startActionsFor } = await vite.ssrLoadModule('/lib/home-tools.ts');
 const { DEFAULT_ROLE_MODULES, MODULE_IDS } = await vite.ssrLoadModule('/lib/modules.ts');
 const { workViewsFor } = await vite.ssrLoadModule('/lib/tool-directory.ts');
 const { previewAccount, previewKeeps } = await vite.ssrLoadModule('/lib/view-as.ts');
@@ -39,11 +39,13 @@ test('every role has its own panel: its own heading and its own set of links', (
 test('every Work area, Home tool and quick start of a role is in its panel, and only those', () => {
   for (const role of roles) {
     const modules = DEFAULT_ROLE_MODULES[role], panel = rolePanel(role, modules), all = links(panel);
-    for (const view of workViewsFor(role)) assert.ok(all.some(l => l.kind === 'area' && l.view === view), `${role} has ${view}`);
+    // Work → Calendar is the Calendar page, so it is a page link rather than a second area link.
+    for (const view of workViewsFor(role)) assert.ok(all.some(l => view === 'calendar' ? l.key === 'page:calendar' : l.kind === 'area' && l.view === view), `${role} has ${view}`);
     for (const l of all) if (l.kind === 'area') assert.ok(workViewsFor(role).includes(l.view), `${role} can open ${l.view}`);
     // Accounts' Owner statements tool is their Owner statements page.
     for (const t of homeToolsFor(role, modules)) if (!(role === 'accounts' && t.key === 'statements')) assert.ok(all.some(l => l.key === 'tool:' + t.key || (l.kind === 'area' && t.target.kind === 'work' && l.view === t.target.view) || (l.kind === 'page' && t.target.kind === 'tab' && l.section === t.target.tab)), `${role} has ${t.key}`);
-    for (const a of homeActionsFor(role, modules)) assert.ok(all.some(l => l.key === 'start:' + a.key), `${role} can start ${a.key}`);
+    for (const a of startActionsFor(role, modules)) assert.ok(all.some(l => l.key === 'start:' + a.key), `${role} can start ${a.key}`);
+    assert.deepEqual(homeActionsFor(role, modules).map(a => a.key), role === 'client' ? startActionsFor(role, modules).map(a => a.key) : [], role + ': Home has no quick-action pills for the team');
   }
 });
 
@@ -78,4 +80,19 @@ test('a role preview keeps only the records that role could be shown', () => {
   assert.ok(ready.journeys && !ready.invoices);
   const admin = previewKeeps('admin', []);
   assert.ok(admin.work('anything') && admin.invoices && admin.journeys && admin.notices);
+});
+
+test('the team panel runs Home, To-do, the Work areas, Calendar, Messages, then the rest', () => {
+  for (const role of roles.filter(r => r !== 'client')) {
+    const all = links(rolePanel(role, DEFAULT_ROLE_MODULES[role])), at = key => all.findIndex(l => l.key === key);
+    assert.deepEqual(all.slice(0, 2).map(l => l.key), ['page:home', 'page:todo'], role);
+    const firstArea = all.findIndex(l => l.kind === 'area'), lastArea = all.map(l => l.kind).lastIndexOf('area');
+    assert.ok(firstArea === 2 && at('page:calendar') > lastArea && at('page:inbox') === at('page:calendar') + 1, role + ': areas, then Calendar, then Messages');
+    assert.ok(all.slice(2, at('page:calendar')).every(l => l.kind === 'area'), role + ': only Work areas between To-do and Calendar');
+  }
+  const admin = links(rolePanel('admin', MODULE_IDS));
+  assert.equal(admin.find(l => l.key === 'page:decisions').label, 'Management approvals');
+  assert.equal(links(rolePanel('stays', DEFAULT_ROLE_MODULES.stays)).find(l => l.key === 'page:decisions').label, 'My requests');
+  assert.equal(links(rolePanel('ready', DEFAULT_ROLE_MODULES.ready)).find(l => l.key === 'page:analytics').label, 'My performance');
+  assert.equal(admin.find(l => l.key === 'page:analytics').label, 'Reports');
 });

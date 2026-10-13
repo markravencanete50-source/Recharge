@@ -24,7 +24,8 @@ test('every role has tools on Home, each opening a place that role can reach', (
   for (const [role, modules] of Object.entries(DEFAULT_ROLE_MODULES)) {
     const tools = homeToolsFor(role, modules);
     assert.ok(tools.length >= 4, role);
-    assert.ok(tools.length <= 9, role + ' keeps Home to three rows of tools');
+    // Home shows the person's favourites; this list feeds the panel, search and the fallback tiles.
+    assert.ok(tools.length <= 10, role + ' keeps the tool list short');
     assert.equal(new Set(tools.map(t => t.key)).size, tools.length, role + ' has no duplicate tools');
     for (const t of tools) {
       assert.ok(t.label.length <= 22, `${role}: "${t.label}" fits a tile`);
@@ -45,9 +46,9 @@ test('tools that need a module only show to people who hold it', () => {
   assert.deepEqual(homeToolsFor('admin', MODULE_IDS).find(t => t.key === 'people').target, { kind: 'work', view: 'management', sub: 'people' });
   assert.deepEqual(homeToolsFor('accounts', DEFAULT_ROLE_MODULES.accounts).find(t => t.key === 'payouts').target, { kind: 'work', view: 'accounts', sub: 'payouts' });
   // Accounts' invoices open inside their own Work view (their bar has no Reports tab), and
-  // Stays' pricing opens the Daily checks where the pricing buttons are.
+  // Guest relations' pricing opens Client relations → Pricing.
   assert.deepEqual(homeToolsFor('accounts', DEFAULT_ROLE_MODULES.accounts).find(t => t.key === 'invoices').target, { kind: 'work', view: 'accounts', anchor: 'section-invoices' });
-  assert.deepEqual(homeToolsFor('stays', DEFAULT_ROLE_MODULES.stays).find(t => t.key === 'pricing').target, { kind: 'work', view: 'stays', anchor: 'section-daily-checks' });
+  assert.deepEqual(homeToolsFor('stays', DEFAULT_ROLE_MODULES.stays).find(t => t.key === 'pricing').target, { kind: 'work', view: 'clients', sub: 'pricing' });
 });
 
 test('every team role can open training from Home; admins land where courses are added', () => {

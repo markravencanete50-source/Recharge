@@ -35,7 +35,7 @@ const touched = (w: OperationView) => { const t = Date.parse(w.updatedAt ?? w.cr
 function repairEntry(w: OperationView, viewer: { owner: boolean; costs: boolean }): HistoryEntry {
   const cancelled = w.status === 'cancelled' || w.status === 'declined';
   const phase = repairStage(w.data), closed = phase === 'closed';
-  const done = phase === 'completed' || phase === 'paid';
+  const done = phase === 'completed' || phase === 'paid' || phase === 'resolved';
   const actual = minor(w.data.actualCostMinor), estimate = minor(w.data.estimatedCostMinor);
   const cost = viewer.costs ? (done && actual !== null ? { costMinor: actual, costKind: 'actual' as const } : estimate !== null ? { costMinor: estimate, costKind: 'estimate' as const } : { costMinor: null, costKind: null }) : { costMinor: null, costKind: null };
   return {

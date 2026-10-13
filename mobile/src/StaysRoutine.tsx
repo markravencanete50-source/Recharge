@@ -6,12 +6,10 @@ import { Text } from "./Typography";
 import { GrowBar, MotionPress, Pop } from "./motion";
 import { ui, type Palette } from "./theme";
 import { addDays } from "./LiveKit";
-import { TrackerSheet } from "./LiveTools";
 import { useWorkJump } from "./WorkJump";
 import { readWorkspace } from "./backend/client";
 import { dailyChecks, vacantNights } from "../../lib/management-live";
-import { sectionAnchor, type HomeToolTarget } from "../../lib/home-tools";
-import { toolsFor, type Tool } from "../../lib/tool-directory";
+import type { HomeToolTarget } from "../../lib/home-tools";
 import { plural } from "../../lib/format";
 import type { scheduleSchema } from "../../lib/cleans-live";
 import type { PropertyView } from "../../lib/workspace-view";
@@ -19,9 +17,10 @@ import type { OperationView } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { ModuleId } from "../../lib/modules";
 
-// Stays' day on one card: each part of the routine, how far along it is, and one tap to where it's done.
+// Guest relations' day on one card: each part of the routine, how far along it is, and one tap to where it's done.
+// Each tap opens a sub-page of Work → Guest relations or Client relations (there is no daily checks tab any more).
 type Schedule = z.infer<typeof scheduleSchema>;
-type Item = { key: string; label: string; detail: string; left: number; done: boolean; target?: HomeToolTarget; tracker?: ModuleId };
+type Item = { key: string; label: string; detail: string; left: number; done: boolean; target: HomeToolTarget };
 const has = (account: WorkspaceAccount, ...modules: ModuleId[]) => modules.some(m => account.modules.includes(m));
 const open = (status: string) => !["completed", "cancelled", "declined"].includes(status);
 
@@ -30,9 +29,8 @@ export function TodaysRoutine({ p, account, properties, operations, schedule, to
 }) {
   const jump = useWorkJump();
   const [claims, setClaims] = useState<number | null>(null);
-  const [tracker, setTracker] = useState<Tool | null>(null);
   const aircover = has(account, "aircover-reporting");
-  // AirCover claims are a simple tracker; count the ones still open.
+  // AirCover claims: count the ones still open.
   const loadClaims = useCallback(async () => {
     if (!aircover) return;
     try { setClaims(z.array(z.object({ status: z.string() })).parse((await readWorkspace({ entity: "work", moduleId: "aircover-reporting" })).data ?? []).filter(c => open(c.status)).length); }
@@ -50,22 +48,19 @@ export function TodaysRoutine({ p, account, properties, operations, schedule, to
   const cleansDone = cleans.filter(w => w.status === "completed").length;
   const offers = operations.filter(op => op.kind === "direct_booking" && ["follow_up", "quoted"].includes(String(op.data.phase)) && open(op.status)).length;
   const monday = new Date(today + "T12:00:00Z").getUTCDay() === 1;
-  const checksAt = { kind: "work", view: "stays", anchor: sectionAnchor("Daily checks") } as const;
+  const listingsAt = { kind: "work", view: "clients", sub: "listings" } as const, pricingAt = { kind: "work", view: "clients", sub: "pricing" } as const;
   const items: Item[] = [
-    ...(has(account, "listing-health") ? [{ key: "listings", label: "Listing checks", detail: properties.length ? `${checked} of ${properties.length} done` : "No properties yet", left: properties.length - checked, done: checked >= properties.length, target: checksAt }] : []),
-    ...(has(account, "daily-pricing") ? [{ key: "pricing", label: "Price the empty nights", detail: unpriced ? `${plural(unpriced, "night")} this week still to price` : "Every empty night this week is priced", left: unpriced, done: !unpriced, target: checksAt }] : []),
-    ...(has(account, "stays-maintenance-reporting", "maintenance-reporting") ? [{ key: "repairs", label: "Refer repairs to Ready", detail: toRefer ? `${plural(toRefer, "repair")} waiting for you` : "Nothing to refer", left: toRefer, done: !toRefer, target: { kind: "work", view: "repairs", anchor: sectionAnchor("Reactive maintenance") } as HomeToolTarget }] : []),
-    ...(has(account, "cleaning-schedule") ? [{ key: "cleans", label: "Today’s cleans", detail: cleans.length ? `${cleansDone} of ${cleans.length} done` : "No cleans today", left: cleans.length - cleansDone, done: cleansDone >= cleans.length, target: { kind: "work", view: "stays", anchor: sectionAnchor("Day by day") } as HomeToolTarget }] : []),
-    ...(aircover ? [{ key: "aircover", label: "AirCover claims", detail: claims === null ? "Open the claims" : claims ? `${plural(claims, "claim")} open` : "No claims open", left: claims ?? 0, done: claims === 0, tracker: "aircover-reporting" as const }] : []),
-    ...(has(account, "direct-bookings") ? [{ key: "offers", label: "Direct-booking offers", detail: offers ? `${plural(offers, "offer")} to follow up` : "No offers open", left: offers, done: !offers, target: { kind: "work", view: "all" } as HomeToolTarget }] : []),
+    ...(has(account, "listing-health") ? [{ key: "listings", label: "Listing checks", detail: properties.length ? `${checked} of ${properties.length} done` : "No properties yet", left: properties.length - checked, done: checked >= properties.length, target: listingsAt }] : []),
+    ...(has(account, "daily-pricing") ? [{ key: "pricing", label: "Price the empty nights", detail: unpriced ? `${plural(unpriced, "night")} this week still to price` : "Every empty night this week is priced", left: unpriced, done: !unpriced, target: pricingAt }] : []),
+    ...(has(account, "stays-maintenance-reporting", "maintenance-reporting") ? [{ key: "repairs", label: "Refer repairs to Ready", detail: toRefer ? `${plural(toRefer, "repair")} waiting for you` : "Nothing to refer", left: toRefer, done: !toRefer, target: { kind: "work", view: "stays", sub: "reactive" } as HomeToolTarget }] : []),
+    ...(has(account, "cleaning-schedule") ? [{ key: "cleans", label: "Today’s cleans", detail: cleans.length ? `${cleansDone} of ${cleans.length} done` : "No cleans today", left: cleans.length - cleansDone, done: cleansDone >= cleans.length, target: { kind: "work", view: "stays", sub: "cleans" } as HomeToolTarget }] : []),
+    ...(aircover ? [{ key: "aircover", label: "AirCover claims", detail: claims === null ? "Open the claims" : claims ? `${plural(claims, "claim")} open` : "No claims open", left: claims ?? 0, done: claims === 0, target: { kind: "work", view: "stays", sub: "aircover" } as HomeToolTarget }] : []),
+    ...(has(account, "direct-bookings") ? [{ key: "offers", label: "Direct-booking offers", detail: offers ? `${plural(offers, "offer")} to follow up` : "No offers open", left: offers, done: !offers, target: { kind: "work", view: "stays", sub: "bookings" } as HomeToolTarget }] : []),
     ...(monday && has(account, "weekly-performance") ? [{ key: "weekly", label: "Weekly performance reports", detail: "Monday: send each owner their report from the property", left: 1, done: false, target: { kind: "tab", tab: "properties" } as HomeToolTarget }] : []),
   ];
   if (!items.length) return null;
   const done = items.filter(i => i.done).length;
-  const go = (item: Item) => {
-    if (item.tracker) setTracker(toolsFor(account.role, account.modules).find(t => t.id === item.tracker) ?? null);
-    else if (item.target) jump?.(item.target);
-  };
+  const go = (item: Item) => jump?.(item.target);
   return (
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 10 }]}>
       <View style={[ui.between, { gap: 12 }]}>
@@ -90,7 +85,6 @@ export function TodaysRoutine({ p, account, properties, operations, schedule, to
           </MotionPress>
         ))}
       </View>
-      <TrackerSheet palette={p} tool={tracker} properties={properties} onClose={() => { setTracker(null); void loadClaims(); }} />
     </View>
   );
 }

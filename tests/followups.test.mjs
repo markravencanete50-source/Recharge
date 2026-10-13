@@ -12,7 +12,7 @@ const { mapBubbles, MAP_WIDTH, MAP_HEIGHT, AREA_CENTRES, MAPPED_REGIONS, LAND_PA
 const { COUNCIL_AREAS, REGION_VIEW, TOWNS } = await vite.ssrLoadModule('/lib/scotland-geo.ts');
 const { propertyPoints, postcodeDistrict } = await vite.ssrLoadModule('/lib/property-points.ts');
 const { POSTCODE_DISTRICTS } = await vite.ssrLoadModule('/lib/postcode-districts.ts');
-const { homeActionsFor } = await vite.ssrLoadModule('/lib/home-tools.ts');
+const { homeActionsFor, startActionsFor } = await vite.ssrLoadModule('/lib/home-tools.ts');
 const { DEFAULT_ROLE_MODULES, MODULE_IDS } = await vite.ssrLoadModule('/lib/modules.ts');
 const { canReviseQuote } = await vite.ssrLoadModule('/lib/repairs-live.ts');
 const { operationsActionSchema } = await vite.ssrLoadModule('/lib/operations-policy.ts');
@@ -141,15 +141,17 @@ test('properties are placed by postcode district, on land, fanned out and never 
   assert.ok(first.w < second.w && first.w >= 60, 'zoom fits the properties, tighter than the whole area');
 });
 
-test('Home shortcuts open the forms each role can use', () => {
-  const keys = role => homeActionsFor(role, DEFAULT_ROLE_MODULES[role]).map(a => a.key);
+test('the forms each role can start open from the panel, search and Work views; Home has no pills for the team', () => {
+  const keys = role => startActionsFor(role, DEFAULT_ROLE_MODULES[role]).map(a => a.key);
+  for (const role of ['admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts']) assert.deepEqual(homeActionsFor(role, DEFAULT_ROLE_MODULES[role]), [], role + ' has no quick-action pills on Home');
   assert.deepEqual(keys('admin'), ['record-stay', 'report-repair', 'new-clean', 'new-expense']);
   assert.deepEqual(keys('accounts'), ['new-expense']);
   assert.deepEqual(keys('cleans'), [], 'cleaners have no form to start');
   assert.deepEqual(keys('client'), ['report-repair']);
   assert.ok(keys('ready').includes('new-routine') && !keys('ready').includes('report-repair'));
   assert.deepEqual(homeActionsFor('client', ['client-dashboard']).map(a => a.key), [], 'owners without the repairs tool');
-  assert.deepEqual(homeActionsFor('accounts', MODULE_IDS).find(a => a.key === 'new-expense').target, { kind: 'work', view: 'accounts', sub: 'expenses', open: 'new-expense' });
+  assert.deepEqual(homeActionsFor('client', DEFAULT_ROLE_MODULES.client).map(a => a.key), ['report-repair'], 'owners keep their one pill');
+  assert.deepEqual(startActionsFor('accounts', MODULE_IDS).find(a => a.key === 'new-expense').target, { kind: 'work', view: 'accounts', sub: 'expenses', open: 'new-expense' });
   // Each form is opened by the screen it lives in.
   const screens = { 'record-stay': 'LiveStays', 'report-repair': 'LiveRepairs', 'new-routine': 'LiveRepairs', 'new-clean': 'LiveCleans', 'new-expense': 'LiveAccounts' };
   for (const [form, screen] of Object.entries(screens)) assert.match(readFileSync(`mobile/src/${screen}.tsx`, 'utf8'), new RegExp(`focus\\?\\.open === "${form}"`), form);

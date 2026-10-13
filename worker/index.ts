@@ -75,6 +75,26 @@ const worker = {
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_mid_stay_cleans', {})).catch(() => {
       console.error('Mid-stay cleans failed; the next run retries.');
     }));
+    // Each tick is a 15-minute one, so these sweeps are paced by the clock. All three are idempotent
+    // (a second run finds nothing to do) and bounded per run, so a late or doubled tick is harmless.
+    const tick = new Date(), hourly = tick.getUTCMinutes() < 15, everySixHours = hourly && tick.getUTCHours() % 6 === 0;
+    // Hourly, which includes the first tick after midnight London: today's daily and department to-dos are added for each team.
+    if (hourly) {
+      ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_ensure_daily_todos', {})).catch(() => {
+        console.error('Daily to-dos failed; the next run retries.');
+      }));
+      // Hourly: a clean whose day has passed with no form gets a warning and a management flag (at most 200 a run).
+      ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_clean_form_sweep', {})).catch(() => {
+        console.error('Clean form check failed; the next run retries.');
+      }));
+    }
+    // Every six hours: a long stay booked through a booking site gets its direct-booking follow-up (at most 50 a run).
+    // A scheduled sweep rather than a trigger, so it can never hold up the Hostaway sync.
+    if (everySixHours) {
+      ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_direct_booking_sweep', {})).catch(() => {
+        console.error('Direct-booking follow-ups failed; the next run retries.');
+      }));
+    }
     // Owners are reminded once an approval has waited 48 hours; client relations are told at 96.
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_chase_owner_approvals', {})).catch(() => {
       console.error('Owner approval reminders failed; the next run retries.');

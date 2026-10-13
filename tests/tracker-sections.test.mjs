@@ -163,10 +163,27 @@ test('a cancelled licence is closed with the bad tone', () => {
 });
 
 test('a kind with no adapter returns null', () => {
-  for (const kind of ['maintenance', 'cleaning', 'direct_booking', 'purchase_delivery', 'inspection', 'nonsense'])
+  for (const kind of ['maintenance', 'cleaning', 'routine_visit', 'purchase_delivery', 'inspection', 'nonsense'])
     assert.equal(trackerItemFor(work(kind, {}), ctx()), null, kind);
   assert.equal(trackerItemFor(purchase('requested'), ctx()).section, 'purchases');
   assert.equal(trackerItemFor(licence('applied'), ctx()).section, 'licensing');
+});
+
+test('direct bookings and re-listings are reachable from the registry', () => {
+  assert.equal(trackerItemFor(work('direct_booking', { phase: 'follow_up' }), ctx()).section, 'direct_bookings');
+  assert.equal(trackerItemFor(work('relisting', { phase: 'relisting' }), ctx()).section, 'relisting');
+  const list = [work('direct_booking', { phase: 'follow_up' }, { workId: 'd1' }), work('relisting', {}, { workId: 'r1' }), purchase('requested', { workId: 'p1' })];
+  assert.deepEqual(trackerItemsFor(list, ctx(), 'direct_bookings').map(i => i.id), ['d1']);
+  assert.deepEqual(trackerItemsFor(list, ctx(), 'relisting').map(i => i.id), ['r1']);
+});
+
+test('the preventative section is built from a role and hidden from owners', () => {
+  const visit = work('routine_visit', { visitType: 'garden', checklist: ['Mow the lawn'] }, { workId: 'v1', dueOn: '2026-10-20', title: 'Garden visit' });
+  const rows = trackerItemsFor([visit], ctx({ role: 'ready' }), 'preventative');
+  assert.deepEqual(rows.map(i => i.section), ['preventative']);
+  assert.deepEqual(trackerItemsFor([visit], ctx({ role: 'ready', owner: true }), 'preventative'), []);
+  // A single routine visit is not drawn on its own: its row belongs to the plan.
+  assert.equal(trackerItemFor(visit, ctx({ role: 'ready' })), null);
 });
 
 test('the address falls back to the property name, then to a placeholder', () => {

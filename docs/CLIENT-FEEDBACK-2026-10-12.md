@@ -16,16 +16,101 @@ Key: ✅ built · 🟡 partly built · ❌ not built
 
 **Totals (35 asks, as audited before any building):** ✅ 0 · 🟡 26 · ❌ 9
 
-**Build progress (12 October 2026):** Phase 1 is built on the local branch `feedback-2026-10-12`
-(not committed or pushed). C1 and C2 now exist as shared components, piloted on purchase orders and
-licensing (Hub tabs, Accounts Purchases, the shared work sheet); the C9 style pass is done. The
-tables below still show the audit as it stood before this work. Details, the unapplied migration and
-the checks are in `DEVELOPER-HANDOVER.md` ("Client feedback round 2"). Phases 2 to 7 are not started.
+**Build progress:** see "Build status (13 October 2026)" below. The audit tables after it show the position as audited, before any building.
 
 IDs here start with A, B, C and D so they do not clash with the older C, D, O and S numbers. Section D
 comes from a written Accounts brief Alex sent after the videos. The videos only mention accounts in
 one line ("invoices to be sent, invoices to be settled, owner statements, performance reporting"),
 so the written brief is the current source for Accounts.
+
+## Build status (13 October 2026)
+
+Everything below is **built on the local branch `feedback-2026-10-12` and applied to no live database**.
+Phase 1 is `7f053e0`, the Accounts work is `7fd4f46`, `d3612ac` and `a588fff`, and wave 1 of asks A, B
+and C is `dfa2cac`. The navigation work (Guest relations, Client relations, My performance, Hub, Stays and
+Updates unrouted) is in the working tree and was not committed when this was written. The migrations
+from `20261012070000` onward must be applied in filename order before the backend is redeployed; see
+"Deploy order and risks" in `DEVELOPER-HANDOVER.md`. The audit tables further down show the position
+before building and are kept for reference.
+
+Status key: **Built**, **Built, needs client answer** (works on a stated default that the client should
+confirm; the question is in the list at the end), **Not built**. Where a status carries a caveat, the
+caveat is in the last column.
+
+| id | Ask, in the client's words | Status | Where |
+|---|---|---|---|
+| A1 | "their favorites, clock in and clock out, track their overall performance, a quick overview" | Built, needs client answer | `HomeTools.tsx` (`HomeFavorites`), `LiveHome.tsx`, `MyPerformance.tsx`, `MySchedule.tsx`, `lib/my-performance.ts`. Bonus is shown as a tier, not pounds (`BONUS_DISPLAY`); pounds not built. |
+| A2 | "Report repair, new clean, new routine visit. Probably don't need this here either" | Built | Action pills and property count removed from `HomeTools.tsx` and `LiveHome.tsx`. |
+| A3 | "like my performance or my recharge something like that" | Built | `Reports.tsx` becomes "My performance" for team roles (`lib/role-panel.ts`), `MyPerformance.tsx`. No SQL needed. |
+| A4 | "probably too much here, condense it... Updates can probably go in with the messages" | Built | Updates is a tab in `LiveChat.tsx`; shorter headers. Working tree, not committed. |
+| A5 | "purely an inbox... guests, email, and whatsapp" (later decision: no WhatsApp) | Built, needs client answer | No motion in `LiveChat.tsx`; WhatsApp not offered (`OFFERED_CHANNELS`, `lib/guest-inbox-policy.ts`, legacy threads still open). Inbound email is **not built**: needs a mailbox decision. |
+| A6 | "guest relations tasks... client relations tasks... my personal to-do list... daily tasks" | Built | `TodoList.tsx`, `lib/todo.ts`, `DailyTaskSettings.tsx`, migration `20261012160000`. No daily templates are seeded: an admin adds them. |
+| A7 | "reflecting on the day... they need to fill this out before they clock off" | Built | `DayReflection.tsx`, `ReflectionReview.tsx`, `lib/reflection.ts`, migration `20261012150000` (clock-out gate for stays, ready, accounts, cleaning manager). |
+| A8 | "I don't think we need a separate thing for stays" | Built | Stays is Guest relations: `GuestRelations.tsx`, `lib/tool-directory.ts`, `lib/role-panel.ts`. `LiveStays.tsx` kept, unrouted. Working tree. |
+| A9 | "the same way the clients can see the calendar... changeovers... where each member of the team is" | Built, needs client answer | `LiveCalendar.tsx`, `lib/calendar-live.ts` (`changeoversFor`, guest names), `TeamEvents.tsx`, migration `20261012210000`. Editing from the calendar and Ready availability booking are not built. |
+| A10 | "probably no need for the hub... Favorites that's good... Training brilliant" | Built | Hub unrouted (`LiveHub.tsx` kept); Training and Favorites untouched; sheets moved to `HubItemSheet.tsx`. Working tree. |
+| B1 | "a column... submitted clean forms... a notification for outstanding ones" | Built, needs client answer | `LiveCleans.tsx`, `DefaultCleaners.tsx`, `lib/clean-forms.ts`. A form is due by 18:00 London on the clean day (an assumption). |
+| B2 | "check the form, the guest is happy... move that across to say clean complete... warning or review... a ticket in the management tool" | Built, needs client answer | Accept tick in `LiveCleans.tsx`; migration `20261012170000` tags `no_form`, raises a management flag, no pay effect. What the warning should do beyond that is undecided. |
+| B3 | "any stay over seven nights will have a ticket created and the team follow up" | Built | `DirectBookings.tsx`, `lib/tracker-direct-bookings.ts`, migration `20261012180000` (cron sweep for Airbnb, Booking.com and VRBO stays; hand-entered stays already did this). |
+| B4 | "air cover claims... flag that ticket as air cover claim... see what the maintenance issue was" | Built | `AirCoverList.tsx`, `lib/tracker-aircover.ts`, "Flag as AirCover claim" in `LiveRepairs.tsx`, migration `20261012190000`. |
+| B5 | "troubleshooting... if it solves it, marked complete; if not, referred to the ready team... quote... client approval" | Built, needs client answer | `resolveRepair` and "not known yet" estimate (`LiveRepairs.tsx`, `lib/repairs-live.ts`, migration `20261012200000`); Ready's quote goes to the owner before booking. Automatic (AI) troubleshooting is **not built**; the guided checklist stays manual. |
+| B6 | "fill out the form... before that can be marked as complete... last updated X days ago... a calendar" | Built, needs client answer | `VisitForm.tsx`, `PreventativeList.tsx`, `lib/tracker-preventative.ts`, migration `20261012200000` (form required). The form is the plan's checklist plus a note until the client supplies his; an availability view is not built. |
+| B7 | "flag management attention... anything that gets management flagged will arrive here" | Built | `ManagementFlag.tsx`, `ManagementApprovals.tsx`, `lib/management-flags.ts`, migration `20261012140000`. "Ask management" makes a free-standing request. |
+| B8 | "automatically notified to the relevant team... as things are checked off" | Built, needs client answer | Migration `20261012160000` (`workspace_notice_routes`, activity trigger). No editor for the routes yet. |
+| C1 | "full address, next steps, next action, last update" in every list | Built | `lib/tracker.ts`, `Tracker.tsx` (Phase 1) and adapters in `lib/tracker-*.ts`, registered in `lib/tracker-sections.ts`. |
+| C2 | "click in... progress bar and the full checklist" | Built | `TrackerDetail` / `TrackerDetailSheet` in `Tracker.tsx`; the shared work sheet uses it for every kind with an adapter. |
+| C3 | "full list of properties and where they are in the onboarding cycle... new inquiries first... to a hundred percent" | Built, needs client answer | `OnboardingTracker.tsx`, `lib/tracker-onboarding.ts` (`ONBOARDING_STEPS`): today's seven phases until the client sends his checklist. |
+| C4 | "full property address, status, region... click in and see all the information" | Built | `PropertiesTable.tsx`, `lib/property-table.ts`, `lib/property-history.ts`, `LivePages.tsx` (staff table; owners keep cards). |
+| C5 | "licensing ticket... very similar to property onboarding" | Built | `LicensingList.tsx`, `lib/tracker-licensing.ts`. |
+| C6 | "any purchase order forms... in that format" | Built | `PurchaseOrdersList.tsx`, `lib/tracker-purchases.ts`. |
+| C7 | "listing health checks... the pricing... reviews, relisting... cell-like structure" | Built, needs client answer | `ListingsTabs.tsx`, `ListingSheets.tsx`, `lib/tracker-listings.ts`. Placed under Client relations (the two videos differ). |
+| C8 | "invoices to be sent, invoices to be settled, owner statements, performance reporting" | Built | `AccountsReceivable.tsx`, `AccountsStatements.tsx`, `AccountsPerformance.tsx`; see D1 to D8. |
+| C9 | "thinner text... solid green... no shiny bits... outlines" | Built | Phase 1: `Typography.tsx`, `lib/design-tokens.ts`, `motion.tsx`, `DimensionalIcon.tsx`; `tests/style-calm.test.mjs`. |
+| D1 | Accounts brief: receivable tickets for any guest stay or client invoice | Built | `AccountsReceivable.tsx`, `lib/tracker-receivable.ts`, migration `20261012110000`. Generating and sending the invoice document stays manual. |
+| D2 | Accounts brief: match Airbnb, Booking.com and VRBO payout reports by reservation code | Built, needs client answer | `lib/payout-report-formats.ts`, `lib/payout-reconciliation.ts`, `PayoutStays.tsx`, `PayoutLinesSheet.tsx`, migration `20261012080000`. Airbnb layout proven; Booking.com and VRBO headers are best guesses. |
+| D3 | Accounts brief: payables matched to an approved clean or maintenance task | Built | `AccountsPayable.tsx`, `lib/tracker-payables.ts`, migration `20261012090000` (cleaner invoices, supplier invoices). |
+| D4 | Accounts brief: auto-generated owner statements, occupancy, ordered deductions, 12% or 15% plus VAT, net after owner expenses | Built, needs client answer | `lib/statement-maths.ts`, `AccountsStatements.tsx`, `lib/tracker-statements.ts`, `OwnerExpenses.tsx`, migrations `20261012100000` and `20261012120000`. Fee base, deduction order and spanning-stay rule are assumptions. |
+| D5 | Accounts brief: a toggle for the clean charge | Built, needs client answer | `clean_charge_mode` per property (`agreed_fee` or `actual_cost`) in migration `20261012090000`; Terms sheet in `AccountsStatements.tsx`. |
+| D6 | Accounts brief: flag a clean for review when its cost is above the value charged | Built, needs client answer | `CleanCostReview.tsx`, `reviewCleanCost`, migration `20261012090000`. Actual cost = cleaner's invoice line, else the cleaner's rate. |
+| D7 | Accounts brief: any stay longer than 14 nights gets a mid-stay clean | Built, needs client answer | Migration `20261012130000` (`workspace_mid_stay_cleans`), cron in `worker/index.ts`. One clean at the midpoint. |
+| D8 | Accounts brief: performance (management and cleaning fee income, occupancy, nightly rates, filters) | Built | `AccountsPerformance.tsx`, `lib/performance.ts`, migration `20261012130000`. |
+
+Parts of asks deliberately not built: inbound email in Messages, WhatsApp (dropped by decision),
+automatic (AI) troubleshooting, editing bookings from the calendar, Ready availability booking, bonus
+shown in pounds, an editor for notice routes, and deleting `LiveHub.tsx` and `LiveStays.tsx` (they are
+only unrouted). Also still open: the `workspace_work_history` staff-name leak to owners.
+
+### Open questions for the client
+
+1. **Real payout files.** A recent real VRBO payout report and a real Booking.com payout report, so the
+   header names can be checked (both are guesses today).
+2. **VRBO money route.** How does VRBO money reach the business (payout to the bank, through Hostaway,
+   to the owner)? It decides what "received" means for a VRBO stay.
+3. **Fee base.** Is the management fee charged on the payout after OTA fees (as built), or on the gross?
+4. **Spanning stays.** For a stay that crosses the end of a statement period, are the money and nights
+   shared by the nights inside each period (as built), or counted in the period it checks in?
+5. **Clean toggle scope.** Is "charge the agreed fee or the actual cost" set per property (as built), per
+   owner, or per clean?
+6. **Actual cost of a clean.** The cleaner's invoice line, else the cleaner's flat rate (as built), or
+   something else?
+7. **Mid-stay rule.** One clean at the midpoint of a stay over 14 nights (as built), or one every 14 nights?
+   Should owner stays get one?
+8. **Onboarding checklist stages.** The full checklist Alex offered to send. Today's seven phases are used.
+9. **Proactive maintenance form fields.** The form Alex offered to help write. Today it is the plan's
+   checklist ticked done or not done, plus a note.
+10. **Calendar permissions.** Who can add absences and meetings, and who sees them? Built: you add your own,
+    admins add anyone's, the whole team sees them, owners never. Should cleaners see guest names (built:
+    no)?
+11. **Cleaning manager and clean-form flags.** Should the cleaning manager see the "no form" flags? Today
+    they are admin only.
+12. **Routed notices.** Do admins want every routed notice (each ticked-off step), or only a digest?
+    Admins currently receive all of them.
+13. **Clean without a form.** What should the warning state do beyond the tag and the management flag
+    (built: no effect on pay, the cleaner can still send the form late)? Is 18:00 the right cut-off?
+14. **Listing health and pricing.** Guest relations or client relations? Built: client relations.
+15. **Reactive repairs.** Should Ready quote before the owner is asked, with no estimate up front? Built:
+    estimate optional, Ready's quote goes to the owner before booking.
+16. **Inbound email.** Which mailbox should feed Messages, if at all?
 
 ## The one pattern behind most asks
 
@@ -144,7 +229,7 @@ Facts a builder will need for section D:
    expenses and net), then the clean cost review flag and the 14-night mid-stay clean, then the
    performance view. Payables need a link between a clean and its supplier invoice first.
 
-## Open questions for Alex
+## Open questions from the audit (the list under Build status supersedes these where they overlap)
 
 - What should happen when a clean gets a complaint or has no form (the warning state)?
 - The full onboarding checklist and process, which Alex offered to send.

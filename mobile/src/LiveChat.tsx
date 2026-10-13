@@ -282,7 +282,7 @@ function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette;
   );
 }
 
-export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, openConversation, updates }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; openConversation?: string; updates?: ReactNode }) {
+export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, openConversation, updates, initialTab }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; openConversation?: string; updates?: ReactNode; initialTab?: "updates" }) {
   const owner = account.role === "client", guests = hasGuestInbox(account);
   // While a super admin views as someone nothing can be started or saved. A role preview (no person) reads the super admin's
   // own Messages, so it keeps only what that role could have (lib/view-as.ts). The workspace remounts when the view changes.
@@ -310,11 +310,13 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   // The team's tabs: Clients for the people who answer owners, Guests for the guest inbox.
   const showClients = ["admin", "super_admin", "stays"].includes(account.role) || !!list?.some(c => c.kind === "owner");
   const tabs: Tab[] = owner ? [] : [...(guests ? ["guests" as const] : []), ...(showClients ? ["clients" as const] : []), "team", ...(updates ? ["updates" as const] : [])];
-  const [chosenTab, setTab] = useState<Tab>(openConversation ? "team" : guests ? "guests" : "team");
+  // `initialTab` opens Updates first (an old Updates link lands there); a conversation link wins over it.
+  const openUpdates = initialTab === "updates" && !openConversation;
+  const [chosenTab, setTab] = useState<Tab>(openUpdates ? "updates" : openConversation ? "team" : guests ? "guests" : "team");
   const tab: Tab = tabs.includes(chosenTab) ? chosenTab : "team";
   const count = (t: Tab) => t === "guests" ? guestWaiting ?? 0 : t === "updates" ? 0 : (list ?? []).filter(c => tabOf(c) === t).reduce((sum, c) => sum + c.unread, 0);
   // The first time the list arrives, open the first tab that needs attention, unless one was chosen.
-  const picked = useRef(!!openConversation);
+  const picked = useRef(!!openConversation || openUpdates);
   const attention = list && !owner ? tabs.find(t => count(t) > 0) ?? null : undefined;
   useEffect(() => {
     if (picked.current || attention === undefined) return;
