@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
@@ -39,6 +39,8 @@ import type { z } from "zod";
 type Reconciliation = z.infer<typeof reconciliationSchema>;
 type NeedsDetails = Reconciliation["needsDetails"][number];
 type Tab = "expenses" | "payouts" | "statements" | "receivable" | "performance" | "aircover";
+// The summary tiles' labels on a phone, where three share one row.
+const TILE_SHORT: Record<string, string> = { "To approve": "Approve", "To reconcile": "Reconcile", "Statements paid": "Paid" };
 const TAB_LABEL: Record<Tab, string> = { expenses: "Expenses", payouts: "Reconciliation", statements: "Statements", receivable: "Receivable", performance: "Performance", aircover: "AirCover" };
 
 // What the platform calls its reservation code, as staff will see it on the payout report.
@@ -191,6 +193,7 @@ function unmatchedTag(stayStatus: string | null | undefined): [string, "wait" | 
 
 // `sectionProps` is what the Work area gives every section list; with it, Accounts also holds the AirCover claims tab.
 export function LiveAccounts({ palette: p, account, properties, sectionProps }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; sectionProps?: SectionProps }) {
+  const { width } = useWindowDimensions();
   const saved = useSaved();
   const role = account.role, management = role === "admin" || role === "super_admin";
   const thisMonth = london(new Date()).slice(0, 7);
@@ -280,6 +283,7 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
   }
 
   const unsettled = (overview?.unsettledPayouts ?? 0) + (overview?.missingDetails ?? 0);
+  const phone = width < 600;
   const tiles = [
     { label: "To approve", value: overview?.toApproveCount ?? 0, icon: "check-circle" as IconName, detail: formatMoney(overview?.toApproveMinor ?? 0) + " in costs" + (overview?.draftCount ? ` · ${formatCount(overview.draftCount)} draft${overview.draftCount === 1 ? "" : "s"}` : ""), attention: (overview?.toApproveCount ?? 0) > 0 },
     { label: "To reconcile", value: unsettled, icon: "repeat" as IconName, detail: "Stays · " + monthLabel(period), attention: unsettled > 0 },
@@ -300,7 +304,8 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
       </View>
 
       <StatGrid>
-        {tiles.map(tile => <StatTile key={tile.label} p={p} icon={tile.icon} tone="accounts" label={tile.label} value={tile.value} detail={tile.detail} attention={tile.attention} />)}
+        {/* On a phone the three tiles sit side by side: one fill for all (no attention wash) and a short label that fits one line. */}
+        {tiles.map(tile => <StatTile key={tile.label} p={p} icon={tile.icon} tone="accounts" label={phone ? TILE_SHORT[tile.label] ?? tile.label : tile.label} value={tile.value} detail={tile.detail} attention={!phone && tile.attention} />)}
       </StatGrid>
 
       {!!error && <Notice text={error} p={p} tone="bad" />}

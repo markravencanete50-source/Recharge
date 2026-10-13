@@ -61,7 +61,8 @@ test('Accounts holds an AirCover tab and the AirCover tool opens it', () => {
   assert.deepEqual(dir.toolsFor('admin', ['aircover-reporting'])[0].place.view, 'stays', 'admins keep Guest relations');
   const accounts = read('mobile/src/LiveAccounts.tsx');
   assert.match(accounts, /view === "aircover" && !!sectionProps && <AirCoverList \{\.\.\.sectionProps\} \/>/);
-  assert.match(accounts, /label="AirCover"/);
+  // The sections are one Pills row (a dropdown for finance roles); AirCover keeps its label there.
+  assert.match(accounts, /aircover: "AirCover"/);
   assert.match(read('mobile/src/LiveWorkspace.tsx'), /<LiveAccounts key=\{"accounts:"[^>]*sectionProps=\{sectionProps\} \/>/);
   // The empty-list copy is now true: a repair can be flagged.
   assert.match(read('mobile/src/AirCoverList.tsx'), /Flag a maintenance ticket to start one/);

@@ -546,7 +546,7 @@ function RecordInvoiceForm({ p, properties, initialCleanerId, onDone }: { p: Pal
     <>
       <Field label="Cleaner or company (as on the invoice)" value={supplier} onChange={setSupplier} p={p} placeholder="For example: Cara Cleaning" />
       <Field label="Invoice reference" value={reference} onChange={setReference} p={p} placeholder="For example: CARA-2026-10" />
-      <Field label="Invoice date (YYYY-MM-DD)" value={invoiceDate} onChange={setInvoiceDate} p={p} />
+      <DateField p={p} label="Invoice date" mode="single" value={{ from: invoiceDate, to: invoiceDate }} onChange={v => setInvoiceDate(v.from)} wholeMonthLink={false} today={today} />
       <Field label="Invoice total" value={total} onChange={setTotal} p={p} placeholder="£0.00" />
       <View style={{ gap: 10 }}>
         <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "600" }}>Which cleans does it cover?</Text>

@@ -54,3 +54,24 @@ test('11. the step tick on a success fill uses onSuccess', () => {
   assert.match(flows, /<Feather name="check" size=\{13\} color=\{p\.onSuccess\} \/>/);
   assert.doesNotMatch(flows, /name="check" size=\{13\} color="#FFFFFF"/);
 });
+
+test('17. the cleaner invoice date in AccountsPayable is a date field; no typed YYYY-MM-DD dates are left there', () => {
+  const payable = src('AccountsPayable.tsx');
+  assert.doesNotMatch(payable, /YYYY-MM-DD/);
+  assert.match(payable, /<DateField p=\{p\} label="Invoice date" mode="single" value=\{\{ from: invoiceDate, to: invoiceDate \}\} onChange=\{v => setInvoiceDate\(v\.from\)\}/);
+});
+
+test('20. the phone Accounts summary tiles: one fill and short one-line labels', () => {
+  const accounts = src('LiveAccounts.tsx');
+  assert.match(accounts, /const TILE_SHORT: Record<string, string> = \{ "To approve": "Approve", "To reconcile": "Reconcile", "Statements paid": "Paid" \};/);
+  assert.match(accounts, /label=\{phone \? TILE_SHORT\[tile\.label\] \?\? tile\.label : tile\.label\}/);
+  assert.match(accounts, /attention=\{!phone && tile\.attention\}/);
+});
+
+test('14 and 15. Management (12 or 13 sections) and Client relations (up to 8) go through Pills, so they are dropdowns', async () => {
+  const { CLIENT_RELATIONS_SUBS } = await vite.ssrLoadModule('/lib/workspace-map.ts');
+  assert.match(src('ClientRelations.tsx'), /<Pills p=\{p\} title="Client relations section" values=\{subs\}/);
+  assert.match(src('LiveManagement.tsx'), /<Pills p=\{p\} title="Management section"/);
+  assert.equal(pillsMode(CLIENT_RELATIONS_SUBS.length), 'dropdown');
+  assert.equal(pillsMode(12), 'search');
+});
