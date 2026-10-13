@@ -138,17 +138,18 @@ test('worked example: November waits for the dear clean to be reviewed, then mat
   assert.equal(s.grossMinor, 175374);
   assert.equal(s.otaFeesMinor, 13372);
   assert.equal(s.cleaningMinor, 18000); assert.equal(s.cleaningCount, 3);
-  assert.equal(s.feeBps, 1500); assert.equal(s.feeMinor, 24300);
-  assert.equal(s.vatRateBps, 2000); assert.equal(s.vatMinor, 4860);
+  // The fee is charged after platform fees and changeovers (client answer 1): 144002 x 15% = 21600.3, so 21600.
+  assert.equal(s.feeBps, 1500); assert.equal(s.feeMinor, 21600);
+  assert.equal(s.vatRateBps, 2000); assert.equal(s.vatMinor, 4320);
   assert.equal(s.expensesMinor, 8500);
-  assert.equal(s.payoutMinor, 106342);
+  assert.equal(s.payoutMinor, 109582);
   assert.equal(s.revenueMinor, 175374 - 13372, 'booking income after OTA fees, as before');
   assert.deepEqual([s.nightsBooked, s.nightsAvailable, s.occupancyBps], [15, 30, 5000]);
   assert.equal(s.cleanChargeMode, 'agreed_fee');
   assert.deepEqual(lineView(s.detail.lines), [
     ['ota_fee', AIR, 1546], ['ota_fee', VRBO, 3392], ['ota_fee', BOOK, 8434],
     ['changeover', C1, 6000], ['changeover', C2, 6000], ['changeover', C3, 6000],
-    ['management_fee', null, 24300], ['vat', null, 4860],
+    ['management_fee', null, 21600], ['vat', null, 4320],
     ['payable', P1, 6000], ['payable', P2, 2500],
   ]);
   assert.deepEqual(s.detail.lines.map(l => l.label), ['Airbnb fees', 'Vrbo fees', 'Booking.com fees', 'Changeover clean', 'Changeover clean', 'Changeover clean',
@@ -180,7 +181,7 @@ test('worked example: December takes the rest of the Booking.com stay, and the t
   assert.equal(nov.grossMinor + booking.grossMinor, 72000);
   assert.equal(nov.otaFeeMinor + booking.otaFeeMinor, 11808);
   assert.equal(nov.amountMinor + booking.amountMinor, 60192);
-  assert.deepEqual(lineView(dec.detail.lines), [['ota_fee', BOOK, 3374], ['changeover', C4, 6000], ['management_fee', null, 2580], ['vat', null, 516]]);
+  assert.deepEqual(lineView(dec.detail.lines), [['ota_fee', BOOK, 3374], ['changeover', C4, 6000], ['management_fee', null, 1680], ['vat', null, 336]]);
   assert.deepEqual(figures(await compute(EX, '2025-12-01', '2026-01-01')), figures(statementFor(exampleInput({ from: '2025-12-01', to: '2026-01-01', payables: [] }))));
 });
 
@@ -189,7 +190,7 @@ test('preparing the same period again keeps one statement; an overlapping period
   const again = await finance({ action: 'prepareStatement', propertyId: EX, from: '2025-11-01', to: '2025-12-01' });
   assert.equal(again.id, preparedNov.id, 'the month and the same dates are one statement');
   assert.equal(again.version, 2);
-  assert.equal(again.payoutMinor, 106342);
+  assert.equal(again.payoutMinor, 109582);
   await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, from: '2025-11-15', to: '2025-12-15' }), /already covers part of these dates/);
   await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, from: '2025-10-20', to: '2025-11-02' }), /already covers part of these dates/);
   await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, from: '2025-11-05', to: '2025-11-05' }), /must end after it starts/);
@@ -216,7 +217,8 @@ test('actual-cost mode, 15% against 12%, and VAT off', async () => {
   await payables({ action: 'reviewCleanCost', workId: C2, decision: 'actual_cost', note: 'Owner agreed to pay the deep clean' });
   s = await prepare();
   assert.equal(s.cleaningMinor, 18500);
-  assert.equal(s.payoutMinor, 106342 - 500);
+  // 500 more in changeovers also lowers the fee base: 143502 x 15% = 21525.3, so 21525, VAT 4305.
+  assert.equal(s.payoutMinor, 162002 - 18500 - 21525 - 4305 - 8500);
   assert.equal(s.cleanChargeMode, 'actual_cost');
   assert.deepEqual(figures(await compute(EX, '2025-11-01', '2025-12-01')),
     figures(tsNov({ terms: { ...exampleInput().terms, cleanChargeMode: 'actual_cost' }, cleans: exampleInput().cleans.map(c => c.id === C2 ? { ...c, decision: 'actual_cost' } : c) })));
@@ -224,20 +226,20 @@ test('actual-cost mode, 15% against 12%, and VAT off', async () => {
   await as(ACCOUNTS);
   await payables({ action: 'reviewCleanCost', workId: C2, decision: 'agreed_fee', note: 'Deep clean after a party; agreed fee only' });
 
-  // 12% instead of 15%: 162002 x 12% = 19440.24, so 19440, and VAT 3888.
+  // 12% instead of 15%: 144002 x 12% = 17280.24, so 17280, and VAT 3456.
   await as(ADMIN); await terms(EX, { managementFeeBps: 1200 });
   s = await prepare();
-  assert.deepEqual([s.feeBps, s.feeMinor, s.vatMinor, s.payoutMinor], [1200, 19440, 3888, 175374 - 13372 - 18000 - 19440 - 3888 - 8500]);
+  assert.deepEqual([s.feeBps, s.feeMinor, s.vatMinor, s.payoutMinor], [1200, 17280, 3456, 175374 - 13372 - 18000 - 17280 - 3456 - 8500]);
   assert.equal(s.detail.lines.find(l => l.kind === 'management_fee').label, 'Management fee (12%)');
   assert.equal(s.payoutMinor, tsNov({ terms: { ...exampleInput().terms, managementFeeBps: 1200 } }).payoutMinor);
   // VAT off: no VAT line, the payout is VAT higher.
   await as(ADMIN); await terms(EX, { vatOnFee: false });
   s = await prepare();
-  assert.deepEqual([s.feeMinor, s.vatMinor, s.vatRateBps, s.payoutMinor], [24300, 0, 0, 106342 + 4860]);
+  assert.deepEqual([s.feeMinor, s.vatMinor, s.vatRateBps, s.payoutMinor], [21600, 0, 0, 109582 + 4320]);
   assert.equal(s.detail.lines.some(l => l.kind === 'vat'), false);
   await as(ADMIN); await terms(EX);
   s = await prepare();
-  assert.equal(s.payoutMinor, 106342);
+  assert.equal(s.payoutMinor, 109582);
 });
 
 test('a stay or payout under an issued statement is locked for any period it overlaps', async () => {
@@ -270,7 +272,7 @@ test('owners read the issued statement without the internal details', async () =
   const s = mine.find(x => x.id === nov.id);
   assert.ok(s, 'the owner sees their issued statement');
   for (const key of ['internal', 'cleanCosts', 'alreadyCounted']) assert.equal(s.detail[key], undefined, `no ${key} for owners`);
-  assert.deepEqual([s.payoutMinor, s.grossMinor, s.vatMinor, s.nightsBooked, s.nightsAvailable, s.occupancyBps], [106342, 175374, 4860, 15, 30, 5000]);
+  assert.deepEqual([s.payoutMinor, s.grossMinor, s.vatMinor, s.nightsBooked, s.nightsAvailable, s.occupancyBps], [109582, 175374, 4320, 15, 30, 5000]);
   assert.deepEqual(lineView(s.detail.lines).map(l => l[0]), ['ota_fee', 'ota_fee', 'ota_fee', 'changeover', 'changeover', 'changeover', 'management_fee', 'vat', 'payable', 'payable']);
   const text = JSON.stringify(mine);
   for (const secret of ['actualMinor', 'Deep clean after a party', 'clean_over_agreed', 'cleanCosts', 'costSource', 'chargedMinor', 'alreadyCounted']) assert.equal(text.includes(secret), false, `owners never see ${secret}`);
@@ -381,15 +383,8 @@ function generator(seed) {
 }
 const isoDay = n => new Date(n * 86400000).toISOString().slice(0, 10);
 
-// The SQL fee base switch, set the way a one-line migration would.
-const setFeeBase = base => sql(`create or replace function private.workspace_statement_fee_base() returns text language sql immutable set search_path='' as $$ select '${base}'::text $$`);
-test('200 seeded random scenarios: the SQL statement equals statementFor', () => randomScenarios('payout_after_ota_fees', 20261012, 'Random'));
-// Client answer 1: the fee charged on the payout after platform fees and changeovers, prepared but not switched on.
-test('200 seeded random scenarios with the fee charged after platform fees and changeovers: the SQL equals statementFor', async () => {
-  await setFeeBase('payout_after_ota_fees_and_changeovers');
-  try { await randomScenarios('payout_after_ota_fees_and_changeovers', 20261015, 'After changeovers'); } finally { await setFeeBase('payout_after_ota_fees'); }
-});
-async function randomScenarios(feeBase, seed, name) {
+test('200 seeded random scenarios: the SQL statement equals statementFor', () => randomScenarios(20261012, 'Random'));
+async function randomScenarios(seed, name) {
   const random = generator(seed), int = (low, high) => low + Math.floor(random() * (high - low + 1)), pick = list => list[int(0, list.length - 1)];
   const chance = p => random() < p;
   const day0 = Date.UTC(2024, 0, 1) / 86400000;
@@ -549,9 +544,8 @@ async function randomScenarios(feeBase, seed, name) {
       if (status === 'approved') tsPayables.push({ id, date, description: `Expense ${i}-${k}`, amountMinor: amount });
     }
 
-    const ts = statementFor({ from, to, method, terms: { ...t, feeBase }, stays: tsStays, cleans: tsCleans, payables: tsPayables });
+    const ts = statementFor({ from, to, method, terms: t, stays: tsStays, cleans: tsCleans, payables: tsPayables });
     const c = await compute(prop, from, to, method);
-    assert.equal(c.terms?.feeBase ?? feeBase, feeBase, label);
     assert.deepEqual(figures(c), figures(ts), label);
     if (ts.stays.some(s => s.grossMinor !== 0 && s.nightsInPeriod < s.nights)) proRated++;
     if (ts.flags.some(x => x.startsWith('stay_changed_after_statement:'))) seen.changed++;

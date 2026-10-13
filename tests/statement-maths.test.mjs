@@ -65,31 +65,30 @@ const lineSum = r => r.lines.reduce((n, l) => n + l.amountMinor, 0);
 
 test('the constants are the brief\'s assumptions', () => {
   assert.equal(VAT_BPS, 2000);
-  assert.equal(FEE_BASE, 'payout_after_ota_fees');
+  assert.equal(FEE_BASE, 'payout_after_ota_fees_and_changeovers');
   assert.equal(STATEMENT_WAITS_FOR_CLEAN_REVIEW, true);
   assert.deepEqual([...DEDUCTION_ORDER], ['ota_fee', 'changeover', 'management_fee', 'vat', 'payable']);
-  assert.equal(feeBaseMinor(1000, 150), 850);
-  assert.equal(feeBaseMinor(1000, 150, 'gross'), 1000);
-  // Client answer 1, prepared: after platform fees and changeovers. Plain subtraction, like the SQL.
-  assert.equal(feeBaseMinor(1000, 150, 'payout_after_ota_fees_and_changeovers', 300), 550);
-  assert.equal(feeBaseMinor(100, 0, 'payout_after_ota_fees_and_changeovers', 300), -200);
-  assert.equal(feeBaseMinor(1000, 150, 'payout_after_ota_fees', 300), 850, 'changeovers only count in the new base');
+  // Client answer 1 (Lee's decision): the fee is charged after platform fees and changeovers. Plain subtraction, like the SQL.
+  assert.equal(feeBaseMinor(1000, 150, 300), 550);
+  assert.equal(feeBaseMinor(1000, 150, 0), 850);
+  assert.equal(feeBaseMinor(100, 0, 300), -200);
 });
 
 test('worked example: November 2026 matches the hand arithmetic', () => {
   const r = november();
   assert.equal(r.grossMinor, 175374);
   assert.equal(r.otaFeesMinor, 13372);
-  assert.equal(r.feeBaseMinor, 162002);
+  // The fee is charged after platform fees and changeovers: 175374 - 13372 - 18000 = 144002; 15% is 21600.3 -> 21600.
+  assert.equal(r.feeBaseMinor, 144002);
   assert.equal(r.changeoversMinor, 18000);
-  assert.equal(r.feeMinor, 24300);
-  assert.equal(r.vatMinor, 4860);
+  assert.equal(r.feeMinor, 21600);
+  assert.equal(r.vatMinor, 4320);
   assert.equal(r.payablesMinor, 8500);
-  assert.equal(r.payoutMinor, 106342);
+  assert.equal(r.payoutMinor, 109582);
   assert.equal(r.nightsBooked, 15);
   assert.equal(r.nightsAvailable, 30);
   assert.equal(r.ownerExpensesMinor, 55000);
-  assert.equal(r.netMinor, 51342);
+  assert.equal(r.netMinor, 54582);
   assert.equal(r.blocked, false, 'the flagged clean has been reviewed');
   assert.deepEqual(r.flags, ['clean_over_agreed:c2']);
   assert.equal(r.grossMinor - lineSum(r), r.payoutMinor);
@@ -99,7 +98,7 @@ test('worked example: November 2026 matches the hand arithmetic', () => {
   assert.deepEqual(r.lines.map(l => [l.kind, l.refId, l.amountMinor]), [
     ['ota_fee', 'airbnb', 1546], ['ota_fee', 'vrbo', 3392], ['ota_fee', 'booking', 8434],
     ['changeover', 'c1', 6000], ['changeover', 'c2', 6000], ['changeover', 'c3', 6000],
-    ['management_fee', null, 24300], ['vat', null, 4860],
+    ['management_fee', null, 21600], ['vat', null, 4320],
     ['payable', 'p1', 6000], ['payable', 'p2', 2500],
   ]);
   assert.equal(r.lines.find(l => l.kind === 'management_fee').label, 'Management fee (15%)');
@@ -109,7 +108,8 @@ test('worked example: actual-cost mode charges 18500 in changeovers', () => {
   // Property mode actual cost; the flagged clean reviewed with no override.
   const byMode = november({ terms: terms({ cleanChargeMode: 'actual_cost' }), cleans: exampleCleans({ decision: null }) });
   assert.equal(byMode.changeoversMinor, 18500);
-  assert.equal(byMode.payoutMinor, 106342 - 500);
+  // 500 more in changeovers lowers the fee base too: 143502 x 15% = 21525.3 -> 21525, VAT 4305.
+  assert.equal(byMode.payoutMinor, 162002 - 18500 - 21525 - 4305 - 8500);
   // Agreed-fee property, but the review chose actual cost for every clean it looked at: only c2 moves.
   const byReview = november({ cleans: exampleCleans({ decision: 'actual_cost' }) });
   assert.equal(byReview.changeoversMinor, 6000 + 7500 + 6000);
@@ -162,8 +162,8 @@ test('VAT off gives VAT 0 and no VAT line', () => {
   const r = november({ terms: terms({ vatOnFee: false }) });
   assert.equal(r.vatMinor, 0);
   assert.equal(r.lines.some(l => l.kind === 'vat'), false);
-  assert.equal(r.feeMinor, 24300);
-  assert.equal(r.payoutMinor, 106342 + 4860);
+  assert.equal(r.feeMinor, 21600);
+  assert.equal(r.payoutMinor, 109582 + 4320);
 });
 
 // Seeded generator (mulberry32) so failures reproduce.
@@ -300,9 +300,10 @@ test('check_in_month reproduces today\'s statement for a sample month', () => {
   // month; cleaning = accepted cleans due in the month x cleaning cost; approved expenses received
   // in the month; fee = round(revenue x bps / 10000); payout = revenue - cleaning - expenses - fee.
   const revenue = 61237 + 33333 + 54321;
-  const fee = Math.round(revenue * 1200 / 10000);
+  // The fee is now charged after the cleaning too (client answer 1).
+  const fee = Math.round((revenue - 3 * 4500) * 1200 / 10000);
   const today = { fee, payout: revenue - 3 * 4500 - 12345 - fee };
-  assert.equal(r.feeBaseMinor, revenue);
+  assert.equal(r.feeBaseMinor, revenue - 3 * 4500);
   assert.equal(r.feeMinor, today.fee);
   assert.equal(r.payoutMinor, today.payout);
   assert.equal(r.changeoversMinor, 3 * 4500);
