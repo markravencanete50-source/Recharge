@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Linking, View } from "react-native";
 import { Text } from "./Typography";
+import { ChoiceField } from "./ChoiceField";
 import { PropertySelect, SearchPicker } from "./SearchPicker";
 import { Chip } from "./SheetTable";
 import { Button, Field, message, Notice, london, useRequestId } from "./LiveKit";
@@ -100,9 +101,9 @@ export function HubItemSheet({ p, hub, account, properties, target, onClose, onS
           </View>
           {f.assign === "person" && <SearchPicker p={p} options={(hub?.people ?? []).map(x => ({ id: x.userId, label: x.userId === account.userId ? "Me" : x.fullName || "Team member" }))} value={f.assigneeId ?? ""}
             onChange={id => setF(v => ({ ...v, assigneeId: id }))} clearable placeholder="Search the team by name" nouns="people" />}
-          {f.assign === "department" && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {DEPARTMENTS.map(d => <Chip key={d} p={p} label={DEPARTMENT_LABEL[d]} on={f.department === d} onPress={() => setF(v => ({ ...v, department: v.department === d ? "" : d }))} />)}
-          </View>}
+          {f.assign === "department" && <ChoiceField p={p} label="Department" value={f.department ?? ""}
+            options={[{ value: "", label: "Choose a department" }, ...DEPARTMENTS.map(d => ({ value: d as string, label: DEPARTMENT_LABEL[d] }))]}
+            onChange={d => setF(v => ({ ...v, department: d }))} />}
         </>}
         {kind !== "todo" && <Field label={kind === "approval" ? "Amount, £" : kind === "aircover" ? "Amount claimed, £" : "Amount, £"} value={f.amount ?? ""} onChange={set("amount")} p={p} placeholder="0.00" />}
         {(kind === "todo" || kind === "invoice") && <Field label={kind === "todo" ? "Due (optional, YYYY-MM-DD)" : "Send by (optional, YYYY-MM-DD)"} value={f.dueOn ?? ""} onChange={set("dueOn")} p={p} placeholder={london(new Date())} />}

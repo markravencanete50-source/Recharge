@@ -231,7 +231,8 @@ Lee: "I'd rather have a drop down, so it's much cleaner." The Management tabs ra
 **How it works**
 - `Pills` moved into `mobile/src/Pills.tsx`; the rule lives in `lib/pills.ts`.
 - 5 or fewer choices stay pills, on one line. On a narrow phone that line scrolls sideways instead of wrapping.
-- More than 5 become the shared `Dropdown`, showing the current choice, e.g. "Waiting on you".
+- More than 5 become the shared `Dropdown`, showing the current choice, e.g. "Waiting on you". Past 10 it opens with a search box.
+- This is one rule with Session D's forms (`lib/choice-control.ts`): `lib/pills.ts` takes `RADIO_MAX` and `choiceControl` from there, and D's `ChoicePills` now draws through `Pills`. After merging D's branch, `Pills` uses D's `hideLabel` (my `showLabel` is gone), and `Dropdown` keeps D's search box, `hideLabel` and `disabled`, plus the combobox role on the phone. Management's 12 or 13 sections are therefore a dropdown with a search box.
 - The dropdown lists every choice with the pill's own words, so a count in a label ("Waiting (3)") shows there too.
 - Same props and the same `onChange`, so no screen's logic changed. `wrap` is still accepted from older callers but no longer changes anything.
 - A new optional `title` names the dropdown for screen readers; Management passes "Management section".

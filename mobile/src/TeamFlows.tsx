@@ -1,4 +1,5 @@
-import { Children, isValidElement, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { flattenSheetChildren } from "../../lib/sheet-children";
 import { Animated, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as ImagePicker from "expo-image-picker";
@@ -79,7 +80,7 @@ export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, chi
             </View>
           </View>
           <ScrollView style={{ width: "100%" }} contentContainerStyle={{ padding: 20, gap: 16, minWidth: 0, maxWidth: "100%" }} keyboardShouldPersistTaps="handled">
-            <InSheet.Provider value>{shown && Children.toArray(content.children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}</InSheet.Provider>
+            <InSheet.Provider value>{shown && flattenSheetChildren(content.children).map(({ key, node }, n) => <Stagger key={key} index={n}>{node as ReactNode}</Stagger>)}</InSheet.Provider>
           </ScrollView>
         </Animated.View>
       </View>

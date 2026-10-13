@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
+import { ChoiceField, ChoicePills } from "./ChoiceField";
 import { useSaved } from "./Celebrate";
-import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, useRequestId } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
-import { Pills } from "./Pills";
 import { Check } from "./ListingSheets";
 import { writeTeams } from "./backend/client";
 import { DEPARTMENTS, type TeamsAction } from "../../lib/workspace-teams-policy";
@@ -50,7 +49,7 @@ export function KpiAdmin({ p, read, onChanged }: { p: Palette; read: KpiRead; on
   return (
     <Section title="KPIs" count={read.kpis.filter(k => k.active).length} p={p}>
       <Text style={[ui.small, { color: p.muted }]}>What each area is measured on. One KPI per area counts for the bonus; the rest are tracked. Everyone sees their own on My performance.</Text>
-      <Pills p={p} values={DEPARTMENTS} value={area} onChange={setArea} label={a => areaLabel(a)} wrap />
+      <ChoicePills p={p} name="Area" values={DEPARTMENTS} value={area} onChange={setArea} label={a => areaLabel(a)} wrap />
       <List p={p} empty="No KPIs for this area yet." search={false}>
         {list.map((k, i) => {
           const tags: [string, "good" | "wait" | "bad" | "plain"][] = [];
@@ -66,16 +65,11 @@ export function KpiAdmin({ p, read, onChanged }: { p: Palette; read: KpiRead; on
       <Sheet palette={p} visible={!!editing} onClose={() => setEditing(null)} title={editing === "new" ? "Add a KPI" : editing?.name ?? ""} subtitle={editing && editing !== "new" ? lastChange(editing) : areaLabel(form.area)} icon="chart">
         <Field label="Name" value={form.name} onChange={v => set({ name: v })} p={p} placeholder="Replies within 5 minutes" />
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Area</Text>
-        <Pills p={p} values={DEPARTMENTS} value={form.area as (typeof DEPARTMENTS)[number]} onChange={a => set({ area: a, measure: read.measures.find(m => m.key === form.measure)?.areas.includes(a) ? form.measure : "" })} label={a => areaLabel(a)} wrap />
+        <ChoicePills p={p} name="Area" values={DEPARTMENTS} value={form.area as (typeof DEPARTMENTS)[number]} onChange={a => set({ area: a, measure: read.measures.find(m => m.key === form.measure)?.areas.includes(a) ? form.measure : "" })} label={a => areaLabel(a)} wrap />
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>What it measures</Text>
-        <View style={{ gap: 6 }}>
-          {measures.map(m => (
-            <MotionPress key={m.key} accessibilityRole="radio" accessibilityState={{ selected: form.measure === m.key }} accessibilityLabel={m.label} onPress={() => set({ measure: m.key, minutes: m.needsMinutes ? form.minutes || "5" : "" })}
-              style={{ minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: form.measure === m.key ? p.primary : p.border, backgroundColor: form.measure === m.key ? p.wash : p.surface }}>
-              <Text style={{ color: form.measure === m.key ? p.primary : p.text, fontSize: 14 }}>{m.label}{m.direction === "lower" ? " (lower is better)" : ""}</Text>
-            </MotionPress>
-          ))}
-        </View>
+        <ChoiceField p={p} label="What it measures" value={form.measure}
+          options={[...(form.measure ? [] : [{ value: "", label: "Choose what it measures" }]), ...measures.map(m => ({ value: m.key, label: m.label + (m.direction === "lower" ? " (lower is better)" : "") }))]}
+          onChange={key => { const m = measures.find(x => x.key === key); if (m) set({ measure: m.key, minutes: m.needsMinutes ? form.minutes || "5" : "" }); }} />
         {!!measure?.needsMinutes && <Field label="Minutes" value={form.minutes} onChange={v => set({ minutes: v })} p={p} placeholder="5" />}
         <Field label="Target % (leave empty to track only)" value={form.target} onChange={v => set({ target: v })} p={p} placeholder="80" />
         <Field label={`Bonus tiers %, ${measure?.direction === "lower" ? "below" : "above"} the target (for example 90, 95)`} value={form.tiers} onChange={v => set({ tiers: v })} p={p} placeholder="90, 95" />
