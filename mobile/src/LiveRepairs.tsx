@@ -113,7 +113,7 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
 
-      {canStart(account, "report-repair") && <View style={{ flexDirection: "row" }}><Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} /></View>}
+      {canStart(account, "report-repair") && <Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} />}
 
       <Section title="Reactive maintenance" p={p}>
         <Dropdown p={p} label="Show" value={stage} onChange={setStage}

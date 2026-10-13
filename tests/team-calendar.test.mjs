@@ -231,7 +231,7 @@ test('the screens: four views for staff, a team events sheet with safe actions, 
   assert.match(sheet, /action: "cancelTeamEvent"/);
   assert.match(sheet, /useRequestId/);
   assert.match(sheet, /canEditAll/);
-  assert.match(sheet, /YYYY-MM-DD/);
+  assert.match(sheet, /<DateField p=\{p\} label="Dates/, 'the dates are chosen on the calendar field');
   for (const text of [calendar, sheet]) assert.doesNotMatch(text, /Alert\.alert|window\.confirm|window\.alert|\bconfirm\(/);
 });
 
