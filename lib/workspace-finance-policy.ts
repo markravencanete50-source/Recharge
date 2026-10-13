@@ -25,7 +25,7 @@ const reconciled = (value: string) => (RECONCILED_CHANNELS as readonly string[])
 
 // Report sections are read through workspace_finance_report (from and to dates, filters), not workspace_finance_read.
 // A section whose database function comes from a later migration answers 'needs a database update' until that is applied.
-export const REPORT_SECTIONS: readonly string[] = ['payoutLines', 'cleansToReview', 'cleanerInvoices', 'receivable', 'performance', 'statementPreview'];
+export const REPORT_SECTIONS: readonly string[] = ['payoutLines', 'cleansToReview', 'cleanerInvoices', 'receivable', 'performance', 'statementPreview', 'payoutStay'];
 // The filters each report accepts besides its dates, the property (propertyId) and one record (id). Any other is refused.
 export const REPORT_FILTERS: Record<string, readonly ('channel' | 'region' | 'reportId' | 'state' | 'status' | 'cleanerId' | 'method')[]> = {
   payoutLines: ['channel', 'reportId', 'state'],
@@ -38,7 +38,8 @@ export const REPORT_FILTERS: Record<string, readonly ('channel' | 'region' | 're
 // Every platform a stay can come from; payout lines are held for the reconciled platforms only.
 export const STAY_CHANNELS = ['airbnb', 'booking_com', 'vrbo', 'direct', 'other'] as const;
 export const financeReadSchema = z.object({
-  section: z.enum(['overview', 'expenses', 'expense', 'reconciliation', 'statements', 'policy', 'jobs', 'payoutLines', 'cleansToReview', 'cleanerInvoices', 'receivable', 'performance', 'statementPreview']),
+  // payoutStay (20261015110000): one stay's details for the payout approval sheet; it takes the stay as id.
+  section: z.enum(['overview', 'expenses', 'expense', 'reconciliation', 'statements', 'policy', 'jobs', 'payoutLines', 'cleansToReview', 'cleanerInvoices', 'receivable', 'performance', 'statementPreview', 'payoutStay']),
   propertyId: id.optional(), period: period.optional(), id: id.optional(),
   status: z.enum(['draft', 'to_approve', 'queried', 'approved', 'rejected']).optional(),
   from: date.optional(), to: date.optional(), channel: z.enum(STAY_CHANNELS).optional(), region: text(1, 80).optional(),
@@ -58,6 +59,7 @@ export const financeReadSchema = z.object({
   }
   if (value.from && value.to && value.from > value.to) context.addIssue({ code: 'custom', message: 'The start date must be on or before the end date' });
   if (value.section === 'expense' && !value.id) context.addIssue({ code: 'custom', message: 'Choose an expense' });
+  if (value.section === 'payoutStay' && !value.id) context.addIssue({ code: 'custom', message: 'Choose a stay' });
   if (value.section === 'jobs' && !value.propertyId) context.addIssue({ code: 'custom', message: 'Choose a property' });
   if (value.status && value.section !== 'expenses' && value.section !== 'cleanerInvoices') context.addIssue({ code: 'custom', message: 'Status applies to expenses and cleaner invoices only' });
 });

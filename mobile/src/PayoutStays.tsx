@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Platform, ScrollView, View, useWindowDimensions } from "react-native";
+import { Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
@@ -12,16 +12,19 @@ import { Button, Field, Notice, Tag, message } from "./LiveKit";
 import { formatCount, formatDay, plural } from "../../lib/format";
 import { PAYOUT_CHANNEL_LABEL, RECONCILED_CHANNELS, type PayoutChannel } from "../../lib/payout-report-formats";
 import { writeFinance } from "./backend/client";
+import { CalendarPicker } from "./CalendarPicker";
+import { payoutCalendarMonth, payoutCalendarScope, payoutDataBounds, payoutDayCounts, togglePayoutDay } from "../../lib/payout-calendar";
 import {
-  BULK_PAYOUT_CHUNK, CHANNEL_LABEL, bulkApprovalSchema, bulkPayoutPlan, chunk, filterPayouts, payoutApproval, payoutDates, payoutDifference, payoutMove, payoutSearchText, payoutStateLabel, payoutTotals,
+  BULK_PAYOUT_CHUNK, CHANNEL_LABEL, bulkApprovalSchema, bulkPayoutPlan, chunk, filterPayouts, payoutApproval, payoutDifference, payoutMove, payoutSearchText, payoutStateLabel, payoutTotals,
   pounds, sumBulkApprovals, type BulkApproval, type PayoutRow, type PayoutStatusFilter,
 } from "../../lib/accounts-live";
 
 // The Platform stays list on the Reconciliation screen: figures that line up, an Approve button on each row so nothing has to be
-// opened, a search, a filter by check-in date, and "Approve all" for what is in view. Approving here makes the same checks as the
+// opened, a search, a calendar of check-in days, and "Approve all" for what is in view. Approving here makes the same checks as the
 // sheet behind each row (the database repeats them), and the amount is always printed on the button before anything is sent.
-// What is "in view" is one thing everywhere: the search, the status, then the dates. The figures, the counts on the chips, the
-// list and "Approve all" all read from it, so the button never reaches a stay the list is not showing.
+// What is "in view" is one thing everywhere: the search, the platform, then the status. The counts on the calendar and "Approve
+// all" read from it; a day chosen on the calendar narrows the figures and the list to that day, and "Approve these N" in the
+// day's heading works on that day only (lib/payout-calendar.ts), so no button reaches a stay that is not in view.
 const PAGE = 50;
 const WIDE = 1120, PHONE = 600;
 const COLUMN = { day: 88, money: 92, status: 184, action: 196 };
@@ -47,10 +50,12 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
   const [measured, setMeasured] = useState(0);
   const width = measured || screen.width;
   const wide = width >= WIDE, phone = width < PHONE;
+  // The calendar sits beside the figures and filters on a wide screen, under them otherwise.
+  const beside = screen.width >= 900;
   const [status, setStatus] = useState<PayoutStatusFilter>("open");
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState<"all" | PayoutChannel>("all");
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string | null>(null);
   const [shown, setShown] = useState(PAGE);
   const [local, setLocal] = useState<Record<string, PayoutRow>>({});
   const [busy, setBusy] = useState<string[]>([]);
@@ -58,6 +63,8 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
   // The approval sheet.
   const [sheet, setSheet] = useState(false);
   const [includeDifferent, setIncludeDifferent] = useState(false);
+  // What the approval sheet works on: everything in view, or the chosen day.
+  const [target, setTarget] = useState<"all" | "day">("all");
   const [note, setNote] = useState(DEFAULT_BULK_NOTE);
   const [running, setRunning] = useState<{ done: number; total: number } | null>(null);
   const [sheetError, setSheetError] = useState("");
@@ -69,7 +76,7 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
 
   // A new month starts from the top with every date and no search. Rows approved here show as approved straight away; once the
   // reload arrives these local copies are dropped and the server's answer is what is shown.
-  useEffect(() => { queueMicrotask(() => { setPicked([]); setQuery(""); setShown(PAGE); }); }, [periodLabel]);
+  useEffect(() => { queueMicrotask(() => { setPicked(null); setQuery(""); setShown(PAGE); }); }, [periodLabel]);
   useEffect(() => { queueMicrotask(() => setLocal({})); }, [rows]);
 
   const all = useMemo(() => rows.map(row => local[row.reservationId] ?? row), [rows, local]);
@@ -83,22 +90,23 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
   const platformsHeld = perPlatform.filter(x => x.count > 0).length;
   const inPlatform = useMemo(() => platform === "all" ? searched : searched.filter(row => row.channel === platform), [searched, platform]);
   const byStatus = useMemo(() => filterPayouts(inPlatform, status), [inPlatform, status]);
-  const dates = useMemo(() => payoutDates(byStatus), [byStatus]);
-  // A date with nothing left on it (everything there was just approved) drops out of the choice by itself.
-  const chosen = useMemo(() => picked.filter(d => dates.some(x => x.date === d)), [picked, dates]);
-  const scope = useMemo(() => filterPayouts(byStatus, "all", chosen), [byStatus, chosen]);
+  const dayCounts = useMemo(() => payoutDayCounts(byStatus), [byStatus]);
+  const bounds = useMemo(() => payoutDataBounds(all), [all]);
+  // A day with nothing left on it (everything there was just approved) drops out of the choice by itself.
+  const chosen = picked && dayCounts[picked] ? picked : null;
+  const calendar = useMemo(() => payoutCalendarScope(byStatus, chosen), [byStatus, chosen]);
+  const scope = calendar.list;
   const totals = useMemo(() => payoutTotals(scope), [scope]);
-  const plan = useMemo(() => bulkPayoutPlan(scope, false), [scope]);
-  const bulk = useMemo(() => bulkPayoutPlan(scope, includeDifferent), [scope, includeDifferent]);
+  const plan = target === "day" && calendar.day ? calendar.day : calendar.all;
+  const bulk = useMemo(() => bulkPayoutPlan(target === "day" && chosen ? scope : byStatus, includeDifferent), [target, chosen, scope, byStatus, includeDifferent]);
   const counts = useMemo(() => ({ open: filterPayouts(inPlatform, "open").length, settled: filterPayouts(inPlatform, "settled").length, all: inPlatform.length }), [inPlatform]);
   const visible = scope.slice(0, shown);
-  const approvable = plan.items.length;
+  const approvable = calendar.all.items.length, approvableDay = calendar.day?.items.length ?? 0;
   const bulkMinor = bulk.atExpected.minor + bulk.atReceived.minor;
-  const scopeDates = !chosen.length ? `Every date in ${periodLabel}` : chosen.length === 1 ? longDay(chosen[0]) : `${chosen.length} dates: ${chosen.slice(0, 3).map(d => formatDay(d)).join(", ")}${chosen.length > 3 ? ` and ${chosen.length - 3} more` : ""}`;
+  const scopeDates = target === "day" && chosen ? longDay(chosen) : `Every date in ${periodLabel}`;
   // The confirmation says what was searched for too, so nobody approves a narrower set than they think.
   const scopeLabel = needle ? `${scopeDates} · matching “${needle.length > 40 ? needle.slice(0, 40) + "…" : needle}”` : scopeDates;
-  const toggle = (date: string) => { setShown(PAGE); setPicked(prev => prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date]); };
-  const allDates = () => { setPicked([]); setShown(PAGE); };
+  const pickDay = (date: string | null) => { setShown(PAGE); setPicked(prev => togglePayoutDay(prev, date, dayCounts)); };
 
   async function approveOne(row: PayoutRow) {
     const approval = payoutApproval(row);
@@ -119,7 +127,7 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
     }
   }
 
-  function openSheet() { setResult(null); setSheetError(""); setIncludeDifferent(false); setNote(DEFAULT_BULK_NOTE); setSheet(true); }
+  function openSheet(on: "all" | "day") { setTarget(on); setResult(null); setSheetError(""); setIncludeDifferent(false); setNote(DEFAULT_BULK_NOTE); setSheet(true); }
   function closeSheet() { if (!running) setSheet(false); }
   async function approveMany() {
     if (running || !bulk.items.length) return;
@@ -151,30 +159,39 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
     } finally { setRunning(null); await onChanged(); }
   }
 
-  const bulkLabel = !approvable ? "Nothing to approve here" : chosen.length === 1 ? `Approve ${formatCount(approvable)} on ${formatDay(chosen[0])}` : chosen.length > 1 ? `Approve ${formatCount(approvable)} on ${chosen.length} dates`
-    : needle ? `Approve ${formatCount(approvable)} matching` : `Approve all ${formatCount(approvable)}`;
+  const bulkLabel = !approvable ? "Nothing to approve here" : needle ? `Approve ${formatCount(approvable)} matching` : `Approve all ${formatCount(approvable)}`;
   const emptyText = !all.length ? "No platform stays this month."
     : needle && !searched.length ? `Nothing matches “${needle.length > 40 ? needle.slice(0, 40) + "…" : needle}”. Try part of the property name, the platform code, the date or the amount.`
     : platform !== "all" && !inPlatform.length ? `No ${PAYOUT_CHANNEL_LABEL[platform]} stays match.`
-    : status === "open" && !chosen.length && !needle ? "Nothing is waiting for approval this month."
+    : status === "open" && !chosen && !needle ? "Nothing is waiting for approval this month."
     : "No stays match. Choose All dates, or choose All.";
-  const leftOut = [plan.heldBack && `${plural(plan.heldBack, "stay")} paid a different amount`, plan.needDetails && `${plural(plan.needDetails, "stay")} that ${plan.needDetails === 1 ? "needs" : "need"} details`].filter(Boolean).join(" and ");
+  const leftOutOf = (x: typeof plan) => [x.heldBack && `${plural(x.heldBack, "stay")} paid a different amount`, x.needDetails && `${plural(x.needDetails, "stay")} that ${x.needDetails === 1 ? "needs" : "need"} details`].filter(Boolean).join(" and ");
+  const leftOut = leftOutOf(calendar.all), leftOutDay = calendar.day ? leftOutOf(calendar.day) : "";
   const figureSize = phone ? 18 : 22;
-  const chips: ReactNode = <>
-    <Chip p={p} role="checkbox" on={!chosen.length} label="All dates" count={byStatus.length} onPress={allDates} />
-    {dates.map(d => <Chip key={d.date} p={p} role="checkbox" on={chosen.includes(d.date)} label={formatDay(d.date)} count={d.count} onPress={() => toggle(d.date)} />)}
-  </>;
+  // The check-in calendar: each day counts the stays in view; choosing a day narrows the list to it.
+  const picker: ReactNode = all.length > 0 && <View style={{ gap: 6, alignSelf: phone ? "stretch" : "flex-start" }}>
+    <View style={[ui.row, { gap: 10, justifyContent: "space-between" }]}>
+      <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Check-in date</Text>
+      {!!chosen && <MotionPress accessibilityRole="button" accessibilityLabel="All dates" onPress={() => pickDay(null)} style={{ minHeight: 32, justifyContent: "center" }}>
+        <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>All dates</Text>
+      </MotionPress>}
+    </View>
+    <CalendarPicker key={periodLabel} p={p} mode="single" value={{ from: chosen, to: chosen }} onChange={v => pickDay(v.from ?? chosen)} counts={dayCounts}
+      dataFrom={bounds.from} dataTo={bounds.to} initialMonth={payoutCalendarMonth(chosen, all, null)} countNoun={status === "open" ? "to approve" : "stays"} />
+    <Text style={[ui.small, { color: p.muted }]}>{chosen ? "Choose the day again for every date." : "Choose a day to see its stays."}</Text>
+  </View>;
 
   return (
     <View style={{ gap: 12 }}>
-      <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 16 }]}>
+      <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 16, flexDirection: beside ? "row" : "column", alignItems: beside ? "flex-start" : "stretch" }]}>
+       <View style={{ flex: beside ? 1 : undefined, minWidth: 0, gap: 16 }}>
         <View style={{ flexDirection: phone ? "column" : "row", alignItems: phone ? "stretch" : "center", justifyContent: "space-between", gap: 14 }}>
           <View style={{ flexDirection: "row", gap: phone ? 18 : 40, flexWrap: "wrap" }}>
             <Figure p={p} size={figureSize} label={status === "open" ? "To approve" : status === "settled" ? "Settled" : "Stays"} value={formatCount(totals.count)} />
             <Figure p={p} size={figureSize} label="Expected" value={pounds(totals.expectedMinor)} />
             <Figure p={p} size={figureSize} label="Received" value={pounds(totals.receivedMinor)} dim={totals.receivedMinor === 0} />
           </View>
-          {canApprove && <View style={{ minWidth: phone ? undefined : 260, flexDirection: "row" }}><Button label={bulkLabel} icon="check-circle" primary={approvable > 0} disabled={approvable === 0} p={p} onPress={openSheet} /></View>}
+          {canApprove && <View style={{ minWidth: phone ? undefined : 260, flexDirection: "row" }}><Button label={bulkLabel} icon="check-circle" primary={approvable > 0 && !chosen} disabled={approvable === 0} p={p} onPress={() => openSheet("all")} /></View>}
         </View>
         {canApprove && !!leftOut && <Text style={[ui.small, { color: p.muted }]}>{approvable > 0 ? `Approve all leaves ${leftOut} for you to check one by one.` : `Left for you to check one by one: ${leftOut}.`}</Text>}
 
@@ -190,14 +207,19 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
           <Chip p={p} role="radio" on={platform === "all"} label="All platforms" count={searched.length} onPress={() => { setPlatform("all"); setShown(PAGE); }} />
           {perPlatform.filter(x => x.count > 0).map(x => <Chip key={x.channel} p={p} role="radio" on={platform === x.channel} label={PAYOUT_CHANNEL_LABEL[x.channel]} count={x.count} onPress={() => { setPlatform(x.channel); setShown(PAGE); }} />)}
         </View>}
-
-        {dates.length > 1 && <View style={{ gap: 8 }}>
-          <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Check-in date. Choose one or more.</Text>
-          {phone
-            ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{chips}</ScrollView>
-            : <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{chips}</View>}
-        </View>}
+       </View>
+        {picker}
       </View>
+
+      {!!chosen && <View style={{ flexDirection: phone ? "column" : "row", alignItems: phone ? "stretch" : "center", justifyContent: "space-between", gap: 10 }}>
+        <View style={{ flex: phone ? undefined : 1, gap: 2, minWidth: 0 }}>
+          <Text accessibilityRole="header" style={{ color: p.text, fontSize: 17, fontWeight: "500" }}>{longDay(chosen)}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{`${plural(scope.length, "stay")} checking in${leftOutDay ? `. Left for you to check one by one: ${leftOutDay}.` : ""}`}</Text>
+        </View>
+        {canApprove && <View style={{ minWidth: phone ? undefined : 220, flexDirection: "row" }}>
+          <Button label={approvableDay ? `Approve these ${formatCount(approvableDay)}` : "Nothing to approve on this day"} icon="check-circle" primary={approvableDay > 0} disabled={approvableDay === 0} p={p} onPress={() => openSheet("day")} />
+        </View>}
+      </View>}
 
       {!!problem && <Notice text={problem} p={p} tone="bad" />}
 
@@ -228,7 +250,7 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
           </MotionPress>
         )}
       </View>
-      {scope.length > 0 && <Text style={[ui.small, { color: p.muted }]}>{`Showing ${formatCount(visible.length)} of ${formatCount(scope.length)}. The approve button at the top works on the whole list, not only the stays shown.`}</Text>}
+      {scope.length > 0 && <Text style={[ui.small, { color: p.muted }]}>{`Showing ${formatCount(visible.length)} of ${formatCount(scope.length)}. ${chosen ? "Approve these works on the whole day, and Approve all at the top on every date" : "The approve button at the top works on the whole list"}, not only the stays shown.`}</Text>}
 
       <Sheet palette={p} visible={sheet} onClose={closeSheet} icon="coins" title={result ? "Approval finished" : `Approve ${plural(bulk.items.length, "payout")}?`} subtitle={scopeLabel}>
         {/* One wrapping view per state: the sheet spaces and staggers its direct children, and a fragment counts as one. */}

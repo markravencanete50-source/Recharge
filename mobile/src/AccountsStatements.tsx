@@ -8,16 +8,17 @@ import { Button, Field, Loading, london, message, Notice, useRequestId } from ".
 import { readFinance, writeFinance } from "./backend/client";
 import { StatementFiles } from "./AccountsFiles";
 import { Line, type NoteAsk } from "./AccountsPayable";
+import { DateField } from "./CalendarPicker";
 import { Chip } from "./SheetTable";
 import { PropertySelect } from "./SearchPicker";
 import { TrackerDetailSheet, TrackerList } from "./Tracker";
-import { CHANNEL_LABEL, isFinanceRole, monthLabel, pounds, shiftMonth, statementPreviewSchema, statementsSchema, type Statement, type StatementPreview } from "../../lib/accounts-live";
+import { CHANNEL_LABEL, isFinanceRole, monthLabel, pounds, statementPreviewSchema, statementsSchema, type Statement, type StatementPreview } from "../../lib/accounts-live";
 import { formatBps, plural } from "../../lib/format";
 import { poundsToMinor } from "../../lib/repairs-live";
 import { visitorLevyForm, visitorLevyInput, type VisitorLevyForm } from "../../lib/accounts-work";
 import { sortTracker, type TrackerItem } from "../../lib/tracker";
 import {
-  blockReasons, CHECK_FIGURES, customRange, flagNotes, ISSUE_STATEMENT, lineGroups, monthRange, periodTitle, prepareAction, previewKey, previewQuery, previewSummary,
+  blockReasons, CHECK_FIGURES, customRange, flagNotes, ISSUE_STATEMENT, lineGroups, monthRange, periodTitle, pickStatementDates, prepareAction, previewKey, previewQuery, previewSummary,
   RECORD_PAYOUT, rangeFromDates, SET_TERMS, statementForms, statementTrackerItems, VOID_STATEMENT,
   type LineGroup, type StatementRange, type StatementSource, type SummaryRow,
 } from "../../lib/tracker-statements";
@@ -30,7 +31,6 @@ import type { z } from "zod";
 // Dates: people choose the first day and the LAST day included. The database wants `to` as the first day NOT included, so
 // customRange (lib/tracker-statements.ts) adds the day once and every request uses its `from` and `to`.
 export type StatementRow = z.infer<typeof statementsSchema>[number];
-const MONTHS_SHOWN = 6;
 const small = (p: Palette) => [ui.small, { color: p.muted }];
 const heading = (p: Palette) => ({ color: p.muted, fontSize: 12, fontWeight: "600" as const, textTransform: "uppercase" as const, letterSpacing: 1 });
 
@@ -191,10 +191,10 @@ type Props = {
 // The Statements tab body, rendered by LiveAccounts while that tab is selected.
 export function AccountsStatements({ p, role, period, statements, loading, busyStatement, statementAction, setTerms, setAsk, properties, onPeriod, onOpenTab }: Props) {
   const finance = isFinanceRole(role);
-  const today = london(new Date()), thisMonth = today.slice(0, 7);
-  const [custom, setCustom] = useState(false);
-  const [fromText, setFromText] = useState("");
-  const [lastText, setLastText] = useState("");
+  const today = london(new Date());
+  // Dates chosen on the calendar other than the page's month (first and last day, both included); null is the page's month.
+  const [chosen, setChosen] = useState<{ from: string; last: string } | null>(null);
+  const custom = !!chosen;
   const [propertyId, setPropertyId] = useState("");
   const [check, setCheck] = useState<Check | null>(null);
   const [showLines, setShowLines] = useState(false);
@@ -202,12 +202,10 @@ export function AccountsStatements({ p, role, period, statements, loading, busyS
   const latest = useRef(0);
 
   // The period being asked about: the page's month, or the dates typed (last day included, turned into `to` once).
-  const range = custom ? customRange(fromText, lastText, today) : monthRange(period);
+  const range = chosen ? customRange(chosen.from, chosen.last, today) : monthRange(period);
   const picked: StatementRange | null = range && !("error" in range) ? range : null;
-  const rangeError = custom && fromText.trim() && lastText.trim() && range && "error" in range ? range.error : "";
-  // Without onPeriod the page's own arrows choose the month, so there is just the one chip.
-  const recent = Array.from({ length: MONTHS_SHOWN }, (_, n) => shiftMonth(thisMonth, -n));
-  const months = !onPeriod ? [period] : recent.includes(period) ? recent : [period, ...recent];
+  const rangeError = range && "error" in range ? range.error : "";
+  const shownDates = picked ? { from: picked.from, to: picked.lastDay } : chosen ? { from: chosen.from, to: chosen.last } : { from: period + "-01", to: period + "-01" };
   const options = useMemo(() => (properties ?? statements.map(r => ({ id: r.propertyId, name: r.propertyName }))), [properties, statements]);
 
   const key = propertyId && picked ? previewKey(propertyId, picked) : "";
@@ -238,10 +236,11 @@ export function AccountsStatements({ p, role, period, statements, loading, busyS
     // Preparing a held draft again keeps its own method (prepareAction leaves the method out).
     void statementAction(`prepare:${key}:${existing?.version ?? 0}`, { ...prepareAction(propertyId, picked, existing), requestId: "" }).then(() => runCheck(propertyId, picked));
   }
-  function chooseCustom() {
-    const month = monthRange(period);
-    if (!custom && month && !fromText && !lastText) { setFromText(month.from); setLastText(month.lastDay); }
-    setCustom(true);
+  // A whole month chosen on the calendar becomes the page's month, as the month chips did; any other dates stay custom.
+  function chooseDates(next: { from: string; to: string }) {
+    const choice = pickStatementDates(next, period, !!onPeriod);
+    if ("month" in choice) { setChosen(null); if (choice.month !== period) onPeriod?.(choice.month); }
+    else setChosen(choice.custom);
   }
 
   const items = useMemo(() => {
@@ -255,7 +254,7 @@ export function AccountsStatements({ p, role, period, statements, loading, busyS
     const r = statement?.periodStart && statement.periodEnd ? rangeFromDates(statement.periodStart, statement.periodEnd) : monthRange(statement?.period ?? item.source.month);
     if (!r) return;
     setPropertyId(row.propertyId);
-    if (r.month) { setCustom(false); if (r.month !== period) onPeriod?.(r.month); } else { setCustom(true); setFromText(r.from); setLastText(r.lastDay); }
+    if (r.month && (r.month === period || onPeriod)) { setChosen(null); if (r.month !== period) onPeriod?.(r.month); } else setChosen({ from: r.from, last: r.lastDay });
     void runCheck(row.propertyId, r);
   }
   function onForm(item: TrackerItem<StatementSource> | undefined, form: WorkflowForm) {
@@ -277,21 +276,9 @@ export function AccountsStatements({ p, role, period, statements, loading, busyS
             <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Prepare a statement</Text>
             <Text style={small(p)}>Choose the dates and a property, check the figures, then prepare the statement.</Text>
           </View>
-          <View style={{ gap: 8 }}>
-            <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Dates</Text>
-            <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-              {months.map(m => <Chip key={m} p={p} label={monthLabel(m)} on={!custom && m === period} onPress={() => { setCustom(false); onPeriod?.(m); }} />)}
-              <Chip p={p} label="Custom dates" on={custom} onPress={chooseCustom} />
-            </View>
-            {!onPeriod && !custom && <Text style={small(p)}>Use the month arrows at the top to change the month.</Text>}
-          </View>
-          {custom && (
-            <View style={{ gap: 12 }}>
-              <Field label="First day" value={fromText} onChange={setFromText} p={p} placeholder="2026-11-01" />
-              <Field label="Last day (included)" value={lastText} onChange={setLastText} p={p} placeholder="2026-11-30" />
-              {!!rangeError && <Notice text={rangeError} p={p} tone="bad" />}
-            </View>
-          )}
+          {/* One field for the period: it opens the calendar (first day, then last day; "Whole month" picks a month). */}
+          <DateField p={p} label="Dates" value={shownDates} onChange={chooseDates} today={today} />
+          {!!rangeError && <Notice text={rangeError} p={p} tone="bad" />}
           {!!picked && <Text style={small(p)}>{`${periodTitle({ periodStart: picked.from, periodEnd: picked.to })} · ${plural(picked.days, "day")}${custom ? ". Both the first and the last day are included." : ""}`}</Text>}
           <View style={{ gap: 8 }}>
             <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property</Text>

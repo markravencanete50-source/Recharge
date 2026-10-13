@@ -1,6 +1,7 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'vite';
 
 // Text-level wiring of the Statements screen: check before preparing, a blocked period cannot be prepared, the shared tracker
 // list and sheet, the terms sheet, the Vrbo example button, and the house rules (no dialogs, no em dashes, CRLF source).
@@ -12,6 +13,9 @@ const read = name => readFileSync(path(name), 'utf8');
 const screen = read('mobile/src/AccountsStatements.tsx');
 const adapter = read('lib/tracker-statements.ts');
 const tracker = read('lib/tracker.ts');
+const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
+after(() => vite.close());
+const S = await vite.ssrLoadModule('/lib/tracker-statements.ts');
 const filesScreen = read('mobile/src/AccountsFiles.tsx');
 const liveAccounts = read('mobile/src/LiveAccounts.tsx');
 
@@ -61,14 +65,24 @@ test('the summary reads gross, deductions in order, then the payout, with reason
   assert.ok(at("label: 'Gross revenue'") < at("label: 'Platform fees'") && at("label: 'Platform fees'") < at('`Changeovers (') && at('`Changeovers (') < at('`Management fee (') && at('`Management fee (') < at('VAT on the management fee') && at('VAT on the management fee') < at("label: 'Other payables'") && at("label: 'Other payables'") < at('Payout to the owner'), 'deductions are in order');
 });
 
-test('dates: the last day is shown and typed, the day after is sent', () => {
-  assert.match(screen, /Last day \(included\)/);
-  assert.match(screen, /Both the first and the last day are included/);
-  assert.match(screen, /customRange\(fromText, lastText, today\)/);
+test('dates: one field opens the calendar; the last day is shown, the day after is sent', () => {
+  // The month chips and "Custom dates" are gone (Lee: fewer buttons): one date field opens the calendar in range mode.
+  assert.match(screen, /<DateField p=\{p\} label="Dates" value=\{shownDates\} onChange=\{chooseDates\}/);
+  assert.doesNotMatch(screen, /label="Custom dates"|monthLabel\(m\)|Last day \(included\)/);
+  assert.match(screen, /customRange\(chosen\.from, chosen\.last, today\)/);
   assert.match(adapter, /`to` is the first day NOT included/);
   assert.match(adapter, /const range = rangeOf\(from, shiftDay\(last, 1\)\);/);
-  assert.match(screen, /label="Custom dates"/);
-  assert.match(screen, /monthLabel\(m\)/);
+  // A whole month is the page's month, as the chips were; any other range is custom and sends the same request as typed dates did.
+  assert.deepEqual(S.pickStatementDates({ from: '2026-10-01', to: '2026-10-31' }, '2026-11', true), { month: '2026-10' });
+  assert.deepEqual(S.pickStatementDates({ from: '2026-10-01', to: '2026-10-31' }, '2026-11', false), { custom: { from: '2026-10-01', last: '2026-10-31' } });
+  assert.deepEqual(S.pickStatementDates({ from: '2026-11-01', to: '2026-11-30' }, '2026-11', false), { month: '2026-11' });
+  const across = S.pickStatementDates({ from: '2026-10-15', to: '2026-11-14' }, '2026-11', true);
+  assert.deepEqual(across, { custom: { from: '2026-10-15', last: '2026-11-14' } });
+  const r = S.customRange(across.custom.from, across.custom.last, '2026-12-01');
+  assert.deepEqual([r.from, r.to, r.lastDay, r.days, r.month], ['2026-10-15', '2026-11-15', '2026-11-14', 31, null]);
+  assert.deepEqual(S.previewQuery('p', r), S.previewQuery('p', S.customRange('2026-10-15', '2026-11-14', '2026-12-01')), 'the same read the typed dates made');
+  const month = S.monthRange('2026-10');
+  assert.deepEqual([month.from, month.to], ['2026-10-01', '2026-11-01']);
 });
 
 test('the list and the sheet are the shared tracker', () => {

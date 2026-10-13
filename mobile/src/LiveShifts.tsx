@@ -18,6 +18,8 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { londonInstant, validClock } from "../../lib/team-time";
 import { isReflectionRefusal, needsReflection } from "../../lib/reflection";
 import { DayReflection } from "./DayReflection";
+import { KpiAdmin } from "./KpiAdmin";
+import { bonusTag, kpiReadSchema, type KpiRead } from "../../lib/kpis";
 
 // Clocking in and out, and the team's guest reply times. Guest relations replies are timed:
 // green within the green limit, amber within the amber limit, red after that.
@@ -149,28 +151,26 @@ const DAILY_KEYS = Object.keys(DAILY_WORK) as DailyKey[];
 function TargetsSheet({ p, targets, visible, onClose, onDone }: { p: Palette; targets: TeamPerformance["targets"]; visible: boolean; onClose: () => void; onDone: () => Promise<void> }) {
   const [green, setGreen] = useState(String(targets.greenMinutes));
   const [amber, setAmber] = useState(String(targets.amberMinutes));
-  const [pass, setPass] = useState(String(targets.passPercent));
-  const [bonus, setBonus] = useState(targets.bonusPercents.join(", "));
   const [weight, setWeight] = useState(String(targets.workWeight));
   const [daily, setDaily] = useState<Record<DailyKey, string>>(() => Object.fromEntries(DAILY_KEYS.map(k => [k, String(targets.dailyTargets[k])])) as Record<DailyKey, string>);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const request = useRequestId(visible ? ["targets", targets.version, green, amber, pass, bonus, weight, ...DAILY_KEYS.map(k => daily[k])].join(":") : null);
+  const request = useRequestId(visible ? ["targets", targets.version, green, amber, weight, ...DAILY_KEYS.map(k => daily[k])].join(":") : null);
   async function save() {
-    const tiers = bonus.split(",").map(x => x.trim()).filter(Boolean).map(Number);
-    const [g, a, s, w] = [Number(green), Number(amber), Number(pass), Number(weight)];
+    const [g, a, w] = [Number(green), Number(amber), Number(weight)];
     const perDay = DAILY_KEYS.map(k => Number(daily[k]));
-    if (![g, a, s, w, ...tiers].every(Number.isInteger) || g < 1 || a <= g || s < 1 || s > 100 || w < 0 || w > 100 || tiers.some(t => t < 1 || t > 100) || tiers.length > 5) { setError("Use whole numbers: amber must be longer than green, and percentages between 0 and 100."); return; }
+    if (![g, a, w].every(Number.isInteger) || g < 1 || a <= g || w < 0 || w > 100) { setError("Use whole numbers: amber must be longer than green, and percentages between 0 and 100."); return; }
     if (!perDay.every(n => Number.isInteger(n) && n >= 0 && n <= 99)) { setError("Daily targets are whole numbers from 0 to 99."); return; }
     setBusy(true); setError("");
     try {
-      await writeTeams({ action: "saveTargets", requestId: request.get(), version: targets.version, greenMinutes: g, amberMinutes: a, passPercent: s, bonusPercents: tiers,
+      // The pass mark and tiers are no longer edited here (each area's bonus is set in KPIs); the stored values go back unchanged.
+      await writeTeams({ action: "saveTargets", requestId: request.get(), version: targets.version, greenMinutes: g, amberMinutes: a, passPercent: targets.passPercent, bonusPercents: targets.bonusPercents,
         workWeight: w, dailyTargets: Object.fromEntries(DAILY_KEYS.map((k, i) => [k, perDay[i]])) as Record<DailyKey, number> });
       request.done(); onClose(); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
-    <Sheet palette={p} visible={visible} onClose={onClose} title="Targets and bonuses" subtitle="How replies and daily work are scored" icon="hourglass">
+    <Sheet palette={p} visible={visible} onClose={onClose} title="Reply and daily-work targets" subtitle="How replies and daily work are scored. Bonuses are set in KPIs." icon="hourglass">
       <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Guest replies</Text>
       <Field label="Green: reply within (minutes)" value={green} onChange={setGreen} p={p} />
       <Field label="Amber: reply within (minutes)" value={amber} onChange={setAmber} p={p} />
@@ -180,8 +180,7 @@ function TargetsSheet({ p, targets, visible, onClose, onDone }: { p: Palette; ta
       <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Score</Text>
       <Field label="Daily work counts for (% of the score)" value={weight} onChange={setWeight} p={p} placeholder="40" />
       <Text style={[ui.small, { color: p.muted }]}>The rest is replies in green. With {Number(weight) || 0}% daily work, someone with 90% green replies and 100% daily work scores {Math.floor(90 * (100 - (Number(weight) || 0)) / 100 + (Number(weight) || 0))}%.</Text>
-      <Field label="On track: score of at least (%)" value={pass} onChange={setPass} p={p} />
-      <Field label="Bonus tiers (score %, comma separated)" value={bonus} onChange={setBonus} p={p} placeholder="95, 100" />
+      <Text style={[ui.small, { color: p.muted }]}>Bonus targets and tiers are set for each area under KPIs on this screen.</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : "Save targets"} primary p={p} disabled={busy} onPress={() => void save()} />
     </Sheet>
@@ -240,6 +239,7 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
   const [error, setError] = useState("");
   const [targets, setTargets] = useState(false);
   const [clients, setClients] = useState<z.infer<typeof clientRelationsSchema> | null>(null);
+  const [kpis, setKpis] = useState<KpiRead | null>(null);
   const [closing, setClosing] = useState<Shift | null>(null);
   const [busy, setBusy] = useState(false), [closeError, setCloseError] = useState("");
   const [stopped, setStopped] = useState(""), [why, setWhy] = useState("");
@@ -253,6 +253,8 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
       setSignoffs(await readTeams({ section: "signoff" }).then(r => signoffSchema.parse(r.data).recent).catch(() => []));
       // Client relations: owner messages in the app, timed the same way.
       setClients(await readChat({ section: "clientRelations", from, to: londonDay() }).then(r => clientRelationsSchema.parse(r.data)).catch(() => null));
+      // The KPI tracker: each person's bonus KPI, and the admin's list of KPIs.
+      setKpis(await readTeams({ section: "kpis", from, to: londonDay() }).then(r => kpiReadSchema.parse(r.data)).catch(() => null));
     } catch (e) { setError(message(e)); }
     setLoading(false);
   }, [range]);
@@ -289,7 +291,7 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
           <Text style={[ui.small, { color: p.muted }]}>
             Replies: green within {t.greenMinutes} min, amber within {t.amberMinutes} min, red after that, credited to whoever was clocked in to guest relations.
             {t.workWeight > 0 ? ` Daily work counts for ${t.workWeight}% of the score: ${DAILY_KEYS.filter(k => t.dailyTargets[k] > 0).map(k => `${t.dailyTargets[k]} ${DAILY_WORK[k].toLowerCase()}`).join(", ") || "nothing yet"} on each Stays shift day.` : " Only reply times count."}
-            {` A score of ${t.passPercent}% is on track${t.bonusPercents.length ? `; ${t.bonusPercents.join("% and ")}% unlock the bonus tiers` : ""}.`}
+            {` A score of ${t.passPercent}% is on track. The bonus follows each area's bonus KPI (see KPIs below).`}
           </Text>
           {!data.messages && <Notice text="No guest messages yet. Log them in Stays → Guest inbox, or they arrive by themselves once the channel manager is connected." p={p} />}
           <Button label="Change the targets" icon="sliders" p={p} onPress={() => setTargets(true)} />
@@ -297,7 +299,8 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
             {data.people.map((x, i) => {
               const total = x.green + x.amber + x.red;
               const tags: [string, "good" | "wait" | "bad" | "plain"][] = x.score !== null ? [[`Score ${x.score}%`, x.onTrack ? "good" : "bad"], [x.onTrack ? "On track" : "Off track", x.onTrack ? "good" : "bad"]] : [["Nothing to score yet", "plain"]];
-              if (x.bonusTier) tags.push([`Bonus tier ${x.bonusTier}%`, "good"]);
+              const bonus = kpis ? bonusTag(kpis, x.userId) : null;
+              if (bonus) tags.push(bonus);
               const parts = [
                 total ? `Replies ${x.percentGreen}% green (${formatCount(x.green)} green, ${formatCount(x.amber)} amber, ${formatCount(x.red)} red)` : "",
                 x.workPercent !== null ? `Daily work ${x.workPercent}% over ${plural(x.daysWorked ?? 0, "Stays day")}` : "",
@@ -316,13 +319,14 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
           {!clients.people.length && <Notice text={clients.ownerMessages ? "No owner messages were answered by someone on a client relations shift yet." : "No owner messages in this period."} p={p} />}
           <List p={p} empty="">
             {clients.people.map((x, i) => {
+              // The bonus follows the KPI tracker now, so no tier from the old targets here.
               const tags: [string, "good" | "wait" | "bad" | "plain"][] = [[`${x.percentGreen ?? 0}% green`, x.onTrack ? "good" : "bad"], [x.onTrack ? "On track" : "Off track", x.onTrack ? "good" : "bad"]];
-              if (x.bonusTier) tags.push([`Bonus tier ${x.bonusTier}%`, "good"]);
               return <Row key={x.userId} p={p} first={i === 0} icon={x.onTrack ? "trending-up" : "trending-down"} tone="clients" title={x.fullName || "Team member"} detail={`${formatCount(x.green)} green · ${formatCount(x.amber)} amber · ${formatCount(x.red)} red`} tags={tags} />;
             })}
           </List>
           {!!clients.overall && clients.overall.red > 0 && <Notice p={p} tone="bad" text={`${plural(clients.overall.red, "owner message")} waited more than ${t.amberMinutes} minutes for a reply.`} />}
         </Section>}
+        {kpis?.canEdit && <KpiAdmin p={p} read={kpis} onChanged={load} />}
         <Section title="Daily sign-offs" count={signoffs.length} p={p}>
           <Text style={[ui.small, { color: p.muted }]}>Stays confirm at the end of each day that every listing is visible, bad reviews are answered, suspensions are dealt with and re-listings are done. The last 14 days.</Text>
           <List p={p} empty="No sign-offs in the last 14 days.">

@@ -6,10 +6,11 @@ import { createServer } from 'vite';
 // A team member's own Home: their performance (bonus as a tier only, no pay), their own schedule and
 // the places that are no longer on Home (the action pills and the property count).
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
-const { ownPerson, bonusFor, workCompleted, shapeOwnNumbers, standingLine, performanceWindow, ownEvents, scheduleDays, bonusArea, bonusProgress } = await vite.ssrLoadModule('/lib/my-performance.ts');
+const { ownPerson, bonusFor, workCompleted, shapeOwnNumbers, standingLine, performanceWindow, ownEvents, scheduleDays, myKpis, kpiProgress } = await vite.ssrLoadModule('/lib/my-performance.ts');
+const K = await vite.ssrLoadModule('/lib/kpis.ts');
 const { teamPerformanceSchema } = await vite.ssrLoadModule('/lib/management-live.ts');
-const { BONUS_DISPLAY, BONUS_SCHEMES } = await vite.ssrLoadModule('/lib/feedback-defaults.ts');
-const { DEPARTMENTS } = await vite.ssrLoadModule('/lib/workspace-teams-policy.ts');
+const defaults = await vite.ssrLoadModule('/lib/feedback-defaults.ts');
+const { BONUS_DISPLAY } = defaults;
 after(() => vite.close());
 const source = file => readFileSync('mobile/src/' + file, 'utf8');
 
@@ -39,10 +40,21 @@ test('the bonus is a tier and nothing in pounds', () => {
   assert.deepEqual(Object.keys(numbers).sort(), ['bonus', 'daily', 'minutes', 'onTrack', 'replies', 'repliesGreen', 'repliesGreenPercent', 'score', 'shifts', 'tasksDone', 'workCompleted']);
 });
 
-test('the bonus is a bar towards the target: the client\'s example for guest relations (80% target, 90% tier 1, 95% tier 2)', () => {
-  const at = percentGreen => bonusProgress(person(ME, { percentGreen, department: 'guest_relations' }), 5);
+// KPI read fixtures (the shape of workspace_teams_read('kpis'), 20261015100000).
+const kpi = (id, extra = {}) => ({ id, name: 'Replies within 5 minutes', area: 'guest_relations', measure: 'guest_reply_within', minutes: 5, direction: 'higher', targetPercent: 80, bonusTiers: [90, 95],
+  countsForBonus: true, placeholder: false, active: true, sortOrder: 1, version: 1, updatedAt: '2026-10-13T09:00:00Z', ...extra });
+const res = (kpiId, value, extra = {}) => ({ kpiId, value, measured: value === null ? 0 : 10, count: null, onTarget: null, tier: null, tierAt: null, ...extra });
+const KPI = ['k1', 'k2', 'k3', 'k4'];
+const kpiRead = (people, kpis = [kpi(KPI[0]), kpi(KPI[1], { name: 'Replies within 30 minutes', minutes: 30, targetPercent: null, bonusTiers: [], countsForBonus: false, sortOrder: 2 }),
+  kpi(KPI[2], { name: 'Replies waiting over 60 minutes', measure: 'guest_reply_over', minutes: 60, direction: 'lower', targetPercent: 10, bonusTiers: [5], countsForBonus: false, sortOrder: 3 }),
+  kpi(KPI[3], { name: 'Cleaning forms in on time', area: 'cleaning', measure: 'clean_forms_on_time', minutes: null, placeholder: true })]) =>
+  K.kpiReadSchema.parse({ from: '2026-10-07', to: '2026-10-13', canEdit: false, myArea: 'guest_relations', measures: [], kpis, people, teams: [], changes: [] });
+const me = (results, extra = {}) => ({ userId: ME, fullName: 'Sam Reid', role: 'stays', area: 'guest_relations', results, guestReplies: null, ...extra });
+
+test('the bonus bar comes from the area\'s bonus KPI: the client\'s example for guest relations (80% target, 90% tier 1, 95% tier 2)', () => {
+  const at = value => myKpis(kpiRead([me([res(KPI[0], value)])]), ME).bonus;
   const below = at(74);
-  assert.deepEqual([below.area, below.areaLabel, below.measure, below.measureLabel], ['guest_relations', 'Guest relations', 'replies', 'Guest messages answered within 5 minutes']);
+  assert.deepEqual([below.area, below.areaLabel, below.name, below.measureLabel, below.placeholder], ['guest_relations', 'Guest relations', 'Replies within 5 minutes', 'Guest messages answered within 5 minutes', false]);
   assert.deepEqual(below.marks, [{ label: 'Target', at: 80, reached: false }, { label: 'Tier 1', at: 90, reached: false }, { label: 'Tier 2', at: 95, reached: false }]);
   assert.deepEqual([below.value, below.reached, below.headline, below.next], [74, 0, '6% to go to the target', 'The target is 80%.']);
   assert.deepEqual([at(80).reached, at(80).headline, at(80).next], [1, 'Target reached', 'Tier 1 starts at 90%.']);
@@ -52,38 +64,49 @@ test('the bonus is a bar towards the target: the client\'s example for guest rel
   assert.deepEqual([at(100).reached, at(100).value], [3, 100]);
   const none = at(null);
   assert.deepEqual([none.value, none.reached, none.headline, none.next], [null, 0, 'Nothing to measure yet', 'The target is 80%.']);
-  assert.equal(bonusProgress(person(ME, { percentGreen: 90, department: 'guest_relations' }), 10).measureLabel, 'Guest messages answered within 10 minutes', 'the green time comes from the targets');
+  // An admin's edit shows straight away: a new target, new tiers, different minutes.
+  const edited = myKpis(kpiRead([me([res(KPI[0], 88)])], [kpi(KPI[0], { name: 'Replies within 10 minutes', minutes: 10, targetPercent: 85, bonusTiers: [92] })]), ME).bonus;
+  assert.deepEqual([edited.measureLabel, edited.marks.map(m => m.at), edited.headline], ['Guest messages answered within 10 minutes', [85, 92], 'Target reached']);
+  // Lower is better: the target and tiers count down.
+  const lower = kpiProgress(kpi(KPI[2], { measure: 'guest_reply_over', minutes: 60, direction: 'lower', targetPercent: 10, bonusTiers: [5, 2] }), { value: 4 });
+  assert.deepEqual([lower.marks.map(m => [m.at, m.reached]), lower.headline, lower.next], [[[10, true], [5, true], [2, false]], 'Bonus tier 1 reached', 'Tier 2 starts at 2% or less.']);
+  assert.equal(kpiProgress(kpi(KPI[2], { direction: 'lower', targetPercent: 10, bonusTiers: [] }), { value: 14 }).headline, '4% above the target');
 });
 
-test('every area has a placeholder bonus scheme, the bar follows the right measure, and none of it is in pounds', () => {
-  for (const area of DEPARTMENTS) {
-    const scheme = BONUS_SCHEMES[area];
-    assert.ok(scheme, area + ' has a scheme');
-    assert.equal(scheme.placeholder, true, area + ' is labelled a placeholder until the client sets it');
-    assert.ok(scheme.tiers.every(t => t > scheme.target && t <= 100), area + ' tiers sit above the target');
-  }
-  assert.deepEqual({ ...BONUS_SCHEMES.guest_relations, tiers: [...BONUS_SCHEMES.guest_relations.tiers] }, { measure: 'replies', target: 80, tiers: [90, 95], placeholder: true });
-  // The rota department wins; without one, the role decides; owners and unknown roles get no bar.
-  assert.equal(bonusArea('stays', 'client_relations'), 'client_relations');
-  assert.equal(bonusArea('stays', null), 'guest_relations');
-  assert.equal(bonusArea('cleans', undefined), 'cleaning');
-  assert.equal(bonusArea('cleaning_manager', 'nonsense'), 'cleaning');
-  assert.equal(bonusArea('client', null), null);
-  assert.equal(bonusArea(null, null), null);
-  assert.equal(bonusProgress(person(ME, { role: 'client', department: null }), 5), null);
-  const daily = bonusProgress(person(ME, { department: 'client_relations', workPercent: 92, percentGreen: 10, score: 10 }), 5);
-  assert.deepEqual([daily.measure, daily.value, daily.headline], ['dailyWork', 92, 'Bonus tier 1 reached']);
-  const cleaner = bonusProgress(person(ME, { role: 'cleans', department: null, score: null }), 5);
-  assert.deepEqual([cleaner.area, cleaner.measure, cleaner.value, cleaner.headline], ['cleaning', 'score', null, 'Nothing to measure yet']);
-  assert.equal(bonusProgress(person(ME, { department: 'accounts', score: 130 }), 5).value, 100, 'the bar never runs past 100%');
-  for (const area of DEPARTMENTS) {
-    const text = JSON.stringify(bonusProgress(person(ME, { department: area }), 5));
-    assert.doesNotMatch(text, /£|pound|wage|salary|amountMinor/i, area);
-  }
+test('the tracked KPIs are rows under the bar, only the person\'s own, and none of it is in pounds', () => {
+  const k = myKpis(kpiRead([me([res(KPI[0], 92, { onTarget: true, tier: 1, tierAt: 90 }), res(KPI[1], null), res(KPI[2], 12, { onTarget: false })]), me([res(KPI[0], 10)], { userId: OTHER })]), ME);
+  assert.deepEqual(k.rows.map(r => [r.name, r.value, r.note, r.tone]), [
+    ['Replies within 30 minutes', 'Nothing to measure yet', 'Tracked', 'plain'],
+    ['Replies waiting over 60 minutes', '12%', 'Target at most 10%', 'bad']]);
+  assert.equal(k.bonus.value, 92);
+  assert.equal(myKpis(kpiRead([me([], { userId: OTHER })]), ME), null, 'never somebody else\'s row');
+  assert.equal(myKpis(kpiRead([me([])]), null).area, 'guest_relations', 'a list of one is theirs');
+  // A placeholder bonus KPI is labelled; an area with no bonus KPI has no bar.
+  const cleaner = myKpis(kpiRead([me([res(KPI[3], null)], { area: 'cleaning', role: 'cleans' })]), ME);
+  assert.deepEqual([cleaner.bonus.placeholder, cleaner.bonus.headline, cleaner.rows.length], [true, 'Nothing to measure yet', 0]);
+  assert.equal(myKpis(kpiRead([me([], { area: 'accounts' })]), ME).bonus, null);
+  assert.doesNotMatch(JSON.stringify(k), /£|pound|wage|salary|amountMinor/i);
+  // The placeholder schemes are gone: the KPI tracker is the one source.
+  assert.equal(defaults.BONUS_SCHEMES, undefined);
+  assert.equal(defaults.BONUS_AREA_BY_ROLE, undefined);
   const card = source('MyPerformance.tsx');
   assert.match(card, /<BonusBar/);
+  assert.match(card, /<KpiRows/);
+  assert.match(card, /section: "kpis"/);
   assert.match(card, /accessibilityRole="progressbar"/);
   assert.match(card, /label="Placeholder"/);
+  assert.doesNotMatch(card, /BONUS_SCHEMES|bonusProgress/);
+});
+
+test('the Team performance list and the admin KPI screen read the same KPI', () => {
+  const read = kpiRead([me([res(KPI[0], 96, { onTarget: true, tier: 2, tierAt: 95 })]), me([res(KPI[0], 70, { onTarget: false })], { userId: OTHER }), me([res(KPI[3], null)], { userId: '33333333-3333-4333-8333-333333333333', area: 'cleaning' })]);
+  assert.deepEqual(K.bonusTag(read, ME), ['Bonus tier 2 · Replies within 5 minutes 96%', 'good']);
+  assert.deepEqual(K.bonusTag(read, OTHER), ['Replies within 5 minutes 70%', 'bad']);
+  assert.deepEqual(K.bonusTag(read, '33333333-3333-4333-8333-333333333333'), ['Cleaning forms in on time: nothing to measure yet', 'plain']);
+  const shifts = source('LiveShifts.tsx');
+  assert.match(shifts, /bonusTag\(kpis, x\.userId\)/);
+  assert.doesNotMatch(shifts, /Bonus tier \$\{x\.bonusTier\}/);
+  assert.match(shifts, /kpis\?\.canEdit && <KpiAdmin/);
 });
 
 test('numbers: replies, minutes worked and tasks done (finished work plus the daily work logged)', () => {
