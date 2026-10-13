@@ -557,3 +557,23 @@ down."
   pass. The screens are checked from their source, because this repository has no React Native
   renderer for tests.
 - **Guest inbox filter counts:** left as they are. Session C's Messages redesign removes that filter.
+
+## Updates bell and pull to refresh (from Session C's Messages redesign, options 1 and 3)
+
+- **Updates bell** in the header, on desktop and the phone, for every role, beside Messages:
+  - its badge is the number of unread notices (`updatesBell` in `lib/header-actions.ts`, using
+    `unreadNotices`, "99+" past 99);
+  - it opens the Updates feed with `navigate("activity")`: the team land on Messages showing the feed, and
+    owners land on their Updates page;
+  - its screen-reader label is "Updates, 3 unread";
+  - `LiveChat.tsx` is unchanged;
+  - in a role preview (View as a role), the super admin's notices are not kept, so the badge stays empty.
+- **Pull to refresh** on the phone: a `RefreshControl` on the workspace's page `ScrollView` runs the same
+  quiet refresh as the one-minute timer (`refresh(true)`). Not on desktop.
+- **Tests:** `tests/header-actions.test.mjs`, 4 of 4 pass:
+  - the count, badge and label, the same for every role;
+  - the bell is in the header with no role or screen-size condition, with its badge;
+  - it opens the Updates feed;
+  - pull to refresh calls the quiet refresh.
+
+  The header is checked from source; there is no React Native renderer for tests here.

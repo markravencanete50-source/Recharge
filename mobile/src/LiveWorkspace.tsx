@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { ActivityIndicator, Animated, AppState, KeyboardAvoidingView, Platform, ScrollView, Switch, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Animated, AppState, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, Switch, View, useWindowDimensions } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import Feather from "@expo/vector-icons/Feather";
@@ -17,6 +17,7 @@ import { RoleNavigation } from "./RoleNavigation";
 import { rolePanel, type PanelLink } from "../../lib/role-panel";
 import { orderPhoneBar, orderWorkViews, parseMenuLayout, phoneMoreGroups, storedMenuLayoutSchema, type MenuLayout } from "../../lib/menu-layout";
 import { onMenuLayoutSaved } from "./MenuLayoutStore";
+import { updatesBell } from "../../lib/header-actions";
 import { NavigationBar, liveNavigationFor } from "./NavigationBar";
 import { FaqShortcut, useFaqShortcut } from "./FaqShortcut";
 import { FilterBar } from "./FilterBar";
@@ -446,6 +447,11 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     } catch (e) { setExportMessage(message(e)); } finally { setExporting(false); }
   }
   // Updates marked read on Activity stop counting on Home straight away.
+  // The Updates bell in the header: unread notices, opening the Updates feed.
+  const bell = updatesBell(notices);
+  // Pull to refresh on phones: the same quiet refresh the app runs every minute.
+  const [pulling, setPulling] = useState(false);
+  const pullToRefresh = useCallback(async () => { setPulling(true); try { await refresh(true); } finally { setPulling(false); } }, [refresh]);
   const markRead = useCallback((ids: number[]) => { const at = new Date().toISOString(); setNotices(list => list.map(n => ids.includes(n.id) ? { ...n, read_at: n.read_at ?? at } : n)); }, []);
   const finishWelcome = () => { setWelcome(null); try { globalThis.localStorage?.setItem("rc-welcomed", welcomeDay()); } catch { /* storage unavailable */ } };
 
@@ -608,6 +614,10 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
                 {canViewAs(realAccount) && width >= 900 && <ModeSwitch palette={p} demo={demo} busy={demoBusy} onChange={onDemo} />}
                 {headerEye && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
                 <View>
+                  <IconButton label={bell.label} icon="bell" palette={header} onPress={() => navigate(bell.section)} />
+                  {bell.count > 0 && <Bump value={bell.count} pointerEvents="none" style={{ position: "absolute", top: -4, right: -4 }}><View pointerEvents="none" style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{bell.badge}</Text></View></Bump>}
+                </View>
+                <View>
                   <IconButton label={messagesBadge ? `Messages, ${[chatUnread ? `${chatUnread} unread` : "", guestWaiting ? `${guestWaiting} ${guestWaiting === 1 ? "guest" : "guests"} waiting` : ""].filter(Boolean).join(", ")}` : "Messages"} icon="message-circle" palette={header} onPress={() => { setChatTarget(null); navigate("inbox"); }} />
                   {messagesBadge > 0 && <Bump value={messagesBadge} pointerEvents="none" style={{ position: "absolute", top: -4, right: -4 }}><View pointerEvents="none" style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View></Bump>}
                 </View>
@@ -620,7 +630,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
               </View>
             </View>
           </View>
-          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, (showFaq || showFavorites) && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
+          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} refreshControl={desktop ? undefined : <RefreshControl refreshing={pulling} onRefresh={() => void pullToRefresh()} tintColor={p.primary} colors={[p.primary]} />} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, (showFaq || showFavorites) && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
               {demo ? <DemoBanner palette={p} viewing={viewAs?.person ? `${viewAs.person.fullName} (${viewAsLabel(viewAs.role)})` : null} onViewAs={() => setViewAsOpen(true)} onLive={() => onDemo(false)} />
                 : !!viewAs && <ViewAsBanner palette={p} view={viewAs} note={viewNote} onChange={() => setViewAsOpen(true)} onBack={() => void onViewAs(null)} />}
