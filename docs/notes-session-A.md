@@ -28,15 +28,21 @@ Alex: "if not done by 6pm, prompt the cleaner with reminder notifications and ch
   - `AccountsPayable.tsx`: Approve is disabled, with a note naming the cleans without a form (`cleansWithoutForm` in `lib/accounts-work.ts`, `formIn` in `lib/accounts-live.ts`).
 - "Marked unsuccessful": a rejected clean already becomes a `cleaning_complaint` decision in the management queue, which Management approvals lists. No change was needed.
 
+### Mid-stay clean switch (client answer 5: "Forget this for now")
+- Migration `supabase/migrations/20261014110000_mid_stay_switch.sql` adds `private.workspace_mid_stay_cleans_enabled()`, ON here, so nothing changes yet.
+- Switching it off is a one-line migration (`select false`). While off: no new mid-stay cleans; automatic ones nobody has started are cancelled with the reason "Mid-stay cleans are switched off"; started, submitted or completed ones and cleans made by hand are left alone. Switching back on brings them back for stays still ahead.
+- Test: `tests/mid-stay-switch-database.test.mjs`.
+- Needs Lee's go-ahead to switch off, because it also cancels unstarted mid-stay cleans already on the schedule.
+
 ## When this goes live
-- Apply `20261014100000_clean_form_reminders.sql` before deploying the Worker. The Worker code is unchanged; it already calls `workspace_clean_form_sweep` hourly.
+- Apply `20261014100000_clean_form_reminders.sql` and `20261014110000_mid_stay_switch.sql` (in that order) before deploying the Worker. The Worker code is unchanged; it already calls `workspace_clean_form_sweep` hourly.
 - On the first run, cleans from the last 14 days without a form that were already warned keep their warning. Open cleans of today get a reminder after 18:00. Earlier ones go straight to the management step.
 - Invoices already waiting for approval whose cleans have no form can no longer be approved until the form is in. They can still be rejected.
 
 ## Waiting on Alex
 - Q1 management fee base (does "cleaning fees" mean the changeover charge on the statement?).
 - Q4 actual clean cost off the statement, and the referral-commission model.
-- Q5 mid-stay cleans: switch the cron off for now?
+- Q5 mid-stay cleans: switch ready; switch off once Lee confirms existing unstarted ones may be cancelled.
 - Q7 VRBO money through Stripe: which report to reconcile against.
 - Real VRBO and Booking.com payout files.
 
