@@ -88,7 +88,8 @@ import { FurnishingSheet } from "./LiveFurnishing";
 import { buildSearchIndex, type SearchEntry } from "../../lib/workspace-search";
 import { toolsFor, type Tool } from "../../lib/tool-directory";
 import { canViewAs, previewAccount, previewKeeps, readSavedView, viewAsKey, viewAsLabel, viewAsName, viewOnlyMessage, VIEW_AS_ENDED, type ViewAs } from "../../lib/view-as";
-import { loadDemoData, setDemo, setViewOnly, startViewAs, stopViewAs } from "./backend/client";
+import { demoInteractive, loadDemoData, setDemo, setViewOnly, startViewAs, stopViewAs } from "./backend/client";
+import { onDemoChanged } from "./demo/notes";
 import { ViewAsBanner, ViewAsSheet } from "./ViewAs";
 import { DemoBanner, DemoSwitchRow, DemoSwitching, ModeSwitch } from "./DemoMode";
 import { DEMO_SAVE_MESSAGE, type DemoData, type DemoRole } from "../../lib/demo-data";
@@ -348,6 +349,10 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   }, [refresh]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void loadReport(period); }); return () => { active = false; }; }, [loadReport, period]);
   const refreshAll = () => { void refresh(); void loadReport(period); void loadUnread(); void loadWaiting(); };
+  // The interactive demo: screens reload straight after Reset demo and the automatic jobs.
+  const refreshAllRef = useRef(refreshAll);
+  useEffect(() => { refreshAllRef.current = refreshAll; });
+  useEffect(() => onDemoChanged(() => refreshAllRef.current()), []);
 
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
@@ -371,7 +376,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const openView = (view: WorkView, sub?: string) => { setFocus(sub ? { sub, nonce: Date.now() } : null); setWorkView(view); setTab("work"); };
   // Search and Favorites: one list of everything this person can open, from what is already loaded.
   // A role preview has nobody's favorites (not the super admin's own); a person view shows theirs.
-  const favorites = useFavoritesStore(team && !(viewAs && !viewAs.person), demo ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
+  const favorites = useFavoritesStore(team && !(viewAs && !viewAs.person), demo && !demoInteractive() ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
   // Viewing as a team member who hasn't finished their start-up checklist: say why their tools are empty.
   const [viewNote, setViewNote] = useState("");
   useEffect(() => {
@@ -475,7 +480,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     else if (t.kind === "tab") setPanelPick({ key: link.key, tab: t.tab, view: "" });
   };
   const panelSelected = panelPick && panelPick.tab === tab && (tab !== "work" || panelPick.view === currentView) ? panelPick.key : tab === "work" ? "area:" + currentView : "page:" + tab;
-  const panelViewing = demo ? { name: viewAs?.person ? `Demo · ${viewAs.person.fullName}` : "Demo mode", detail: "A sample business. Nothing you do here is saved." } : viewAs ? viewAs.person
+  const panelViewing = demo ? { name: viewAs?.person ? `Demo · ${viewAs.person.fullName}` : "Demo mode", detail: demoInteractive() ? "A sample business in this browser. Try anything." : "A sample business. Nothing you do here is saved." } : viewAs ? viewAs.person
     ? { name: `Viewing as ${viewAs.person.fullName}`, detail: `Exactly what this ${viewAsLabel(viewAs.role).toLowerCase()} sees. Nothing can be changed.` }
     : { name: `${viewAsLabel(viewAs.role)} preview`, detail: `The ${viewAsLabel(viewAs.role)} menus and tools only. Nothing can be changed.` } : null;
   // Cards inside a page (Stays' routine) open another place, or scroll to a section on the same page.
