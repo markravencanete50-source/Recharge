@@ -2,7 +2,7 @@ import { rpcRoute } from './workspace-rpc-route';
 import { ACCOUNTS_ACTIONS, ACCOUNTS_SECTIONS, PAYABLES_ACTIONS, REPORT_SECTIONS, financeActionSchema, financeBodyLimit, financeReadSchema, prepareFinanceAction } from './workspace-finance-policy';
 import { teamsActionSchema, teamsReadSchema } from './workspace-teams-policy';
 import { adminActionSchema, adminReadSchema } from './workspace-admin-policy';
-import { integrationConfiguration } from './integration-policy';
+import { enquiryEmailReady } from './integration-policy';
 
 // Only the filters asked for are sent; the database refuses any other key.
 const reportFilters = (input: { channel?: string; region?: string; reportId?: string; state?: string; status?: string; cleanerId?: string; method?: string }) =>
@@ -28,7 +28,7 @@ export const workspaceTeams = rpcRoute({
     : input.section === 'viewAsPeople' ? client.rpc('workspace_view_as_people')
     // Client enquiries also say whether the email service is set up (or the team copies the link).
     : input.section === 'clientEnquiries' ? Promise.all([client.rpc('workspace_teams_read', { section: input.section }),
-      import('./integration-server').then(m => integrationConfiguration(m.integrationSettings()).email, () => false)]).then(([r, email]) => r.error ? r : { ...r, data: { ...(r.data as object), emailReady: email } })
+      import('./integration-server').then(m => enquiryEmailReady(m.integrationSettings()), () => false)]).then(([r, email]) => r.error ? r : { ...r, data: { ...(r.data as object), emailReady: email } })
     : client.rpc('workspace_teams_read', { section: input.section, start_on: input.from || null, end_on: input.to || null, target_property: input.propertyId || null, target_user: input.userId || null }),
   action: 'workspace_teams_action',
   // Sending the enquiry form makes its link and sends the email on the server.

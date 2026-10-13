@@ -69,9 +69,10 @@ export async function deliverNotification(settings:IntegrationSettings,job:Deliv
 }
 // A one-off email the team wrote (Client Enquiries), sent now. The key makes a retried send
 // the same email.
-export async function sendEmail(settings:IntegrationSettings,email:{to:string;subject:string;text:string;html:string;idempotencyKey:string}) {
+// `from` and `replyTo` replace the notification sender for this email (the enquiry form is sent as ownerrelations@).
+export async function sendEmail(settings:IntegrationSettings,email:{to:string;subject:string;text:string;html:string;idempotencyKey:string;from?:string;replyTo?:string}) {
   const result=await jsonRequest('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${settings.RESEND_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':email.idempotencyKey},
-    body:JSON.stringify({from:settings.NOTIFICATION_FROM_EMAIL,to:[email.to],subject:email.subject,text:email.text,html:email.html})});
+    body:JSON.stringify({from:email.from??settings.NOTIFICATION_FROM_EMAIL,to:[email.to],subject:email.subject,text:email.text,html:email.html,...(email.replyTo?{reply_to:email.replyTo}:{})})});
   if(typeof result.id!=='string'||!result.id)throw new ProviderFailure('uncertain');
   return result.id;
 }

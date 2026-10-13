@@ -51,3 +51,13 @@ sender -> Fasthosts mailbox (kept there) -> forwarding rule -> guestrelations@in
 - Resend's received-email API field names (`GET /emails/receiving/{id}`, `.../attachments/{id}`) and whether received mail carries an `Authentication-Results` header. The Worker reads fields defensively; if a test email is dropped as "no authentication result", set `EMAIL_ALLOW_UNVERIFIED`.
 - Resend honours a custom `Message-ID` header on send (replies are matched by it, and fall back to the sender's address if not).
 - Fasthosts forwarding keeps the original From and DKIM signature (so DMARC passes at Resend).
+
+## The client enquiry form is emailed automatically
+
+Client relations, Client enquiries, "Send the enquiry form" now emails the form by itself. It has **its own switch**, apart from the staff notice emails:
+
+- **Ready** when `RESEND_API_KEY` is set (it is) and `ENQUIRY_EMAIL_ENABLED` is not `false`. It does **not** need `NOTIFICATION_EMAIL_ENABLED` or `NOTIFICATION_FROM_EMAIL`, and it never turns staff notice emails on.
+- Sent as `Recharge Group <ownerrelations@rechargegroup.co.uk>` with reply-to `ownerrelations@rechargegroup.co.uk`, so a landlord's reply reaches that mailbox (and Messages, Clients, once inbound is on). Optional Worker secret `ENQUIRY_FROM_EMAIL` ("Name <address>" or an address on the verified domain) replaces the sender.
+- One request makes one link and one email (Resend idempotency key `recharge-enquiry/<user>/<request>`); 40 forms an hour per person.
+- The sheet has one button, "Send the form" (and "Send the new link"). The link with Copy and "Open my email app" appears only when email is not ready or the send failed. The enquiry row shows "Email failed" with **Try again**.
+- **Worker secrets to add:** none. To switch the form's email off: `ENQUIRY_EMAIL_ENABLED=false`. Because the key is already set and the domain is verified, enquiry emails start as soon as this is deployed.

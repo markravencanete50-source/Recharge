@@ -12,6 +12,16 @@ export function integrationConfiguration(settings: IntegrationSettings) {
   const reservations = settings.HOSTAWAY_IMPORT_ENABLED === 'true' && Boolean(settings.HOSTAWAY_ACCOUNT_ID && settings.HOSTAWAY_API_KEY);
   return { media, mediaProvider: cloudinary ? 'cloudinary' as const : storage ? 'storage' as const : null, email, push, reservations };
 }
+// The client enquiry form is emailed by its own switch, apart from `email` (staff notice emails): ready as soon as RESEND_API_KEY is set,
+// unless ENQUIRY_EMAIL_ENABLED is `false`. It never needs NOTIFICATION_EMAIL_ENABLED and never turns staff notice emails on.
+export const ENQUIRY_SENDER = 'Recharge Group <ownerrelations@rechargegroup.co.uk>';
+export const ENQUIRY_REPLY_TO = 'ownerrelations@rechargegroup.co.uk';
+export const enquiryEmailReady = (settings: IntegrationSettings) => Boolean(settings.RESEND_API_KEY) && settings.ENQUIRY_EMAIL_ENABLED !== 'false';
+// The sender is ownerrelations@ (a verified domain); an optional ENQUIRY_FROM_EMAIL ("Name <address>" or an address) replaces it.
+export function enquirySender(settings: IntegrationSettings) {
+  const custom = (settings.ENQUIRY_FROM_EMAIL || '').trim();
+  return /^(?:[^<>"\r\n]{1,80} )?<[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+>$/.test(custom) || z.string().email().safeParse(custom).success ? custom : ENQUIRY_SENDER;
+}
 export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 export function photoFormat(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
   if (bytes.length < 12 || bytes.length > MAX_PHOTO_BYTES) return null;
