@@ -104,7 +104,11 @@ export function FilterBar({
                 bottom: 4,
                 left: 0,
                 borderRadius: 999,
-                backgroundColor: p.primary,
+                // The chosen item uses the selected tokens, not a primary-button fill (round 6, E's review: in dark
+                // mode it was a mint block).
+                backgroundColor: p.selected,
+                borderWidth: 1,
+                borderColor: p.selectedBorder,
                 width:100,
                 transform: [{ translateX: x }, {scaleX:width.interpolate({inputRange:[0,100],outputRange:[0,1]})}],
               }}
@@ -132,7 +136,9 @@ export function FilterBar({
                 borderRadius: 999,
                 // Until the sliding pill has measured its place, the chosen item paints its own
                 // background so its label is never light text on the light track.
-                backgroundColor: !box && selected === value ? p.primary : "transparent",
+                backgroundColor: !box && selected === value ? p.selected : "transparent",
+                borderWidth: !box && selected === value ? 1 : 0,
+                borderColor: p.selectedBorder,
               }}
             >
               <Text
@@ -140,7 +146,7 @@ export function FilterBar({
                   fontSize: 13,
                   lineHeight: 20,
                   fontWeight: "600",
-                  color: selected === value ? p.onPrimary : p.muted,
+                  color: selected === value ? p.onSelected : p.muted,
                 }}
               >
                 {value}

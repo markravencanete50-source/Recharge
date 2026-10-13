@@ -6,6 +6,7 @@ import { MotionPress, motionTokens, useReducedMotion } from './motion';
 import { Text } from './Typography';
 import { depth, ui, web, type Palette } from './theme';
 import { CompanyLogo } from './CompanyLogo';
+import { HeroWash, heroRule } from './HeroWash';
 import type { PanelGroup, PanelLink, RolePanel } from '../../lib/role-panel';
 
 type Icon = keyof typeof Feather.glyphMap;
@@ -41,7 +42,7 @@ function Group({group,selected,palette:p,badges,onOpen}:{group:PanelGroup;select
       <View style={{flex:1,height:1,backgroundColor:p.border}}/>
     </View>
     <View style={{gap:2}}>
-      <Animated.View pointerEvents="none" style={{position:'absolute',left:0,right:0,top:y,height:h,borderRadius:12,backgroundColor:p.wash,opacity:shown,...web({boxShadow:'inset 0 1px 0 rgba(255,255,255,.5)'})}}>
+      <Animated.View pointerEvents="none" style={{position:'absolute',left:0,right:0,top:y,height:h,borderRadius:12,backgroundColor:p.wash,opacity:shown,...web({boxShadow:`inset 0 1px 0 ${p.surface}`})}}>
         <View style={{position:'absolute',left:-14,top:9,bottom:9,width:4,borderTopRightRadius:4,borderBottomRightRadius:4,backgroundColor:p.primary}}/>
       </Animated.View>
       {group.links.map(link=>{
@@ -63,16 +64,17 @@ function RoleCard({panel,palette:p,viewing,onBack,backLabel='Back to my view'}:{
   return <View testID="sidebar-role" accessibilityRole="header" accessibilityLabel={(viewing?`${viewing.name}. `:'')+panel.title+' workspace. '+panel.tagline}
     style={{borderRadius:20,overflow:'hidden',backgroundColor:p.hero,padding:14,gap:10,...depth.raised}}>
     <View style={[ui.row,{gap:11}]}>
-      <View style={{width:38,height:38,borderRadius:12,backgroundColor:'rgba(255,255,255,0.12)',borderWidth:1,borderColor:'rgba(255,255,255,0.18)',alignItems:'center',justifyContent:'center'}}><Feather name={panel.icon as Icon} size={17} color="#FFFFFF"/></View>
+      <View style={{width:38,height:38,borderRadius:12,alignItems:'center',justifyContent:'center'}}><HeroWash p={p} radius={12}/><Feather name={panel.icon as Icon} size={17} color={p.heroText}/></View>
       <View style={{flex:1,minWidth:0}}>
-        <Text numberOfLines={1} style={{fontSize:15,fontWeight:'800',color:'#FFFFFF',letterSpacing:-0.2}}>{panel.title}</Text>
-        <Text numberOfLines={2} style={{fontSize:11,lineHeight:15,color:'rgba(255,255,255,0.78)'}}>{panel.tagline}</Text>
+        <Text numberOfLines={1} style={{fontSize:15,fontWeight:'800',color:p.heroText,letterSpacing:-0.2}}>{panel.title}</Text>
+        <Text numberOfLines={2} style={{fontSize:11,lineHeight:15,color:p.heroMuted,opacity:0.78}}>{panel.tagline}</Text>
       </View>
     </View>
-    {!!viewing&&<View style={{gap:8,paddingTop:10,borderTopWidth:1,borderColor:'rgba(255,255,255,0.14)'}}>
-      <View style={[ui.row,{gap:6}]}><Feather name="eye" size={13} color="#A7D9C1"/><Text numberOfLines={1} style={{flex:1,fontSize:12,fontWeight:'700',color:'#FFFFFF'}}>{viewing.name}</Text></View>
-      <Text style={{fontSize:11,lineHeight:15,color:'rgba(255,255,255,0.78)'}}>{viewing.detail}</Text>
-      {!!onBack&&<MotionPress accessibilityRole="button" onPress={onBack} style={[ui.row,{justifyContent:'center',gap:6,minHeight:36,borderRadius:999,backgroundColor:'#FFFFFF'}]}><Feather name="corner-up-left" size={14} color="#1F3D38"/><Text style={{fontSize:12,fontWeight:'700',color:'#1F3D38'}}>{backLabel}</Text></MotionPress>}
+    {!!viewing&&<View style={{gap:8}}>
+      {heroRule(p)}
+      <View style={[ui.row,{gap:6,paddingTop:2}]}><Feather name="eye" size={13} color={p.heroLine}/><Text numberOfLines={1} style={{flex:1,fontSize:12,fontWeight:'700',color:p.heroText}}>{viewing.name}</Text></View>
+      <Text style={{fontSize:11,lineHeight:15,color:p.heroMuted,opacity:0.78}}>{viewing.detail}</Text>
+      {!!onBack&&<MotionPress accessibilityRole="button" onPress={onBack} style={[ui.row,{justifyContent:'center',gap:6,minHeight:36,borderRadius:999,backgroundColor:p.heroText}]}><Feather name="corner-up-left" size={14} color={p.hero}/><Text style={{fontSize:12,fontWeight:'700',color:p.hero}}>{backLabel}</Text></MotionPress>}
     </View>}
   </View>;
 }

@@ -9,8 +9,9 @@ import { Initials } from "./LiveAccounts";
 import { PageHeading } from "./LivePages";
 import { Segmented } from "./Segmented";
 import { Sheet } from "./TeamFlows";
+import { HeroWash } from "./HeroWash";
 import { useCelebrate } from "./Celebrate";
-import { depth, ui, web, type Palette } from "./theme";
+import { depth, ui, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
@@ -51,14 +52,15 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette
       <Entrance sessionKey="enquiries:hero">
         <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel="Send the enquiry form to a landlord" onPress={() => setSending(true)}
           style={[ui.row, { gap: 16, padding: 20, borderRadius: 24, backgroundColor: p.hero, overflow: "hidden", ...depth.raised }]}>
-          <View style={{ width: 52, height: 52, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-            <Feather name="send" size={22} color="#FFFFFF" />
+          <View style={{ width: 52, height: 52, borderRadius: 17, alignItems: "center", justifyContent: "center" }}>
+            <HeroWash p={p} radius={17} edge={0.2} />
+            <Feather name="send" size={22} color={p.heroText} />
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-            <Text style={{ color: "#FFFFFF", fontSize: 17, fontWeight: "800", letterSpacing: -0.3 }}>Send the form to a landlord</Text>
-            <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, lineHeight: 19 }}>Write the email, and they get a private link to the form. Their answers, photos and videos come straight back here.</Text>
+            <Text style={{ color: p.heroText, fontSize: 17, fontWeight: "800", letterSpacing: -0.3 }}>Send the form to a landlord</Text>
+            <Text style={{ color: p.heroMuted, opacity: 0.8, fontSize: 13, lineHeight: 19 }}>Write the email, and they get a private link to the form. Their answers, photos and videos come straight back here.</Text>
           </View>
-          <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" }}><Feather name="arrow-right" size={19} color="#1F3D38" /></View>
+          <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.heroText }}><Feather name="arrow-right" size={19} color={p.hero} /></View>
         </MotionPress>
       </Entrance>
       <StatGrid>
