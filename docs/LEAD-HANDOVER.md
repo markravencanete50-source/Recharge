@@ -117,7 +117,7 @@ Lee switches a running session with `/model claude-sonnet-5-5`. A and D were ask
 - C `71720a9`;
 - B `f113abd`.
 
-`npm test` on `cf59b6e` (before B) passed **1475/1475**. A run on `850ca09` was in progress at handover; run it again.
+`npm test` on `850ca09` passed **1514/1514**.
 
 **Migrations so far (none applied):**
 - `20261016200000_todo_updates.sql` (B)
@@ -167,7 +167,7 @@ Lee asked for every developer to stop. Each session was interrupted and told to 
 | D | `74cd69f` | a local merge of E's branch (`365efd8`), plus uncommitted `CalendarPicker.tsx` (an `empty` prop) and a new `DayField.tsx` (item 17) |
 | E | `41e6279` | nothing (only a review branch, `review/lead-cf59b6e`) |
 
-The lead branch is at `d3fde42` and later; its last full run passed 1475/1475 before B was merged. Anything unpushed
+The lead branch is at `d3fde42` and later; its last full run, on `850ca09` with B, C and D merged, passed 1514/1514. Anything unpushed
 has to be redone from these notes, unless Lee asks a developer to push it as work in progress.
 
 ## 6. Waiting on Lee
