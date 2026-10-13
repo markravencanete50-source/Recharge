@@ -51,13 +51,14 @@ export function SearchBar({ p, value, onChange, placeholder, action }: { p: Pale
   );
 }
 
-// A quiet one-line note (for example, guests who have waited too long).
+// A quiet note (for example, guests who have waited too long). It wraps on a narrow phone rather than being cut short
+// (Session E's review, item 19); the icon stays beside the first line.
 export function QuietLine({ p, icon = "clock", text, tone = "plain" }: { p: Palette; icon?: IconName; text: string; tone?: "plain" | "bad" }) {
   const ink = tone === "bad" ? p.danger : p.muted;
   return (
-    <View accessible accessibilityLiveRegion="polite" style={[ui.row, { gap: 6 }]}>
-      <Feather name={icon} size={13} color={ink} />
-      <Text numberOfLines={1} style={[ui.small, { color: ink, flex: 1 }]}>{text}</Text>
+    <View accessible accessibilityLiveRegion="polite" style={[ui.row, { gap: 6, alignItems: "flex-start" }]}>
+      <Feather name={icon} size={13} color={ink} style={{ marginTop: 3 }} />
+      <Text style={[ui.small, { color: ink, flex: 1 }]}>{text}</Text>
     </View>
   );
 }

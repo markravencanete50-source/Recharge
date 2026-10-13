@@ -400,6 +400,14 @@ is gone, and each area's bonus is its bonus KPI. So this is a new KPI measure, n
 - Tests: `tests/management-bonus.test.mjs` and `tests/management-bonus-database.test.mjs` are new.
   `tests/kpi-tracker-database.test.mjs` now expects the management seed on `teams_combined`.
 
+Screenshot (sample data, phone width): `docs/screenshots/round6-bonus-messages-phone.png`. It shows the bar with both teams,
+with one team only, and with nothing to measure, and below it the Messages helper lines.
+
+**Messages helper lines wrap on phones** (Session E's review, item 19). "Hostaway isn't connected yet: log each guest message by
+hand." and "5 guests have waited longer than 30 minutes." were cut short with "…" on a phone. `QuietLine` in
+`mobile/src/MessagesLayout.tsx` no longer limits the text to one line, and its icon stays beside the first line.
+`tests/messages-redesign.test.mjs` checks it.
+
 **Question for Alex:**
 - Weighting: is it 50/50 between Guest relations and Client relations, or should one count more?
 - Target and tiers: what are the real ones for the management bonus? They are placeholders at 80% target, 90% tier 1 and 95%
