@@ -39,6 +39,7 @@ import type { z } from "zod";
 type Reconciliation = z.infer<typeof reconciliationSchema>;
 type NeedsDetails = Reconciliation["needsDetails"][number];
 type Tab = "expenses" | "payouts" | "statements" | "receivable" | "performance" | "aircover";
+const TAB_LABEL: Record<Tab, string> = { expenses: "Expenses", payouts: "Reconciliation", statements: "Statements", receivable: "Receivable", performance: "Performance", aircover: "AirCover" };
 
 // What the platform calls its reservation code, as staff will see it on the payout report.
 export function platformCode(channel: string): { label: string; placeholder: string } {
@@ -305,11 +306,9 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
 
-      <View style={[ui.row, { gap: 8 }]}>
-        {(isFinanceRole(role) ? ["expenses", "payouts", "statements", "receivable"] as const : ["expenses", "payouts", "statements"] as const).map(v => <Button key={v} label={{ expenses: "Expenses", payouts: "Reconciliation", statements: "Statements", receivable: "Receivable" }[v]} primary={view === v} p={p} onPress={() => setView(v)} />)}
-        {isFinanceRole(role) && <Button key="performance" label="Performance" primary={view === "performance"} p={p} onPress={() => setView("performance")} />}
-        {isFinanceRole(role) && !!sectionProps && <Button key="aircover" label="AirCover" primary={view === "aircover"} p={p} onPress={() => setView("aircover")} />}
-      </View>
+      {/* The Accounts sections: pills up to 5, one dropdown past that (finance roles have 6), by the shared rule (Pills.tsx). */}
+      <Pills p={p} title="Accounts section" value={view} onChange={setView} label={v => TAB_LABEL[v]}
+        values={(["expenses", "payouts", "statements", "receivable", "performance", "aircover"] as const).filter(v => (v !== "receivable" && v !== "performance" && v !== "aircover") || (isFinanceRole(role) && (v !== "aircover" || !!sectionProps)))} />
 
       {view === "expenses" && <AccountsPayable p={p} account={account} role={role} management={management} overview={overview} status={status} setStatus={setStatus} expenses={expenses} limit={limit} loading={loading} load={load} setAsk={setAsk} setOpenExpense={setOpenExpense} setCreating={setCreating} properties={properties} />}
 

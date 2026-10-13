@@ -13,6 +13,7 @@ import { formatCount, formatDay, plural } from "../../lib/format";
 import { PAYOUT_CHANNEL_LABEL, RECONCILED_CHANNELS, type PayoutChannel } from "../../lib/payout-report-formats";
 import { writeFinance } from "./backend/client";
 import { CalendarPicker } from "./CalendarPicker";
+import { pillBox, pillInk } from "./Pills";
 import { payoutCalendarMonth, payoutCalendarScope, payoutDataBounds, payoutDayCounts, togglePayoutDay } from "../../lib/payout-calendar";
 import {
   BULK_PAYOUT_CHUNK, CHANNEL_LABEL, bulkApprovalSchema, bulkPayoutPlan, chunk, filterPayouts, payoutApproval, payoutDifference, payoutMove, payoutSearchText, payoutStateLabel, payoutTotals,
@@ -316,9 +317,9 @@ function Figure({ p, label, value, size, dim = false }: { p: Palette; label: str
 function Chip({ p, label, count, on, onPress, role }: { p: Palette; label: string; count: number; on: boolean; onPress: () => void; role: "radio" | "checkbox" }) {
   return (
     <MotionPress accessibilityRole={role} accessibilityState={role === "radio" ? { selected: on } : { checked: on }} accessibilityLabel={`${label}, ${count}`} onPress={onPress}
-      style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-      <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label}</Text>
-      <Text style={{ color: on ? p.onPrimary : p.muted, fontSize: 13, fontWeight: "700" }}>{formatCount(count)}</Text>
+      style={[{ minHeight: 44, paddingHorizontal: 14, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 8 }, pillBox(p, on)]}>
+      <Text style={{ color: pillInk(p, on), fontSize: 13, fontWeight: "600" }}>{label}</Text>
+      <Text style={{ color: pillInk(p, on, true), fontSize: 13, fontWeight: "700" }}>{formatCount(count)}</Text>
     </MotionPress>
   );
 }
@@ -367,7 +368,7 @@ function RowAction({ p, kind, fit, row, busy, onOpen, onApprove }: { p: Palette;
     const amount = pounds(payoutApproval(row)?.agreedMinor);
     return (
       <MotionPress accessibilityRole="button" accessibilityLabel={`Approve ${amount} for ${row.reference}`} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={onApprove}
-        style={[base, { backgroundColor: busy ? p.elevated : p.wash }]}>
+        style={[base, { backgroundColor: busy ? p.elevated : p.wash, borderWidth: 1, borderColor: busy ? p.border : p.washBorder }]}>
         <Feather name="check" size={15} color={busy ? p.muted : p.primary} />
         <Text numberOfLines={1} style={{ color: busy ? p.muted : p.primary, fontSize: 13, fontWeight: "700" }}>{busy ? "Approving…" : `Approve ${amount}`}</Text>
       </MotionPress>

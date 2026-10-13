@@ -4,6 +4,8 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { Pills } from "./Pills";
+import { Dropdown } from "./Dropdown";
+import { DateField } from "./CalendarPicker";
 import { ListSearchBox, matchesSearch, PropertySelect, SEARCH_LIST_ABOVE, SearchBox, searchTextOf, useListSearch } from "./SearchPicker";
 import { CHOOSE_PROPERTY_FIRST, saveDisabled } from "../../lib/search-picker";
 import { ExpandChevron, MotionPress, Stagger, SwapIn } from "./motion";
@@ -253,7 +255,7 @@ export function ExpenseSheet({ p, role, id, limit, onClose, onAsk, onDone }: { p
           <Field label="Supplier" value={draft.supplier ?? ""} onChange={set("supplier")} p={p} />
           <Field label="Invoice number" value={draft.reference ?? ""} onChange={set("reference")} p={p} />
           <Field label="Amount" value={draft.amount ?? ""} onChange={set("amount")} p={p} placeholder="£0.00" />
-          <Field label="Received on (YYYY-MM-DD)" value={draft.receivedOn ?? ""} onChange={set("receivedOn")} p={p} />
+          <DateField p={p} label="Received on" mode="single" value={{ from: draft.receivedOn ?? "", to: draft.receivedOn ?? "" }} onChange={v => set("receivedOn")(v.from)} wholeMonthLink={false} />
           <Field label="What it was for" value={draft.description ?? ""} onChange={set("description")} p={p} multiline />
           <Button label={busy ? "Sending…" : "Send for approval"} icon="send" primary p={p} disabled={busy} onPress={() => void submitDraft()} />
         </View>}
@@ -316,10 +318,10 @@ export function NewExpenseSheet({ p, visible, properties, onClose, onDone }: { p
       </View>}
       <Field label="Supplier" value={supplier} onChange={setSupplier} p={p} />
       <Field label="Invoice number" value={reference} onChange={setReference} p={p} />
-      <Pills p={p} values={EXPENSE_CATEGORIES} value={category} onChange={setCategory} />
+      <Dropdown p={p} label="Category" value={category} onChange={setCategory} options={EXPENSE_CATEGORIES.map(c => ({ value: c, label: readableStage(c) }))} />
       <Field label="What it was for" value={description} onChange={setDescription} p={p} multiline />
       <Field label="Amount" value={amount} onChange={setAmount} p={p} placeholder="£0.00" />
-      <Field label="Received on (YYYY-MM-DD)" value={receivedOn} onChange={setReceivedOn} p={p} />
+      <DateField p={p} label="Received on" mode="single" value={{ from: receivedOn, to: receivedOn }} onChange={v => setReceivedOn(v.from)} wholeMonthLink={false} today={today} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!propertyId && <Text style={[ui.small, { color: p.muted }]}>{CHOOSE_PROPERTY_FIRST}</Text>}
       <Button label={busy ? "Saving…" : "Save expense"} primary p={p} disabled={saveDisabled(busy, propertyId)} onPress={() => void save()} />
