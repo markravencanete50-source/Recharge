@@ -244,3 +244,19 @@ test('Send in an email conversation: recorded once, sent through Resend as guest
   assert.match((await refused.json()).error, /rejected the saved key/);
   assert.deepEqual(state.security.map(c => [c.name, c.args.input.ok]), [['workspace_email_reply_result', false]]);
 });
+
+test('attachment links are only as open as the database says: for an owner, a cleaner or Ready nothing is signed', async () => {
+  const ID = '44444444-4444-4444-8444-444444444444';
+  reset();
+  // A person the database allows: a short signed link for exactly their file.
+  state.rpc.workspace_email_files = () => ({ data: [{ id: ID, path: 'guest/2026-10/em_1/a1.pdf', filename: 'booking.pdf', mime: 'application/pdf', bytes: 5 }], error: null });
+  const ok = await server.emailFilesRoute(new Request('https://app.test/api/workspace/email-files?ids=' + ID));
+  assert.deepEqual(await ok.json(), { data: { [ID]: { url: 'https://signed.test/guest/2026-10/em_1/a1.pdf', mime: 'application/pdf', name: 'booking.pdf', bytes: 5 } } });
+  // An owner, a cleaner or Ready: the database returns nothing for them, so nothing is signed.
+  state.rpc.workspace_email_files = () => ({ data: [], error: null });
+  assert.deepEqual(await (await server.emailFilesRoute(new Request('https://app.test/api/workspace/email-files?ids=' + ID))).json(), { data: {} });
+  // Bad input never reaches the database.
+  reset();
+  for (const query of ['', '?ids=not-a-uuid', '?ids=' + Array(61).fill(ID).join(',')]) assert.equal((await server.emailFilesRoute(new Request('https://app.test/api/workspace/email-files' + query))).status, 400, query);
+  assert.deepEqual(state.rpcCalls, []);
+});

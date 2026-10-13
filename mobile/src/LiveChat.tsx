@@ -11,6 +11,7 @@ import { depth, primaryFill, ui, type Palette } from "./theme";
 import { readChat, readInbox, viewMode, writeChat } from "./backend/client";
 import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
+import { EmailUnknownSenders } from "./EmailUnknownSenders";
 import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, messageTabs, presenceLabel, presenceOf, threadSchema, type ChatMessage, type ChatReaction, type Conversation, type MessagesTab } from "../../lib/workspace-chat-policy";
 import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
 import { MessageSafety } from "./ChatSafety";
@@ -353,6 +354,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       <SearchBar p={p} value={query} onChange={setQuery} placeholder={clients ? "Search owner or property" : "Search conversations or people"}
         action={mode.readOnly ? undefined : { icon: "edit-3", label: clients ? "New message to an owner" : "New message", onPress: () => setCreating(true) }} />
       {clients && !!list && <StatusFilter p={p} value={status} counts={statusCounts(found, clientStatus)} onChange={setStatus} />}
+      {clients && !mode.readOnly && ["admin", "super_admin", "stays"].includes(account.role) && <EmailUnknownSenders p={p} onChanged={changed} />}
       {!list ? <Loading p={p} /> : shown.length ? <View style={{ gap: 2 }}>{shown.map(c => <ConversationRow key={c.id} p={p} c={c} active={c.id === open} onPress={() => setOpen(c.id)} />)}</View>
         : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyStatusMessage(clients ? "clients" : "team", clients ? status : null, !!query.trim())}</Text>}
     </View>
