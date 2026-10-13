@@ -13,10 +13,10 @@ const ml = await vite.ssrLoadModule('/lib/menu-layout.ts');
 const { DEFAULT_ROLE_MODULES } = await vite.ssrLoadModule('/lib/modules.ts');
 const { phoneBarFor } = await vite.ssrLoadModule('/lib/workspace-map.ts');
 const { teamsActionSchema, teamsReadSchema } = await vite.ssrLoadModule('/lib/workspace-teams-policy.ts');
-const { MENU_ROLES, applyMenuLayout, layoutOfPanel, moveSection, moveItem, orderPhoneBar, orderWorkViews, phoneMoreGroups, parseMenuLayout, barLinkKey } = ml;
+const { MENU_ROLES, applyMenuLayout, layoutOfPanel, moveSection, moveItem, moveItemTo, orderPhoneBar, orderWorkViews, phoneMoreGroups, parseMenuLayout, barLinkKey } = ml;
 const { workViewsFor } = await vite.ssrLoadModule('/lib/tool-directory.ts');
 
-const panelOf = (role, layout, modules = DEFAULT_ROLE_MODULES[role]) => rolePanel(role, modules, layout);
+const panelOf = (role, layout, modules = DEFAULT_ROLE_MODULES[role], keepEmpty = false) => rolePanel(role, modules ?? DEFAULT_ROLE_MODULES[role], layout, keepEmpty);
 const linkKeys = panel => panel.groups.flatMap(g => g.links.map(l => l.key));
 const sectionKeys = panel => panel.groups.map(g => g.key);
 const reversed = panel => ({ sections: [...sectionKeys(panel)].reverse(), items: Object.fromEntries(panel.groups.map(g => [g.key, g.links.map(l => l.key).reverse()])) });
@@ -32,18 +32,69 @@ test('every role has stable, unique section keys', () => {
   assert.deepEqual(sectionKeys(panelOf('admin')), ['overview', 'departments', 'calendar-messages', 'management', 'more', 'start']);
 });
 
-test('the merge only reorders: never a tool the role lacks, never one lost', () => {
-  // Every link any role could have, plus made-up ones, in a random-ish order.
+test('the merge only arranges: never a tool the role lacks, never one lost, each link once', () => {
+  // Every link any role could have, plus made-up ones, listed under several sections.
   const everything = [...new Set(MENU_ROLES.flatMap(r => linkKeys(panelOf(r))))];
   const greedy = { sections: ['made-up', ...MENU_ROLES.flatMap(r => sectionKeys(panelOf(r)))].reverse(), items: Object.fromEntries(['more', 'overview', 'today', 'work', 'made-up'].map(k => [k, [...everything, 'tool:made-up'].reverse()])) };
   for (const role of MENU_ROLES) {
     const plain = panelOf(role), merged = panelOf(role, greedy);
-    assert.deepEqual([...linkKeys(merged)].sort(), [...linkKeys(plain)].sort(), role + ': the same links');
-    assert.deepEqual([...sectionKeys(merged)].sort(), [...sectionKeys(plain)].sort(), role + ': the same sections');
-    for (const g of merged.groups) assert.deepEqual([...g.links.map(l => l.key)].sort(), [...plain.groups.find(x => x.key === g.key).links.map(l => l.key)].sort(), role + ': links stay in their own section');
+    assert.deepEqual([...linkKeys(merged)].sort(), [...linkKeys(plain)].sort(), role + ': the same links, each once');
+    for (const k of sectionKeys(merged)) assert.ok(sectionKeys(plain).includes(k), role + ': no made-up section');
   }
   // A cleaner never gets a management link, whatever the layout lists.
   assert.ok(!linkKeys(panelOf('cleans', greedy)).includes('tool:access'));
+});
+
+test('a link moved to another section is there on desktop and on the phone', () => {
+  // Messages moved from "Calendar & messages" to the top of "Overview", for admins.
+  const moved = panelOf('admin', { sections: [], items: { overview: ['page:inbox', 'page:home', 'page:todo'] } });
+  assert.deepEqual(moved.groups.find(g => g.key === 'overview').links.map(l => l.key), ['page:inbox', 'page:home', 'page:todo']);
+  assert.ok(!moved.groups.find(g => g.key === 'calendar-messages').links.some(l => l.key === 'page:inbox'));
+  const phone = orderPhoneBar(bar('admin'), moved);
+  assert.equal(phone[0].value, 'inbox', 'first on the phone bar too');
+  // A link the bar does not show, moved: the phone menu lists it under its new section.
+  const reports = panelOf('admin', { sections: [], items: { overview: ['page:home', 'page:todo', 'page:analytics'] } });
+  const more = phoneMoreGroups(reports, orderPhoneBar(bar('admin'), reports));
+  assert.ok(more.find(g => g.key === 'overview').links.some(l => l.key === 'page:analytics'));
+  assert.ok(!more.find(g => g.key === 'more').links.some(l => l.key === 'page:analytics'));
+  // The editor's "Move to section" puts it at the end of the chosen section, and saving keeps it there.
+  const draft = moveItemTo(panelOf('admin', null, undefined, true), 'page:analytics', 'overview');
+  assert.deepEqual(draft.groups.find(g => g.key === 'overview').links.map(l => l.key).slice(-1), ['page:analytics']);
+  assert.deepEqual(panelOf('admin', layoutOfPanel(draft)), draft);
+  assert.deepEqual(moveItemTo(draft, 'page:analytics', 'nope'), draft, 'an unknown section changes nothing');
+});
+
+test('a link listed under two sections stays in the first', () => {
+  const twice = panelOf('stays', { sections: ['more', 'today'], items: { more: ['page:todo'], today: ['page:todo', 'page:home'] } });
+  assert.ok(twice.groups.find(g => g.key === 'more').links.some(l => l.key === 'page:todo'), 'more comes first in the saved order');
+  assert.ok(!twice.groups.find(g => g.key === 'today').links.some(l => l.key === 'page:todo'));
+  assert.equal(linkKeys(twice).filter(k => k === 'page:todo').length, 1);
+  // Sections not in the saved order count after those that are.
+  const later = panelOf('stays', { sections: ['today'], items: { more: ['page:home'], today: ['page:home'] } });
+  assert.deepEqual(later.groups.find(g => g.key === 'today').links.map(l => l.key)[0], 'page:home');
+});
+
+test('a section emptied by moves is hidden in the app and kept in the editor', () => {
+  const layout = { sections: [], items: { more: ['page:home', 'page:todo'] } };
+  const app = panelOf('stays', layout), editor = panelOf('stays', layout, undefined, true);
+  assert.ok(!sectionKeys(app).includes('today'), 'hidden');
+  assert.deepEqual(editor.groups.find(g => g.key === 'today').links, [], 'kept, empty, in the editor');
+  assert.ok(!phoneMoreGroups(app, orderPhoneBar(bar('stays'), app)).some(g => g.key === 'today'));
+  // Saving the editor's draft and reading it back gives the same arrangement.
+  assert.deepEqual(panelOf('stays', layoutOfPanel(editor), undefined, true), editor);
+});
+
+test('a moved link the role later loses disappears; a new tool appears in its default section', () => {
+  // Saved when Guest relations staff held direct bookings, with it moved to Today.
+  const saved = layoutOfPanel(moveItemTo(panelOf('stays', null, undefined, true), 'tool:bookings', 'today'));
+  assert.ok(panelOf('stays', saved).groups.find(g => g.key === 'today').links.some(l => l.key === 'tool:bookings'));
+  const without = DEFAULT_ROLE_MODULES.stays.filter(m => m !== 'direct-bookings');
+  assert.ok(!linkKeys(panelOf('stays', saved, without)).includes('tool:bookings'), 'gone with the tool');
+  // Saved without AirCover; when the tool arrives it sits in its default section.
+  const before = layoutOfPanel(panelOf('stays', null, DEFAULT_ROLE_MODULES.stays.filter(m => m !== 'aircover-reporting'), true));
+  const now = panelOf('stays', before);
+  const home = panelOf('stays').groups.find(g => g.links.some(l => l.key === 'tool:aircover')).key;
+  assert.ok(now.groups.find(g => g.key === home).links.some(l => l.key === 'tool:aircover'));
 });
 
 test('a saved order is applied to sections and to the links inside each section', () => {
@@ -143,7 +194,7 @@ test('the screens are wired: the workspace uses the merged menu, Access control 
   assert.match(access, /"Menu order"/);
   assert.match(access, /<MenuOrderEditor palette=\{p\} \/>/);
   const editor = readFileSync('mobile/src/MenuOrderEditor.tsx', 'utf8');
-  for (const words of ['Save and publish', 'Reset this role to default', 'Last changed by', 'Move section']) assert.ok(editor.includes(words), words);
+  for (const words of ['Save and publish', 'Reset this role to default', 'Last changed by', 'Move section', 'Move to…', 'to another section']) assert.ok(editor.includes(words), words);
   assert.match(editor, /rolePanel\(role, DEFAULT_ROLE_MODULES\[role\], layoutOfPanel\(draft\)\)/, 'the preview uses the same merge');
   for (const file of ['lib/menu-layout.ts', 'mobile/src/MenuOrderEditor.tsx', 'mobile/src/MenuLayoutStore.ts', 'supabase/migrations/20261015210000_menu_layouts.sql'])
     assert.ok(!readFileSync(file, 'utf8').includes(String.fromCharCode(0x2014)), file + ' has an em dash');

@@ -13,12 +13,12 @@ import { publishMenuLayout } from "./MenuLayoutStore";
 import { DEFAULT_ROLE_MODULES } from "../../lib/modules";
 import { rolePanel, type RolePanel } from "../../lib/role-panel";
 import {
-  MENU_ROLES, MENU_ROLE_LABEL, layoutOfPanel, moveItem, moveSection, orderPhoneBar, parseMenuLayout, phoneMoreGroups, storedMenuLayoutSchema,
+  MENU_ROLES, MENU_ROLE_LABEL, layoutOfPanel, moveItem, moveItemTo, moveSection, orderPhoneBar, parseMenuLayout, phoneMoreGroups, storedMenuLayoutSchema,
   type MenuRole, type StoredMenuLayout,
 } from "../../lib/menu-layout";
 
 // Access control → Menu order (super admins). Pick a role, move its sections and the links inside each
-// section up or down, then "Save and publish": everyone with that role gets the new order on their next quiet
+// section up or down, or move a link to another section ("Move to section"), then "Save and publish": everyone with that role gets the new order on their next quiet
 // refresh (within a minute), and this app at once. It only reorders; what a role may open is unchanged.
 // The preview is built by the same code the app uses (rolePanel with the layout, then the phone bar order),
 // shown with the role's usual tools.
@@ -43,7 +43,10 @@ export function MenuOrderEditor({ palette: p }: { palette: Palette }) {
   // The role's menu as saved (with its usual tools), and the one being edited. The draft is kept with the
   // saved version it started from, so switching role or a new save starts again from what is saved.
   const current = stored.find(l => l.role === role) ?? null;
-  const savedPanel = useMemo(() => rolePanel(role, DEFAULT_ROLE_MODULES[role], parseMenuLayout(current)), [role, current]);
+  // The editor keeps sections a move has emptied (the app hides them), so links can be moved back.
+  const savedPanel = useMemo(() => rolePanel(role, DEFAULT_ROLE_MODULES[role], parseMenuLayout(current), true), [role, current]);
+  // The link whose "Move to section" choices are open.
+  const [moving, setMoving] = useState<string | null>(null);
   const savedKey = role + ":" + (current?.version ?? 0);
   const [edit, setEdit] = useState<{ key: string; panel: RolePanel } | null>(null);
   const draft = edit && edit.key === savedKey ? edit.panel : savedPanel;
@@ -83,9 +86,9 @@ export function MenuOrderEditor({ palette: p }: { palette: Palette }) {
     <View style={{ gap: 16 }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Menu order</Text>
-        <Text style={[ui.small, { color: p.muted }]}>The order of the left panel and the phone menu for each role. Move the sections, and the links inside a section. This only changes the order: what each person can open still comes from their role and tools.</Text>
+        <Text style={[ui.small, { color: p.muted }]}>The order of the left panel and the phone menu for each role. Move the sections, the links inside a section, or a link to another section. This only arranges the menu: what each person can open still comes from their role and tools.</Text>
       </View>
-      <Pills p={p} values={MENU_ROLES} value={role} onChange={value => { setRole(value); setNote(""); setError(""); }} label={v => MENU_ROLE_LABEL[v]} />
+      <Pills p={p} values={MENU_ROLES} value={role} onChange={value => { setRole(value); setMoving(null); setNote(""); setError(""); }} label={v => MENU_ROLE_LABEL[v]} />
       <Text style={[ui.small, { color: p.muted }]}>{current?.updatedAt ? `Last changed by ${current.updatedByName ?? "a super admin"} on ${when(current.updatedAt)}.` : "Default order. Nobody has changed it yet."}</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!!note && <Notice text={note} p={p} />}
@@ -97,12 +100,30 @@ export function MenuOrderEditor({ palette: p }: { palette: Palette }) {
               <Move p={p} icon="chevron-up" label={`Move section ${group.title} up`} disabled={gi === 0 || busy} onPress={() => setDraft(d => moveSection(d, group.key, -1))} />
               <Move p={p} icon="chevron-down" label={`Move section ${group.title} down`} disabled={gi === draft.groups.length - 1 || busy} onPress={() => setDraft(d => moveSection(d, group.key, 1))} />
             </View>
+            {!group.links.length && <Text style={[ui.small, { color: p.muted, paddingLeft: 12 }]}>Empty: hidden for this role until a link is moved here.</Text>}
             {group.links.map((link, li) => (
-              <View key={link.key} style={[ui.row, { gap: 8, paddingLeft: 12, borderTopWidth: 1, borderColor: p.border, paddingTop: 6 }]}>
-                <Feather name={link.icon as keyof typeof Feather.glyphMap} size={15} color={p.muted} />
-                <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 14 }}>{link.label}</Text>
-                <Move p={p} icon="chevron-up" label={`Move ${link.label} up in ${group.title}`} disabled={li === 0 || busy} onPress={() => setDraft(d => moveItem(d, group.key, link.key, -1))} />
-                <Move p={p} icon="chevron-down" label={`Move ${link.label} down in ${group.title}`} disabled={li === group.links.length - 1 || busy} onPress={() => setDraft(d => moveItem(d, group.key, link.key, 1))} />
+              <View key={link.key} style={{ gap: 6, paddingLeft: 12, borderTopWidth: 1, borderColor: p.border, paddingTop: 6 }}>
+                <View style={[ui.row, { gap: 8 }]}>
+                  <Feather name={link.icon as keyof typeof Feather.glyphMap} size={15} color={p.muted} />
+                  <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 14 }}>{link.label}</Text>
+                  <Move p={p} icon="chevron-up" label={`Move ${link.label} up in ${group.title}`} disabled={li === 0 || busy} onPress={() => setDraft(d => moveItem(d, group.key, link.key, -1))} />
+                  <Move p={p} icon="chevron-down" label={`Move ${link.label} down in ${group.title}`} disabled={li === group.links.length - 1 || busy} onPress={() => setDraft(d => moveItem(d, group.key, link.key, 1))} />
+                  <MotionPress accessibilityRole="button" accessibilityLabel={`Move ${link.label} to another section`} accessibilityState={{ expanded: moving === link.key, disabled: busy }} disabled={busy}
+                    onPress={() => setMoving(moving === link.key ? null : link.key)}
+                    style={{ minHeight: 44, paddingHorizontal: 10, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: moving === link.key ? p.wash : p.surface }}>
+                    <Text style={{ color: p.text, fontSize: 13 }}>Move to…</Text>
+                  </MotionPress>
+                </View>
+                {moving === link.key && (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingBottom: 6 }}>
+                    {draft.groups.filter(g => g.key !== group.key).map(g => (
+                      <MotionPress key={g.key} accessibilityRole="button" accessibilityLabel={`Move ${link.label} to ${g.title}`} onPress={() => { setDraft(d => moveItemTo(d, link.key, g.key)); setMoving(null); }}
+                        style={{ minHeight: 44, paddingHorizontal: 12, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
+                        <Text style={{ color: p.text, fontSize: 13 }}>{g.title}</Text>
+                      </MotionPress>
+                    ))}
+                  </View>
+                )}
               </View>
             ))}
           </View>

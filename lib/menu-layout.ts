@@ -2,12 +2,16 @@ import { z } from 'zod';
 import type { PanelGroup, PanelLink, RolePanel } from './role-panel';
 
 // The menu order a super admin sets per role in Access control → Menu order (migration
-// 20261015210000_menu_layouts.sql). It only REORDERS: the sections and links a person gets still come
+// 20261015210000_menu_layouts.sql). It only ARRANGES: the sections and links a person gets still come
 // from their role and tools (lib/role-panel.ts). The saved layout is applied on top:
 //   * sections: the saved ones the role has, in the saved order, then any others in their default order;
-//   * links inside each section: the same, by link key;
-//   * keys the role does not have, or that no longer exist, are ignored;
-//   * a link stays in its own section (moving links between sections is not offered).
+//   * links: each section lists its links in order, and a link belongs to the section it is listed under, so
+//     links can move between sections (Lee, round 5). A link listed under two sections stays in the first
+//     (sections in the saved order, then any other listed sections);
+//   * a link the layout does not list goes back to its default section, after the listed ones, in its
+//     default order (a tool added later, for example);
+//   * keys the role does not have, sections it does not have, and keys that no longer exist are ignored;
+//   * a section left with no links is hidden in the app (the editor keeps it, so links can move back).
 // The desktop left panel, the phone bar and the phone's More list are all built from the merged panel,
 // so they always agree.
 
@@ -48,12 +52,21 @@ function ordered<T>(list: readonly T[], keyOf: (x: T) => string, wanted: readonl
   return [...first, ...list.filter(x => !seen.has(keyOf(x)))];
 }
 
-// The role's panel in the saved order. Never adds or removes a section or a link.
-export function applyMenuLayout(panel: RolePanel, layout: MenuLayout | null | undefined): RolePanel {
+// The role's panel arranged as saved. Never adds a link the role lacks or loses one it has. `keepEmpty` keeps
+// sections the layout emptied (the editor); the app hides them.
+export function applyMenuLayout(panel: RolePanel, layout: MenuLayout | null | undefined, keepEmpty = false): RolePanel {
   if (!layout) return panel;
-  const groups = ordered(panel.groups, g => g.key, layout.sections)
-    .map((g): PanelGroup => ({ ...g, links: ordered(g.links, l => l.key, layout.items[g.key]) }));
-  return { ...panel, groups };
+  const sections = new Set(panel.groups.map(g => g.key));
+  const links = new Map(panel.groups.flatMap(g => g.links.map(l => [l.key, l] as const)));
+  // Where the layout puts each link: the first of the role's sections that lists it.
+  const listed = [...layout.sections, ...Object.keys(layout.items).filter(k => !layout.sections.includes(k))];
+  const home = new Map<string, string>();
+  for (const s of listed) if (sections.has(s)) for (const k of layout.items[s] ?? []) if (links.has(k) && !home.has(k)) home.set(k, s);
+  const groups = ordered(panel.groups, g => g.key, layout.sections).map((g): PanelGroup => {
+    const placed = [...new Set((layout.items[g.key] ?? []).filter(k => home.get(k) === g.key))].map(k => links.get(k)!);
+    return { ...g, links: [...placed, ...g.links.filter(l => !home.has(l.key))] };
+  });
+  return { ...panel, groups: keepEmpty ? groups : groups.filter(g => g.links.length) };
 }
 
 // The layout that reproduces a panel exactly (what the editor saves).
@@ -72,6 +85,12 @@ export function moveSection(panel: RolePanel, sectionKey: string, by: -1 | 1): R
 }
 export function moveItem(panel: RolePanel, sectionKey: string, linkKey: string, by: -1 | 1): RolePanel {
   return { ...panel, groups: panel.groups.map(g => g.key !== sectionKey ? g : { ...g, links: swap(g.links, g.links.findIndex(l => l.key === linkKey), by) }) };
+}
+// "Move to section": the link leaves its section and goes to the end of the chosen one.
+export function moveItemTo(panel: RolePanel, linkKey: string, toSection: string): RolePanel {
+  const link = panel.groups.flatMap(g => g.links).find(l => l.key === linkKey);
+  if (!link || !panel.groups.some(g => g.key === toSection)) return panel;
+  return { ...panel, groups: panel.groups.map(g => ({ ...g, links: [...g.links.filter(l => l.key !== linkKey), ...(g.key === toSection ? [link] : [])] })) };
 }
 
 // The panel link a phone bar destination stands for: Work is the first Work area, the others their page.

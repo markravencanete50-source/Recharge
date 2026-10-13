@@ -364,13 +364,19 @@ Built on `claude/serene-babbage-xgqaus` after merging `main` (`b25d02f`). One mi
 - **Live preview:** it shows the phone bar, the left panel and the phone menu's sections for that role. It
   is built by the same code the app uses (`rolePanel` with the layout, then `orderPhoneBar`), with the
   role's usual tools.
-- **Reorder only.** `lib/menu-layout.ts` (`applyMenuLayout`):
-  - it starts from the sections and links the role and its tools allow, in the default order, then
-    applies the saved order;
-  - sections and links not in the saved layout (for example a tool added later) keep their default
-    position after the ordered ones;
-  - unknown keys, keys the role does not have, and repeats are ignored;
-  - a link always stays in its own section.
+- **Arrange only, never grant.** `lib/menu-layout.ts` (`applyMenuLayout`):
+  - it starts from the sections and links the role and its tools allow, then applies the saved layout;
+  - **links can move between sections** (Lee's answer): each section lists its links in order, and a link
+    belongs to the section that lists it. If a layout lists a link under two sections, the first wins:
+    sections in the saved order first, then any other listed sections;
+  - a link the layout does not list (for example a tool added later) goes back to its default section,
+    after the listed ones, in its default order;
+  - unknown keys, keys the role does not have, sections the role does not have, and repeats are ignored;
+  - a section left with no links is hidden in the app. The editor keeps it ("Empty: hidden for this role
+    until a link is moved here"), so links can be moved back.
+- **Move to section:** every link in the editor has a "Move to…" button. It opens a row of plain buttons,
+  one per other section, and the link goes to the end of the chosen section. Move up and Move down work as
+  before.
 - **Stable keys:**
   - each section now has a key in `lib/role-panel.ts` (`overview`, `departments`, `calendar-messages`,
     `management`, `more`, `start`, `today`, `work`, `guests-listings`, `my-day`, `my-work`, `me`,
@@ -420,9 +426,12 @@ Built on `claude/serene-babbage-xgqaus` after merging `main` (`b25d02f`). One mi
 
 ## Tests
 
-- `tests/menu-layout.test.mjs`, 9 of 9 pass:
-  - the merge never adds a tool the role lacks and never loses one;
-  - links stay in their section;
+- `tests/menu-layout.test.mjs`, 13 of 13 pass:
+  - the merge never adds a tool the role lacks and never loses one, and lists each link once;
+  - a link moved between sections shows there on desktop, on the phone bar and in the phone menu;
+  - a link listed twice stays in the first section;
+  - an emptied section is hidden in the app and kept in the editor;
+  - a moved link disappears when the role loses its tool, and a new tool appears in its default section;
   - saved order applied;
   - unknown and duplicate keys ignored;
   - new tools fall in at their default place;
@@ -447,8 +456,7 @@ Built on `claude/serene-babbage-xgqaus` after merging `main` (`b25d02f`). One mi
 
 ## Questions for Lee
 
-1. **Moving links between sections** is not built (reorder within a section only). Should a link be
-   movable to another section?
+1. Moving links between sections: answered yes by Lee, and built.
 2. **Phone bar:** it keeps today's destinations (at most five), only reordered. Should the editor also choose
    which destinations are on the bar? Should the new phone Menu button replace a bar slot instead of sitting
    in the header?

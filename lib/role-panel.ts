@@ -151,7 +151,8 @@ const plainArea = (target: HomeToolTarget): WorkView | null =>
 
 // `layout` is the menu order a super admin saved for the role (Access control → Menu order). It only
 // reorders: the sections and links come from the role and its tools as above (lib/menu-layout.ts).
-export function rolePanel(role: string, modules: readonly string[], layout?: MenuLayout | null): RolePanel {
+// `keepEmpty` keeps sections the layout emptied (only the Menu order editor wants them).
+export function rolePanel(role: string, modules: readonly string[], layout?: MenuLayout | null, keepEmpty = false): RolePanel {
   const spec = LAYOUTS[role];
   if (!spec) return { title: role, tagline: '', icon: 'user', groups: [] };
   const views = workViewsFor(role), tools = [...homeToolsFor(role, modules), ...panelToolsFor(role, modules)], actions = startActionsFor(role, modules);
@@ -189,5 +190,5 @@ export function rolePanel(role: string, modules: readonly string[], layout?: Men
     const more = groups.find(g => g.key === 'more');
     if (more) more.links.push(...rest); else groups.push({ key: 'more', title: 'More', links: rest });
   }
-  return applyMenuLayout({ title: spec.title, tagline: spec.tagline, icon: spec.icon, groups: groups.filter(g => g.links.length) }, layout);
+  return applyMenuLayout({ title: spec.title, tagline: spec.tagline, icon: spec.icon, groups: groups.filter(g => g.links.length) }, layout, keepEmpty);
 }
