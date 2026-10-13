@@ -30,9 +30,9 @@ import { propertyPoints } from "../../lib/property-points";
 import { usesPropertyTable } from "../../lib/property-table";
 import { formatCount, formatMoney } from "../../lib/format";
 import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
-import { LiveNoticeRow, LiveWorkRow, isDone } from "./LiveRows";
+import { LiveWorkRow, NoticeRowView, isDone, noticeIcon } from "./LiveRows";
+import { noticeRow, noticeRows, type NoticeRow } from "../../lib/notice-details";
 import { ListSearchBox, useListSearch } from "./SearchPicker";
-import { noticeCopy } from "../../lib/notice-copy";
 import { Calendar } from "./WorkspaceScreens";
 import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
@@ -565,18 +565,26 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
 }
 
 // Updates in day groups, in London time: "Today", "Yesterday", then "Friday 9 October".
-function dayGroups(notices: readonly NoticeView[]): [string, NoticeView[]][] {
+// The day a row belongs to: Today, Yesterday, then the date.
+function dayGroups(rows: readonly NoticeRow[]): [string, NoticeRow[]][] {
   const day = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(iso));
   const today = day(new Date().toISOString()), yesterday = day(new Date(Date.now() - 86_400_000).toISOString());
-  const groups = new Map<string, NoticeView[]>();
-  for (const n of notices) {
-    const key = day(n.created_at);
-    const label = key === today ? "Today" : key === yesterday ? "Yesterday" : new Date(n.created_at).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" });
-    groups.set(label, [...(groups.get(label) ?? []), n]);
+  const groups = new Map<string, NoticeRow[]>();
+  for (const r of rows) {
+    const at = r.notices[0].created_at, key = day(at);
+    const label = key === today ? "Today" : key === yesterday ? "Yesterday" : new Date(at).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" });
+    groups.set(label, [...(groups.get(label) ?? []), r]);
   }
-  return [...groups];
+  return [...groups.entries()];
 }
-export function LiveActivity({ palette: p, notices, loading, onRead }: { palette: Palette; notices: NoticeView[]; loading: boolean; onRead?: (ids: number[]) => void }) {
+
+// The Updates feed (round 6): each row says what it is ("Pricing: 3 empty nights to price"), then the property, who did it and when.
+// A row with a work item opens it; chat and guest notices open Messages; a burst of the same automatic kind is one row that opens
+// its list. Opening the feed marks the listed updates read.
+export function LiveActivity({ palette: p, notices, loading, onRead, work = [], onOpenWork, onOpenMessages }: {
+  palette: Palette; notices: NoticeView[]; loading: boolean; onRead?: (ids: number[]) => void;
+  work?: readonly OperationView[]; onOpenWork?: (item: OperationView) => void; onOpenMessages?: () => void;
+}) {
   // Opening Activity marks the listed updates read (one request each, newest first, never twice),
   // so Home's Updates count only shows what is new.
   const tried = useRef(new Set<number>());
@@ -593,21 +601,43 @@ export function LiveActivity({ palette: p, notices, loading, onRead }: { palette
       if (read.length) onRead?.(read);
     })();
   }, [notices, onRead]);
-  const search = useListSearch(notices, n => [noticeCopy(n.event_type).title, new Date(n.created_at).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" })]);
+  const rows = useMemo(() => noticeRows(notices), [notices]);
+  const search = useListSearch(rows, r => [r.title, r.line, ...r.notices.map(n => n.work_title ?? "")]);
+  const [opened, setOpened] = useState<string | null>(null);
+  const byId = useMemo(() => new Map(work.map(w => [w.workId, w] as const)), [work]);
+  // Where a row goes: its work item (when it is in the work already loaded), or Messages.
+  const press = (row: NoticeRow) => {
+    if (row.notices.length > 1) return () => setOpened(opened === row.key ? null : row.key);
+    const t = row.target;
+    if (t?.kind === "work" && onOpenWork) { const item = byId.get(t.workId); return item ? () => onOpenWork(item) : undefined; }
+    if (t?.kind === "messages" && onOpenMessages) return onOpenMessages;
+    return undefined;
+  };
   return (
     <>
       <PageHeading palette={p} title="Recent activity" subtitle="Updates on the work and properties within your access." />
       <ListSearchBox p={p} search={search} nouns="updates" />
-      {search.missed ? null : notices.length ? (
-        // Grouped by day (Today, Yesterday, then the date), newest first, each row easing in.
+      {search.missed ? null : rows.length ? (
         dayGroups(search.shown).map(([day, list], g) => (
           <View key={day} style={{ gap: 8 }}>
             <View style={[ui.row, { gap: 10, paddingHorizontal: 4 }]}>
               <Text style={[ui.label, { color: g === 0 ? p.primary : p.muted }]}>{day}</Text>
               <View style={{ flex: 1, height: 1, backgroundColor: p.border }} />
-              <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{list.length}</Text>
+              <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{list.reduce((sum, r) => sum + r.notices.length, 0)}</Text>
             </View>
-            <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 6, gap: 0 }]}>{list.map((notice, i) => <Stagger key={notice.id} index={i}><View style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}><LiveNoticeRow notice={notice} palette={p} /></View></Stagger>)}</View>
+            <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
+              {list.map((row, i) => {
+                const group = row.notices.length > 1, open = group && opened === row.key;
+                return (
+                  <View key={row.key} style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}>
+                    <NoticeRowView row={row} palette={p} icon={noticeIcon(row.notices[0].event_type, row.notices[0].work_kind)} onPress={press(row)} open={group ? open : undefined} clock />
+                    {open && <View style={{ marginLeft: 17, borderLeftWidth: 1, borderColor: p.border, paddingLeft: 12 }}>
+                      {row.notices.map(n => { const one = noticeRow(n); return <NoticeRowView key={n.id} row={one} palette={p} icon={noticeIcon(n.event_type, n.work_kind)} onPress={press(one)} clock />; })}
+                    </View>}
+                  </View>
+                );
+              })}
+            </View>
           </View>
         ))
       ) : <EmptyState palette={p} icon="activity" title={loading ? "Loading updates…" : "No updates yet"} detail="Changes to your work and properties appear here." />}

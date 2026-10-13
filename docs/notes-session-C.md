@@ -308,6 +308,52 @@ properties", one chip per property, "Showing 12 of 63"). A guest conversation op
 **Not checked visually:** the screens need a real login, so they were not screenshotted; check desktop and phone with a Stays
 account and an admin after deploy.
 
+## 8. Round 6 (16 October): the Updates feed says what each update is
+
+Lee: "instead of saying new task for your team it should be specific what type of task." Before, almost every row in the feed
+behind the header bell read "New task for your team · 13 Oct, 13:39": `lib/notice-copy.ts` titles by event type only, and the read
+returned only the event type and time.
+
+**After** (screenshots, sample data: `docs/screenshots/round6-updates-desktop.png`, `docs/screenshots/round6-updates-phone.png`):
+- **Title**: "<type of work>: <the work item's title>", e.g. "Pricing: 3 empty nights to price", "Direct booking follow-up: Smith,
+  8 nights", "Repair: Boiler not working", "Licensing: …". The type comes from the work item's kind (`workspace_domain_details`),
+  mapped in `WORK_KIND_LABEL` (`lib/notice-details.ts`), else the tool's name, else the kind made readable. Chat notices name the
+  writer ("Message from Holly Holder"), guest notices the property ("Guest message · 10 Barnet Cres"). Anything without a work item
+  keeps today's wording from `lib/notice-copy.ts`.
+- **Second line**: the property (its address when the address already starts with the name, else "name, address"), then who did
+  it ("Automatic" for sweeps, crons and feeds; nothing for chat, whose title already names the writer). The time sits on the right
+  of the title row (just the time, as the list is grouped under Today, Yesterday and dates), so a narrow phone cuts the place short
+  but never the time.
+- **Tapping a row** opens its work item (the tracker detail sheet, `setOpenWork`) when the item is in the work list already loaded;
+  chat and guest notices open Messages. A row with nowhere to go has no chevron.
+- **Bursts**: two or more of the same automatic event for the same kind of work within a minute of the newest are one row,
+  "Pricing: 12 new tasks · Automatic", which opens its list in place; each item in the list opens as above.
+- **Owners**: the read never gives them a staff name: "You" for their own action, otherwise "Recharge", and never "Automatic". Which
+  notices anyone gets is unchanged.
+- **Email and push**: the subject names the type of work ("Pricing: New task for your team"); still no property, title or names,
+  as `lib/notice-copy.ts` requires for anything that leaves the app (`noticeCopyFor` in `lib/web-push.ts` and
+  `lib/integration-providers.ts`).
+- Icons follow the kind of work (pricing and listings a tag, cleans a spray, repairs a hard hat; guest messages the chat icon).
+  `kindLook` in `LiveRows.tsx` gained the tag for pricing and listing kinds, so work rows elsewhere show it too.
+
+**Migration `20261016300000_notice_details.sql`** (not applied): anchor-and-append patches to `workspace_controls_read`
+(the notifications branch gains `work_title`, `work_kind`, `work_module`, `property_name`, `property_address`, `automatic`,
+`actor_name` from left joins in the same single query, no per-row lookups) and to the two delivery claims
+(`integration_claim_notifications`, `integration_claim_web_push` return `workKind`). The app's `noticeViewSchema` accepts the new
+fields as optional, so an older database still reads.
+
+**Files:** `lib/notice-details.ts` (new), `lib/workspace-view.ts` (schema), `mobile/src/LivePages.tsx` (`LiveActivity`),
+`mobile/src/LiveRows.tsx` (`LiveNoticeRow`, `NoticeRowView`, `noticeIcon`), `lib/web-push.ts`, `lib/integration-providers.ts`,
+`lib/integration-policy.ts` (job type), and **two props on each `LiveActivity` mount in `mobile/src/LiveWorkspace.tsx`**
+(`work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")}`; no navigation changed, flagged for Session B).
+Tests: `tests/notice-details.test.mjs` and `tests/notice-details-database.test.mjs` (new); `tests/wiring-v2.test.mjs` updated for
+the new props.
+
+**Open points:**
+- The read still returns the newest 50 notices (`limit 50` cannot be changed by an append patch). A burst of 180 pricing tasks fills
+  them and shows as "Pricing: 50 new tasks". Raising the limit means replacing the notifications branch whole.
+- A work item not in the loaded work list (older or closed) has no tap target yet; opening by id would need a single-item read.
+
 ## Not done yet (waiting for the client)
 
 - Inbound email into Messages (design above; to be built later).
@@ -357,6 +403,9 @@ Apply in filename order after the round 3 migrations: `20261014300000_team_calen
 `20261014310000_guest_messaging_roles.sql`, `20261014320000_chat_notices.sql`, `20261014330000_stay_guest_name_dates.sql`, then
 redeploy. The app works before and after each of them. Warn the team before `…320000`: people with unread conversations get one
 notice per conversation the next time someone writes there.
+
+Round 6: apply `20261016300000_notice_details.sql`, then redeploy the backend and the app (the app reads the new fields as
+optional, so either order works).
 
 Round 5: apply `20261015300000_chat_notice_every_message.sql`, `20261015310000_guest_message_notices.sql`,
 `20261015320000_owner_chat_closed.sql` and `20261015330000_guest_message_notices_onboarded.sql` in that order, then redeploy the backend and the app (the app's Close button and the
