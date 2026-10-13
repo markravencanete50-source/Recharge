@@ -109,6 +109,10 @@ for (const f of fresh) await db.exec(await fs.readFile(MIGRATIONS + f, 'utf8'));
 const defs1 = await fnDefs(), cons1 = await conDefs();
 for (const f of fresh) await db.exec(await fs.readFile(MIGRATIONS + f, 'utf8'));
 const defs2 = await fnDefs(), cons2 = await conDefs();
+// A stay cancelled after its first statement was issued pays no further share (20261013100000), applied twice.
+const CANCELLED_AFTER_ISSUE = '20261013100000_statement_cancelled_after_issue.sql';
+await db.exec(await fs.readFile(MIGRATIONS + CANCELLED_AFTER_ISSUE, 'utf8'));
+await db.exec(await fs.readFile(MIGRATIONS + CANCELLED_AFTER_ISSUE, 'utf8'));
 
 test('the six migrations apply over legacy finance data, and a second run changes nothing', async () => {
   assert.deepEqual(Object.keys(defs1).filter(k => defs1[k] !== defs2[k]), [], 'function definitions changed on the second run');
@@ -220,6 +224,29 @@ test('M2: a stay extended after its first period was issued is not shared out ag
     stays: [{ id: S, channel: 'direct', checkIn: '2025-11-26', checkOut: '2025-12-10', status: 'confirmed', settledMinor: 70000,
       storedShare: { grossMinor: 70000, otaFeeMinor: 0, settledMinor: 70000, nights: 7, checkIn: '2025-11-26', checkOut: '2025-12-03' } }] });
   assert.deepEqual([ts.grossMinor, ts.feeMinor, ts.payoutMinor, ts.nightsBooked, ts.flags, ts.blockedReasons], [dec.grossMinor, dec.feeMinor, dec.payoutMinor, dec.nightsBooked, dec.flags, dec.blockedReasons]);
+});
+
+test('M2b: a stay cancelled after its first period was issued pays no further share, and is flagged', async () => {
+  const P = await property('Cancelled stay flat');
+  const S = await stay(P, 'Direct then cancelled', 'direct', null, '2025-11-26', '2025-12-03', 70000);
+  await as(ADMIN);
+  await terms(P);
+  await as(ACCOUNTS);
+  const nov = await finance({ action: 'prepareStatement', propertyId: P, period: '2025-11' });
+  await finance({ action: 'issueStatement', statementId: nov.id, version: nov.version });
+  assert.equal(entry(nov, S).grossMinor, 50000);
+  await as(ADMIN);
+  await rpc('workspace_controls_action', [{ action: 'updateReservation', requestId: crypto.randomUUID(), propertyId: P, reservationId: S, version: await version(S), checkIn: '2025-11-26', checkOut: '2025-12-03', status: 'cancelled' }]);
+  const dec = await compute(P, '2025-12-01', '2026-01-01');
+  assert.equal(dec.grossMinor, 0, 'December pays nothing for a cancelled stay');
+  assert.ok(!dec.stays.some(x => x.reservationId === S && x.counted), 'it takes no share');
+  assert.deepEqual(dec.flags, [`stay_changed_after_statement:${S}`]);
+  const t = dec.terms;
+  const ts = statementFor({ from: '2025-12-01', to: '2026-01-01', method: 'nights', cleans: [], payables: [],
+    terms: { managementFeeBps: t.managementFeeBps, vatOnFee: t.vatOnFee, cleaningCostMinor: t.cleaningCostMinor, cleanChargeMode: t.cleanChargeMode },
+    stays: [{ id: S, channel: 'direct', checkIn: '2025-11-26', checkOut: '2025-12-03', status: 'cancelled', settledMinor: 70000,
+      storedShare: { grossMinor: 70000, otaFeeMinor: 0, settledMinor: 70000, nights: 7, checkIn: '2025-11-26', checkOut: '2025-12-03' } }] });
+  assert.deepEqual([ts.grossMinor, ts.feeMinor, ts.payoutMinor, ts.flags, ts.blockedReasons], [dec.grossMinor, dec.feeMinor, dec.payoutMinor, dec.flags, dec.blockedReasons]);
 });
 
 test('M7: a stay is never split by nights on one statement and by check-in on another', async () => {

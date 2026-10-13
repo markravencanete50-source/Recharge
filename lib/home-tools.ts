@@ -91,7 +91,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
   ],
   accounts: [
     tool('expenses', 'Expenses', 'Evidence to approve', 'receipt', work('accounts', { sub: 'expenses' })),
-    tool('payouts', 'Payouts', 'Platform payouts to match', 'wallet', work('accounts', { sub: 'payouts' })),
+    tool('payouts', 'Reconciliation', 'Match platform payouts to stays', 'wallet', work('accounts', { sub: 'payouts' })),
     tool('statements', 'Owner statements', 'Draft, issue and settle', 'pie', work('accounts', { sub: 'statements' })),
     tool('purchases', 'Purchases', 'Approve and order', 'cart', work('accounts', { section: 'Purchases' })),
     tool('cleaner-invoices', 'Cleaner invoices', 'Accepted cleans by cleaner', 'spray', work('accounts', { section: 'Cleaner invoices' })),

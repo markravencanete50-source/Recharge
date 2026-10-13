@@ -26,12 +26,11 @@ export const DAILY_ROUTINE: { id: ModuleId; label: string; cadence: string }[] =
   { id: "weekly-performance", label: "Weekly performance report", cadence: "Mondays" },
 ];
 
-export type InboxChannel = "guests" | "clients" | "team" | "whatsapp" | "email";
+export type InboxChannel = "guests" | "clients" | "team" | "email";
 export const CHANNELS: { key: InboxChannel; label: string; icon: "home" | "briefcase" | "users" | "message-circle" | "mail" }[] = [
   { key: "guests", label: "Guests", icon: "home" },
   { key: "clients", label: "Clients", icon: "briefcase" },
   { key: "team", label: "Team", icon: "users" },
-  { key: "whatsapp", label: "WhatsApp", icon: "message-circle" },
   { key: "email", label: "Email", icon: "mail" },
 ];
 export type Thread = {
@@ -56,7 +55,7 @@ export const TEAM_THREADS: Thread[] = [
     messages: [{ from: "them", author: "Example owner", body: "I've read the management agreement. Who do I speak to about the furnishing quote?", time: "08:30" }] },
   { id: "t4", channel: "team", name: "Maintenance coordinator", property: "Example Glasgow Apartment", source: "Ready team", time: "10:05", unread: true,
     messages: [{ from: "them", author: "Ready team", body: "Boiler engineer booked for Thursday 10am. Quote to follow after the visit.", time: "10:05" }] },
-  { id: "t5", channel: "whatsapp", name: "Example cleaner", property: "Example Edinburgh Apartment", source: "Team WhatsApp", time: "07:58", unread: false,
+  { id: "t5", channel: "team", name: "Example cleaner", property: "Example Edinburgh Apartment", source: "Team chat", time: "07:58", unread: false,
     messages: [{ from: "them", author: "Example cleaner", body: "Turnover finished, photos uploaded. Bathroom extractor fan is noisy.", time: "07:58" }] },
   { id: "t6", channel: "email", name: "Example supplier", property: "Portfolio", source: "team@ shared inbox", time: "Mon", unread: false,
     messages: [{ from: "them", author: "Example supplier", body: "Your linen order has been dispatched and will arrive on Wednesday.", time: "Mon" }] },

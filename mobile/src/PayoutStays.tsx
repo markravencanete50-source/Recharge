@@ -268,6 +268,7 @@ export function PayoutStays({ p, rows, periodLabel, canApprove, propertyName, on
 function skippedLines(r: BulkApproval) {
   const s = r.skipped, out: string[] = [];
   if (s.different) out.push(`${plural(s.different, "stay")} paid a different amount ${s.different === 1 ? "was" : "were"} left for you to check.`);
+  if (r.repeatedAmountSkipped) out.push(`${formatCount(r.repeatedAmountSkipped)} of those ${r.repeatedAmountSkipped === 1 ? "has" : "have"} the same amount on more than one payout line. Check ${r.repeatedAmountSkipped === 1 ? "it" : "them"} before approving.`);
   if (s.needsDetails) out.push(`${plural(s.needsDetails, "stay")} still ${s.needsDetails === 1 ? "needs" : "need"} details before ${s.needsDetails === 1 ? "it" : "they"} can be approved.`);
   if (s.changed) out.push(`${plural(s.changed, "stay")} changed while you were looking. The list now shows ${s.changed === 1 ? "it" : "them"} as ${s.changed === 1 ? "it is" : "they are"}.`);
   if (s.settled) out.push(`${plural(s.settled, "stay")} ${s.settled === 1 ? "was" : "were"} already settled.`);

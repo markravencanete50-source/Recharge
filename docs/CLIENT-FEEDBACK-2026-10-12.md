@@ -25,13 +25,13 @@ so the written brief is the current source for Accounts.
 
 ## Build status (13 October 2026)
 
-Everything below is **built on the local branch `feedback-2026-10-12` and applied to no live database**.
-Phase 1 is `7f053e0`, the Accounts work is `7fd4f46`, `d3612ac` and `a588fff`, and wave 1 of asks A, B
-and C is `dfa2cac`. The navigation work (Guest relations, Client relations, My performance, Hub, Stays and
-Updates unrouted) is in the working tree and was not committed when this was written. The migrations
-from `20261012070000` onward must be applied in filename order before the backend is redeployed; see
-"Deploy order and risks" in `DEVELOPER-HANDOVER.md`. The audit tables further down show the position
-before building and are kept for reference.
+Everything below is **built, committed and live**: the migrations `20261012070000` to `20261012220000`
+were applied to the live database on 13 October 2026, the backend and web app were redeployed (Worker
+version `254902b3`), and `main` is `96024f0`. A follow-up round (owner privacy, a stay cancelled after
+its statement was issued, the warnings on the reconciliation and statement screens) is written and tested
+locally but not yet applied; see "Deploy order and risks" in `DEVELOPER-HANDOVER.md`. A check of the
+asks Alex said he did not want is in `docs/FEEDBACK-AUDIT-2026-10-13.md`. The audit tables further down
+show the position before building and are kept for reference.
 
 Status key: **Built**, **Built, needs client answer** (works on a stated default that the client should
 confirm; the question is in the list at the end), **Not built**. Where a status carries a caveat, the

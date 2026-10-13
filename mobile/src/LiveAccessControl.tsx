@@ -219,7 +219,7 @@ function LinkCard({ p, name, link, minutes }: { p: Palette; name: string; link: 
   const text = `Hi ${name}, your Recharge account is ready. Open this link to choose your password (it works once, for ${minutes} minutes): ${link}`;
   async function share() {
     try {
-      if (Platform.OS === "web" && globalThis.navigator?.clipboard) { await globalThis.navigator.clipboard.writeText(text); setNote("Message copied. Paste it into WhatsApp, a text or an email."); }
+      if (Platform.OS === "web" && globalThis.navigator?.clipboard) { await globalThis.navigator.clipboard.writeText(text); setNote("Message copied. Paste it into a text or an email."); }
       else { await Share.share({ message: text }); setNote(""); }
     } catch { setNote("Couldn’t copy. Press and hold the link to copy it."); }
   }

@@ -209,7 +209,7 @@ export function AccountsStatements({ p, role, period, statements, loading, busyS
   const preview = active?.status === "ready" ? active.preview : undefined;
   const summary = preview ? previewSummary(preview) : null;
   const reasons = preview ? blockReasons(preview.blockedReasons) : [];
-  const notes = preview ? flagNotes(preview.flags, preview.blockedReasons) : [];
+  const notes = preview ? flagNotes(preview.flags, preview.blockedReasons, preview.lateMoneyAfterStatementCount ?? 0) : [];
   const sameDates = (s: Statement) => !!picked && (s.periodStart ?? s.period + "-01") === picked.from && (s.periodEnd ?? monthRange(s.period)?.to) === picked.to;
   const overlapping = preview?.statements ?? [];
   const existing = overlapping.find(sameDates), clash = overlapping.filter(s => !sameDates(s));

@@ -238,7 +238,7 @@ export function statementFor(input: StatementInput): StatementResult {
     if (stay.sharedByNightsElsewhere) blockedReasons.push(`stay_method_conflict:${stay.id}`);
     else if (stay.alreadyCounted && inMoney && !ownerMoney) { /* its money is on the other statement: nights only */ }
     else if (stored) {
-      if (here && inMoney) {
+      if (here && inMoney && live) {
         const gross = safeInteger(stored.grossMinor, 'Stored gross'), fee = safeInteger(stored.otaFeeMinor, 'Stored OTA fees');
         grossMinor = fullShare ? gross : prorate(gross, before, through, windowNights);
         otaFeeMinor = fullShare ? fee : prorate(fee, before, through, windowNights);

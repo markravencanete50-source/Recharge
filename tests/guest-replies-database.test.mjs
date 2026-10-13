@@ -240,7 +240,7 @@ test('only the backend can record a result, nobody signed in can read the reques
 });
 
 test('conversations show the tidy Airbnb booking code; stays keep the full reference', async () => {
-  const cleanup = (await fs.readFile('supabase/migrations/20261012060000_guest_replies_via_hostaway.sql', 'utf8')).split('\n-- Conversations already stored show the tidy Airbnb booking code.\n')[1];
+  const cleanup = (await fs.readFile('supabase/migrations/20261012060000_guest_replies_via_hostaway.sql', 'utf8')).replaceAll('\r\n', '\n').split('\n-- Conversations already stored show the tidy Airbnb booking code.\n')[1];
   await asBackend();
   const stay = (id, ref) => ({ id, listingId: '701', checkIn: `2031-0${id}-10`, checkOut: `2031-0${id}-14`, status: 'confirmed', channel: 'airbnb', channelReference: ref, guests: 2, payoutMinor: 1000 });
   // The same Airbnb booking under two Airbnb accounts: only the full reference tells them apart.

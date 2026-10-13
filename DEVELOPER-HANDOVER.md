@@ -888,10 +888,16 @@ All are idempotent and bounded per run, so a late or doubled tick is harmless.
 
 ## Deploy order and risks
 
-- **Migrations 20261012070000 onward are NOT applied to any live database.** That is
-  `20261012070000_work_last_update.sql` (Phase 1) and everything in the two sections above, up to
-  `20261012210000_team_calendar.sql`. The earlier chat and block migrations (`20261012010000`,
-  `20261012030000`) are also still marked not applied elsewhere in this file.
+- **Migrations 20261012070000 to 20261012220000 ARE applied to the live database (13 October 2026)**, in
+  filename order, each recorded in `supabase_migrations.schema_migrations`, and the backend and web app
+  were redeployed afterwards (Worker version `254902b3`; `main` is `96024f0`). Every function was
+  fingerprinted against a local build of all migrations and matched. **Not yet applied (written on
+  13 October, waiting for approval):** `20261013090000_owner_privacy_round3.sql` (owners see a work
+  item's history without staff names; the activity table hides internal event names from the client role)
+  and `20261013100000_statement_cancelled_after_issue.sql` (a stay cancelled after its first statement
+  was issued takes no share in later periods; the TypeScript twin in `lib/statement-maths.ts` has the
+  same rule). Apply them in that order, then redeploy the backend. The earlier chat and block migrations
+  (`20261012010000`, `20261012030000`) are still marked not applied elsewhere in this file.
 - **Order matters.** Apply the migrations in filename order on the client Supabase first, then
   redeploy the backend. Deploying the backend first breaks reads, because it asks for sections and
   columns that do not exist yet. Report sections that run ahead of the database say "needs a

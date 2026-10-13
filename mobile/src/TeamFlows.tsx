@@ -452,7 +452,7 @@ export function TeamInbox({ palette: p, role }: { palette: Palette; role: Worksp
         </View>
       )}
       </View>
-      <Text style={[ui.small, { color: p.muted }]}>Sample conversations. Guest messages arrive from Hostaway, and WhatsApp and email connect when their accounts are linked.</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Sample conversations. Guest messages arrive from Hostaway, and email connects when its account is linked.</Text>
       {wide ? null : (
         <Sheet palette={p} visible={!!open} onClose={() => setOpen(null)} title={open?.name ?? ""} subtitle={open ? `${open.property} · ${open.source}` : ""} icon="chat">
           {open && <ThreadBody palette={p} thread={open} draft={draft} setDraft={setDraft} onSent={() => { setDraft(""); setOpen(null); }} />}

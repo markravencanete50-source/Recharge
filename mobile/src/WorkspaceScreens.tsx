@@ -907,7 +907,7 @@ export function WorkspaceScreens({
       {section === "training" ? <TrainingCentre palette={p} role={role}/> : null}
       {section === "inbox" && role !== "client" ? (
         <>
-          {heading("Inbox", role === "cleans" || role === "cleaning_manager" ? "Conversations about your properties with the Stays and Ready teams." : "Guests, clients, team, WhatsApp and email in one place.")}
+          {heading("Inbox", role === "cleans" || role === "cleaning_manager" ? "Conversations about your properties with the Stays and Ready teams." : "Guests, clients, team and email in one place.")}
           <TeamInbox palette={p} role={role}/>
         </>
       ) : null}

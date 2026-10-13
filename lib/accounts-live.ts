@@ -174,6 +174,8 @@ export const statementPreviewSchema = z.object({
   grossMinor: minor, otaFeesMinor: minor, revenueMinor: minor, changeoversMinor: minor, cleaningCount: z.number(), feeBaseMinor: minor, feeMinor: minor, vatMinor: minor,
   payablesMinor: minor, payoutMinor: minor, nightsBooked: z.number(), nightsAvailable: z.number(),
   flags: z.array(z.string()), blocked: z.boolean(), blockedReasons: z.array(z.string()),
+  // Stays whose money changed after an issued statement stored its copy (staff only).
+  lateMoneyAfterStatementCount: z.number().optional(),
   // Statements already covering part of these dates (any status but void), as the list shows them.
   statements: z.array(statementSchema).optional(),
 }).passthrough();
@@ -337,13 +339,15 @@ export function chunk<T>(items: T[], size: number): T[][] {
 export const bulkApprovalSchema = z.object({
   approved: z.number(), approvedMinor: minor, atExpected: z.number(), atReceived: z.number(),
   skipped: z.object({ changed: z.number(), settled: z.number(), needsDetails: z.number(), different: z.number(), locked: z.number(), notFound: z.number() }),
+  // Of the stays held back as different, how many have the same payout amount on more than one line.
+  repeatedAmountSkipped: z.number().default(0),
 });
 export type BulkApproval = z.infer<typeof bulkApprovalSchema>;
 export const sumBulkApprovals = (parts: BulkApproval[]): BulkApproval => parts.reduce<BulkApproval>((all, part) => ({
-  approved: all.approved + part.approved, approvedMinor: all.approvedMinor + part.approvedMinor, atExpected: all.atExpected + part.atExpected, atReceived: all.atReceived + part.atReceived,
+  approved: all.approved + part.approved, approvedMinor: all.approvedMinor + part.approvedMinor, atExpected: all.atExpected + part.atExpected, atReceived: all.atReceived + part.atReceived, repeatedAmountSkipped: all.repeatedAmountSkipped + part.repeatedAmountSkipped,
   skipped: { changed: all.skipped.changed + part.skipped.changed, settled: all.skipped.settled + part.skipped.settled, needsDetails: all.skipped.needsDetails + part.skipped.needsDetails,
     different: all.skipped.different + part.skipped.different, locked: all.skipped.locked + part.skipped.locked, notFound: all.skipped.notFound + part.skipped.notFound },
-}), { approved: 0, approvedMinor: 0, atExpected: 0, atReceived: 0, skipped: { changed: 0, settled: 0, needsDetails: 0, different: 0, locked: 0, notFound: 0 } });
+}), { approved: 0, approvedMinor: 0, atExpected: 0, atReceived: 0, repeatedAmountSkipped: 0, skipped: { changed: 0, settled: 0, needsDetails: 0, different: 0, locked: 0, notFound: 0 } });
 
 // Money is written one way across the app (lib/format).
 export const pounds = (value: number | null | undefined) => formatMoney(value);

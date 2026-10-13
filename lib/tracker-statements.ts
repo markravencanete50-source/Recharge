@@ -132,7 +132,7 @@ export function blockReasons(reasons: readonly string[]): BlockReason[] {
 }
 
 // Things worth a look that do not stop a statement. Finance staff only.
-export function flagNotes(flags: readonly string[], blockedReasons: readonly string[] = []): string[] {
+export function flagNotes(flags: readonly string[], blockedReasons: readonly string[] = [], lateMoneyCount = 0): string[] {
   const notes: string[] = [];
   const unknownFee = countOf(flags, 'ota_fee_unknown'), over = countOf(flags, 'clean_over_agreed') - countOf(blockedReasons, 'clean_unreviewed');
   const noCost = countOf(flags, 'clean_cost_unknown'), ownerAmount = countOf(flags, 'owner_stay_amount_ignored');
@@ -140,6 +140,9 @@ export function flagNotes(flags: readonly string[], blockedReasons: readonly str
   if (over > 0) notes.push(over === 1 ? '1 clean cost more than the agreed fee. Its review, or the actual-cost setting, decides what the owner pays.' : `${formatCount(over)} cleans cost more than the agreed fee. Their reviews, or the actual-cost setting, decide what the owner pays.`);
   if (noCost) notes.push(noCost === 1 ? '1 clean is charged at actual cost but has no cost on record, so the agreed fee is used.' : `${formatCount(noCost)} cleans are charged at actual cost but have no cost on record, so the agreed fee is used.`);
   if (ownerAmount) notes.push('An owner stay has an amount on it. Owner stays count as nights booked only.');
+  const changed = countOf(flags, 'stay_changed_after_statement');
+  if (changed) notes.push(changed === 1 ? '1 stay has changed since its first statement was issued. A stay that was cancelled takes no share in this one.' : `${formatCount(changed)} stays have changed since their first statement was issued. A stay that was cancelled takes no share in this one.`);
+  if (lateMoneyCount) notes.push(lateMoneyCount === 1 ? '1 stay was paid a different amount after its statement was issued. That money is on no statement yet, so check it with the payouts.' : `${formatCount(lateMoneyCount)} stays were paid a different amount after their statement was issued. That money is on no statement yet, so check it with the payouts.`);
   if (flags.includes('nights_exceed_period')) notes.push('More nights are booked than the period has. Check for overlapping stays.');
   return notes;
 }
