@@ -543,3 +543,17 @@ Before, each showed 12 chips, with property names, or for stays the property, HA
 "Showing 12 of 101 properties" or "Showing 12 of 332 stays". After: the search box and "Nothing chosen yet.
 Type to find one of the ...". Typing shows up to 12 matches with "Showing x of y. Keep typing to narrow it
 down."
+
+## Follow-up: Save waits for a property
+
+- **Where:** Record a stay (`StaySheet.tsx`), Report a repair and New routine plan (`LiveRepairs.tsx`), and
+  Supplier invoice (`AccountsPayable.tsx`, edited for this change only).
+- **What:** Save stays disabled until a property is chosen, and "Choose a property first." shows just above
+  it while none is chosen. The rule is one helper, `saveDisabled(busy, propertyId)` with
+  `CHOOSE_PROPERTY_FIRST`, in `lib/search-picker.ts`.
+- **Unchanged:** each form's own check when saving, and the server's check.
+- **Tests:** `tests/search-picker.test.mjs` checks the rule (disabled with no property or while saving,
+  enabled once one is chosen) and, per screen, that the Save button uses it and the hint is shown. 11 of 11
+  pass. The screens are checked from their source, because this repository has no React Native
+  renderer for tests.
+- **Guest inbox filter counts:** left as they are. Session C's Messages redesign removes that filter.

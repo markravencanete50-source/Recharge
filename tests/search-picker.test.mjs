@@ -8,7 +8,7 @@ import { createServer } from 'vite';
 // short lists unchanged. Matching itself (lib/search-options.ts) is not changed.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 after(() => vite.close());
-const { pickerView, SHOW_SEARCH_ABOVE, SHOWN } = await vite.ssrLoadModule('/lib/search-picker.ts');
+const { pickerView, SHOW_SEARCH_ABOVE, SHOWN, saveDisabled, CHOOSE_PROPERTY_FIRST } = await vite.ssrLoadModule('/lib/search-picker.ts');
 const { searchOptions, propertyOption } = await vite.ssrLoadModule('/lib/search-options.ts');
 
 const TOWNS = ['Leith', 'Portobello', 'Stockbridge', 'Morningside', 'Bruntsfield', 'Marchmont', 'Newington', 'Corstorphine', 'Dalry', 'Gorgie', 'Tollcross', 'Abbeyhill', 'Canonmills', 'Inverleith', 'Trinity'];
@@ -64,3 +64,32 @@ test('the picker uses the view, keeps fixed options and says when nothing is cho
   assert.doesNotMatch(src, /Type to find the rest/);
   assert.match(src, /onChange\(clearable && id === value \? "" : id\)/, 'tapping the chosen chip clears it when clearable');
 });
+
+// Forms that need a property keep Save disabled until one is chosen, with "Choose a property first." (the
+// server still checks). One check per screen: the rule, and that the screen's Save button and hint use it.
+const SCREENS = [
+  ['Record a stay', 'mobile/src/StaySheet.tsx', 'Save stay'],
+  ['Report a repair', 'mobile/src/LiveRepairs.tsx', 'Report repair'],
+  ['New routine plan', 'mobile/src/LiveRepairs.tsx', 'Save routine'],
+  ['Supplier invoice', 'mobile/src/AccountsPayable.tsx', 'Save expense'],
+];
+test('the rule: disabled with no property or while saving, enabled once one is chosen', () => {
+  assert.equal(saveDisabled(false, ''), true);
+  assert.equal(saveDisabled(false, null), true);
+  assert.equal(saveDisabled(false, undefined), true);
+  assert.equal(saveDisabled(false, 'p1'), false);
+  assert.equal(saveDisabled(true, 'p1'), true, 'still disabled while saving');
+  assert.equal(CHOOSE_PROPERTY_FIRST, 'Choose a property first.');
+});
+for (const [screen, file, label] of SCREENS) {
+  test(`${screen}: Save is disabled until a property is chosen`, () => {
+    const src = readFileSync(file, 'utf8');
+    const lines = src.split('\n'), at = lines.findIndex(line => line.includes(`"${label}"`) && line.includes('<Button'));
+    assert.ok(at > 0, 'the Save button is there');
+    const button = lines[at], before = lines[at - 1];
+    assert.match(button, /disabled=\{saveDisabled\(busy, propertyId\)\}/, 'disabled with no property');
+    assert.match(before, /\{!propertyId && <Text style=\{\[ui\.small, \{ color: p\.muted \}\]\}>\{CHOOSE_PROPERTY_FIRST\}<\/Text>\}/, 'the hint shows while none is chosen');
+    // The server-side check (and its message) is still in the save step.
+    assert.match(src, /if \(!propertyId/);
+  });
+}
