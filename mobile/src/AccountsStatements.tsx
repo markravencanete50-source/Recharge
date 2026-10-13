@@ -14,6 +14,7 @@ import { TrackerDetailSheet, TrackerList } from "./Tracker";
 import { CHANNEL_LABEL, isFinanceRole, monthLabel, pounds, shiftMonth, statementPreviewSchema, statementsSchema, type Statement, type StatementPreview } from "../../lib/accounts-live";
 import { formatBps, plural } from "../../lib/format";
 import { poundsToMinor } from "../../lib/repairs-live";
+import { visitorLevyForm, visitorLevyInput, type VisitorLevyForm } from "../../lib/accounts-work";
 import { sortTracker, type TrackerItem } from "../../lib/tracker";
 import {
   blockReasons, CHECK_FIGURES, customRange, flagNotes, ISSUE_STATEMENT, lineGroups, monthRange, periodTitle, prepareAction, previewKey, previewQuery, previewSummary,
@@ -99,15 +100,17 @@ export function TermsSheet({ p, row, onClose, onDone }: { p: Palette; row: State
   const [fee, setFee] = useState("");
   const [clean, setClean] = useState("");
   const [vat, setVat] = useState(false);
+  const [levy, setLevy] = useState<VisitorLevyForm>(visitorLevyForm(null));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const request = useRequestId(row ? ["terms", row.propertyId, fee, clean, vat].join(":") : null);
+  const request = useRequestId(row ? ["terms", row.propertyId, fee, clean, vat, levy.enabled, levy.rate, levy.cap, levy.from].join(":") : null);
   useEffect(() => {
     queueMicrotask(() => {
       if (!row) return;
       setFee(row.terms?.managementFeeBps != null ? String(row.terms.managementFeeBps / 100) : "");
       setClean(row.terms?.cleaningCostMinor != null ? (row.terms.cleaningCostMinor / 100).toFixed(2) : "");
       setVat(row.terms?.vatOnFee === true);
+      setLevy(visitorLevyForm(row.terms?.visitorLevy));
       setError("");
     });
   }, [row]);
@@ -115,9 +118,11 @@ export function TermsSheet({ p, row, onClose, onDone }: { p: Palette; row: State
     if (!row || busy) return;
     const percent = Number(fee), cleaningCostMinor = poundsToMinor(clean);
     if (!/^\d{1,3}(\.\d{1,2})?$/.test(fee.trim()) || percent > 100 || cleaningCostMinor === null) { setError("Enter the fee as a percentage (for example 15) and the cleaning cost per clean."); return; }
+    const visitorLevy = visitorLevyInput(levy);
+    if ("error" in visitorLevy) { setError(visitorLevy.error); return; }
     setBusy(true); setError("");
     try {
-      await writeFinance({ action: "setStatementTerms", requestId: request.get(), propertyId: row.propertyId, managementFeeBps: Math.round(percent * 100), cleaningCostMinor, vatOnFee: vat, cleanChargeMode: "agreed_fee" });
+      await writeFinance({ action: "setStatementTerms", requestId: request.get(), propertyId: row.propertyId, managementFeeBps: Math.round(percent * 100), cleaningCostMinor, vatOnFee: vat, cleanChargeMode: "agreed_fee", visitorLevy: visitorLevy.value });
       request.done(); onClose(); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
@@ -142,6 +147,18 @@ export function TermsSheet({ p, row, onClose, onDone }: { p: Palette; row: State
       </View>
       <Field label="Agreed cleaning cost per clean" value={clean} onChange={setClean} p={p} placeholder="£0.00" />
       <Text style={small(p)}>{"The owner pays the agreed cost for every clean. A clean whose invoice is higher is flagged for Accounts to review; the statement does not wait for it."}</Text>
+      <View style={[ui.between, { gap: 16, minHeight: 56 }]}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ color: p.text, fontWeight: "600" }}>Charge the visitor levy</Text>
+          <Text style={small(p)}>{"Only where the council charges one. It comes off straight after the platform fees, on the accommodation without the cleaning fee."}</Text>
+        </View>
+        <Switch accessibilityLabel="Charge the visitor levy" value={levy.enabled} onValueChange={on => setLevy(l => ({ ...l, enabled: on }))} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
+      </View>
+      {levy.enabled && <>
+        <Field label="Visitor levy (% of the accommodation)" value={levy.rate} onChange={rate => setLevy(l => ({ ...l, rate }))} p={p} placeholder="5" />
+        <Field label="Most nights levied per stay (empty for every night)" value={levy.cap} onChange={cap => setLevy(l => ({ ...l, cap }))} p={p} placeholder="5" />
+        <Field label="Levy stays checking in from (YYYY-MM-DD, empty for every stay)" value={levy.from} onChange={from => setLevy(l => ({ ...l, from }))} p={p} placeholder="2026-07-24" />
+      </>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : "Save terms"} primary p={p} disabled={busy} onPress={() => void save()} />
     </Sheet>

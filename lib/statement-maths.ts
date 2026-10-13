@@ -31,7 +31,7 @@ export const FEE_BASE = 'payout_after_ota_fees_and_changeovers' as const;
 export const STATEMENT_WAITS_FOR_CLEAN_REVIEW = false;
 // Assumption (c): the order deductions are listed in. VAT is part of the management fee and sits
 // straight after it. Within each category lines are in date order (then by id).
-export const DEDUCTION_ORDER = ['ota_fee', 'changeover', 'management_fee', 'vat', 'payable'] as const;
+export const DEDUCTION_ORDER = ['ota_fee', 'visitor_levy', 'changeover', 'management_fee', 'vat', 'payable'] as const;
 export type StatementLineKind = (typeof DEDUCTION_ORDER)[number];
 
 export type StatementMethod = 'nights' | 'check_in_month';
@@ -44,11 +44,22 @@ export type StatementTerms = {
   vatOnFee: boolean;
   cleaningCostMinor: number;
   cleanChargeMode: CleanChargeMode;
+  // The visitor levy (migration 20261014150000): off when absent.
+  visitorLevy?: VisitorLevyTerms | null;
 };
+// A property's visitor levy settings (columns levy_enabled, levy_rate_bps, levy_night_cap, levy_from). Councils differ,
+// so none of it is fixed: the rate, the most nights of a stay that are levied (null: all) and the first check-in day
+// levied (null: every stay).
+export type VisitorLevyTerms = { enabled: boolean; rateBps: number; nightCap: number | null; from: string | null };
+// The management fee is charged on the payout after the levy (SQL: private.workspace_statement_fee_after_levy()).
+// One switch, a question for the client.
+export const FEE_AFTER_LEVY = true;
 // The stored copy of a stay's money (detail.stays[].stay* on the statement that first put it on).
 export type StoredStayShare = {
   grossMinor: number; otaFeeMinor: number; settledMinor: number;
   nights: number; checkIn: string; checkOut: string;
+  // The stay's visitor levy and levied nights as first counted (none on a copy made before the levy existed).
+  levyMinor?: number | null; levyNights?: number | null;
   // The copy is on another property's statement (the stay has moved since): its money stays there.
   otherProperty?: boolean;
 };
@@ -62,6 +73,7 @@ export type StatementStayInput = {
   settledMinor: number | null; // the amount received (net); null while unsettled
   itemisedFeesMinor?: number | null; // OTA fees itemised on the stay's payout lines
   grossMinor?: number | null; // gross from the payout file, used for gross minus net
+  cleaningFeeMinor?: number | null; // the guest's cleaning fee on the payout lines; left out of the visitor levy's base
   ownerStay?: boolean; // owner stays count as booked nights, with no money
   reference?: string;
   storedShare?: StoredStayShare | null;
@@ -106,12 +118,14 @@ export type StatementStayShare = {
   id: string; channel: string; checkIn: string; checkOut: string; ownerStay: boolean;
   nights: number; nightsInPeriod: number; grossMinor: number; otaFeeMinor: number; payoutMinor: number;
   counted: boolean; // this statement puts (a share of) the stay's money on
+  levyMinor: number; // this period's share of the stay's visitor levy
 };
 export type StatementResult = {
   lines: StatementLine[];
   stays: StatementStayShare[];
   grossMinor: number;
   otaFeesMinor: number;
+  visitorLevyMinor: number;
   changeoversMinor: number;
   feeBaseMinor: number;
   feeMinor: number;
@@ -158,6 +172,16 @@ function percentOfMinor(minor: number, bps: number): number {
   return fromBig(twice >= BPS_SCALE ? q + (product < ZERO ? -ONE : ONE) : q, 'Amount');
 }
 
+// The visitor levy on an amount for `levied` of its `nights` nights: amount x levied / nights x bps / 10000, halves
+// rounded away from zero (the management fee's rule). 0 with no nights, no levied nights or no rate.
+export function levyMinor(amount: number, levied: number, nights: number, bps: number): number {
+  safeInteger(amount, 'Amount');
+  if (!Number.isSafeInteger(nights) || !Number.isSafeInteger(levied) || !Number.isSafeInteger(bps) || nights <= 0 || levied <= 0 || bps <= 0) return 0;
+  const x = BigInt(amount) * BigInt(Math.min(levied, nights)) * BigInt(bps), d = BigInt(nights) * BPS_SCALE;
+  const magnitude = ((x < ZERO ? -x : x) * TWO + d) / (d * TWO);
+  return fromBig(x < ZERO ? -magnitude : magnitude, 'Levy');
+}
+
 // The share of x for nights before+1..through of a stay of `nights` nights:
 // floor(x*through/nights) - floor(x*before/nights). Shares of consecutive ranges add up to x exactly.
 export function prorate(x: number, before: number, through: number, nights: number): number {
@@ -200,6 +224,12 @@ export function statementFor(input: StatementInput): StatementResult {
   if (!Number.isSafeInteger(terms.managementFeeBps) || terms.managementFeeBps < 0 || terms.managementFeeBps > 10000) throw new RangeError('Invalid management fee');
   if (safeInteger(terms.cleaningCostMinor, 'Cleaning cost') < 0) throw new RangeError('Invalid cleaning cost');
   if (terms.cleanChargeMode !== 'agreed_fee' && terms.cleanChargeMode !== 'actual_cost') throw new RangeError('Invalid clean charge mode');
+  const levy = terms.visitorLevy?.enabled ? terms.visitorLevy : null;
+  if (levy) {
+    if (!Number.isSafeInteger(levy.rateBps) || levy.rateBps < 0 || levy.rateBps > 10000) throw new RangeError('Invalid visitor levy rate');
+    if (levy.nightCap !== null && (!Number.isSafeInteger(levy.nightCap) || levy.nightCap < 1 || levy.nightCap > 366)) throw new RangeError('Invalid visitor levy night cap');
+    if (levy.from !== null) dayNumber(levy.from, 'Visitor levy start');
+  }
   const inPeriod = (iso: string, what: string) => { const d = dayNumber(iso, what); return d >= from && d < to; };
   const flags: string[] = [], blockedReasons: string[] = [];
 
@@ -232,7 +262,7 @@ export function statementFor(input: StatementInput): StatementResult {
     listed.add(stay.id);
     nightsBooked += nightsInPeriod;
     const ownerStay = stay.ownerStay === true, ownerMoney = ownerStay && !stored;
-    let grossMinor = 0, otaFeeMinor = 0, counted = false;
+    let grossMinor = 0, otaFeeMinor = 0, counted = false, stayLevy = 0, stayLevyNights = 0;
     if (ownerStay && stay.settledMinor !== null && stay.settledMinor !== undefined && stay.settledMinor !== 0) flags.push(`owner_stay_amount_ignored:${stay.id}`);
     // OTA fee: itemised fees, else gross minus net, else 0 (flagged for platform stays).
     const liveFee = (settled: number) => stay.itemisedFeesMinor !== null && stay.itemisedFeesMinor !== undefined ? safeInteger(stay.itemisedFeesMinor, 'OTA fees')
@@ -245,6 +275,9 @@ export function statementFor(input: StatementInput): StatementResult {
         grossMinor = fullShare ? gross : prorate(gross, before, through, windowNights);
         otaFeeMinor = fullShare ? fee : prorate(fee, before, through, windowNights);
         counted = true;
+        // The levy from the copy too, never from the settings as they are now.
+        stayLevy = stored.levyMinor == null ? 0 : safeInteger(stored.levyMinor, 'Stored levy');
+        stayLevyNights = stored.levyNights == null ? 0 : safeInteger(stored.levyNights, 'Stored levied nights');
       }
       const settled = stay.settledMinor ?? null;
       const changed = !here || !live || stay.checkIn !== stored.checkIn || stay.checkOut !== stored.checkOut || settled !== stored.settledMinor
@@ -263,13 +296,24 @@ export function statementFor(input: StatementInput): StatementResult {
         grossMinor = fullShare ? gross : prorate(gross, before, through, windowNights);
         otaFeeMinor = fullShare ? fee : prorate(fee, before, through, windowNights);
         counted = true;
+        // The visitor levy, worked out once here: on the accommodation (gross less the guest's cleaning fee) for the
+        // first nights of the stay, at most the night cap, for a stay checking in on or after the start day.
+        if (levy && windowNights > 0 && (levy.from === null || stay.checkIn >= levy.from)) {
+          const cleaningFee = stay.cleaningFeeMinor == null ? null : safeInteger(stay.cleaningFeeMinor, 'Cleaning fee');
+          if (cleaningFee === null && OTA_CHANNELS.includes(stay.channel)) flags.push(`levy_cleaning_fee_unknown:${stay.id}`);
+          stayLevyNights = Math.min(windowNights, levy.nightCap ?? windowNights);
+          stayLevy = levyMinor(gross - (cleaningFee ?? 0), stayLevyNights, windowNights, levy.rateBps);
+        }
       }
     }
+    // This period's share of the levy, by its levied nights (the first nights of the stay).
+    const levyShare = counted && stayLevy !== 0 && stayLevyNights > 0
+      ? (fullShare ? stayLevy : prorate(stayLevy, Math.min(before, stayLevyNights), Math.min(through, stayLevyNights), stayLevyNights)) : 0;
     // By nights, part of a stay whose other nights sit on a statement counted by check-in would never be paid.
     if (input.method === 'nights' && counted && !fullShare && stay.checkInStatementOverlaps) blockedReasons.push(`stay_method_conflict:${stay.id}`);
     // Another statement left this stay to a statement of the other method counting it in full: this one must do that.
     if (stay.reliedOnBy && !(stay.reliedOnBy !== input.method && counted && fullShare)) blockedReasons.push(`stay_relied_on:${stay.id}`);
-    stays.push({ id: stay.id, channel: stay.channel, checkIn: stay.checkIn, checkOut: stay.checkOut, ownerStay, nights, nightsInPeriod, grossMinor, otaFeeMinor, payoutMinor: grossMinor - otaFeeMinor, counted });
+    stays.push({ id: stay.id, channel: stay.channel, checkIn: stay.checkIn, checkOut: stay.checkOut, ownerStay, nights, nightsInPeriod, grossMinor, otaFeeMinor, payoutMinor: grossMinor - otaFeeMinor, counted, levyMinor: levyShare });
   }
   // A stay this statement used to count in full, no longer in its period, that another statement still relies on.
   for (const stay of input.stays.filter(s => s.reliedOnBy && s.countedBefore && !listed.has(s.id)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) blockedReasons.push(`stay_relied_on:${stay.id}`);
@@ -296,16 +340,20 @@ export function statementFor(input: StatementInput): StatementResult {
   const otaLines: StatementLine[] = stays.filter(s => s.otaFeeMinor !== 0)
     .map(s => ({ kind: 'ota_fee', date: s.checkIn, label: `${CHANNEL_LABEL[s.channel] ?? s.channel} fees`, amountMinor: s.otaFeeMinor, refId: s.id }));
 
+  const levyLines: StatementLine[] = stays.filter(s => s.levyMinor !== 0)
+    .map(s => ({ kind: 'visitor_levy', date: s.checkIn, label: 'Visitor levy', amountMinor: s.levyMinor, refId: s.id }));
+
   const grossMinor = total(stays.map(s => s.grossMinor), 'Gross');
   const otaFeesMinor = total(otaLines.map(l => l.amountMinor), 'OTA fees');
+  const visitorLevyMinor = total(levyLines.map(l => l.amountMinor), 'Visitor levy');
   const changeoversMinor = total(changeovers.map(l => l.amountMinor), 'Changeovers');
   const payablesMinor = total(payables.map(l => l.amountMinor), 'Payables');
-  const base = feeBaseMinor(grossMinor, otaFeesMinor, changeoversMinor);
+  const base = feeBaseMinor(grossMinor, otaFeesMinor, changeoversMinor) - (FEE_AFTER_LEVY ? visitorLevyMinor : 0);
   const feeMinor = percentOfMinor(base, terms.managementFeeBps);
   const vatMinor = terms.vatOnFee ? percentOfMinor(feeMinor, VAT_BPS) : 0;
   const feeLines: StatementLine[] = [{ kind: 'management_fee', date: input.from, label: `Management fee (${percentLabel(terms.managementFeeBps)})`, amountMinor: feeMinor, refId: null }];
   const vatLines: StatementLine[] = terms.vatOnFee ? [{ kind: 'vat', date: input.from, label: `VAT on the management fee (${percentLabel(VAT_BPS)})`, amountMinor: vatMinor, refId: null }] : [];
-  const byKind: Record<StatementLineKind, StatementLine[]> = { ota_fee: otaLines, changeover: changeovers, management_fee: feeLines, vat: vatLines, payable: payables };
+  const byKind: Record<StatementLineKind, StatementLine[]> = { ota_fee: otaLines, visitor_levy: levyLines, changeover: changeovers, management_fee: feeLines, vat: vatLines, payable: payables };
   const lines = DEDUCTION_ORDER.flatMap(kind => byKind[kind]);
   const payoutMinor = total([grossMinor, ...lines.map(l => -l.amountMinor)], 'Payout');
 
@@ -313,7 +361,7 @@ export function statementFor(input: StatementInput): StatementResult {
     ? total(input.ownerExpenses.filter(x => inPeriod(x.date, 'Owner expense date')).map(x => safeInteger(x.amountMinor, 'Owner expense')), 'Owner expenses')
     : null;
   return {
-    lines, stays, grossMinor, otaFeesMinor, changeoversMinor, feeBaseMinor: base, feeMinor, vatMinor, payablesMinor, payoutMinor,
+    lines, stays, grossMinor, otaFeesMinor, visitorLevyMinor, changeoversMinor, feeBaseMinor: base, feeMinor, vatMinor, payablesMinor, payoutMinor,
     ownerExpensesMinor, netMinor: ownerExpensesMinor === null ? null : payoutMinor - ownerExpensesMinor,
     nightsBooked, nightsAvailable, flags, blocked: blockedReasons.length > 0, blockedReasons,
   };

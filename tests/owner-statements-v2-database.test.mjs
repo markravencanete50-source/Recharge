@@ -72,11 +72,11 @@ const line = (channel, reference, amountMinor, { gross = null, commission = null
 });
 const lineView = lines => lines.map(l => [l.kind, l.refId, l.amountMinor]);
 // The figures statementFor and the SQL share, in one shape.
-const figures = r => ({ grossMinor: r.grossMinor, otaFeesMinor: r.otaFeesMinor, changeoversMinor: r.changeoversMinor, feeBaseMinor: r.feeBaseMinor, feeMinor: r.feeMinor,
+const figures = r => ({ grossMinor: r.grossMinor, otaFeesMinor: r.otaFeesMinor, visitorLevyMinor: r.visitorLevyMinor, changeoversMinor: r.changeoversMinor, feeBaseMinor: r.feeBaseMinor, feeMinor: r.feeMinor,
   vatMinor: r.vatMinor, payablesMinor: r.payablesMinor, payoutMinor: r.payoutMinor, nightsBooked: r.nightsBooked, nightsAvailable: r.nightsAvailable,
   flags: r.flags, blocked: r.blocked, blockedReasons: r.blockedReasons,
   lines: r.lines.map(l => ({ kind: l.kind, date: l.date, label: l.label, amountMinor: l.amountMinor, refId: l.refId })),
-  stays: r.stays.map(s => ({ id: s.id ?? s.reservationId, nights: s.nights, nightsInPeriod: s.nightsInPeriod, counted: s.counted, grossMinor: s.grossMinor, otaFeeMinor: s.otaFeeMinor, payoutMinor: s.payoutMinor })) });
+  stays: r.stays.map(s => ({ id: s.id ?? s.reservationId, nights: s.nights, nightsInPeriod: s.nightsInPeriod, counted: s.counted, grossMinor: s.grossMinor, otaFeeMinor: s.otaFeeMinor, payoutMinor: s.payoutMinor, levyMinor: s.levyMinor })) });
 const compute = async (prop, from, to, method = 'nights') => (await sql('select private.workspace_statement_compute($1,$2,$3,$4,null) c', [prop, from, to, method]))[0].c;
 
 await sql('insert into private.workspace_cleaner_rates(cleaner_id,rate_minor,updated_by) values($1,5500,$3),($2,5800,$3)', [users[CLEANER_A], users[CLEANER_B], users[ADMIN]]);
@@ -388,12 +388,15 @@ const isoDay = n => new Date(n * 86400000).toISOString().slice(0, 10);
 test('200 seeded random scenarios: the SQL statement equals statementFor', () => randomScenarios(20261012, 'Random'));
 async function randomScenarios(seed, name) {
   const random = generator(seed), int = (low, high) => low + Math.floor(random() * (high - low + 1)), pick = list => list[int(0, list.length - 1)];
+  // The visitor levy (20261014150000) draws from its own generator, so every other choice is as it was before it.
+  const levyRandom = generator(seed + 7), lint = (low, high) => low + Math.floor(levyRandom() * (high - low + 1)), lpick = list => list[lint(0, list.length - 1)];
+  let withLevy = 0;
   const chance = p => random() < p;
   const day0 = Date.UTC(2024, 0, 1) / 86400000;
   const cleaners = [users[CLEANER_A], users[CLEANER_B], users[CLEANER_C]];
   const dayN = iso => Date.parse(iso + 'T00:00:00Z') / 86400000;
   let prepared = 0, blockedCount = 0, withOldStatement = 0, withOwnerStay = 0, proRated = 0, withStoredCopy = 0, withRelier = 0, withNeighbour = 0;
-  const seen = { changed: 0, conflict: 0, relied: 0, fromCopy: 0 };
+  const seen = { changed: 0, conflict: 0, relied: 0, fromCopy: 0, levied: 0 };
   for (let i = 0; i < 200; i++) {
     const label = `${name} scenario ${i}`;
     // Owner stays share one code index across the database: keep at most one alive.
@@ -403,6 +406,11 @@ async function randomScenarios(seed, name) {
     await sql('insert into private.workspace_property_financials(property_id,management_fee_bps,cleaning_cost_minor,vat_on_fee,clean_charge_mode) values($1,$2,$3,$4,$5)',
       [prop, t.managementFeeBps, t.cleaningCostMinor, t.vatOnFee, t.cleanChargeMode]);
     const fromN = day0 + int(0, 600), toN = fromN + int(1, 100), from = isoDay(fromN), to = isoDay(toN), method = chance(0.7) ? 'nights' : 'check_in_month';
+    if (levyRandom() < 0.5) {
+      t.visitorLevy = { enabled: true, rateBps: lpick([500, 500, 300, 0, lint(1, 10000)]), nightCap: lpick([null, 5, 5, lint(1, 30)]), from: lpick([null, null, isoDay(fromN + lint(-60, 60))]) };
+      await sql('update private.workspace_property_financials set levy_enabled=true,levy_rate_bps=$2,levy_night_cap=$3,levy_from=$4 where property_id=$1', [prop, t.visitorLevy.rateBps, t.visitorLevy.nightCap, t.visitorLevy.from]);
+      withLevy++;
+    }
     // The cleaners' rates for this scenario (the third cleaner has none).
     const rates = { [cleaners[0]]: int(1, 20000), [cleaners[1]]: int(1, 20000) };
     await sql('delete from private.workspace_cleaner_rates where cleaner_id=$1', [cleaners[2]]);
@@ -418,7 +426,7 @@ async function randomScenarios(seed, name) {
       const amount = chance(0.1) ? int(0, 99990000) : int(0, 5000000);
       const ota = ['airbnb', 'booking_com', 'vrbo'].includes(channel);
       const code = ota ? `R${i}-${k}-${int(0, 1e9)}` : channel === 'owner' ? 'Owner stay' : null;
-      let payout = amount, settled = null, fee = null, model = null;
+      let payout = amount, settled = null, fee = null, model = null, cleaningFee = null;
       if (ota) {
         model = pick(['matched', 'matched', 'matched', 'agreed', 'agreedBeforeFunds', 'different', 'none', 'noReference']);
         if (model === 'agreed' || model === 'different') payout = amount + int(1, 5000);
@@ -438,8 +446,9 @@ async function randomScenarios(seed, name) {
         } else if (feeKind === 'gross') { gross = Math.min(100000000, lineAmount + int(-1000, 1000000)); fee = gross - lineAmount; }
         const [rep] = await sql(`insert into private.workspace_payout_reports(channel,file_name,content_hash,line_count,total_minor,new_line_count,new_minor,uploaded_by,request_id)
           values($1,'random.csv',md5(random()::text),1,$2,1,$2,$3,gen_random_uuid()) returning id`, [channel, lineAmount, users[ACCOUNTS]]);
-        await sql(`insert into private.workspace_payout_lines(report_id,channel,reference,amount_minor,gross_minor,commission_minor,host_fee_minor,payment_fee_minor) values($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [rep.id, channel, code, lineAmount, gross, parts.commission, parts.host, parts.payment]);
+        cleaningFee = levyRandom() < 0.6 ? lint(0, 200000) : null;
+        await sql(`insert into private.workspace_payout_lines(report_id,channel,reference,amount_minor,gross_minor,commission_minor,host_fee_minor,payment_fee_minor,cleaning_fee_minor) values($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [rep.id, channel, code, lineAmount, gross, parts.commission, parts.host, parts.payment, cleaningFee]);
         if (model === 'matched') settled = lineAmount;
         if (model === 'agreed') {
           settled = int(0, 10000000);
@@ -449,7 +458,7 @@ async function randomScenarios(seed, name) {
         settled = int(0, 10000000);
         await sql('insert into private.workspace_payout_agreements(reservation_id,received_snapshot_minor,agreed_minor,note,agreed_by) values($1,null,$2,$3,$4)', [id, settled, 'Agreed in a test', users[ACCOUNTS]]);
       } else if (!ota) settled = payout;
-      tsStays.push({ id, channel: channel === 'owner' ? 'other' : channel, checkIn: isoDay(checkInN), checkOut: isoDay(checkOutN), status, settledMinor: settled, itemisedFeesMinor: fee, ownerStay: channel === 'owner' });
+      tsStays.push({ id, channel: channel === 'owner' ? 'other' : channel, checkIn: isoDay(checkInN), checkOut: isoDay(checkOutN), status, settledMinor: settled, itemisedFeesMinor: fee, cleaningFeeMinor: cleaningFee, ownerStay: channel === 'owner' });
     }
     const statement = (owner, start, end, statementMethod, status, detail) => sql(`insert into private.workspace_owner_statements(property_id,period_start,period_end,method,status,revenue_minor,cleaning_count,cleaning_minor,expenses_minor,fee_bps,fee_minor,payout_minor,detail,prepared_by,issued_at)
       values($1,$2,$3,$4,$5,0,0,0,0,0,0,0,$6::jsonb,$7,case when $5='draft' then null else now() end)`, [owner, start, end, statementMethod, status, JSON.stringify(detail), users[ADMIN]]);
@@ -480,11 +489,14 @@ async function randomScenarios(seed, name) {
           const inN = dayN(s.checkIn) + int(-5, 5), nights = int(1, 40), gross = int(0, 5000000), fee = chance(0.7) ? int(0, gross) : 0;
           copy = { grossMinor: gross, otaFeeMinor: fee, settledMinor: chance(0.8) ? gross - fee : int(0, 5000000), nights, checkIn: isoDay(inN), checkOut: isoDay(inN + nights) };
         }
+        // A copy made since the levy holds the stay's levy and levied nights; an older one has none.
+        if (levyRandom() < 0.5) { copy.levyMinor = lint(0, 300000); copy.levyNights = lint(1, copy.nights); }
         return { s, copy, whole: chance(0.7) };
       });
       await statement(elsewhere ? await property(`Random ${i} before the move`) : prop, '2019-01-01', '2019-02-01', method, pick(['issued', 'paid']), {
         stays: basisHeld.map(({ s, copy, whole }) => ({ reservationId: s.id, counted: true, stayGrossMinor: copy.grossMinor, stayOtaFeeMinor: copy.otaFeeMinor, staySettledMinor: copy.settledMinor,
-          stayNights: copy.nights, stayCheckIn: copy.checkIn, stayCheckOut: copy.checkOut, wholeStay: whole })) });
+          stayNights: copy.nights, stayCheckIn: copy.checkIn, stayCheckOut: copy.checkOut, wholeStay: whole,
+          ...(copy.levyMinor !== undefined ? { stayLevyMinor: copy.levyMinor, stayLevyNights: copy.levyNights } : {}) })) });
       for (const { s, copy } of basisHeld) s.storedShare = { ...copy, otherProperty: elsewhere };
     }
     // Sometimes a statement relies on another to count some of them in full (its alreadyCounted). Unless another
@@ -555,6 +567,7 @@ async function randomScenarios(seed, name) {
     if (ts.blockedReasons.some(x => x.startsWith('stay_method_conflict:'))) seen.conflict++;
     if (ts.blockedReasons.some(x => x.startsWith('stay_relied_on:'))) seen.relied++;
     if (ts.stays.some(x => x.counted && tsStays.find(y => y.id === x.id)?.storedShare)) seen.fromCopy++;
+    if (ts.visitorLevyMinor !== 0) seen.levied++;
     if (ts.blocked) { blockedCount++; continue; }
     // Prepared and stored: the same figures.
     await asDb(); await db.exec('delete from private.workspace_write_limits');
@@ -576,4 +589,5 @@ async function randomScenarios(seed, name) {
   assert.ok(proRated >= 20, `pro-rated ${proRated}`);
   assert.ok(withStoredCopy >= 40 && withRelier >= 15 && withNeighbour >= 10, `stored copies ${withStoredCopy}, reliers ${withRelier}, neighbours ${withNeighbour}`);
   assert.ok(seen.fromCopy >= 20 && seen.changed >= 20 && seen.conflict >= 8 && seen.relied >= 5, JSON.stringify(seen));
+  assert.ok(withLevy >= 60 && seen.levied >= 30, `levy on ${withLevy} properties, levied in ${seen.levied} scenarios`);
 }

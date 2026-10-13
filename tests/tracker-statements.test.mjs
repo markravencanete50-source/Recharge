@@ -127,7 +127,7 @@ test('notes for flags never repeat what a block already says', () => {
   assert.equal(S.flagNotes(['ota_fee_unknown:a', 'ota_fee_unknown:b']).length, 1);
   assert.match(S.flagNotes(['ota_fee_unknown:a'])[0], /no fee on its payout/);
   assert.deepEqual(S.flagNotes(['clean_over_agreed:a'], ['clean_unreviewed:a']), [], 'an unreviewed dear clean is in the blocks');
-  assert.match(S.flagNotes(['clean_over_agreed:a', 'clean_over_agreed:b'], ['clean_unreviewed:a'])[0], /^1 clean cost more than the agreed fee/);
+  assert.match(S.flagNotes(['clean_over_agreed:a', 'clean_over_agreed:b'], ['clean_unreviewed:a'])[0], /^1 clean's invoice is above the agreed fee\. The owner still pays the agreed fee/);
   assert.match(S.flagNotes(['nights_exceed_period'])[0], /overlapping/);
 });
 
@@ -256,7 +256,7 @@ test('the sheet shows period, occupancy, nights, gross, VAT and payout', () => {
   assert.equal(d['Payout to the owner'], '£1,063.42');
   assert.match(d['How stays are counted'], /nights/);
   assert.match(d['Terms'], /Management fee 15%, plus VAT, cleans at agreed fee/);
-  assert.match(d['Worth a look'], /1 clean cost more than the agreed fee/);
+  assert.match(d['Worth a look'], /1 clean's invoice is above the agreed fee/);
   const custom = S.statementTrackerItem(row(), statement({ periodStart: '2026-11-10', periodEnd: '2026-11-21' }), ctx());
   assert.equal(custom.title, '10 Nov to 20 Nov');
   assert.equal(S.statementTrackerItem(row(), statement({ periodStart: undefined, periodEnd: undefined, grossMinor: undefined, nightsBooked: undefined, nightsAvailable: undefined, vatMinor: 0 }), ctx()).title, 'November 2026');
