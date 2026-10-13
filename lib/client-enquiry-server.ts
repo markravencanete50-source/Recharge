@@ -57,6 +57,21 @@ export async function sendEnquiryForm(context: RpcContext, input: Invite) {
   return businessResponse({ ok: true, data: { enquiry, link } });
 }
 
+// ---------------------------------------------------------------- the team: delete an enquiry
+// The database deletes the enquiry (and the property it made) and queues its files; the stored copies are
+// removed here straight away and marked removed. Anything left queued (storage was down) stays on record.
+export async function deleteEnquiry(context: RpcContext, input: Extract<TeamsAction, { action: 'deleteEnquiry' }>) {
+  const result = await context.client.rpc('workspace_teams_action', { input });
+  if (result.error) return databaseFailure(result.error);
+  const paths = z.array(z.string()).catch([]).parse((result.data as { paths?: unknown })?.paths);
+  const storage = secretClient()?.storage.from(ENQUIRY_BUCKET);
+  if (paths.length && storage) {
+    const removed = await storage.remove(paths).then(r => !r.error, () => false);
+    if (removed) await context.client.rpc('workspace_storage_removed', { bucket_name: ENQUIRY_BUCKET, removed: paths }).then(() => undefined, () => undefined);
+  }
+  return businessResponse({ ok: true, data: result.data });
+}
+
 // ---------------------------------------------------------------- the landlord: the form
 export type EnquiryFormState = { state: 'open' | 'answered' | 'expired' | 'closed'; id: string; name: string; email: string; files: { id: string; name: string; mime: string; bytes: number }[] } | { state: 'invalid' } | { state: 'unavailable' };
 export async function openEnquiryForm(token: string | undefined): Promise<EnquiryFormState> {

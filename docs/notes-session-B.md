@@ -762,3 +762,83 @@ have."
     menu-layout-database, mobile-workspace, qa-wiring-fixes, role-authorization-matrix, search-and-cancel,
     view-as-database, view-as-http, wiring-fixes-v2, workspace-access and workspace-web-path all pass.
     wiring-v2 has only its known line-ending failure.
+
+# Round 6, third task: delete client enquiries (Lee)
+
+Lee: "we should be able to delete client enquiries." For example the test entry "Mark Raven Canete ·
+Optimal · Tinibgan · Valuing".
+
+## The screen (`LiveEnquiries.tsx`)
+
+- **The button:** "Delete enquiry" in the enquiry's detail, for admins and super admins only
+  (`canDeleteEnquiry` in `lib/client-enquiry.ts`).
+- **When it shows:** only while the enquiry has not moved on. That means not yet answered, or its property
+  is still at the enquiry stage, or it was archived by closing the enquiry.
+- **Confirmation:** it asks first, in a sheet (no browser dialog): "Delete this enquiry? This removes the
+  enquiry, its answers and photos, and the property it created. This can’t be undone." An enquiry that
+  never made a property leaves out the part about the property.
+- **Close** is unchanged.
+
+## The database (`supabase/migrations/20261016210000_delete_client_enquiry.sql`, not applied)
+
+- **New action `deleteEnquiry`** `{ requestId, enquiryId, version }`, routed from `workspace_teams_action`.
+  - Admins and super admins only. Everyone else gets "Only management can delete an enquiry", including
+    owners and Guest relations staff with onboarding.
+  - It has a version check and action receipts.
+- **Allowed only while it has not moved on.** All of these must hold:
+  - the journey is at `enquiry`, or `archived` by Close;
+  - no owner (journey `client_id`, or a client assignment);
+  - no signed agreement and no invoice on the journey;
+  - the property is still `onboarding` or `archived`;
+  - nothing else refers to the property or the onboarding item.
+- **How "nothing else refers to it" is checked:** `workspace_enquiry_moved_on` reads the foreign keys, so a
+  table added later counts too. Stays, money, expenses, statements, to-dos, photos, flags, routine plans,
+  guest messages and other work items all count.
+  - The only references allowed are the ones the enquiry itself made: the journey, its questions, the
+    onboarding item, the onboarding team's staff access, activity and notices, and the item's updates and
+    upload intents.
+  - Otherwise: "This enquiry has moved on. Close it instead."
+- **What it deletes:**
+  - the enquiry and its answers;
+  - the property made on submit;
+  - its journey and journey questions;
+  - the onboarding work item, with its updates, details and upload intents;
+  - the staff access to the property;
+  - the property's and the item's activity and notices.
+
+  Another enquiry marked as a duplicate of the property is kept, with the link cleared.
+- **Files:** no removal queue existed before. The privacy erase and deleting a course both remove stored
+  copies straight from the server. So I added `private.workspace_storage_removals` (bucket, path, reason,
+  queued by, queued and removed times), with RLS on and no direct access.
+  - The delete queues every photo and video path and returns the paths.
+  - The server (`deleteEnquiry` in `lib/client-enquiry-server.ts`, routed in
+    `lib/workspace-finance-server.ts`) removes the stored copies straight away. It then marks them removed
+    with `workspace_storage_removed`, which only marks rows the caller queued.
+  - If storage is down, the rows stay queued, on record.
+- **History:** the access history gets a `client_enquiry.deleted` event with who and when (`actor_id`,
+  `occurred_at`). It holds the enquiry id, name and company, status, stage, and whether a property was
+  deleted. It holds no email, phone or address.
+- **Run twice:** the table uses "if not exists", the functions are replaced, and the route patch has a
+  sentinel and a single-line anchor.
+
+## Tests
+
+- **New, `tests/enquiry-delete-database.test.mjs`:** 9 of 9 pass. It covers:
+  - the button rule and the wording;
+  - deleting at each allowed stage: sent, opened, answered, valuing and closed, with nothing left behind
+    (enquiry, property, journey, work, access, activity, notices);
+  - the files queued and marked, only by whoever queued them;
+  - the access history entry, without contact details;
+  - refusal once moved on, with nothing deleted and nothing queued: an estimate, a linked owner, a
+    signature, another to-do on the property, or an invoice;
+  - every other role refused, a stale version, unknown keys and a repeated request;
+  - a duplicate link cleared;
+  - the screen and server wiring;
+  - running the migration twice.
+- **Existing tests still pass:** client-enquiries-database, enquiry-property-database, enquiry-property,
+  enquiry-and-preview, hub-database, todo-updates-database, view-as-http, business-workspace and
+  role-authorization-matrix (72 of 72, with the new file).
+
+## For Lee
+
+Once Lee or the Lead applies the migration, an admin can delete the test entry from the app.

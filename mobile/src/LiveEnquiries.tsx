@@ -14,7 +14,7 @@ import { depth, ui, web, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
-  DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, clientEnquiriesSchema, defaultBody, duplicateNote, enquiryStep, valuationDraft, valueButtonLabel,
+  DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, deleteEnquiryWarning, duplicateNote, enquiryStep, valuationDraft, valueButtonLabel,
   type ClientEnquiries, type ClientEnquiry, type EnquiryStep,
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -29,7 +29,7 @@ const ago = (iso: string) => {
 };
 const fileSize = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
-export function LiveEnquiries({ palette: p, onOpenProperty }: { palette: Palette; account: WorkspaceAccount; onOpenProperty: (id: string) => void }) {
+export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette: Palette; account: WorkspaceAccount; onOpenProperty: (id: string) => void }) {
   const [data, setData] = useState<ClientEnquiries | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter | null>(null);
@@ -79,6 +79,7 @@ export function LiveEnquiries({ palette: p, onOpenProperty }: { palette: Palette
       </View>
       <SendSheet p={p} visible={sending} emailReady={!!data?.emailReady} onClose={() => setSending(false)} onSent={load} />
       <EnquirySheet key={open?.id ?? "none"} p={p} enquiry={open} step={open ? steps.get(open.id)! : "sent"} emailReady={!!data?.emailReady} onClose={() => setOpenId(null)} onChanged={load}
+        canDelete={!!open && canDeleteEnquiry(account.role, open)} onDeleted={async () => { setOpenId(null); await load(); }}
         onOpenProperty={id => { setOpenId(null); onOpenProperty(id); }} />
     </View>
   );
@@ -209,10 +210,11 @@ function Group({ p, title, icon, children }: { p: Palette; title: string; icon: 
 const yes = (v?: string) => v === "yes" ? "Yes" : v === "no" ? "No" : undefined;
 
 // Everything the landlord sent, and what to do next.
-function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onOpenProperty }: {
+function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onOpenProperty, canDelete = false, onDeleted }: {
   p: Palette; enquiry: ClientEnquiry | null; step: EnquiryStep; emailReady: boolean; onClose: () => void; onChanged: () => Promise<void>; onOpenProperty: (id: string) => void;
+  canDelete?: boolean; onDeleted?: () => Promise<void>;
 }) {
-  const [mode, setMode] = useState<"view" | "value" | "close" | "resend">("view");
+  const [mode, setMode] = useState<"view" | "value" | "close" | "resend" | "delete">("view");
   const [fileError, setFileError] = useState("");
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const a = e?.answers;
@@ -231,6 +233,7 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
   }
   if (e && mode === "value") return <ValueSheet p={p} enquiry={e} onClose={() => setMode("view")} onDone={async id => { await onChanged(); onOpenProperty(id); }} />;
   if (e && mode === "close") return <CloseSheet p={p} enquiry={e} onClose={() => setMode("view")} onDone={async () => { setMode("view"); await onChanged(); }} />;
+  if (e && mode === "delete") return <DeleteSheet p={p} enquiry={e} onClose={() => setMode("view")} onDone={async () => { setMode("view"); await onDeleted?.(); }} />;
   if (e && mode === "resend") return <SendSheet p={p} visible emailReady={emailReady} resend={e} onClose={() => setMode("view")} onSent={onChanged} />;
   return (
     <Sheet palette={p} visible={!!e} onClose={onClose} title={a?.fullName ?? e?.recipientName ?? ""} subtitle={e ? STEP_LABEL[step] + (e.submittedAt ? ` · answered ${ago(e.submittedAt)}` : ` · sent ${ago(e.sentAt)}`) : undefined} icon="building">
@@ -291,6 +294,7 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
         </Group>}
         {["sent", "opened", "expired"].includes(step) && <Button label="Send a new link" icon="refresh-cw" p={p} onPress={() => setMode("resend")} />}
         {!["valuing", "estimate", "won", "declined", "closed"].includes(step) && <Button label="Close this enquiry" icon="x" p={p} onPress={() => setMode("close")} />}
+        {canDelete && <Button label="Delete enquiry" icon="trash-2" p={p} onPress={() => setMode("delete")} />}
       </>}
     </Sheet>
   );
@@ -337,6 +341,28 @@ function ValueSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: C
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : e.propertyId ? "Save and start valuing" : "Start valuing"} icon="trending-up" primary p={p} disabled={busy} onPress={() => void start()} />
+    </Sheet>
+  );
+}
+
+// Delete (admins and super admins): asks first, in a sheet. The database refuses one that has moved on.
+function DeleteSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: ClientEnquiry; onClose: () => void; onDone: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const request = useRequestId(["delete", e.id, e.version].join(":"));
+  async function remove() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try { await writeTeams({ action: "deleteEnquiry", requestId: request.get(), enquiryId: e.id, version: e.version }); request.done(); await onDone(); }
+    catch (err) { setError(message(err)); } finally { setBusy(false); }
+  }
+  return (
+    <Sheet palette={p} visible onClose={onClose} title="Delete enquiry" subtitle={e.answers?.fullName ?? e.recipientName} icon="building">
+      <Text style={[ui.body, { color: p.text }]}>{deleteEnquiryWarning(e)}</Text>
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
+        <Button label={busy ? "Deleting…" : "Delete enquiry"} icon="trash-2" primary p={p} disabled={busy} onPress={() => void remove()} />
+        <Button label="Keep it" p={p} disabled={busy} onPress={onClose} />
+      </View>
     </Sheet>
   );
 }
