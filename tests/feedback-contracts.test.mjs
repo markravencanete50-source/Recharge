@@ -205,7 +205,8 @@ test('feedback defaults: one constant per assumption, mirroring SQL', () => {
   assert.equal(defaults.CLEAN_FORM_ZONE, 'Europe/London');
   assert.match(defaults.CLEAN_FORM_DUE_BY, /^([01]\d|2[0-3]):[0-5]\d$/);
   assert.equal(defaults.CLEAN_FORM_WARNING, 'no_form');
-  assert.deepEqual({ ...defaults.CLEAN_FORM_WARNING_EFFECT }, { tag: true, flagManagement: true, payEffect: 'none', lateSubmitAllowed: true });
+  assert.deepEqual({ ...defaults.CLEAN_FORM_WARNING_EFFECT }, { tag: true, flagManagement: true, payEffect: 'none', lateSubmitAllowed: true, remindCleaner: true, invoiceApprovalNeedsForm: true });
+  assert.equal(defaults.CLEAN_FORM_ESCALATE_AT, '09:00');
   assert.equal(defaults.CLEAN_FORM_SWEEP_LIMIT, 200);
   assert.deepEqual([...defaults.DIRECT_BOOKING_OTA_CHANNELS], ['airbnb', 'booking_com', 'vrbo']);
   assert.equal(defaults.DIRECT_BOOKING_OTA_CHANNELS.includes('other'), false, 'owner stays are excluded');

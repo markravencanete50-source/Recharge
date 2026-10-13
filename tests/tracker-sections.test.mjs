@@ -103,7 +103,7 @@ test('licensing moves through three steps by phase', () => {
     assert.deepEqual(states(item), expected, String(phase));
     assert.deepEqual(item.status, { label: status, tone: 'wait' }, String(phase));
     assert.equal(item.nextStep, next, String(phase));
-    assert.deepEqual(item.nextAction, { label: 'Waiting for Stays' }, String(phase));
+    assert.deepEqual(item.nextAction, { label: 'Waiting for Guest relations' }, String(phase));
     assert.deepEqual(item.progress, { done, total: 3 }, String(phase));
     assert.equal(item.section, 'licensing');
   }

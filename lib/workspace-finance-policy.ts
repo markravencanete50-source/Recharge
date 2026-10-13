@@ -70,7 +70,10 @@ export const financeActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('setRepairApprovalLimit'), requestId: id, version, managementRepairLimitMinor: money.nullable() }).strict(),
   // vatOnFee: VAT is charged on the management fee. cleanChargeMode: owners pay the agreed cleaning value or what each clean cost.
   z.object({ action: z.literal('setStatementTerms'), requestId: id, propertyId: id, managementFeeBps: z.number().int().min(0).max(10000), cleaningCostMinor: z.number().int().min(0).max(1000000),
-    vatOnFee: z.boolean().optional(), cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).optional() }).strict(),
+    vatOnFee: z.boolean().optional(), cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).optional(),
+    // The visitor levy (20261014150000): on or off, the rate, the most nights of a stay levied and the first check-in day levied.
+    visitorLevy: z.object({ enabled: z.boolean(), rateBps: z.number().int().min(0).max(10000).optional(), nightCap: z.number().int().min(1).max(366).nullable().optional(),
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() }).strict().optional() }).strict(),
   z.object({ action: z.literal('setReservationFinancials'), requestId: id, propertyId: id, reservationId: id, version,
     channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']), channelReference: text(1, 120).optional(),
     guests: z.number().int().min(1).max(50).nullable().optional(), payoutMinor: money.nullable().optional() }).strict(),

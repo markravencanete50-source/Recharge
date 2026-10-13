@@ -10,14 +10,15 @@ import { Button, Field, message, Notice, Tag, useRequestId, type IconName } from
 import { writeTeams } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import {
-  eventClock, eventDates, eventIsAllDay, TEAM_EVENT_COLOUR, TEAM_EVENT_LABEL, whoIsWhere, whoIsWhereWeek, type PersonDay, type PersonStatus, type TeamEvent, type TeamEventKind,
+  eventClock, eventDates, eventEdited, eventIsAllDay, TEAM_EVENT_COLOUR, TEAM_EVENT_LABEL, whoIsWhere, whoIsWhereWeek, type PersonDay, type PersonStatus, type TeamEvent, type TeamEventKind,
 } from "../../lib/calendar-live";
 import { TEAM_EVENT_KINDS, type RotaPlan } from "../../lib/workspace-teams-policy";
 import { validClock } from "../../lib/team-time";
 
 // Team calendar: absences, meetings, time away, training and anything else that takes a person away from
-// their usual work, and where everyone is on a given day. Everyone adds and cancels their own; admins
-// can add one for another person and cancel anyone's. Owners never see any of this.
+// their usual work, and where everyone is on a given day. Anyone on the team (cleaners too) adds, changes
+// and cancels anyone's, and each entry shows who last edited it and when. Owners never see any of this.
+// A database without migration 20261014300000 still says canEditAll only for admins, and the sheet follows it.
 export const TEAM_EVENT_ICON: Record<TeamEventKind, IconName> = { absence: "user-x", meeting: "users", away: "map-pin", training: "book-open", other: "calendar" };
 const PLACEHOLDER: Record<TeamEventKind, string> = { absence: "Annual leave", meeting: "Owner call", away: "Dentist", training: "First aid course", other: "Site visit" };
 const eventColour = (p: Palette) => TEAM_EVENT_COLOUR[p.isDark ? "dark" : "light"];
@@ -59,7 +60,8 @@ function Line({ p, icon, label, value }: { p: Palette; icon: IconName; label: st
 
 export type TeamPerson = { userId: string; fullName: string };
 
-// Add a team event (event = null) or look at, change or cancel one. A person you cannot change it for sees it read only.
+// Add a team event (event = null) or look at, change or cancel one, for yourself or anyone on the team.
+// When the database says you cannot change someone else's (canEditAll false), it is read only.
 export function TeamEventSheet({ palette: p, visible, event, day, canEditAll, myId, people, onClose, onSaved }: {
   palette: Palette; visible: boolean; event: TeamEvent | null; day: string; canEditAll: boolean; myId: string; people: readonly TeamPerson[];
   onClose: () => void; onSaved: () => Promise<void> | void;
@@ -69,6 +71,7 @@ export function TeamEventSheet({ palette: p, visible, event, day, canEditAll, my
   const [who, setWho] = useState(""), [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const editable = !event || event.mine || canEditAll;
+  const edited = event ? eventEdited(event, myId) : null;
   const key = visible ? [event?.id ?? "new", event?.version ?? 0, who, kind, title, startsOn, endsOn, startTime, endTime, location].join("|") : null;
   const request = useRequestId(key), cancelRequest = useRequestId(visible && event ? "cancel:" + event.id + ":" + event.version : null);
   useEffect(() => {
@@ -126,6 +129,7 @@ export function TeamEventSheet({ palette: p, visible, event, day, canEditAll, my
         <Line p={p} icon="calendar" label="When" value={eventDates(event)} />
         {!!event.startTime && <Line p={p} icon="clock" label="Time (UK)" value={event.endTime ? `${event.startTime} to ${event.endTime}` : `From ${event.startTime}`} />}
         {!!event.location && <Line p={p} icon="map-pin" label="Where" value={event.location} />}
+        {!!edited && <Line p={p} icon="edit-3" label={edited.label} value={`${edited.who} · ${edited.when}`} />}
         <Text style={[ui.small, { color: p.muted }]}>Only {event.fullName ?? "this person"} or an admin can change this.</Text>
       </> : <>
         {canEditAll && !event && (
@@ -135,6 +139,7 @@ export function TeamEventSheet({ palette: p, visible, event, day, canEditAll, my
           </View>
         )}
         {!!event && !event.mine && <Line p={p} icon="user" label="For" value={event.fullName ?? "Team member"} />}
+        {!!edited && <Line p={p} icon="edit-3" label={edited.label} value={`${edited.who} · ${edited.when}`} />}
         <View style={{ gap: 8 }}>
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>What is it?</Text>
           <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>

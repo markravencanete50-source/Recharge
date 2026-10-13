@@ -119,7 +119,9 @@ const EXACT: Record<string, NoticeCopy> = {
   'management.flag_resolved': copy('Your flag was resolved', 'Management has looked at what you flagged and resolved it.'),
   'management.flag_declined': copy('Your flag was declined', 'Management has declined what you flagged and said why.'),
   'management.flag_withdrawn': copy('A flag was withdrawn', 'The person who flagged this has withdrawn it.'),
-  'cleaning.form_missing': copy('Clean form missing', 'A clean has passed its day with no form sent, so it has been flagged for management. The cleaner can still send the form.'),
+  'cleaning.form_missing': copy('Clean form missing', 'A clean still has no form the morning after, so it has been flagged for management. The cleaner can still send the form, and their invoice for it cannot be approved until they do.'),
+  // Session A: the 18:00 reminder to the cleaner (client answer 8).
+  'cleaning.form_reminder': copy('Send your clean form', 'Your form for today\'s clean was due by 18:00 and is not in yet. Send it now; if it is still missing in the morning, management is told.'),
   // Day reflections, daily to-dos, AirCover, direct bookings and the team calendar.
   'reflection.saved': copy('Day reflection sent', 'A team member has written their end-of-day reflection. Open Reflections to read it.'),
   'reflection.reviewed': copy('Your reflection was read', 'Management has read your end-of-day reflection.'),

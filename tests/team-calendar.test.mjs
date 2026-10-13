@@ -243,3 +243,19 @@ test('no em dashes, and the TypeScript files keep their CRLF line endings', () =
     else assert.ok(!text.includes('\r'), path + ' should be LF');
   }
 });
+
+test('who last edited a team event, in UK time, and the sheet lets anyone on the team change anyone\'s', () => {
+  const read = cal.teamEventsSchema.parse({ from: '2026-10-01', to: '2026-10-31', canEditAll: true, events: [
+    { id: id(1), userId: A, fullName: 'Ann', kind: 'absence', title: 'Leave', startsOn: '2026-10-20', endsOn: '2026-10-21', editedById: B, editedBy: 'Bea', editedAt: '2026-10-13T13:05:00Z', added: false },
+    { id: id(2), userId: A, fullName: 'Ann', kind: 'meeting', title: 'Call', startsOn: '2026-10-22', endsOn: '2026-10-22', editedById: A, editedBy: 'Ann', editedAt: '2026-12-01T09:30:00Z', added: true },
+    { id: id(3), userId: A, fullName: 'Ann', kind: 'other', title: 'Older database', startsOn: '2026-10-23', endsOn: '2026-10-23' },
+  ] });
+  assert.deepEqual(cal.eventEdited(read.events[0], A), { label: 'Last changed', who: 'Bea', when: 'Tue 13 Oct at 14:05', text: 'Last changed by Bea on Tue 13 Oct at 14:05' }, 'British Summer Time');
+  assert.deepEqual(cal.eventEdited(read.events[1], A), { label: 'Added', who: 'You', when: 'Tue 1 Dec at 09:30', text: 'Added by you on Tue 1 Dec at 09:30' }, 'winter time');
+  assert.equal(cal.eventEdited(read.events[2], A), null, 'a database without the column shows nothing');
+  assert.equal(cal.eventEdited({ ...read.events[0], editedBy: null }, C).who, 'A team member');
+  const sheet = source('mobile/src/TeamEvents.tsx');
+  assert.match(sheet, /eventEdited\(event, myId\)/);
+  assert.match(sheet, /canEditAll && !event &&/, 'whoever may edit everyone picks who it is for');
+  assert.match(source('supabase/migrations/20261014300000_team_calendar_anyone_edits.sql'), /workspace_team_events_anyone_edits\(\) returns boolean language sql immutable set search_path='' as \$fn\$ select true \$fn\$/);
+});

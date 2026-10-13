@@ -94,9 +94,10 @@ export const PAYOUT_LINE_STATES = ["active", "setAside", "noConfirmedStay"] as c
 
 // --- Owner statements with a period, VAT and ordered lines (migration 20261012100000). Every new field is optional so older answers still parse.
 // The lines are deductions from gross in this order, each category in date order.
-export const STATEMENT_LINE_KINDS = ["ota_fee", "changeover", "management_fee", "vat", "payable"] as const;
+// visitor_levy: the visitor levy (20261014150000), straight after the OTA fees.
+export const STATEMENT_LINE_KINDS = ["ota_fee", "visitor_levy", "changeover", "management_fee", "vat", "payable"] as const;
 export const STATEMENT_LINE_LABEL: Record<(typeof STATEMENT_LINE_KINDS)[number], string> = {
-  ota_fee: "Platform fees", changeover: "Changeover clean", management_fee: "Management fee", vat: "VAT on the fee", payable: "Other costs",
+  ota_fee: "Platform fees", visitor_levy: "Visitor levy", changeover: "Changeover clean", management_fee: "Management fee", vat: "VAT on the fee", payable: "Other costs",
 };
 export const statementLineSchema = z.object({
   kind: z.enum(STATEMENT_LINE_KINDS), label: z.string(), date: z.string().nullable().optional(), amountMinor: minor, refId: z.string().nullable().optional(),
@@ -121,6 +122,7 @@ export const statementCleanCostSchema = z.object({
 // what each clean cost and the stays already counted in an older statement.
 export const statementDetailExtraSchema = z.object({
   lines: z.array(statementLineSchema).optional(), feeBaseMinor: nullableMinor.optional(), feeBase: z.string().nullable().optional(),
+  visitorLevyMinor: nullableMinor.optional(), visitorLevy: z.lazy(() => visitorLevyTermsSchema).nullable().optional(),
   internal: z.array(z.string()).optional(), cleanCosts: z.array(statementCleanCostSchema).optional(), alreadyCounted: z.array(z.string()).optional(),
 });
 // One stay in a statement. A v2 statement shares a stay by nights: nightsInPeriod of nights fall in the period and grossMinor, otaFeeMinor and
@@ -129,7 +131,7 @@ export const statementStaySchema = z.object({
   reference: z.string(), channel: z.string(), checkIn: z.string(), checkOut: z.string(), amountMinor: minor,
   reservationId: z.string().nullable().optional(), channelReference: z.string().nullable().optional(), guests: z.number().nullable().optional(),
   nights: z.number().optional(), nightsInPeriod: z.number().optional(), ownerStay: z.boolean().optional(), counted: z.boolean().optional(),
-  grossMinor: nullableMinor.optional(), otaFeeMinor: nullableMinor.optional(), payoutMinor: nullableMinor.optional(),
+  grossMinor: nullableMinor.optional(), otaFeeMinor: nullableMinor.optional(), payoutMinor: nullableMinor.optional(), levyMinor: nullableMinor.optional(),
 }).passthrough();
 
 export const statementSchema = z.object({
@@ -146,9 +148,15 @@ export type Statement = z.infer<typeof statementSchema>;
 // The statements list (one row per property for a month). statement is the one that STARTS in the month; periodStatements is every live
 // statement overlapping the month, whatever its dates (the 20261012100000 migration). cleansToReview counts the month's cleans that cost more
 // than agreed and are still unreviewed (20261012090000). terms.vatRateBps is the VAT rate in hundredths of a percent (2000 is 20%).
+// The visitor levy settings of a property (20261014150000): on or off, the rate in hundredths of a percent, the most nights of a stay
+// levied (null: all) and the first check-in day levied (null: every stay). feeAfterLevy: the management fee is charged after it.
+export const visitorLevyTermsSchema = z.object({
+  enabled: z.boolean(), rateBps: z.number(), nightCap: z.number().nullable(), from: z.string().nullable(), feeAfterLevy: z.boolean().optional(),
+});
+export type VisitorLevyTermsView = z.infer<typeof visitorLevyTermsSchema>;
 export const statementTermsSchema = z.object({
   managementFeeBps: z.number().nullable(), cleaningCostMinor: nullableMinor, vatOnFee: z.boolean().nullable().optional(), vatRateBps: z.number().nullable().optional(),
-  cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).nullable().optional(),
+  cleanChargeMode: z.enum(CLEAN_CHARGE_MODES).nullable().optional(), visitorLevy: visitorLevyTermsSchema.nullable().optional(),
 });
 export const statementsSchema = z.array(z.object({
   propertyId: z.string().uuid(), propertyName: z.string(),
@@ -172,7 +180,7 @@ export const statementPreviewSchema = z.object({
   stays: z.array(statementStaySchema).optional(), expenses: z.array(z.object({ supplier: z.string(), reference: z.string(), amountMinor: minor }).passthrough()).optional(),
   cleans: z.array(statementCleanCostSchema).optional(), alreadyCounted: z.array(z.string()).optional(),
   grossMinor: minor, otaFeesMinor: minor, revenueMinor: minor, changeoversMinor: minor, cleaningCount: z.number(), feeBaseMinor: minor, feeMinor: minor, vatMinor: minor,
-  payablesMinor: minor, payoutMinor: minor, nightsBooked: z.number(), nightsAvailable: z.number(),
+  payablesMinor: minor, payoutMinor: minor, nightsBooked: z.number(), nightsAvailable: z.number(), visitorLevyMinor: minor.optional(),
   flags: z.array(z.string()), blocked: z.boolean(), blockedReasons: z.array(z.string()),
   // Stays whose money changed after an issued statement stored its copy (staff only).
   lateMoneyAfterStatementCount: z.number().optional(),
@@ -202,6 +210,8 @@ export const cleanerInvoiceLineSchema = z.object({
   // lineId, propertyId, live (false once the invoice is rejected), agreedMinor and overAgreed come from workspace_cleaner_invoice_view; optional so older answers parse.
   lineId: z.string().uuid().optional(), propertyId: z.string().uuid().nullable().optional(), live: z.boolean().optional(),
   agreedMinor: nullableMinor.optional(), overAgreed: z.boolean().optional(),
+  // Whether the clean's form is in (20261014100000_clean_form_reminders); an older server sends none.
+  formIn: z.boolean().optional(),
 });
 export const cleanerInvoiceSchema = z.object({
   id: z.string().uuid(), supplier: z.string(), reference: z.string(), invoiceDate: z.string(), totalMinor: minor, status: z.string(),

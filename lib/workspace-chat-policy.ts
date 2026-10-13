@@ -157,8 +157,12 @@ export function chatTime(iso: string, now = new Date()) {
 }
 
 // The guest inbox (and saved replies) are for team members with the guest communication tool;
-// admins hold every tool.
-export const hasGuestInbox = (account: { role: string; modules: readonly string[] }) => account.role !== 'client' && account.role !== 'cleans' && account.modules.includes('guest-communication');
+// admins hold every tool. Owners, cleaners and Ready (maintenance) never use guest messaging, whatever
+// tools they hold (client answer 12; the database's private.workspace_guest_messaging_role, migration
+// 20261014310000, has the same list and decides).
+export const GUEST_MESSAGING_BLOCKED_ROLES = ['client', 'cleans', 'ready'] as const;
+export const hasGuestInbox = (account: { role: string; modules: readonly string[] }) =>
+  !(GUEST_MESSAGING_BLOCKED_ROLES as readonly string[]).includes(account.role) && account.modules.includes('guest-communication');
 
 // Saved replies: short answers the team inserts into a reply to guests or owners, then edits.
 export const SAVED_AUDIENCES = ['guest', 'owner', 'all'] as const;

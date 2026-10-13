@@ -89,7 +89,7 @@ export function DefaultCleanersSheet({ p, visible, admin, onClose, onChanged }: 
   );
 }
 
-// Where a clean's form stands (Submitted, Outstanding, Warning, Not due yet), as a calm pill with an
+// Where a clean's form stands (Submitted, Unsubmitted, Warning, Not due yet), as a calm pill with an
 // outline icon. The wording and tone come from lib/clean-forms.ts; `late` reads "Submitted late".
 const FORM_ICON = { submitted: "check-circle", outstanding: "clock", warning: "alert-triangle", not_due: "minus-circle" } as const;
 export function FormStateTag({ p, state, late = false }: { p: Palette; state: FormState; late?: boolean }) {

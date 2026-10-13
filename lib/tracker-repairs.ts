@@ -81,12 +81,12 @@ export function preventativeTrackerItem(visits: OperationView[], ctx: TrackerCon
   const move = acts ? visitMoves(role, work.status, info.formRecorded)[0] : undefined;
   const nextStep = closed ? `${kindLabel}: ${lastText}, ${nextText}`
     : !info.formRecorded ? `Record the visit: tick off the checklist (${lastText})`
-      : work.status === 'in_review' ? 'Waiting for Stays to sign off'
+      : work.status === 'in_review' ? 'Waiting for Guest relations to sign off'
         : move && !move.blocked ? move.label : `Visit done (${nextText})`;
   const nextAction: TrackerItem['nextAction'] = closed || !acts ? null
     : !info.formRecorded ? { label: 'Record visit', actionKey: RECORD_VISIT_KEY }
       : move && !move.blocked ? { label: move.label }
-        : { label: work.status === 'in_review' ? 'Waiting for Stays' : 'Nothing more to do' };
+        : { label: work.status === 'in_review' ? 'Waiting for Guest relations' : 'Nothing more to do' };
 
   const details: Detail[] = [];
   const add = (label: string, value: string, tone?: Detail['tone']) => { if (value) details.push({ label, value, ...(tone ? { tone } : {}) }); };

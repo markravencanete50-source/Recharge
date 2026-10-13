@@ -6,7 +6,8 @@ import { MotionPress } from "./motion";
 import { readTeams } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import { teamPerformanceSchema, hoursLabel, type TeamPerformance } from "../../lib/management-live";
-import { PERFORMANCE_RANGES, RANGE_LABEL, performanceWindow, shapeOwnNumbers, standingLine, type OwnNumbers, type PerformanceRange } from "../../lib/my-performance";
+import { Tag } from "./LiveKit";
+import { PERFORMANCE_RANGES, RANGE_LABEL, bonusProgress, ownPerson, performanceWindow, shapeOwnNumbers, type BonusProgress, type OwnNumbers, type PerformanceRange } from "../../lib/my-performance";
 import { formatCount } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { OperationView } from "../../lib/workflow-forms";
@@ -24,8 +25,46 @@ function Stat({ p, label, value, hint }: { p: Palette; label: string; value: str
   );
 }
 
-// The person's own numbers: guest-reply score, tasks done, time worked and the bonus tier (a tier,
-// never a figure in pounds). `page` adds the week/month switch and the breakdown; without it this is
+// The bonus as a bar towards the area's target, with the target and each tier marked on it. A scheme the
+// client has not set yet is labelled as a placeholder. Never a figure in pounds.
+function BonusBar({ p, b }: { p: Palette; b: BonusProgress }) {
+  const fill = b.value ?? 0;
+  const marks = b.marks.map(m => `${m.label} ${m.at}%${m.reached ? ", reached" : ""}`).join(", ");
+  return (
+    <View style={{ gap: 10, paddingTop: 10, borderTopWidth: 1, borderColor: p.border }}>
+      <View style={[ui.row, { gap: 10, alignItems: "flex-start" }]}>
+        <Feather name="award" size={18} color={b.reached > 1 ? p.primary : p.muted} style={{ marginTop: 1 }} />
+        <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+          <Text style={{ color: p.text, fontSize: 14, lineHeight: 20, fontWeight: "600" }}>{b.headline}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{b.areaLabel} · {b.measureLabel}</Text>
+        </View>
+        {b.value !== null && <Text style={{ color: p.text, fontSize: 20, lineHeight: 24, fontWeight: "500", fontVariant: ["tabular-nums"] }}>{b.value}%</Text>}
+      </View>
+      <View accessible accessibilityRole="progressbar" accessibilityLabel={`Bonus progress: ${b.measureLabel}. ${marks}`}
+        accessibilityValue={{ min: 0, max: 100, now: fill, text: b.value === null ? "Nothing yet" : `${b.value}%` }}
+        style={{ height: 12, borderRadius: 6, backgroundColor: p.wash, overflow: "hidden" }}>
+        <View style={{ width: `${fill}%`, height: "100%", borderRadius: 6, backgroundColor: b.reached ? p.success : p.primary }} />
+        {b.marks.map(m => <View key={m.label} style={{ position: "absolute", left: `${m.at}%`, top: 0, bottom: 0, width: 2, marginLeft: -1, backgroundColor: p.text, opacity: 0.45 }} />)}
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 12, rowGap: 4 }}>
+        {b.marks.map(m => (
+          <View key={m.label} style={[ui.row, { gap: 4 }]}>
+            <Feather name={m.reached ? "check-circle" : "circle"} size={13} color={m.reached ? p.success : p.muted} />
+            <Text style={[ui.small, { color: m.reached ? p.text : p.muted, fontVariant: ["tabular-nums"] }]}>{m.label} {m.at}%</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={[ui.small, { color: p.muted }]}>{b.next}</Text>
+      {b.placeholder && <View style={{ gap: 6 }}>
+        <Tag label="Placeholder" tone="wait" p={p} />
+        <Text style={[ui.small, { color: p.muted }]}>These targets and tiers are placeholders until the bonus scheme for {b.areaLabel.toLowerCase()} is agreed.</Text>
+      </View>}
+    </View>
+  );
+}
+
+// The person's own numbers: guest-reply score, tasks done, time worked and the bonus as a bar towards
+// the target (never a figure in pounds). `page` adds the week/month switch and the breakdown; without it this is
 // the compact card on Home, which opens the page through `onOpen`.
 export function MyPerformance({ palette: p, account, work = [], page = false, onOpen }: { palette: Palette; account: WorkspaceAccount; work?: OperationView[]; page?: boolean; onOpen?: () => void }) {
   const [range, setRange] = useState<PerformanceRange>("week");
@@ -41,6 +80,10 @@ export function MyPerformance({ palette: p, account, work = [], page = false, on
   }, [range]);
   // Shaped here, so a refreshed work list updates the finished-job count without another read.
   const n: OwnNumbers | null = useMemo(() => read ? shapeOwnNumbers(read.data, account.userId, work, read.from) : null, [read, work, account.userId]);
+  const bonus = useMemo(() => {
+    const row = read ? ownPerson(read.data.people, account.userId) : null;
+    return row && read ? bonusProgress(row, read.data.targets.greenMinutes) : null;
+  }, [read, account.userId]);
   return (
     <View testID="my-performance" style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 14 }]}>
       <View style={[ui.between, { gap: 12 }]}>
@@ -67,13 +110,7 @@ export function MyPerformance({ palette: p, account, work = [], page = false, on
           <Stat p={p} label="Tasks done" value={formatCount(n.tasksDone)} />
           <Stat p={p} label="Time worked" value={hoursLabel(n.minutes)} hint={`${formatCount(n.shifts)} ${n.shifts === 1 ? "shift" : "shifts"}`} />
         </View>
-        <View style={[ui.row, { gap: 10, paddingTop: 10, borderTopWidth: 1, borderColor: p.border }]}>
-          <Feather name="award" size={18} color={n.bonus.tier ? p.primary : p.muted} />
-          <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-            <Text style={{ color: p.text, fontSize: 14, lineHeight: 20, fontWeight: "600" }}>{n.bonus.label}</Text>
-            <Text style={[ui.small, { color: p.muted }]}>{standingLine(n)}</Text>
-          </View>
-        </View>
+        {!!bonus && <BonusBar p={p} b={bonus} />}
         {page && <View style={{ gap: 4, paddingTop: 10, borderTopWidth: 1, borderColor: p.border }}>
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>How your tasks add up</Text>
           <Text style={[ui.small, { color: p.muted }]}>{formatCount(n.workCompleted)} finished jobs, {formatCount(n.daily.listingChecks)} listing checks, {formatCount(n.daily.pricingDecisions)} pricing decisions, {formatCount(n.daily.reviewsLogged)} reviews logged and {formatCount(n.daily.signOffs)} daily sign-offs.</Text>

@@ -61,6 +61,13 @@ export function updateStamp(u: TrackerUpdate | null | undefined, now: Date = new
   return `${label} · ${who}`;
 }
 
+// The stamp followed by what changed: "Today 14:05 · Morag Reid · Invoice recorded". Owners get the
+// stamp alone, as in the detail sheet: they read "Recharge" for the person and never the step's name.
+export function updateLine(u: TrackerUpdate | null | undefined, now: Date = new Date(), owner = false): string {
+  const stamp = updateStamp(u, now, owner), what = owner ? '' : u?.what?.trim();
+  return what ? `${stamp} · ${what}` : stamp;
+}
+
 // The first form this person may use. When there is none, the item waits for someone else.
 type FormLike = { key: string; title: string; unavailable?: string };
 export function nextActionOf(forms: readonly FormLike[], waitingOn?: string | null): TrackerItem['nextAction'] {

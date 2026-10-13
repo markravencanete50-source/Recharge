@@ -16,6 +16,8 @@ create function auth.jwt() returns jsonb language sql stable as $$select coalesc
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 after(() => db.close());
+// Mid-stay cleans are switched off by 20261014110000 (client answer 5); these tests cover the run while it is on.
+await db.exec(`create or replace function private.workspace_mid_stay_cleans_enabled() returns boolean language sql immutable set search_path='' as $$ select true $$`);
 
 const roles = ['super_admin', 'admin', 'accounts', 'cleans', 'client'];
 const users = roles.map((_, i) => `e1000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);

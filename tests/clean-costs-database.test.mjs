@@ -79,8 +79,8 @@ test('statement terms gain the VAT and clean-charge switches; older callers keep
   assert.equal((await sql('select private.workspace_vat_bps() v'))[0].v, 2000);
   await as(ACCOUNTS);
   const list = await rpc('workspace_finance_read', ['statements', null, '2026-09', null, null]);
-  assert.deepEqual(list.find(p => p.propertyId === HOME).terms, { managementFeeBps: 1500, cleaningCostMinor: 6000, vatOnFee: true, cleanChargeMode: 'agreed_fee', vatRateBps: 2000 });
-  assert.deepEqual(list.find(p => p.propertyId === OTHER).terms, { managementFeeBps: 1500, cleaningCostMinor: 6000, vatOnFee: false, cleanChargeMode: 'agreed_fee', vatRateBps: 2000 });
+  assert.deepEqual(list.find(p => p.propertyId === HOME).terms, { managementFeeBps: 1500, cleaningCostMinor: 6000, vatOnFee: true, cleanChargeMode: 'agreed_fee', vatRateBps: 2000, visitorLevy: { enabled: false, rateBps: 500, nightCap: null, from: null, feeAfterLevy: true } });
+  assert.deepEqual(list.find(p => p.propertyId === OTHER).terms, { managementFeeBps: 1500, cleaningCostMinor: 6000, vatOnFee: false, cleanChargeMode: 'agreed_fee', vatRateBps: 2000, visitorLevy: { enabled: false, rateBps: 500, nightCap: null, from: null, feeAfterLevy: true } });
 });
 
 test('a cleaner invoice must add up, and each line must be a real clean of this cleaner the reader can finance', async () => {

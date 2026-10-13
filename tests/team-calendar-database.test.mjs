@@ -15,7 +15,11 @@ create table auth.sessions(id uuid primary key,user_id uuid references auth.user
 create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 const files = await fs.readdir('supabase/migrations');
-for (const file of files.filter(f => f.endsWith('.sql') && !f.startsWith(MINE)).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+// Later migrations that replace this one's functions have their own tests (who may edit, 20261014300000:
+// tests/team-calendar-edits-database.test.mjs; the guest name without the date match, 20261014330000:
+// tests/stay-guest-name-database.test.mjs); this file proves the original migration on its own.
+const REPLACED_BY = ['20261014300000_team_calendar_anyone_edits', '20261014330000_stay_guest_name_dates'];
+for (const file of files.filter(f => f.endsWith('.sql') && !f.startsWith(MINE) && !REPLACED_BY.some(r => f.startsWith(r))).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 const mineFile = files.find(f => f === MINE + '.sql') ?? files.find(f => f === MINE + '.sql.draft');
 assert.ok(mineFile, 'the team calendar migration exists');
 const mine = await fs.readFile('supabase/migrations/' + mineFile, 'utf8');

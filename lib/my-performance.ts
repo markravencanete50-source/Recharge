@@ -1,4 +1,5 @@
-import type { TeamPerformance } from './management-live';
+import { DEPARTMENT_LABEL, type TeamPerformance } from './management-live';
+import { BONUS_AREA_BY_ROLE, BONUS_SCHEMES, type BonusMeasure, type BonusScheme } from './feedback-defaults';
 import type { RotaPlan } from './workspace-teams-policy';
 import type { OperationView } from './workflow-forms';
 
@@ -85,6 +86,59 @@ export function standingLine(n: OwnNumbers): string {
   if (n.score === null) return 'Nothing to score yet in this period.';
   const base = n.onTrack ? `On track with a score of ${n.score}%.` : `Off track with a score of ${n.score}%.`;
   return n.bonus.nextAt !== null && n.bonus.of ? `${base} The next bonus tier starts at ${n.bonus.nextAt}%.` : base;
+}
+
+// --- Bonus progress towards the target ------------------------------------------------------------
+// A bar from 0 to 100% with the area's target and bonus tiers marked on it. The schemes are placeholders
+// in lib/feedback-defaults.ts (BONUS_SCHEMES) until the client sets them; none of it is in pounds.
+
+// The area a person's bonus follows: their rota department when it has a scheme, else their role's.
+export function bonusArea(role: string | null | undefined, department: string | null | undefined, schemes: Readonly<Record<string, BonusScheme>> = BONUS_SCHEMES): string | null {
+  if (department && schemes[department]) return department;
+  const byRole = BONUS_AREA_BY_ROLE[role ?? ''];
+  return byRole && schemes[byRole] ? byRole : null;
+}
+
+const MEASURE_LABEL: Record<BonusMeasure, (greenMinutes: number) => string> = {
+  replies: minutes => `Guest messages answered within ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`,
+  dailyWork: () => 'Daily work done against its targets',
+  score: () => 'Your performance score',
+};
+
+export type BonusMark = { label: string; at: number; reached: boolean };
+export type BonusProgress = {
+  area: string; areaLabel: string; measure: BonusMeasure; measureLabel: string; placeholder: boolean;
+  // 0 to 100, or null when there is nothing to measure yet in the period.
+  value: number | null;
+  // The target first, then each tier.
+  marks: BonusMark[];
+  // How many marks are reached: 0 below the target, 1 the target, 2 tier 1, 3 tier 2.
+  reached: number;
+  headline: string; next: string;
+};
+
+const clampPercent = (v: number | null | undefined) => v == null || !Number.isFinite(v) ? null : Math.max(0, Math.min(100, Math.floor(v)));
+
+// The person's progress for their area's scheme, from their own row of the team performance read.
+export function bonusProgress(row: Pick<Person, 'role' | 'percentGreen' | 'workPercent' | 'score'> & { department?: string | null }, greenMinutes: number,
+  schemes: Readonly<Record<string, BonusScheme>> = BONUS_SCHEMES): BonusProgress | null {
+  const area = bonusArea(row.role, row.department, schemes);
+  if (!area) return null;
+  const scheme = schemes[area];
+  const value = clampPercent(scheme.measure === 'replies' ? row.percentGreen : scheme.measure === 'dailyWork' ? row.workPercent : row.score);
+  const tiers = [...new Set(scheme.tiers)].filter(t => t > scheme.target).sort((a, b) => a - b);
+  const marks: BonusMark[] = [{ label: 'Target', at: scheme.target, reached: value !== null && value >= scheme.target },
+    ...tiers.map((at, i) => ({ label: `Tier ${i + 1}`, at, reached: value !== null && value >= at }))];
+  const reached = marks.filter(m => m.reached).length, upcoming = marks[reached] ?? null;
+  const nextLine = upcoming ? `${upcoming.label === 'Target' ? 'The target is' : upcoming.label + ' starts at'} ${upcoming.at}%.` : 'That is the top tier.';
+  const headline = value === null ? 'Nothing to measure yet'
+    : reached === 0 ? `${scheme.target - value}% to go to the target`
+    : reached === 1 ? 'Target reached'
+    : `Bonus tier ${reached - 1} reached`;
+  return {
+    area, areaLabel: DEPARTMENT_LABEL[area] ?? area, measure: scheme.measure, measureLabel: MEASURE_LABEL[scheme.measure](greenMinutes), placeholder: scheme.placeholder,
+    value, marks, reached, headline, next: nextLine,
+  };
 }
 
 // --- My schedule ------------------------------------------------------------------------------------

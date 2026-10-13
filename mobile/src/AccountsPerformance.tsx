@@ -23,6 +23,10 @@ import type { PropertyView } from "../../lib/workspace-view";
 const ALL = "all";
 const rate = (minor: number | null) => minor === null ? "No priced nights" : `${formatMoney(minor)} a night`;
 const marginLine = (f: PerformanceFigures) => `Charged ${formatMoney(f.cleaningChargedMinor)} · cost ${formatMoney(f.cleaningCostMinor)}`;
+// Profit per clean (client answer 4): the agreed fee charged less the cleaner's invoice, over the cleans that have an invoice.
+const profitLine = (f: PerformanceFigures) => f.invoicedCleanCount
+  ? `${plural(f.invoicedCleanCount, "invoiced clean")} · charged ${formatMoney(f.invoicedChargedMinor ?? 0)} · invoices ${formatMoney(f.invoicedCostMinor ?? 0)}`
+  : "No invoiced cleans in these dates";
 // "Occupancy 22.1% · £102.77 a night · fees £375.00": the line under a property or a month.
 const summary = (f: PerformanceFigures) => [`Occupancy ${formatOccupancy(f.occupancyBps)}`, rate(f.averageNightlyRateMinor), `cleaning margin ${formatMoney(f.cleaningMarginMinor)}`].join(" · ");
 
@@ -113,11 +117,13 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
         <StatGrid>
           <StatTile p={p} icon="briefcase" tone="accounts" label="Management fees" value={formatMoney(totals.managementFeeMinor)}
             detail={`${plural(totals.statementCount, "statement")} · VAT ${formatMoney(totals.vatMinor)} on its own`} />
-          <StatTile p={p} icon="droplet" tone="accounts" label="Cleaning margin" value={formatMoney(totals.cleaningMarginMinor)} detail={marginLine(totals)} attention={totals.cleaningMarginMinor < 0} />
+          {totals.invoicedCleanCount !== undefined
+            ? <StatTile p={p} icon="droplet" tone="accounts" label="Profit per clean" value={totals.profitPerCleanMinor == null ? "–" : formatMoney(totals.profitPerCleanMinor)} detail={profitLine(totals)} attention={(totals.cleanProfitMinor ?? 0) < 0} />
+            : <StatTile p={p} icon="droplet" tone="accounts" label="Cleaning margin" value={formatMoney(totals.cleaningMarginMinor)} detail={marginLine(totals)} attention={totals.cleaningMarginMinor < 0} />}
           <StatTile p={p} icon="moon" tone="accounts" label="Occupancy" value={formatOccupancy(totals.occupancyBps)}
             detail={`${rate(totals.averageNightlyRateMinor)} · ${plural(totals.nightsBooked, "night")} of ${plural(totals.nightsAvailable, "night")}`} />
         </StatGrid>
-        {totals.cleansWithoutCost > 0 && <Notice text={`${plural(totals.cleansWithoutCost, "clean")} on these statements ${totals.cleansWithoutCost === 1 ? "has" : "have"} no cost recorded yet (no cleaner invoice or rate), so the margin may look higher than it is.`} p={p} />}
+        {totals.cleansWithoutCost > 0 && <Notice text={`${plural(totals.cleansWithoutCost, "clean")} on these statements ${totals.cleansWithoutCost === 1 ? "has" : "have"} no cost recorded yet (no cleaner invoice yet), so ${totals.cleansWithoutCost === 1 ? "it is" : "they are"} left out of profit per clean.`} p={p} />}
 
         <Section title="By property" count={report.byProperty.length} p={p}>
           <List p={p} empty="No properties match these filters.">

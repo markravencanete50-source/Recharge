@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 // across periods, owner and cancelled stays, the clean review block, today's check-in-month figures.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 after(() => vite.close());
-const { prorate, statementFor, feeBaseMinor, VAT_BPS, FEE_BASE, STATEMENT_WAITS_FOR_CLEAN_REVIEW, DEDUCTION_ORDER } = await vite.ssrLoadModule('/lib/statement-maths.ts');
+const { prorate, statementFor, feeBaseMinor, levyMinor, VAT_BPS, FEE_BASE, FEE_AFTER_LEVY, STATEMENT_WAITS_FOR_CLEAN_REVIEW, DEDUCTION_ORDER } = await vite.ssrLoadModule('/lib/statement-maths.ts');
 
 /*
 Worked example, recomputed by hand from the rules before any code was run.
@@ -65,27 +65,31 @@ const lineSum = r => r.lines.reduce((n, l) => n + l.amountMinor, 0);
 
 test('the constants are the brief\'s assumptions', () => {
   assert.equal(VAT_BPS, 2000);
-  assert.equal(FEE_BASE, 'payout_after_ota_fees');
-  assert.equal(STATEMENT_WAITS_FOR_CLEAN_REVIEW, true);
-  assert.deepEqual([...DEDUCTION_ORDER], ['ota_fee', 'changeover', 'management_fee', 'vat', 'payable']);
-  assert.equal(feeBaseMinor(1000, 150), 850);
-  assert.equal(feeBaseMinor(1000, 150, 'gross'), 1000);
+  assert.equal(FEE_BASE, 'payout_after_ota_fees_and_changeovers');
+  assert.equal(STATEMENT_WAITS_FOR_CLEAN_REVIEW, false, 'client answer 4: a clean-cost review flags, it never holds a statement up');
+  assert.deepEqual([...DEDUCTION_ORDER], ['ota_fee', 'visitor_levy', 'changeover', 'management_fee', 'vat', 'payable']);
+  assert.equal(FEE_AFTER_LEVY, true);
+  // Client answer 1 (Lee's decision): the fee is charged after platform fees and changeovers. Plain subtraction, like the SQL.
+  assert.equal(feeBaseMinor(1000, 150, 300), 550);
+  assert.equal(feeBaseMinor(1000, 150, 0), 850);
+  assert.equal(feeBaseMinor(100, 0, 300), -200);
 });
 
 test('worked example: November 2026 matches the hand arithmetic', () => {
   const r = november();
   assert.equal(r.grossMinor, 175374);
   assert.equal(r.otaFeesMinor, 13372);
-  assert.equal(r.feeBaseMinor, 162002);
+  // The fee is charged after platform fees and changeovers: 175374 - 13372 - 18000 = 144002; 15% is 21600.3 -> 21600.
+  assert.equal(r.feeBaseMinor, 144002);
   assert.equal(r.changeoversMinor, 18000);
-  assert.equal(r.feeMinor, 24300);
-  assert.equal(r.vatMinor, 4860);
+  assert.equal(r.feeMinor, 21600);
+  assert.equal(r.vatMinor, 4320);
   assert.equal(r.payablesMinor, 8500);
-  assert.equal(r.payoutMinor, 106342);
+  assert.equal(r.payoutMinor, 109582);
   assert.equal(r.nightsBooked, 15);
   assert.equal(r.nightsAvailable, 30);
   assert.equal(r.ownerExpensesMinor, 55000);
-  assert.equal(r.netMinor, 51342);
+  assert.equal(r.netMinor, 54582);
   assert.equal(r.blocked, false, 'the flagged clean has been reviewed');
   assert.deepEqual(r.flags, ['clean_over_agreed:c2']);
   assert.equal(r.grossMinor - lineSum(r), r.payoutMinor);
@@ -95,27 +99,27 @@ test('worked example: November 2026 matches the hand arithmetic', () => {
   assert.deepEqual(r.lines.map(l => [l.kind, l.refId, l.amountMinor]), [
     ['ota_fee', 'airbnb', 1546], ['ota_fee', 'vrbo', 3392], ['ota_fee', 'booking', 8434],
     ['changeover', 'c1', 6000], ['changeover', 'c2', 6000], ['changeover', 'c3', 6000],
-    ['management_fee', null, 24300], ['vat', null, 4860],
+    ['management_fee', null, 21600], ['vat', null, 4320],
     ['payable', 'p1', 6000], ['payable', 'p2', 2500],
   ]);
   assert.equal(r.lines.find(l => l.kind === 'management_fee').label, 'Management fee (15%)');
 });
 
-test('worked example: actual-cost mode charges 18500 in changeovers', () => {
-  // Property mode actual cost; the flagged clean reviewed with no override.
+test('worked example: cleans are always charged the agreed fee, whatever the mode or the review says (client answer 4)', () => {
+  // A property still marked actual cost, the dear clean reviewed with no decision: still the agreed fee.
   const byMode = november({ terms: terms({ cleanChargeMode: 'actual_cost' }), cleans: exampleCleans({ decision: null }) });
-  assert.equal(byMode.changeoversMinor, 18500);
-  assert.equal(byMode.payoutMinor, 106342 - 500);
-  // Agreed-fee property, but the review chose actual cost for every clean it looked at: only c2 moves.
+  assert.equal(byMode.changeoversMinor, 18000);
+  assert.equal(byMode.payoutMinor, 109582);
+  // A review that chose actual cost does not change the charge either.
   const byReview = november({ cleans: exampleCleans({ decision: 'actual_cost' }) });
-  assert.equal(byReview.changeoversMinor, 6000 + 7500 + 6000);
-  // Actual-cost property, review chose the agreed fee for c2: 5500 + 6000 + 5500.
-  const override = november({ terms: terms({ cleanChargeMode: 'actual_cost' }) });
-  assert.equal(override.changeoversMinor, 17000);
-  // A stale review (decision kept, reviewed false) does not apply and the statement waits.
+  assert.equal(byReview.changeoversMinor, 18000);
+  assert.deepEqual(byReview.lines.filter(l => l.kind === 'changeover').map(l => l.amountMinor), [6000, 6000, 6000]);
+  // The dear clean is still flagged for staff.
+  assert.deepEqual(byReview.flags, ['clean_over_agreed:c2']);
+  // A stale review no longer holds the statement up.
   const stale = november({ cleans: exampleCleans({ decision: 'actual_cost', reviewed: false }) });
   assert.equal(stale.changeoversMinor, 18000);
-  assert.equal(stale.blocked, true);
+  assert.equal(stale.blocked, false);
 });
 
 test('worked example: December share of the Booking.com stay, November plus December add up', () => {
@@ -158,8 +162,8 @@ test('VAT off gives VAT 0 and no VAT line', () => {
   const r = november({ terms: terms({ vatOnFee: false }) });
   assert.equal(r.vatMinor, 0);
   assert.equal(r.lines.some(l => l.kind === 'vat'), false);
-  assert.equal(r.feeMinor, 24300);
-  assert.equal(r.payoutMinor, 106342 + 4860);
+  assert.equal(r.feeMinor, 21600);
+  assert.equal(r.payoutMinor, 109582 + 4320);
 });
 
 // Seeded generator (mulberry32) so failures reproduce.
@@ -242,27 +246,18 @@ test('an owner stay counts as booked nights with no revenue; a cancelled stay is
   assert.deepEqual(r.flags, []);
 });
 
-test('an unreviewed flagged clean blocks the statement; an unflagged one does not', () => {
+test('a flagged clean is flagged for staff but never blocks the statement; an unflagged one is not flagged', () => {
   const r = november({ cleans: exampleCleans({ decision: null, reviewed: false }) });
-  assert.equal(r.blocked, true);
-  assert.deepEqual(r.blockedReasons, ['clean_unreviewed:c2']);
+  assert.equal(r.blocked, false);
+  assert.deepEqual(r.blockedReasons, []);
   assert.deepEqual(r.flags, ['clean_over_agreed:c2']);
-  // The figures are still worked out, at the agreed value, so the screen can show them.
   assert.equal(r.changeoversMinor, 18000);
   // Clean costing exactly the agreed value: tolerance 0, so not flagged.
   const exact = november({ cleans: [{ id: 'e', date: '2026-11-08', actualCostMinor: 6000, decision: null, reviewed: false }] });
   assert.deepEqual([exact.blocked, exact.flags], [false, []]);
-  // A clean with no known cost in actual-cost mode is charged the agreed value and flagged.
+  // A clean with no invoice yet is charged the agreed value and not flagged.
   const unknown = november({ terms: terms({ cleanChargeMode: 'actual_cost' }), cleans: [{ id: 'u', date: '2026-11-08', actualCostMinor: null, decision: null, reviewed: false }] });
-  assert.deepEqual([unknown.changeoversMinor, unknown.flags, unknown.blocked], [6000, ['clean_cost_unknown:u'], false]);
-});
-
-test('in actual-cost mode a flagged clean stays flagged but does not block, as the owner pays the real cost', () => {
-  const r = november({ terms: terms({ cleanChargeMode: 'actual_cost' }), cleans: exampleCleans({ decision: null, reviewed: false }) });
-  assert.equal(r.blocked, false);
-  assert.deepEqual(r.blockedReasons, []);
-  assert.deepEqual(r.flags, ['clean_over_agreed:c2']);
-  assert.equal(r.changeoversMinor, 18500);
+  assert.deepEqual([unknown.changeoversMinor, unknown.flags, unknown.blocked], [6000, [], false]);
 });
 
 test('an unsettled stay blocks; a platform stay with no fee data is flagged', () => {
@@ -296,9 +291,10 @@ test('check_in_month reproduces today\'s statement for a sample month', () => {
   // month; cleaning = accepted cleans due in the month x cleaning cost; approved expenses received
   // in the month; fee = round(revenue x bps / 10000); payout = revenue - cleaning - expenses - fee.
   const revenue = 61237 + 33333 + 54321;
-  const fee = Math.round(revenue * 1200 / 10000);
+  // The fee is now charged after the cleaning too (client answer 1).
+  const fee = Math.round((revenue - 3 * 4500) * 1200 / 10000);
   const today = { fee, payout: revenue - 3 * 4500 - 12345 - fee };
-  assert.equal(r.feeBaseMinor, revenue);
+  assert.equal(r.feeBaseMinor, revenue - 3 * 4500);
   assert.equal(r.feeMinor, today.fee);
   assert.equal(r.payoutMinor, today.payout);
   assert.equal(r.changeoversMinor, 3 * 4500);
@@ -321,4 +317,79 @@ test('statementFor refuses bad periods, dates and terms', () => {
   assert.throws(() => statementFor({ ...base, payables: [{ id: 'p', date: '2026-11-05', description: 'x', amountMinor: 1.5 }] }), RangeError);
   const empty = statementFor(base);
   assert.deepEqual([empty.grossMinor, empty.feeMinor, empty.vatMinor, empty.payoutMinor, empty.netMinor, empty.nightsAvailable], [0, 0, 0, 0, null, 30]);
+});
+
+// ---- Visitor levy (migration 20261014150000) ----------------------------------------------------------------
+// An Edinburgh-style setting: 5% on the first 5 nights of stays checking in from 24 July 2026.
+const EDINBURGH = { enabled: true, rateBps: 500, nightCap: 5, from: '2026-07-24' };
+const levyStays = [
+  // Airbnb, 4 nights in November: gross 50000 + 1546 = 51546, the guest's cleaning fee 6000 is left out:
+  // 45546 x 4/4 x 5% = 2277.3 -> 2277.
+  { id: 'air', channel: 'airbnb', checkIn: '2026-11-05', checkOut: '2026-11-09', status: 'confirmed', settledMinor: 50000, itemisedFeesMinor: 1546, cleaningFeeMinor: 6000 },
+  // Direct, 7 nights 28 Nov to 5 Dec: 70000 x 5/7 x 5% = 2500. Its levied nights are 28, 29, 30 Nov and 1, 2 Dec:
+  // November 2500 x 3/5 = 1500, December 1000.
+  { id: 'dir', channel: 'direct', checkIn: '2026-11-28', checkOut: '2026-12-05', status: 'confirmed', settledMinor: 70000 },
+];
+const levyMonth = (from, to, over = {}) => statementFor({ from, to, method: 'nights', terms: terms({ visitorLevy: EDINBURGH }), stays: levyStays, cleans: [], payables: [], ...over });
+
+test('visitor levy: whole pence, half away from zero, over the levied nights only', () => {
+  assert.equal(levyMinor(45546, 4, 4, 500), 2277);
+  assert.equal(levyMinor(70000, 5, 7, 500), 2500);
+  assert.equal(levyMinor(10, 1, 1, 500), 1, '0.5 rounds up');
+  assert.equal(levyMinor(-10, 1, 1, 500), -1, 'and a refund rounds away from zero too');
+  assert.equal(levyMinor(29, 1, 1, 500), 1, '1.45 -> 1');
+  assert.equal(levyMinor(70000, 9, 7, 500), 3500, 'never more nights than the stay has');
+  assert.deepEqual([levyMinor(70000, 0, 7, 500), levyMinor(70000, 5, 0, 500), levyMinor(70000, 5, 7, 0)], [0, 0, 0]);
+});
+
+test('visitor levy worked example: November and December, the levy line after the OTA fees, the fee after the levy', () => {
+  const nov = levyMonth('2026-11-01', '2026-12-01');
+  assert.deepEqual(nov.lines.map(l => [l.kind, l.refId, l.amountMinor]), [
+    ['ota_fee', 'air', 1546], ['visitor_levy', 'air', 2277], ['visitor_levy', 'dir', 1500],
+    ['management_fee', null, 11433], ['vat', null, 2287],
+  ]);
+  // Gross 51546 + 70000 x 3/7 (30000) = 81546. The fee is charged after the levy: 81546 - 1546 (OTA) - 3777 (levy)
+  // - 0 (changeovers) = 76223, x 15% = 11433.45 -> 11433; VAT 2286.6 -> 2287. Payout 81546 - 1546 - 3777 - 11433 - 2287.
+  assert.equal(nov.grossMinor, 81546);
+  assert.equal(nov.visitorLevyMinor, 3777);
+  assert.equal(nov.feeBaseMinor, 76223);
+  assert.equal(nov.payoutMinor, 62503);
+  assert.equal(nov.grossMinor - nov.lines.reduce((n, l) => n + l.amountMinor, 0), nov.payoutMinor);
+  const dec = levyMonth('2026-12-01', '2027-01-01');
+  assert.deepEqual(dec.lines.filter(l => l.kind === 'visitor_levy').map(l => [l.refId, l.amountMinor]), [['dir', 1000]]);
+  assert.equal(nov.stays.find(x => x.id === 'dir').levyMinor + dec.stays.find(x => x.id === 'dir').levyMinor, 2500, 'the months add up to the stay\'s levy');
+});
+
+test('visitor levy: off, before the start day, owner stays and a missing cleaning fee', () => {
+  const off = statementFor({ from: '2026-11-01', to: '2026-12-01', method: 'nights', terms: terms({ visitorLevy: { ...EDINBURGH, enabled: false } }), stays: levyStays, cleans: [], payables: [] });
+  assert.equal(off.visitorLevyMinor, 0); assert.equal(off.lines.some(l => l.kind === 'visitor_levy'), false);
+  // Stays checking in before the start day are not levied.
+  const late = levyMonth('2026-11-01', '2026-12-01', { terms: terms({ visitorLevy: { ...EDINBURGH, from: '2026-11-10' } }) });
+  assert.deepEqual(late.lines.filter(l => l.kind === 'visitor_levy').map(l => l.refId), ['dir']);
+  // No cap: every night. 70000 x 7/7 x 5% = 3500; November 3/7 of it.
+  const uncapped = levyMonth('2026-11-01', '2026-12-01', { terms: terms({ visitorLevy: { ...EDINBURGH, nightCap: null } }) });
+  assert.equal(uncapped.stays.find(x => x.id === 'dir').levyMinor, 1500);
+  // An owner stay is never levied; a platform stay with no cleaning fee on its payout lines is levied on its gross and flagged.
+  const more = levyMonth('2026-11-01', '2026-12-01', { stays: [
+    { id: 'own', channel: 'other', checkIn: '2026-11-12', checkOut: '2026-11-15', status: 'confirmed', settledMinor: null, ownerStay: true },
+    { id: 'bdc', channel: 'booking_com', checkIn: '2026-11-16', checkOut: '2026-11-18', status: 'confirmed', settledMinor: 20000, grossMinor: 24000 },
+  ] });
+  assert.deepEqual(more.lines.filter(l => l.kind === 'visitor_levy').map(l => [l.refId, l.amountMinor]), [['bdc', 1200]]);
+  assert.deepEqual(more.flags, ['levy_cleaning_fee_unknown:bdc']);
+  // By check-in month the whole levy sits in the check-in month.
+  const byCheckIn = levyMonth('2026-11-01', '2026-12-01', { method: 'check_in_month' });
+  assert.equal(byCheckIn.stays.find(x => x.id === 'dir').levyMinor, 2500);
+});
+
+test('visitor levy: a stored copy is used as it was, never the settings as they are now', () => {
+  // December after November was issued with the Edinburgh settings (the copy holds the levy 2500 over 5 nights),
+  // now that the rate has gone up to 7%: December still takes 1000 from the copy.
+  const stored = { grossMinor: 70000, otaFeeMinor: 0, settledMinor: 70000, nights: 7, checkIn: '2026-11-28', checkOut: '2026-12-05', levyMinor: 2500, levyNights: 5 };
+  const dec = statementFor({ from: '2026-12-01', to: '2027-01-01', method: 'nights', terms: terms({ visitorLevy: { ...EDINBURGH, rateBps: 700 } }), cleans: [], payables: [],
+    stays: [{ ...levyStays[1], storedShare: stored }] });
+  assert.equal(dec.visitorLevyMinor, 1000);
+  // A copy made before the levy existed has none, and the stay is never levied afterwards.
+  const old = statementFor({ from: '2026-12-01', to: '2027-01-01', method: 'nights', terms: terms({ visitorLevy: EDINBURGH }), cleans: [], payables: [],
+    stays: [{ ...levyStays[1], storedShare: { ...stored, levyMinor: undefined, levyNights: undefined } }] });
+  assert.equal(old.visitorLevyMinor, 0);
 });
