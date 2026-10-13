@@ -2,7 +2,7 @@
 
 Branch: `claude/compassionate-bardeen-anm9qt`. Nothing here has been applied to the live database or deployed.
 
-Work is on the lead developer's instructions (Lee's decisions of 13 October 2026), in the order 1, 2, 2b, 6, 3, 4.
+Work is on the lead developer's instructions (Lee's decisions of 13 October 2026), in the order 1, 2, 2b, 6, 3, 4. Round 5 (the KPI tracker) is at the end.
 
 ## What changed
 
@@ -118,6 +118,54 @@ Today the automatic "Cleaning form missing" flags (`source = 'clean_form'`) are 
 - **Screens:** Management approvals already lists what `flags` returns; the cleaning manager's navigation would need the approvals page, or a "Cleaning flags" filter on Cleans.
 - One migration in this session's range, with a database test for each role.
 
+## Round 5: KPI tracker
+Alex wants his own KPIs, edited by admins in the app, with one per area counting for the bonus. Lee told Alex the backend comes first, so this is mostly backend with simple screens.
+
+| Part | Where |
+| --- | --- |
+| Table, change log, seed, measures, reads, admin actions | `supabase/migrations/20261015100000_kpi_tracker.sql` |
+| App schemas | `lib/workspace-teams-policy.ts` (`kpis` read, `saveKpi`, `setKpiActive`, `moveKpi`), `lib/kpis.ts` |
+| My performance (Home card and page) | `lib/my-performance.ts`, `mobile/src/MyPerformance.tsx` |
+| Team performance list and the admin's KPI screen | `mobile/src/LiveShifts.tsx`, `mobile/src/KpiAdmin.tsx` |
+| Tests | `tests/kpi-tracker-database.test.mjs`, `tests/kpi-screens.test.mjs`, `tests/my-performance.test.mjs` |
+
+**The table** (`private.workspace_kpis`): name, area (the six rota departments), measure key, minutes (only for measures that take them), direction (set by the measure), target % (empty means tracked only), up to five bonus tiers beyond the target, counts for bonus, placeholder, active, sort order, version, who created it, who changed it last and when. A unique index allows only one active bonus KPI per area. Nothing is deleted: a KPI is switched off, which also stops it counting for the bonus. Every change goes into `private.workspace_kpi_changes` with who made it and the row before and after.
+
+**Measures** (`private.workspace_kpi_measures()`; to add one, add its entry there and a branch in `private.workspace_kpi_person_value`, and in `private.workspace_kpi_team_value` when a team is not the average of its people):
+
+| Key | What it is | Areas |
+| --- | --- | --- |
+| `guest_reply_within` | Share of guest messages answered within N minutes | Guest relations |
+| `guest_reply_over` | Share of guest messages that waited longer than N minutes (lower is better) | Guest relations |
+| `daily_work_done` | Daily work % (`private.workspace_daily_work`) | Guest and client relations |
+| `performance_score` | The blended score Team performance shows | Every area |
+| `clean_forms_on_time` | Share of a cleaner's cleans with the form in by 18:00 on the day | Cleaning |
+
+- Guest replies use a new `private.workspace_kpi_reply_rows`: the same conversations, waits and credit as `workspace_response_rows` (a test checks they match), but each wait says whether it was answered. A wait counts for "within N" once it was answered or has lasted longer than N; one still inside N is not counted either way yet. Higher-is-better values round down, lower-is-better values round up, so a rounding never flatters.
+- Teams: guest replies count every guest message (also those that came in with nobody on shift); cleaning forms count every clean of the area's cleaners; anything else is the average of the members who have a value.
+- A clean is on time when its form is in and the sweep never reminded the cleaner (`unsubmittedAt`) or warned management (`formWarningAt`). There is no submission time on a clean, so a late form sent while the sweep was not running would count as on time.
+- A person's area is their rota department, else their role (stays to guest relations, cleans and cleaning managers to cleaning, admins to management). This replaces `BONUS_AREA_BY_ROLE`.
+- No data gives no value, shown as "Nothing to measure yet", never 0%.
+
+**Seed** (rows carry a `seed_key`, so a second run adds nothing):
+
+| Area | KPI | Target and tiers | Bonus |
+| --- | --- | --- | --- |
+| Guest relations | Replies within 5 minutes | Pass mark and tiers from `workspace_performance_targets` (80, then 90 and 95 live) | Yes, Alex's own |
+| Guest relations | Replies within 10, 30, 60 minutes; waiting over 60 minutes | Tracked only | No |
+| Client relations | Daily work done | 80, 90, 95 | Yes, placeholder |
+| Cleaning | Cleaning forms in on time | 80, 90, 95 | Yes, placeholder |
+| Ready, Accounts, Management | Performance score | 80, 90, 95 | Yes, placeholder |
+
+**Reads and writes** go through the team routes: `workspace_teams_read('kpis', from, to)` (up to 92 days) and the actions `saveKpi`, `setKpiActive`, `moveKpi`. Admins and super admins see everyone, every area and the last 50 changes, and are the only ones who can change KPIs. Anyone else on the team sees only their own results and their own area's team. Owners are refused.
+
+**Screens**
+- My performance: the bonus bar is the area's bonus KPI (target and tiers marked, placeholder labelled), with the area's other KPIs as rows underneath. `BONUS_SCHEMES` and `bonusProgress` are gone.
+- Team performance: each person's tag is their bonus KPI's value and tier. The owner reply times list no longer shows a tier from the old targets.
+- Team performance → KPIs (admins only): area tabs, the list with "Counts for the bonus", "Switched off" and "Placeholder" tags and who changed it last; add, edit, switch off or on, move up or down.
+
+**`workspace_performance_targets` still works** and is still read by: the reply grades in `workspace_response_rows` (green and amber minutes); `score`, `onTrack` and `bonusTier` in the `teamPerformance` read; the client relations owner reply times (pass mark and tiers); the daily-work targets and their weight; and the "Change the targets" sheet. Only the screens' bonus moved to the KPIs. Changing the pass mark or tiers there no longer changes anyone's bonus, so that sheet could lose those two fields later.
+
 ## Deploy order for this session's migrations
 Apply in filename order, before deploying the Worker (the Worker code is unchanged by this session):
 
@@ -128,12 +176,14 @@ Apply in filename order, before deploying the Worker (the Worker code is unchang
 5. `20261014140000_clean_charge_agreed_fee.sql`
 6. `20261014150000_visitor_levy.sql`
 7. `20261014160000_owner_work_staff_fields.sql`
+8. `20261015100000_kpi_tracker.sql` (round 5; needs nothing new in the Worker beyond the updated teams schemas)
 
 Things to tell the team after:
 - Clean form reminders start at 18:00, and the management flag comes at 09:00 the next day.
 - An invoice for cleans without a form cannot be approved.
 - New statements charge the fee after changeovers and charge every clean at the agreed fee.
 - No new mid-stay cleans are made; the query above lists the open ones.
+- KPIs: the bonus now follows each area's bonus KPI. Every area except guest relations has a placeholder until Alex sends his.
 
 ## Open questions
 For Alex:
@@ -143,9 +193,14 @@ For Alex:
 - **Which properties, and from which date,** the levy applies to.
 - **Referral commission:** rate, who it is set for, start date, netted or invoiced.
 - **Cleaning manager:** should they see, and decide, clean-form flags?
+- **KPIs for the other areas:** the real measure, target and tiers for client relations, cleaning, ready, accounts and management. Each has a placeholder at 80, 90 and 95 today.
+- **Guest relations tracked KPIs:** should within 10, 30 or 60 minutes, or "over 60", have targets of their own?
+- **Team guest reply figures:** should messages that come in with nobody on shift count against the team? Today they do.
 
 For Lee or the lead developer:
 - Whether owners should stop reading `actor_id` on activity rows (see task 3).
+- Whether to take the pass mark and tiers out of the "Change the targets" sheet now that the bonus follows the KPIs.
+- A clean has no submission time, so "forms in on time" relies on the sweep's reminder marker. A `submittedAt` on the form would make it exact.
 
 ## Tests run
 - Targeted database and unit tests for every change: clean forms, mid-stay, statements (worked examples and 200 random scenarios), visitor levy, clean costs, performance, finance, payables, privacy.

@@ -7,7 +7,8 @@ import { readTeams } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import { teamPerformanceSchema, hoursLabel, type TeamPerformance } from "../../lib/management-live";
 import { Tag } from "./LiveKit";
-import { PERFORMANCE_RANGES, RANGE_LABEL, bonusProgress, ownPerson, performanceWindow, shapeOwnNumbers, type BonusProgress, type OwnNumbers, type PerformanceRange } from "../../lib/my-performance";
+import { PERFORMANCE_RANGES, RANGE_LABEL, myKpis, performanceWindow, shapeOwnNumbers, type BonusProgress, type MyKpis, type OwnNumbers, type PerformanceRange } from "../../lib/my-performance";
+import { kpiReadSchema, type KpiRead } from "../../lib/kpis";
 import { formatCount } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { OperationView } from "../../lib/workflow-forms";
@@ -25,8 +26,8 @@ function Stat({ p, label, value, hint }: { p: Palette; label: string; value: str
   );
 }
 
-// The bonus as a bar towards the area's target, with the target and each tier marked on it. A scheme the
-// client has not set yet is labelled as a placeholder. Never a figure in pounds.
+// The bonus as a bar towards the target of the area's bonus KPI, with the target and each tier marked on it. A KPI
+// the client has not set yet is labelled as a placeholder. Never a figure in pounds.
 function BonusBar({ p, b }: { p: Palette; b: BonusProgress }) {
   const fill = b.value ?? 0;
   const marks = b.marks.map(m => `${m.label} ${m.at}%${m.reached ? ", reached" : ""}`).join(", ");
@@ -36,11 +37,11 @@ function BonusBar({ p, b }: { p: Palette; b: BonusProgress }) {
         <Feather name="award" size={18} color={b.reached > 1 ? p.primary : p.muted} style={{ marginTop: 1 }} />
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
           <Text style={{ color: p.text, fontSize: 14, lineHeight: 20, fontWeight: "600" }}>{b.headline}</Text>
-          <Text style={[ui.small, { color: p.muted }]}>{b.areaLabel} · {b.measureLabel}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{b.areaLabel} · {b.name}</Text>
         </View>
         {b.value !== null && <Text style={{ color: p.text, fontSize: 20, lineHeight: 24, fontWeight: "500", fontVariant: ["tabular-nums"] }}>{b.value}%</Text>}
       </View>
-      <View accessible accessibilityRole="progressbar" accessibilityLabel={`Bonus progress: ${b.measureLabel}. ${marks}`}
+      <View accessible accessibilityRole="progressbar" accessibilityLabel={`Bonus progress: ${b.name}, ${b.measureLabel}. ${marks}`}
         accessibilityValue={{ min: 0, max: 100, now: fill, text: b.value === null ? "Nothing yet" : `${b.value}%` }}
         style={{ height: 12, borderRadius: 6, backgroundColor: p.wash, overflow: "hidden" }}>
         <View style={{ width: `${fill}%`, height: "100%", borderRadius: 6, backgroundColor: b.reached ? p.success : p.primary }} />
@@ -63,27 +64,43 @@ function BonusBar({ p, b }: { p: Palette; b: BonusProgress }) {
   );
 }
 
+// The area's other KPIs, one line each: the value, or "nothing to measure yet", and where it stands.
+function KpiRows({ p, k }: { p: Palette; k: MyKpis }) {
+  if (!k.rows.length) return null;
+  return (
+    <View style={{ gap: 6, paddingTop: 10, borderTopWidth: 1, borderColor: p.border }}>
+      <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Also tracked</Text>
+      {k.rows.map(r => (
+        <View key={r.kpiId} accessible accessibilityLabel={`${r.name}: ${r.value}${r.note ? ", " + r.note : ""}`} style={[ui.row, { gap: 10 }]}>
+          <Text style={[ui.small, { color: p.text, flex: 1 }]}>{r.name}</Text>
+          {!!r.note && <Text style={[ui.small, { color: r.tone === "good" ? p.success : r.tone === "bad" ? p.danger : p.muted }]}>{r.note}</Text>}
+          <Text style={[ui.small, { color: p.text, fontVariant: ["tabular-nums"], fontWeight: "600" }]}>{r.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // The person's own numbers: guest-reply score, tasks done, time worked and the bonus as a bar towards
 // the target (never a figure in pounds). `page` adds the week/month switch and the breakdown; without it this is
 // the compact card on Home, which opens the page through `onOpen`.
 export function MyPerformance({ palette: p, account, work = [], page = false, onOpen }: { palette: Palette; account: WorkspaceAccount; work?: OperationView[]; page?: boolean; onOpen?: () => void }) {
   const [range, setRange] = useState<PerformanceRange>("week");
-  const [read, setRead] = useState<{ data: TeamPerformance; from: string } | null>(null);
+  const [read, setRead] = useState<{ data: TeamPerformance; from: string; kpis: KpiRead | null } | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   useEffect(() => {
     let active = true;
     const { from, to } = performanceWindow(range, londonToday());
-    readTeams({ section: "teamPerformance", from, to })
-      .then(r => { if (!active) return; setRead({ data: teamPerformanceSchema.parse(r.data), from }); setState("ready"); })
+    // The KPIs (bonus bar and tracked rows) read alongside; without them the numbers still show.
+    Promise.all([readTeams({ section: "teamPerformance", from, to }), readTeams({ section: "kpis", from, to }).then(r => kpiReadSchema.parse(r.data)).catch(() => null)])
+      .then(([r, kpis]) => { if (!active) return; setRead({ data: teamPerformanceSchema.parse(r.data), from, kpis }); setState("ready"); })
       .catch(() => { if (active) setState("failed"); });
     return () => { active = false; };
   }, [range]);
   // Shaped here, so a refreshed work list updates the finished-job count without another read.
   const n: OwnNumbers | null = useMemo(() => read ? shapeOwnNumbers(read.data, account.userId, work, read.from) : null, [read, work, account.userId]);
-  const bonus = useMemo(() => {
-    const row = read ? ownPerson(read.data.people, account.userId) : null;
-    return row && read ? bonusProgress(row, read.data.targets.greenMinutes) : null;
-  }, [read, account.userId]);
+  const kpis = useMemo(() => read?.kpis ? myKpis(read.kpis, account.userId) : null, [read, account.userId]);
+  const bonus: BonusProgress | null = kpis?.bonus ?? null;
   return (
     <View testID="my-performance" style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 14 }]}>
       <View style={[ui.between, { gap: 12 }]}>
@@ -111,6 +128,7 @@ export function MyPerformance({ palette: p, account, work = [], page = false, on
           <Stat p={p} label="Time worked" value={hoursLabel(n.minutes)} hint={`${formatCount(n.shifts)} ${n.shifts === 1 ? "shift" : "shifts"}`} />
         </View>
         {!!bonus && <BonusBar p={p} b={bonus} />}
+        {!!kpis && <KpiRows p={p} k={kpis} />}
         {page && <View style={{ gap: 4, paddingTop: 10, borderTopWidth: 1, borderColor: p.border }}>
           <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>How your tasks add up</Text>
           <Text style={[ui.small, { color: p.muted }]}>{formatCount(n.workCompleted)} finished jobs, {formatCount(n.daily.listingChecks)} listing checks, {formatCount(n.daily.pricingDecisions)} pricing decisions, {formatCount(n.daily.reviewsLogged)} reviews logged and {formatCount(n.daily.signOffs)} daily sign-offs.</Text>
