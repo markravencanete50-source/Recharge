@@ -29,7 +29,14 @@ lead developer's and are not in this note. Drafted by Session C from every sessi
   - New to-do: "Who is it for" is a dropdown (Me, A person, A department), and the due date opens a calendar.
   - Each heading shows 10 rows; "Show all" opens the rest.
 - **Trackers** (purchases, licensing, onboarding, accounts and the others) use the same thin rows on a computer.
-- **Dark mode** is easier to read: cards stand out from the page, and chosen buttons and tabs are clearly marked.
+- **Dark mode** is easier to read: cards stand out from the page, and chosen buttons and tabs are clearly marked, including
+  the department strip and the Work tabs on a phone. The banners at the top of pages follow the theme too.
+- **On a phone:**
+  - The Favorites star no longer floats over the page and covers rows. Favorites is on the bottom bar or first in the Menu.
+  - The logo is never covered. Menu, the bell, Messages and your picture always show in the header; when there is not
+    room, Search, View as, Refresh and the dark-mode switch move to the top of the Menu.
+- **The "New property enquiry" card** is a plain card with one Add button, instead of a bright block (owners see "Have
+  another property?").
 - **Help** no longer floats over the page. On a computer it is a button in the header, beside the theme switch. On a phone
   it is "Help and FAQs" at the end of the Menu.
 - **Help answers** cover all of the above, and more for each role.
@@ -127,7 +134,7 @@ keep a copy of everything, as now.
 ### Owners
 
 - **Favorites** now works for owners: a star on the screens they can open, and Favorites in Your properties, straight
-  after Home. On a phone there is a Favorites button too.
+  after Home. On a phone it is on the bottom bar or first in the Menu.
 - **Updates** say what each one is about. Owners never see a team member's name: their own actions say "You", and
   everything else says "Recharge". Tapping an update opens the request it is about, if it is one of theirs.
 - **Email:** an email to ownerrelations@ from their sign-in address shows in their Messages conversation. While their
@@ -158,6 +165,9 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 9. **To-do:** thin rows on a computer; open one, add an update, and see it at the top of its history with your name.
 10. **Help:** in the header on a computer, at the end of the Menu on a phone. Search "Engaged", "checklist" or "bonus"
     and the new answers show.
+11. **On a phone (390 px wide):** the logo is not covered; Menu, the bell, Messages and your picture are in the header, and
+    Search, View as, Refresh and the dark-mode switch are at the top of the Menu. No Favorites star floats over the page.
+    The "New property enquiry" card on Home is a plain card with one Add button.
 
 ### Guest relations
 
@@ -191,7 +201,7 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 
 ### Cleaner
 
-1. **Menu → My day:** Home, Favorites, To-do.
+1. **Menu → My day:** Home, Favorites, To-do. On Cleans, nothing floats over "Checklists" or the rows.
 2. **Updates:** "Clean: Changeover clean" style titles; tapping one opens the clean.
 3. **Report a problem** on one of their cleans: the kind is a dropdown with a search.
 4. Nothing from Messages statuses, the checklist or the bonus shows.
@@ -214,7 +224,8 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 
 ### Owner
 
-1. **Menu → Your properties:** Home, Favorites, My properties, …; a Favorites button on the phone.
+1. **Menu → Your properties:** Home, Favorites, My properties, … On a phone: no star floating over the page, and the
+   logo shows in the header.
 2. **Star a property or a request,** then open Favorites: it is there.
 3. **Updates:** no team member's names anywhere; "You" for their own actions and "Recharge" for the rest. Tapping an update
    opens the request if it is theirs; anything else says "That item is no longer available to you."
