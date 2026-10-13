@@ -524,7 +524,8 @@ page is also called Recent activity.
 - Screenshots: `docs/screenshots/round8-bonus-bar-*.png` (the bar at 60/40) and `round8-kpi-sheet-*.png` (the field), light and
   dark, with sample data.
 
-**3. The go-live note for rounds 6 and 7**: `docs/GO-LIVE-ROUND-6-7.md`, with only "Tell the team" and "Check as each role
+**3. The go-live note for rounds 6 and 7**: `docs/GO-LIVE-ROUND-6-7.md` (renamed `docs/GO-LIVE-ROUND-6-8.md` when the lead
+shipped rounds 6 to 8 together; it then gained the admin split and Session F's email), with only "Tell the team" and "Check as each role
 after go-live". It covers A, B, C, D and E's round 6 work and my round 7, from each session's notes and the merged lead branch.
 Work that was never pushed is left out: B's and D's later design-review items (the floating Favorites star, the phone header
 logo, the Maintenance filter, typed dates in Cleans and the calendar). The round 8 split is not in it; add one line for admins if
