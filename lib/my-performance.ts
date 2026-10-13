@@ -94,9 +94,12 @@ export function standingLine(n: OwnNumbers): string {
 export { kpiProgress, kpiRow, myKpis, type KpiProgress as BonusProgress, type KpiMark as BonusMark, type MyKpis } from './kpis';
 
 // The management bonus (Alex, round 6) is Guest relations and Client relations combined. Under the bar, each team's own
-// figure: "Guest relations 86% · Client relations 74%". Team totals only, never a name. Empty for any other bonus.
+// figure with its share of the bonus when both count: "Guest relations 86% (60%) · Client relations 74% (40%)" (round 8:
+// admins set the split). When one team has nothing to measure the other counts alone, so no share is shown. Team totals
+// only, never a name. Empty for any other bonus.
 export function bonusPartsLine(parts: readonly KpiPart[] | null | undefined): string {
-  return (parts ?? []).map(part => `${areaLabel(part.area)} ${part.value === null ? 'nothing to measure yet' : `${part.value}%`}`).join(' · ');
+  const list = parts ?? [], both = list.length > 1 && list.every(part => part.value !== null);
+  return list.map(part => `${areaLabel(part.area)} ${part.value === null ? 'nothing to measure yet' : `${part.value}%`}${both && part.share !== undefined ? ` (${part.share}%)` : ''}`).join(' · ');
 }
 
 // --- My schedule ------------------------------------------------------------------------------------

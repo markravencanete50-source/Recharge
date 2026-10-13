@@ -23,7 +23,9 @@ create function auth.jwt() returns jsonb language sql stable as $$select coalesc
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 const files = (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort();
 assert.ok(files.includes(MINE + '.sql'));
-for (const file of files) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+// The second run is checked before the later migrations: 20261018300000 replaces workspace_kpi_result, which this one patched.
+const upTo = files.indexOf(MINE + '.sql');
+for (const file of files.slice(0, upTo + 1)) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 const SIGS = ['private.workspace_kpi_measures()', 'private.workspace_kpi_teams_combined(date,date)', 'private.workspace_kpi_person_value(text,integer,uuid,date,date,jsonb)',
   'private.workspace_kpi_team_value(text,integer,uuid[],date,date,jsonb)', 'private.workspace_kpi_result(private.workspace_kpis,jsonb)'];
 const snapshot = async () => ({
@@ -34,6 +36,7 @@ const snapshot = async () => ({
 const firstRun = await snapshot();
 await db.exec(await fs.readFile(`supabase/migrations/${MINE}.sql`, 'utf8'));
 const secondRun = await snapshot();
+for (const file of files.slice(upTo + 1)) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 after(async () => { await db.close(); await vite.close(); });
 
 // A manager is anyone whose rota department is management (here a stays user); admins are managers by role.
@@ -136,7 +139,7 @@ test('only admins and managers get the team figures, and never a name', async ()
   assert.deepEqual(manager.teams.map(t => t.area), ['management']);
   const partsJson = JSON.stringify(mine(manager, MANAGER).parts);
   for (const name of names) assert.ok(!partsJson.includes(name) && !partsJson.includes(name.split(' ')[0]), `no ${name} in the parts`);
-  assert.ok(mine(manager, MANAGER).parts.every(x => Object.keys(x).sort().join() === 'area,measured,value'));
+  assert.ok(mine(manager, MANAGER).parts.every(x => Object.keys(x).sort().join() === 'area,measured,share,value'), 'an area, its figure, its count and its share (20261018300000): no names');
   // Guest relations, client relations, cleaners and Ready get nothing new: no management result and no parts anywhere.
   for (const who of [GUEST, CLIENT1, CLEANER, READY]) {
     await as(who);

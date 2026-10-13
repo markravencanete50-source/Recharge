@@ -40,7 +40,7 @@ test('the two parts under the bar: both, one, neither', () => {
 test('the admin form takes the measure for management only', () => {
   const measures = [{ key: 'teams_combined', label: 'Guest relations and Client relations, combined', needsMinutes: false, direction: 'higher', areas: ['management'] }];
   const form = { ...k.emptyKpiForm('management'), name: 'Teams combined', measure: 'teams_combined', target: '80', tiers: '90, 95', countsForBonus: true, placeholder: true };
-  assert.deepEqual(k.kpiInput(form, measures), { value: { name: 'Teams combined', area: 'management', measure: 'teams_combined', minutes: null, targetPercent: 80, bonusTiers: [90, 95], countsForBonus: true, placeholder: true } });
+  assert.deepEqual(k.kpiInput(form, measures), { value: { name: 'Teams combined', area: 'management', measure: 'teams_combined', minutes: null, targetPercent: 80, bonusTiers: [90, 95], countsForBonus: true, placeholder: true, guestShare: 50 } });
   assert.match(k.kpiInput({ ...form, area: 'guest_relations' }, measures).error, /does not fit guest relations/);
 });
 

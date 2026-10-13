@@ -170,7 +170,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   // KPIs (admins and super admins only): add or edit one, switch it off or on, move it up or down within its area.
   // The direction (higher or lower is better) comes from the measure; tiers sit beyond the target in that direction.
   z.object({ action: z.literal('saveKpi'), requestId: id, kpiId: id.optional(), version: version.optional(), name: text(2, 120), area: z.enum(DEPARTMENTS), measure: z.enum(KPI_MEASURES),
-    minutes: z.number().int().min(1).max(1440).nullable().optional(), targetPercent: kpiPercent.nullable(), bonusTiers: z.array(kpiPercent).max(5), countsForBonus: z.boolean(), placeholder: z.boolean() }).strict(),
+    minutes: z.number().int().min(1).max(1440).nullable().optional(), targetPercent: kpiPercent.nullable(), bonusTiers: z.array(kpiPercent).max(5), countsForBonus: z.boolean(), placeholder: z.boolean(),
+    // The combined management measure only: Guest relations' share, Client relations gets the rest (migration 20261018300000).
+    guestShare: kpiPercent.nullable().optional() }).strict(),
   z.object({ action: z.literal('setKpiActive'), requestId: id, kpiId: id, version, active: z.boolean() }).strict(),
   z.object({ action: z.literal('moveKpi'), requestId: id, kpiId: id, version, direction: z.enum(['up', 'down']) }).strict(),
   z.object({ action: z.literal('signContract'), requestId: id, contractId: id, version, signedName: text(2, 200), agree: z.literal(true, { errorMap: () => ({ message: 'Tick the box to agree to the contract' }) }) }).strict(),
