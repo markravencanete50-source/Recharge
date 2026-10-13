@@ -94,3 +94,22 @@ export function sortTracker<T extends TrackerItem>(items: readonly T[]): T[] {
 export function addressOf(property: { address?: string | null; name?: string | null } | null | undefined): string {
   return property?.address?.trim() || property?.name?.trim() || '';
 }
+
+// The empty cell in the thin tables (the To-do list, the trackers): the same "–" the sheet tables use.
+export const EMPTY_CELL = '–';
+
+// How long ago, for a table column: "just now", "5m ago", "2h ago", "3d ago", then the day ("12 Oct", or
+// "12 Oct 2025" in another year). UK time for the day. Unreadable times give ''.
+export function timeAgo(at: string | null | undefined, now: Date = new Date()): string {
+  const t = Date.parse(at ?? '');
+  if (Number.isNaN(t)) return '';
+  const minutes = Math.floor((now.getTime() - t) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const when = new Date(t);
+  return (yearOf.format(when) === yearOf.format(now) ? dayName : dayNameYear).format(when);
+}

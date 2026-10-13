@@ -202,6 +202,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   // Menu order per role (super admins only). Version 0 is a role nobody has reordered yet.
   z.object({ action: z.literal('saveMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0), ...menuLayoutSchema.shape }).strict(),
   z.object({ action: z.literal('resetMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0) }).strict(),
+  // Round 6: an update on a to-do (anyone who can see the to-do; never owners).
+  z.object({ action: z.literal('addTodoUpdate'), requestId: id, id, text: text(1, 2000) }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'flagForManagement') {
     if (value.source === 'work' && (!value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'Flag work with its work id only' });

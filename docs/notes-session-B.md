@@ -577,3 +577,137 @@ down."
   - pull to refresh calls the quiet refresh.
 
   The header is checked from source; there is no React Native renderer for tests here.
+
+# Round 6: the To-do page and the New to-do form (from Alex's video)
+
+## 1. Updates on a to-do
+
+- **Database** (`supabase/migrations/20261016200000_todo_updates.sql`, in the 20261016200000 to
+  20261016299999 range):
+  - New table `private.workspace_hub_item_updates`: the to-do, the text (1 to 2,000 characters), the kind
+    (`note`, `done` or `reopened`), who wrote it and when.
+  - RLS is on and signed-in users have no direct access; the write limit trigger applies.
+  - New action `addTodoUpdate` `{ requestId, id, text }`, routed from `workspace_teams_action` after the hub
+    route. It uses action receipts, so a repeated request returns the same answer.
+- **Who can add updates:** anyone who can see the to-do, using the to-do's own rule
+  (`private.workspace_hub_can_see`): the admin, the person it is for, the person who set it, or the
+  department's team.
+  - Owners are refused: the client role gets "Team access required", the same as the hub read.
+  - A to-do the person cannot see reads "To-do not found".
+  - Approvals, claims and invoices take no updates.
+- **Who hears about an update:** the person it is for and the person who set it get a notice
+  (`hub.todo_updated`). The writer does not.
+- **Ticking:** ticking a to-do done logs "Marked done", and unticking it logs "Reopened" (`moveHubItem`).
+- **The hub view:** for a to-do it now returns `updateCount` (the running total) and `updates`, the last
+  100, newest first. Other kinds return 0 and `[]`.
+- **Patches:** three anchor-and-append patches with sentinels: the hub view, the hub action and the teams
+  route. All anchors are single lines, because of the CRLF checkout.
+- **Run twice:** the table and indexes use "if not exists", the functions are replaced, and the patches
+  have sentinels. A test runs the migration a second time and checks that nothing changes.
+- **Not applied anywhere.** Lee or the Lead applies it.
+- **App:** the `addTodoUpdate` schema is added at the end of the union in `lib/workspace-teams-policy.ts`.
+  `lib/todo.ts` adds `todoUpdateSchema`, and `todoHubItemSchema` gains `updateCount` and `updates`, both
+  defaulting to empty so older answers still parse. Each row now has `latest` and `updateCount`.
+- **The detail** (`TodoDetailSheet` in `TodoList.tsx`) opens when a to-do row is clicked. It shows:
+  - where, when and who;
+  - Mark done or Reopen, and Edit (which opens the existing form);
+  - "3 updates · Last update 2h ago by Dan Fraser";
+  - the "Add update" box;
+  - the full history, newest first. Each entry shows the text, the stamp ("Today 12:34 · Dan Fraser") and
+    how long ago.
+
+  Automatic tasks still open their work, as before.
+
+## 2. New to-do form (`HubItemSheet.tsx`)
+
+- **Who is it for** is now one `Dropdown` (Session A's `mobile/src/Dropdown.tsx`) with Me, A person and
+  A department. "A person" shows a second dropdown, "Which person?", over the team; "A department" shows
+  "Which department?". The chips are gone. Saving "A person" with no one chosen says "Choose the person."
+- **The due date** (and "Send by" on an invoice) is Session A's `DateField` in single mode, in place of the
+  typed YYYY-MM-DD box. "No date" removes it.
+- **The property** stays the shared `PropertySelect`, which is search only on long lists since round 5.
+- **For Session A:** in single mode, the empty `DateField` reads "Choose dates" (plural), from
+  `rangeLabel`'s default. I did not change Session A's file.
+
+## 3. Thin, spreadsheet-like rows
+
+- **The table:** `ThinTable` in `mobile/src/Tracker.tsx`. It has one line per row, 40 px rows
+  (`THIN_ROW`), a 32 px header in the wash colour, and it scrolls sideways when the columns are wider
+  than the screen.
+- **The trackers use it too:** `TrackerList` now draws `ThinTable` in place of `SheetTable`.
+  - The tracker columns are unchanged, but each is now one line: the address with the title after it, the
+    status with Flagged beside it, and so on.
+  - So every tracker table (purchases, licensing, onboarding, accounts and the rest) has the same density.
+    Phone cards are unchanged.
+- **To-do on a computer** (from 1,024 px, `todoLayout`), with these columns:
+  - tick;
+  - property (the full address, or "–");
+  - task (the title, with the description truncated on the same line);
+  - latest update;
+  - updated by;
+  - when ("2h ago");
+  - due ("Today", "12 Oct", red when overdue);
+  - status (To do, Automatic or Done).
+
+  The columns are in `TODO_COLUMNS` and what each shows is in `todoCells`. Clicking a row opens the
+  detail.
+- **The empty cell:** the brief asked for an em dash, but the To-do and Tracker files have a no-em-dash test. So empty
+  cells use the "–" the sheet tables already use (`EMPTY_CELL` in `lib/tracker.ts`).
+- **To-do on a phone:** a two-line card (`todoCardLines`). The first line is the task and the due day. The
+  second is the property and the latest update (who and when), or the description when there is no
+  update. The tick is a 44 px target.
+- **Same rows everywhere:** the automatic sections, the four headings and the Done list all use these
+  rows, and the Home summary card uses the phone card.
+- **New in `lib/tracker.ts`:** `timeAgo`.
+
+## 4. Pricing overload
+
+- **Unchanged:** the automatic pricing rows are still made the same way, so all 180 are kept.
+- **Change:** each heading now shows 10 rows (`ROWS_PER_HEADING`, was 8). The button reads "Show all N"
+  (for example "Show all 185" under Client relations with 180 pricing rows), and "Show fewer" once open.
+
+## Tests
+
+- **`tests/todo-updates-database.test.mjs`** (PGlite, all migrations): 8 of 8 pass. It covers:
+  - adding updates, newest first, with who and the running total;
+  - visibility: own, department and admin; others get "To-do not found";
+  - owners refused, with no table access;
+  - "Marked done" and "Reopened", and nothing for approvals;
+  - input checks and a repeated request;
+  - notices;
+  - running the migration twice.
+- **`tests/todo-rows.test.mjs`**: 16 of 16 pass. It covers:
+  - the log reaching the rows;
+  - update kinds and the action schema;
+  - `timeAgo`;
+  - the column order and what each column shows;
+  - the phone card;
+  - phone versus desktop (1,023 px gives cards, 1,024 px the table);
+  - "Last update X ago by Y";
+  - the 180 pricing rows with "Show all 180";
+  - the form's dropdowns and `DateField`;
+  - the screens' table, cards, 44 px ticks and detail;
+  - the tracker using the thin table;
+  - no em dashes.
+
+  The screens are checked from source, because there is no React Native renderer for tests here.
+- **Existing tests still pass:** `todo`, `tracker`, `tracker-onboarding`, `hub-database`, `hub-policy`,
+  `daily-tasks-notice-routes-database`, `wiring-fixes-v2`, `management-approvals` and `search-picker`
+  (98 of 98).
+- **No test file outside my area was changed.**
+- **Checks:** mobile TypeScript (`npx tsc --noEmit -p mobile/tsconfig.json`) and ESLint on the changed
+  files are clean.
+
+## Screenshots (sample data)
+
+**How they were taken:** a temporary route (not committed) rendered the real `TodoList` from sample data.
+The sample has 180 properties, 180 pricing gaps, 3 listing checks due and 10 hub to-dos with updates, for
+a Stays persona. The hub read came through the app's demo answers. Playwright took the shots in Chromium.
+
+| Desktop | Desktop, detail | Desktop, New to-do |
+| --- | --- | --- |
+| ![](screenshots/session-b/round6-todo-desktop.png) | ![](screenshots/session-b/round6-todo-desktop-detail.png) | ![](screenshots/session-b/round6-todo-desktop-form.png) |
+
+| Phone | Phone, detail |
+| --- | --- |
+| ![](screenshots/session-b/round6-todo-phone.png) | ![](screenshots/session-b/round6-todo-phone-detail.png) |
