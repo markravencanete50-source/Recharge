@@ -842,3 +842,27 @@ Optimal · Tinibgan · Valuing".
 ## For Lee
 
 Once Lee or the Lead applies the migration, an admin can delete the test entry from the app.
+
+# Round 6, merge with Session D's forms (Lead)
+
+- **Merged:** `origin/claude/round6-forms-session-d`. The only conflict was `mobile/src/HubItemSheet.tsx`.
+- **How it was resolved:** my form is kept: the Who-is-it-for dropdown pair, the `DateField` for "Due" and
+  "Send by", and the search-only `PropertySelect`.
+  - D's `ChoiceField` (department) is not used there, so its import is gone, along with `SearchPicker` and
+    `Chip`.
+  - There are no typed dates left: the old "Enter the date as YYYY-MM-DD." message now reads "Choose a valid
+    date."
+- **A test outside my area that I changed:** in `tests/choice-control.test.mjs`, the HubItemSheet row now
+  expects my "Which department?" `Dropdown` in place of `ChoiceField`. It still checks there is no row of
+  chips.
+- **Left for D:** `tests/wiring-v2.test.mjs`, "the phone bar, management and the routine card use the new
+  names", fails on D's branch as well. Its regex `<DailyTaskSettings p={p} account={account}[^>]*\/>` cannot
+  get past the `=>` in D's `onShowAll={() => setDailyOnly(null)}`. Allowing `>` there (for example
+  `[^]*?\/>`) would fix it.
+- **Line endings:** `git add --renormalize .` staged nothing. The repository copy was already right; only
+  the files on disk were LF. I converted them to CRLF in the working copy (no content change; `git status`
+  is clean) and did not commit that. The 6 line-ending failures are gone.
+- **For D:** `todoHubSchema` and `moveHubItem` are compatible with D's checklist.
+  - The hub items gain `updateCount` and `updates`. Both have defaults.
+  - `moveHubItem` takes the same input. A tick from the checklist now also logs "Marked done" (or
+    "Reopened") in that to-do's update history.
