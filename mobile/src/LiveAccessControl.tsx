@@ -7,7 +7,7 @@ import { ExpandChevron, MotionPress, Pop, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { departmentColor, ui, type Palette } from "./theme";
 import { Anchor, Button, Field, Loading, message, Notice, Section, StatGrid, StatTile, Tag } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { readAdmin, readTeams, writeAdmin } from "./backend/client";
 import { presenceOf } from "../../lib/workspace-chat-policy";
 import { contractsSchema, coursesSchema, onboardingFor, type Contract, type Course } from "../../lib/management-live";

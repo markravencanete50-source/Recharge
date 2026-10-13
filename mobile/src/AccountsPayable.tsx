@@ -1,17 +1,18 @@
 import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Platform, ScrollView, View } from "react-native";
+import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
+import { Pills } from "./Pills";
 import { ListSearchBox, matchesSearch, PropertySelect, SEARCH_LIST_ABOVE, SearchBox, searchTextOf, useListSearch } from "./SearchPicker";
 import { CHOOSE_PROPERTY_FIRST, saveDisabled } from "../../lib/search-picker";
-import { ExpandChevron, MotionPress, Pop, Stagger, SwapIn } from "./motion";
+import { ExpandChevron, MotionPress, Stagger, SwapIn } from "./motion";
 import { useSaved } from "./Celebrate";
 import { Sheet } from "./TeamFlows";
 import { TrackerDetailSheet, TrackerList } from "./Tracker";
 import { CleanCostReviewSheet } from "./CleanCostReview";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
-import { departmentColor, primaryFill, ui, type Palette } from "./theme";
+import { departmentColor, ui, type Palette } from "./theme";
 import { Button, Field, IconChip, london, message, Loading, Notice, RefreshButton, Section, Tag, useRequestId, type IconName, type Tone } from "./LiveKit";
 import { readFinance, readOperations, readTeams, writeFinance, writeOperation, WorkspaceApiError } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
@@ -36,21 +37,8 @@ export type LimitState = { minor: number | null; version: number; repairMinor: n
 const STATUS_LABEL: Record<Expense["status"], [string, "good" | "wait" | "bad" | "plain"]> = { draft: ["Draft", "wait"], to_approve: ["To approve", "wait"], queried: ["Queried", "bad"], approved: ["Approved", "good"], rejected: ["Rejected", "plain"] };
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v + "T12:00:00Z"));
 
-// Choices as pills. A short fixed set wraps onto more lines so every option is visible on a phone;
-// long lists (properties, nights) scroll sideways.
-export function Pills<T extends string>({ p, values, value, onChange, label, wrap = values.length <= 8 }: { p: Palette; values: readonly T[]; value: T; onChange: (v: T) => void; label?: (v: T) => string; wrap?: boolean }) {
-  const items = values.map(v => {
-    const on = v === value;
-    return (
-      <Pop key={v} active={on}><MotionPress {...(Platform.OS === "web" && !on ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(v)} style={[{ minHeight: 42, paddingHorizontal: 16, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: on ? p.primary : p.border }, on ? primaryFill(p) : { backgroundColor: p.surface }]}>
-        <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label ? label(v) : readableStage(v)}</Text>
-      </MotionPress></Pop>
-    );
-  });
-  return wrap
-    ? <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{items}</View>
-    : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{items}</ScrollView>;
-}
+// Pills moved to Pills.tsx (round 6: more than 5 choices become a dropdown); re-exported here so older imports keep working.
+export { Pills } from "./Pills";
 
 // A list row: optional icon, title, supporting line and status tags, with any amount
 // right-aligned in lining figures so columns of money line up. A row that opens something takes a quiet wash on hover

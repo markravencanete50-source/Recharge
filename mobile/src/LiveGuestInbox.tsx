@@ -9,7 +9,7 @@ import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Tag, Loading } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { readInbox, writeInbox } from "./backend/client";
 import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
 import { emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";

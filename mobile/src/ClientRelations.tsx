@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
 import { useWorkFocus } from "./LiveKit";
-import { Pills } from "./AccountsPayable";
+import { Pills } from "./Pills";
 import { LicensingList } from "./LicensingList";
 import { ListingHealthList, PricingList, RelistingList, ReviewsList } from "./ListingsTabs";
 import { LiveEnquiries } from "./LiveEnquiries";

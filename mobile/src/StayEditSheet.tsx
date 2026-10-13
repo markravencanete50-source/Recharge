@@ -4,7 +4,7 @@ import { Text } from "./Typography";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { writeControls } from "./backend/client";
 import type { StayLine } from "../../lib/property-profile";
 

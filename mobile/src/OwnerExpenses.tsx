@@ -5,7 +5,7 @@ import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { SoftButton } from "./LivePages";
 import { writeOwner } from "./backend/client";
 import { formatMoney } from "../../lib/format";

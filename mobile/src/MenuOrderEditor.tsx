@@ -6,7 +6,7 @@ import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
 import { Button, Loading, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { liveNavigationFor } from "./NavigationBar";
 import { readTeams, writeTeams } from "./backend/client";
 import { publishMenuLayout } from "./MenuLayoutStore";

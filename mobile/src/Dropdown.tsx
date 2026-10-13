@@ -6,28 +6,29 @@ import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
 
 // One closed control that shows the current choice ("All regions"). On the web it is the browser's own select; on the phone
-// it opens a plain list under it. Used where a row of chips was too many buttons.
+// it opens a plain list under it. Used where a row of chips was too many buttons. `showLabel` false hides the label text
+// (the control still carries it for screen readers), for a row of tabs that became a dropdown (Pills.tsx).
 export type DropdownOption<T extends string> = { value: T; label: string };
 
-export function Dropdown<T extends string>({ p, label, value, options, onChange }: { p: Palette; label: string; value: T; options: readonly DropdownOption<T>[]; onChange: (v: T) => void }) {
+export function Dropdown<T extends string>({ p, label, value, options, onChange, showLabel = true }: { p: Palette; label: string; value: T; options: readonly DropdownOption<T>[]; onChange: (v: T) => void; showLabel?: boolean }) {
   const [open, setOpen] = useState(false);
   const current = options.find(o => o.value === value)?.label ?? "";
   const box = { minHeight: 48, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: open ? p.primary : p.border, backgroundColor: p.surface };
   if (Platform.OS === "web") {
     return (
-      <View style={{ gap: 6 }}>
-        <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text>
+      <View style={{ gap: 6, alignSelf: showLabel ? "stretch" : "flex-start", maxWidth: "100%" }}>
+        {showLabel && <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text>}
         {createElement("select", {
           "aria-label": label, value, onChange: (e: { target: { value: string } }) => onChange(e.target.value as T),
-          style: { minHeight: 48, padding: "0 12px", borderRadius: 12, border: `1px solid ${p.border}`, background: p.surface, color: p.text, fontSize: 15, fontFamily: "inherit", fontWeight: 400 },
+          style: { minHeight: 48, minWidth: showLabel ? undefined : 240, maxWidth: "100%", padding: "0 12px", borderRadius: 12, border: `1px solid ${p.border}`, background: p.surface, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular, system-ui, sans-serif", fontWeight: 400, cursor: "pointer" },
         }, options.map(o => createElement("option", { key: o.value, value: o.value }, o.label)))}
       </View>
     );
   }
   return (
     <View style={{ gap: 6 }}>
-      <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text>
-      <MotionPress accessibilityRole="button" accessibilityLabel={`${label}: ${current}`} accessibilityState={{ expanded: open }} onPress={() => setOpen(o => !o)} style={[ui.row, box, { gap: 10 }]}>
+      {showLabel && <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text>}
+      <MotionPress accessibilityRole="combobox" accessibilityLabel={`${label}: ${current}`} accessibilityState={{ expanded: open }} onPress={() => setOpen(o => !o)} style={[ui.row, box, { gap: 10 }]}>
         <Text style={{ flex: 1, color: p.text, fontSize: 15 }}>{current}</Text>
         <Feather name={open ? "chevron-up" : "chevron-down"} size={16} color={p.muted} />
       </MotionPress>

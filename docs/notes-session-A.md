@@ -225,6 +225,71 @@ Lee: "minimize buttons as much as possible, so users will not be overwhelmed."
 - Region and Channel are dropdowns with the same values as before.
 - The property chips shown when there are 8 or fewer properties are left for Session B's search-only picker change.
 
+## Round 6: long tab rows become a dropdown
+Lee: "I'd rather have a drop down, so it's much cleaner." The Management tabs ran off the screen after "Daily tasks".
+
+**How it works**
+- `Pills` moved into `mobile/src/Pills.tsx`; the rule lives in `lib/pills.ts`.
+- 5 or fewer choices stay pills, on one line. On a narrow phone that line scrolls sideways instead of wrapping.
+- More than 5 become the shared `Dropdown`, showing the current choice, e.g. "Waiting on you".
+- The dropdown lists every choice with the pill's own words, so a count in a label ("Waiting (3)") shows there too.
+- Same props and the same `onChange`, so no screen's logic changed. `wrap` is still accepted from older callers but no longer changes anything.
+- A new optional `title` names the dropdown for screen readers; Management passes "Management section".
+- `AccountsPayable.tsx` re-exports `Pills`, so old imports still work. Every screen now imports it from `./Pills`.
+- `Dropdown`:
+  - on the web it is the browser's select, in the app's Montserrat font;
+  - on the phone it is a combobox that opens a plain list;
+  - `showLabel={false}` hides the heading text when it stands in for a row of tabs.
+- No migration.
+
+**Screenshots** (in `docs/screenshots/session-a/`):
+- `management-before-desktop.png` and `management-before-phone.png`: the old row runs off the screen.
+- `management-after-desktop.png` and `management-after-phone.png`: one dropdown, and a 3-choice row still as pills.
+- How they were made: the live Management screen needs a signed-in backend, so a temporary page (not committed) drew Management's header and real section row with the app's theme, using the old code for "before" and `Pills.tsx` for "after".
+
+**Every screen that uses Pills** (choices, then what it becomes):
+
+| Screen | Choices | Now |
+| --- | --- | --- |
+| Management sections (`LiveManagement`) | 12 or 13 | Dropdown |
+| Client relations sub-pages | up to 8 | Dropdown when more than 5 |
+| Guest relations sub-pages | up to 5 | Pills |
+| Expense category (`AccountsPayable`) | 6 | Dropdown |
+| Evidence kind, expense status | 4, 5 | Pills |
+| Cleaner filter on cleaner invoices | the cleaners, plus "All" | Dropdown when more than 5 |
+| Performance property, when 8 or fewer properties | up to 9 | Dropdown when more than 5 |
+| KPI area, in the list and in the form | 6 | Dropdown |
+| Rota department (`LiveShifts`) | 6 | Dropdown |
+| Usual shift, range (`LiveShifts`) | 3 | Pills |
+| Access control filter (`LiveAccessControl`) | 6, counts in labels | Dropdown |
+| Access control People or Menu order | 2 | Pills |
+| Menu order role (`MenuOrderEditor`) | 8 | Dropdown |
+| Person role (`LivePeople`) | role list | Dropdown when more than 5 |
+| Login platform (`LivePeople`) | 8 | Dropdown |
+| Login holder; property status; person and property filters | 2, 3, 5, 4 | Pills |
+| Guest inbox channel | 6 | Dropdown |
+| Guest inbox "how long ago" | 5 | Pills |
+| Listing night (`ListingSheets`) | the nights | Dropdown when more than 5 |
+| Listing platform, review, decision, sentiment | 4, 3, 2, 3 | Pills |
+| Calendar mode, team | 4, up to 5 | Pills |
+| Stays Today or Guest inbox; stay status; stay channel | 2, 2, 5 | Pills |
+| Owner expenses property and month | per owner | Dropdown when more than 5 |
+| Owner expense category | 5 | Pills |
+| Owner period, saved replies audience, onboarding filter, reflection range and read state, oversight area, accounts channel | 4, 3, 3, 3 and 2, 5, 5 | Pills |
+
+**Where the switch may feel wrong** (for Lee to look at):
+- **Access control filter** (6 choices with live counts) is tapped often. A dropdown hides the counts until opened. Dropping one filter would keep it as pills.
+- **Rows of exactly 5 that used to wrap now scroll sideways on a phone**, so the fifth choice can sit just off screen:
+  - the person filter with counts;
+  - expense status;
+  - the accounts and stay channels;
+  - oversight areas;
+  - owner expense categories;
+  - "how long ago".
+  This follows the "one line, no wrapping" rule.
+- **The KPI area in the KPI form** is a natural dropdown. Its list of areas is also a dropdown now, so admins see one area at a time, as before.
+- Two-option toggles all stay pills.
+
 ## Deploy order for this session's migrations
 Apply in filename order, before deploying the Worker (the Worker code is unchanged by this session):
 
