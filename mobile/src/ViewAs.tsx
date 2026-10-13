@@ -5,7 +5,7 @@ import { Text } from "./Typography";
 import { Sheet } from "./TeamFlows";
 import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
-import { readViewAsPeople, WorkspaceApiError } from "./backend/client";
+import { demoInteractive, readViewAsPeople, WorkspaceApiError } from "./backend/client";
 import { viewAsGroups, viewAsKey, viewAsLabel, viewAsName, type ViewAs, type ViewAsPerson } from "../../lib/view-as";
 
 // The super admin's "View as" picker: each role, with the people in it. Picking a person shows
@@ -48,7 +48,7 @@ export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose, d
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="View as someone else" subtitle="See exactly what each person sees" icon="people">
       <Text style={[ui.small, { color: p.muted }]}>{demo
-        ? "Pick one of the demo business's people to see the demo as they would: their Home, tools, properties, work and messages. Nothing is saved."
+        ? "Pick one of the demo business's people to see the demo as they would: their Home, tools, properties, work and messages. " + (demoInteractive() ? "What you do as them stays in this browser's demo." : "Nothing is saved.")
         : "Pick a person to see the app exactly as they do: their Home, tools, properties, work and messages. Nothing can be changed while you look, private chats stay hidden, and each view is recorded in Access history."}</Text>
       {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text></View>}
       {option(null, demo ? "The demo's super admin" : "Myself", "Super admin, everything", "user")}

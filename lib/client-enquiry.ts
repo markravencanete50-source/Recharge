@@ -81,17 +81,23 @@ export const clientEnquirySchema = z.object({
   expiresAt: z.string(), answers: enquiryAnswersSchema.nullable(), files: z.array(fileSchema),
   propertyId: z.string().uuid().nullable(), propertyName: z.string().nullable(), stage: z.string().nullable(),
   valuedByName: z.string().nullable(), valuedAt: z.string().nullable(), closedByName: z.string().nullable(), closedAt: z.string().nullable(), closeNote: z.string(), version: z.number(),
+  // A possible duplicate, flagged when the form came back (migration 20261015200000): another property at the
+  // same address, or the landlord said they already work with us. Never merged; the team decides.
+  duplicateOf: z.string().uuid().nullable().default(null), duplicateOfName: z.string().nullable().default(null),
+  duplicateReason: z.enum(['same_address', 'existing_client']).nullable().default(null),
 });
 export type ClientEnquiry = z.infer<typeof clientEnquirySchema>;
 export const clientEnquiriesSchema = z.object({ canInvite: z.boolean(), emailReady: z.boolean().default(false), items: z.array(clientEnquirySchema) });
 export type ClientEnquiries = z.infer<typeof clientEnquiriesSchema>;
 
 // Where an enquiry is, in the team's words. Once valuing has started, the property's onboarding
-// stage says how far it has gone (estimate sent, agreed, live or declined).
+// stage says how far it has gone (estimate sent, agreed, live or declined). An answered enquiry already has
+// its property (made when the form came back); if the team moved that property on from its own page, the
+// enquiry follows its stage too.
 export type EnquiryStep = 'sent' | 'opened' | 'received' | 'valuing' | 'estimate' | 'won' | 'declined' | 'closed' | 'expired';
 export function enquiryStep(e: Pick<ClientEnquiry, 'status' | 'stage' | 'expiresAt'>, now = Date.now()): EnquiryStep {
   if (e.status === 'closed') return 'closed';
-  if (e.status === 'valuing') {
+  if (e.status === 'valuing' || (e.status === 'received' && !!e.stage && e.stage !== 'enquiry')) {
     if (e.stage === 'archived') return 'declined';
     if (e.stage === 'estimate' || e.stage === 'reviewing') return 'estimate';
     if (e.stage && e.stage !== 'enquiry') return 'won';
@@ -104,6 +110,16 @@ export const STEP_LABEL: Record<EnquiryStep, string> = {
   sent: 'Form sent', opened: 'Form opened', received: 'New: ready to value', valuing: 'Valuing', estimate: 'Estimate sent',
   won: 'Onboarding', declined: 'Declined', closed: 'Closed', expired: 'Link expired',
 };
+// The badge on a possible duplicate, and a line saying why.
+export const DUPLICATE_LABEL = 'Possible duplicate';
+export function duplicateNote(e: Pick<ClientEnquiry, 'duplicateReason' | 'duplicateOfName'>): string {
+  if (e.duplicateReason === 'same_address') return `Same address as ${e.duplicateOfName?.trim() || 'another property'}. Check before valuing; close one of them if it is the same place.`;
+  if (e.duplicateReason === 'existing_client') return 'They said they already work with us. Check their other properties before valuing.';
+  return '';
+}
+// The main button on an answered enquiry: its property is already in Properties, so the team checks the
+// details and values it. An enquiry answered before properties were made on submit still starts valuing.
+export const valueButtonLabel = (e: Pick<ClientEnquiry, 'propertyId'>) => e.propertyId ? 'Check the details and value' : 'Start valuing';
 export const STEP_TONE: Record<EnquiryStep, 'good' | 'wait' | 'bad' | 'plain'> = {
   sent: 'plain', opened: 'plain', received: 'wait', valuing: 'wait', estimate: 'good', won: 'good', declined: 'bad', closed: 'plain', expired: 'bad',
 };

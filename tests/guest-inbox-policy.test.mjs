@@ -27,9 +27,10 @@ test('the guest inbox builds its channel choices from OFFERED_CHANNELS', () => {
   assert.doesNotMatch(inbox, /connect(ing)? (to )?WhatsApp|WhatsApp (is )?(not )?connected/i);
 });
 
-test('Messages gets an optional Updates tab and no looping motion', () => {
+// Round 5: Updates is no longer a tab; a link to it opens the feed in place (tests/messages-redesign.test.mjs).
+test('Messages takes the Updates feed for its links, with no Updates tab, and no looping motion', () => {
   assert.match(chat, /updates\?: ReactNode/);
-  assert.match(chat, /\.\.\.\(updates \? \["updates" as const\] : \[\]\)/);
+  assert.doesNotMatch(chat, /"updates" as const/);
   assert.doesNotMatch(chat, /\b(Entrance|SwapIn|Pop|Shimmer|Float|Stagger)\b/);
   assert.doesNotMatch(chat, /WhatsApp/i);
 });

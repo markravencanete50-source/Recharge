@@ -49,13 +49,14 @@ test('team members message each other; nobody else sees it',async()=>{
  await as(3);await assert.rejects(send(direct.id,'Hello'),/not found/);
 });
 
-test('people are told once per conversation until they read it',async()=>{
+// One notice per message (Lee, round 5; migration 20261015300000), read or not.
+test('people are told about every message',async()=>{
  const before=await outbox(users[2]);
  await as(1);await send(direct.id,'Second message');await send(direct.id,'Third message');
- assert.equal(await outbox(users[2]),before,'already told about the unread conversation');
+ assert.equal(await outbox(users[2]),before+2,'told about each message, even unread');
  await as(2);await act({action:'markRead',conversationId:direct.id});assert.equal(await read('unread'),0);
  await as(1);await send(direct.id,'After they read it');
- assert.equal(await outbox(users[2]),before+1);
+ assert.equal(await outbox(users[2]),before+3);
 });
 
 test('a group can be about a property, and only team members can be added',async()=>{

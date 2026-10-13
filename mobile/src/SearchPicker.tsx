@@ -4,12 +4,13 @@ import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
-import { matchesSearch, normalise, propertyOption, searchOptions, textOfRow, type SearchOption } from "../../lib/search-options";
+import { matchesSearch, normalise, propertyOption, textOfRow, type SearchOption } from "../../lib/search-options";
+import { SHOW_SEARCH_ABOVE, pickerView } from "../../lib/search-picker";
 
-// Choosing one property (or person) from a long list, on phones and on the web: a search box over
-// the list, the best dozen matches as chips, and the current choice always in view. Short lists
-// (eight or fewer) show every chip with no search box, as before.
-const SHOW_SEARCH_ABOVE = 8, SHOWN = 12;
+// Choosing one property (or person) from a long list, on phones and on the web. A long list is search
+// only: before anything is typed it shows the search box, the fixed options and the current choice, and
+// once something is typed the best dozen matches as chips (lib/search-picker.ts). Short lists (eight or
+// fewer) show every chip with no search box, as before.
 
 export function SearchBox({ p, value, onChange, placeholder }: { p: Palette; value: string; onChange: (v: string) => void; placeholder: string }) {
   // On the web the browser's own focus ring would sit as a second box inside this one. The box shows focus itself instead: a thicker
@@ -44,23 +45,22 @@ export function SearchPicker({ p, options, value, onChange, fixed = [], placehol
   placeholder?: string; nouns?: string; clearable?: boolean; empty?: string;
 }) {
   const [query, setQuery] = useState("");
-  const searchable = options.length > SHOW_SEARCH_ABOVE;
-  const { shown, matches } = useMemo(() => searchable ? searchOptions(options, query, SHOWN) : { shown: options, matches: options.length }, [options, query, searchable]);
-  // The current choice stays visible even when the search doesn't match it.
-  const chosen = options.find(o => o.id === value);
-  const list = chosen && !shown.some(o => o.id === chosen.id) ? [chosen, ...shown] : shown;
+  // The current choice stays visible, typed or not; other options appear only for what is typed.
+  const view = useMemo(() => pickerView(options, query, value), [options, query, value]);
   const pick = (id: string) => onChange(clearable && id === value ? "" : id);
   return (
     <View style={{ gap: 8 }}>
-      {searchable && <SearchBox p={p} value={query} onChange={setQuery} placeholder={placeholder} />}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {view.searchable && <SearchBox p={p} value={query} onChange={setQuery} placeholder={placeholder} />}
+      {(fixed.length > 0 || view.chips.length > 0) && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {fixed.map(o => <OptionChip key={"fixed:" + o.id} p={p} label={o.label} on={value === o.id} onPress={() => pick(o.id)} />)}
-        {list.map(o => <OptionChip key={o.id} p={p} label={o.label} on={value === o.id} onPress={() => pick(o.id)} />)}
-      </View>
+        {view.chips.map(o => <OptionChip key={o.id} p={p} label={o.label} on={value === o.id} onPress={() => pick(o.id)} />)}
+      </View>}
       {!options.length && !!empty && <Text style={[ui.small, { color: p.muted }]}>{empty}</Text>}
-      {searchable && !!query.trim() && !matches && <Text style={[ui.small, { color: p.muted }]}>Nothing matches “{query.trim()}”. Try part of the name, the street or the postcode.</Text>}
-      {searchable && matches > shown.length && <Text style={[ui.small, { color: p.muted }]}>
-        Showing {shown.length} of {matches} {nouns}. Type to find the rest.
+      {/* A long list shows no options until something is typed, so say when nothing is chosen yet. */}
+      {view.searchable && !view.typing && !view.chips.length && !fixed.some(o => o.id === value) && <Text style={[ui.small, { color: p.muted }]}>Nothing chosen yet. Type to find one of the {options.length} {nouns}.</Text>}
+      {view.none && <Text style={[ui.small, { color: p.muted }]}>Nothing matches “{query.trim()}”. Try part of the name, the street or the postcode.</Text>}
+      {view.more && <Text style={[ui.small, { color: p.muted }]}>
+        Showing {view.shown} of {view.matches} {nouns}. Keep typing to narrow it down.
       </Text>}
     </View>
   );
@@ -73,7 +73,7 @@ export function PropertySelect({ p, properties, value, onChange, fixed, clearabl
 }) {
   const options = useMemo(() => properties.map(propertyOption), [properties]);
   return <SearchPicker p={p} options={options} value={value} onChange={onChange} fixed={fixed} clearable={clearable} empty={empty}
-    placeholder="Search properties by name, street or postcode" nouns="properties" />;
+    placeholder="Search for a property by name, street or postcode" nouns="properties" />;
 }
 
 // Long lists and tables get a search box once they pass eight rows. A row matches when every word

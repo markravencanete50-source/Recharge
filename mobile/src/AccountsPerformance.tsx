@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
-import { Button, Field, Loading, london, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
+import { Loading, london, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
 import { PropertySelect } from "./SearchPicker";
 import { List, Pills, Row } from "./AccountsPayable";
 import { readFinance } from "./backend/client";
+import { DateField } from "./CalendarPicker";
+import { Dropdown } from "./Dropdown";
 import { formatMoney, plural } from "../../lib/format";
 import { CHANNEL_LABEL, isFinanceRole } from "../../lib/accounts-live";
 import {
-  customRange, formatOccupancy, hasActivity, PERFORMANCE_CHANNELS, PERFORMANCE_HELP, PERFORMANCE_PERIODS, performanceMonthLabel, performanceQuery,
-  performanceReportSchema, PERIOD_LABEL, periodRange, rangeLabel, regionOptions,
-  type PerformanceChannel, type PerformanceFigures, type PerformancePeriod, type PerformanceRange, type PerformanceReport,
+  CHANNEL_FILTER_OPTIONS, customRange, formatOccupancy, hasActivity, lastDayOfRange, PERFORMANCE_HELP, performanceMonthLabel, performanceQuery,
+  performanceReportSchema, periodRange, regionFilterOptions, regionOptions,
+  type PerformanceChannel, type PerformanceFigures, type PerformanceRange, type PerformanceReport,
 } from "../../lib/performance";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
@@ -33,10 +35,8 @@ const summary = (f: PerformanceFigures) => [`Occupancy ${formatOccupancy(f.occup
 export function AccountsPerformance({ p, account, properties }: { p: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
   const allowed = isFinanceRole(account.role);
   const today = london(new Date());
-  const [period, setPeriod] = useState<PerformancePeriod>("this_month");
-  const [first, setFirst] = useState("");
-  const [last, setLast] = useState("");
-  const [custom, setCustom] = useState<PerformanceRange | null>(null);
+  // One date field opens the calendar (Lee: no row of period buttons); this month until another range is chosen.
+  const [range, setRange] = useState<PerformanceRange>(() => periodRange("this_month", today));
   const [dateError, setDateError] = useState("");
   const [propertyId, setPropertyId] = useState("");
   const [region, setRegion] = useState(ALL);
@@ -47,7 +47,6 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
   const [error, setError] = useState("");
   const latest = useRef(0);
 
-  const range = useMemo<PerformanceRange | null>(() => period === "custom" ? custom : periodRange(period, today), [period, custom, today]);
   const regions = useMemo(() => regionOptions(properties), [properties]);
   const query = useMemo(() => range ? performanceQuery(range, { propertyId: propertyId || null, region: region === ALL ? null : region, channel: channel === ALL ? null : channel }) : null,
     [range, propertyId, region, channel]);
@@ -66,10 +65,11 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
   }, [queryKey]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active && allowed) void load(); }); return () => { active = false; }; }, [load, allowed]);
 
-  function applyDates() {
-    const chosen = customRange(first, last);
+  // The calendar gives the first and last day (both included); customRange turns that into the same from and to as before.
+  function chooseDates(next: { from: string; to: string }) {
+    const chosen = customRange(next.from, next.to);
     if ("error" in chosen) { setDateError(chosen.error); return; }
-    setDateError(""); setCustom(chosen);
+    setDateError(""); setRange(chosen);
   }
 
   if (!allowed) return <Notice text="Performance is for Accounts and management." p={p} />;
@@ -84,14 +84,8 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
       </View>
 
       <View style={{ gap: 10 }}>
-        <Pills p={p} values={PERFORMANCE_PERIODS} value={period} onChange={setPeriod} label={v => PERIOD_LABEL[v]} />
-        {period === "custom" && <View style={{ gap: 8 }}>
-          <Field label="First day (YYYY-MM-DD)" value={first} onChange={setFirst} p={p} placeholder={today.slice(0, 8) + "01"} />
-          <Field label="Last day, included (YYYY-MM-DD)" value={last} onChange={setLast} p={p} placeholder={today} />
-          {!!dateError && <Notice text={dateError} p={p} tone="bad" />}
-          <View style={{ flexDirection: "row" }}><Button label="Show these dates" icon="calendar" p={p} onPress={applyDates} /></View>
-        </View>}
-        {!!range && <Text style={[ui.small, { color: p.muted }]}>{rangeLabel(range)}</Text>}
+        <DateField p={p} label="Dates" value={{ from: range.from, to: lastDayOfRange(range) }} onChange={chooseDates} today={today} />
+        {!!dateError && <Notice text={dateError} p={p} tone="bad" />}
       </View>
 
       <Section title="Filters" p={p}>
@@ -100,17 +94,12 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
           {properties.length <= 8
             ? <Pills p={p} values={[ALL, ...properties.map(x => x.id)]} value={propertyId || ALL} onChange={v => setPropertyId(v === ALL ? "" : v)} label={v => v === ALL ? "All properties" : propertyName(v)} />
             : <PropertySelect p={p} properties={properties} value={propertyId} onChange={setPropertyId} clearable />}
-          {regions.length > 0 && <>
-            <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Region</Text>
-            <Pills p={p} values={[ALL, ...regions]} value={region} onChange={setRegion} label={v => v === ALL ? "All regions" : v} />
-          </>}
-          <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Channel</Text>
-          <Pills p={p} values={[ALL, ...PERFORMANCE_CHANNELS] as const} value={channel} onChange={setChannel} label={v => v === ALL ? "All channels" : CHANNEL_LABEL[v] ?? v} />
+          {regions.length > 0 && <Dropdown p={p} label="Region" value={region} onChange={setRegion} options={regionFilterOptions(regions)} />}
+          <Dropdown p={p} label="Channel" value={channel} onChange={setChannel} options={CHANNEL_FILTER_OPTIONS} />
         </View>
       </Section>
 
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {period === "custom" && !range && <Notice text="Enter the first and last day, then choose Show these dates." p={p} />}
       {loading && !report && <Loading p={p} />}
 
       {!!report && !!totals && <>

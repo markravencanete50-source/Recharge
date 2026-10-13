@@ -2,6 +2,22 @@
 
 Start with `README.md`. It describes the parts of the platform and the commands.
 
+## Round 4 is live (13 October 2026)
+
+Three parallel sessions (A: cleans and money, B: trackers and Client relations, C: team and people) were integrated by the
+lead developer and went live: migrations `20261014100000` to `20261014330000` installed in one transaction, `main` at
+`b25d02f`, Worker `b3f6054c`. What changed, the open questions and the optional data steps are in
+`docs/GO-LIVE-2026-10-14.md`; the detail is in `docs/notes-session-A.md`, `-B.md` and `-C.md`.
+
+- **How the Worker deploys:** pushing `main` mirrors to `codex/cloudflare-preview`
+  (`.github/workflows/sync-live-preview.yml`), and Cloudflare Workers Builds deploys `recharge-backend` from that branch.
+  The "codex/cloudflare-preview" builds in the Cloudflare deployment list are these, not a separate tool. A manual
+  `wrangler deploy` is only needed when the build is not used.
+- **Line endings:** `.gitattributes` checks out `.ts`, `.tsx` and `.sql` with CRLF on every platform, so the line-ending
+  tests pass on Linux and CI as well as Windows. The full suite is 1329 of 1329 on Linux.
+- **Installing migrations:** the Supabase connector timed out on migrations of this size. `supabase/install-pending.sql`
+  holds whatever is pending, in one transaction with a guard against a second run; Lee runs it in the SQL editor.
+
 ## The old portal has been retired (7 October 2026)
 
 The original portal ran on a separate Cloudflare D1 database and R2 file storage. It held no real

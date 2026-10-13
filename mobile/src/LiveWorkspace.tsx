@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { ActivityIndicator, Animated, AppState, KeyboardAvoidingView, Platform, ScrollView, Switch, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Animated, AppState, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, Switch, View, useWindowDimensions } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import Feather from "@expo/vector-icons/Feather";
@@ -15,6 +15,9 @@ import { ProfileEditor, usePresenceHeartbeat } from "./ProfileSettings";
 import { FeatureTile } from "./Artwork";
 import { RoleNavigation } from "./RoleNavigation";
 import { rolePanel, type PanelLink } from "../../lib/role-panel";
+import { orderPhoneBar, orderWorkViews, parseMenuLayout, phoneMoreGroups, storedMenuLayoutSchema, type MenuLayout } from "../../lib/menu-layout";
+import { onMenuLayoutSaved } from "./MenuLayoutStore";
+import { updatesBell } from "../../lib/header-actions";
 import { NavigationBar, liveNavigationFor } from "./NavigationBar";
 import { FaqShortcut, useFaqShortcut } from "./FaqShortcut";
 import { FilterBar } from "./FilterBar";
@@ -85,7 +88,8 @@ import { FurnishingSheet } from "./LiveFurnishing";
 import { buildSearchIndex, type SearchEntry } from "../../lib/workspace-search";
 import { toolsFor, type Tool } from "../../lib/tool-directory";
 import { canViewAs, previewAccount, previewKeeps, readSavedView, viewAsKey, viewAsLabel, viewAsName, viewOnlyMessage, VIEW_AS_ENDED, type ViewAs } from "../../lib/view-as";
-import { loadDemoData, setDemo, setViewOnly, startViewAs, stopViewAs } from "./backend/client";
+import { demoInteractive, loadDemoData, setDemo, setViewOnly, startViewAs, stopViewAs } from "./backend/client";
+import { onDemoChanged } from "./demo/notes";
 import { ViewAsBanner, ViewAsSheet } from "./ViewAs";
 import { DemoBanner, DemoSwitchRow, DemoSwitching, ModeSwitch } from "./DemoMode";
 import { DEMO_SAVE_MESSAGE, type DemoData, type DemoRole } from "../../lib/demo-data";
@@ -155,10 +159,17 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const updatesLink = requested === "activity" && team;
   const tab: WorkspaceSection = updatesLink ? "inbox" : SECTIONS.includes(requested as WorkspaceSection) && (ROLE_SECTIONS[requested as WorkspaceSection]?.includes(account.role) ?? true) ? requested as WorkspaceSection : "home";
   const setTab = (value: WorkspaceSection) => router.setParams({ section: value });
-  const nav = useMemo(() => liveNavigationFor(account.role), [account.role]);
+  // The menu order a super admin set for this role (Access control → Menu order), read with every refresh.
+  // It only reorders; null is the default order.
+  // Kept with the role it was read for, so a role change (or a change of view) never shows another role's order.
+  const [menuState, setMenuState] = useState<{ role: string; layout: MenuLayout | null }>({ role: account.role, layout: null });
+  const menuLayout = menuState.role === account.role ? menuState.layout : null;
   // On desktop the left panel is the role's own (lib/role-panel.ts): its heading, groups and everyday
-  // tools. It follows the account shown, so View as shows the viewed person's or role's panel.
-  const panel = useMemo(() => rolePanel(account.role, account.modules), [account.role, account.modules]);
+  // tools, in the saved menu order. It follows the account shown, so View as shows the viewed person's or
+  // role's panel. The phone bar keeps its destinations in the same order, and the phone's menu lists the rest.
+  const panel = useMemo(() => rolePanel(account.role, account.modules, menuLayout), [account.role, account.modules, menuLayout]);
+  const nav = useMemo(() => orderPhoneBar(liveNavigationFor(account.role), panel), [account.role, panel]);
+  const [phoneMenu, setPhoneMenu] = useState(false);
   const [focus, setFocus] = useState<WorkFocus | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false), [deleting, setDeleting] = useState(false), [blockedOpen, setBlockedOpen] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
@@ -250,8 +261,25 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   }, [realAccount]);
   // A quiet refresh (every minute, and when someone comes back to the app) keeps what is on screen
   // and its messages; only a failed sign-in is acted on.
+  // The menu order: your own role's (as the person viewed, while viewing as someone), or for a role preview,
+  // that role's from the super admin's list of every role. A failed read keeps the order already shown.
+  const loadMenuLayout = useCallback(async () => {
+    if (demo) return;
+    try {
+      if (rolePreview) {
+        const all = z.array(storedMenuLayoutSchema).parse((await readTeams({ section: "menuLayouts" })).data);
+        setMenuState({ role: rolePreview, layout: parseMenuLayout(all.find(l => l.role === rolePreview) ?? null) });
+      } else {
+        const own = (await readTeams({ section: "menuLayout" })).data as { role?: unknown } | null;
+        if (own && typeof own.role === "string") setMenuState({ role: own.role, layout: parseMenuLayout(own) });
+      }
+    } catch { /* the default order, or the one already shown */ }
+  }, [demo, rolePreview]);
+  // A save in the Menu order editor shows here at once when it is this role's.
+  useEffect(() => onMenuLayoutSaved((role, layout) => { if (role === account.role) setMenuState({ role, layout }); }), [account.role]);
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) { setLoading(true); setError(""); }
+    void loadMenuLayout();
     const keep = rolePreview ? previewKeeps(rolePreview, account.modules) : null;
     // Properties and invoices come a page of 100 at a time; read every page.
     const readAll = async (entity: "properties" | "invoices") => {
@@ -302,7 +330,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     }
     lastRefresh.current = Date.now();
     if (!quiet) setLoading(false);
-  }, [account.role, account.modules, rolePreview, onSignedOut, onAccount]);
+  }, [account.role, account.modules, rolePreview, onSignedOut, onAccount, loadMenuLayout]);
   const loadReport = useCallback(async (range: AnalyticsPeriod) => {
     if (periodError(range)) return;
     setReportError("");
@@ -321,6 +349,10 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   }, [refresh]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void loadReport(period); }); return () => { active = false; }; }, [loadReport, period]);
   const refreshAll = () => { void refresh(); void loadReport(period); void loadUnread(); void loadWaiting(); };
+  // The interactive demo: screens reload straight after Reset demo and the automatic jobs.
+  const refreshAllRef = useRef(refreshAll);
+  useEffect(() => { refreshAllRef.current = refreshAll; });
+  useEffect(() => onDemoChanged(() => refreshAllRef.current()), []);
 
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
@@ -344,7 +376,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const openView = (view: WorkView, sub?: string) => { setFocus(sub ? { sub, nonce: Date.now() } : null); setWorkView(view); setTab("work"); };
   // Search and Favorites: one list of everything this person can open, from what is already loaded.
   // A role preview has nobody's favorites (not the super admin's own); a person view shows theirs.
-  const favorites = useFavoritesStore(team && !(viewAs && !viewAs.person), demo ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
+  const favorites = useFavoritesStore(team && !(viewAs && !viewAs.person), demo && !demoInteractive() ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
   // Viewing as a team member who hasn't finished their start-up checklist: say why their tools are empty.
   const [viewNote, setViewNote] = useState("");
   useEffect(() => {
@@ -420,6 +452,11 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     } catch (e) { setExportMessage(message(e)); } finally { setExporting(false); }
   }
   // Updates marked read on Activity stop counting on Home straight away.
+  // The Updates bell in the header: unread notices, opening the Updates feed.
+  const bell = updatesBell(notices);
+  // Pull to refresh on phones: the same quiet refresh the app runs every minute.
+  const [pulling, setPulling] = useState(false);
+  const pullToRefresh = useCallback(async () => { setPulling(true); try { await refresh(true); } finally { setPulling(false); } }, [refresh]);
   const markRead = useCallback((ids: number[]) => { const at = new Date().toISOString(); setNotices(list => list.map(n => ids.includes(n.id) ? { ...n, read_at: n.read_at ?? at } : n)); }, []);
   const finishWelcome = () => { setWelcome(null); try { globalThis.localStorage?.setItem("rc-welcomed", welcomeDay()); } catch { /* storage unavailable */ } };
 
@@ -443,7 +480,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     else if (t.kind === "tab") setPanelPick({ key: link.key, tab: t.tab, view: "" });
   };
   const panelSelected = panelPick && panelPick.tab === tab && (tab !== "work" || panelPick.view === currentView) ? panelPick.key : tab === "work" ? "area:" + currentView : "page:" + tab;
-  const panelViewing = demo ? { name: viewAs?.person ? `Demo · ${viewAs.person.fullName}` : "Demo mode", detail: "A sample business. Nothing you do here is saved." } : viewAs ? viewAs.person
+  const panelViewing = demo ? { name: viewAs?.person ? `Demo · ${viewAs.person.fullName}` : "Demo mode", detail: demoInteractive() ? "A sample business in this browser. Try anything." : "A sample business. Nothing you do here is saved." } : viewAs ? viewAs.person
     ? { name: `Viewing as ${viewAs.person.fullName}`, detail: `Exactly what this ${viewAsLabel(viewAs.role).toLowerCase()} sees. Nothing can be changed.` }
     : { name: `${viewAsLabel(viewAs.role)} preview`, detail: `The ${viewAsLabel(viewAs.role)} menus and tools only. Nothing can be changed.` } : null;
   // Cards inside a page (Stays' routine) open another place, or scroll to a section on the same page.
@@ -492,7 +529,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const workPage = (
     <>
       {/* The Work areas are listed in the left panel on desktop, so the row of tabs shows only without it (phones, or the panel hidden). */}
-      {workViews.length > 1 && !(desktop && !sidebarHidden) && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => { const view = (Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(v => WORK_VIEW_LABEL[v] === label) ?? ""; if (view === "calendar") navigate("calendar"); else setWorkView(view); }} palette={p} />}
+      {workViews.length > 1 && !(desktop && !sidebarHidden) && <FilterBar values={orderWorkViews(workViews, panel).map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => { const view = (Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(v => WORK_VIEW_LABEL[v] === label) ?? ""; if (view === "calendar") navigate("calendar"); else setWorkView(view); }} palette={p} />}
       {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} properties={properties} onOpenWork={setOpenWork} onOpenView={openView} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />}
       {currentView === "stays" && <GuestRelations key={"stays:" + (focus?.nonce ?? "")} {...sectionProps} onRefresh={() => refresh(true)} minimumNights={policy?.minimum_nights} />}
@@ -577,9 +614,14 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
                 {desktop && team && <HeaderSearch palette={p} onOpen={() => setSearchOpen(true)} />}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
+                {!desktop && <IconButton label="Menu" icon="menu" palette={header} onPress={() => setPhoneMenu(true)} />}
                 {!desktop && team && <IconButton label="Search" icon="search" palette={header} onPress={() => setSearchOpen(true)} />}
                 {canViewAs(realAccount) && width >= 900 && <ModeSwitch palette={p} demo={demo} busy={demoBusy} onChange={onDemo} />}
                 {headerEye && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
+                <View>
+                  <IconButton label={bell.label} icon="bell" palette={header} onPress={() => navigate(bell.section)} />
+                  {bell.count > 0 && <Bump value={bell.count} pointerEvents="none" style={{ position: "absolute", top: -4, right: -4 }}><View pointerEvents="none" style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{bell.badge}</Text></View></Bump>}
+                </View>
                 <View>
                   <IconButton label={messagesBadge ? `Messages, ${[chatUnread ? `${chatUnread} unread` : "", guestWaiting ? `${guestWaiting} ${guestWaiting === 1 ? "guest" : "guests"} waiting` : ""].filter(Boolean).join(", ")}` : "Messages"} icon="message-circle" palette={header} onPress={() => { setChatTarget(null); navigate("inbox"); }} />
                   {messagesBadge > 0 && <Bump value={messagesBadge} pointerEvents="none" style={{ position: "absolute", top: -4, right: -4 }}><View pointerEvents="none" style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View></Bump>}
@@ -593,7 +635,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
               </View>
             </View>
           </View>
-          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, (showFaq || showFavorites) && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
+          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} refreshControl={desktop ? undefined : <RefreshControl refreshing={pulling} onRefresh={() => void pullToRefresh()} tintColor={p.primary} colors={[p.primary]} />} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, (showFaq || showFavorites) && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
               {demo ? <DemoBanner palette={p} viewing={viewAs?.person ? `${viewAs.person.fullName} (${viewAsLabel(viewAs.role)})` : null} onViewAs={() => setViewAsOpen(true)} onLive={() => onDemo(false)} />
                 : !!viewAs && <ViewAsBanner palette={p} view={viewAs} note={viewNote} onChange={() => setViewAsOpen(true)} onBack={() => void onViewAs(null)} />}
@@ -608,6 +650,22 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           {!desktop && <NavigationBar role={account.role} items={nav} section={tab} onNavigate={navigate} palette={p} />}
         </View>
       </KeyboardAvoidingView>
+      {/* The phone's menu: the panel's sections and links in the saved order, without what the bottom bar already shows. */}
+      {!desktop && <Sheet palette={p} visible={phoneMenu} onClose={() => setPhoneMenu(false)} title="Menu" subtitle={panel.title} icon="compass">
+        {phoneMoreGroups(panel, nav).map(group => (
+          <View key={group.key} style={{ gap: 4 }}>
+            <Text accessibilityRole="header" style={[ui.label, { color: p.muted }]}>{group.title}</Text>
+            {group.links.map(link => (
+              <MotionPress key={link.key} accessibilityRole="button" accessibilityLabel={link.label} onPress={() => { setPhoneMenu(false); openPanel(link); }}
+                style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 4, borderBottomWidth: 1, borderColor: p.border }]}>
+                <Feather name={link.icon as keyof typeof Feather.glyphMap} size={17} color={link.kind === "start" ? p.primary : p.muted} />
+                <Text numberOfLines={1} style={{ flex: 1, color: link.kind === "start" ? p.primary : p.text, fontSize: 15 }}>{link.label}</Text>
+                <Feather name="chevron-right" size={16} color={p.muted} />
+              </MotionPress>
+            ))}
+          </View>
+        ))}
+      </Sheet>}
       <Sheet palette={p} visible={settings} onClose={() => { setSettings(false); setConfirmOut(false); }} title="Profile & preferences" subtitle="Your account and comfort settings" icon="people">
         <View style={{ borderRadius: 22, padding: 18, gap: 6, backgroundColor: p.header, overflow: "hidden" }}>
           <View style={[ui.row, { gap: 14 }]}>

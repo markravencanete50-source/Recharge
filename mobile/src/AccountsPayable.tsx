@@ -4,6 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { ListSearchBox, matchesSearch, PropertySelect, SEARCH_LIST_ABOVE, SearchBox, searchTextOf, useListSearch } from "./SearchPicker";
+import { CHOOSE_PROPERTY_FIRST, saveDisabled } from "../../lib/search-picker";
 import { ExpandChevron, MotionPress, Pop, Stagger, SwapIn } from "./motion";
 import { useSaved } from "./Celebrate";
 import { Sheet } from "./TeamFlows";
@@ -332,7 +333,8 @@ export function NewExpenseSheet({ p, visible, properties, onClose, onDone }: { p
       <Field label="Amount" value={amount} onChange={setAmount} p={p} placeholder="£0.00" />
       <Field label="Received on (YYYY-MM-DD)" value={receivedOn} onChange={setReceivedOn} p={p} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      <Button label={busy ? "Saving…" : "Save expense"} primary p={p} disabled={busy} onPress={() => void save()} />
+      {!propertyId && <Text style={[ui.small, { color: p.muted }]}>{CHOOSE_PROPERTY_FIRST}</Text>}
+      <Button label={busy ? "Saving…" : "Save expense"} primary p={p} disabled={saveDisabled(busy, propertyId)} onPress={() => void save()} />
     </Sheet>
   );
 }

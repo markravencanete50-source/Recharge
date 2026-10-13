@@ -119,6 +119,13 @@ export function performanceQuery(range: PerformanceRange, filters: PerformanceFi
   return query;
 }
 // The regions to filter by: each non-blank region once, in alphabetical order (case kept from the first seen).
+// The region and channel filters as one dropdown each (they were rows of chips): the same values, "all" first.
+export const ALL_FILTER = 'all';
+export const regionFilterOptions = (regions: readonly string[]) => [{ value: ALL_FILTER, label: 'All regions' }, ...regions.map(r => ({ value: r, label: r }))];
+const CHANNEL_NAME: Record<PerformanceChannel, string> = { airbnb: 'Airbnb', booking_com: 'Booking.com', vrbo: 'Vrbo', direct: 'Direct', other: 'Other' };
+export const CHANNEL_FILTER_OPTIONS: { value: PerformanceChannel | typeof ALL_FILTER; label: string }[] = [{ value: ALL_FILTER, label: 'All channels' }, ...PERFORMANCE_CHANNELS.map(c => ({ value: c, label: CHANNEL_NAME[c] }))];
+// The last day a range includes (its `to` is the day after), for the date field.
+export const lastDayOfRange = (r: PerformanceRange) => isoOf((dayNumber(r.to) ?? 0) - 1);
 export function regionOptions(properties: readonly { region?: string | null }[]): string[] {
   const seen = new Map<string, string>();
   for (const p of properties) { const r = p.region?.trim(); if (r && !seen.has(r.toLowerCase())) seen.set(r.toLowerCase(), r); }

@@ -8,6 +8,7 @@ import * as Crypto from "expo-crypto";
 import { z } from "zod";
 import { Text } from "./Typography";
 import { ListSearchBox, PropertySelect, useListSearch } from "./SearchPicker";
+import { CHOOSE_PROPERTY_FIRST, saveDisabled } from "../../lib/search-picker";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -482,7 +483,8 @@ function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: 
         <Text style={{ color: p.text, flex: 1 }}>Urgent: guests can’t use the property properly until it’s fixed</Text>
       </MotionPress>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      <Button label={busy ? "Sending…" : "Report repair"} icon="send" primary p={p} disabled={busy} onPress={() => void save()} />
+      {!propertyId && <Text style={[ui.small, { color: p.muted }]}>{CHOOSE_PROPERTY_FIRST}</Text>}
+      <Button label={busy ? "Sending…" : "Report repair"} icon="send" primary p={p} disabled={saveDisabled(busy, propertyId)} onPress={() => void save()} />
     </Sheet>
   );
 }
@@ -522,7 +524,8 @@ function PlanSheet({ p, visible, properties, account, onClose, onDone }: { p: Pa
       <Field label="Day of the month (1–28)" value={day} onChange={setDay} p={p} />
       {account.role === "ready" && <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: mine }} onPress={() => setMine(m => !m)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: p.elevated }]}><Feather name={mine ? "check-square" : "square"} size={20} color={mine ? p.success : p.muted} /><Text style={{ color: p.text, flex: 1 }}>Assign these visits to me</Text></MotionPress>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      <Button label={busy ? "Saving…" : "Save routine"} primary p={p} disabled={busy} onPress={() => void save()} />
+      {!propertyId && <Text style={[ui.small, { color: p.muted }]}>{CHOOSE_PROPERTY_FIRST}</Text>}
+      <Button label={busy ? "Saving…" : "Save routine"} primary p={p} disabled={saveDisabled(busy, propertyId)} onPress={() => void save()} />
     </Sheet>
   );
 }

@@ -59,3 +59,40 @@ export function emptyMessage(chip: InboxChip, where: 'guests' | 'clients' | 'tea
   if (propertyName) return `No conversations${at}.`;
   return where === 'guests' ? 'No conversations here.' : where === 'clients' ? 'No owner conversations yet. Tap New to message an owner you look after.' : 'No conversations yet. Tap New to message someone on the team.';
 }
+
+// ---- Messages, round 5 (Lee: "keep it simple, clean, and professional"): three statuses for Guests and Clients
+// instead of the chips above, and one search box instead of the property chips. The Team tab has no status filter.
+// Needs a reply: the other side spoke last and nobody has answered. Waiting for reply: we answered last and it is still
+// open. Closed: marked done (guests) or closed (owners); a new message reopens either.
+export const MESSAGE_STATUSES = ['reply', 'waiting', 'closed'] as const;
+export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
+export const MESSAGE_STATUS_LABEL: Record<MessageStatus, string> = { reply: 'Needs a reply', waiting: 'Waiting for reply', closed: 'Closed' };
+
+export const guestStatus = (t: { status: 'open' | 'done'; waitingSince: string | null }): MessageStatus =>
+  t.status === 'done' ? 'closed' : t.waitingSince ? 'reply' : 'waiting';
+export const clientStatus = (c: { closed?: boolean; last: { fromOwner?: boolean; kind?: 'text' | 'event' } | null }): MessageStatus =>
+  c.closed ? 'closed' : c.last?.fromOwner ? 'reply' : 'waiting';
+
+export function statusCounts<T>(items: readonly T[], statusOf: (item: T) => MessageStatus): Record<MessageStatus, number> {
+  const out: Record<MessageStatus, number> = { reply: 0, waiting: 0, closed: 0 };
+  for (const item of items) out[statusOf(item)]++;
+  return out;
+}
+
+// Search as you type: every word typed must appear somewhere in the fields (any order, any case, accents ignored).
+const fold = (text: string) => text.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
+export function matchesSearch(query: string, fields: readonly (string | null | undefined)[]): boolean {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const text = fold(fields.filter(Boolean).join(' '));
+  return words.every(word => text.includes(word));
+}
+
+// What an empty list says, for a status, a search, or a tab with nothing in it yet.
+export function emptyStatusMessage(where: 'guests' | 'clients' | 'team', status: MessageStatus | null, searching: boolean): string {
+  if (searching) return 'Nothing matches your search.';
+  if (status === 'reply') return where === 'guests' ? 'Nobody is waiting for a reply.' : 'No owner is waiting for a reply.';
+  if (status === 'waiting') return where === 'guests' ? 'No open conversations waiting on a guest.' : 'No open conversations waiting on an owner.';
+  if (status === 'closed') return 'No closed conversations.';
+  return where === 'clients' ? 'No owner conversations yet. Tap the pencil to message an owner you look after.' : 'No conversations yet. Tap the pencil to message someone on the team.';
+}

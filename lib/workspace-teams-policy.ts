@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
 import { enquiryInviteSchema } from './client-enquiry';
 import { enquiryDetailsSchema } from './journey-policy';
+import { MENU_ROLES, menuLayoutSchema } from './menu-layout';
 
 const id = z.string().uuid();
 export const DEPARTMENTS = ['guest_relations', 'client_relations', 'cleaning', 'ready', 'accounts', 'management'] as const;
@@ -21,7 +22,11 @@ export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
     'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople', 'productivity', 'shiftChanges', 'clientEnquiries', 'feedback', 'chatReports',
     // Client feedback build, October 2026: management flags, day reflections, daily to-dos, AirCover claims, team calendar.
-    'flags', 'reflection', 'reflections', 'dailyTasks', 'aircover', 'teamEvents']),
+    'flags', 'reflection', 'reflections', 'dailyTasks', 'aircover', 'teamEvents',
+    // Menu order (Access control → Menu order): your own role's, and every role's for super admins.
+    'menuLayout', 'menuLayouts',
+    // Round 5: the KPI tracker (20261015100000).
+    'kpis']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -44,7 +49,7 @@ export const teamsReadSchema = z.object({
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
   }
-  if (value.section === 'teamPerformance') {
+  if (value.section === 'teamPerformance' || value.section === 'kpis') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 92 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 92 days' });
   }
@@ -75,6 +80,9 @@ const reflectionNote = z.string().trim().max(2000);
 // One thing the person says they got done today (a ticket, a to-do, a guest reply...). The label is the words they see.
 export const reflectionItemSchema = z.object({ kind: z.string().trim().min(1).max(40), ref: z.string().trim().max(80).nullable().optional(), label: text(1, 200) }).strict();
 export const visitAnswerSchema = z.object({ item: text(1, 200), done: z.boolean(), note: z.string().trim().max(500).optional() }).strict();
+// The KPI measure keys (private.workspace_kpi_measures() holds their labels, directions and areas).
+export const KPI_MEASURES = ['guest_reply_within', 'guest_reply_over', 'daily_work_done', 'performance_score', 'clean_forms_on_time'] as const;
+const kpiPercent = z.number().int().min(0).max(100);
 export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('decideComplaint'), requestId: id, workId: id, version, outcome: z.enum(['upheld', 'overturned']), note }).strict(),
   z.object({ action: z.literal('decideCleanerReview'), requestId: id, workId: id, version, outcome: z.enum(['no_action', 'supervised', 'removed_from_rota']), note }).strict(),
@@ -159,6 +167,12 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
     passPercent: z.number().int().min(1).max(100), bonusPercents: z.array(z.number().int().min(1).max(100)).max(5),
     // How much daily work counts in the score (0-100%), and what's expected on each Stays shift day.
     workWeight: z.number().int().min(0).max(100).optional(), dailyTargets: dailyTargetsSchema.optional() }).strict(),
+  // KPIs (admins and super admins only): add or edit one, switch it off or on, move it up or down within its area.
+  // The direction (higher or lower is better) comes from the measure; tiers sit beyond the target in that direction.
+  z.object({ action: z.literal('saveKpi'), requestId: id, kpiId: id.optional(), version: version.optional(), name: text(2, 120), area: z.enum(DEPARTMENTS), measure: z.enum(KPI_MEASURES),
+    minutes: z.number().int().min(1).max(1440).nullable().optional(), targetPercent: kpiPercent.nullable(), bonusTiers: z.array(kpiPercent).max(5), countsForBonus: z.boolean(), placeholder: z.boolean() }).strict(),
+  z.object({ action: z.literal('setKpiActive'), requestId: id, kpiId: id, version, active: z.boolean() }).strict(),
+  z.object({ action: z.literal('moveKpi'), requestId: id, kpiId: id, version, direction: z.enum(['up', 'down']) }).strict(),
   z.object({ action: z.literal('signContract'), requestId: id, contractId: id, version, signedName: text(2, 200), agree: z.literal(true, { errorMap: () => ({ message: 'Tick the box to agree to the contract' }) }) }).strict(),
   // Flag something for management (work, a hub item, or a free-standing request with an optional amount).
   z.object({ action: z.literal('flagForManagement'), requestId: id, workId: id.optional(), hubItemId: id.optional(), title: text(2, 200), reason: text(5, 2000),
@@ -185,6 +199,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('saveTeamEvent'), requestId: id, id: id.optional(), version: version.optional(), userId: id.optional(), kind: z.enum(TEAM_EVENT_KINDS), title: text(2, 200), startsOn: date, endsOn: date,
     startTime: clockTime.nullable().optional(), endTime: clockTime.nullable().optional(), location: z.string().trim().max(200).optional() }).strict(),
   z.object({ action: z.literal('cancelTeamEvent'), requestId: id, id, version: version.optional() }).strict(),
+  // Menu order per role (super admins only). Version 0 is a role nobody has reordered yet.
+  z.object({ action: z.literal('saveMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0), ...menuLayoutSchema.shape }).strict(),
+  z.object({ action: z.literal('resetMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0) }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'flagForManagement') {
     if (value.source === 'work' && (!value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'Flag work with its work id only' });

@@ -16,6 +16,7 @@ import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
 import { PayoutExamples } from "./AccountsFiles";
 import { PayoutStays } from "./PayoutStays";
 import { PayoutLinesSheet, type LinesStay } from "./PayoutLinesSheet";
+import { PayoutApproveSheet } from "./PayoutApproveSheet";
 import { AccountsPayable, ExpenseSheet, List, NewExpenseSheet, Pills, Row, type LimitState, type NoteAsk, type Overview } from "./AccountsPayable";
 import { AccountsStatements, TermsSheet, type StatementRow } from "./AccountsStatements";
 import { AccountsReceivable } from "./AccountsReceivable";
@@ -205,6 +206,7 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
   const [openExpense, setOpenExpense] = useState<string | null>(null);
   const [creating, setCreating] = useState(() => focus?.open === "new-expense");
   const [ask, setAsk] = useState<NoteAsk | null>(null);
+  const [approving, setApproving] = useState<PayoutRow | null>(null);
   const [stay, setStay] = useState<(NeedsDetails | PayoutRow) & { propertyName?: string } | null>(null);
   const [terms, setTerms] = useState<StatementRow | null>(null);
   const [linesFor, setLinesFor] = useState<LinesStay | null>(null);
@@ -271,11 +273,8 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
   // (The row's own Approve button agrees the amount it shows without opening anything.)
   function openPayout(r: PayoutRow) {
     if (r.state === "no_reference" || r.state === "no_expected_amount") { setStay({ ...r, propertyName: properties.find(x => x.id === r.propertyId)?.name }); return; }
-    setAsk({
-      title: "Approve the payout", subtitle: `${r.reference} · expected ${pounds(r.expectedMinor)}, received ${pounds(r.receivedMinor)}`, label: "Why this amount is right", min: 5, confirm: "Approve payout",
-      amount: { label: "Amount to approve", initial: (((r.state === "agreed" ? r.agreedMinor : null) ?? r.receivedMinor ?? r.expectedMinor ?? 0) / 100).toFixed(2) },
-      build: (note, minor) => ({ action: "agreePayout", requestId: "", reservationId: r.reservationId, version: r.version, agreedMinor: minor ?? 0, note }),
-    });
+    // The approval sheet shows what is being approved first (PayoutApproveSheet.tsx).
+    setApproving(r);
   }
 
   const unsettled = (overview?.unsettledPayouts ?? 0) + (overview?.missingDetails ?? 0);
@@ -364,6 +363,7 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
       <ExpenseSheet p={p} role={role} id={openExpense} limit={limit?.minor ?? null} onClose={() => setOpenExpense(null)} onAsk={a => { setOpenExpense(null); setAsk(a); }} onDone={saved(load)} />
       <NewExpenseSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={saved(load)} />
       <NoteSheet p={p} ask={ask} onClose={() => setAsk(null)} onDone={saved(load)} />
+      <PayoutApproveSheet p={p} row={approving} property={approving ? properties.find(x => x.id === approving.propertyId) : undefined} onClose={() => setApproving(null)} onDone={saved(load)} />
       <StaySheet p={p} stay={stay} onClose={() => setStay(null)} onDone={saved(load)} />
       <PayoutLinesSheet p={p} stay={linesFor} canSetAside={isFinanceRole(role)} onClose={() => setLinesFor(null)} onChanged={() => load({ quiet: true })} />
       <TermsSheet p={p} row={terms} onClose={() => setTerms(null)} onDone={saved(load)} />

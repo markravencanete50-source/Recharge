@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createServer } from 'vite';
 
 // Team channels in Messages: Everyone and one per department, found by rota department or by
-// role, readable by admins, heard once until read, and never open to owners.
+// role, readable by admins, heard on every message (round 5), and never open to owners.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 const { threadSchema } = await vite.ssrLoadModule('/lib/workspace-chat-policy.ts');
 const db = new PGlite();
@@ -64,13 +64,13 @@ test('each person finds their department\'s channel, and Everyone', async () => 
   await as(OWNER); assert.deepEqual(await channels(), [], 'owners see none');
 });
 
-test('messages stay inside the channel, and are heard once until read', async () => {
+test('messages stay inside the channel, and each one is heard', async () => {
   await as(CLEANER);
   const cleaning = (await read('list')).find(c => c.department === 'cleaning');
   assert.equal(cleaning.title, 'Cleaning'); assert.equal(cleaning.subtitle, 'Team channel'); assert.equal(cleaning.mine, true);
   await send(cleaning.id, 'Short of towels at the Leith flat');
   await send(cleaning.id, 'Also bin bags');
-  assert.equal(await outbox(users[CLEAN_MGR]), 1, 'the cleaning manager is told once');
+  assert.equal(await outbox(users[CLEAN_MGR]), 2, 'the cleaning manager is told about each message');
   assert.equal(await outbox(users[ADMIN]), 0, 'admins are not told about department channels');
   assert.equal(await outbox(users[READY]), 0);
   await as(READY);

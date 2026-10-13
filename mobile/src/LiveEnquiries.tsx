@@ -14,7 +14,7 @@ import { depth, ui, web, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
-  DEFAULT_SUBJECT, LINK_PLACEHOLDER, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, clientEnquiriesSchema, defaultBody, enquiryStep, valuationDraft,
+  DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, clientEnquiriesSchema, defaultBody, duplicateNote, enquiryStep, valuationDraft, valueButtonLabel,
   type ClientEnquiries, type ClientEnquiry, type EnquiryStep,
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -88,7 +88,7 @@ function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: Cli
   const a = e.answers;
   const when = e.submittedAt ? `Answered ${ago(e.submittedAt)}` : e.openedAt ? `Opened ${ago(e.openedAt)}` : `Sent ${ago(e.sentAt)}${e.emailStatus === "failed" ? " · email failed" : e.delivery === "link" ? " · link copied" : ""}`;
   return (
-    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={`${a?.fullName ?? e.recipientName}, ${STEP_LABEL[step]}`} onPress={onPress}
+    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={`${a?.fullName ?? e.recipientName}, ${STEP_LABEL[step]}${e.duplicateReason ? ", " + DUPLICATE_LABEL : ""}`} onPress={onPress}
       style={[ui.row, { gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: step === "received" ? p.waiting : p.border, backgroundColor: p.surface, ...depth.card }]}>
       <Initials p={p} name={a?.fullName ?? e.recipientName} tone="clients" size={44} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
@@ -101,6 +101,7 @@ function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: Cli
       </View>
       <View style={{ alignItems: "flex-end", gap: 6 }}>
         <Tag label={STEP_LABEL[step]} tone={STEP_TONE[step]} p={p} />
+        {!!e.duplicateReason && step !== "closed" && <Tag label={DUPLICATE_LABEL} tone="bad" p={p} />}
         {e.files.length > 0 && <View style={[ui.row, { gap: 4 }]}><Feather name="image" size={12} color={p.muted} /><Text style={{ color: p.muted, fontSize: 11 }}>{e.files.length}</Text></View>}
       </View>
       <Feather name="chevron-right" size={18} color={p.muted} />
@@ -234,9 +235,11 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
   return (
     <Sheet palette={p} visible={!!e} onClose={onClose} title={a?.fullName ?? e?.recipientName ?? ""} subtitle={e ? STEP_LABEL[step] + (e.submittedAt ? ` · answered ${ago(e.submittedAt)}` : ` · sent ${ago(e.sentAt)}`) : undefined} icon="building">
       {e && <>
-        {step === "received" && <Button label="Start valuing" icon="trending-up" primary p={p} onPress={() => setMode("value")} />}
-        {e.propertyId && <Button label={`Open ${e.propertyName ?? "the property"}`} icon="arrow-right" primary p={p} onPress={() => onOpenProperty(e.propertyId!)} />}
-        {e.propertyId && <Text style={[ui.small, { color: p.muted }]}>Valuing since {e.valuedAt ? ago(e.valuedAt) : "–"}{e.valuedByName ? `, by ${e.valuedByName}` : ""}. Publish the estimate from the property’s onboarding.</Text>}
+        {!!e.duplicateReason && step !== "closed" && <Notice text={`${DUPLICATE_LABEL}. ${duplicateNote(e)}`} p={p} tone="bad" />}
+        {step === "received" && <Button label={valueButtonLabel(e)} icon="trending-up" primary p={p} onPress={() => setMode("value")} />}
+        {e.propertyId && step !== "closed" && <Button label={`Open ${e.propertyName ?? "the property"}`} icon="arrow-right" primary={step !== "received"} p={p} onPress={() => onOpenProperty(e.propertyId!)} />}
+        {e.propertyId && step === "received" && <Text style={[ui.small, { color: p.muted }]}>It is already in Properties as a new enquiry. Check the details, then publish the estimate from the property’s onboarding.</Text>}
+        {e.propertyId && e.status === "valuing" && <Text style={[ui.small, { color: p.muted }]}>Valuing since {e.valuedAt ? ago(e.valuedAt) : "–"}{e.valuedByName ? `, by ${e.valuedByName}` : ""}. Publish the estimate from the property’s onboarding.</Text>}
         {e.status === "closed" && <Notice text={`Closed by ${e.closedByName ?? "the team"}: ${e.closeNote}`} p={p} />}
         {a ? <>
           <Group p={p} title="Contact information" icon="user">
@@ -294,7 +297,8 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
 }
 
 // "Start valuing": the property's details from the answers, checked, then the property and its
-// onboarding journey are made, ready for the estimate.
+// onboarding journey are made, ready for the estimate. Since 20261015200000 the property is made when the
+// form comes back, so this is "Check the details and value": the corrections are saved onto it.
 function ValueSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: ClientEnquiry; onClose: () => void; onDone: (propertyId: string) => Promise<void> }) {
   const celebrate = useCelebrate();
   const draft = valuationDraft(e.answers!);
@@ -314,8 +318,10 @@ function ValueSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: C
     } catch (err) { setError(message(err)); } finally { setBusy(false); }
   }
   return (
-    <Sheet palette={p} visible onClose={onClose} title="Start valuing" subtitle={e.answers!.fullName} icon="building">
-      <Text style={[ui.small, { color: p.muted }]}>This adds the property and its onboarding, with everything they told us. Then publish the estimate from the property.</Text>
+    <Sheet palette={p} visible onClose={onClose} title={valueButtonLabel(e)} subtitle={e.answers!.fullName} icon="building">
+      <Text style={[ui.small, { color: p.muted }]}>{e.propertyId
+        ? "The property is already in Properties. Correct anything here and it is saved onto it, with everything they told us. Then publish the estimate from the property."
+        : "This adds the property and its onboarding, with everything they told us. Then publish the estimate from the property."}</Text>
       <Field label="Property name" value={name} onChange={setName} p={p} placeholder="A short name the team will recognise" />
       <Field label="Property address" value={address} onChange={setAddress} p={p} multiline />
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Area</Text>
@@ -330,7 +336,7 @@ function ValueSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: C
         <View style={{ flex: 1 }}><Field label="Full bathrooms" value={bathrooms} onChange={setBathrooms} p={p} /></View>
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      <Button label={busy ? "Starting…" : "Start valuing"} icon="trending-up" primary p={p} disabled={busy} onPress={() => void start()} />
+      <Button label={busy ? "Saving…" : e.propertyId ? "Save and start valuing" : "Start valuing"} icon="trending-up" primary p={p} disabled={busy} onPress={() => void start()} />
     </Sheet>
   );
 }
@@ -347,7 +353,8 @@ function CloseSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: C
   }
   return (
     <Sheet palette={p} visible onClose={onClose} title="Close this enquiry" subtitle={e.answers?.fullName ?? e.recipientName} icon="building">
-      <Text style={[ui.small, { color: p.muted }]}>{e.answers ? "It stays on record, closed." : "The form link stops working, and it stays on record."}</Text>
+      <Text style={[ui.small, { color: p.muted }]}>{!e.answers ? "The form link stops working, and it stays on record."
+        : e.propertyId && (!e.stage || e.stage === "enquiry") ? "It stays on record, closed. Its property in Properties is archived too." : "It stays on record, closed."}</Text>
       <Field label="Why" value={note} onChange={setNote} p={p} multiline placeholder="Not in an area we cover" />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : "Close the enquiry"} icon="x" primary p={p} disabled={busy} onPress={() => void close()} />

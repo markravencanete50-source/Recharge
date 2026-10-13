@@ -13,6 +13,7 @@ import path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ROOT, DEVSTACK, PEOPLE, ROLES, DevDatabase, findPerson, freshDatabase, loadDatabase, sourceHash } from './db.mjs';
 import { storageGet, storagePut, storageRemove } from './media.mjs';
+import { createDevstack, STUBS, VIRTUAL } from './devstack-core.mjs';
 
 const args = process.argv.slice(2);
 const flag = name => args.includes(name);
@@ -55,139 +56,23 @@ await dev.exec(`update private.workspace_approved_sessions set expires_at = now(
 await dev.refreshUsers();
 
 // ---------------------------------------------------------------------------------------------
-// What the replaced modules call (globalThis.__devstack).
+// What the replaced modules call (globalThis.__devstack): devstack-core.mjs, with photos on disk.
 const als = new AsyncLocalStorage();
 const current = () => als.getStore() ?? { user: null, origin: `http://localhost:${PORT}` };
-const userObject = p => ({
-  id: p.id, aud: 'authenticated', role: 'authenticated', email: p.email, phone: '', email_confirmed_at: p.email_confirmed_at ?? new Date(0).toISOString(),
-  confirmed_at: p.email_confirmed_at ?? new Date(0).toISOString(), last_sign_in_at: new Date().toISOString(), app_metadata: { provider: 'email', providers: ['email'] },
-  user_metadata: { full_name: p.fullName }, identities: [], created_at: p.created_at ?? new Date(0).toISOString(), updated_at: new Date().toISOString(), is_anonymous: false,
-});
-class Query {
-  constructor(user, headers, table) { Object.assign(this, { user, headers, table, columns: '*', filters: [], orders: [], rowLimit: undefined, one: null, mutation: null }); }
-  select(columns = '*') { if (!this.mutation) this.columns = String(columns).replace(/\s+/g, ''); return this; }
-  order(column, options = {}) { this.orders.push([column, options.ascending !== false]); return this; }
-  limit(n) { this.rowLimit = n; return this; }
-  eq(c, v) { this.filters.push([c, '=', v]); return this; }
-  neq(c, v) { this.filters.push([c, '<>', v]); return this; }
-  gt(c, v) { this.filters.push([c, '>', v]); return this; }
-  gte(c, v) { this.filters.push([c, '>=', v]); return this; }
-  lt(c, v) { this.filters.push([c, '<', v]); return this; }
-  lte(c, v) { this.filters.push([c, '<=', v]); return this; }
-  is(c, v) { this.filters.push([c, 'is', v]); return this; }
-  in(c, v) { this.filters.push([c, 'in', v]); return this; }
-  maybeSingle() { this.one = 'maybe'; return this; }
-  single() { this.one = 'single'; return this; }
-  insert(row) { this.mutation = { kind: 'insert', row }; return this; }
-  then(resolve, reject) { return this.run().then(resolve, reject); }
-  async run() {
-    if (this.mutation) {
-      // Only the service client inserts (account invites record an access event).
-      if (this.user !== 'service') return { data: null, error: { code: '42501', message: 'permission denied' } };
-      const rows = [].concat(this.mutation.row), keys = Object.keys(rows[0] ?? {});
-      if (!keys.every(k => /^[a-z_][a-z0-9_]*$/.test(k)) || !/^[a-z_][a-z0-9_]*$/.test(this.table)) return { data: null, error: { code: 'PGRST100', message: 'Invalid insert' } };
-      try {
-        const columns = keys.map(k => `"${k}"`).join(', ');
-        for (const row of rows) await dev.sql(`insert into public."${this.table}"(${columns}) select ${columns} from jsonb_populate_record(null::public."${this.table}", $1::jsonb)`, [JSON.stringify(row)]);
-        return { data: null, error: null };
-      } catch (error) { return { data: null, error: { code: error.code, message: error.message } }; }
-    }
-    return dev.select(this.user, this, this.headers);
-  }
-}
-const thenable = promise => Object.assign(promise, { throwOnError() { return promise; } });
-function client(extraHeaders = {}) {
-  const ctx = current(), person = ctx.user;
-  const headers = { ...extraHeaders };
-  return {
-    devstack: true,
-    rpc: (name, rpcArgs = {}) => thenable(dev.rpc(person, name, rpcArgs, headers)),
-    from: table => new Query(person, headers, table),
-    auth: {
-      getUser: async () => person ? { data: { user: userObject(person) }, error: null } : { data: { user: null }, error: { name: 'AuthSessionMissingError', message: 'Auth session missing!', status: 400, code: 'session_not_found' } },
-      getClaims: async () => person ? { data: { claims: { sub: person.id, session_id: person.sessionId, role: 'authenticated', aud: 'authenticated', email: person.email } }, error: null } : { data: null, error: { message: 'Auth session missing!' } },
-      getSession: async () => ({ data: { session: person ? { user: userObject(person), access_token: 'devstack' } : null }, error: null }),
-      signOut: async () => ({ error: null }),
-      signInWithPassword: async () => ({ data: null, error: { code: 'invalid_credentials', message: 'Use /dev/as/<role> on the devstack' } }),
-      updateUser: async () => ({ data: { user: person ? userObject(person) : null }, error: null }),
-    },
-  };
-}
-// The service-role client (createClient with the secret key): RPCs as service_role, a few admin calls.
-function serviceClient() {
-  const admin = {
-    inviteUserByEmail: async email => ({ data: null, error: { message: `Invites are not sent on the devstack (${email})` } }),
-    generateLink: async () => ({ data: null, error: { message: 'Links are not sent on the devstack' } }),
-    createUser: async () => ({ data: null, error: { message: 'Accounts are seeded on the devstack' } }),
-    deleteUser: async () => ({ data: null, error: { message: 'Accounts are not deleted on the devstack' } }),
-    getUserById: async target => { const row = dev.users.get(target); return row ? { data: { user: userObject({ ...row, fullName: row.full_name }) }, error: null } : { data: { user: null }, error: { message: 'User not found' } }; },
-    signOut: async () => ({ error: null }),
-  };
-  return {
-    devstack: true,
-    rpc: (name, rpcArgs = {}) => thenable(dev.rpc('service', name, rpcArgs)),
-    from: table => new Query('service', {}, table),
-    auth: { admin, getUser: async () => ({ data: { user: null }, error: { message: 'Service client' } }) },
-    // Supabase Storage on disk: scripts/demo/storage/<bucket>/<path> (photos, course files).
-    storage: { from: bucket => ({
-      upload: async (file, body, options = {}) => {
-        if (!options.upsert && await storageGet(bucket, file)) return { data: null, error: { message: 'The resource already exists', statusCode: '409' } };
-        await storagePut(bucket, file, Buffer.from(body instanceof Uint8Array ? body : await new Response(body).arrayBuffer()));
-        return { data: { path: file, fullPath: `${bucket}/${file}` }, error: null };
-      },
-      download: async file => { const bytes = await storageGet(bucket, file).catch(() => null); return bytes ? { data: new Blob([bytes]), error: null } : { data: null, error: { message: 'Object not found', statusCode: '404' } }; },
-      createSignedUrl: async (file, _expires, options = {}) => ({ data: { signedUrl: `${current().origin}/devstack-storage/${bucket}/${file.split('/').map(encodeURIComponent).join('/')}${options.download ? `?download=${encodeURIComponent(options.download)}` : ''}` }, error: null }),
-      createSignedUrls: async files => ({ data: files.map(file => ({ path: file, error: null, signedUrl: `${current().origin}/devstack-storage/${bucket}/${file.split('/').map(encodeURIComponent).join('/')}` })), error: null }),
-      // One-off upload links (Messages photos and videos): the browser PUTs the file to the devstack.
-      createSignedUploadUrl: async file => ({ data: { path: file, token: 'devstack', signedUrl: `${current().origin}/devstack-storage-upload/${bucket}/${file.split('/').map(encodeURIComponent).join('/')}?token=devstack` }, error: null }),
-      remove: async files => { for (const file of files) await storageRemove(bucket, file).catch(() => undefined); return { data: [], error: null }; },
-    }) },
-  };
-}
-globalThis.__devstack = {
+const fileUrl = (prefix, bucket, file) => `${current().origin}/${prefix}/${bucket}/${file.split('/').map(encodeURIComponent).join('/')}`;
+globalThis.__devstack = createDevstack({
+  dev, current,
+  storage: { get: storageGet, put: (bucket, file, bytes) => storagePut(bucket, file, Buffer.from(bytes)), remove: storageRemove },
+  links: {
+    read: (bucket, file, options = {}) => fileUrl('devstack-storage', bucket, file) + (options.download ? `?download=${encodeURIComponent(options.download)}` : ''),
+    upload: (bucket, file) => fileUrl('devstack-storage-upload', bucket, file) + '?token=devstack',
+  },
   // Photos use the project's storage (here on disk); email, push and the channel manager stay unconfigured.
   env: { APP_ORIGIN: `http://localhost:${PORT}`, SUPABASE_URL: 'https://devstack.localhost', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_devstack', SUPABASE_SECRET_KEY: 'sb_secret_devstack' },
-  current, client, serviceClient,
-  serviceRpc: (name, rpcArgs) => dev.rpc('service', name, rpcArgs),
-  supabaseConfiguration: () => ({ url: `http://localhost:${PORT}/devstack-supabase`, key: 'sb_publishable_devstack' }),
-  securityConfiguration: () => ({ url: `http://localhost:${PORT}/devstack-supabase`, key: 'sb_secret_devstack', salt: 'devstack-rate-limit-salt-0123456789abcdef', origin: current().origin }),
-};
+});
 
 // ---------------------------------------------------------------------------------------------
 // Vite loads the real route modules; this plugin swaps the server-only modules at resolution time.
-const STUBS = {
-  'lib/supabase-server.ts': `import { confirmedContact } from './registration-policy';
-const ds = () => globalThis.__devstack;
-export function supabaseConfiguration() { return ds().supabaseConfiguration(); }
-export const workspaceSupabase = async () => ds().client();
-export const workspaceSupabaseViewing = async target => ds().client({ 'x-recharge-view-as': target });
-export const verifiedWorkspaceUser = async () => {
-  const client = ds().client();
-  const { data, error } = await client.auth.getUser();
-  if (error || !data.user || !confirmedContact(data.user)) return null;
-  const allowed = await client.rpc('workspace_session_allowed');
-  return allowed.error || allowed.data !== true ? null : data.user;
-};`,
-  'lib/auth-security.ts': `const ds = () => globalThis.__devstack;
-export function authSecurityConfiguration() { return ds().securityConfiguration(); }
-export async function securityHash(scope, value) {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey('raw', encoder.encode(ds().securityConfiguration().salt), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const digest = await crypto.subtle.sign('HMAC', key, encoder.encode(scope + '\\0' + value));
-  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-}
-export async function securityRpc(name, args) { const result = await ds().serviceRpc(name, args); if (result.error) throw new Error('Security database unavailable: ' + result.error.message); return result.data; }
-export async function passwordDecision() { return { allowed: true, retryAfter: 0 }; }
-// No rate limits on the devstack.
-export async function requestQuota() { return { allowed: true, retryAfter: 0 }; }
-export async function providerIdentity() { const user = ds().current().user; return user ? { user: { id: user.id, email: user.email, email_confirmed_at: new Date(0).toISOString() }, sessionId: user.sessionId } : null; }
-export async function recoveryPhase() { return true; }`,
-};
-const VIRTUAL = {
-  'cloudflare:workers': 'export const env = globalThis.__devstack.env; export default { env };',
-  '@supabase/supabase-js': `export const createClient = () => globalThis.__devstack.serviceClient();
-export class SupabaseClient {}`,
-};
 const stubPlugin = {
   name: 'recharge-devstack-stubs', enforce: 'pre',
   resolveId(source) {
@@ -290,7 +175,7 @@ async function publicApi(req, res, url, origin, file) {
   return response.status;
 }
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.mjs': 'application/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain', '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.webp': 'image/webp', '.gif': 'image/gif' };
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain', '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.webp': 'image/webp', '.gif': 'image/gif', '.wasm': 'application/wasm' };
 function serveStatic(req, res, url) {
   if (!STATIC) return send(res, 404, `<p>No web build: start with <code>--static &lt;dir&gt;</code> (an <code>expo export --platform web</code> output built with EXPO_PUBLIC_WORKSPACE_WEB=same-origin).</p>`);
   const relative = decodeURIComponent(url.pathname.replace(/^\/workspace\/?/, ''));
