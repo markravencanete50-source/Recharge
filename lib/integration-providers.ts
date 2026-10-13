@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_PHOTO_BYTES,photoFormat } from './integration-policy';
+import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_PHOTO_BYTES,photoFormat,isMailboxAddress } from './integration-policy';
 import { noticeCopyFor } from './notice-details';
 
 async function jsonRequest(url:string,init:RequestInit,readOnly=false):Promise<Record<string,unknown>> {
@@ -69,9 +69,12 @@ export async function deliverNotification(settings:IntegrationSettings,job:Deliv
 }
 // A one-off email the team wrote (Client Enquiries), sent now. The key makes a retried send
 // the same email.
-export async function sendEmail(settings:IntegrationSettings,email:{to:string;subject:string;text:string;html:string;idempotencyKey:string}) {
+// `from` and `replyTo` replace the notification sender for this email (the enquiry form is sent as ownerrelations@).
+export async function sendEmail(settings:IntegrationSettings,email:{to:string;subject:string;text:string;html:string;idempotencyKey:string;from?:string;replyTo?:string}) {
+  // This one-off sender is for owners and clients (the enquiry form): never the guest mailbox, and never to one of our own mailboxes.
+  if(/guestrelations@/i.test(email.from??'')||/guestrelations@/i.test(email.replyTo??'')||isMailboxAddress(email.to))throw new ProviderFailure('rejected');
   const result=await jsonRequest('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${settings.RESEND_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':email.idempotencyKey},
-    body:JSON.stringify({from:settings.NOTIFICATION_FROM_EMAIL,to:[email.to],subject:email.subject,text:email.text,html:email.html})});
+    body:JSON.stringify({from:email.from??settings.NOTIFICATION_FROM_EMAIL,to:[email.to],subject:email.subject,text:email.text,html:email.html,...(email.replyTo?{reply_to:email.replyTo}:{})})});
   if(typeof result.id!=='string'||!result.id)throw new ProviderFailure('uncertain');
   return result.id;
 }

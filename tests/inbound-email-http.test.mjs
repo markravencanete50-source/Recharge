@@ -202,7 +202,7 @@ test('a reply by email goes out as guestrelations@ with In-Reply-To, References,
   const [call] = state.resend;
   const sent = JSON.parse(call.body);
   assert.equal(call.headers['idempotency-key'], 'recharge-owner-email/11111111-1111-4111-8111-111111111111');
-  assert.equal(sent.from, 'Recharge <ownerrelations@rechargegroup.co.uk>');
+  assert.equal(sent.from, 'Recharge Group <ownerrelations@rechargegroup.co.uk>');
   assert.deepEqual([sent.to, sent.subject, sent.text], [['owner@example.com'], 'Re: Boiler', 'We will send an engineer.']);
   assert.deepEqual(sent.headers, { 'Message-ID': '<11111111-1111-4111-8111-111111111111@rechargegroup.co.uk>', 'In-Reply-To': '<owner-1@mail.example.com>', References: '<first@x> <owner-1@mail.example.com>' });
   assert.deepEqual(state.security.at(-1), { name: 'workspace_email_outbox_result', args: { input: { id: '11111111-1111-4111-8111-111111111111', ok: true, messageId: '11111111-1111-4111-8111-111111111111@rechargegroup.co.uk' } } });
@@ -226,7 +226,7 @@ test('Send in an email conversation: recorded once, sent through Resend as guest
   const [call] = state.resend;
   assert.equal(call.headers['idempotency-key'], 'recharge-guest-reply/' + REQUEST);
   const sent = JSON.parse(call.body);
-  assert.equal(sent.from, 'Recharge <guestrelations@rechargegroup.co.uk>');
+  assert.equal(sent.from, 'Recharge Group <guestrelations@rechargegroup.co.uk>');
   assert.deepEqual([sent.to, sent.subject, sent.text], [['guest.one@example.org'], 'Re: Question about check in', 'Check in is from 3pm.']);
   assert.deepEqual(sent.headers, { 'Message-ID': `<${REQUEST}@rechargegroup.co.uk>`, 'In-Reply-To': '<abc@mail.example.org>', References: '<first@x> <abc@mail.example.org>' });
   assert.deepEqual(state.security, [{ name: 'workspace_email_reply_result', args: { input: { requestId: REQUEST, ok: true, messageId: `${REQUEST}@rechargegroup.co.uk` } } }]);

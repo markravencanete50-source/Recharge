@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { GUEST_MAILBOX, MAIL_DOMAIN, OWNER_MAILBOX, type Mailbox } from './email-inbound-policy';
+import { MAIL_DOMAIN, type Mailbox } from './email-inbound-policy';
+import { GUEST_ADDRESS, GUEST_FROM, OWNER_ADDRESS, OWNER_FROM, isMailboxAddress } from './integration-policy';
 
 // Resend, for the two mailboxes. The key and the webhook signing secret are Worker Secrets (RESEND_API_KEY, RESEND_WEBHOOK_SECRET).
 const settings = () => env as unknown as Record<string, string | undefined>;
@@ -70,10 +71,12 @@ export async function sendMailboxEmail(mailbox: Mailbox, email: { to: string; su
   const headers: Record<string, string> = { 'Message-ID': `<${messageId}>` };
   if (email.inReplyTo) headers['In-Reply-To'] = wrap(email.inReplyTo);
   if (email.references?.length) headers.References = email.references.map(wrap).join(' ');
-  const address = mailbox === 'guest' ? GUEST_MAILBOX : OWNER_MAILBOX;
+  // The two mailboxes never mix: a guest email goes out from guestrelations@, an owner email from ownerrelations@, and neither is ever sent to our own mailbox.
+  const address = mailbox === 'guest' ? GUEST_ADDRESS : OWNER_ADDRESS, from = mailbox === 'guest' ? GUEST_FROM : OWNER_FROM;
+  if (isMailboxAddress(email.to)) throw new ResendError('Not sent: the address is one of our own mailboxes', 400);
   const response = await resend('/emails', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': email.idempotencyKey },
-    body: JSON.stringify({ from: `Recharge <${address}>`, to: [email.to], reply_to: address, subject: email.subject, text: email.text, headers }),
+    body: JSON.stringify({ from, to: [email.to], reply_to: address, subject: email.subject, text: email.text, headers }),
   });
   const result = await response.json() as { id?: string };
   if (typeof result.id !== 'string' || !result.id) throw new ResendError('Resend gave no id', 502);

@@ -104,6 +104,7 @@ function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: Cli
       </View>
       <View style={{ alignItems: "flex-end", gap: 6 }}>
         <Tag label={STEP_LABEL[step]} tone={STEP_TONE[step]} p={p} />
+        {e.delivery === "email" && ["sent", "opened", "expired"].includes(step) && e.emailStatus !== "sent" && <Tag label={e.emailStatus === "failed" ? "Email failed" : "Sending…"} tone={e.emailStatus === "failed" ? "bad" : "plain"} p={p} />}
         {!!e.duplicateReason && step !== "closed" && <Tag label={DUPLICATE_LABEL} tone="bad" p={p} />}
         {e.files.length > 0 && <View style={[ui.row, { gap: 4 }]}><Feather name="image" size={12} color={p.muted} /><Text style={{ color: p.muted, fontSize: 11 }}>{e.files.length}</Text></View>}
       </View>
@@ -131,6 +132,7 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
   }, [visible, resend]);
   // The greeting follows the name until the message is edited by hand.
   const changeName = (v: string) => { setName(v); if (!edited) setBody(defaultBody(v)); };
+  // With email ready the sheet only sends (the email goes out by itself); without it, or if a send fails, the link is the fallback.
   async function send(delivery: "email" | "link") {
     if (busy) return;
     if (!resend && (name.trim().length < 1 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()))) { setError("Add their name and a valid email address."); return; }
@@ -161,11 +163,14 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
             <Feather name={result.failed ? "alert-triangle" : result.emailed ? "check" : "link"} size={28} color={result.failed ? p.danger : p.success} />
           </View>
           <Text style={{ color: p.text, fontSize: 18, fontWeight: "800", textAlign: "center" }}>{result.emailed ? `Sent to ${result.to}` : result.failed ? "The email didn't go" : "Your link is ready"}</Text>
-          <Text style={[ui.small, { color: p.muted, textAlign: "center" }]}>{result.emailed ? "Their answers will appear in Client enquiries. The link works for 30 days." : "Send it from your own email: copy the link, or open your email app with the message filled in."}</Text>
+          <Text style={[ui.small, { color: p.muted, textAlign: "center" }]}>{result.emailed ? "Their answers will appear in Client enquiries, and their replies to the email arrive in Messages. The link works for 30 days." : result.failed ? "Recharge couldn't send it. Try again from this enquiry, or send the link yourself: copy it below, or open your email app with the message filled in." : "Send it from your own email: copy the link, or open your email app with the message filled in."}</Text>
         </View>
-        <View style={{ padding: 12, borderRadius: 14, backgroundColor: p.wash }}><Text selectable numberOfLines={2} style={{ color: p.text, fontSize: 12, fontVariant: ["tabular-nums"] }}>{result.link}</Text></View>
-        <Button label={copied ? "Copied" : "Copy the link"} icon={copied ? "check" : "copy"} p={p} primary={!result.emailed} onPress={() => void copy()} />
-        {!result.emailed && <Button label="Open my email app" icon="mail" p={p} onPress={() => void Linking.openURL(mailto).catch(() => setError("No email app could be opened. Copy the link instead."))} />}
+        {/* Sent by Recharge: nothing to copy. Only the fallback (email not ready, or the send failed) shows the link. */}
+        {!result.emailed && <>
+          <View style={{ padding: 12, borderRadius: 14, backgroundColor: p.wash }}><Text selectable numberOfLines={2} style={{ color: p.text, fontSize: 12, fontVariant: ["tabular-nums"] }}>{result.link}</Text></View>
+          <Button label={copied ? "Copied" : "Copy the link"} icon={copied ? "check" : "copy"} p={p} primary onPress={() => void copy()} />
+          <Button label="Open my email app" icon="mail" p={p} onPress={() => void Linking.openURL(mailto).catch(() => setError("No email app could be opened. Copy the link instead."))} />
+        </>}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         <Button label="Done" icon="check" p={p} onPress={onClose} />
       </> : <>
@@ -189,8 +194,8 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
         </View>
         {!emailReady && <Notice text="Recharge's email service isn't connected yet, so you send this yourself: make the link, then copy it or open your email app with the message filled in." p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
-        {emailReady && <Button label={busy ? "Sending…" : "Send the email"} icon="send" primary p={p} disabled={busy} onPress={() => void send("email")} />}
-        <Button label={busy && !emailReady ? "Making the link…" : emailReady ? "Copy the link instead" : "Make the link"} icon="link" primary={!emailReady} p={p} disabled={busy} onPress={() => void send("link")} />
+        {emailReady ? <Button label={busy ? "Sending…" : resend ? "Send the new link" : "Send the form"} icon="send" primary p={p} disabled={busy} onPress={() => void send("email")} />
+          : <Button label={busy ? "Making the link…" : "Make the link"} icon="link" primary p={p} disabled={busy} onPress={() => void send("link")} />}
       </>}
     </Sheet>
   );
@@ -289,12 +294,12 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
         </> : <Group p={p} title="The email" icon="mail">
           <Line p={p} label="To" value={`${e.recipientName} · ${e.recipientEmail}`} />
           <Line p={p} label="Subject" value={e.subject} />
-          <Line p={p} label="How" value={e.delivery === "email" ? (e.emailStatus === "sent" ? "Sent by Recharge's email" : e.emailStatus === "failed" ? "The email failed: send a new link" : "Sending…") : "Link copied to send yourself"} />
+          <Line p={p} label="How" value={e.delivery === "email" ? (e.emailStatus === "sent" ? "Sent by Recharge's email" : e.emailStatus === "failed" ? "The email failed: press Try again" : "Sending…") : "Link copied to send yourself"} />
           <Line p={p} label="Sent" value={`${ago(e.sentAt)}${e.sentByName ? ` by ${e.sentByName}` : ""}`} />
           <Line p={p} label="Opened" value={e.openedAt ? ago(e.openedAt) : "Not yet"} />
           <Line p={p} label="Link works until" value={new Date(e.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} />
         </Group>}
-        {["sent", "opened", "expired"].includes(step) && <Button label="Send a new link" icon="refresh-cw" p={p} onPress={() => setMode("resend")} />}
+        {["sent", "opened", "expired"].includes(step) && <Button label={e.emailStatus === "failed" ? "Try again" : "Send a new link"} icon="refresh-cw" primary={e.emailStatus === "failed"} p={p} onPress={() => setMode("resend")} />}
         {!["valuing", "estimate", "won", "declined", "closed"].includes(step) && <Button label="Close this enquiry" icon="x" p={p} onPress={() => setMode("close")} />}
         {canDelete && <Button label="Delete enquiry" icon="trash-2" p={p} onPress={() => setMode("delete")} />}
       </>}

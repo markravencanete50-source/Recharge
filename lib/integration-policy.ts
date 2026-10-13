@@ -7,11 +7,25 @@ export function integrationConfiguration(settings: IntegrationSettings) {
   // switched on. That needs only the backend's existing database connection.
   const storage = settings.MEDIA_STORAGE !== 'off' && /^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test((settings.SUPABASE_URL || '').replace(/\/$/, '')) && Boolean(settings.SUPABASE_SECRET_KEY?.startsWith('sb_secret_'));
   const media = cloudinary || storage;
-  const email = settings.NOTIFICATION_EMAIL_ENABLED === 'true' && Boolean(settings.RESEND_API_KEY) && z.string().email().safeParse(settings.NOTIFICATION_FROM_EMAIL).success;
+  const email = settings.NOTIFICATION_EMAIL_ENABLED === 'true' && Boolean(settings.RESEND_API_KEY) && z.string().email().safeParse(settings.NOTIFICATION_FROM_EMAIL).success && !isMailboxAddress(settings.NOTIFICATION_FROM_EMAIL);
   const push = settings.NOTIFICATION_PUSH_ENABLED === 'true' && Boolean(settings.EXPO_ACCESS_TOKEN);
   const reservations = settings.HOSTAWAY_IMPORT_ENABLED === 'true' && Boolean(settings.HOSTAWAY_ACCOUNT_ID && settings.HOSTAWAY_API_KEY);
   return { media, mediaProvider: cloudinary ? 'cloudinary' as const : storage ? 'storage' as const : null, email, push, reservations };
 }
+// Two mailboxes, never mixed: guests are written to as guestrelations@, owners and clients as ownerrelations@ (the client enquiry form
+// included). Nothing else sends from either address: the staff notice sender may not be one of them.
+export const GUEST_FROM = 'Recharge Group <guestrelations@rechargegroup.co.uk>';
+export const OWNER_FROM = 'Recharge Group <ownerrelations@rechargegroup.co.uk>';
+export const GUEST_ADDRESS = 'guestrelations@rechargegroup.co.uk';
+export const OWNER_ADDRESS = 'ownerrelations@rechargegroup.co.uk';
+export const isMailboxAddress = (value: string | undefined) => /(^|<)\s*(guestrelations|ownerrelations)@rechargegroup\.co\.uk\s*(>|$)/i.test(value || '');
+// The client enquiry form is emailed by its own switch, apart from `email` (staff notice emails): ready as soon as RESEND_API_KEY is set,
+// unless ENQUIRY_EMAIL_ENABLED is `false`. It never needs NOTIFICATION_EMAIL_ENABLED and never turns staff notice emails on.
+export const ENQUIRY_SENDER = OWNER_FROM;
+export const ENQUIRY_REPLY_TO = OWNER_ADDRESS;
+export const enquiryEmailReady = (settings: IntegrationSettings) => Boolean(settings.RESEND_API_KEY) && settings.ENQUIRY_EMAIL_ENABLED !== 'false';
+// Always ownerrelations@: there is no override, so the form can never go out from the guest mailbox.
+export const enquirySender = (_settings?: IntegrationSettings) => ENQUIRY_SENDER;
 export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 export function photoFormat(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
   if (bytes.length < 12 || bytes.length > MAX_PHOTO_BYTES) return null;
