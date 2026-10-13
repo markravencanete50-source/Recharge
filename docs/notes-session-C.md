@@ -246,7 +246,11 @@ chats keep today's owner team; one notice per message, not per conversation.
   message", no names or property).
 - **Owner chats**: unchanged, and now proved by a test: an owner's message tells every admin, the client relations (or
   management) rota, and Stays on that owner's properties, on every message; the team's messages tell the owner.
-- Not filtered: a Stays person still mid-onboarding is told about guest messages they cannot open until onboarding is done.
+- **Onboarding** (`20261015330000_guest_message_notices_onboarded.sql`, follow-up): a Stays person still mid-onboarding (a
+  required contract unsigned or a required course not done) is no longer told about guest messages, using the same check the guest
+  inbox uses (`workspace_onboarding_status(person)->>'complete'`). Once onboarding is complete they are told about the next guest
+  message; earlier ones are not sent again. Admins never onboard and are unchanged. Test:
+  `tests/guest-message-notices-onboarding-database.test.mjs`.
 - Tests: `tests/message-notices-database.test.mjs` (new). `chat-database` and `team-channels-database` now expect one notice per
   message; `chat-notices-database` leaves `…300000` out, as it proves the round 4 rule on its own.
 
@@ -354,7 +358,7 @@ Apply in filename order after the round 3 migrations: `20261014300000_team_calen
 redeploy. The app works before and after each of them. Warn the team before `…320000`: people with unread conversations get one
 notice per conversation the next time someone writes there.
 
-Round 5: apply `20261015300000_chat_notice_every_message.sql`, `20261015310000_guest_message_notices.sql` and
-`20261015320000_owner_chat_closed.sql` in that order, then redeploy the backend and the app (the app's Close button and the
+Round 5: apply `20261015300000_chat_notice_every_message.sql`, `20261015310000_guest_message_notices.sql`,
+`20261015320000_owner_chat_closed.sql` and `20261015330000_guest_message_notices_onboarded.sql` in that order, then redeploy the backend and the app (the app's Close button and the
 Clients status need `…320000`; before it, every owner conversation reads as open). Warn the team first: every chat message and
 every guest message now sends a notice, and push and email follow when they are switched on.
