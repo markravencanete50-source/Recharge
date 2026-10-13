@@ -300,7 +300,27 @@ Lee: "in the properties remove those location buttons, it should be searchable o
 - `lib/property-table.ts` is unchanged; its region and status helpers stay tested.
 - Test: `tests/properties-search-only.test.mjs`.
 
-## Deploy order for this session's migrations
+## Round 6: Session E's design items (1, 2, 3, 4, 11, 17, 20; 14 and 15 confirmed)
+- Pills and the pill copies use the `selected` tokens when chosen and `controlBorder` when not (`pillBox`, `pillInk` in `Pills.tsx`).
+- The payout row's Approve button has a `washBorder` edge.
+- The Accounts sections are one Pills row: a dropdown for finance roles (6), pills otherwise (3).
+- New expense:
+  - "Received on" and the draft form's date are single-day `DateField`s;
+  - the category is a `Dropdown`;
+  - the cleaner invoice date is a `DateField` too.
+- The phone Accounts tiles use one fill and one-line labels (Approve, Reconcile, Paid).
+- The AccountsFlows step tick uses `onSuccess`.
+- Tests: `tests/design-review-session-a.test.mjs`.
+
+**Dark-mode screenshots** (`docs/screenshots/session-a/dark/`):
+- Before is `cd85572` (E's tokens merged, these items not yet done); after is `202c62c`.
+- Desktop 1440×900 and phone 390×844 of:
+  - Accounts (`*-accounts`);
+  - Reconciliation with Platform stays, its pills and the calendar (`*-reconciliation`);
+  - the New expense sheet (`*-new-expense`) and its date field open (`*-new-expense-date`).
+- Taken in the interactive demo in headless Chromium, served the way `tests/demo-browser-e2e.test.mjs` serves it.
+
+
 Apply in filename order, before deploying the Worker (the Worker code is unchanged by this session):
 
 1. `20261014100000_clean_form_reminders.sql`
