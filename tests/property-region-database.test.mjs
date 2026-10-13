@@ -37,10 +37,34 @@ test('editing an address fills a blank area but never replaces one',async()=>{
 });
 
 test('the database rules match the app rules for every address in the sample',async()=>{
- const samples=['Leith Walk, Edinburgh','Paisley Road West, Glasgow','Pitlochry Perthshire','Kirkcaldy, Fife','Oban, Argyll','Dalkeith Midlothian','Hamilton ML3','Stornoway, Isle of Lewis','Greenock PA15','Peebles EH45','Montrose DD10','Nowhere','Duke St, Hawick TD9 9PY, UK','Armadale, Bathgate EH48 3NE','Rutherglen G73 4NN','Bornisketaig, Portree IV51 9YS','Prestonpans EH32 0QF','Main St, Prestwick KA9 1PB','Townend Rd, Dumbarton G82 2BA','75 George St, Huntly AB54 8HJ','Deanpark Bank, Balerno EH14 7LG','De Quincey Road, Polton EH18 1DP','Sydney Drive, East Kilbride G75'];
+ const samples=['Leith Walk, Edinburgh','Paisley Road West, Glasgow','Pitlochry Perthshire','Kirkcaldy, Fife','Oban, Argyll','Dalkeith Midlothian','Hamilton ML3','Stornoway, Isle of Lewis','Greenock PA15','Peebles EH45','Montrose DD10','Nowhere','Duke St, Hawick TD9 9PY, UK','Armadale, Bathgate EH48 3NE','Rutherglen G73 4NN','Bornisketaig, Portree IV51 9YS','Prestonpans EH32 0QF','Main St, Prestwick KA9 1PB','Townend Rd, Dumbarton G82 2BA','75 George St, Huntly AB54 8HJ','Deanpark Bank, Balerno EH14 7LG','De Quincey Road, Polton EH18 1DP','Sydney Drive, East Kilbride G75','Main St, Alexandria, West Dunbartonshire G83 0AA','Kirkintilloch, East Dunbartonshire','1 High St, Dunbar EH42 1EN','Dunbar Road, Haddington','Innerleithen EH44 6HA','5 Great Junction St, Leith EH6 5LA'];
  for(const a of samples){
   const expected=normaliseRegion('',a);
   const got=(await db.query('select private.workspace_infer_region($1) r',[a])).rows[0].r;
   assert.equal(got,expected,a);
+ }
+});
+
+// A live property in West Dunbartonshire was filed as East Lothian: "dunbar" matched inside the word.
+test('Dunbartonshire is not East Lothian and Innerleithen is not Edinburgh, in the app and the database',async()=>{
+ const cases=[
+  ['12 Main St, Alexandria, West Dunbartonshire G83 0AA','Dunbartonshire'],['West Dunbartonshire','Dunbartonshire'],['East Dunbartonshire','Dunbartonshire'],
+  ['5 Station Rd, Clydebank, West Dunbartonshire','Dunbartonshire'],['1 High St, Dunbar EH42 1EN','East Lothian'],['Dunbar, East Lothian','East Lothian'],
+  ['Innerleithen EH44 6HA','Scottish Borders'],['5 Great Junction St, Leith EH6 5LA','Edinburgh'],['Leith Walk, Edinburgh','Edinburgh'],
+ ];
+ for(const [address,area] of cases){
+  assert.equal(normaliseRegion('',address),area,'app: '+address);
+  assert.equal((await db.query('select private.workspace_infer_region($1) r',[address])).rows[0].r,area,'database: '+address);
+ }
+ assert.equal(await add('Flat W','12 Main St, Alexandria, West Dunbartonshire G83 0AA'),'Dunbartonshire','a new property is filed under its own area');
+});
+
+test('every place name in the rules, and every council, maps to its own area',async()=>{
+ const src=await fs.readFile('lib/regions.ts','utf8');
+ for(const m of src.matchAll(/\[\/([^/]+)\/i, '([^']+)'\]/g))for(const name of m[1].replaceAll('\\b','').split('|'))assert.equal(normaliseRegion('',name),m[2],name);
+ const councils={'Aberdeen City':'Aberdeen',Aberdeenshire:'Aberdeenshire and Moray',Angus:'Angus','Argyll and Bute':'Argyll and Bute','City of Edinburgh':'Edinburgh','Dumfries and Galloway':'Dumfries and Galloway','Dundee City':'Dundee','East Ayrshire':'Ayrshire','East Dunbartonshire':'Dunbartonshire','East Lothian':'East Lothian','East Renfrewshire':'Renfrewshire and Inverclyde',Falkirk:'Stirling and Falkirk',Fife:'Fife','Glasgow City':'Glasgow',Highland:'Inverness and Highlands',Inverclyde:'Renfrewshire and Inverclyde',Midlothian:'Midlothian',Moray:'Aberdeenshire and Moray','North Ayrshire':'Ayrshire','North Lanarkshire':'Lanarkshire','Orkney Islands':'Scottish islands','Perth and Kinross':'Perth and Kinross',Renfrewshire:'Renfrewshire and Inverclyde','Scottish Borders':'Scottish Borders','Shetland Islands':'Scottish islands','South Ayrshire':'Ayrshire','South Lanarkshire':'Lanarkshire',Stirling:'Stirling and Falkirk','West Dunbartonshire':'Dunbartonshire','West Lothian':'West Lothian'};
+ for(const [council,area] of Object.entries(councils)){
+  assert.equal(normaliseRegion(council,council),area,'app: '+council);
+  assert.equal((await db.query('select private.workspace_infer_region($1) r',[council])).rows[0].r,area,'database: '+council);
  }
 });
