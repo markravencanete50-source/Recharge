@@ -62,11 +62,11 @@ export function emptyMessage(chip: InboxChip, where: 'guests' | 'clients' | 'tea
 
 // ---- Messages, round 5 (Lee: "keep it simple, clean, and professional"): three statuses for Guests and Clients
 // instead of the chips above, and one search box instead of the property chips. The Team tab has no status filter.
-// Needs a reply: the other side spoke last and nobody has answered. Waiting for reply: we answered last and it is still
-// open. Closed: marked done (guests) or closed (owners); a new message reopens either.
+// Needs a reply: the other side spoke last and nobody has answered. Engaged: we answered last and it is still open
+// (Lee renamed it from "Waiting for reply": nobody waits on us). The key stays `waiting`. Closed: marked done (guests) or closed (owners); a new message reopens either.
 export const MESSAGE_STATUSES = ['reply', 'waiting', 'closed'] as const;
 export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
-export const MESSAGE_STATUS_LABEL: Record<MessageStatus, string> = { reply: 'Needs a reply', waiting: 'Waiting for reply', closed: 'Closed' };
+export const MESSAGE_STATUS_LABEL: Record<MessageStatus, string> = { reply: 'Needs a reply', waiting: 'Engaged', closed: 'Closed' };
 
 export const guestStatus = (t: { status: 'open' | 'done'; waitingSince: string | null }): MessageStatus =>
   t.status === 'done' ? 'closed' : t.waitingSince ? 'reply' : 'waiting';

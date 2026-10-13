@@ -13,14 +13,14 @@ import { Button, Field, message, Notice, Tag, Loading } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { readInbox, writeInbox } from "./backend/client";
 import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
-import { emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
+import { MESSAGE_STATUS_LABEL, emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, QuietLine, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { chatTime } from "../../lib/workspace-chat-policy";
 import { SavedReplies } from "./SavedReplies";
 import type { PropertyView } from "../../lib/workspace-view";
 
 // The guest inbox (the Guests tab of Messages): every conversation with guests, the longest wait first, filtered
-// by Needs a reply, Waiting for reply or Closed and by one search box. A conversation opens in place: beside the
+// by Needs a reply, Engaged or Closed and by one search box. A conversation opens in place: beside the
 // list on a wide screen, instead of it on a phone.
 // Hostaway fills it by itself (guest messages and the team's replies there, within about a minute).
 // When sending is switched on (canSend), a reply to a Hostaway conversation is sent to the guest through
@@ -72,7 +72,7 @@ function ThreadRow({ p, t, targets, first, unread = false, active = false, onPre
         <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
           {wait && <Tag label={`Waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} />}
           {t.status === "done" && <Tag label="Done" tone="plain" p={p} />}
-          {t.status === "open" && !wait && <Tag label="Waiting for reply" tone="good" p={p} />}
+          {t.status === "open" && !wait && <Tag label={MESSAGE_STATUS_LABEL.waiting} tone="good" p={p} />}
         </View>
       </View>
     </MotionPress>
@@ -193,7 +193,7 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
       {!data && !error && <Loading p={p} />}
       {t && data && <>
         <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-          {wait ? <Tag label={`Needs a reply · waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} /> : <Tag label={t.status === "done" ? "Closed" : "Waiting for reply"} tone={t.status === "done" ? "plain" : "good"} p={p} />}
+          {wait ? <Tag label={`Needs a reply · waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} /> : <Tag label={MESSAGE_STATUS_LABEL[t.status === "done" ? "closed" : "waiting"]} tone={t.status === "done" ? "plain" : "good"} p={p} />}
           {t.source === "manual" && <Tag label="Logged by hand" tone="plain" p={p} />}
         </View>
         <ScrollView ref={scroller} style={{ maxHeight: Platform.OS === "web" ? 460 : 380 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })}>

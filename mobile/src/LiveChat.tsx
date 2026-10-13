@@ -26,7 +26,7 @@ import { z } from "zod";
 
 // Messages, laid out like a messenger (Lee, round 5): at most three tabs, Guests (the guest inbox, for people with the
 // guest communication tool), Clients (each owner's conversation with Recharge) and Team (one-to-one, group and
-// department conversations). One search box per tab; Guests and Clients filter by Needs a reply, Waiting for reply
+// department conversations). One search box per tab; Guests and Clients filter by Needs a reply, Engaged
 // and Closed. A conversation opens in place: beside the list on a wide screen, full screen with a back arrow on a phone.
 // Owners only see their conversation with Recharge. While a conversation is open it checks for new messages every few
 // seconds; the list refreshes by itself. Nothing here animates by itself.
@@ -337,7 +337,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
     picked.current = true;
     if (attention) queueMicrotask(() => setTab(attention));
   }, [attention]);
-  // Clients: Needs a reply, Waiting for reply, Closed. Team: no status. Both: one search box.
+  // Clients: Needs a reply, Engaged, Closed. Team: no status. Both: one search box.
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const choose = (t: Tab) => { picked.current = true; setTab(t); setOpen(null); setQuery(""); setStatus("reply"); };
   const inTab = (list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab);

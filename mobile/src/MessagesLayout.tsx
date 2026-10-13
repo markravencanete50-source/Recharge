@@ -11,7 +11,7 @@ import type { IconName } from "./LiveKit";
 // action beside it, the three statuses for Guests and Clients, a quiet one-line note, and the list with the open
 // conversation beside it on a wide screen, or in its place on a phone.
 
-// Needs a reply in the attention colour, Waiting for reply in green, Closed plain.
+// Needs a reply in the attention colour, Engaged in green, Closed plain.
 const STATUS_INK = (p: Palette): Record<MessageStatus, string> => ({ reply: p.waiting, waiting: p.success, closed: p.muted });
 
 export function StatusFilter({ p, value, counts, onChange }: { p: Palette; value: MessageStatus; counts: Record<MessageStatus, number>; onChange: (s: MessageStatus) => void }) {
