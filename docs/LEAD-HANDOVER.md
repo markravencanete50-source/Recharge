@@ -23,8 +23,14 @@ and five developers.
   - Plus: To-do, Messages, Updates feed, Calendar, Favorites, Help, and an interactive Demo.
 - **Hostaway:** the sync is on. Guest messages come into the inbox. Replies are sent from the app because
   `HOSTAWAY_REPLIES_ENABLED=true` is set as a **Worker secret**. Details are in `docs/HOSTAWAY-SYNC.md`.
-- **Inbound email (later):** `guestrelations@rechargegroup.co.uk` for guests and `ownerrelations@rechargegroup.co.uk` for
-  owners (Fasthosts). The design is in `docs/notes-session-C.md`; it isn't built yet.
+- **Two email addresses, never mixed (Lee):**
+  - **Guests:** `guestrelations@rechargegroup.co.uk`. Guest emails go to Messages → Guests, and replies to guests are sent
+    from it.
+  - **Clients and owners:** `ownerrelations@rechargegroup.co.uk`. Owner and client emails go to Messages → Clients, and
+    replies to owners, plus the client enquiry form email, are sent from it.
+
+  Both mailboxes are hosted at Fasthosts. The domain's DNS is in **Cloudflare** (nameservers `*.ns.cloudflare.com`); the
+  Fasthosts "Advanced DNS" page has no effect. Resend is verified for the domain. Session F built it; see `docs/EMAIL.md`.
 
 ## 2. How a round ships
 

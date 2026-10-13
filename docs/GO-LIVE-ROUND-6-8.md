@@ -1,8 +1,8 @@
-# Go-live note: rounds 6 and 7
+# Go-live note: rounds 6, 7 and 8
 
 For Lee's team. What changes for each role, and what to check as each role once it is live. The install steps are the
 lead developer's and are not in this note. Drafted by Session C from every session's notes (`docs/notes-session-A.md` to
-`-E.md`) and the merged lead branch.
+`-E.md`), Session F's `docs/EMAIL.md` and the merged lead branch. Rounds 6, 7 and 8 ship together.
 
 ## Tell the team
 
@@ -51,8 +51,10 @@ lead developer's and are not in this note. Drafted by Session C from every sessi
 - **The management bonus:**
   - For people in management, the bonus bar on My performance now combines two teams over the same period. Guest
     relations: guest messages answered within five minutes. Client relations: daily work done against its targets.
-  - Half and half, rounded down. If one team has nothing to measure, the other counts alone.
-  - Under the bar: "Guest relations 86% · Client relations 74%".
+  - Half and half by default, rounded down. If one team has nothing to measure, the other counts alone.
+  - **Admins set the split:** in Team performance, under KPIs, open the combined KPI and set "Guest relations share %"
+    (0 to 100; Client relations gets the rest). The change is recorded in the KPI history.
+  - Under the bar: each team's figure and its share, for example "Guest relations 86% (60%) · Client relations 74% (40%)".
   - It is the management bonus KPI in Team performance, under KPIs, now named "Guest relations and Client relations,
     combined". It is still a placeholder at an 80% target with tiers at 90% and 95% until Alex sets his own there.
 - **Messages:** the status "Waiting for reply" is now **"Engaged"**: we wrote last and the conversation is still open. Needs
@@ -61,6 +63,23 @@ lead developer's and are not in this note. Drafted by Session C from every sessi
   in the search box.
 - **Access control:** the role is a dropdown, with the chosen role's summary under it. **View as:** pick the person with a
   search ("Name · Role"); role previews are one dropdown.
+
+### Email (Guest relations and Client relations)
+
+Once email is switched on, guest and owner emails come into Messages, and replies go out by email. The mailboxes at Fasthosts
+keep a copy of everything, as now.
+- **Guests:** an email to guestrelations@rechargegroup.co.uk appears in **Messages, Guests**, within seconds. It joins the
+  conversation it replies to, or the stay whose booking code it mentions, or that sender's earlier emails; otherwise it is a
+  new conversation with no property yet (match it with Guest details). Press Send in an email conversation and the reply
+  goes out by email from guestrelations@. The guest's answer threads back into the same conversation.
+- **Owners:** an email to ownerrelations@rechargegroup.co.uk from an owner's sign-in address appears in that owner's
+  conversation in **Messages, Clients**. When the owner's latest message came by email, the team's reply is emailed to them
+  from ownerrelations@.
+- **Unknown senders:** an email to ownerrelations@ from an address we don't know waits in **Messages, Clients, Unknown
+  senders** (admins and Client relations). Assign it to an owner (the address is remembered) or dismiss it.
+- **Attachments:** photos (JPEG, PNG, WebP, GIF) and PDFs up to 10 MB each open from the message. Spam and mail that fails
+  its checks never appears.
+- Owners, cleaners and Ready never see guest emails.
 
 ### Guest relations
 
@@ -111,6 +130,8 @@ lead developer's and are not in this note. Drafted by Session C from every sessi
   after Home. On a phone there is a Favorites button too.
 - **Updates** say what each one is about. Owners never see a team member's name: their own actions say "You", and
   everything else says "Recharge". Tapping an update opens the request it is about, if it is one of theirs.
+- **Email:** an email to ownerrelations@ from their sign-in address shows in their Messages conversation. While their
+  latest message is an email, the team's replies reach them by email too.
 - **The New Property Enquiry Form** (the link owners receive): the options in each list are readable in dark mode, and
   the address fields no longer show a second box when typed in.
 
@@ -128,9 +149,10 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 4. **Client enquiries:** open an enquiry that has not moved on: "Delete enquiry" shows and asks before deleting. Open one
    with an estimate: no Delete button. (Try a real delete only on the "Mark Raven Canete · Optimal" test enquiry.)
 5. **Team performance → KPIs:** the Management bonus KPI is "Guest relations and Client relations, combined", marked
-   placeholder, target 80, tiers 90 and 95.
+   placeholder, target 80, tiers 90 and 95. Open it: "Guest relations share %" shows 50. Set it to 60 and save; the KPI's
+   history shows the change, and My performance shows the new shares.
 6. **My performance** (as a person in management): the bonus bar says "Management · Guest relations and Client relations,
-   combined", with "Guest relations …% · Client relations …%" under it.
+   combined", with "Guest relations …% (…%) · Client relations …% (…%)" under it.
 7. **Messages → Guests and Clients:** the middle status reads "Engaged", with its count.
 8. **Properties:** no region or status buttons; typing "onboarding" or a town narrows the table.
 9. **To-do:** thin rows on a computer; open one, add an update, and see it at the top of its history with your name.
@@ -146,6 +168,9 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 4. **Report a repair:** the type of repair is a dropdown with a search box.
 5. **Guest relations** sub-pages are buttons (five or fewer).
 6. **My performance:** their own bar as before (Replies within 5 minutes).
+7. **Email:** send a test email to guestrelations@ from another account. It appears in Messages, Guests within seconds (and
+   still arrives at Fasthosts). Press Send on a reply: the test account receives it from guestrelations@, and its answer
+   comes back into the same conversation.
 
 ### Client relations
 
@@ -153,6 +178,9 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 2. **Messages → Clients:** Needs a reply, Engaged, Closed.
 3. **To-do → Client relations:** pricing shows 10 rows and "Show all".
 4. **Client enquiries → Start valuing:** area and property type are dropdowns; no Delete button (admins only).
+5. **Email:** an email from an owner's sign-in address to ownerrelations@ appears in that owner's conversation in
+   Messages, Clients, and a reply from the app reaches them from ownerrelations@. An email from an unknown address waits
+   under Unknown senders: assign it to an owner and it moves into their conversation.
 
 ### Cleaning manager
 
@@ -194,3 +222,4 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 5. **Help:** the answers about updates, Favorites and dropdowns; none of the team-only answers (checklist, bonus,
    enquiries, Messages statuses).
 6. **The enquiry form link,** in dark mode: list options are readable; typing an address shows one box, not two.
+7. **Email:** an email from their sign-in address to ownerrelations@ shows in their Messages conversation.
