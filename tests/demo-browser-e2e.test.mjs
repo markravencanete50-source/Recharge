@@ -82,7 +82,8 @@ test('in Demo, nothing is sent to the live API, and every flow runs in the brows
     // Viewing as a cleaner signs in as the sample cleaner, still in the browser.
     await menu.click();
     await page.getByRole('menuitem', { name: 'View as someone' }).click();
-    await page.getByText('Exactly what Ewan sees').click();
+    // People are one picker (round 6, Session D), listed as "Name · Role" (a search box appears only for a long list).
+    await page.getByText('Ewan Stewart · Cleaner').first().click();
     await page.getByText(/viewing as Ewan Stewart/).waitFor({ timeout: 30_000 });
     await page.waitForTimeout(3000);
     assert.deepEqual(apiCalls.slice(before), [], 'no /api request while Demo is on');
