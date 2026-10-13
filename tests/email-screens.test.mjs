@@ -41,7 +41,7 @@ test('the new screen uses theme tokens only', () => {
   assert.doesNotMatch(unknown, /p\.wash/, 'a quiet bordered panel like the other lists, not the loud wash');
 });
 
-test('review fixes: attachment chip fits a phone, a paperclip leads it, the panel is one collapsible line remembered per device, a nameless sender shows the subject below', () => {
+test('review fixes: attachment chip fits a phone, a paperclip leads it, the panel is one collapsible line remembered per device, every row shows the subject on a second line', () => {
   const chip = inbox.slice(inbox.indexOf('{m.files.map'), inbox.indexOf('</MotionPress>', inbox.indexOf('{m.files.map')));
   assert.match(chip, /maxWidth: "100%"/);
   assert.match(chip, /<Feather name="paperclip" size=\{14\}/);
@@ -53,7 +53,9 @@ test('review fixes: attachment chip fits a phone, a paperclip leads it, the pane
   assert.match(unknown, /AsyncStorage\.setItem\(OPEN_KEY/);
   assert.match(unknown, /\{expanded && <View/);
   assert.match(unknown, /borderWidth: 1, borderColor: p\.border, backgroundColor: p\.surface/);
-  assert.match(unknown, /\{r\.name \? <View[\s\S]*: <>[\s\S]*\{r\.from\}[\s\S]*\{!!r\.subject && <Text numberOfLines=\{1\}/);
+  // Every row, named or not, is two lines: the name (or the address) and the subject below it.
+  assert.match(unknown, /\{r\.name \?\? r\.from\}<\/Text>\s*\{!!r\.subject && <Text numberOfLines=\{1\}/);
+  assert.doesNotMatch(unknown, /\{r\.name \? <View/);
 });
 
 test('Send the form sheet: honest placeholders, the email preview behind a toggle, and the page action is a normal primary button, not a banner', async () => {

@@ -61,15 +61,10 @@ export function EmailUnknownSenders({ p, onChanged }: { p: Palette; onChanged: (
           <View key={r.id} style={{ gap: 6, borderTopWidth: 1, borderColor: p.border, paddingTop: 6 }}>
             <MotionPress accessibilityRole="button" accessibilityState={{ expanded: open === r.id }} accessibilityLabel={`${r.name ?? r.from}, ${r.subject ?? "no subject"}`} onPress={() => { setOpen(open === r.id ? null : r.id); setOwnerId(""); setError(""); }}
               style={[ui.row, { gap: 8, minHeight: 40, alignItems: "flex-start", paddingVertical: 4 }]}>
-              {/* A sender with a name: name and subject share a line. A sender with no name: the address on top and the subject on a second line. */}
+              {/* Every row has the same two lines: who it is from (the name, or the address when there is none), then the subject. */}
               <View style={{ flex: 1, minWidth: 0 }}>
-                {r.name ? <View style={[ui.row, { gap: 8 }]}>
-                  <Text numberOfLines={1} style={{ color: p.text, fontSize: 14, fontWeight: "500", flexShrink: 1 }}>{r.name}</Text>
-                  <Text numberOfLines={1} style={[ui.small, { color: p.muted, flex: 1 }]}>{r.subject ?? ""}</Text>
-                </View> : <>
-                  <Text numberOfLines={1} style={{ color: p.text, fontSize: 14, fontWeight: "500" }}>{r.from}</Text>
-                  {!!r.subject && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{r.subject}</Text>}
-                </>}
+                <Text numberOfLines={1} style={{ color: p.text, fontSize: 14, fontWeight: "500" }}>{r.name ?? r.from}</Text>
+                {!!r.subject && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{r.subject}</Text>}
               </View>
               <Text style={[ui.small, { color: p.muted }]}>{chatTime(r.receivedAt)}</Text>
             </MotionPress>
