@@ -29,7 +29,7 @@ Everything below is **built, committed and live**: the migrations `2026101207000
 were applied to the live database on 13 October 2026, the backend and web app were redeployed (Worker
 version `254902b3`), and `main` is `96024f0`. A follow-up round (owner privacy, a stay cancelled after
 its statement was issued, the warnings on the reconciliation and statement screens) is written and tested
-locally but not yet applied; see "Deploy order and risks" in `DEVELOPER-HANDOVER.md`. A check of the
+applied live on the same day (migrations `20261013090000` and `20261013100000`, Worker `aa2a1055`); see "Deploy order and risks" in `DEVELOPER-HANDOVER.md`. A check of the
 asks Alex said he did not want is in `docs/FEEDBACK-AUDIT-2026-10-13.md`. The audit tables further down
 show the position before building and are kept for reference.
 
