@@ -40,8 +40,13 @@ Alex: "if not done by 6pm, prompt the cleaner with reminder notifications and ch
 - Tests: the 200 random scenarios now also run with the new base (seed 20261015), and the database and TypeScript agree on all of them. Unit cases are in `tests/statement-maths.test.mjs`.
 - Before switching: confirm with Alex that "the cleaning fees" means the changeover charges. Also decide whether the fee base should stop at zero; today it is plain subtraction, so a period with cleans but little revenue gives a negative fee.
 
+### Owner privacy, the remaining place
+- An owner reading the history of their own work still got internal events by name (management and AirCover flags, reflections, routine visit forms, direct-booking follow-ups, clean form events), because `private.workspace_work_history` reads with its own rights and the round 3 policy did not reach it.
+- Migration `supabase/migrations/20261014130000_owner_history_internal_events.sql` leaves those entries out for owners. The repair-resolved entry stays (Lee's decision). Staff are unchanged.
+- Test: `tests/owner-history-internal-events-database.test.mjs`. It fails without the migration.
+
 ## When this goes live
-- Apply `20261014100000_clean_form_reminders.sql`, `20261014110000_mid_stay_switch.sql` and `20261014120000_fee_base_after_changeovers.sql` (in that order) before deploying the Worker. The Worker code is unchanged; it already calls `workspace_clean_form_sweep` hourly.
+- Apply `20261014100000_clean_form_reminders.sql`, `20261014110000_mid_stay_switch.sql`, `20261014120000_fee_base_after_changeovers.sql` and `20261014130000_owner_history_internal_events.sql` (in that order) before deploying the Worker. The Worker code is unchanged; it already calls `workspace_clean_form_sweep` hourly.
 - On the first run, cleans from the last 14 days without a form that were already warned keep their warning. Open cleans of today get a reminder after 18:00. Earlier ones go straight to the management step.
 - Invoices already waiting for approval whose cleans have no form can no longer be approved until the form is in. They can still be rejected.
 
