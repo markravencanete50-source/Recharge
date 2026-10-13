@@ -164,7 +164,7 @@ export function BookingMonthCalendar({ palette: p }: { palette: Palette }) {
                   return (
                     <MotionPress key={date} accessibilityRole="button" accessibilityState={{ selected: isSelected }} accessibilityLabel={longDate(date)} onPress={() => setSelected(date)} style={{ flex: 1, borderLeftWidth: col ? 1 : 0, borderColor: p.border, backgroundColor: isSelected ? p.wash : "transparent", paddingTop: 4, alignItems: "center" }}>
                       <View style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: isToday ? p.primary : "transparent" }}>
-                        <Text style={{ color: isToday ? p.onPrimary : inMonth ? p.text : p.muted, opacity: inMonth || isToday ? 1 : 0.55, fontSize: 12, fontWeight: isToday ? "700" : "500" }}>{Number(date.slice(8))}</Text>
+                        <Text style={{ color: isToday ? p.onPrimary : inMonth ? p.text : p.disabled, fontSize: 12, fontWeight: isToday ? "700" : "500" }}>{Number(date.slice(8))}</Text>
                       </View>
                     </MotionPress>
                   );
