@@ -711,3 +711,54 @@ a Stays persona. The hub read came through the app's demo answers. Playwright to
 | Phone | Phone, detail |
 | --- | --- |
 | ![](screenshots/session-b/round6-todo-phone.png) | ![](screenshots/session-b/round6-todo-phone-detail.png) |
+
+# Round 6, second task: Favorites always in the Overview (Lee)
+
+Lee: "the favorites feature should always be in the overview for easy access regardless of which role we
+have."
+
+- **Menu (`lib/role-panel.ts`):** `page:favorites` is now in every role's first section, straight after
+  Home, and is gone from More.
+  - The first sections are: Overview for super admin, admin and Accounts; Today for Guest relations,
+    Cleaning team and Ready; My day for Cleaners; Your properties for Owners.
+  - The team-only limit on the Favorites page is removed, so owners get it too.
+- **Search (`lib/workspace-search.ts`):** the Favorites page is in everyone's search list.
+- **`LiveWorkspace.tsx`, so owners can use Favorites:**
+  - the Favorites store loads for every role (still blank in a role preview);
+  - the favorites context is given to every role, so the stars show for owners too;
+  - the floating Favorites button on the phone shows for every role;
+  - the "Save to Favorites" button on an open work item shows for every role;
+  - the Favorites section is no longer limited to team roles.
+- **Owners in the database: no migration was needed.** `workspace_favorites` and
+  `workspace_save_favorites` accept any active role and only ever touch the caller's own row
+  (`auth.uid()`).
+- **Owners can only use what they can open:** a saved key is resolved against the person's own search
+  list (`resolveFavorites`). A key the owner cannot open, for example a team page, is kept with its label
+  so it can be removed, but it never opens. Owners can only pin from screens they already have.
+- **Menu order (`lib/menu-layout.ts`):**
+  - `LOCKED_LINKS = ['page:favorites']`.
+  - The merge only places a locked link from its own section. Listed elsewhere, it goes back to its own
+    section.
+  - `moveItemTo` does nothing for it. It can still move up and down within its section, and it goes
+    wherever its section goes.
+- **Menu order editor (`MenuOrderEditor.tsx`):** no "Move to…" for Favorites. A lock icon and a note
+  show: "Favorites stays in Overview for every role, so it is always easy to reach. It can move up or down
+  here."
+- **The phone:** the bar and the Menu are built from the same merged panel, so Favorites is either on the
+  bar or first in the Menu (tested for all eight roles).
+- **Tests:**
+  - **New, `tests/favorites-overview.test.mjs`:** 6 of 6 pass. It covers all eight roles, a saved layout
+    that cannot move Favorites out, the phone, owners' list resolving only what they can open, the
+    editor's lock, and a database check that owners pin and unpin their own list and nobody else sees it.
+  - **Tests outside my area that I changed,** because they said owners have no Favorites or that To-do
+    comes straight after Home:
+    - `tests/role-panel.test.mjs`: owners have Favorites; the team order is now Home, Favorites, To-do.
+    - `tests/navigation-v2.test.mjs`: `page:favorites` removed from the owner's "never" list.
+    - `tests/workspace-search.test.mjs`: owners have the Favorites page.
+  - **My own round 5 tests:** `tests/menu-layout.test.mjs`, four expectations updated for Favorites in the
+    first section. The "emptied section" case now empties Calendar & messages, because Today keeps the
+    locked Favorites.
+  - **Related tests:** app-wiring, business-workspace, favorites-database, header-actions,
+    menu-layout-database, mobile-workspace, qa-wiring-fixes, role-authorization-matrix, search-and-cancel,
+    view-as-database, view-as-http, wiring-fixes-v2, workspace-access and workspace-web-path all pass.
+    wiring-v2 has only its known line-ending failure.
