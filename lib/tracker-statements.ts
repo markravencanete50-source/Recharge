@@ -264,12 +264,13 @@ export function statementTrackerItem(row: StatementRowInput, statement: Statemen
   const address = addressOf(property) || row.propertyName, propertyName = property?.name?.trim() || row.propertyName;
   const status = statement?.status, paid = status === 'paid', issued = status === 'issued' || paid, drafted = !!statement;
   const owes = !!statement && statement.payoutMinor < 0;
-  const mode = row.terms?.cleanChargeMode ?? null;
 
   // The two checks before a statement exists. A loaded check gives the exact reasons; otherwise the list's counts do.
   const reasons = ctx.preview?.blockedReasons;
   const staysOpen = reasons ? countOf(reasons, 'stay_unsettled') : row.unsettledPayouts + row.missingDetails;
-  const cleansOpen = reasons ? countOf(reasons, 'clean_unreviewed') : mode === 'actual_cost' ? 0 : row.cleansToReview ?? 0;
+  // Client answer 4: a clean costing more than agreed is flagged for staff but no longer holds a statement up, so only an
+  // older server's reasons can still list one.
+  const cleansOpen = reasons ? countOf(reasons, 'clean_unreviewed') : 0;
   const reconciled = drafted || staysOpen === 0, cleansReviewed = drafted || cleansOpen === 0;
   const ready = reconciled && cleansReviewed && termsSet(row);
 

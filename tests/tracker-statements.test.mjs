@@ -181,20 +181,24 @@ test('occupancy is nights booked of the nights in the period', () => {
 
 test('a property with no statement yet shows what is left: reconcile, then review cleans, then prepare', () => {
   const none = (over, c = {}) => S.statementTrackerItem(row(over), null, ctx(c));
+  // Client answer 4: a clean costing more than agreed is flagged but never holds a statement, so only stays wait.
   const stuck = none({ unsettledPayouts: 1, missingDetails: 1, cleansToReview: 1 });
-  assert.equal(states(stuck), 'reconciled:current cleans:todo prepared:todo issued:todo paid:todo');
+  assert.equal(states(stuck), 'reconciled:current cleans:done prepared:todo issued:todo paid:todo');
   assert.deepEqual([stuck.status.label, stuck.status.tone, stuck.nextStep], ['Not ready', 'wait', 'Reconcile 2 stays']);
   assert.deepEqual(stuck.nextAction, { label: 'Check figures', actionKey: 'checkFigures' });
   const cleans = none({ cleansToReview: 1 });
-  assert.equal(states(cleans), 'reconciled:done cleans:current prepared:todo issued:todo paid:todo');
-  assert.equal(cleans.nextStep, 'Review 1 clean');
+  assert.equal(states(cleans), 'reconciled:done cleans:done prepared:current issued:todo paid:todo');
+  // A loaded check from an older server can still name one, and then it is shown.
+  const older = none({ cleansToReview: 1 }, { preview: { blockedReasons: ['clean_unreviewed:abc'] } });
+  assert.equal(states(older), 'reconciled:done cleans:current prepared:todo issued:todo paid:todo');
+  assert.equal(older.nextStep, 'Review 1 clean');
   const ready = none({});
   assert.equal(states(ready), 'reconciled:done cleans:done prepared:current issued:todo paid:todo');
   assert.deepEqual([ready.status.label, ready.nextStep, ready.title, ready.closed], ['Ready to prepare', 'Check the figures and prepare the statement', 'November 2026', false]);
   assert.deepEqual(ready.progress, { done: 2, total: 5 });
   assert.equal(ready.id, `${PROPERTY}:2026-11`);
   assert.equal(ready.lastUpdate, null);
-  // In actual-cost mode a dear clean is charged as it cost, so it does not hold the statement.
+  // A property still marked actual cost behaves the same.
   const actual = none({ cleansToReview: 3, terms: { ...row().terms, cleanChargeMode: 'actual_cost' } });
   assert.equal(states(actual), 'reconciled:done cleans:done prepared:current issued:todo paid:todo');
 });

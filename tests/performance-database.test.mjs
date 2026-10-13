@@ -10,6 +10,7 @@ import { createServer } from 'vite';
 // filtered by property, region and channel. Finance roles and admins only. Every figure below was worked out by
 // hand from the definitions before the report was run.
 const MIGRATION = 'supabase/migrations/20261012130000_mid_stay_cleans_performance.sql';
+const PROFIT_MIGRATION = 'supabase/migrations/20261014140000_clean_charge_agreed_fee.sql';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const vite = await createServer({ configFile: false, root, server: { middlewareMode: true, hmr: false } });
 const { performanceReportSchema } = await vite.ssrLoadModule('/lib/performance.ts');
@@ -100,8 +101,14 @@ const CA1 = await clean(HARBOUR, '2026-09-10', CLEANER_A);
 const CA2 = await clean(HARBOUR, '2026-09-28', CLEANER_A);
 await clean(HARBOUR, '2026-09-20', CLEANER_B); // billable, but not on the itemised September statement: not counted
 const CA3 = await clean(HARBOUR, '2026-10-04', CLEANER_B);
-await clean(GLEN, '2026-10-08', CLEANER_B); // on Glen's older monthly statement, found by its month
+const CG1 = await clean(GLEN, '2026-10-08', CLEANER_B); // on Glen's older monthly statement, found by its month
 await clean(GLEN, '2026-10-20', null);
+
+// The cleans' actual cost is the cleaner's invoice line (client answer 4): the same amounts as the rates above.
+for (const [workId, prop, amount, i] of [[CA1, HARBOUR, 5500, 1], [CA2, HARBOUR, 5500, 2], [CA3, HARBOUR, 8000, 3], [CG1, GLEN, 8000, 4]]) {
+  const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,reference,invoice_date,total_minor,created_by,request_id) values('Perf cleaner',$1,'2026-10-31',$2,$3,gen_random_uuid()) returning id", ['PERF-' + i, amount, users[ADMIN]]);
+  await sql('insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor) values($1,$2,$3,$4)', [inv.id, workId, prop, amount]);
+}
 
 // Statements. Counted: Harbour September (issued), Harbour October (paid), Glen October (issued, an older monthly one).
 await statement(HARBOUR, '2026-09-01', 'issued', { fee: 12000, vat: 2400, cleaning: 12000, lines: [[CA1, '2026-09-10', 6000], [CA2, '2026-09-28', 6000]] });
@@ -114,18 +121,23 @@ await statement(HARBOUR, '2026-08-01', 'issued', { fee: 8888, cleaning: 0, lines
 await statement(GLEN, '2026-11-01', 'issued', { fee: 6666, cleaning: 0, lines: [] });
 
 const FROM = '2026-09-01', TO = '2026-11-01';
-const zeroMoney = { managementFeeMinor: 0, vatMinor: 0, cleaningChargedMinor: 0, cleaningCostMinor: 0, cleaningMarginMinor: 0, cleanCount: 0, cleansWithoutCost: 0, statementCount: 0 };
+const zeroMoney = { managementFeeMinor: 0, vatMinor: 0, cleaningChargedMinor: 0, cleaningCostMinor: 0, cleaningMarginMinor: 0, cleanCount: 0, cleansWithoutCost: 0, statementCount: 0,
+  invoicedCleanCount: 0, invoicedChargedMinor: 0, invoicedCostMinor: 0, cleanProfitMinor: 0, profitPerCleanMinor: null };
 const TOTALS = {
   managementFeeMinor: 37500, vatMinor: 5400, cleaningChargedMinor: 32000, cleaningCostMinor: 27000, cleaningMarginMinor: 5000,
   cleanCount: 5, cleansWithoutCost: 1, statementCount: 3,
+  // Profit per clean: the cleans with an invoice and a charge on an itemised statement (Glen's older statement has none).
+  invoicedCleanCount: 3, invoicedChargedMinor: 18000, invoicedCostMinor: 19000, cleanProfitMinor: -1000, profitPerCleanMinor: -333,
   grossRevenueMinor: 205547, nightsBooked: 27, nightsAvailable: 122, occupancyBps: 2213, nightsSold: 20, averageNightlyRateMinor: 10277,
 };
 const GLEN_FIGURES = {
   managementFeeMinor: 10500, vatMinor: 0, cleaningChargedMinor: 14000, cleaningCostMinor: 8000, cleaningMarginMinor: 6000, cleanCount: 2, cleansWithoutCost: 1, statementCount: 1,
+  invoicedCleanCount: 0, invoicedChargedMinor: 0, invoicedCostMinor: 0, cleanProfitMinor: 0, profitPerCleanMinor: null,
   grossRevenueMinor: 70000, nightsBooked: 11, nightsAvailable: 61, occupancyBps: 1803, nightsSold: 7, averageNightlyRateMinor: 10000,
 };
 const HARBOUR_FIGURES = {
   managementFeeMinor: 27000, vatMinor: 5400, cleaningChargedMinor: 18000, cleaningCostMinor: 19000, cleaningMarginMinor: -1000, cleanCount: 3, cleansWithoutCost: 0, statementCount: 2,
+  invoicedCleanCount: 3, invoicedChargedMinor: 18000, invoicedCostMinor: 19000, cleanProfitMinor: -1000, profitPerCleanMinor: -333,
   grossRevenueMinor: 135547, nightsBooked: 16, nightsAvailable: 61, occupancyBps: 2623, nightsSold: 13, averageNightlyRateMinor: 10427,
 };
 
@@ -138,9 +150,11 @@ test('a multi-property window: totals, each property and each month, worked out 
   ], 'the archived and onboarding properties with nothing in the window are left out');
   assert.deepEqual(r.byMonth, [
     { period: '2026-09', from: '2026-09-01', to: '2026-10-01', managementFeeMinor: 12000, vatMinor: 2400, cleaningChargedMinor: 12000, cleaningCostMinor: 11000, cleaningMarginMinor: 1000,
-      cleanCount: 2, cleansWithoutCost: 0, statementCount: 1, grossRevenueMinor: 81546, nightsBooked: 12, nightsAvailable: 60, occupancyBps: 2000, nightsSold: 8, averageNightlyRateMinor: 10193 },
+      cleanCount: 2, cleansWithoutCost: 0, statementCount: 1, invoicedCleanCount: 2, invoicedChargedMinor: 12000, invoicedCostMinor: 11000, cleanProfitMinor: 1000, profitPerCleanMinor: 500,
+      grossRevenueMinor: 81546, nightsBooked: 12, nightsAvailable: 60, occupancyBps: 2000, nightsSold: 8, averageNightlyRateMinor: 10193 },
     { period: '2026-10', from: '2026-10-01', to: '2026-11-01', managementFeeMinor: 25500, vatMinor: 3000, cleaningChargedMinor: 20000, cleaningCostMinor: 16000, cleaningMarginMinor: 4000,
-      cleanCount: 3, cleansWithoutCost: 1, statementCount: 2, grossRevenueMinor: 124001, nightsBooked: 15, nightsAvailable: 62, occupancyBps: 2419, nightsSold: 12, averageNightlyRateMinor: 10333 },
+      cleanCount: 3, cleansWithoutCost: 1, statementCount: 2, invoicedCleanCount: 1, invoicedChargedMinor: 6000, invoicedCostMinor: 8000, cleanProfitMinor: -2000, profitPerCleanMinor: -2000,
+      grossRevenueMinor: 124001, nightsBooked: 15, nightsAvailable: 62, occupancyBps: 2419, nightsSold: 12, averageNightlyRateMinor: 10333 },
   ]);
   // The parts add up to the whole, exactly.
   for (const key of ['managementFeeMinor', 'vatMinor', 'cleaningChargedMinor', 'cleaningCostMinor', 'grossRevenueMinor', 'nightsBooked', 'nightsAvailable', 'nightsSold']) {
@@ -256,5 +270,8 @@ test('the migration runs twice and the figures do not change', async () => {
   await asDb();
   await db.exec(await fs.readFile(MIGRATION, 'utf8'));
   await db.exec(await fs.readFile(MIGRATION, 'utf8'));
+  // The report is replaced by 20261014140000 (profit per clean); run it again after, twice, as the live order would.
+  await db.exec(await fs.readFile(PROFIT_MIGRATION, 'utf8'));
+  await db.exec(await fs.readFile(PROFIT_MIGRATION, 'utf8'));
   assert.deepEqual((await perf(FROM, TO)).totals, TOTALS);
 });

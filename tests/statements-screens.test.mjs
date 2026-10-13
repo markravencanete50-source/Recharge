@@ -87,17 +87,17 @@ test('the list and the sheet are the shared tracker', () => {
   assert.match(screen, /\{finance && \(/);
 });
 
-test('the terms sheet has 12% and 15%, a VAT switch and a clean charge choice, all saved together', () => {
+test('the terms sheet has 12% and 15% and a VAT switch; cleans are always charged the agreed fee (client answer 4)', () => {
   assert.match(screen, /label="12%"/);
   assert.match(screen, /label="15%"/);
   assert.match(screen, /accessibilityLabel="Add VAT to the management fee"/);
-  assert.match(screen, /Charge cleans at/);
-  assert.match(screen, /CLEAN_MODE_LABEL\.agreed_fee/);
-  assert.match(screen, /CLEAN_MODE_LABEL\.actual_cost/);
-  assert.match(screen, /action: "setStatementTerms".*vatOnFee: vat, cleanChargeMode: mode/);
-  assert.match(adapter, /agreed_fee: 'Agreed fee', actual_cost: 'Actual cost'/);
-  // The fee field is still there for any other rate.
-  assert.match(screen, /Management fee \(% of the payout after platform fees\)/);
+  assert.doesNotMatch(screen, /Charge cleans at/, 'the old agreed-fee or actual-cost choice is gone');
+  assert.doesNotMatch(screen, /CLEAN_MODE_LABEL\.actual_cost/);
+  assert.match(screen, /action: "setStatementTerms".*vatOnFee: vat, cleanChargeMode: "agreed_fee"/);
+  assert.match(screen, /The owner pays the agreed cost for every clean/);
+  assert.match(adapter, /agreed_fee: 'Agreed fee', actual_cost: 'Actual cost'/, 'older statements still name their mode');
+  // The fee field is still there for any other rate, and says what the fee is charged on.
+  assert.match(screen, /Management fee \(% of the payout after platform fees and changeovers\)/);
 });
 
 test('the tracker knows the new sections', () => {

@@ -66,7 +66,7 @@ const lineSum = r => r.lines.reduce((n, l) => n + l.amountMinor, 0);
 test('the constants are the brief\'s assumptions', () => {
   assert.equal(VAT_BPS, 2000);
   assert.equal(FEE_BASE, 'payout_after_ota_fees_and_changeovers');
-  assert.equal(STATEMENT_WAITS_FOR_CLEAN_REVIEW, true);
+  assert.equal(STATEMENT_WAITS_FOR_CLEAN_REVIEW, false, 'client answer 4: a clean-cost review flags, it never holds a statement up');
   assert.deepEqual([...DEDUCTION_ORDER], ['ota_fee', 'changeover', 'management_fee', 'vat', 'payable']);
   // Client answer 1 (Lee's decision): the fee is charged after platform fees and changeovers. Plain subtraction, like the SQL.
   assert.equal(feeBaseMinor(1000, 150, 300), 550);
@@ -104,22 +104,21 @@ test('worked example: November 2026 matches the hand arithmetic', () => {
   assert.equal(r.lines.find(l => l.kind === 'management_fee').label, 'Management fee (15%)');
 });
 
-test('worked example: actual-cost mode charges 18500 in changeovers', () => {
-  // Property mode actual cost; the flagged clean reviewed with no override.
+test('worked example: cleans are always charged the agreed fee, whatever the mode or the review says (client answer 4)', () => {
+  // A property still marked actual cost, the dear clean reviewed with no decision: still the agreed fee.
   const byMode = november({ terms: terms({ cleanChargeMode: 'actual_cost' }), cleans: exampleCleans({ decision: null }) });
-  assert.equal(byMode.changeoversMinor, 18500);
-  // 500 more in changeovers lowers the fee base too: 143502 x 15% = 21525.3 -> 21525, VAT 4305.
-  assert.equal(byMode.payoutMinor, 162002 - 18500 - 21525 - 4305 - 8500);
-  // Agreed-fee property, but the review chose actual cost for every clean it looked at: only c2 moves.
+  assert.equal(byMode.changeoversMinor, 18000);
+  assert.equal(byMode.payoutMinor, 109582);
+  // A review that chose actual cost does not change the charge either.
   const byReview = november({ cleans: exampleCleans({ decision: 'actual_cost' }) });
-  assert.equal(byReview.changeoversMinor, 6000 + 7500 + 6000);
-  // Actual-cost property, review chose the agreed fee for c2: 5500 + 6000 + 5500.
-  const override = november({ terms: terms({ cleanChargeMode: 'actual_cost' }) });
-  assert.equal(override.changeoversMinor, 17000);
-  // A stale review (decision kept, reviewed false) does not apply and the statement waits.
+  assert.equal(byReview.changeoversMinor, 18000);
+  assert.deepEqual(byReview.lines.filter(l => l.kind === 'changeover').map(l => l.amountMinor), [6000, 6000, 6000]);
+  // The dear clean is still flagged for staff.
+  assert.deepEqual(byReview.flags, ['clean_over_agreed:c2']);
+  // A stale review no longer holds the statement up.
   const stale = november({ cleans: exampleCleans({ decision: 'actual_cost', reviewed: false }) });
   assert.equal(stale.changeoversMinor, 18000);
-  assert.equal(stale.blocked, true);
+  assert.equal(stale.blocked, false);
 });
 
 test('worked example: December share of the Booking.com stay, November plus December add up', () => {
@@ -246,27 +245,18 @@ test('an owner stay counts as booked nights with no revenue; a cancelled stay is
   assert.deepEqual(r.flags, []);
 });
 
-test('an unreviewed flagged clean blocks the statement; an unflagged one does not', () => {
+test('a flagged clean is flagged for staff but never blocks the statement; an unflagged one is not flagged', () => {
   const r = november({ cleans: exampleCleans({ decision: null, reviewed: false }) });
-  assert.equal(r.blocked, true);
-  assert.deepEqual(r.blockedReasons, ['clean_unreviewed:c2']);
+  assert.equal(r.blocked, false);
+  assert.deepEqual(r.blockedReasons, []);
   assert.deepEqual(r.flags, ['clean_over_agreed:c2']);
-  // The figures are still worked out, at the agreed value, so the screen can show them.
   assert.equal(r.changeoversMinor, 18000);
   // Clean costing exactly the agreed value: tolerance 0, so not flagged.
   const exact = november({ cleans: [{ id: 'e', date: '2026-11-08', actualCostMinor: 6000, decision: null, reviewed: false }] });
   assert.deepEqual([exact.blocked, exact.flags], [false, []]);
-  // A clean with no known cost in actual-cost mode is charged the agreed value and flagged.
+  // A clean with no invoice yet is charged the agreed value and not flagged.
   const unknown = november({ terms: terms({ cleanChargeMode: 'actual_cost' }), cleans: [{ id: 'u', date: '2026-11-08', actualCostMinor: null, decision: null, reviewed: false }] });
-  assert.deepEqual([unknown.changeoversMinor, unknown.flags, unknown.blocked], [6000, ['clean_cost_unknown:u'], false]);
-});
-
-test('in actual-cost mode a flagged clean stays flagged but does not block, as the owner pays the real cost', () => {
-  const r = november({ terms: terms({ cleanChargeMode: 'actual_cost' }), cleans: exampleCleans({ decision: null, reviewed: false }) });
-  assert.equal(r.blocked, false);
-  assert.deepEqual(r.blockedReasons, []);
-  assert.deepEqual(r.flags, ['clean_over_agreed:c2']);
-  assert.equal(r.changeoversMinor, 18500);
+  assert.deepEqual([unknown.changeoversMinor, unknown.flags, unknown.blocked], [6000, [], false]);
 });
 
 test('an unsettled stay blocks; a platform stay with no fee data is flagged', () => {

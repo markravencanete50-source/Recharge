@@ -16,7 +16,7 @@ import { formatBps, plural } from "../../lib/format";
 import { poundsToMinor } from "../../lib/repairs-live";
 import { sortTracker, type TrackerItem } from "../../lib/tracker";
 import {
-  blockReasons, CHECK_FIGURES, CLEAN_MODE_LABEL, customRange, flagNotes, ISSUE_STATEMENT, lineGroups, monthRange, periodTitle, prepareAction, previewKey, previewQuery, previewSummary,
+  blockReasons, CHECK_FIGURES, customRange, flagNotes, ISSUE_STATEMENT, lineGroups, monthRange, periodTitle, prepareAction, previewKey, previewQuery, previewSummary,
   RECORD_PAYOUT, rangeFromDates, SET_TERMS, statementForms, statementTrackerItems, VOID_STATEMENT,
   type LineGroup, type StatementRange, type StatementSource, type SummaryRow,
 } from "../../lib/tracker-statements";
@@ -93,23 +93,21 @@ function StatementExtras({ p, statement }: { p: Palette; statement: Statement })
   );
 }
 
-// The statement terms: the management fee (12% or 15%, or another rate), whether VAT is added to it, the cleaning cost
-// and whether owners are charged the agreed fee or what each clean cost.
+// The statement terms: the management fee (12% or 15%, or another rate), whether VAT is added to it, and the agreed
+// cleaning cost. Owners are always charged the agreed cost for a clean (client answer 4); the old actual-cost choice is gone.
 export function TermsSheet({ p, row, onClose, onDone }: { p: Palette; row: StatementRow | null; onClose: () => void; onDone: () => Promise<void> }) {
   const [fee, setFee] = useState("");
   const [clean, setClean] = useState("");
   const [vat, setVat] = useState(false);
-  const [mode, setMode] = useState<"agreed_fee" | "actual_cost">("agreed_fee");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const request = useRequestId(row ? ["terms", row.propertyId, fee, clean, vat, mode].join(":") : null);
+  const request = useRequestId(row ? ["terms", row.propertyId, fee, clean, vat].join(":") : null);
   useEffect(() => {
     queueMicrotask(() => {
       if (!row) return;
       setFee(row.terms?.managementFeeBps != null ? String(row.terms.managementFeeBps / 100) : "");
       setClean(row.terms?.cleaningCostMinor != null ? (row.terms.cleaningCostMinor / 100).toFixed(2) : "");
       setVat(row.terms?.vatOnFee === true);
-      setMode(row.terms?.cleanChargeMode === "actual_cost" ? "actual_cost" : "agreed_fee");
       setError("");
     });
   }, [row]);
@@ -119,7 +117,7 @@ export function TermsSheet({ p, row, onClose, onDone }: { p: Palette; row: State
     if (!/^\d{1,3}(\.\d{1,2})?$/.test(fee.trim()) || percent > 100 || cleaningCostMinor === null) { setError("Enter the fee as a percentage (for example 15) and the cleaning cost per clean."); return; }
     setBusy(true); setError("");
     try {
-      await writeFinance({ action: "setStatementTerms", requestId: request.get(), propertyId: row.propertyId, managementFeeBps: Math.round(percent * 100), cleaningCostMinor, vatOnFee: vat, cleanChargeMode: mode });
+      await writeFinance({ action: "setStatementTerms", requestId: request.get(), propertyId: row.propertyId, managementFeeBps: Math.round(percent * 100), cleaningCostMinor, vatOnFee: vat, cleanChargeMode: "agreed_fee" });
       request.done(); onClose(); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
@@ -134,7 +132,7 @@ export function TermsSheet({ p, row, onClose, onDone }: { p: Palette; row: State
           <Chip p={p} label="15%" on={Number(fee) === 15 && fee.trim() !== ""} onPress={() => setFee("15")} />
         </View>
       </View>
-      <Field label="Management fee (% of the payout after platform fees)" value={fee} onChange={setFee} p={p} placeholder="15" />
+      <Field label="Management fee (% of the payout after platform fees and changeovers)" value={fee} onChange={setFee} p={p} placeholder="15" />
       <View style={[ui.between, { gap: 16, minHeight: 56 }]}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={{ color: p.text, fontWeight: "600" }}>Add VAT to the management fee</Text>
@@ -143,16 +141,7 @@ export function TermsSheet({ p, row, onClose, onDone }: { p: Palette; row: State
         <Switch accessibilityLabel="Add VAT to the management fee" value={vat} onValueChange={setVat} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
       </View>
       <Field label="Agreed cleaning cost per clean" value={clean} onChange={setClean} p={p} placeholder="£0.00" />
-      <View style={{ gap: 8 }}>
-        <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Charge cleans at</Text>
-        <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-          <Chip p={p} label={CLEAN_MODE_LABEL.agreed_fee} on={mode === "agreed_fee"} onPress={() => setMode("agreed_fee")} />
-          <Chip p={p} label={CLEAN_MODE_LABEL.actual_cost} on={mode === "actual_cost"} onPress={() => setMode("actual_cost")} />
-        </View>
-        <Text style={small(p)}>{mode === "agreed_fee"
-          ? "The owner pays the agreed cost for every clean. A clean that cost more is reviewed first, and a statement waits for the review."
-          : "The owner pays what each clean actually cost: the cleaner’s invoice, otherwise their rate."}</Text>
-      </View>
+      <Text style={small(p)}>{"The owner pays the agreed cost for every clean. A clean whose invoice is higher is flagged for Accounts to review; the statement does not wait for it."}</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : "Save terms"} primary p={p} disabled={busy} onPress={() => void save()} />
     </Sheet>

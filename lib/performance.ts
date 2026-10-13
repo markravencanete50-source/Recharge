@@ -34,6 +34,10 @@ const figures = {
   cleanCount: count, cleansWithoutCost: count, statementCount: count,
   grossRevenueMinor: int, nightsBooked: count, nightsAvailable: count, occupancyBps: count.nullable(),
   nightsSold: count, averageNightlyRateMinor: int.nullable(),
+  // Profit per clean (client answer 4, 20261014140000): cleans on itemised statements that have an invoice line. Optional
+  // so an older server's report still reads.
+  invoicedCleanCount: count.optional(), invoicedChargedMinor: int.optional(), invoicedCostMinor: int.optional(),
+  cleanProfitMinor: int.optional(), profitPerCleanMinor: int.nullable().optional(),
 };
 export const performanceFiguresSchema = z.object(figures);
 export const performancePropertySchema = z.object({ propertyId: z.string().uuid(), propertyName: z.string(), region: z.string().nullable(), ...figures });

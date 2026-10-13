@@ -28,7 +28,7 @@ export const VAT_BPS = 2000;
 // private.workspace_statement_compute (20261014120000), and private.workspace_statement_fee_base() names it.
 export const FEE_BASE = 'payout_after_ota_fees_and_changeovers' as const;
 // An unreviewed clean whose actual cost is above the agreed value blocks the statement.
-export const STATEMENT_WAITS_FOR_CLEAN_REVIEW = true;
+export const STATEMENT_WAITS_FOR_CLEAN_REVIEW = false;
 // Assumption (c): the order deductions are listed in. VAT is part of the management fee and sits
 // straight after it. Within each category lines are in date order (then by id).
 export const DEDUCTION_ORDER = ['ota_fee', 'changeover', 'management_fee', 'vat', 'payable'] as const;
@@ -80,8 +80,8 @@ export type StatementCleanInput = {
   id: string;
   date: string;
   chargedMinor?: number | null; // the value charged to the owner; defaults to the terms' cleaning cost
-  actualCostMinor: number | null; // cleaner's invoice line, else the assigned cleaner's rate
-  decision: CleanChargeMode | null; // the review's choice; used only while `reviewed` is true
+  actualCostMinor: number | null; // the cleaner's invoice line (client answer 4); only flags, never charged
+  decision: CleanChargeMode | null; // the review's choice; kept for callers, no longer changes the charge
   reviewed: boolean; // false when there is no review or the review went stale
 };
 export type StatementPayableInput = { id: string; date: string; description: string; amountMinor: number };
@@ -276,23 +276,18 @@ export function statementFor(input: StatementInput): StatementResult {
   const nightsAvailable = to - from;
   if (nightsBooked > nightsAvailable) flags.push('nights_exceed_period');
 
-  // Changeovers: the agreed value, unless the reviewed decision (or else the property's mode) says
-  // actual cost. A clean costing more than the agreed value is flagged and waits for a review.
+  // Changeovers: always the agreed value (client answer 4). The property's clean charge mode and a review's decision
+  // no longer change it. A clean whose actual cost (the cleaner's invoice line) is above it is flagged for staff, but
+  // the statement does not wait for its review (STATEMENT_WAITS_FOR_CLEAN_REVIEW is false).
   const changeovers: StatementLine[] = [];
   for (const clean of input.cleans.filter(c => inPeriod(c.date, 'Clean date')).sort(byDateThenId(c => c.date))) {
     const agreed = safeInteger(clean.chargedMinor ?? terms.cleaningCostMinor, 'Clean charge');
     const actual = clean.actualCostMinor === null || clean.actualCostMinor === undefined ? null : safeInteger(clean.actualCostMinor, 'Clean cost');
     if (actual !== null && actual > agreed) {
       flags.push(`clean_over_agreed:${clean.id}`);
-      if (STATEMENT_WAITS_FOR_CLEAN_REVIEW && !clean.reviewed && terms.cleanChargeMode === 'agreed_fee') blockedReasons.push(`clean_unreviewed:${clean.id}`);
+      if (STATEMENT_WAITS_FOR_CLEAN_REVIEW && !clean.reviewed) blockedReasons.push(`clean_unreviewed:${clean.id}`);
     }
-    const basis: CleanChargeMode = clean.reviewed && clean.decision ? clean.decision : terms.cleanChargeMode;
-    let charge = agreed;
-    if (basis === 'actual_cost') {
-      if (actual === null) flags.push(`clean_cost_unknown:${clean.id}`);
-      else charge = actual;
-    }
-    changeovers.push({ kind: 'changeover', date: clean.date, label: 'Changeover clean', amountMinor: charge, refId: clean.id });
+    changeovers.push({ kind: 'changeover', date: clean.date, label: 'Changeover clean', amountMinor: agreed, refId: clean.id });
   }
 
   const payables: StatementLine[] = input.payables.filter(x => inPeriod(x.date, 'Payable date')).sort(byDateThenId(x => x.date))

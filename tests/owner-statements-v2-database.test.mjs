@@ -101,7 +101,7 @@ await as(ACCOUNTS);
 await finance({ action: 'importPayoutReport', channel: 'airbnb', fileName: 'airbnb-nov.csv', lines: [line('airbnb', 'HMNOV0001', 50000, { hostFee: 1546 })] });
 await finance({ action: 'importPayoutReport', channel: 'vrbo', fileName: 'vrbo-nov.csv', lines: [line('vrbo', 'HA-NOV0001', 39008, { gross: 42400, commission: 3392 })] });
 await finance({ action: 'importPayoutReport', channel: 'booking_com', fileName: 'booking-nov.csv', lines: [line('booking_com', '5550000001', 60192, { gross: 72000 })] });
-// The 15 Nov clean cost 7500 on the cleaner's invoice; the others cost the cleaners' rates.
+// The 15 Nov clean cost 7500 on the cleaner's invoice; the others have no invoice yet, so no actual cost.
 await payables({ action: 'recordCleanerInvoice', supplier: 'Person 5', cleanerId: users[CLEANER_B], reference: 'NOV-15', invoiceDate: '2025-11-30', totalMinor: 7500, lines: [{ workId: C2, amountMinor: 7500 }] });
 
 // The same facts, as statementFor takes them.
@@ -115,21 +115,21 @@ const exampleInput = (over = {}) => ({
     { id: BOOK, channel: 'booking_com', checkIn: '2025-11-26', checkOut: '2025-12-03', status: 'confirmed', settledMinor: 60192, itemisedFeesMinor: 72000 - 60192 },
   ],
   cleans: [
-    { id: C1, date: '2025-11-08', actualCostMinor: 5500, decision: null, reviewed: false },
+    { id: C1, date: '2025-11-08', actualCostMinor: null, decision: null, reviewed: false },
     { id: C2, date: '2025-11-15', actualCostMinor: 7500, decision: 'agreed_fee', reviewed: true },
-    { id: C3, date: '2025-11-22', actualCostMinor: 5500, decision: null, reviewed: false },
-    { id: C4, date: '2025-12-03', actualCostMinor: 5500, decision: null, reviewed: false },
+    { id: C3, date: '2025-11-22', actualCostMinor: null, decision: null, reviewed: false },
+    { id: C4, date: '2025-12-03', actualCostMinor: null, decision: null, reviewed: false },
   ],
   payables: [{ id: P1, date: '2025-11-10', description: 'Boiler service', amountMinor: 6000 }, { id: P2, date: '2025-11-25', description: 'Light bulbs', amountMinor: 2500 }],
   ...over,
 });
 const preparedNov = { id: null };
 
-test('worked example: November waits for the dear clean to be reviewed, then matches the brief to the penny', async () => {
+test('worked example: November flags the dear clean for staff without waiting for its review, and matches the brief to the penny', async () => {
   await as(ACCOUNTS);
-  await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, period: '2025-11' }), /Review the cleans that cost more than agreed first/);
+  // Client answer 4: the owner pays the agreed fee, so the dear clean is flagged but does not hold the statement up.
   const preview = await report('statementPreview', { propertyId: EX, from: '2025-11-01', to: '2025-12-01' });
-  assert.deepEqual([preview.blocked, preview.blockedReasons, preview.flags], [true, [`clean_unreviewed:${C2}`], [`clean_over_agreed:${C2}`]]);
+  assert.deepEqual([preview.blocked, preview.blockedReasons, preview.flags], [false, [], [`clean_over_agreed:${C2}`]]);
   await payables({ action: 'reviewCleanCost', workId: C2, decision: 'agreed_fee', note: 'Deep clean after a party; agreed fee only' });
 
   const s = await finance({ action: 'prepareStatement', propertyId: EX, period: '2025-11' });
@@ -204,22 +204,21 @@ test('preparing the same period again keeps one statement; an overlapping period
   await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, from: later.d, to: later.e }), /period that has started/);
 });
 
-test('actual-cost mode, 15% against 12%, and VAT off', async () => {
+test('a property still marked actual cost, 15% against 12%, and VAT off', async () => {
   const prepare = async () => { await as(ACCOUNTS); return finance({ action: 'prepareStatement', propertyId: EX, period: '2025-11' }); };
   const tsNov = over => statementFor(exampleInput(over));
-  // Actual cost on the property; the review chose the agreed fee for the dear clean, so only the cheaper two move.
+  // Client answer 4: the property's old actual-cost setting no longer changes the charge, nor does a review choosing
+  // actual cost. The owner pays the agreed fee for every clean, and the statement says so.
   await as(ADMIN); await terms(EX, { cleanChargeMode: 'actual_cost' });
   let s = await prepare();
-  assert.equal(s.cleaningMinor, 5500 + 6000 + 5500);
-  assert.equal(s.payoutMinor, tsNov({ terms: { ...exampleInput().terms, cleanChargeMode: 'actual_cost' } }).payoutMinor);
-  // The review now says actual cost too: 18500 in changeovers.
+  assert.equal(s.cleaningMinor, 18000);
+  assert.equal(s.payoutMinor, 109582);
+  assert.equal(s.cleanChargeMode, 'agreed_fee');
   await as(ACCOUNTS);
   await payables({ action: 'reviewCleanCost', workId: C2, decision: 'actual_cost', note: 'Owner agreed to pay the deep clean' });
   s = await prepare();
-  assert.equal(s.cleaningMinor, 18500);
-  // 500 more in changeovers also lowers the fee base: 143502 x 15% = 21525.3, so 21525, VAT 4305.
-  assert.equal(s.payoutMinor, 162002 - 18500 - 21525 - 4305 - 8500);
-  assert.equal(s.cleanChargeMode, 'actual_cost');
+  assert.equal(s.cleaningMinor, 18000);
+  assert.equal(s.payoutMinor, 109582);
   assert.deepEqual(figures(await compute(EX, '2025-11-01', '2025-12-01')),
     figures(tsNov({ terms: { ...exampleInput().terms, cleanChargeMode: 'actual_cost' }, cleans: exampleInput().cleans.map(c => c.id === C2 ? { ...c, decision: 'actual_cost' } : c) })));
   await as(ADMIN); await terms(EX);
@@ -300,13 +299,16 @@ test('a statement waits while a stay in the period is unsettled', async () => {
   const error = await finance({ action: 'prepareStatement', propertyId: U, period: '2025-09' }).then(() => null, e => e);
   assert.match(error.message, /Reconcile every stay in the period first/);
   assert.deepEqual(JSON.parse(error.detail), [`stay_unsettled:${WAIT}`, `stay_unsettled:${DIRECT_U}`]);
-  // An unsettled stay and an unreviewed dear clean: both reasons in one message.
+  // A dear clean (its invoice is above the agreed fee) adds no reason of its own: client answer 4, the owner pays the
+  // agreed fee and the clean is only flagged for staff.
   const dear = await clean(U, '2025-09-06', users[CLEANER_C]);
-  await sql('insert into private.workspace_cleaner_rates(cleaner_id,rate_minor,updated_by) values($1,9000,$2)', [users[CLEANER_C], users[ADMIN]]);
   await as(ACCOUNTS);
-  await assert.rejects(finance({ action: 'prepareStatement', propertyId: U, period: '2025-09' }), /Reconcile every stay in the period and review the cleans/);
+  await payables({ action: 'recordCleanerInvoice', supplier: 'Person 7', cleanerId: users[CLEANER_C], reference: 'SEP-06', invoiceDate: '2025-09-30', totalMinor: 9000, lines: [{ workId: dear, amountMinor: 9000 }] });
+  const again = await finance({ action: 'prepareStatement', propertyId: U, period: '2025-09' }).then(() => null, e => e);
+  assert.deepEqual(JSON.parse(again.detail), [`stay_unsettled:${WAIT}`, `stay_unsettled:${DIRECT_U}`]);
+  const preview = await report('statementPreview', { propertyId: U, from: '2025-09-01', to: '2025-10-01' });
+  assert.ok(preview.flags.includes(`clean_over_agreed:${dear}`));
   // A statement that ends before the unsettled stays can be prepared.
-  await payables({ action: 'reviewCleanCost', workId: dear, decision: 'agreed_fee', note: 'Rate rise not passed on' });
   const early = await finance({ action: 'prepareStatement', propertyId: U, from: '2025-09-01', to: '2025-09-03' });
   assert.deepEqual([early.grossMinor, early.nightsBooked, early.nightsAvailable], [0, 0, 2]);
 });
@@ -516,7 +518,8 @@ async function randomScenarios(seed, name) {
       const assignee = pick([...cleaners, null]);
       const billable = chance(0.8);
       const id = await clean(prop, isoDay(dueN), assignee, billable ? {} : pick([{ status: 'waiting', phase: 'assigned' }, { status: 'completed', phase: 'assigned' }]));
-      let actual = assignee && rates[assignee] !== undefined ? rates[assignee] : null;
+      // The actual cost is the invoice line only (client answer 4); the cleaners' rates no longer count.
+      let actual = null;
       const invoiceBy = assignee ?? cleaners[0];
       if (chance(0.15)) {
         const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,status,created_by,request_id) values('Random cleaner',$1,$2,'2025-01-01',$3,'rejected',$4,gen_random_uuid()) returning id", [invoiceBy, `${name} X-${i}-${k}`, 100, users[ACCOUNTS]]);
