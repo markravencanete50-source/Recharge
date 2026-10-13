@@ -15,7 +15,10 @@ create function auth.jwt() returns jsonb language sql stable as $$select coalesc
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 const files = (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort();
 assert.ok(files.includes(MINE + '.sql'), 'the migration exists');
-for (const file of files) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+// 20261015300000 makes every message notify (one per message), replacing the rule this file proves; it has its own test,
+// tests/message-notices-database.test.mjs, so it is left out here.
+const REPLACED_BY = ['20261015300000_chat_notice_every_message'];
+for (const file of files.filter(f => !REPLACED_BY.some(r => f.startsWith(r)))) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 const definition = async sig => (await db.query('select pg_get_functiondef($1::regprocedure) def', [sig])).rows[0].def;
 const SIGS = ['private.workspace_chat_action(jsonb)', 'private.chat_notice_due(uuid,uuid)'];
 const firstRun = await Promise.all(SIGS.map(definition));

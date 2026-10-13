@@ -76,7 +76,9 @@ test('Messages gets the Updates tab and the old Updates page opens it', () => {
   assert.match(workspace, /section === "messages" \? "inbox" : section/, 'a messages link is the inbox page');
   const chat = mobile('LiveChat.tsx');
   assert.match(chat, /initialTab\?: "updates"/);
-  assert.match(chat, /openUpdates \? "updates"/);
+  // Round 5: no Updates tab; the link opens the feed in place inside Messages.
+  assert.match(chat, /const openUpdates = initialTab === "updates"/);
+  assert.match(chat, /if \(showUpdates && updates && !owner\) return/);
   // Owners have no Updates tab in Messages; their Updates page stays.
   assert.match(workspace, /tab === "activity" \? <LiveActivity /);
   // The map resolves it the same way.

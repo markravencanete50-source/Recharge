@@ -1,25 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Platform, ScrollView, TextInput, View } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Text } from "./Typography";
-import { ListSearchBox, PropertySelect, useListSearch } from "./SearchPicker";
+import { PropertySelect } from "./SearchPicker";
 import { useCelebrate } from "./Celebrate";
-import { MotionPress, Pop } from "./motion";
+import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, Tag, Loading, RefreshButton } from "./LiveKit";
+import { Button, Field, message, Notice, Tag, Loading } from "./LiveKit";
 import { Pills } from "./LiveAccounts";
 import { readInbox, writeInbox } from "./backend/client";
 import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
-import { ALL_PROPERTIES, chipCounts, emptyMessage, filterInbox, GUEST_CHIPS, guestFacts, propertyChips } from "../../lib/inbox-filters";
-import { InboxChips } from "./InboxChips";
+import { emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
+import { MessagesSplit, QuietLine, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { chatTime } from "../../lib/workspace-chat-policy";
 import { SavedReplies } from "./SavedReplies";
 import type { PropertyView } from "../../lib/workspace-view";
 
-// The guest inbox (Stays → Guest inbox): every conversation with guests, the longest wait first.
+// The guest inbox (the Guests tab of Messages): every conversation with guests, the longest wait first, filtered
+// by Needs a reply, Waiting for reply or Closed and by one search box. A conversation opens in place: beside the
+// list on a wide screen, instead of it on a phone.
 // Hostaway fills it by itself (guest messages and the team's replies there, within about a minute).
 // When sending is switched on (canSend), a reply to a Hostaway conversation is sent to the guest through
 // Hostaway. Messages from anywhere else (email, for one) are logged by hand, and a reply can be recorded
@@ -47,22 +48,22 @@ function ChannelBadge({ channel, size = 40 }: { channel: GuestChannel; size?: nu
   }
   return (
     <View accessible accessibilityLabel={CHANNEL_LABEL[channel]} style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center", backgroundColor: s.bg }}>
-      <Text style={{ color: s.fg, fontWeight: "800", fontSize: size * 0.38 }}>{s.letter}</Text>
+      <Text style={{ color: s.fg, fontWeight: "600", fontSize: size * 0.38 }}>{s.letter}</Text>
     </View>
   );
 }
 
-function ThreadRow({ p, t, targets, first, unread = false, onPress }: { p: Palette; t: GuestThread; targets: { greenMinutes: number; amberMinutes: number }; first: boolean; unread?: boolean; onPress: () => void }) {
+function ThreadRow({ p, t, targets, first, unread = false, active = false, onPress }: { p: Palette; t: GuestThread; targets: { greenMinutes: number; amberMinutes: number }; first: boolean; unread?: boolean; active?: boolean; onPress: () => void }) {
   const wait = t.status === "open" ? waitGrade(t.waitingSince, targets) : null;
   const where = [CHANNEL_LABEL[t.channel], t.propertyName ?? "No property yet", t.reservationRef].filter(Boolean).join(" · ");
   return (
     <MotionPress accessibilityRole="button" accessibilityLabel={`${t.guestName ?? "Guest"}${unread ? ", unread" : ""}, ${where}${wait ? `, waiting ${waitLabel(wait.minutes)}` : ""}`} onPress={onPress}
-      style={[ui.row, { gap: 12, paddingVertical: 12, borderTopWidth: first ? 0 : 1, borderColor: p.border, alignItems: "flex-start" }]}>
+      style={[ui.row, { gap: 12, paddingVertical: 12, paddingHorizontal: 8, borderRadius: 14, borderTopWidth: first || active ? 0 : 1, borderColor: p.border, alignItems: "flex-start", backgroundColor: active ? p.wash : "transparent" }]}>
       <ChannelBadge channel={t.channel} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <View style={[ui.row, { gap: 8 }]}>
           {unread && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.primary }} />}
-          <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: unread ? "800" : "700", flex: 1 }}>{t.guestName ?? "Guest"}</Text>
+          <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: unread ? "600" : "500", flex: 1 }}>{t.guestName ?? "Guest"}</Text>
           {!!t.lastMessageAt && <Text style={[ui.small, { color: p.muted }]}>{chatTime(t.lastMessageAt)}</Text>}
         </View>
         <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{where}</Text>
@@ -70,7 +71,7 @@ function ThreadRow({ p, t, targets, first, unread = false, onPress }: { p: Palet
         <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
           {wait && <Tag label={`Waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} />}
           {t.status === "done" && <Tag label="Done" tone="plain" p={p} />}
-          {t.status === "open" && !wait && <Tag label="Replied" tone="good" p={p} />}
+          {t.status === "open" && !wait && <Tag label="Waiting for reply" tone="good" p={p} />}
         </View>
       </View>
     </MotionPress>
@@ -126,7 +127,8 @@ function LogMessageSheet({ p, properties, onClose, onDone }: { p: Palette; prope
 }
 
 type Loaded = ReturnType<typeof inboxThreadSchema.parse>;
-function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palette; threadId: string; properties: PropertyView[]; onClose: () => void; onChanged: () => void }) {
+// One guest conversation, open in place. `onBack` (phones) puts the list back.
+function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Palette; threadId: string; properties: PropertyView[]; onBack?: () => void; onChanged: () => void }) {
   const celebrate = useCelebrate();
   const [data, setData] = useState<Loaded | null>(null);
   const [reply, setReply] = useState(""), [guestText, setGuestText] = useState("");
@@ -179,15 +181,21 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
   }
   const wait = t && t.status === "open" && data ? waitGrade(t.waitingSince, data.targets) : null;
   return (
-    <Sheet palette={p} visible onClose={onClose} title={t?.guestName ?? "Conversation"} subtitle={t ? [CHANNEL_LABEL[t.channel], t.propertyName ?? "No property yet", t.reservationRef].filter(Boolean).join(" · ") : undefined} icon="chat">
+    <View style={{ gap: 12 }}>
+      <ThreadHeader p={p} onBack={onBack}>
+        {t ? <ChannelBadge channel={t.channel} size={36} /> : null}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text accessibilityRole="header" numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 16 }}>{t?.guestName ?? "Guest"}</Text>
+          {!!t && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{[CHANNEL_LABEL[t.channel], t.propertyName ?? "No property yet", t.reservationRef].filter(Boolean).join(" · ")}</Text>}
+        </View>
+      </ThreadHeader>
       {!data && !error && <Loading p={p} />}
       {t && data && <>
         <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-          <ChannelBadge channel={t.channel} size={28} />
-          {wait ? <Tag label={`Waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} /> : <Tag label={t.status === "done" ? "Done" : "Replied"} tone={t.status === "done" ? "plain" : "good"} p={p} />}
+          {wait ? <Tag label={`Needs a reply · waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} /> : <Tag label={t.status === "done" ? "Closed" : "Waiting for reply"} tone={t.status === "done" ? "plain" : "good"} p={p} />}
           {t.source === "manual" && <Tag label="Logged by hand" tone="plain" p={p} />}
         </View>
-        <ScrollView ref={scroller} style={{ maxHeight: 380 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })}>
+        <ScrollView ref={scroller} style={{ maxHeight: Platform.OS === "web" ? 460 : 380 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })}>
           {data.messages.map(m => {
             const team = m.direction === "team";
             return (
@@ -222,7 +230,7 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
           {!!guestText.trim() && <Button label="Log their message" icon="inbox" p={p} disabled={busy} onPress={() => void run({ action: "logMessage", requestId: Crypto.randomUUID(), threadId, body: guestText.trim() }, "Message logged", () => setGuestText(""))} />}
         </View>}
         <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-          {t.status === "open" ? <Button label="Mark as done" icon="archive" p={p} disabled={busy} onPress={() => void run({ action: "setStatus", requestId: Crypto.randomUUID(), threadId, status: "done" }, "Conversation done")} />
+          {t.status === "open" ? <Button label="Close" icon="archive" p={p} disabled={busy} onPress={() => void run({ action: "setStatus", requestId: Crypto.randomUUID(), threadId, status: "done" }, "Conversation closed")} />
             : <Button label="Reopen" icon="rotate-ccw" p={p} disabled={busy} onPress={() => void run({ action: "setStatus", requestId: Crypto.randomUUID(), threadId, status: "open" }, "Reopened")} />}
           <Button label="Guest details" icon="edit-2" p={p} onPress={() => { setEditing(!editing); setGuest(t.guestName ?? ""); setProperty(t.propertyId); setBooking(t.reservationRef ?? ""); }} />
         </View>
@@ -234,7 +242,7 @@ function ThreadSheet({ p, threadId, properties, onClose, onChanged }: { p: Palet
         </View>}
       </>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
-    </Sheet>
+    </View>
   );
 }
 
@@ -259,9 +267,9 @@ function useSeenThreads() {
   return { seen, mark };
 }
 
-export function GuestInbox({ palette: p, properties, onChanged }: { palette: Palette; properties: PropertyView[]; onChanged?: () => void }) {
-  // Every recent conversation is read once; the chips (Needs a reply first) filter it here.
-  const [chip, setChip] = useState<(typeof GUEST_CHIPS)[number]>("reply"), [property, setProperty] = useState(ALL_PROPERTIES);
+export function GuestInbox({ palette: p, properties, desktop = false, onChanged }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void }) {
+  // Every recent conversation is read once; the status and the search filter it here, Needs a reply first.
+  const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const [data, setData] = useState<ReturnType<typeof inboxListSchema.parse> | null>(null);
   const [error, setError] = useState(""), [logging, setLogging] = useState(false), [openId, setOpenId] = useState<string | null>(null);
   const [, setTick] = useState(0);
@@ -281,33 +289,31 @@ export function GuestInbox({ palette: p, properties, onChanged }: { palette: Pal
   }, [load]);
   const red = data ? data.threads.filter(t => t.status === "open" && waitGrade(t.waitingSince, data.targets)?.grade === "red").length : 0;
   const threads = data?.threads ?? [];
-  const facts = (t: GuestThread) => guestFacts(t, seen[t.id]);
-  const names = new Map([...threads.filter(t => t.propertyId && t.propertyName).map(t => [t.propertyId!, t.propertyName!] as const), ...properties.map(x => [x.id, x.name] as const)]);
-  const propertyOptions = propertyChips(threads, facts, names, chip);
-  const where = propertyOptions.some(x => x.id === property) ? property : ALL_PROPERTIES;
-  const search = useListSearch(filterInbox(threads, facts, chip, where), t => [t.guestName, t.propertyName, t.reservationRef, CHANNEL_LABEL[t.channel], t.preview]), shown = search.shown;
-  return (
-    <View style={{ gap: 16 }}>
-      {data && !data.connected && <View style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.wash, alignItems: "flex-start" }]}>
-        <Feather name="info" size={16} color={p.primary} style={{ marginTop: 2 }} />
-        <Text style={[ui.small, { color: p.text, flex: 1 }]}>The channel manager isn’t connected yet, so messages don’t arrive here by themselves. Log each guest message as it comes in and record your reply: reply times and bonuses count from these.</Text>
-      </View>}
-      <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-        <Button label="Log a guest message" icon="plus" primary p={p} onPress={() => setLogging(true)} />
-        <RefreshButton p={p} onPress={() => void load()} />
-      </View>
-      {data && <InboxChips p={p} chips={GUEST_CHIPS} chip={chip} counts={chipCounts(threads, facts, GUEST_CHIPS, where)} onChip={setChip} properties={propertyOptions} property={where} onProperty={setProperty} />}
-      {red > 0 && <Notice text={`${red} guest${red === 1 ? " has" : "s have"} waited longer than ${data?.targets.amberMinutes} minutes.`} p={p} tone="bad" />}
+  // The search looks at the guest's name, the property's name and address, and the booking reference.
+  const address = new Map(properties.map(x => [x.id, x.address] as const));
+  const found = threads.filter(t => matchesSearch(query, [t.guestName, t.propertyName, t.propertyId ? address.get(t.propertyId) : null, t.reservationRef]));
+  // The open conversation stays listed beside it while it is read, even once it has moved to another status.
+  const shown = found.filter(t => guestStatus(t) === status || (desktop && t.id === openId));
+  const list = (
+    <View style={{ gap: 10 }}>
+      <SearchBar p={p} value={query} onChange={setQuery} placeholder="Search guest or property" action={{ icon: "plus", label: "Log a guest message", onPress: () => setLogging(true) }} />
+      {data && <StatusFilter p={p} value={status} counts={statusCounts(found, guestStatus)} onChange={setStatus} />}
+      {data && !data.connected && <QuietLine p={p} icon="info" text="Hostaway isn't connected yet: log each guest message by hand." />}
+      {red > 0 && <QuietLine p={p} tone="bad" text={`${red} guest${red === 1 ? " has" : "s have"} waited longer than ${data?.targets.amberMinutes} minutes.`} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {data && <ListSearchBox p={p} search={search} nouns="conversations" />}
-      {!data && !error ? <Loading p={p} /> : data && !search.missed && (
-        <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
-          {shown.length ? shown.map((t, i) => <Pop key={t.id} active={t.id === openId}><ThreadRow p={p} t={t} targets={data.targets} unread={facts(t).unread} first={i === 0} onPress={() => open(t.id)} /></Pop>)
-            : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyMessage(chip, "guests", where !== ALL_PROPERTIES ? names.get(where) : undefined)}</Text>}
+      {!data && !error ? <Loading p={p} /> : data && (
+        <View>
+          {shown.length ? shown.map((t, i) => <ThreadRow key={t.id} p={p} t={t} targets={data.targets} unread={guestFacts(t, seen[t.id]).unread} active={t.id === openId} first={i === 0} onPress={() => open(t.id)} />)
+            : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyStatusMessage("guests", status, !!query.trim())}</Text>}
         </View>
       )}
-      {logging && <LogMessageSheet p={p} properties={properties} onClose={() => setLogging(false)} onDone={id => { setLogging(false); void load(); onChanged?.(); if (id) open(id); }} />}
-      {openId && <ThreadSheet key={openId} p={p} threadId={openId} properties={properties} onClose={() => open(null)} onChanged={() => { void load(); onChanged?.(); }} />}
     </View>
+  );
+  const detail = openId ? <GuestThreadPane key={openId} p={p} threadId={openId} properties={properties} onBack={desktop ? undefined : () => open(null)} onChanged={() => { void load(); onChanged?.(); }} /> : null;
+  return (
+    <>
+      <MessagesSplit p={p} desktop={desktop} list={list} detail={detail} />
+      {logging && <LogMessageSheet p={p} properties={properties} onClose={() => setLogging(false)} onDone={id => { setLogging(false); void load(); onChanged?.(); if (id) open(id); }} />}
+    </>
   );
 }

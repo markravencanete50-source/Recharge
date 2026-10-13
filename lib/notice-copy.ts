@@ -14,6 +14,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'chat.report_reviewed': copy('Your report was reviewed', 'An admin reviewed the message you reported and left it in place.'),
   'chat.report_removed': copy('Your report was reviewed', 'An admin removed the message you reported. Thanks for letting us know.'),
   'chat.message_removed': copy('An admin removed one of your messages', 'It broke the team\'s acceptable use rules. Contact an admin if you think this was a mistake.'),
+  // Session C, round 5: every guest message tells Stays on the property and the admins (migration 20261015310000).
+  'guest.message': copy('New guest message', 'A guest has sent a message. Open Messages to reply.'),
   'journey.createEnquiry': copy('New property enquiry', 'A new property enquiry has been started.'),
   'journey.publishEstimate': copy('Your estimate is ready', 'Recharge has prepared an estimate for your property, with expected nightly rates and comparable listings. You can review it and choose how to go ahead.'),
   'journey.decideEstimate': copy('Estimate decision recorded', 'A decision has been recorded on a property estimate.'),
