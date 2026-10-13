@@ -186,3 +186,79 @@ too: add `gz|tgz` to the extensions in `hashedWorkspaceFile`. Not required (the 
 - **Rate limits** are off in the demo (as on the devstack).
 - **Time of day** isn't moved, only the date: a shift seeded at 08:52 shows "since 08:52".
 - Headless Chromium reported times in UTC in the screenshots; real browsers use the viewer's clock.
+
+---
+
+# Round 6: long option lists become a dropdown or a search (13 October 2026)
+
+Branch `claude/round6-forms-session-d`, from `main` at `8329f37`. No migration. Lee: "the property should be
+dropdown or searchable" (Area in "Add a new property enquiry" showed 23 full-width radio cards).
+
+## The rule (`lib/choice-control.ts`)
+
+| Options | Drawn as |
+|---|---|
+| 5 or fewer | the compact radio choices (or pills) as before |
+| 6 to 10 | one closed dropdown (`Dropdown`; the browser's own select on the web) |
+| more than 10 | a dropdown that opens with a search box at the top (every word typed must appear; case and accents ignored) |
+| properties, people, stays | the search-only picker (`SearchPicker` / `PropertySelect`), never radio cards |
+
+- `mobile/src/ChoiceField.tsx` (new): `ChoiceField` applies the rule to `{ value, label }` options; `ChoicePills` is a
+  drop-in for a row of `Pills` (5 or fewer stay pills).
+- `mobile/src/Dropdown.tsx` (Session A's, extended, backward compatible): `searchable` (search box, scrolling list,
+  on every platform), `hideLabel` (for forms that print their own label) and `disabled`.
+- **The shared workflow form renderer** (`Field` in `mobile/src/LivePages.tsx`) draws every `select` field with
+  `ChoiceField`, and the quick picks under a text field (`Suggestions`: property type 8, bedrooms 7) become one
+  dropdown past 5 while the field stays free to type in.
+- **Area** (`lib/workflow-forms.ts`): `defaultValue: ''`, so the dropdown starts on "Work it out from the address";
+  23 options, so it is the searchable dropdown. The postcode lookup still fills it in when nobody chose one.
+
+## Every screen audited
+
+Converted:
+
+| Screen | List | Now |
+|---|---|---|
+| Any workflow form (`LivePages` `Field`) | every select field: Area (23), type of repair (11), the owner's estimate decision (3), review sentiment (3)… | `ChoiceField` by count |
+| Workflow form quick picks (`LivePages` `Suggestions`) | property type (8), bedrooms (7) | dropdown; parking, garden, WCs, bathrooms (≤5) stay chips |
+| Client enquiries → Start valuing (`LiveEnquiries`) | Area (23 chips), property type (8 chips) | searchable dropdown; dropdown |
+| Report a repair (`LiveRepairs`) | type of repair (11 chips); which stay (chips) | searchable dropdown; stays in the search picker |
+| Clean problem (`CleanProblem`) | kind of problem (11 chips) | searchable dropdown |
+| Access control → change role, add a person (`LiveAccessControl`) | role (8 radio cards, twice); people filter (6 pills) | dropdown with the chosen role's summary under it; dropdown |
+| KPIs (`KpiAdmin`) | area (6 pills, list and sheet); what it measures (radio list) | dropdown; `ChoiceField` by count |
+| Usual cleaners (`DefaultCleaners`) | cleaners per property (people chips) | search picker |
+| Listing links (`LivePropertyProfile`) | platform per listing (6 chips) | dropdown |
+| Log a guest review (`ListingSheets`) | rating out of 10 (10 buttons); the night to price (pills) | dropdown when out of 10 (out of 5 keeps its 5 round buttons); `ChoicePills` |
+| New to-do (`HubItemSheet`) | department (6 chips) | dropdown |
+| View as (`ViewAs`) | every person as a radio card, grouped by role, plus a card per role | people in the search picker ("Name · Role"), role previews in one dropdown |
+| Usual shift (`LiveShifts`) | department (6 pills) | dropdown |
+| People (`LivePeople`) | role (up to 8 pills), OTA platform (8 pills) | dropdowns |
+| Menu order (`MenuOrderEditor`) | role (8 pills) | dropdown |
+| Owner expenses (`OwnerExpenses`) | property (pills); month (pills) | property search picker; `ChoicePills` |
+| Log a guest message (`LiveGuestInbox`) | channel (pills) | `ChoicePills` |
+| Calendar (`LiveCalendar`) | team filter (pills) | `ChoicePills` |
+
+Left as they are (5 or fewer, or not a list of text choices): accept/reject a clean (2), the clean form's property
+check answers (2–3 each), routine type (3) and frequency (2) in Ready, email or phone in sign-up (2), feedback
+category (4), who a to-do is for (3), review platform (4) and sentiment (3), owner expense category (5), owner
+periods (4), saved-reply audience (3), stay status (2) and channel (5), people and property filters in People (5 and
+4), guest inbox "waiting more than" (5), and the profile colour (6 colour swatches in one row: a dropdown of colour
+names would hide the colour, so they stay swatches; say if you want them changed).
+
+For the Lead to route (not mine this round):
+- **Session B / navigation:** Management's view row (`LiveManagement`, about 14 tab pills: Waiting on you, People,
+  Properties, Productivity…) is the longest pill row left. Guest and Client relations sub-tabs and the calendar's
+  mode row (4) are tabs and short.
+- **Session A / Accounts:** `PayoutStays` platform chips (All + up to 5 platforms) and status chips (3).
+- **Session C:** the team calendar's day strip (`TeamEvents`, 7 days) and Messages' status chips (3) are short.
+- **Dates:** "Due (optional, YYYY-MM-DD)" and "Send by" in the new to-do sheet (`HubItemSheet`) are typed dates,
+  not the one calendar field (`DateField`) the house rule asks for.
+
+## Tests
+
+- `tests/choice-control.test.mjs` (new, 20 tests): the threshold (5 radio, 6–10 dropdown, 11+ searchable), the search
+  filter, the Area default and searchable, the renderer and the quick picks using the rule, and one check per
+  converted screen (16 screens).
+- Every existing test that reads the changed files passes (305). `tsc -p mobile` and ESLint are clean.
+
+Screenshots: `docs/session-D-screenshots/round6-*`.

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps 
 import { ActivityIndicator, Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { ChoicePills } from "./ChoiceField";
 import { SearchPicker } from "./SearchPicker";
 import { MotionPress, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -468,7 +469,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
     <View style={{ gap: 16 }}>
       <PageHeading palette={p} title="Calendar" subtitle={staff ? "Bookings with guest names, changeovers, cleans, maintenance and where the team is. Tap a day or a booking for its details." : "Tap a day to see what is happening, then an entry for its details."} />
       {staff && <Pills p={p} values={MODES} value={mode} onChange={setMode} label={v => MODE_LABEL[v]} />}
-      {(mode === "month" || mode === "week") && teams.length > 1 && <Pills p={p} values={["all", ...teams] as (Team | "all")[]} value={team} onChange={setTeam} label={v => v === "all" ? "All teams" : TEAM_LABEL[v]} />}
+      {(mode === "month" || mode === "week") && teams.length > 1 && <ChoicePills p={p} name="Team" values={["all", ...teams] as (Team | "all")[]} value={team} onChange={setTeam} label={v => v === "all" ? "All teams" : TEAM_LABEL[v]} />}
       {filters && (
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
