@@ -30,6 +30,9 @@ export const CLEAN_FORM_ZONE = 'Europe/London';
 export const CLEAN_FORM_WARNING = 'no_form';
 export const CLEAN_FORM_WARNING_EFFECT = { tag: true, flagManagement: true, payEffect: 'none', lateSubmitAllowed: true, remindCleaner: true, invoiceApprovalNeedsForm: true } as const;
 export const CLEAN_FORM_SWEEP_LIMIT = 200;
+// Session A: mid-stay cleans (client answer 5, "Forget this for now"). SQL: private.workspace_mid_stay_cleans_enabled()
+// (migration 20261014110000_mid_stay_switch). OFF: the run creates none and leaves existing ones exactly as they are.
+export const MID_STAY_CLEANS_ENABLED = false;
 
 // --- B3: direct-booking follow-ups (migration 20261012180000_direct_booking_followups) -------------
 // The minimum number of nights is NOT mirrored here: it is the booking policy's minimum_nights

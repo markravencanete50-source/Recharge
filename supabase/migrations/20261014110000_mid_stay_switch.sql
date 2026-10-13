@@ -1,31 +1,25 @@
--- Mid-stay cleans get one on/off switch (client answer 5, 13 October 2026: "Forget this for now").
+-- Mid-stay cleans get one on/off switch, OFF (client answer 5, 13 October 2026: "Forget this for now"; Lee's decision).
 --
--- private.workspace_mid_stay_cleans_enabled() is the switch. It is ON here, so nothing changes until a later
--- one-line migration replaces it with `select false`. While it is OFF:
---   * no new mid-stay clean is made, by the 15-minute run or at the end of a Hostaway sync;
---   * an automatic mid-stay clean nobody has started (waiting or in progress, nothing submitted) is cancelled with
---     the reason "Mid-stay cleans are switched off", exactly as the run already cancels one whose stay changed;
---   * a started, submitted or completed one is left alone, and a clean someone made by hand is never touched.
--- Turning it back ON makes mid-stay cleans again for long stays whose middle day is still ahead.
+-- private.workspace_mid_stay_cleans_enabled() is the switch, mirrored by MID_STAY_CLEANS_ENABLED in
+-- lib/feedback-defaults.ts. While it is OFF, private.workspace_mid_stay_cleans does nothing at all: it creates no new
+-- mid-stay clean, by the 15-minute run in worker/index.ts or at the end of a Hostaway sync, and it leaves every
+-- mid-stay clean that already exists exactly as it is (none is cancelled, moved or changed). Its answer keeps the same
+-- keys, all zero, plus switchedOff true. Turning it back ON is a one-line migration (`select true`): the run then
+-- behaves as before, including cancelling an unstarted automatic clean whose stay no longer needs it.
 --
--- private.workspace_mid_stay_wanted is replaced as a whole (it is only defined in 20261012130000). The reason in
--- private.workspace_mid_stay_cleans is a patch: it reads the LATEST definition, needs its anchor exactly once and is
+-- The worker keeps calling the run: the switch lives in the database so the cron and the Hostaway sync obey it alike.
+--
+-- The patch reads the LATEST definition of private.workspace_mid_stay_cleans, needs its anchor exactly once and is
 -- skipped once its sentinel is present, so the migration is safe to run twice.
 
-create or replace function private.workspace_mid_stay_cleans_enabled() returns boolean language sql immutable set search_path='' as $$ select true $$;
-
--- Whether a stay needs a mid-stay clean, dates aside: never while mid-stay cleans are switched off.
-create or replace function private.workspace_mid_stay_wanted(r private.workspace_reservations) returns boolean language sql stable set search_path='' as $$
- select private.workspace_mid_stay_cleans_enabled() and r.status='confirmed' and r.check_out-r.check_in>private.workspace_mid_stay_nights()
-  and (private.workspace_mid_stay_cleans_owner_stays() or not private.workspace_is_owner_stay(r));
-$$;
+create or replace function private.workspace_mid_stay_cleans_enabled() returns boolean language sql immutable set search_path='' as $$ select false $$;
 
 do $patch$
 declare
  definition text;found_count integer;
- anchor constant text:=$q$case when s.id is null or s.status<>'confirmed' then 'The stay was cancelled'$q$;
- replacement constant text:=$q$case when not private.workspace_mid_stay_cleans_enabled() then 'Mid-stay cleans are switched off' when s.id is null or s.status<>'confirmed' then 'The stay was cancelled'$q$;
- sentinel constant text:=$q$then 'Mid-stay cleans are switched off'$q$;
+ anchor constant text:=$q$perform pg_advisory_xact_lock(hashtextextended('workspace_mid_stay_cleans',0));$q$;
+ replacement constant text:=$q$perform pg_advisory_xact_lock(hashtextextended('workspace_mid_stay_cleans',0)); if not private.workspace_mid_stay_cleans_enabled() then return jsonb_build_object('created',0,'cancelled',0,'leftAlone',0,'remaining',0,'switchedOff',true);end if;$q$;
+ sentinel constant text:=$q$if not private.workspace_mid_stay_cleans_enabled() then return$q$;
 begin
  definition:=pg_get_functiondef('private.workspace_mid_stay_cleans(timestamptz)'::regprocedure);
  if position(sentinel in definition)=0 then
@@ -36,4 +30,4 @@ begin
  end if;
 end $patch$;
 
-revoke all on function private.workspace_mid_stay_cleans_enabled(),private.workspace_mid_stay_wanted(private.workspace_reservations) from public,anon,authenticated;
+revoke all on function private.workspace_mid_stay_cleans_enabled() from public,anon,authenticated;

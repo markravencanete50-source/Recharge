@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-// Mid-stay cleans switch (20261014110000, client answer 5): ON by default, so nothing changes; while OFF no new
-// mid-stay clean is made and an automatic one nobody has started is cancelled, a started one is left alone, and a
-// clean made by hand is never touched; ON again brings mid-stay cleans back for stays still ahead.
+// Mid-stay cleans switch (20261014110000, client answer 5, Lee's decision): OFF by default. While off the run creates
+// no mid-stay clean and leaves every existing one exactly as it is, even one whose stay was cancelled. Switched on, the
+// run behaves as before.
 const MIGRATION = 'supabase/migrations/20261014110000_mid_stay_switch.sql';
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -43,10 +43,6 @@ async function stay(prop, reference, checkIn, checkOut) {
   return (await sql(`insert into private.workspace_reservations(property_id,reference,check_in,check_out,status,source,channel,payout_minor)
     values($1,$2,$3,$4,'confirmed','manual','direct',50000) returning id`, [prop, reference, checkIn, checkOut]))[0].id;
 }
-async function setClean(id, status, data = {}) {
-  await sql('update private.workspace_domain_details set data=data||$2::jsonb where work_id=$1', [id, JSON.stringify({ workStatus: status, ...data })]);
-  await sql('update public.workspace_work_items set status=$2,version=version+1 where id=$1', [id, status]);
-}
 // Flip the switch the way a later one-line migration would.
 const setSwitch = on => sql(`create or replace function private.workspace_mid_stay_cleans_enabled() returns boolean language sql immutable set search_path='' as $$ select ${on} $$`);
 
@@ -54,57 +50,57 @@ await as(SUPER);
 const HOME = await rpc('workspace_save_property', [{ requestId: crypto.randomUUID(), name: 'Switch flat' }]);
 await sql('insert into private.workspace_default_cleaners(property_id,cleaner_id,updated_by) values($1,$2,$3)', [HOME, users[CLEANER], users[ADMIN]]);
 
-test('the switch is on by default, so long stays still get their mid-stay clean', async () => {
-  assert.equal((await sql('select private.workspace_mid_stay_cleans_enabled() v'))[0].v, true);
+test('the switch is off by default and matches the app constant', async () => {
+  assert.equal((await sql('select private.workspace_mid_stay_cleans_enabled() v'))[0].v, false);
   assert.equal((await sql("select provolatile v from pg_proc where oid='private.workspace_mid_stay_cleans_enabled()'::regprocedure"))[0].v, 'i');
-  const long = await stay(HOME, 'Twenty nights', '2026-11-05', '2026-11-25');
-  const result = await midStay();
-  assert.equal(result.created, 1);
-  const [made] = await cleansFor(long);
-  assert.equal(made.due, '2026-11-15'); assert.equal(made.status, 'waiting');
+  const defaults = await fs.readFile('lib/feedback-defaults.ts', 'utf8');
+  assert.match(defaults, /export const MID_STAY_CLEANS_ENABLED = false;/);
 });
 
-test('switched off: no new mid-stay cleans, unstarted automatic ones are cancelled, started ones are left alone', async () => {
-  const unstarted = await stay(HOME, 'Sixteen nights', '2026-11-26', '2026-12-12');
-  const started = await stay(HOME, 'Eighteen nights', '2026-12-13', '2026-12-31');
+test('off: no new mid-stay cleans, and existing ones are left exactly as they are', async () => {
+  // Made while the switch was on.
+  await setSwitch(true);
+  const kept = await stay(HOME, 'Twenty nights', '2026-11-05', '2026-11-25');
+  const gone = await stay(HOME, 'Sixteen nights', '2026-11-26', '2026-12-12');
   assert.equal((await midStay()).created, 2);
-  const [startedClean] = await cleansFor(started);
-  await setClean(startedClean.id, 'in_progress', { submittedBy: users[CLEANER], phase: 'review' });
-  // A clean made by hand for a long stay is not one the run made, so the switch never touches it.
-  const manual = (await sql(`with w as (insert into public.workspace_work_items(request_id,property_id,module_id,title,created_by,due_on)
-    values(gen_random_uuid(),$1,'cleaning-schedule','Extra clean',$2,'2026-11-20') returning id)
-    insert into private.workspace_domain_details(work_id,kind,data) select id,'cleaning','{"phase":"assigned","workStatus":"waiting"}'::jsonb from w returning work_id`, [HOME, users[ADMIN]]))[0].work_id;
+  const before = await sql(`select w.id,w.status,w.version,w.due_on::text due,d.data from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id
+    where d.kind='cleaning' and d.data->>'cleanType'='mid_stay' order by w.id`);
+  assert.equal(before.length, 2);
 
   await setSwitch(false);
+  // A stay that would need one, and a stay whose clean is no longer needed: neither is acted on.
   const later = await stay(HOME, 'Twenty-two nights', '2027-01-02', '2027-01-24');
-  const off = await midStay();
-  assert.equal(off.created, 0, 'nothing new while switched off');
-  assert.equal(off.cancelled, 2, 'the first test\'s clean and the unstarted one');
-  assert.equal(off.leftAlone, 1, 'the started one');
-  const [cancelled] = await cleansFor(unstarted);
-  assert.equal(cancelled.status, 'cancelled'); assert.equal(cancelled.data.cancelledBecause, 'Mid-stay cleans are switched off'); assert.equal(cancelled.data.midStayCancelled, true);
-  assert.equal((await cleansFor(started))[0].status, 'in_progress');
+  await sql("update private.workspace_reservations set status='cancelled' where id=$1", [gone]);
+  assert.deepEqual(await midStay(), { created: 0, cancelled: 0, leftAlone: 0, remaining: 0, switchedOff: true });
+  assert.deepEqual(await midStay('2026-11-30T12:00:00Z'), { created: 0, cancelled: 0, leftAlone: 0, remaining: 0, switchedOff: true });
   assert.equal((await cleansFor(later)).length, 0);
-  assert.equal((await sql('select status from public.workspace_work_items where id=$1', [manual]))[0].status, 'waiting');
-  assert.deepEqual(await midStay(), { created: 0, cancelled: 0, leftAlone: 1, remaining: 0 }, 'a second run changes nothing');
+  const after = await sql(`select w.id,w.status,w.version,w.due_on::text due,d.data from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id
+    where d.kind='cleaning' and d.data->>'cleanType'='mid_stay' order by w.id`);
+  assert.deepEqual(after, before, 'not cancelled, moved or changed');
+  assert.equal((await cleansFor(kept))[0].status, 'waiting');
 
-  // Switched back on, stays still ahead get a mid-stay clean again (one cancelled by the switch is not counted).
+  // The backend entry obeys it too.
+  await asDb(); await db.exec('set role service_role');
+  assert.equal((await db.query('select public.workspace_mid_stay_cleans() r')).rows[0].r.switchedOff, true);
+
+  // On again: the run picks up where it was, cancelling the clean of the cancelled stay and making the new one.
   await setSwitch(true);
   const on = await midStay();
-  assert.equal(on.created, 3);
+  assert.equal(on.created, 1); assert.equal(on.cancelled, 1); assert.equal(on.switchedOff, undefined);
   assert.equal((await cleansFor(later)).length, 1);
-  assert.equal((await cleansFor(unstarted)).filter(c => c.status === 'waiting').length, 1);
+  assert.equal((await cleansFor(gone))[0].status, 'cancelled');
+  await setSwitch(false);
 });
 
 test('the migration runs twice without changing a definition, and the switch is not callable by anyone', async () => {
-  const fns = ['private.workspace_mid_stay_cleans_enabled()', 'private.workspace_mid_stay_wanted(private.workspace_reservations)', 'private.workspace_mid_stay_cleans(timestamptz)'];
+  const fns = ['private.workspace_mid_stay_cleans_enabled()', 'private.workspace_mid_stay_cleans(timestamptz)'];
   const read = () => Promise.all(fns.map(async fn => (await sql('select pg_get_functiondef($1::regprocedure) d', [fn]))[0].d));
   const before = await read();
   await asDb(); await db.exec(await fs.readFile(MIGRATION, 'utf8'));
   assert.deepEqual(await read(), before);
-  assert.equal(before[2].split('Mid-stay cleans are switched off').length - 1, 1, 'the reason is patched in once');
+  assert.equal(before[1].split('if not private.workspace_mid_stay_cleans_enabled() then return').length - 1, 1, 'the early return is patched in once');
   for (const role of ['anon', 'authenticated']) {
-    const [row] = await sql(`select has_function_privilege($1,'private.workspace_mid_stay_cleans_enabled()','execute') a,has_function_privilege($1,'private.workspace_mid_stay_wanted(private.workspace_reservations)','execute') b`, [role]);
-    assert.equal(row.a, false, role); assert.equal(row.b, false, role);
+    const [row] = await sql(`select has_function_privilege($1,'private.workspace_mid_stay_cleans_enabled()','execute') a`, [role]);
+    assert.equal(row.a, false, role);
   }
 });
