@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Text } from "./Typography";
 import { ExpandChevron, MotionPress, SwapIn } from "./motion";
 import { Button, Field, Loading, message, Notice, Tag } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { readChat, writeChat } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import { fillReply, repliesFor, SAVED_AUDIENCE_LABEL, SAVED_AUDIENCES, savedRepliesSchema, type SavedReply } from "../../lib/workspace-chat-policy";

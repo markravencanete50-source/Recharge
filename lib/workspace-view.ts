@@ -9,7 +9,12 @@ export const journeyViewSchema=z.object({propertyId:z.string().uuid(),clientId:z
 export const operationViewSchema=z.object({workId:z.string().uuid(),propertyId:z.string().uuid(),moduleId:z.string(),title:z.string(),kind:z.string(),status:z.string(),version:z.number(),assigneeId:z.string().nullable(),dueOn:z.string().nullable().optional(),dueTime:z.string().nullable().optional(),endTime:z.string().nullable().optional(),createdAt:z.string().optional(),updatedAt:z.string().optional(),updatedBy:z.string().nullable().optional(),updatedEvent:z.string().nullable().optional(),lastActivityAt:z.string().nullable().optional(),data:z.record(z.unknown())});
 export const invoiceViewSchema=z.object({id:z.string().uuid(),property_id:z.string().uuid(),work_id:z.string().uuid().nullable().optional(),reference:z.string(),amount_minor:z.number(),currency:z.string(),status:z.string(),version:z.number()});
 export const reportViewSchema=z.object({title:z.string(),description:z.string(),propertyLabel:z.string(),propertyCount:z.number(),propertyAvailable:z.boolean(),sources:z.array(z.object({key:z.enum(['workflows','repairs','cleans','onboarding','mail']),name:z.string(),available:z.boolean(),records:z.array(z.object({date:z.string(),status:z.enum(['waiting','progress','complete']),count:z.number().optional()}))}))});
-export const noticeViewSchema=z.object({id:z.number(),event_type:z.string(),created_at:z.string(),read_at:z.string().nullable().optional()});
+// Round 6 (migration 20261016300000): what the notice is about, so the Updates feed can say it (lib/notice-details.ts). Optional, so an
+// older database still parses.
+export const noticeViewSchema=z.object({id:z.number(),event_type:z.string(),created_at:z.string(),read_at:z.string().nullable().optional(),
+ property_id:z.string().nullable().optional(),work_id:z.string().nullable().optional(),work_title:z.string().nullable().optional(),work_kind:z.string().nullable().optional(),
+ work_module:z.string().nullable().optional(),property_name:z.string().nullable().optional(),property_address:z.string().nullable().optional(),
+ automatic:z.boolean().nullable().optional(),actor_name:z.string().nullable().optional()});
 // Updates the person has not seen yet. Opening Activity marks the newest few read, one request
 // each (the server has no batch), so a long backlog clears over a few visits without a burst.
 export const unreadNotices=(notices:{id:number;read_at?:string|null}[])=>notices.filter(n=>!n.read_at);

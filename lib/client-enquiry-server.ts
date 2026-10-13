@@ -5,7 +5,7 @@ import { boundedJson, isSameOrigin } from './auth-security-policy';
 import { businessContext, businessResponse, databaseFailure, viewAsFailure } from './business-server';
 import { isNativeRequest } from './native-request-policy';
 import { boundedFormData } from './bounded-form';
-import { integrationConfiguration } from './integration-policy';
+import { ENQUIRY_REPLY_TO, enquiryEmailReady, enquirySender } from './integration-policy';
 import { integrationSettings } from './integration-server';
 import { sendEmail } from './integration-providers';
 import { enquiryAnswersSchema, enquiryEmail, enquiryFileType, MAX_ENQUIRY_FILE_BYTES, tokenHash, tokenPattern } from './client-enquiry';
@@ -38,7 +38,8 @@ export async function sendEnquiryForm(context: RpcContext, input: Invite) {
   const config = authSecurityConfiguration();
   if (!config) return businessResponse({ error: 'Client enquiries are awaiting configuration' }, 503);
   const settings = integrationSettings();
-  if (input.delivery === 'email' && !integrationConfiguration(settings).email) return businessResponse({ error: 'Email isn’t set up yet. Choose “Copy the link” and send it from your own email.' }, 400);
+  // The form's email has its own switch (RESEND_API_KEY set, ENQUIRY_EMAIL_ENABLED not false), apart from the staff notice emails.
+  if (input.delivery === 'email' && !enquiryEmailReady(settings)) return businessResponse({ error: 'Email isn’t set up yet. Make the link and send it from your own email.' }, 400);
   const quota = await requestQuota(context.request, 'enquiry-send', 40, 3600, context.account.userId);
   if (!quota.allowed) return tooMany(quota.retryAfter, 'That’s a lot of forms at once. Please wait a little.');
   // The same request always makes the same link, so a retry never sends a second, different one.
@@ -50,11 +51,27 @@ export async function sendEnquiryForm(context: RpcContext, input: Invite) {
   if (input.delivery === 'email' && enquiry.emailStatus === 'pending') {
     const email = enquiryEmail(input.subject, input.body, link);
     let status: 'sent' | 'failed' = 'sent';
-    try { await sendEmail(settings, { to: enquiry.recipientEmail, ...email, idempotencyKey: `recharge-enquiry/${context.account.userId}/${input.requestId}` }); } catch { status = 'failed'; }
+    // Sent as ownerrelations@ (a verified sender), replies going to ownerrelations@ and so into Messages. The key makes a retry the same email.
+    try { await sendEmail(settings, { to: enquiry.recipientEmail, ...email, from: enquirySender(settings), replyTo: ENQUIRY_REPLY_TO, idempotencyKey: `recharge-enquiry/${context.account.userId}/${input.requestId}` }); } catch { status = 'failed'; }
     const marked = await context.client.rpc('workspace_teams_action', { input: { action: 'markEnquiryEmail', requestId: crypto.randomUUID(), enquiryId: enquiry.id, emailStatus: status } });
     if (!marked.error) enquiry = marked.data;
   }
   return businessResponse({ ok: true, data: { enquiry, link } });
+}
+
+// ---------------------------------------------------------------- the team: delete an enquiry
+// The database deletes the enquiry (and the property it made) and queues its files; the stored copies are
+// removed here straight away and marked removed. Anything left queued (storage was down) stays on record.
+export async function deleteEnquiry(context: RpcContext, input: Extract<TeamsAction, { action: 'deleteEnquiry' }>) {
+  const result = await context.client.rpc('workspace_teams_action', { input });
+  if (result.error) return databaseFailure(result.error);
+  const paths = z.array(z.string()).catch([]).parse((result.data as { paths?: unknown })?.paths);
+  const storage = secretClient()?.storage.from(ENQUIRY_BUCKET);
+  if (paths.length && storage) {
+    const removed = await storage.remove(paths).then(r => !r.error, () => false);
+    if (removed) await context.client.rpc('workspace_storage_removed', { bucket_name: ENQUIRY_BUCKET, removed: paths }).then(() => undefined, () => undefined);
+  }
+  return businessResponse({ ok: true, data: result.data });
 }
 
 // ---------------------------------------------------------------- the landlord: the form

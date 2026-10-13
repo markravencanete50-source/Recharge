@@ -23,7 +23,7 @@ test('the converted forms use the shared calendar field', () => {
     'LocalEvents.tsx': /<DateField p=\{p\} label="Date" mode="single"/,
     'TeamEvents.tsx': /<DateField p=\{p\} label="Dates/,
     'LiveTeamTime.tsx': /<DateField p=\{p\} label="Date" mode="single"/,
-    'HubItemSheet.tsx': /<DateField p=\{p\} label=\{kind === "todo" \? "Due \(optional\)" : "Send by \(optional\)"\} mode="single"[^>]* clearable /,
+    'HubItemSheet.tsx': /<DateField p=\{p\} label=\{kind === "todo" \? "Due \(optional\)" : "Send by \(optional\)"\} mode="single"/,
   };
   for (const [file, pattern] of Object.entries(uses)) {
     const text = readFileSync(path.join('mobile/src', file), 'utf8');

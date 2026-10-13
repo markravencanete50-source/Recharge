@@ -7,6 +7,7 @@ import { Text } from "./Typography";
 import { Entrance, MotionPress, Pop, SwapIn, motionTokens, useReducedMotion } from "./motion";
 import { Button, Field, Loading, Notice, StatGrid, StatTile, Tag, addDays, london, message, useRequestId } from "./LiveKit";
 import { Initials } from "./LiveAccounts";
+import { HeroWash } from "./HeroWash";
 import { Segmented } from "./Segmented";
 import { Sheet } from "./TeamFlows";
 import { SheetTable, cellText } from "./SheetTable";
@@ -111,22 +112,24 @@ function LockedHero({ p, onShift, direct }: { p: Palette; onShift: ProductivityP
     <Entrance sessionKey="productivity:hero">
       <View style={{ borderRadius: 24, overflow: "hidden", backgroundColor: p.hero, padding: 20, gap: 14, ...depth.raised }}>
         <View style={[ui.row, { gap: 12, alignItems: "flex-start" }]}>
-          <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-            <Feather name="lock" size={19} color="#FFFFFF" />
+          <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" }}>
+            <HeroWash p={p} radius={14} edge={0.2} />
+            <Feather name="lock" size={19} color={p.heroText} />
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-            <Text accessibilityRole="header" style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "800", letterSpacing: -0.6 }}>Productivity</Text>
-            <Text style={{ color: "rgba(255,255,255,0.82)", fontSize: 13, lineHeight: 19 }}>
+            <Text accessibilityRole="header" style={{ color: p.heroText, fontSize: 22, fontWeight: "800", letterSpacing: -0.6 }}>Productivity</Text>
+            <Text style={{ color: p.heroMuted, opacity: 0.82, fontSize: 13, lineHeight: 19 }}>
               Every clock in and clock out, adding up by week and by month. Hours are locked: nobody edits their own, {direct ? "you can change anyone's directly, and admins' changes wait for your approval." : "and your changes go to a super admin. They count only once approved."}
             </Text>
           </View>
         </View>
         <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-          <View style={[ui.row, { gap: 8, paddingHorizontal: 12, minHeight: 32, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.1)" }]}>
+          <View style={[ui.row, { gap: 8, paddingHorizontal: 12, minHeight: 32, borderRadius: 999 }]}>
+            <HeroWash p={p} radius={999} fill={0.1} edge={0} />
             <View style={{ width: 10, height: 10, alignItems: "center", justifyContent: "center" }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onShift.length ? "#7BE0A8" : "rgba(255,255,255,0.4)" }} />
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onShift.length ? p.heroGlow : p.heroMuted, opacity: onShift.length ? 1 : 0.4 }} />
             </View>
-            <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}>{onShift.length ? `${onShift.length} on shift now` : "Nobody on shift"}</Text>
+            <Text style={{ color: p.heroText, fontSize: 12, fontWeight: "700" }}>{onShift.length ? `${onShift.length} on shift now` : "Nobody on shift"}</Text>
           </View>
           <View style={{ flexDirection: "row" }}>
             {onShift.slice(0, 6).map((x, i) => <View key={x.userId} style={{ marginLeft: i ? -6 : 0, borderRadius: 18, borderWidth: 2, borderColor: p.hero }}><Initials p={p} name={x.fullName} size={30} /></View>)}

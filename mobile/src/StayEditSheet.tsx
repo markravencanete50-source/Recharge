@@ -5,7 +5,7 @@ import { Sheet } from "./TeamFlows";
 import { DateField } from "./CalendarPicker";
 import { ui, type Palette } from "./theme";
 import { Button, message, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { writeControls } from "./backend/client";
 import type { StayLine } from "../../lib/property-profile";
 

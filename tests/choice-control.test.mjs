@@ -62,7 +62,8 @@ const screens = [
   ['DefaultCleaners.tsx', 'Usual cleaners: cleaners are people (search picker)', [/<SearchPicker p=\{p\} options=\{choices\.map/], [/choices\.map\(c => \{/]],
   ['LivePropertyProfile.tsx', 'Listing links: platform (6)', [/<ChoiceField p=\{p\} label="Platform"/], [/LISTING_PLATFORMS\.map\(x => <MotionPress/]],
   ['ListingSheets.tsx', 'Guest review: a rating out of 10 is a dropdown; the night to price', [/outOf > 5 \? <ChoiceField/, /<ChoicePills p=\{p\} name="Night"/], []],
-  ['HubItemSheet.tsx', 'New to-do: department (6)', [/<ChoiceField p=\{p\} label="Department"/], [/DEPARTMENTS\.map\(d => <Chip/]],
+  // Merged with Session B's round 6 form: the department is the second dropdown of "Who is it for".
+  ['HubItemSheet.tsx', 'New to-do: department (6)', [/<Dropdown p=\{p\} label="Which department\?" value=\{f\.department \?\? ""\} options=\{DEPARTMENT_OPTIONS\}/], [/DEPARTMENTS\.map\(d => <Chip/]],
   ['ViewAs.tsx', 'View as: people in the search picker, a role preview in one dropdown', [/<SearchPicker p=\{p\} nouns="people"/, /<ChoiceField p=\{p\} label="A role's screens only"/], [/group\.people\.map\(person => option\(/]],
   ['LiveShifts.tsx', 'Usual shift: department (6)', [/<ChoicePills p=\{p\} name="Department"/], [/<Pills p=\{p\} values=\{DEPARTMENTS\}/]],
   ['LivePeople.tsx', 'People: role and OTA platform (8)', [/<ChoicePills p=\{p\} name="Role"/, /<ChoicePills p=\{p\} name="Platform" values=\{OTA_PLATFORMS\}/], [/<Pills p=\{p\} values=\{OTA_PLATFORMS\}/]],

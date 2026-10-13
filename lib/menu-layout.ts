@@ -52,6 +52,11 @@ function ordered<T>(list: readonly T[], keyOf: (x: T) => string, wanted: readonl
   return [...first, ...list.filter(x => !seen.has(keyOf(x)))];
 }
 
+// Links a saved layout cannot move out of their own section. Favorites stays in every role's first section,
+// straight after Home by default (Lee, round 6); it can still move up and down within that section.
+export const LOCKED_LINKS: readonly string[] = ['page:favorites'];
+export const isLocked = (linkKey: string) => LOCKED_LINKS.includes(linkKey);
+
 // The role's panel arranged as saved. Never adds a link the role lacks or loses one it has. `keepEmpty` keeps
 // sections the layout emptied (the editor); the app hides them.
 export function applyMenuLayout(panel: RolePanel, layout: MenuLayout | null | undefined, keepEmpty = false): RolePanel {
@@ -61,7 +66,9 @@ export function applyMenuLayout(panel: RolePanel, layout: MenuLayout | null | un
   // Where the layout puts each link: the first of the role's sections that lists it.
   const listed = [...layout.sections, ...Object.keys(layout.items).filter(k => !layout.sections.includes(k))];
   const home = new Map<string, string>();
-  for (const s of listed) if (sections.has(s)) for (const k of layout.items[s] ?? []) if (links.has(k) && !home.has(k)) home.set(k, s);
+  // A locked link only takes its place from its own section; listed anywhere else it goes back there.
+  const ownSection = new Map(panel.groups.flatMap(g => g.links.map(l => [l.key, g.key] as const)));
+  for (const s of listed) if (sections.has(s)) for (const k of layout.items[s] ?? []) if (links.has(k) && !home.has(k) && (!isLocked(k) || ownSection.get(k) === s)) home.set(k, s);
   const groups = ordered(panel.groups, g => g.key, layout.sections).map((g): PanelGroup => {
     const placed = [...new Set((layout.items[g.key] ?? []).filter(k => home.get(k) === g.key))].map(k => links.get(k)!);
     return { ...g, links: [...placed, ...g.links.filter(l => !home.has(l.key))] };
@@ -86,8 +93,9 @@ export function moveSection(panel: RolePanel, sectionKey: string, by: -1 | 1): R
 export function moveItem(panel: RolePanel, sectionKey: string, linkKey: string, by: -1 | 1): RolePanel {
   return { ...panel, groups: panel.groups.map(g => g.key !== sectionKey ? g : { ...g, links: swap(g.links, g.links.findIndex(l => l.key === linkKey), by) }) };
 }
-// "Move to section": the link leaves its section and goes to the end of the chosen one.
+// "Move to section": the link leaves its section and goes to the end of the chosen one. Locked links stay.
 export function moveItemTo(panel: RolePanel, linkKey: string, toSection: string): RolePanel {
+  if (isLocked(linkKey)) return panel;
   const link = panel.groups.flatMap(g => g.links).find(l => l.key === linkKey);
   if (!link || !panel.groups.some(g => g.key === toSection)) return panel;
   return { ...panel, groups: panel.groups.map(g => ({ ...g, links: [...g.links.filter(l => l.key !== linkKey), ...(g.key === toSection ? [link] : [])] })) };

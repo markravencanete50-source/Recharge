@@ -14,12 +14,16 @@ export const kpiSchema = z.object({
   id: z.string(), name: z.string(), area: z.string(), measure: z.string(), minutes: z.number().nullable(), direction: z.enum(['higher', 'lower']),
   targetPercent: z.number().nullable(), bonusTiers: z.array(z.number()), countsForBonus: z.boolean(), placeholder: z.boolean(), active: z.boolean(),
   sortOrder: z.number(), version: z.number(), updatedAt: z.string(),
+  // The combined management measure only: Guest relations' share of the bonus, 0 to 100 (50 unless an admin set it).
+  guestShare: z.number().nullable().optional(),
   // Admins only.
   updatedByName: z.string().nullable().optional(),
 });
 export const kpiResultSchema = z.object({
   kpiId: z.string(), value: z.number().nullable(), measured: z.number(), count: z.number().nullable(),
   onTarget: z.boolean().nullable(), tier: z.number().nullable(), tierAt: z.number().nullable(),
+  // A measure made of team totals (teams_combined, migration 20261016310000): each team's own value. Never a name.
+  parts: z.array(z.object({ area: z.string(), value: z.number().nullable(), measured: z.number(), share: z.number().optional() })).optional(),
 });
 export const replyBandsSchema = z.object({
   waits: z.number(), stillWaiting: z.number(),
@@ -49,6 +53,7 @@ export function kpiMeasureLabel(kpi: Pick<Kpi, 'measure' | 'minutes'>): string {
     case 'daily_work_done': return 'Daily work done against its targets';
     case 'performance_score': return 'Performance score';
     case 'clean_forms_on_time': return 'Cleaning forms in by 18:00 on the day';
+    case 'teams_combined': return 'Guest relations and Client relations, combined';
     default: return kpi.measure;
   }
 }
@@ -70,12 +75,15 @@ export type KpiProgress = {
   // How many marks are reached: 0 short of the target, 1 the target, 2 tier 1, 3 tier 2.
   reached: number;
   headline: string; next: string;
+  // The teams a combined measure is made of, each with its own value (empty for any other measure).
+  parts: KpiPart[];
 };
+export type KpiPart = NonNullable<KpiResult['parts']>[number];
 
 const clamp = (v: number | null | undefined) => v == null || !Number.isFinite(v) ? null : Math.max(0, Math.min(100, Math.round(v)));
 
 // Where a value stands against a KPI's target and tiers. Null when the KPI has no target (tracked only).
-export function kpiProgress(kpi: Kpi, result: Pick<KpiResult, 'value'> | null | undefined): KpiProgress | null {
+export function kpiProgress(kpi: Kpi, result: Pick<KpiResult, 'value' | 'parts'> | null | undefined): KpiProgress | null {
   if (kpi.targetPercent === null) return null;
   const lower = kpi.direction === 'lower', target = kpi.targetPercent, value = clamp(result?.value);
   const meets = (at: number) => value !== null && (lower ? value <= at : value >= at);
@@ -87,7 +95,7 @@ export function kpiProgress(kpi: Kpi, result: Pick<KpiResult, 'value'> | null | 
     : reached === 0 ? (lower ? `${value - target}% above the target` : `${target - value}% to go to the target`)
     : reached === 1 ? 'Target reached'
     : `Bonus tier ${reached - 1} reached`;
-  return { kpiId: kpi.id, name: kpi.name, area: kpi.area, areaLabel: areaLabel(kpi.area), measureLabel: kpiMeasureLabel(kpi), placeholder: kpi.placeholder, direction: kpi.direction, value, marks, reached, headline, next };
+  return { kpiId: kpi.id, name: kpi.name, area: kpi.area, areaLabel: areaLabel(kpi.area), measureLabel: kpiMeasureLabel(kpi), placeholder: kpi.placeholder, direction: kpi.direction, value, marks, reached, headline, next, parts: result?.parts ?? [] };
 }
 
 // One line per KPI under the bar: the value and where it stands.
@@ -128,16 +136,20 @@ export function bonusTag(read: Pick<KpiRead, 'kpis' | 'people'>, userId: string)
 }
 
 // --- The admin form -------------------------------------------------------------------------------------
-export type KpiForm = { name: string; area: string; measure: string; minutes: string; target: string; tiers: string; countsForBonus: boolean; placeholder: boolean };
-export const emptyKpiForm = (area: string = 'guest_relations'): KpiForm => ({ name: '', area, measure: '', minutes: '', target: '', tiers: '', countsForBonus: false, placeholder: false });
+export type KpiForm = { name: string; area: string; measure: string; minutes: string; target: string; tiers: string; countsForBonus: boolean; placeholder: boolean; guestShare: string };
+export const emptyKpiForm = (area: string = 'guest_relations'): KpiForm => ({ name: '', area, measure: '', minutes: '', target: '', tiers: '', countsForBonus: false, placeholder: false, guestShare: '' });
+// The measure that splits the bonus between Guest relations and Client relations, and its share when unset.
+export const COMBINED_MEASURE = 'teams_combined';
+export const DEFAULT_GUEST_SHARE = 50;
 export const kpiForm = (k: Kpi): KpiForm => ({
   name: k.name, area: k.area, measure: k.measure, minutes: k.minutes === null ? '' : String(k.minutes), target: k.targetPercent === null ? '' : String(k.targetPercent),
   tiers: k.bonusTiers.join(', '), countsForBonus: k.countsForBonus, placeholder: k.placeholder,
+  guestShare: k.measure === COMBINED_MEASURE ? String(k.guestShare ?? DEFAULT_GUEST_SHARE) : '',
 });
 const whole = (s: string) => /^\d{1,4}$/.test(s.trim()) ? Number(s.trim()) : NaN;
 
 // The fields the saveKpi action takes, or the first thing to fix. The database checks the same again.
-export function kpiInput(form: KpiForm, measures: readonly KpiMeasureInfo[]): { value: { name: string; area: KpiArea; measure: KpiMeasure; minutes: number | null; targetPercent: number | null; bonusTiers: number[]; countsForBonus: boolean; placeholder: boolean } } | { error: string } {
+export function kpiInput(form: KpiForm, measures: readonly KpiMeasureInfo[]): { value: { name: string; area: KpiArea; measure: KpiMeasure; minutes: number | null; targetPercent: number | null; bonusTiers: number[]; countsForBonus: boolean; placeholder: boolean; guestShare?: number } } | { error: string } {
   const name = form.name.trim();
   if (name.length < 2 || name.length > 120) return { error: 'Give the KPI a name.' };
   if (!(DEPARTMENTS as readonly string[]).includes(form.area)) return { error: 'Choose an area.' };
@@ -160,5 +172,11 @@ export function kpiInput(form: KpiForm, measures: readonly KpiMeasureInfo[]): { 
   if (target !== null && m.direction === 'higher' && tiers.some(t => t <= target)) return { error: 'Each bonus tier must be above the target.' };
   if (target !== null && m.direction === 'lower' && tiers.some(t => t >= target)) return { error: 'Lower is better here, so each bonus tier must be below the target.' };
   if (form.countsForBonus && target === null) return { error: 'A bonus KPI needs a target.' };
-  return { value: { name, area: form.area as KpiArea, measure: m.key as KpiMeasure, minutes, targetPercent: target, bonusTiers: tiers, countsForBonus: form.countsForBonus, placeholder: form.placeholder } };
+  // The combined measure: Guest relations' share, a whole percentage (empty means the default, 50).
+  let guestShare: number | undefined;
+  if (m.key === COMBINED_MEASURE) {
+    guestShare = form.guestShare.trim() ? whole(form.guestShare) : DEFAULT_GUEST_SHARE;
+    if (!(guestShare >= 0 && guestShare <= 100)) return { error: 'The Guest relations share is a whole percentage from 0 to 100.' };
+  }
+  return { value: { name, area: form.area as KpiArea, measure: m.key as KpiMeasure, minutes, targetPercent: target, bonusTiers: tiers, countsForBonus: form.countsForBonus, placeholder: form.placeholder, ...(guestShare === undefined ? {} : { guestShare }) } };
 }

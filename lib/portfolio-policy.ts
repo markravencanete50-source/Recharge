@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
 const id=z.string().uuid(),text=(n:number)=>z.string().trim().max(n),date=z.string().refine(v=>Boolean(parseAnalyticsDate(v)));
-export const portfolioReadSchema=z.object({section:z.enum(['portfolio','bookingPolicy','reservations','vacancies','weekly','notifications','onboardingPayout','insights']).default('portfolio'),propertyId:id.optional(),from:date.optional(),to:date.optional(),download:z.literal('csv').optional()}).strict().superRefine((v,c)=>{
+export const portfolioReadSchema=z.object({section:z.enum(['portfolio','bookingPolicy','reservations','vacancies','weekly','notifications','onboardingPayout','insights']).default('portfolio'),propertyId:id.optional(),from:date.optional(),to:date.optional(),download:z.literal('csv').optional(),
+ // Updates older than this one (its id), 50 at a time (migration 20261017300000).
+ before:z.string().regex(/^[1-9]\d{0,14}$/).optional()}).strict().superRefine((v,c)=>{
  if(!['portfolio','bookingPolicy','notifications','insights'].includes(v.section)&&!v.propertyId)c.addIssue({code:'custom',message:'Choose a property'});
  if(v.section==='weekly'&&(!v.from||!v.to||v.from>v.to||Date.parse(v.to)-Date.parse(v.from)>30*86400000))c.addIssue({code:'custom',message:'Choose up to 31 report days'});
+ if(v.before&&v.section!=='notifications')c.addIssue({code:'custom',message:'Older updates apply to notifications only'});
  if(v.download&&v.section!=='weekly')c.addIssue({code:'custom',message:'Choose a weekly property report'});
  if(v.section!=='weekly'&&(v.from||v.to))c.addIssue({code:'custom',message:'Dates apply to weekly reports only'});
 });

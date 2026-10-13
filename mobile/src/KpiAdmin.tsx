@@ -10,7 +10,7 @@ import { List, Row } from "./LiveAccounts";
 import { Check } from "./ListingSheets";
 import { writeTeams } from "./backend/client";
 import { DEPARTMENTS, type TeamsAction } from "../../lib/workspace-teams-policy";
-import { areaKpis, areaLabel, CHANGE_LABEL, emptyKpiForm, kpiForm, kpiInput, kpiMeasureLabel, type Kpi, type KpiForm, type KpiRead } from "../../lib/kpis";
+import { areaKpis, areaLabel, CHANGE_LABEL, COMBINED_MEASURE, DEFAULT_GUEST_SHARE, emptyKpiForm, kpiForm, kpiInput, kpiMeasureLabel, type Kpi, type KpiForm, type KpiRead } from "../../lib/kpis";
 import { formatDay } from "../../lib/format";
 
 // Team performance -> KPIs, for admins and super admins: each area's KPIs in order, one of them counting for the bonus.
@@ -69,8 +69,9 @@ export function KpiAdmin({ p, read, onChanged }: { p: Palette; read: KpiRead; on
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>What it measures</Text>
         <ChoiceField p={p} label="What it measures" value={form.measure}
           options={[...(form.measure ? [] : [{ value: "", label: "Choose what it measures" }]), ...measures.map(m => ({ value: m.key, label: m.label + (m.direction === "lower" ? " (lower is better)" : "") }))]}
-          onChange={key => { const m = measures.find(x => x.key === key); if (m) set({ measure: m.key, minutes: m.needsMinutes ? form.minutes || "5" : "" }); }} />
+          onChange={key => { const m = measures.find(x => x.key === key); if (m) set({ measure: m.key, minutes: m.needsMinutes ? form.minutes || "5" : "", guestShare: m.key === COMBINED_MEASURE ? form.guestShare || String(DEFAULT_GUEST_SHARE) : "" }); }} />
         {!!measure?.needsMinutes && <Field label="Minutes" value={form.minutes} onChange={v => set({ minutes: v })} p={p} placeholder="5" />}
+        {form.measure === COMBINED_MEASURE && <Field label="Guest relations share % (Client relations gets the rest)" value={form.guestShare} onChange={v => set({ guestShare: v })} p={p} placeholder={String(DEFAULT_GUEST_SHARE)} />}
         <Field label="Target % (leave empty to track only)" value={form.target} onChange={v => set({ target: v })} p={p} placeholder="80" />
         <Field label={`Bonus tiers %, ${measure?.direction === "lower" ? "below" : "above"} the target (for example 90, 95)`} value={form.tiers} onChange={v => set({ tiers: v })} p={p} placeholder="90, 95" />
         <Check p={p} label="Counts for the bonus" value={form.countsForBonus} onChange={v => set({ countsForBonus: v })} />

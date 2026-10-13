@@ -76,7 +76,7 @@ function pages(role: string): SearchEntry[] {
     ...(team ? [page('decisions', admin ? 'Management approvals' : 'My requests', admin ? 'Flags and requests waiting for a decision' : 'Ask management and see what you flagged', 'hourglass')] : []),
     ...(role === 'super_admin' ? [page('feedback', 'Feedback', 'What the team has told you', 'chat')] : ['admin', 'stays'].includes(role) ? [page('feedback', 'Send feedback', 'Ideas, problems and praise for the super admin', 'chat')] : []),
     ...(admin ? [page('moderation', 'Reported messages', 'Messages people have reported: remove or dismiss', 'chat')] : []),
-    ...(team ? [page('favorites', 'Favorites', 'Your saved places', 'star')] : []),
+    page('favorites', 'Favorites', 'Your saved places', 'star'),
     page('help', 'Help and all tools', 'Guides, training and every tool', 'compass'),
   ];
 }

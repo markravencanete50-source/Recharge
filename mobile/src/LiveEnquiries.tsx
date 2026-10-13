@@ -9,12 +9,13 @@ import { Initials } from "./LiveAccounts";
 import { PageHeading } from "./LivePages";
 import { Segmented } from "./Segmented";
 import { Sheet } from "./TeamFlows";
+import { HeroWash } from "./HeroWash";
 import { useCelebrate } from "./Celebrate";
-import { depth, ui, web, type Palette } from "./theme";
+import { depth, ui, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
-  DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, clientEnquiriesSchema, defaultBody, duplicateNote, enquiryStep, valuationDraft, valueButtonLabel,
+  DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, deleteEnquiryWarning, duplicateNote, enquiryStep, valuationDraft, valueButtonLabel,
   type ClientEnquiries, type ClientEnquiry, type EnquiryStep,
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -29,7 +30,7 @@ const ago = (iso: string) => {
 };
 const fileSize = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
-export function LiveEnquiries({ palette: p, onOpenProperty }: { palette: Palette; account: WorkspaceAccount; onOpenProperty: (id: string) => void }) {
+export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette: Palette; account: WorkspaceAccount; onOpenProperty: (id: string) => void }) {
   const [data, setData] = useState<ClientEnquiries | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter | null>(null);
@@ -51,14 +52,15 @@ export function LiveEnquiries({ palette: p, onOpenProperty }: { palette: Palette
       <Entrance sessionKey="enquiries:hero">
         <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel="Send the enquiry form to a landlord" onPress={() => setSending(true)}
           style={[ui.row, { gap: 16, padding: 20, borderRadius: 24, backgroundColor: p.hero, overflow: "hidden", ...depth.raised }]}>
-          <View style={{ width: 52, height: 52, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-            <Feather name="send" size={22} color="#FFFFFF" />
+          <View style={{ width: 52, height: 52, borderRadius: 17, alignItems: "center", justifyContent: "center" }}>
+            <HeroWash p={p} radius={17} edge={0.2} />
+            <Feather name="send" size={22} color={p.heroText} />
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-            <Text style={{ color: "#FFFFFF", fontSize: 17, fontWeight: "800", letterSpacing: -0.3 }}>Send the form to a landlord</Text>
-            <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, lineHeight: 19 }}>Write the email, and they get a private link to the form. Their answers, photos and videos come straight back here.</Text>
+            <Text style={{ color: p.heroText, fontSize: 17, fontWeight: "800", letterSpacing: -0.3 }}>Send the form to a landlord</Text>
+            <Text style={{ color: p.heroMuted, opacity: 0.8, fontSize: 13, lineHeight: 19 }}>Write the email, and they get a private link to the form. Their answers, photos and videos come straight back here.</Text>
           </View>
-          <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" }}><Feather name="arrow-right" size={19} color="#1F3D38" /></View>
+          <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.heroText }}><Feather name="arrow-right" size={19} color={p.hero} /></View>
         </MotionPress>
       </Entrance>
       <StatGrid>
@@ -79,6 +81,7 @@ export function LiveEnquiries({ palette: p, onOpenProperty }: { palette: Palette
       </View>
       <SendSheet p={p} visible={sending} emailReady={!!data?.emailReady} onClose={() => setSending(false)} onSent={load} />
       <EnquirySheet key={open?.id ?? "none"} p={p} enquiry={open} step={open ? steps.get(open.id)! : "sent"} emailReady={!!data?.emailReady} onClose={() => setOpenId(null)} onChanged={load}
+        canDelete={!!open && canDeleteEnquiry(account.role, open)} onDeleted={async () => { setOpenId(null); await load(); }}
         onOpenProperty={id => { setOpenId(null); onOpenProperty(id); }} />
     </View>
   );
@@ -101,6 +104,7 @@ function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: Cli
       </View>
       <View style={{ alignItems: "flex-end", gap: 6 }}>
         <Tag label={STEP_LABEL[step]} tone={STEP_TONE[step]} p={p} />
+        {e.delivery === "email" && ["sent", "opened", "expired"].includes(step) && e.emailStatus !== "sent" && <Tag label={e.emailStatus === "failed" ? "Email failed" : "Sending…"} tone={e.emailStatus === "failed" ? "bad" : "plain"} p={p} />}
         {!!e.duplicateReason && step !== "closed" && <Tag label={DUPLICATE_LABEL} tone="bad" p={p} />}
         {e.files.length > 0 && <View style={[ui.row, { gap: 4 }]}><Feather name="image" size={12} color={p.muted} /><Text style={{ color: p.muted, fontSize: 11 }}>{e.files.length}</Text></View>}
       </View>
@@ -128,6 +132,7 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
   }, [visible, resend]);
   // The greeting follows the name until the message is edited by hand.
   const changeName = (v: string) => { setName(v); if (!edited) setBody(defaultBody(v)); };
+  // With email ready the sheet only sends (the email goes out by itself); without it, or if a send fails, the link is the fallback.
   async function send(delivery: "email" | "link") {
     if (busy) return;
     if (!resend && (name.trim().length < 1 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()))) { setError("Add their name and a valid email address."); return; }
@@ -158,11 +163,14 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
             <Feather name={result.failed ? "alert-triangle" : result.emailed ? "check" : "link"} size={28} color={result.failed ? p.danger : p.success} />
           </View>
           <Text style={{ color: p.text, fontSize: 18, fontWeight: "800", textAlign: "center" }}>{result.emailed ? `Sent to ${result.to}` : result.failed ? "The email didn't go" : "Your link is ready"}</Text>
-          <Text style={[ui.small, { color: p.muted, textAlign: "center" }]}>{result.emailed ? "Their answers will appear in Client enquiries. The link works for 30 days." : "Send it from your own email: copy the link, or open your email app with the message filled in."}</Text>
+          <Text style={[ui.small, { color: p.muted, textAlign: "center" }]}>{result.emailed ? "Their answers will appear in Client enquiries, and their replies to the email arrive in Messages. The link works for 30 days." : result.failed ? "Recharge couldn't send it. Try again from this enquiry, or send the link yourself: copy it below, or open your email app with the message filled in." : "Send it from your own email: copy the link, or open your email app with the message filled in."}</Text>
         </View>
-        <View style={{ padding: 12, borderRadius: 14, backgroundColor: p.wash }}><Text selectable numberOfLines={2} style={{ color: p.text, fontSize: 12, fontVariant: ["tabular-nums"] }}>{result.link}</Text></View>
-        <Button label={copied ? "Copied" : "Copy the link"} icon={copied ? "check" : "copy"} p={p} primary={!result.emailed} onPress={() => void copy()} />
-        {!result.emailed && <Button label="Open my email app" icon="mail" p={p} onPress={() => void Linking.openURL(mailto).catch(() => setError("No email app could be opened. Copy the link instead."))} />}
+        {/* Sent by Recharge: nothing to copy. Only the fallback (email not ready, or the send failed) shows the link. */}
+        {!result.emailed && <>
+          <View style={{ padding: 12, borderRadius: 14, backgroundColor: p.wash }}><Text selectable numberOfLines={2} style={{ color: p.text, fontSize: 12, fontVariant: ["tabular-nums"] }}>{result.link}</Text></View>
+          <Button label={copied ? "Copied" : "Copy the link"} icon={copied ? "check" : "copy"} p={p} primary onPress={() => void copy()} />
+          <Button label="Open my email app" icon="mail" p={p} onPress={() => void Linking.openURL(mailto).catch(() => setError("No email app could be opened. Copy the link instead."))} />
+        </>}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         <Button label="Done" icon="check" p={p} onPress={onClose} />
       </> : <>
@@ -186,8 +194,8 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
         </View>
         {!emailReady && <Notice text="Recharge's email service isn't connected yet, so you send this yourself: make the link, then copy it or open your email app with the message filled in." p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
-        {emailReady && <Button label={busy ? "Sending…" : "Send the email"} icon="send" primary p={p} disabled={busy} onPress={() => void send("email")} />}
-        <Button label={busy && !emailReady ? "Making the link…" : emailReady ? "Copy the link instead" : "Make the link"} icon="link" primary={!emailReady} p={p} disabled={busy} onPress={() => void send("link")} />
+        {emailReady ? <Button label={busy ? "Sending…" : resend ? "Send the new link" : "Send the form"} icon="send" primary p={p} disabled={busy} onPress={() => void send("email")} />
+          : <Button label={busy ? "Making the link…" : "Make the link"} icon="link" primary p={p} disabled={busy} onPress={() => void send("link")} />}
       </>}
     </Sheet>
   );
@@ -209,10 +217,11 @@ function Group({ p, title, icon, children }: { p: Palette; title: string; icon: 
 const yes = (v?: string) => v === "yes" ? "Yes" : v === "no" ? "No" : undefined;
 
 // Everything the landlord sent, and what to do next.
-function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onOpenProperty }: {
+function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onOpenProperty, canDelete = false, onDeleted }: {
   p: Palette; enquiry: ClientEnquiry | null; step: EnquiryStep; emailReady: boolean; onClose: () => void; onChanged: () => Promise<void>; onOpenProperty: (id: string) => void;
+  canDelete?: boolean; onDeleted?: () => Promise<void>;
 }) {
-  const [mode, setMode] = useState<"view" | "value" | "close" | "resend">("view");
+  const [mode, setMode] = useState<"view" | "value" | "close" | "resend" | "delete">("view");
   const [fileError, setFileError] = useState("");
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const a = e?.answers;
@@ -231,6 +240,7 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
   }
   if (e && mode === "value") return <ValueSheet p={p} enquiry={e} onClose={() => setMode("view")} onDone={async id => { await onChanged(); onOpenProperty(id); }} />;
   if (e && mode === "close") return <CloseSheet p={p} enquiry={e} onClose={() => setMode("view")} onDone={async () => { setMode("view"); await onChanged(); }} />;
+  if (e && mode === "delete") return <DeleteSheet p={p} enquiry={e} onClose={() => setMode("view")} onDone={async () => { setMode("view"); await onDeleted?.(); }} />;
   if (e && mode === "resend") return <SendSheet p={p} visible emailReady={emailReady} resend={e} onClose={() => setMode("view")} onSent={onChanged} />;
   return (
     <Sheet palette={p} visible={!!e} onClose={onClose} title={a?.fullName ?? e?.recipientName ?? ""} subtitle={e ? STEP_LABEL[step] + (e.submittedAt ? ` · answered ${ago(e.submittedAt)}` : ` · sent ${ago(e.sentAt)}`) : undefined} icon="building">
@@ -284,13 +294,14 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
         </> : <Group p={p} title="The email" icon="mail">
           <Line p={p} label="To" value={`${e.recipientName} · ${e.recipientEmail}`} />
           <Line p={p} label="Subject" value={e.subject} />
-          <Line p={p} label="How" value={e.delivery === "email" ? (e.emailStatus === "sent" ? "Sent by Recharge's email" : e.emailStatus === "failed" ? "The email failed: send a new link" : "Sending…") : "Link copied to send yourself"} />
+          <Line p={p} label="How" value={e.delivery === "email" ? (e.emailStatus === "sent" ? "Sent by Recharge's email" : e.emailStatus === "failed" ? "The email failed: press Try again" : "Sending…") : "Link copied to send yourself"} />
           <Line p={p} label="Sent" value={`${ago(e.sentAt)}${e.sentByName ? ` by ${e.sentByName}` : ""}`} />
           <Line p={p} label="Opened" value={e.openedAt ? ago(e.openedAt) : "Not yet"} />
           <Line p={p} label="Link works until" value={new Date(e.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} />
         </Group>}
-        {["sent", "opened", "expired"].includes(step) && <Button label="Send a new link" icon="refresh-cw" p={p} onPress={() => setMode("resend")} />}
+        {["sent", "opened", "expired"].includes(step) && <Button label={e.emailStatus === "failed" ? "Try again" : "Send a new link"} icon="refresh-cw" primary={e.emailStatus === "failed"} p={p} onPress={() => setMode("resend")} />}
         {!["valuing", "estimate", "won", "declined", "closed"].includes(step) && <Button label="Close this enquiry" icon="x" p={p} onPress={() => setMode("close")} />}
+        {canDelete && <Button label="Delete enquiry" icon="trash-2" p={p} onPress={() => setMode("delete")} />}
       </>}
     </Sheet>
   );
@@ -334,6 +345,28 @@ function ValueSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: C
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : e.propertyId ? "Save and start valuing" : "Start valuing"} icon="trending-up" primary p={p} disabled={busy} onPress={() => void start()} />
+    </Sheet>
+  );
+}
+
+// Delete (admins and super admins): asks first, in a sheet. The database refuses one that has moved on.
+function DeleteSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: ClientEnquiry; onClose: () => void; onDone: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const request = useRequestId(["delete", e.id, e.version].join(":"));
+  async function remove() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try { await writeTeams({ action: "deleteEnquiry", requestId: request.get(), enquiryId: e.id, version: e.version }); request.done(); await onDone(); }
+    catch (err) { setError(message(err)); } finally { setBusy(false); }
+  }
+  return (
+    <Sheet palette={p} visible onClose={onClose} title="Delete enquiry" subtitle={e.answers?.fullName ?? e.recipientName} icon="building">
+      <Text style={[ui.body, { color: p.text }]}>{deleteEnquiryWarning(e)}</Text>
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
+        <Button label={busy ? "Deleting…" : "Delete enquiry"} icon="trash-2" primary p={p} disabled={busy} onPress={() => void remove()} />
+        <Button label="Keep it" p={p} disabled={busy} onPress={onClose} />
+      </View>
     </Sheet>
   );
 }

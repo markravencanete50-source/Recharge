@@ -46,7 +46,7 @@ test('each role finds only what it can open',()=>{
  assert.ok(!accounts.some(e=>e.group==='Properties'||e.key==='section:properties'),'Accounts have no Properties page');
  assert.ok(accounts.some(e=>e.group==='Invoices'));
  const owner=search.buildSearchIndex({role:'client',modules:DEFAULT_ROLE_MODULES.client,properties,work});
- assert.ok(!owner.some(e=>e.key==='section:favorites'));
+ assert.ok(owner.some(e=>e.key==='section:favorites'),'owners have Favorites too (round 6)');
 });
 
 test('favorites keep order, toggle, move and survive things going away',()=>{

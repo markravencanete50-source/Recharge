@@ -214,7 +214,7 @@ export function OwnerStatements({ palette: p, desktop }: { palette: Palette; des
           return (
             <View key={label} style={[ui.row, { gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: current ? p.primary : done ? p.successWash : p.surface, borderWidth: 1, borderColor: current ? p.primary : p.border }]}>
               <View style={{ width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: current ? p.onPrimary : done ? p.success : p.elevated }}>
-                {done ? <Feather name="check" size={13} color="#FFFFFF" /> : <Text style={{ fontSize: 12, fontWeight: "700", color: current ? p.primary : p.muted }}>{index + 1}</Text>}
+                {done ? <Feather name="check" size={13} color={p.onSuccess} /> : <Text style={{ fontSize: 12, fontWeight: "700", color: current ? p.primary : p.muted }}>{index + 1}</Text>}
               </View>
               <Text style={{ fontSize: 13, fontWeight: "600", color: current ? p.onPrimary : p.text }}>{label}</Text>
             </View>

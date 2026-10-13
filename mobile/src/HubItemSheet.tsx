@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Linking, View } from "react-native";
 import { Text } from "./Typography";
-import { ChoiceField } from "./ChoiceField";
-import { PropertySelect, SearchPicker } from "./SearchPicker";
-import { Chip } from "./SheetTable";
-import { Button, Field, message, Notice, useRequestId } from "./LiveKit";
-import { Sheet } from "./TeamFlows";
+import { PropertySelect } from "./SearchPicker";
+import { Dropdown } from "./Dropdown";
 import { DateField } from "./CalendarPicker";
+import { MotionPress } from "./motion";
+import { Button, Field, message, Notice, london, useRequestId } from "./LiveKit";
+import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { writeTeams } from "./backend/client";
 import { poundsToMinor } from "../../lib/repairs-live";
@@ -29,9 +29,11 @@ const KIND_TITLE: Record<HubItem["kind"], [string, string]> = {
   aircover: ["AirCover claim", "What happened"], invoice: ["Invoice to send", "Who it is for and what it covers"],
 };
 
-// Who a to-do is for: the person adding it, a named person, or a whole department.
+// Who a to-do is for: the person adding it, a named person, or a whole department. One dropdown (round 6,
+// from Alex's video); "A person" or "A department" then shows a second dropdown for which one.
 type Assign = "me" | "person" | "department";
-const ASSIGN_CHOICES: [Assign, string][] = [["me", "Me"], ["person", "A person"], ["department", "A department"]];
+export const ASSIGN_OPTIONS: { value: Assign; label: string }[] = [{ value: "me", label: "Me" }, { value: "person", label: "A person" }, { value: "department", label: "A department" }];
+export const DEPARTMENT_OPTIONS = [{ value: "", label: "Choose a department" }, ...DEPARTMENTS.map(d => ({ value: d as string, label: DEPARTMENT_LABEL[d] }))];
 
 // Adding or changing one row, and moving it along (done, approved, claimed, sent, paid).
 // `defaults` pre-fills a NEW to-do, for example the department of the heading it was added under.
@@ -65,7 +67,8 @@ export function HubItemSheet({ p, hub, account, properties, target, onClose, onS
     if (f.amount?.trim() && amount === null) { setError("Enter the amount in pounds, for example 149.99."); return; }
     const assign = (f.assign || "me") as Assign;
     if (kind === "todo" && assign === "department" && !f.department) { setError("Choose the department."); return; }
-    if (f.dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(f.dueOn)) { setError("Choose the date."); return; }
+    if (kind === "todo" && assign === "person" && !f.assigneeId) { setError("Choose the person."); return; }
+    if (f.dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(f.dueOn)) { setError("Choose a valid date."); return; }
     if (f.link && !/^https:\/\//.test(f.link.trim())) { setError("Use a secure link starting https://"); return; }
     setBusy(true); setError("");
     try {
@@ -96,18 +99,18 @@ export function HubItemSheet({ p, hub, account, properties, target, onClose, onS
         <Field label={title} value={f.title ?? ""} onChange={set("title")} p={p} placeholder={placeholder} />
         <Field label="Details (optional)" value={f.details ?? ""} onChange={set("details")} p={p} multiline />
         {kind === "todo" && <>
-          <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Who is it for?</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {ASSIGN_CHOICES.map(([key, label]) => <Chip key={key} p={p} label={label} on={(f.assign || "me") === key} onPress={() => setF(v => ({ ...v, assign: key }))} />)}
-          </View>
-          {f.assign === "person" && <SearchPicker p={p} options={(hub?.people ?? []).map(x => ({ id: x.userId, label: x.userId === account.userId ? "Me" : x.fullName || "Team member" }))} value={f.assigneeId ?? ""}
-            onChange={id => setF(v => ({ ...v, assigneeId: id }))} clearable placeholder="Search the team by name" nouns="people" />}
-          {f.assign === "department" && <ChoiceField p={p} label="Department" value={f.department ?? ""}
-            options={[{ value: "", label: "Choose a department" }, ...DEPARTMENTS.map(d => ({ value: d as string, label: DEPARTMENT_LABEL[d] }))]}
-            onChange={d => setF(v => ({ ...v, department: d }))} />}
+          <Dropdown p={p} label="Who is it for?" value={(f.assign || "me") as Assign} options={ASSIGN_OPTIONS} onChange={a => setF(v => ({ ...v, assign: a }))} />
+          {f.assign === "person" && <Dropdown p={p} label="Which person?" value={f.assigneeId ?? ""} onChange={id => setF(v => ({ ...v, assigneeId: id }))}
+            options={[{ value: "", label: "Choose a person" }, ...(hub?.people ?? []).map(x => ({ value: x.userId, label: x.userId === account.userId ? "Me" : x.fullName || "Team member" }))]} />}
+          {f.assign === "department" && <Dropdown p={p} label="Which department?" value={f.department ?? ""} options={DEPARTMENT_OPTIONS} onChange={d => setF(v => ({ ...v, department: d }))} />}
         </>}
         {kind !== "todo" && <Field label={kind === "approval" ? "Amount, £" : kind === "aircover" ? "Amount claimed, £" : "Amount, £"} value={f.amount ?? ""} onChange={set("amount")} p={p} placeholder="0.00" />}
-        {(kind === "todo" || kind === "invoice") && <DateField p={p} label={kind === "todo" ? "Due (optional)" : "Send by (optional)"} mode="single" wholeMonthLink={false} empty="Choose a date" clearable value={{ from: f.dueOn ?? "", to: f.dueOn ?? "" }} onChange={next => set("dueOn")(next.from)} />}
+        {(kind === "todo" || kind === "invoice") && <View style={{ gap: 4 }}>
+          <DateField p={p} label={kind === "todo" ? "Due (optional)" : "Send by (optional)"} mode="single" wholeMonthLink={false} today={london(new Date())} value={{ from: f.dueOn ?? "", to: f.dueOn ?? "" }} onChange={r => setF(v => ({ ...v, dueOn: r.from }))} />
+          {!!f.dueOn && <MotionPress accessibilityRole="button" accessibilityLabel="Remove the date" onPress={() => setF(v => ({ ...v, dueOn: "" }))} style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }}>
+            <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>No date</Text>
+          </MotionPress>}
+        </View>}
         {kind === "aircover" && <Field label="Reservation code (optional)" value={f.reference ?? ""} onChange={set("reference")} p={p} placeholder="HMABCD1234" />}
         {(kind === "aircover" || kind === "invoice") && <Field label={kind === "invoice" ? "Invoice link (optional)" : "Claim link (optional)"} value={f.link ?? ""} onChange={set("link")} p={p} placeholder="https://" />}
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property (optional)</Text>

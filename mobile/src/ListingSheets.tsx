@@ -7,7 +7,7 @@ import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, dayLabel, Field, london, message, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { writeOperation } from "./backend/client";
 import { poundsToMinor } from "../../lib/repairs-live";
 import { type PropertyView } from "../../lib/workspace-view";
