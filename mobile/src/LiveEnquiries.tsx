@@ -6,10 +6,9 @@ import { ChoiceField } from "./ChoiceField";
 import { Entrance, MotionPress, motionTokens } from "./motion";
 import { Button, Field, Loading, Notice, StatGrid, StatTile, Tag, message, useRequestId } from "./LiveKit";
 import { Initials } from "./LiveAccounts";
-import { PageHeading } from "./LivePages";
+import { PageHeading, SoftButton } from "./LivePages";
 import { Segmented } from "./Segmented";
 import { Sheet } from "./TeamFlows";
-import { HeroWash } from "./HeroWash";
 import { useCelebrate } from "./Celebrate";
 import { depth, ui, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
@@ -48,21 +47,8 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette
   const open = data?.items.find(e => e.id === openId) ?? null;
   return (
     <View style={{ gap: 18 }}>
-      <PageHeading palette={p} title="Client enquiries" subtitle="Send landlords the New Property Enquiry Form, see their answers here, and value the property." />
-      <Entrance sessionKey="enquiries:hero">
-        <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel="Send the enquiry form to a landlord" onPress={() => setSending(true)}
-          style={[ui.row, { gap: 16, padding: 20, borderRadius: 24, backgroundColor: p.hero, overflow: "hidden", ...depth.raised }]}>
-          <View style={{ width: 52, height: 52, borderRadius: 17, alignItems: "center", justifyContent: "center" }}>
-            <HeroWash p={p} radius={17} edge={0.2} />
-            <Feather name="send" size={22} color={p.heroText} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-            <Text style={{ color: p.heroText, fontSize: 17, fontWeight: "800", letterSpacing: -0.3 }}>Send the form to a landlord</Text>
-            <Text style={{ color: p.heroMuted, opacity: 0.8, fontSize: 13, lineHeight: 19 }}>Write the email, and they get a private link to the form. Their answers, photos and videos come straight back here.</Text>
-          </View>
-          <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.heroText }}><Feather name="arrow-right" size={19} color={p.hero} /></View>
-        </MotionPress>
-      </Entrance>
+      <PageHeading palette={p} title="Client enquiries" subtitle="Send landlords the New Property Enquiry Form, see their answers here, and value the property."
+        action={<SoftButton palette={p} primary icon="plus" label="Send the form to a landlord" onPress={() => setSending(true)} />} />
       <StatGrid>
         <StatTile p={p} icon="inbox" tone="clients" label="Ready to value" value={count("value")} attention={count("value") > 0} detail="Answered forms" />
         <StatTile p={p} icon="clock" tone="stays" label="Waiting for them" value={count("waiting")} detail="Form sent, not answered" />
@@ -119,14 +105,14 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
   const [name, setName] = useState(""), [email, setEmail] = useState(""), [subject, setSubject] = useState(DEFAULT_SUBJECT), [body, setBody] = useState(defaultBody(""));
   const [edited, setEdited] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [result, setResult] = useState<{ link: string; to: string; emailed: boolean; failed: boolean } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(false), [showPreview, setShowPreview] = useState(false);
   const request = useRequestId(visible ? ["send", resend?.id ?? "", name, email, subject, body].join(":") : null);
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
       if (!active || !visible) return;
       setName(resend?.recipientName ?? ""); setEmail(resend?.recipientEmail ?? ""); setSubject(resend?.subject ?? DEFAULT_SUBJECT); setBody(resend?.body ?? defaultBody(resend?.recipientName ?? ""));
-      setEdited(false); setError(""); setResult(null); setCopied(false);
+      setEdited(false); setError(""); setResult(null); setCopied(false); setShowPreview(false);
     });
     return () => { active = false; };
   }, [visible, resend]);
@@ -175,14 +161,18 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
         <Button label="Done" icon="check" p={p} onPress={onClose} />
       </> : <>
         {!resend && <>
-          <Field label="Their name" value={name} onChange={changeName} p={p} placeholder="Alex Morgan" />
-          <Field label="Their email" value={email} onChange={setEmail} p={p} email placeholder="alex@example.com" />
+          <Field label="Their name" value={name} onChange={changeName} p={p} placeholder="Their name" />
+          <Field label="Their email" value={email} onChange={setEmail} p={p} email placeholder="name@example.com" />
         </>}
         <Field label="Subject" value={subject} onChange={setSubject} p={p} />
         <Field label="Message" value={body} onChange={v => { setBody(v); setEdited(true); }} p={p} multiline />
         <Text style={[ui.small, { color: p.muted }]}>The form link goes at the end, or wherever you write {LINK_PLACEHOLDER}.</Text>
-        {/* What they'll receive. */}
-        <View style={{ borderRadius: 18, borderWidth: 1, borderColor: p.border, backgroundColor: p.background, overflow: "hidden" }}>
+        {/* What they'll receive, behind a toggle: the message above is the same text, so it is not shown twice by default. */}
+        <MotionPress accessibilityRole="button" accessibilityState={{ expanded: showPreview }} accessibilityLabel="Preview the email" onPress={() => setShowPreview(v => !v)} style={[ui.row, { gap: 8, minHeight: 40 }]}>
+          <Text style={{ flex: 1, color: p.text, fontSize: 14, fontWeight: "600" }}>Preview the email</Text>
+          <Feather name={showPreview ? "chevron-up" : "chevron-down"} size={18} color={p.muted} />
+        </MotionPress>
+        {showPreview && <View style={{ borderRadius: 18, borderWidth: 1, borderColor: p.border, backgroundColor: p.background, overflow: "hidden" }}>
           <View style={[ui.row, { gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
             <Feather name="mail" size={14} color={p.muted} /><Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 13, fontWeight: "700" }}>{subject || "(no subject)"}</Text>
           </View>
@@ -191,7 +181,7 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
             <View style={{ alignSelf: "flex-start", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, backgroundColor: p.primary }}><Text style={{ color: p.onPrimary, fontSize: 13, fontWeight: "700" }}>Open the property form</Text></View>
             {!!preview[1]?.trim() && <Text style={{ color: p.text, fontSize: 13, lineHeight: 20 }}>{preview.slice(1).join(" ").trim()}</Text>}
           </View>
-        </View>
+        </View>}
         {!emailReady && <Notice text="Recharge's email service isn't connected yet, so you send this yourself: make the link, then copy it or open your email app with the message filled in." p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         {emailReady ? <Button label={busy ? "Sending…" : resend ? "Send the new link" : "Send the form"} icon="send" primary p={p} disabled={busy} onPress={() => void send("email")} />

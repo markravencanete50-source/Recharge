@@ -55,3 +55,17 @@ test('review fixes: attachment chip fits a phone, a paperclip leads it, the pane
   assert.match(unknown, /borderWidth: 1, borderColor: p\.border, backgroundColor: p\.surface/);
   assert.match(unknown, /\{r\.name \? <View[\s\S]*: <>[\s\S]*\{r\.from\}[\s\S]*\{!!r\.subject && <Text numberOfLines=\{1\}/);
 });
+
+test('Send the form sheet: honest placeholders, the email preview behind a toggle, and the page action is a normal primary button, not a banner', async () => {
+  const sheet = (await fs.readFile('mobile/src/LiveEnquiries.tsx', 'utf8')).replace(/\r\n/g, '\n');
+  assert.match(sheet, /placeholder="Their name"/);
+  assert.match(sheet, /placeholder="name@example\.com"/);
+  assert.doesNotMatch(sheet, /Alex Morgan|alex@example\.com/);
+  assert.match(sheet, /\[showPreview, setShowPreview\] = useState\(false\)/);
+  assert.match(sheet, /accessibilityLabel="Preview the email"/);
+  assert.match(sheet, /name=\{showPreview \? "chevron-up" : "chevron-down"\}/);
+  assert.match(sheet, /\{showPreview && <View style=\{\{ borderRadius: 18,/);
+  // The banner is gone: a primary SoftButton in the page heading opens the same sheet, and the hero tokens are no longer used here.
+  assert.match(sheet, /<PageHeading[^]*action=\{<SoftButton palette=\{p\} primary icon="plus" label="Send the form to a landlord" onPress=\{\(\) => setSending\(true\)\} \/>\} \/>/);
+  assert.doesNotMatch(sheet, /HeroWash|p\.hero\b|enquiries:hero/);
+});
