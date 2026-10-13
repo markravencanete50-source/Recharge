@@ -32,12 +32,14 @@ export const dayLabel = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDa
 // on a computer's page they size to their label, so a lone action doesn't stretch across the screen.
 export const InSheet = createContext(false);
 export function Button({ label, onPress, p, primary = false, disabled = false, icon }: { label: string; onPress: () => void; p: Palette; primary?: boolean; disabled?: boolean; icon?: ComponentProps<typeof Feather>["name"] }) {
-  const ink = disabled ? p.muted : primary ? p.onPrimary : p.primary;
+  const ink = disabled ? p.disabled : primary ? p.onPrimary : p.primary;
   const { width } = useWindowDimensions(), sheet = useContext(InSheet);
   const hug = width >= 900 && !sheet;
+  // Primary: the solid fill. Secondary: a wash with a visible edge, so on a dark card it still reads as a button.
+  // Disabled: a raised strip with a quiet outline and the disabled label.
   return (
-    <MotionPress {...(!primary && Platform.OS === "web" && !disabled ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-      style={[ui.button, hug ? { flexGrow: 0, alignSelf: "flex-start", minWidth: 180, paddingHorizontal: 22 } : { flexGrow: 1 }, disabled ? { backgroundColor: p.elevated } : primary ? primaryFill(p) : { backgroundColor: p.wash, borderWidth: 1, borderColor: "transparent" }]}>
+    <MotionPress {...(Platform.OS === "web" && !disabled ? { dataSet: { hover: primary ? "primary" : "tint" } } : {})} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+      style={[ui.button, hug ? { flexGrow: 0, alignSelf: "flex-start", minWidth: 180, paddingHorizontal: 22 } : { flexGrow: 1 }, disabled ? { backgroundColor: p.elevated, borderWidth: 1, borderColor: p.border } : primary ? primaryFill(p) : { backgroundColor: p.wash, borderWidth: 1, borderColor: p.washBorder }]}>
       {!!icon && <Feather name={icon} size={16} color={ink} />}
       <Text style={[ui.buttonText, { color: ink, letterSpacing: 0.1 }]}>{label}</Text>
     </MotionPress>

@@ -545,7 +545,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
           </MotionPress>
           {!formChecked && <Text style={[ui.small, { color: p.muted }]}>Tick the box to accept this clean. You can reject it without ticking.</Text>}
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true, disabled: !formChecked }} disabled={!formChecked} onPress={() => { if (formChecked) setAccepted(true); }} style={[ui.button, { flex: 1, opacity: formChecked ? 1 : 0.5, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? "#FFFFFF" : p.primary }]}>Accept</Text></MotionPress>
+            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true, disabled: !formChecked }} disabled={!formChecked} onPress={() => { if (formChecked) setAccepted(true); }} style={[ui.button, { flex: 1, opacity: formChecked ? 1 : 0.5, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? p.onSuccess : p.primary }]}>Accept</Text></MotionPress>
             <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === false }} onPress={() => setAccepted(false)} style={[ui.button, { flex: 1, backgroundColor: accepted === false ? p.danger : p.wash }]}><Text style={[ui.buttonText, { color: accepted === false ? p.onPrimary : p.primary }]}>Reject</Text></MotionPress>
           </View>
           <Field label="Guest feedback" value={guestFeedback} onChange={setGuestFeedback} p={p} multiline placeholder="What guests said, or 'No comments'" />
