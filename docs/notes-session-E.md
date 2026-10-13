@@ -61,3 +61,27 @@ Severity: **High** breaks the client's rules or hides something; **Medium** clea
 | 10 | Department strip and the "Work" tabs on phones | The chosen tab is a mint block (dark) and the strip scrolls with a chevron. | `selected` tokens; consider the Dropdown above 5. | B | Medium |
 | 11 | `AccountsFlows.tsx` step dots | A white tick on `p.success` (1.6:1 in dark). | `color={p.onSuccess}`. | A | Low |
 | 12 | `RoleNavigation.tsx`, `LiveProductivity.tsx`, `LiveEnquiries.tsx` | White and white-alpha colours written into the components (`#FFFFFF`, `rgba(255,255,255,…)`), so they can't follow the tokens. | Move to `heroText` / `heroMuted` / `onPrimary` and a new token if needed (ask me). | B | Low |
+
+## Task 2: UI/UX sweep (both themes, desktop and phone)
+
+Fixed in my files:
+
+| Where | Change |
+| --- | --- |
+| `mobile/src/theme.ts` | One scale for corners (`radius`: tag 8, control 14, tile 18, card 24, sheet 28, pill 999), icons (`icon`: 14, 16, 18, 20) and spacing (`space`: 6, 10, 14, 20, 24). The shared `ui` styles use it: icon buttons now share the 14px corner of buttons and fields (were 16), and sheets space their sections 20px apart (were 18). The sweep counted corners of 12, 14, 15, 16, 18, 20, 22 and 24 and icons from 12 to 22 side by side. |
+| Header buttons (`LiveWorkspace.tsx`) | The header icon buttons take the shared 14px corner (were 15). |
+| Property search (`SearchPicker.tsx`) | The placeholder was cut off on phones ("…street or p"). Now "Search property, street or postcode", which fits a 390px field. |
+
+Routed, continuing the list above:
+
+| # | Screen | Problem | Suggested fix | Owner | Severity |
+| --- | --- | --- | --- | --- | --- |
+| 13 | Maintenance | Nine filter pills in one row that runs off the screen ("With R…"); each repair is a tall card; a Refresh button next to Report a repair. | One Dropdown for the filter; thin rows (property, problem, status, cost, updated); drop Refresh (pages reload on their own). | Lead to route (`LiveRepairs`) | High |
+| 14 | Management centre | Nine or more tabs in a row that runs off the screen ("Day refle…"). | Dropdown above 5 tabs. | B | High |
+| 15 | Client relations | Eight tabs (Onboarding … Purchase orders). | Dropdown. | B | High |
+| 16 | Calendar (phone) | Four view pills and five team pills wrap, leaving "Team" and "Accounts" alone on a line. | Teams as a Dropdown next to the two existing dropdowns; views as a 4-segment `Segmented`. | Lead to route (`LiveCalendar`) | Medium |
+| 17 | Record a stay, New clean, edit stay, local and team events, team time, New expense | Dates are typed as text, "(YYYY-MM-DD)": 13 fields in `LiveCleans`, `StaySheet`, `StayEditSheet`, `LiveRepairs`, `LiveCalendar`, `LocalEvents`, `TeamEvents`, `LiveTeamTime`, `AccountsPayable`. | The shared `DateField` (one field that opens the calendar). | Lead to route; A for `AccountsPayable` | High |
+| 18 | Report a repair | Eleven repair-type pills. | Dropdown. | Lead to route (`LiveRepairs`) | High |
+| 19 | Messages (phone) | Helper lines cut short with "…" ("Hostaway isn't connected yet: log each gue…", "5 guests have waited longer than 30 minut…"). | Let them wrap (drop `numberOfLines={1}`). | C | Medium |
+| 20 | Accounts summary tiles (phone) | "TO RECONCILE" and "STATEMENTS PAID" wrap to two lines, and the three tiles use three different fills. | Shorter labels ("Reconcile", "Statements") or two tiles per row; one fill (`p.surface`). | A | Medium |
+| 21 | Everywhere | Corner and icon sizes are typed as numbers. | Use `radius`, `icon` and `space` from `theme.ts` when a file is next touched: 12/16 become `radius.control`, 20/22 become `radius.card`, icons 15/17/19 become the nearest step. | All sessions | Low |
