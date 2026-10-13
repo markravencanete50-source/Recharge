@@ -43,7 +43,7 @@ export function ModeSwitch({ palette: p, demo, busy, onChange }: { palette: Pale
 export function DemoBanner({ viewing, onViewAs, onLive }: { palette: Palette; viewing: string | null; onViewAs: () => void; onLive: () => void }) {
   const interactive = demoInteractive();
   const [notes, setNotes] = useState<string[]>([]);
-  const [busy, setBusy] = useState<"jobs" | "reset" | null>(null), [confirmReset, setConfirmReset] = useState(false), [status, setStatus] = useState("");
+  const [busy, setBusy] = useState<"jobs" | "reset" | null>(null), [confirmReset, setConfirmReset] = useState(false), [status, setStatus] = useState(""), [menu, setMenu] = useState(false);
   useEffect(() => subscribeDemoNotes(next => setNotes(current => [...next, ...current].slice(0, 3))), []);
   useEffect(() => { if (!notes.length) return; const t = setTimeout(() => setNotes([]), 30000); return () => clearTimeout(t); }, [notes]);
   const runJobs = async () => {
@@ -51,6 +51,7 @@ export function DemoBanner({ viewing, onViewAs, onLive }: { palette: Palette; vi
     try {
       const done = await runDemoJobs();
       const failed = done.results.filter(r => !r.ok).length;
+      setMenu(false);
       setStatus(failed ? `Today's automatic jobs ran; ${failed} could not run.` : "Today's automatic jobs ran: reminders, flags, to-dos and follow-ups are up to date.");
       refreshScreens();
     } catch (e) { setStatus(e instanceof Error ? e.message : "The jobs could not run."); } finally { setBusy(null); }
@@ -61,15 +62,21 @@ export function DemoBanner({ viewing, onViewAs, onLive }: { palette: Palette; vi
       await resetDemo();
       // Photos the sample people took wait in this browser's upload line; they go too.
       for (const item of uploads.getSnapshot().items.filter(x => isDemoPerson(x.ownerId))) await uploads.remove(item.id);
-      setNotes([]); setStatus("The demo is back to how it started.");
+      setNotes([]); setMenu(false); setStatus("The demo is back to how it started.");
       refreshScreens();
     } catch (e) { setStatus(e instanceof Error ? e.message : "The demo could not be reset."); } finally { setBusy(null); }
   };
-  const chip = (label: string, icon: React.ComponentProps<typeof Feather>["name"], onPress: () => void, working = false) => (
-    <MotionPress accessibilityRole="button" accessibilityLabel={label} disabled={!!busy} onPress={onPress} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: "#8C6E33", opacity: busy && !working ? 0.6 : 1 }]}>
-      {working ? <ActivityIndicator size="small" color="#FFF6E2" /> : <Feather name={icon} size={14} color="#FFF6E2" />}<Text style={{ color: "#FFF6E2", fontSize: 13, fontWeight: "600" }}>{label}</Text>
+  // All of the demo's controls sit in one small menu by the banner (house rule: as few buttons as possible).
+  const item = (label: string, icon: React.ComponentProps<typeof Feather>["name"], onPress: () => void, working = false, detail = "") => (
+    <MotionPress accessibilityRole="menuitem" accessibilityLabel={label} disabled={!!busy} onPress={onPress} style={[ui.row, { gap: 10, minHeight: 40, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, opacity: busy && !working ? 0.6 : 1 }]}>
+      {working ? <ActivityIndicator size="small" color="#FFF6E2" /> : <Feather name={icon} size={15} color="#E8C27D" />}
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: "#FFF6E2", fontSize: 13, fontWeight: "500" }}>{label}</Text>
+        {!!detail && <Text style={{ color: "#F3E2BD", fontSize: 12, lineHeight: 16 }}>{detail}</Text>}
+      </View>
     </MotionPress>
   );
+  const close = (then: () => void) => () => { setMenu(false); setConfirmReset(false); then(); };
   return (
     <View accessibilityRole="alert" style={{ gap: 10, padding: 12, paddingLeft: 14, borderRadius: 18, backgroundColor: "#3A2C15", borderWidth: 1, borderColor: "#6B5326", overflow: "hidden", ...depth.card }}>
       <View style={[ui.row, { gap: 12, flexWrap: "wrap" }]}>
@@ -82,18 +89,22 @@ export function DemoBanner({ viewing, onViewAs, onLive }: { palette: Palette; vi
             ? "Try anything: it all works on a private copy of a sample business kept in this browser. Your real records aren\u2019t shown or changed, and nothing is sent to anyone."
             : "Every screen shows sample properties, people and money. Your real records aren\u2019t shown or changed, and nothing you do here is saved."}</Text>
         </View>
-        {interactive && chip(busy === "jobs" ? "Running…" : "Run today\u2019s automatic jobs", "clock", () => void runJobs(), busy === "jobs")}
-        {interactive && (confirmReset
-          ? <>{chip("Reset: start again", "rotate-ccw", () => void reset(), busy === "reset")}{chip("Keep my changes", "x", () => setConfirmReset(false))}</>
-          : chip("Reset demo", "rotate-ccw", () => setConfirmReset(true), busy === "reset"))}
-        <MotionPress accessibilityRole="button" onPress={onViewAs} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: "#8C6E33" }]}>
-          <Feather name="eye" size={14} color="#FFF6E2" /><Text style={{ color: "#FFF6E2", fontSize: 13, fontWeight: "700" }}>{viewing ? "Change person" : "View as"}</Text>
-        </MotionPress>
-        <MotionPress accessibilityRole="button" onPress={onLive} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "#FFF6E2" }]}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#177A41" }} /><Text style={{ color: "#3A2C15", fontSize: 13, fontWeight: "800" }}>Switch to Live</Text>
+        <MotionPress accessibilityRole="button" accessibilityLabel="Demo options" accessibilityState={{ expanded: menu }} onPress={() => { setMenu(!menu); setConfirmReset(false); }} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#8C6E33", backgroundColor: menu ? "#4A3A1E" : "transparent" }]}>
+          {busy ? <ActivityIndicator size="small" color="#FFF6E2" /> : <Feather name="sliders" size={14} color="#FFF6E2" />}
+          <Text style={{ color: "#FFF6E2", fontSize: 13, fontWeight: "600" }}>Demo options</Text>
+          <Feather name={menu ? "chevron-up" : "chevron-down"} size={14} color="#FFF6E2" />
         </MotionPress>
       </View>
-      {confirmReset && <Text style={{ color: "#F3E2BD", fontSize: 12, lineHeight: 17 }}>Reset puts the sample business back as it started. Everything you did in the demo goes.</Text>}
+      {menu && (
+        <View accessibilityRole="menu" style={{ alignSelf: "flex-end", width: "100%", maxWidth: 360, padding: 4, borderRadius: 14, backgroundColor: "#2E2311", borderWidth: 1, borderColor: "#6B5326" }}>
+          {item(viewing ? "Change person" : "View as someone", "eye", close(onViewAs))}
+          {interactive && item(busy === "jobs" ? "Running today\u2019s automatic jobs…" : "Run today\u2019s automatic jobs", "clock", () => void runJobs(), busy === "jobs", "Reminders, flags, to-dos and follow-ups, as the schedule makes them.")}
+          {interactive && (confirmReset
+            ? item("Reset: start again", "rotate-ccw", () => void reset(), busy === "reset", "The sample business goes back as it started. Everything you did in the demo goes.")
+            : item("Reset demo", "rotate-ccw", () => setConfirmReset(true), busy === "reset"))}
+          {item("Switch to Live", "zap", close(onLive))}
+        </View>
+      )}
       {!!status && <Text accessibilityRole="alert" style={{ color: "#F3E2BD", fontSize: 12, lineHeight: 17 }}>{status}</Text>}
       {notes.map((note, i) => (
         <View key={i + note} style={[ui.row, { gap: 8, alignItems: "flex-start" }]}>

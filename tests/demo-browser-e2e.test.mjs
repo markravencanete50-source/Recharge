@@ -57,7 +57,12 @@ test('in Demo, nothing is sent to the live API, and every flow runs in the brows
     assert.deepEqual(demoFiles, [], 'Live loads none of the demo files');
     await page.getByRole('radio', { name: /Demo mode/ }).click();
     const switched = Date.now(), before = apiCalls.length;
-    await page.getByRole('button', { name: 'Reset demo' }).waitFor({ timeout: 120_000 });
+    // The interactive demo's controls are in one menu by the banner.
+    const menu = page.getByRole('button', { name: 'Demo options' });
+    await menu.waitFor({ timeout: 120_000 });
+    await menu.click();
+    await page.getByRole('menuitem', { name: 'Reset demo' }).waitFor({ timeout: 120_000 });
+    await menu.click();
     const opened = Date.now() - switched;
     // A write through the real database function: a management decision on a contested clean.
     // (Home is still filling in as the demo's reads come back, so the card can move under the click.)
@@ -71,10 +76,12 @@ test('in Demo, nothing is sent to the live API, and every flow runs in the brows
     await page.getByRole('button', { name: 'Record decision' }).click();
     await page.getByText('Rejected clean').waitFor({ state: 'hidden', timeout: 20_000 });
     // The scheduled sweeps, on demand.
-    await page.getByRole('button', { name: /Run today.s automatic jobs/ }).click();
+    await menu.click();
+    await page.getByRole('menuitem', { name: /Run today.s automatic jobs/ }).click();
     await page.getByText(/Today.s automatic jobs ran/).waitFor({ timeout: 60_000 });
     // Viewing as a cleaner signs in as the sample cleaner, still in the browser.
-    await page.getByText('View as', { exact: true }).first().click();
+    await menu.click();
+    await page.getByRole('menuitem', { name: 'View as someone' }).click();
     await page.getByText('Exactly what Ewan sees').click();
     await page.getByText(/viewing as Ewan Stewart/).waitFor({ timeout: 30_000 });
     await page.waitForTimeout(3000);

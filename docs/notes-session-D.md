@@ -16,9 +16,11 @@ works." Demo mode in the browser app now does exactly that.
   cleaner, Rory Ready, Graham accounts, Alasdair owner). Viewing as someone in the demo signs in as them, so you
   can do their part of a flow and switch to the next person.
 - It runs on a **private copy** of the sample business kept in that browser (IndexedDB). It stays there, with
-  everything done to it, until **Reset demo** (in the demo banner, with a confirm step). Other viewers and other
+  everything done to it, until **Reset demo** (with a confirm step).
+- **All the demo's controls are in one small menu, "Demo options", by the demo banner** (house rule: as few
+  buttons as possible): View as someone, Run today's automatic jobs, Reset demo, Switch to Live (screenshot 0). Other viewers and other
   browsers each have their own copy.
-- **Run today's automatic jobs** (in the banner) runs the backend's scheduled sweeps on the copy now: pricing
+- **Run today's automatic jobs** runs the backend's scheduled sweeps on the copy now: pricing
   gaps, routine visits, mid-stay cleans, daily to-dos, the clean-form sweep, direct-booking follow-ups, owner
   approval reminders, sign-off rollover, weekly report notices, privacy clean-up, then the email/phone delivery
   batch.
@@ -45,7 +47,7 @@ database functions in PGlite. The browser demo is the same thing, moved into a W
 | Automatic jobs | `scripts/demo/browser/jobs.mjs` | The schedule's sweeps in `worker/index.ts`, same order. A test fails if the schedule gains a sweep this list lacks. |
 | Photos and files | `engine.mjs` | Supabase Storage is IndexedDB (the viewer's uploads) plus the sample photos as static files, fetched the first time one is opened. Signed links become object URLs; chat one-off upload links are `demo-upload://…` and are kept by the worker. No Cloudinary, no Supabase Storage. |
 | Build | `scripts/demo/build-browser-demo.mjs` | Run by `scripts/build-workspace-web.mjs` (so by `npm run build`) into `dist/client/workspace/demo/`. Seeds the sample business (or reuses the devstack's cached seed), compacts it into a snapshot (no template databases, `vacuum full`, only the write-ahead log the last checkpoint needs with its unused tail zeroed: 24 MB → 2.6 MB), bundles the engine with esbuild, and copies PGlite's WebAssembly and data files gzipped. Every file but `manifest.json` has a content hash in its name. |
-| The app side | `mobile/src/demo/engine.ts`, `mobile/src/demo/notes.ts`, demo parts of `mobile/src/backend/client.ts`, `mobile/src/DemoMode.tsx` | Starts the worker when Demo is switched on and routes `workspaceRequest` (reads and writes), photos, profile photos, chat file links and chat uploads to it. The banner has Reset demo, Run today's automatic jobs and the notes. |
+| The app side | `mobile/src/demo/engine.ts`, `mobile/src/demo/notes.ts`, demo parts of `mobile/src/backend/client.ts`, `mobile/src/DemoMode.tsx` | Starts the worker when Demo is switched on and routes `workspaceRequest` (reads and writes), photos, profile photos, chat file links and chat uploads to it. The banner has the one "Demo options" menu (View as, the jobs, Reset demo, Switch to Live) and the notes. |
 
 Safety details:
 - `workspaceRequest` answers from the demo before any live call. While Demo is being switched on, and after a
