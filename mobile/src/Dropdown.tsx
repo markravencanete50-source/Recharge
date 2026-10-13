@@ -35,7 +35,7 @@ export function Dropdown<T extends string>({ p, label, value, options, onChange,
   return (
     <View style={{ gap: 6 }}>
       {caption}
-      <MotionPress accessibilityRole="button" accessibilityLabel={`${label}: ${current}`} accessibilityState={{ expanded: open, disabled }} disabled={disabled} onPress={toggle} style={[ui.row, box, { gap: 10 }]}>
+      <MotionPress accessibilityRole="combobox" accessibilityLabel={`${label}: ${current}`} accessibilityState={{ expanded: open, disabled }} disabled={disabled} onPress={toggle} style={[ui.row, box, { gap: 10 }]}>
         <Text style={{ flex: 1, color: p.text, fontSize: 15 }}>{current}</Text>
         <Feather name={open ? "chevron-up" : "chevron-down"} size={16} color={p.muted} />
       </MotionPress>

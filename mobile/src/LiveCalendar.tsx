@@ -7,7 +7,7 @@ import { SearchPicker } from "./SearchPicker";
 import { MotionPress, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, london, message, Notice, Tag, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { PageHeading } from "./LivePages";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { EventRow, TeamEventSheet, WhoIsWhere } from "./TeamEvents";

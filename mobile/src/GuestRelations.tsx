@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { Button, useWorkFocus } from "./LiveKit";
-import { Pills } from "./AccountsPayable";
+import { Pills } from "./Pills";
 import { AirCoverList } from "./AirCoverList";
 import { DirectBookings } from "./DirectBookings";
 import { LiveCleans } from "./LiveCleans";

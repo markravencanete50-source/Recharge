@@ -7,7 +7,6 @@ import { Sheet } from "./TeamFlows";
 import { Loading, Notice, Tag, london, message } from "./LiveKit";
 import { SearchBox } from "./SearchPicker";
 import { FavoriteButton } from "./Favorites";
-import { Chip } from "./LivePortfolio";
 import { PropertyAccess } from "./LiveTools";
 import { PropertyProfile } from "./LivePropertyProfile";
 import { readFinance, readTeams, workspaceRequest } from "./backend/client";
@@ -18,7 +17,7 @@ import { isFinanceRole, shiftMonth, statementsSchema } from "../../lib/accounts-
 import { defaultCleanersSchema, type DefaultCleaners } from "../../lib/workspace-teams-policy";
 import { ownersSchema, profileAccess } from "../../lib/property-profile";
 import {
-  DEFAULT_SORT, NO_FILTER, REGION_NOT_SET, SORT_KEYS, SORT_LABEL, buildPropertyRows, filterPropertyRows, nextSort, regionOptions, seesCleaners, sortPropertyRows, statusOptions,
+  DEFAULT_SORT, REGION_NOT_SET, SORT_KEYS, SORT_LABEL, buildPropertyRows, filterPropertyRows, nextSort, seesCleaners, sortPropertyRows,
   type PropertyRow, type Sort, type SortKey,
 } from "../../lib/property-table";
 import { historyDay, historyGroups, propertyHistory, seesHistoryCost, statementHistory, type HistoryEntry, type StatementInput } from "../../lib/property-history";
@@ -27,7 +26,7 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
 
 // The Properties database for staff: a table on a wide screen and cards on a phone, with a search box,
-// region and status filters and a click-in detail sheet (overview, people, maintenance history, and
+// search (address, region and status words) and a click-in detail sheet (overview, people, maintenance history, and
 // statements for finance roles). Owners keep the card grid in LivePages. The data shaping is in
 // lib/property-table.ts and lib/property-history.ts.
 const DESKTOP = 1024;
@@ -282,7 +281,9 @@ export function PropertiesTable({ palette: p, account, properties, journeys, wor
   extra?: (property: PropertyView) => ReactNode;
 }) {
   const { width } = useWindowDimensions();
-  const [query, setQuery] = useState(""), [region, setRegion] = useState<string | null>(NO_FILTER.region), [status, setStatus] = useState<string | null>(NO_FILTER.status);
+  // Search only (Lee, round 6: "remove those location buttons, it should be searchable only"): the one box matches the
+  // address, region and status words, so "Glasgow" or "onboarding" narrows the list. No region or status chips.
+  const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT), [shown, setShown] = useState(PAGE);
   const [cleaners, setCleaners] = useState<DefaultCleaners | "error" | null>(null);
   const wantCleaners = seesCleaners(account.role, account.modules);
@@ -294,11 +295,8 @@ export function PropertiesTable({ palette: p, account, properties, journeys, wor
   }, [wantCleaners]);
 
   const all = useMemo(() => buildPropertyRows(properties, journeys, work), [properties, journeys, work]);
-  const regions = useMemo(() => regionOptions(all), [all]), statuses = useMemo(() => statusOptions(all), [all]);
-  // A filter whose region or status has since left the data is ignored rather than showing nothing.
-  const activeRegion = region && regions.some(r => r.region === region) ? region : null, activeStatus = status && statuses.some(s => s.status === status) ? status : null;
-  const rows = useMemo(() => sortPropertyRows(filterPropertyRows(all, { query, region: activeRegion, status: activeStatus }), sort), [all, query, activeRegion, activeStatus, sort]);
-  const table = width >= DESKTOP, filtered = !!(query.trim() || activeRegion || activeStatus);
+  const rows = useMemo(() => sortPropertyRows(filterPropertyRows(all, { query }), sort), [all, query, sort]);
+  const table = width >= DESKTOP, filtered = !!query.trim();
   const row = selected ? all.find(r => r.id === selected.id) : undefined;
   const open = (r: PropertyRow) => onSelect(r.property);
   const change = (apply: () => void) => { apply(); setShown(PAGE); };
@@ -308,12 +306,6 @@ export function PropertiesTable({ palette: p, account, properties, journeys, wor
       <SearchBox p={p} value={query} onChange={v => change(() => setQuery(v))} placeholder="Search by address, region or status" />
       {!!all.length && (
         <View style={{ gap: 8 }}>
-          {regions.length > 1 && <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel="Filter by Scotland region" contentContainerStyle={{ gap: 8 }}>
-            {regions.map(r => <Chip key={r.region} p={p} label={r.region} count={r.count} on={activeRegion === r.region} onPress={() => change(() => setRegion(activeRegion === r.region ? null : r.region))} />)}
-          </ScrollView>}
-          {statuses.length > 1 && <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel="Filter by status" contentContainerStyle={{ gap: 8 }}>
-            {statuses.map(s => <Chip key={s.status} p={p} label={s.label} count={s.count} on={activeStatus === s.status} onPress={() => change(() => setStatus(activeStatus === s.status ? null : s.status))} />)}
-          </ScrollView>}
           {!table && <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel="Sort the list" contentContainerStyle={{ gap: 8 }}>
             {SORT_KEYS.map(k => <SortChip key={k} p={p} sortKey={k} sort={sort} onSort={key => setSort(nextSort(sort, key))} />)}
           </ScrollView>}
@@ -321,10 +313,10 @@ export function PropertiesTable({ palette: p, account, properties, journeys, wor
       )}
       <View style={[ui.between, { gap: 12 }]}>
         <Text style={small(p, { fontVariant: ["tabular-nums"] })}>{filtered ? `${rows.length} of ${plural(all.length, "property", "properties")}` : plural(all.length, "property", "properties")}</Text>
-        {filtered && <MotionPress accessibilityRole="button" onPress={() => change(() => { setQuery(""); setRegion(null); setStatus(null); })} style={{ minHeight: 40, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Clear filters</Text></MotionPress>}
+        {filtered && <MotionPress accessibilityRole="button" onPress={() => change(() => setQuery(""))} style={{ minHeight: 40, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Clear search</Text></MotionPress>}
       </View>
       {loading && !all.length && <Loading p={p} />}
-      {!loading && !!all.length && !rows.length && <Notice text="No properties match. Try another word, or clear the filters." p={p} />}
+      {!loading && !!all.length && !rows.length && <Notice text="No properties match. Try another word, or clear the search." p={p} />}
       {!!rows.length && (table ? <Table p={p} rows={rows.slice(0, shown)} sort={sort} onSort={key => setSort(nextSort(sort, key))} onOpen={open} /> : <Cards p={p} rows={rows.slice(0, shown)} onOpen={open} />)}
       {rows.length > shown && <MotionPress accessibilityRole="button" onPress={() => setShown(shown + PAGE)} style={{ alignSelf: "flex-start", minHeight: 44, justifyContent: "center" }}><Text style={{ color: p.primary, fontWeight: "600" }}>Show more ({rows.length - shown} more)</Text></MotionPress>}
       <Sheet palette={p} visible={!!row} onClose={onClose} title={row?.name ?? ""} subtitle={row && row.address !== row.name ? row.address : undefined} icon="house">

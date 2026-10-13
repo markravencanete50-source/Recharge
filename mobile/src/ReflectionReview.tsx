@@ -4,7 +4,7 @@ import { Text } from "./Typography";
 import { useCelebrate } from "./Celebrate";
 import { ui, type Palette } from "./theme";
 import { Button, london, Loading, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
-import { Pills } from "./AccountsPayable";
+import { Pills } from "./Pills";
 import { readTeams, writeTeams } from "./backend/client";
 import { buildMarkReviewed, REFLECTION_COPY, reflectionWindow, shapeReflections, summaryLine, type ReflectionList, type ReflectionView } from "../../lib/reflection";
 import { formatDay } from "../../lib/format";
