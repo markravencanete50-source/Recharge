@@ -15,6 +15,8 @@ import { ProfileEditor, usePresenceHeartbeat } from "./ProfileSettings";
 import { FeatureTile } from "./Artwork";
 import { RoleNavigation } from "./RoleNavigation";
 import { rolePanel, type PanelLink } from "../../lib/role-panel";
+import { orderPhoneBar, orderWorkViews, parseMenuLayout, phoneMoreGroups, storedMenuLayoutSchema, type MenuLayout } from "../../lib/menu-layout";
+import { onMenuLayoutSaved } from "./MenuLayoutStore";
 import { NavigationBar, liveNavigationFor } from "./NavigationBar";
 import { FaqShortcut, useFaqShortcut } from "./FaqShortcut";
 import { FilterBar } from "./FilterBar";
@@ -155,10 +157,17 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const updatesLink = requested === "activity" && team;
   const tab: WorkspaceSection = updatesLink ? "inbox" : SECTIONS.includes(requested as WorkspaceSection) && (ROLE_SECTIONS[requested as WorkspaceSection]?.includes(account.role) ?? true) ? requested as WorkspaceSection : "home";
   const setTab = (value: WorkspaceSection) => router.setParams({ section: value });
-  const nav = useMemo(() => liveNavigationFor(account.role), [account.role]);
+  // The menu order a super admin set for this role (Access control → Menu order), read with every refresh.
+  // It only reorders; null is the default order.
+  // Kept with the role it was read for, so a role change (or a change of view) never shows another role's order.
+  const [menuState, setMenuState] = useState<{ role: string; layout: MenuLayout | null }>({ role: account.role, layout: null });
+  const menuLayout = menuState.role === account.role ? menuState.layout : null;
   // On desktop the left panel is the role's own (lib/role-panel.ts): its heading, groups and everyday
-  // tools. It follows the account shown, so View as shows the viewed person's or role's panel.
-  const panel = useMemo(() => rolePanel(account.role, account.modules), [account.role, account.modules]);
+  // tools, in the saved menu order. It follows the account shown, so View as shows the viewed person's or
+  // role's panel. The phone bar keeps its destinations in the same order, and the phone's menu lists the rest.
+  const panel = useMemo(() => rolePanel(account.role, account.modules, menuLayout), [account.role, account.modules, menuLayout]);
+  const nav = useMemo(() => orderPhoneBar(liveNavigationFor(account.role), panel), [account.role, panel]);
+  const [phoneMenu, setPhoneMenu] = useState(false);
   const [focus, setFocus] = useState<WorkFocus | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false), [deleting, setDeleting] = useState(false), [blockedOpen, setBlockedOpen] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
@@ -250,8 +259,25 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   }, [realAccount]);
   // A quiet refresh (every minute, and when someone comes back to the app) keeps what is on screen
   // and its messages; only a failed sign-in is acted on.
+  // The menu order: your own role's (as the person viewed, while viewing as someone), or for a role preview,
+  // that role's from the super admin's list of every role. A failed read keeps the order already shown.
+  const loadMenuLayout = useCallback(async () => {
+    if (demo) return;
+    try {
+      if (rolePreview) {
+        const all = z.array(storedMenuLayoutSchema).parse((await readTeams({ section: "menuLayouts" })).data);
+        setMenuState({ role: rolePreview, layout: parseMenuLayout(all.find(l => l.role === rolePreview) ?? null) });
+      } else {
+        const own = (await readTeams({ section: "menuLayout" })).data as { role?: unknown } | null;
+        if (own && typeof own.role === "string") setMenuState({ role: own.role, layout: parseMenuLayout(own) });
+      }
+    } catch { /* the default order, or the one already shown */ }
+  }, [demo, rolePreview]);
+  // A save in the Menu order editor shows here at once when it is this role's.
+  useEffect(() => onMenuLayoutSaved((role, layout) => { if (role === account.role) setMenuState({ role, layout }); }), [account.role]);
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) { setLoading(true); setError(""); }
+    void loadMenuLayout();
     const keep = rolePreview ? previewKeeps(rolePreview, account.modules) : null;
     // Properties and invoices come a page of 100 at a time; read every page.
     const readAll = async (entity: "properties" | "invoices") => {
@@ -302,7 +328,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     }
     lastRefresh.current = Date.now();
     if (!quiet) setLoading(false);
-  }, [account.role, account.modules, rolePreview, onSignedOut, onAccount]);
+  }, [account.role, account.modules, rolePreview, onSignedOut, onAccount, loadMenuLayout]);
   const loadReport = useCallback(async (range: AnalyticsPeriod) => {
     if (periodError(range)) return;
     setReportError("");
@@ -492,7 +518,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const workPage = (
     <>
       {/* The Work areas are listed in the left panel on desktop, so the row of tabs shows only without it (phones, or the panel hidden). */}
-      {workViews.length > 1 && !(desktop && !sidebarHidden) && <FilterBar values={workViews.map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => { const view = (Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(v => WORK_VIEW_LABEL[v] === label) ?? ""; if (view === "calendar") navigate("calendar"); else setWorkView(view); }} palette={p} />}
+      {workViews.length > 1 && !(desktop && !sidebarHidden) && <FilterBar values={orderWorkViews(workViews, panel).map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => { const view = (Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(v => WORK_VIEW_LABEL[v] === label) ?? ""; if (view === "calendar") navigate("calendar"); else setWorkView(view); }} palette={p} />}
       {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} properties={properties} onOpenWork={setOpenWork} onOpenView={openView} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />}
       {currentView === "stays" && <GuestRelations key={"stays:" + (focus?.nonce ?? "")} {...sectionProps} onRefresh={() => refresh(true)} minimumNights={policy?.minimum_nights} />}
@@ -577,6 +603,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
                 {desktop && team && <HeaderSearch palette={p} onOpen={() => setSearchOpen(true)} />}
               </View>
               <View style={[ui.row, { gap: 8 }]}>
+                {!desktop && <IconButton label="Menu" icon="menu" palette={header} onPress={() => setPhoneMenu(true)} />}
                 {!desktop && team && <IconButton label="Search" icon="search" palette={header} onPress={() => setSearchOpen(true)} />}
                 {canViewAs(realAccount) && width >= 900 && <ModeSwitch palette={p} demo={demo} busy={demoBusy} onChange={onDemo} />}
                 {headerEye && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
@@ -608,6 +635,22 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           {!desktop && <NavigationBar role={account.role} items={nav} section={tab} onNavigate={navigate} palette={p} />}
         </View>
       </KeyboardAvoidingView>
+      {/* The phone's menu: the panel's sections and links in the saved order, without what the bottom bar already shows. */}
+      {!desktop && <Sheet palette={p} visible={phoneMenu} onClose={() => setPhoneMenu(false)} title="Menu" subtitle={panel.title} icon="compass">
+        {phoneMoreGroups(panel, nav).map(group => (
+          <View key={group.key} style={{ gap: 4 }}>
+            <Text accessibilityRole="header" style={[ui.label, { color: p.muted }]}>{group.title}</Text>
+            {group.links.map(link => (
+              <MotionPress key={link.key} accessibilityRole="button" accessibilityLabel={link.label} onPress={() => { setPhoneMenu(false); openPanel(link); }}
+                style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 4, borderBottomWidth: 1, borderColor: p.border }]}>
+                <Feather name={link.icon as keyof typeof Feather.glyphMap} size={17} color={link.kind === "start" ? p.primary : p.muted} />
+                <Text numberOfLines={1} style={{ flex: 1, color: link.kind === "start" ? p.primary : p.text, fontSize: 15 }}>{link.label}</Text>
+                <Feather name="chevron-right" size={16} color={p.muted} />
+              </MotionPress>
+            ))}
+          </View>
+        ))}
+      </Sheet>}
       <Sheet palette={p} visible={settings} onClose={() => { setSettings(false); setConfirmOut(false); }} title="Profile & preferences" subtitle="Your account and comfort settings" icon="people">
         <View style={{ borderRadius: 22, padding: 18, gap: 6, backgroundColor: p.header, overflow: "hidden" }}>
           <View style={[ui.row, { gap: 14 }]}>

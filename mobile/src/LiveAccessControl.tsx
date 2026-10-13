@@ -15,6 +15,8 @@ import { accessHistorySchema, accessPeopleSchema, accessState, accessSummary, ev
 import { ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange } from "../../lib/admin-live";
 import { isWorkspaceAdmin, type ModuleId, type WorkspaceRole } from "../../lib/modules";
 import { z } from "zod";
+import { MenuOrderEditor } from "./MenuOrderEditor";
+import { MENU_ROLE_LABEL } from "../../lib/menu-layout";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Access control, for super admins: every account, its role and tools, and the security actions
@@ -296,13 +298,16 @@ function AddPersonSheet({ p, onClose, onDone }: { p: Palette; onClose: () => voi
   );
 }
 
+// A menu order change names the role it was for (the person is the super admin who made it).
+const menuEvent = (e: AccessEvent) => e.event === "menu_order_saved" || e.event === "menu_order_reset";
+const menuRole = (e: AccessEvent) => typeof e.detail.role === "string" ? MENU_ROLE_LABEL[e.detail.role as keyof typeof MENU_ROLE_LABEL] ?? e.detail.role : "a role";
 function HistoryRow({ p, e, first }: { p: Palette; e: AccessEvent; first: boolean }) {
   const when = new Date(e.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
   return (
     <View style={[ui.row, { gap: 12, paddingVertical: 10, borderTopWidth: first ? 0 : 1, borderColor: p.border }]}>
-      <Feather name={e.event === "account_blocked" || e.event === "account_deleted" ? "slash" : e.event === "password_revoked" ? "key" : e.event === "signed_out_everywhere" ? "log-out" : e.event === "role_changed" ? "trending-up" : e.event === "viewed_as" ? "eye" : "sliders"} size={16} color={p.muted} />
+      <Feather name={e.event === "account_blocked" || e.event === "account_deleted" ? "slash" : e.event === "password_revoked" ? "key" : e.event === "signed_out_everywhere" ? "log-out" : e.event === "role_changed" ? "trending-up" : e.event === "viewed_as" ? "eye" : menuEvent(e) ? "list" : "sliders"} size={16} color={p.muted} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 14 }}>{eventLabel(e.event)} · {e.target}{e.event === "role_changed" && typeof e.detail.from === "string" && typeof e.detail.role === "string" ? ` (${roleLabel(e.detail.from)} → ${roleLabel(e.detail.role)})` : ""}</Text>
+        <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 14 }}>{eventLabel(e.event)} · {menuEvent(e) ? menuRole(e) : e.target}{e.event === "role_changed" && typeof e.detail.from === "string" && typeof e.detail.role === "string" ? ` (${roleLabel(e.detail.from)} → ${roleLabel(e.detail.role)})` : ""}</Text>
         <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>By {e.actor} · {when}</Text>
       </View>
     </View>
@@ -314,6 +319,8 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [query, setQuery] = useState(""), [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
   const [openId, setOpenId] = useState<string | null>(null), [adding, setAdding] = useState(false);
+  // Two tabs: the people, and the menu order per role (Lee's request, round 5).
+  const [tab, setTab] = useState<"people" | "menu">("people");
   const load = useCallback(async () => {
     setError("");
     const [list, log] = await Promise.allSettled([readAdmin("accessControl"), readAdmin("accessHistory")]);
@@ -326,6 +333,8 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
   // Who is online changes by the minute, so the list refreshes itself while it is open.
   useEffect(() => { const timer = setInterval(() => void load(), 60_000); return () => clearInterval(timer); }, [load]);
   if (account.role !== "super_admin") return <Notice text="Access control is for super admins." p={p} />;
+  const tabs = <Pills p={p} values={["people", "menu"] as const} value={tab} onChange={setTab} label={v => v === "people" ? "People" : "Menu order"} />;
+  if (tab === "menu") return <Anchor id="access-control"><View style={{ gap: 18 }}>{tabs}<MenuOrderEditor palette={p} /></View></Anchor>;
   const summary = accessSummary(people);
   const shown = people.filter(x => (filter === "all" ? !x.closed : filter === "online" ? !x.closed && presenceOf(x.seenAt) === "online" : accessState(x) === (filter as AccessState)) && matchesSearch(x, query));
   const person = people.find(x => x.userId === openId) ?? null;
@@ -335,6 +344,7 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Access control</Text>
         <Text style={[ui.small, { color: p.muted }]}>Everyone with a Recharge account. Add someone new, or open a person to change their role and tools, sign them out, revoke their password, block or delete them.</Text>
       </View>
+      {tabs}
       <View style={{ flexDirection: "row" }}><Button label="Add a person" icon="user-plus" primary p={p} onPress={() => setAdding(true)} /></View>
       <StatGrid>
         <StatTile key="people" p={p} icon="users" label="People" value={summary.people} />

@@ -344,3 +344,113 @@ If Lee wants them converted, one more migration in my range can call
   the enquiry archives that property.
 - "Possible duplicate" on an enquiry means: check the other property and close one if it is the same place.
   Nothing is merged automatically.
+
+# Round 5, second task: menu order per role (Lee's request)
+
+Built on `claude/serene-babbage-xgqaus` after merging `main` (`b25d02f`). One migration:
+`20261015210000_menu_layouts.sql`. Not applied anywhere. For this round Session B owns the navigation.
+
+## What it does
+
+- **Access control → Menu order** (super admins only; a new People / Menu order switch at the top of
+  Access control, in `mobile/src/MenuOrderEditor.tsx`):
+  - pick a role (Super admin, Admin, Guest relations, Cleaning manager, Cleaner, Ready, Accounts, Owner);
+  - move its sections up or down, and the links inside each section up or down;
+  - press **Save and publish**. **Undo changes** and **Reset this role to default** are there too, with
+    "Last changed by X on ...".
+
+  The move buttons are plain 44-point buttons with labels such as "Move section Overview up", so they work
+  on a phone, with a keyboard and with a screen reader. There is no drag.
+- **Live preview:** it shows the phone bar, the left panel and the phone menu's sections for that role. It
+  is built by the same code the app uses (`rolePanel` with the layout, then `orderPhoneBar`), with the
+  role's usual tools.
+- **Reorder only.** `lib/menu-layout.ts` (`applyMenuLayout`):
+  - it starts from the sections and links the role and its tools allow, in the default order, then
+    applies the saved order;
+  - sections and links not in the saved layout (for example a tool added later) keep their default
+    position after the ordered ones;
+  - unknown keys, keys the role does not have, and repeats are ignored;
+  - a link always stays in its own section.
+- **Stable keys:**
+  - each section now has a key in `lib/role-panel.ts` (`overview`, `departments`, `calendar-messages`,
+    `management`, `more`, `start`, `today`, `work`, `guests-listings`, `my-day`, `my-work`, `me`,
+    `cleaning-team`, `cleaning-desk`, `jobs`, `ready-desk`, `accounts`, `money`, `costs`,
+    `your-properties`, `requests`);
+  - links use their existing keys (`page:home`, `area:stays`, `tool:payouts`...);
+  - renaming a section title keeps its key.
+- **Desktop and phone use the same merged menu** (`mobile/src/LiveWorkspace.tsx`):
+  - **Desktop:** the left panel is `rolePanel(role, modules, layout)`.
+  - **Phone bar:** the same destinations as today, reordered by where they come in the merged menu (Work
+    counts as the first Work area). So the first sections fill the bar.
+  - **Phone menu:** there was no More menu on phones. A new **Menu** button in the phone header opens a
+    sheet with every section in order, without the places already on the bar.
+  - **Work tabs:** the phone's Work area tabs follow the order of the areas too. Which area opens first does
+    not change.
+- **View as:**
+  - **a person:** the reads run as that person, so the menu shown is their role's;
+  - **a role preview** (no person): the app takes that role's layout from the super admin's list of every
+    role;
+  - **Demo mode:** uses the default order.
+- **Publishing:**
+  - after Save, the editor's own app updates at once, through `mobile/src/MenuLayoutStore.ts`, when the
+    saved role is the editor's own;
+  - everyone else gets it on the existing one-minute quiet refresh, or when they reopen the app;
+  - the read is one small row.
+
+## Database (`20261015210000_menu_layouts.sql`)
+
+- `private.workspace_menu_layouts`: one row per role (`sections` array, `items` object of arrays, `version`,
+  `updated_by`, `updated_at`). Empty arrays mean the default order.
+- Team read `menuLayout`: anyone signed in gets **their own role's** layout, order data only (role,
+  sections, items, version).
+- Team read `menuLayouts`: super admins get every role's layout, with who changed it and when.
+- Team actions `saveMenuLayout` and `resetMenuLayout`:
+  - super admins only;
+  - optimistic version check (version 0 is a role never changed);
+  - keys must be stable keys (lower case, digits, `: _ = -`), each once, at most 40 sections and 80 links
+    per section;
+  - a retried request gets the same answer (action receipts).
+- Every save or reset writes `workspace_access_events` (`menu_order_saved` / `menu_order_reset`). The person
+  and the actor are both the super admin, the old order is in `old_access`, and the role and new order are in
+  `new_access`. Access control's history shows "Menu order saved · Guest relations".
+- Routes are appended after the hub anchors in `workspace_teams_read` and `workspace_teams_action`. They
+  are single-line anchors with sentinels, so the migration is safe to run twice.
+- Schemas: `lib/workspace-teams-policy.ts` gained the two read sections and the two actions (at the end
+  of their lists).
+
+## Tests
+
+- `tests/menu-layout.test.mjs`, 9 of 9 pass:
+  - the merge never adds a tool the role lacks and never loses one;
+  - links stay in their section;
+  - saved order applied;
+  - unknown and duplicate keys ignored;
+  - new tools fall in at their default place;
+  - the desktop panel, phone bar, phone menu and Work tabs agree;
+  - the editor's moves, and the preview equals what the role gets;
+  - request schemas;
+  - wiring.
+- `tests/menu-layout-database.test.mjs`, 5 of 5 pass:
+  - own-role read only, order data only;
+  - only super admins can save or reset (admin, staff and owners refused);
+  - version check;
+  - keys checked;
+  - access history and retry;
+  - the migration runs twice.
+- Database tests that share the patched team routes, plus the two enquiry ones: management-flags,
+  enquiry-property, client-enquiries, team-calendar, aircover-links, day-reflection, daily-tasks,
+  access-control. 67 of 67 pass.
+- Whole non-database suite: 849 of 861. The 12 failures fail on `main` too:
+  - 5 are line-ending checks: this checkout's files predate the new `.gitattributes` and are LF;
+  - 7 need build output (prepared Worker, preview, hosted routes, icon fonts, Cloudflare redirect).
+- `npx tsc --noEmit -p mobile/tsconfig.json`: no errors. ESLint: no errors on the changed files.
+
+## Questions for Lee
+
+1. **Moving links between sections** is not built (reorder within a section only). Should a link be
+   movable to another section?
+2. **Phone bar:** it keeps today's destinations (at most five), only reordered. Should the editor also choose
+   which destinations are on the bar? Should the new phone Menu button replace a bar slot instead of sitting
+   in the header?
+3. **Home tools** (the tiles on Home) are not part of the menu order. Should they follow it too?
+4. **Section names** cannot be renamed from the editor, only reordered.

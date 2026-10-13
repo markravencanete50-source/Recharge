@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
 import { enquiryInviteSchema } from './client-enquiry';
 import { enquiryDetailsSchema } from './journey-policy';
+import { MENU_ROLES, menuLayoutSchema } from './menu-layout';
 
 const id = z.string().uuid();
 export const DEPARTMENTS = ['guest_relations', 'client_relations', 'cleaning', 'ready', 'accounts', 'management'] as const;
@@ -21,7 +22,9 @@ export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
     'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople', 'productivity', 'shiftChanges', 'clientEnquiries', 'feedback', 'chatReports',
     // Client feedback build, October 2026: management flags, day reflections, daily to-dos, AirCover claims, team calendar.
-    'flags', 'reflection', 'reflections', 'dailyTasks', 'aircover', 'teamEvents']),
+    'flags', 'reflection', 'reflections', 'dailyTasks', 'aircover', 'teamEvents',
+    // Menu order (Access control → Menu order): your own role's, and every role's for super admins.
+    'menuLayout', 'menuLayouts']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -185,6 +188,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('saveTeamEvent'), requestId: id, id: id.optional(), version: version.optional(), userId: id.optional(), kind: z.enum(TEAM_EVENT_KINDS), title: text(2, 200), startsOn: date, endsOn: date,
     startTime: clockTime.nullable().optional(), endTime: clockTime.nullable().optional(), location: z.string().trim().max(200).optional() }).strict(),
   z.object({ action: z.literal('cancelTeamEvent'), requestId: id, id, version: version.optional() }).strict(),
+  // Menu order per role (super admins only). Version 0 is a role nobody has reordered yet.
+  z.object({ action: z.literal('saveMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0), ...menuLayoutSchema.shape }).strict(),
+  z.object({ action: z.literal('resetMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0) }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'flagForManagement') {
     if (value.source === 'work' && (!value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'Flag work with its work id only' });
