@@ -76,6 +76,19 @@ test('the steps name the form that records them, and the first form this person 
   assert.deepEqual(item.nextAction, { label: 'Prepare a direct-booking offer', actionKey: 'prepareQuote' });
 });
 
+test('the decline form is never the next action, and an unavailable offer form says why', () => {
+  const decline = form('recordGuestDecline', 'The guest said no');
+  const gated = { ...form('prepareQuote', 'Prepare a direct-booking offer'), unavailable: 'The discount policy awaits confirmation.' };
+  assert.deepEqual(directBookingTrackerItem(work('follow_up'), ctx({ forms: () => [gated, decline] })).nextAction, { label: 'The discount policy awaits confirmation.' });
+  assert.deepEqual(directBookingTrackerItem(work('follow_up'), ctx({ forms: () => [decline] })).nextAction, { label: 'Waiting for Guest relations' });
+  const quoted = directBookingTrackerItem(work('quoted'), ctx({ forms: () => [decline, form('recordGuestAcceptance', 'Record guest acceptance')] }));
+  assert.deepEqual(quoted.nextAction, { label: 'Record guest acceptance', actionKey: 'recordGuestAcceptance' });
+  for (const phase of ['follow_up', 'quoted']) {
+    const item = directBookingTrackerItem(work(phase), ctx({ forms: () => [decline] }));
+    assert.doesNotMatch(item.nextStep + ' ' + item.nextAction.label, /said no|declined/, phase);
+  }
+});
+
 test('a confirmed booking is complete and closed', () => {
   const item = directBookingTrackerItem(work('confirmed', { status: 'completed' }, { quoteAmountMinor: 90000 }), ctx());
   assert.deepEqual(states(item), ['done', 'done', 'done', 'done']);
@@ -96,6 +109,8 @@ test('a declined offer closes with the last step skipped and the guest\'s words 
   assert.equal(item.closed, true);
   assert.equal(item.nextAction, null);
   assert.ok(item.details.some(d => d.label === 'What the guest said' && d.value === 'Prefers to stay on Airbnb'));
+  assert.equal(item.nextStep, 'Closed, the guest declined the offer');
+  assert.equal(item.steps[2].detail, 'The guest declined the offer');
 });
 
 test('a follow-up cancelled because the stay changed is closed and not called declined', () => {
@@ -310,6 +325,14 @@ test('the direct bookings screen reads the stays for dates and nights and offers
   assert.match(text, /directBookingTrackerItems/);
   assert.match(text, /workItemForms/);
   assert.match(text, /onOpenWork/);
+});
+
+test('listing checks and empty-night pricing sit in Client relations\' routine, not Guest relations\'', () => {
+  const card = source('mobile/src/StaysRoutineCard.tsx');
+  assert.match(card, /CLIENT_TOOLS: readonly string\[\] = \["listing-health", "daily-pricing"\]/);
+  assert.match(card, /CLIENT_TOOLS\.includes\(m\) === \(part === "clients"\)/);
+  assert.match(source('mobile/src/GuestRelations.tsx'), /<StaysRoutineCard [^>]*part="guests" \/>/);
+  assert.match(source('mobile/src/ClientRelations.tsx'), /<StaysRoutineCard [^>]*part="clients" \/>/);
 });
 
 test('the record-a-stay sheet shows the nights and the follow-up hint, and its other callers are unchanged', () => {

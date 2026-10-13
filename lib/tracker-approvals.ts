@@ -159,7 +159,7 @@ function managementSpec(source: Exclude<ApprovalSource, { kind: 'flag' | 'hub' }
     }
     case 'missed': {
       const m = source.missed;
-      return { badge: 'Missed checks', address: 'Stays team', title: `${text(m.fullName) || 'Team member'} · ${formatDay(m.day, ctx.now)}`, amountMinor: null, since: m.createdAt, by: null, automatic: true,
+      return { badge: 'Missed checks', address: 'Guest relations team', title: `${text(m.fullName) || 'Team member'} · ${formatDay(m.day, ctx.now)}`, amountMinor: null, since: m.createdAt, by: null, automatic: true,
         action: APPROVAL_SEEN, actionLabel: 'Mark as seen', next: 'Mark as seen',
         details: [...(!m.signedOff ? [{ label: 'Sign-off', value: 'Not done', tone: 'bad' as const }] : []), ...(m.missedListings.length ? [{ label: 'Listing checks missed', value: `${m.missedListings.length} of ${m.listingsDue}: ${m.missedListings.map(x => x.propertyName).join(', ')}` }] : [])] };
     }

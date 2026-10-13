@@ -10,7 +10,7 @@ import { cellText, SheetTable, type Column } from "./SheetTable";
 import { ListSearchBox, useListSearch } from "./SearchPicker";
 import { WorkHistory } from "./WorkHistory";
 import { ui, type Palette } from "./theme";
-import { updateStamp, type TrackerItem, type TrackerStep } from "../../lib/tracker";
+import { updateLine, type TrackerItem, type TrackerStep } from "../../lib/tracker";
 import { groupBySection, percentOf } from "../../lib/tracker-onboarding";
 import type { WorkflowForm } from "../../lib/workflow-forms";
 
@@ -55,9 +55,9 @@ function StatusTags({ p, item }: { p: Palette; item: TrackerItem }) {
   return <View style={{ alignItems: "flex-end", gap: 4 }}><Tag label={item.status.label} tone={item.status.tone} p={p} /><Tag label="Flagged" tone="bad" p={p} /></View>;
 }
 
-// One item as a phone card: where, what, how it stands, what is next and when it last moved.
+// One item as a phone card: where, what, how it stands, what is next, and when it last moved and what changed.
 export function TrackerRow({ p, item, onOpen, compact = false, owner = false, first = true, percent = false }: { p: Palette; item: TrackerItem; onOpen: (item: TrackerItem) => void; compact?: boolean; owner?: boolean; first?: boolean; percent?: boolean }) {
-  const stamp = updateStamp(item.lastUpdate, new Date(), owner);
+  const stamp = updateLine(item.lastUpdate, new Date(), owner);
   return (
     <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "row" } } : {})} accessibilityRole="button" accessibilityLabel={labelOf(item, stamp, percent)} onPress={() => onOpen(item)}
       style={[ui.row, { gap: 12, alignItems: "flex-start", paddingVertical: compact ? 10 : 14, borderTopWidth: first ? 0 : 1, borderTopColor: p.border }]}>
@@ -69,7 +69,7 @@ export function TrackerRow({ p, item, onOpen, compact = false, owner = false, fi
         {item.title !== item.address && <Text numberOfLines={1} style={{ color: p.text, fontSize: 14, lineHeight: 20 }}>{item.title}</Text>}
         {!item.closed && <Text numberOfLines={2} style={small(p)}>Next: {item.nextStep}</Text>}
         <NextAction p={p} item={item} />
-        <Text numberOfLines={1} style={small(p, { fontVariant: ["tabular-nums"] })}>{stamp}</Text>
+        <Text numberOfLines={2} style={small(p, { fontVariant: ["tabular-nums"] })}>{stamp}</Text>
         {!compact && <TrackerProgress p={p} progress={item.progress} decorative percent={percent} />}
       </View>
       <Feather name="chevron-right" size={18} color={p.muted} style={{ alignSelf: "center" }} />
@@ -84,7 +84,7 @@ function columnsFor(p: Palette, owner: boolean, percent: boolean): Column<Tracke
     { label: "Status", width: 150, cell: i => <View style={{ alignItems: "flex-start", gap: 4 }}><Tag label={i.status.label} tone={i.status.tone} p={p} />{!!i.flagged && <Tag label="Flagged" tone="bad" p={p} />}</View> },
     { label: "Next step", width: 190, cell: i => cellText(p, i.closed ? "" : i.nextStep) },
     { label: "Next action", width: 200, cell: i => i.nextAction ? <NextAction p={p} item={i} /> : cellText(p, "") },
-    { label: "Last update", width: 210, cell: i => cellText(p, updateStamp(i.lastUpdate, now, owner)) },
+    { label: "Last update", width: 240, cell: i => cellText(p, updateLine(i.lastUpdate, now, owner)) },
     { label: "Progress", width: percent ? 200 : 150, cell: i => i.progress ? <TrackerProgress p={p} progress={i.progress} compact decorative percent={percent} /> : cellText(p, "") },
   ];
 }
@@ -104,7 +104,7 @@ export function TrackerList({ p, items, onOpen, empty, loading = false, error = 
   const shown = [...search.shown], open = groups ? shown.filter(i => !i.closed) : shown, done = groups ? shown.filter(i => i.closed) : [];
   const doneShown = doneOpen || !!search.query.trim();
   const draw = (rows: TrackerItem[]) => table
-    ? <SheetTable p={p} columns={columnsFor(p, owner, percent)} rows={rows} keyOf={i => i.id} onRow={onOpen} labelOf={i => labelOf(i, updateStamp(i.lastUpdate, new Date(), owner), percent)} empty={empty} search={false} />
+    ? <SheetTable p={p} columns={columnsFor(p, owner, percent)} rows={rows} keyOf={i => i.id} onRow={onOpen} labelOf={i => labelOf(i, updateLine(i.lastUpdate, new Date(), owner), percent)} empty={empty} search={false} />
     : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>{rows.map((i, n) => <TrackerRow key={i.id} p={p} item={i} onOpen={onOpen} owner={owner} first={!n} percent={percent} />)}</View>;
   const sections = sectionOf ? groupBySection(open, sectionOf) : [];
   return (
@@ -176,7 +176,7 @@ export function TrackerDetail({ p, item, forms = [], onForm, children, owner = f
   const next = onForm && item.nextAction?.actionKey ? forms.find(f => f.key === item.nextAction?.actionKey && !f.unavailable) : undefined;
   const recorded = new Set(item.steps.map(s => s.actionKey).filter(Boolean));
   const others = onForm ? forms.filter(f => f !== next && !(recorded.has(f.key) && !f.unavailable)) : [];
-  const stamp = updateStamp(item.lastUpdate, new Date(), owner);
+  const stamp = updateLine(item.lastUpdate, new Date(), owner);
   return (
     <View style={{ gap: 18 }}>
       <View style={{ gap: 8 }}>
@@ -185,7 +185,7 @@ export function TrackerDetail({ p, item, forms = [], onForm, children, owner = f
           <StatusTags p={p} item={item} />
         </View>
         <TrackerProgress p={p} progress={item.progress} percent={percent} />
-        <Text style={small(p, { fontVariant: ["tabular-nums"] })}>{item.lastUpdate ? "Updated " : ""}{stamp}{item.lastUpdate?.what && !owner ? " · " + item.lastUpdate.what : ""}</Text>
+        <Text style={small(p, { fontVariant: ["tabular-nums"] })}>{item.lastUpdate ? "Updated " : ""}{stamp}</Text>
       </View>
       <View style={{ gap: 8, padding: 14, borderRadius: 14, backgroundColor: p.wash }}>
         <Text style={heading(p)}>{item.closed ? "Status" : "Next"}</Text>

@@ -22,11 +22,14 @@ const STEPS = [
   { key: 'done', label: 'Done', actionKey: 'confirmBooking' },
 ] as const;
 const LAST_DONE: Record<string, number> = { follow_up: 0, quoted: 1, accepted: 2, confirmed: 3 };
-// What is needed after each phase, and which team it waits on.
-const NEXT: Record<string, { step: string; waitingOn: string }> = {
-  follow_up: { step: 'Contact the guest with the direct-booking offer', waitingOn: 'Guest relations' },
-  quoted: { step: "Record the guest's answer", waitingOn: 'Guest relations' },
-  accepted: { step: 'Confirm the booking once the invoice is paid', waitingOn: 'Accounts' },
+// What is needed after each phase, the form that moves it on, and which team it waits on. Only that form is
+// the next action: "The guest said no" (recordGuestDecline) is offered beside it in the detail sheet, never
+// as what to do next, so a follow-up whose offer form is unavailable (the discount policy is not confirmed
+// yet) says why rather than suggesting the guest refused.
+const NEXT: Record<string, { step: string; actionKey: string; waitingOn: string }> = {
+  follow_up: { step: 'Contact the guest with the direct-booking offer', actionKey: 'prepareQuote', waitingOn: 'Guest relations' },
+  quoted: { step: "Record the guest's answer", actionKey: 'recordGuestAcceptance', waitingOn: 'Guest relations' },
+  accepted: { step: 'Confirm the booking once the invoice is paid', actionKey: 'confirmBooking', waitingOn: 'Accounts' },
 };
 const STATUS: Record<string, { label: string; tone: TrackerTone }> = {
   follow_up: { label: 'Follow up', tone: 'wait' }, quoted: { label: 'Offer sent', tone: 'wait' }, accepted: { label: 'Agreed', tone: 'wait' },
@@ -98,7 +101,7 @@ export function directBookingTrackerItem(work: OperationView, ctx: DirectBooking
   const detailOf = (i: number) => {
     if (i === 0) return work.createdAt ? 'Raised ' + formatDay(work.createdAt.slice(0, 10), ctx.now) : undefined;
     if (i === 1) return quote ? 'Offer ' + quote : undefined;
-    if (i === 2) return declined ? 'The guest said no' : quote ? 'Guest agreed at ' + quote : 'Guest agreed';
+    if (i === 2) return declined ? 'The guest declined the offer' : quote ? 'Guest agreed at ' + quote : 'Guest agreed';
     if (i === 3) return 'Booking confirmed';
     return undefined;
   };
@@ -109,8 +112,8 @@ export function directBookingTrackerItem(work: OperationView, ctx: DirectBooking
     return { key: s.key, label, state, ...(detail ? { detail } : {}), ...(s.actionKey ? { actionKey: s.actionKey } : {}) };
   });
 
-  const available = ctx.forms(work);
   const next = NEXT[phase] ?? NEXT.follow_up;
+  const form = ctx.forms(work).find(f => f.key === next.actionKey);
   const status = cancelled ? { label: 'Cancelled', tone: 'bad' as TrackerTone } : done ? STATUS.confirmed : STATUS[phase] ?? STATUS.follow_up;
   const details: Detail[] = [];
   const add = (label: string, value: string, tone?: Detail['tone']) => { if (value) details.push({ label, value, ...(tone ? { tone } : {}) }); };
@@ -126,8 +129,8 @@ export function directBookingTrackerItem(work: OperationView, ctx: DirectBooking
   return {
     id: work.workId, section: 'direct_bookings', source: ctx.owner ? { ...work, updatedBy: null } : work, propertyId: work.propertyId || null, address, propertyName, title,
     status, closed,
-    nextStep: cancelled ? 'Cancelled, the stay changed' : declined ? 'The guest said no' : done ? 'Nothing more to do' : next.step,
-    nextAction: closed ? null : nextActionOf(available, next.waitingOn),
+    nextStep: cancelled ? 'Cancelled, the stay changed' : declined ? 'Closed, the guest declined the offer' : done ? 'Nothing more to do' : next.step,
+    nextAction: closed ? null : form?.unavailable ? { label: form.unavailable } : nextActionOf(form ? [form] : [], next.waitingOn),
     // Owners never see who made the change, even if the data carried a name.
     lastUpdate: update && ctx.owner ? { ...update, by: null } : update,
     progress: progressOf(steps), steps, details, workId: work.workId, version: work.version,

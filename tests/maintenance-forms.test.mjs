@@ -120,7 +120,7 @@ test('preventative rows: Due, Overdue and Done, with last done and next due', ()
   assert.equal(d.status.label, 'Due'); assert.equal(d.address, 'Harbour cottage', 'no address held, so the name');
   assert.ok(d.details.some(x => x.label === 'Visit type' && x.value === 'Garden'));
   const [n] = preventativeTrackerItems([done], ctx(), 'ready');
-  assert.equal(n.status.label, 'Done'); assert.equal(n.closed, false); assert.equal(n.nextAction.label, 'Waiting for Stays');
+  assert.equal(n.status.label, 'Done'); assert.equal(n.closed, false); assert.equal(n.nextAction.label, 'Waiting for Guest relations');
   assert.ok(n.details.some(x => x.label === 'Next due' && /20 Nov/.test(x.value)));
   assert.ok(n.details.some(x => x.label === 'Checklist' && x.value === '2 of 2 done'));
   assert.deepEqual(n.steps.map(s => s.state), ['done', 'done', 'done', 'current']);

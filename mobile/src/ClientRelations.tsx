@@ -8,6 +8,7 @@ import { ListingHealthList, PricingList, RelistingList, ReviewsList } from "./Li
 import { LiveEnquiries } from "./LiveEnquiries";
 import { OnboardingTracker } from "./OnboardingTracker";
 import { PurchaseOrdersList } from "./PurchaseOrdersList";
+import { StaysRoutineCard } from "./StaysRoutineCard";
 import type { SectionProps } from "./SectionProps";
 import { ui } from "./theme";
 import { CLIENT_SUB_LABEL, clientSubsFor, defaultClientSub, pickSub, type ClientSub } from "../../lib/relations-subs";
@@ -22,7 +23,8 @@ import { CLIENT_SUB_LABEL, clientSubsFor, defaultClientSub, pickSub, type Client
 //   reviews      guest reviews to log and answer (ReviewsList)
 //   relisting    properties that need re-listing (RelistingList)
 //   purchases    purchase orders (PurchaseOrdersList)
-// A link's `sub` picks the section; otherwise Onboarding opens. The host builds the SectionProps once
+// Guest relations staff and admins see Today's routine above the chips: the listing checks and the empty
+// nights to price (StaysRoutineCard, part "clients"). A link's `sub` picks the section; otherwise Onboarding opens. The host builds the SectionProps once
 // and passes them in; `onOpenProperty` is where a won enquiry goes (the property's page).
 export function ClientRelations(props: SectionProps & { onOpenProperty: (propertyId: string) => void }) {
   const { palette: p, account, onOpenProperty } = props;
@@ -35,6 +37,7 @@ export function ClientRelations(props: SectionProps & { onOpenProperty: (propert
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Client relations</Text>
         <Text style={[ui.body, { color: p.muted }]}>Onboarding, enquiries, licensing, listings, pricing, reviews and purchases for your clients’ properties.</Text>
       </View>
+      <StaysRoutineCard palette={p} account={account} properties={props.properties} work={props.work} part="clients" />
       {subs.length > 1 && <Pills p={p} values={subs} value={sub} onChange={setSub} label={v => CLIENT_SUB_LABEL[v]} wrap={false} />}
       {sub === "onboarding" && <OnboardingTracker {...props} />}
       {sub === "enquiries" && <LiveEnquiries palette={p} account={account} onOpenProperty={onOpenProperty} />}
