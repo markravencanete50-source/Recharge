@@ -4,6 +4,7 @@ import * as Crypto from "expo-crypto";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { ChoicePills } from "./ChoiceField";
 import { useCelebrate, useSaved } from "./Celebrate";
 import { GrowBar, MotionPress, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -214,7 +215,7 @@ function RotaSection({ p }: { p: Palette }) {
       </List>
       <Sheet palette={p} visible={!!editing} onClose={() => setEditing(null)} title={editing?.fullName ?? ""} subtitle="Department and usual shift" icon="people">
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Department</Text>
-        <Pills p={p} values={DEPARTMENTS} value={department} onChange={setDept} label={d => DEPARTMENT_LABEL[d]} />
+        <ChoicePills p={p} name="Department" values={DEPARTMENTS} value={department} onChange={setDept} label={d => DEPARTMENT_LABEL[d]} />
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Usual shift</Text>
         <Pills p={p} values={["early", "late", "both"] as const} value={usual} onChange={setUsual} label={v => SHIFTS[v]} />
         {!!error && <Notice text={error} p={p} tone="bad" />}
