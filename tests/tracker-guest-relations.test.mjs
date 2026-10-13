@@ -327,9 +327,9 @@ test('the direct bookings screen reads the stays for dates and nights and offers
   assert.match(text, /onOpenWork/);
 });
 
-test('listing checks and empty-night pricing sit in Client relations\' routine, not Guest relations\'', () => {
+test('listing checks, empty-night pricing and the Monday owner reports sit in Client relations\' routine, not Guest relations\'', () => {
   const card = source('mobile/src/StaysRoutineCard.tsx');
-  assert.match(card, /CLIENT_TOOLS: readonly string\[\] = \["listing-health", "daily-pricing"\]/);
+  assert.match(card, /CLIENT_TOOLS: readonly string\[\] = \["listing-health", "daily-pricing", "weekly-performance"\]/);
   assert.match(card, /CLIENT_TOOLS\.includes\(m\) === \(part === "clients"\)/);
   assert.match(source('mobile/src/GuestRelations.tsx'), /<StaysRoutineCard [^>]*part="guests" \/>/);
   assert.match(source('mobile/src/ClientRelations.tsx'), /<StaysRoutineCard [^>]*part="clients" \/>/);

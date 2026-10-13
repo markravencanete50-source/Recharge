@@ -9,13 +9,12 @@ import type { SectionProps } from "./SectionProps";
 // "Today's routine" for Guest relations staff and admins, each part one tap from where it is done. It reads
 // the schedule itself (arrivals, departures and cleans) and takes the work list from the host.
 //   part "guests"   top of Guest relations: repairs to refer, cleans, AirCover claims, direct-booking offers
-//                   and the Monday owner reports
-//   part "clients"  top of Client relations: listing checks and empty nights to price
+//   part "clients"  top of Client relations: listing checks, empty nights to price and the Monday owner reports
 // TodaysRoutine draws a part only for someone holding its tool, so each card hides the other card's tools.
 // A role that holds none of them sees nothing.
 type Schedule = z.infer<typeof scheduleSchema>;
 export const ROUTINE_ROLES = ["stays", "admin", "super_admin"] as const;
-const CLIENT_TOOLS: readonly string[] = ["listing-health", "daily-pricing"];
+const CLIENT_TOOLS: readonly string[] = ["listing-health", "daily-pricing", "weekly-performance"];
 
 export function StaysRoutineCard({ palette: p, account: person, properties, work, part = "guests" }: Pick<SectionProps, "palette" | "account" | "properties" | "work"> & { part?: "guests" | "clients" }) {
   const eligible = (ROUTINE_ROLES as readonly string[]).includes(person.role);

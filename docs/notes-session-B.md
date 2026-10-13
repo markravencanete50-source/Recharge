@@ -31,12 +31,12 @@ Branch `claude/serene-babbage-xgqaus`, from `main` at `f17c4bf`. No migrations, 
 ## 3. Guest relations routine and the "Stays" labels
 
 - `StaysRoutineCard.tsx` takes `part`. Guest relations (`part="guests"`) shows repairs to refer, cleans,
-  AirCover, direct-booking offers and the Monday owner reports. Client relations (`part="clients"`, new,
-  above the chips in `ClientRelations.tsx`) shows listing checks and empty nights to price. The card
+  AirCover and direct-booking offers. Client relations (`part="clients"`, new, above the chips in
+  `ClientRelations.tsx`) shows listing checks, empty nights to price and the Monday owner reports. The card
   passes `TodaysRoutine` only that part's tools, so `StaysRoutine.tsx` is unchanged.
-- Question for the client: the Monday "Weekly performance reports" item (sending owners their report)
-  is still in Guest relations. It may belong in Client relations too; moving it means adding
-  `weekly-performance` to `CLIENT_TOOLS` in `StaysRoutineCard.tsx`.
+- The Monday "Weekly performance reports" item (sending owners their report) moved to Client relations
+  in its own commit ("Routine: Monday owner reports in Client relations"), so it can be reverted alone if
+  the client says no.
 - "Stays" changed to "Guest relations" where users see it: "Waiting for Guest relations" in onboarding,
   enquiries, licensing and preventative visits, "Waiting for Guest relations to sign off", and the
   missed-checks approval row "Guest relations team". These are the team's name (the `stays` role). The
