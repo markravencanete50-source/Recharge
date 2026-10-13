@@ -866,3 +866,45 @@ Once Lee or the Lead applies the migration, an admin can delete the test entry f
   - The hub items gain `updateCount` and `updates`. Both have defaults.
   - `moveHubItem` takes the same input. A tick from the checklist now also logs "Marked done" (or
     "Reopened") in that to-do's update history.
+
+# Round 6, Session E's design review: the items routed to Session B
+
+- **Merged first:** `origin/claude/round6-uiux-session-e` (merge `edb7c13`), for E's tokens (`selected`,
+  `onSelected`, `selectedBorder`, `washBorder`, `disabled`, `onSuccess`). Neither theme file was edited.
+- **Not taken from D's branch:** D's `wiring-v2` regex fix. D force-pushed their branch, and the Lead keeps
+  D's fix on the lead branch. Here that test still fails until the branches meet.
+
+| # | What | Change |
+| --- | --- | --- |
+| 5 | The floating Favorites star covered content on phones ("Checklists" on Cleans). | Removed from `LiveWorkspace.tsx`, along with its 184 px bottom padding and its scroll-tuck timer. Favorites is in every role's first section, so on a phone it is on the bar or first in the Menu. |
+| 6 | At 390 px the header buttons covered the logo ("R…ARGE"). | New `phoneHeader(width, has)` in `lib/header-actions.ts`, from the real sizes (46 px buttons, 44 px avatar, 8 px gaps, 40 px padding, 12 px before the buttons). Menu, the bell, Messages and the avatar always show. Search, View as, Refresh and the dark-mode switch show only while the logo keeps 88 px; otherwise they move to the top of the Menu sheet. Under 346 px the logo shrinks to the room left, so nothing ever sits on it. The old count left out Menu and Messages. |
+| 7 | To-do as tall cards. | Already covered: E's screenshot came from `main`, before my thin rows (`cb4d767`). The after shot shows the rows. |
+| 8 | "New property enquiry" was a full-width mint block in dark mode (`EnquiryCard` in `HomeOverview.tsx`). | Now a surface card with a hairline, a wash icon tile edged with `washBorder`, text and muted lines, and one primary "Add" pill. Owners see the same card ("Have another property?"). |
+| 10 | The department strip and Work tabs on phones showed the chosen tab as a mint block. | The shared `FilterBar` now uses `selected`, `selectedBorder` and `onSelected` (deep green with a mint edge in dark, forest in light). It also serves LiveHub, WorkspaceScreens and AccessHelp. |
+| 12 | Hard-coded white and white-alpha in `RoleNavigation`, `LiveProductivity` and `LiveEnquiries`. | Changed to tokens: text is `heroText`; secondary lines are `heroMuted` with an opacity; icons are `heroLine` or `heroGlow`; the white pill is `heroText` with `hero` text. See-through tiles and edges use a new `HeroWash.tsx`, which layers `heroText` at a low opacity, because on the web a token is a CSS variable and can't take an alpha suffix. The web-only inset highlight in the role panel is `p.surface`. |
+
+**Side fix:** with the star's timer gone, the React Compiler analysed further into `LiveWorkspace` and ESLint
+reported an older issue in `loadReport`, whose `useCallback` was missing `setSnapshot`. I added it; a state
+setter never changes, so behaviour is the same. The unused `web` import in `LiveEnquiries.tsx` is removed.
+
+## Tests
+
+- **New, `tests/e-review-fixes.test.mjs`:** 7 of 7 pass. It covers:
+  - the 390 px header for a super admin and for an owner;
+  - every width from 320 to 1,022 px: the row fits beside the logo, the logo keeps 88 px from 346 px up,
+    wider phones never get fewer buttons, and each button is either in the header or in the Menu;
+  - the workspace wiring and the Menu list;
+  - no star;
+  - the enquiry card, the strip's tokens, and no hard-coded white or brand colour in the three files.
+- **Changed:** `tests/favorites-overview.test.mjs` now checks the star is gone.
+
+## Screenshots
+
+- **Where:** `docs/screenshots/session-b/e-review/`, phone (390×844) in dark mode, before and after.
+- **How they were taken:**
+  - **App and data:** the local review server (`scripts/demo/server.mjs`) with its seeded sample business,
+    signed in as each role through `/dev/as/<role>`.
+  - **Builds:** before is `edb7c13` (`main` plus round 6, before these fixes); after is this commit.
+  - **Shots:** home header (super admin, Guest relations, owner), cleaner home and Work, the Work strip,
+    Properties, To-do, Client enquiries, and the Menu after (where the moved header buttons are).
+- **Missing before shot:** there is no before shot of the Menu; its server had been stopped.

@@ -77,7 +77,8 @@ test('owners have a Favorites page, and only what they can open resolves', () =>
   const ws = source('mobile/src/LiveWorkspace.tsx');
   assert.match(ws, /const favorites = useFavoritesStore\(!\(viewAs && !viewAs\.person\),/);
   assert.match(ws, /<FavoritesContext\.Provider value=\{favorites\}>/);
-  assert.match(ws, /const showFavorites = !desktop && tab !== "favorites";/);
+  // Round 6 (E's review): no floating Favorites star on phones any more; it is in the bar or first in the Menu.
+  assert.doesNotMatch(ws, /FavoritesShortcut|showFavorites/);
   assert.doesNotMatch(ws, /favorites: \["super_admin"/, 'the Favorites page is for every role');
 });
 
