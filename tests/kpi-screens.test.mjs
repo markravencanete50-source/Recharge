@@ -67,3 +67,11 @@ test('the admin screen: area tabs, the list with who changed it last, add, edit,
   // Mounted on Team performance only when the read says the viewer may edit (admins and super admins).
   assert.match(readFileSync('mobile/src/LiveShifts.tsx', 'utf8'), /\{kpis\?\.canEdit && <KpiAdmin p=\{p\} read=\{kpis\} onChanged=\{load\} \/>\}/);
 });
+
+test('the targets sheet no longer edits the pass mark or bonus tiers; it sends the stored ones back unchanged', () => {
+  const shifts = readFileSync('mobile/src/LiveShifts.tsx', 'utf8');
+  const sheet = shifts.slice(shifts.indexOf('function TargetsSheet'), shifts.indexOf('function RotaSection'));
+  assert.doesNotMatch(sheet, /On track: score of at least|Bonus tiers \(score|setPass|setBonus/);
+  assert.match(sheet, /passPercent: targets\.passPercent, bonusPercents: targets\.bonusPercents/);
+  assert.match(sheet, /Bonus targets and tiers are set for each area under KPIs/);
+});

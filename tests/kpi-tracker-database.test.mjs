@@ -157,6 +157,20 @@ test('cleaning forms in on time, per cleaner and for the team; nothing to measur
   assert.ok(empty.people.every(p => p.results.every(r => r.value === null && r.measured === 0)));
 });
 
+test('cleaning forms on time use the submittedAt stamp when there is one, else the reminder markers (20261015120000)', async () => {
+  // Mia (cleaning manager, no other cleans) in early March, away from the other fixtures' dates.
+  const sent = (at, extra = {}) => ({ ...submitted(MIA), submittedAt: at, ...extra });
+  await clean(MIA, '2026-03-02', sent('2026-03-02T17:30:00.000Z'), 'in_review');                               // on time
+  await clean(MIA, '2026-03-02', sent('2026-03-02T19:00:00.000Z'), 'in_review');                               // late by the stamp, no marker
+  await clean(MIA, '2026-03-02', sent('2026-03-02T17:59:00.000Z', { unsubmittedAt: '2026-03-02T18:05:00.000Z' }), 'in_review'); // the stamp wins
+  await clean(MIA, '2026-03-02', submitted(MIA), 'in_review');                                                   // no stamp, no marker: on time
+  const id = (await seeded('cleaning_forms_on_time')).id;
+  await as(ADMIN);
+  const read = await kpis('2026-03-01', '2026-03-07');
+  const mia = result(read.people.find(p => p.userId === users[MIA]), id);
+  assert.deepEqual([mia.measured, mia.count, mia.value], [4, 3, 75]);
+});
+
 test('admins add, edit, switch off and reorder KPIs; every change is recorded with who made it', async () => {
   await as(ADMIN);
   const made = await act({ action: 'saveKpi', name: 'Replies within 15 minutes', area: 'guest_relations', measure: 'guest_reply_within', minutes: 15, targetPercent: 70, bonusTiers: [80], countsForBonus: false, placeholder: false });
@@ -248,6 +262,10 @@ test('the migration runs twice without adding or changing anything', async () =>
   const before = await count();
   await db.exec('reset role');
   await db.exec(await fs.readFile('supabase/migrations/' + NAME, 'utf8'));
+  // The submittedAt patch (20261015120000) runs twice too, and its anchor patch lands once.
+  await db.exec(await fs.readFile('supabase/migrations/20261015120000_clean_form_submitted_at.sql', 'utf8'));
+  const ops = (await owner("select pg_get_functiondef('private.workspace_operations_action(jsonb)'::regprocedure) d"))[0].d;
+  assert.equal(ops.split("'submittedAt',coalesce(d.data->'submittedAt'").length - 1, 1);
   assert.deepEqual(await count(), before);
   for (const [fn, needle] of [['private.workspace_teams_read(text,date,date,uuid,uuid)', 'workspace_kpis_read('], ['private.workspace_teams_action(jsonb)', 'workspace_kpi_action(']]) {
     const d = (await owner('select pg_get_functiondef($1::regprocedure) d', [fn]))[0].d;

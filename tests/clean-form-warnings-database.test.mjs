@@ -396,3 +396,22 @@ test('the migration runs twice without changing a definition or a row', async ()
   // And the management flag functions this depends on are untouched by it.
   assert.equal((await owner("select count(*)::int n from pg_proc where proname='workspace_flag_open_for_work'"))[0].n, 1);
 });
+
+test('sending the form stamps submittedAt on the server (20261015120000); the app sends nothing new', async () => {
+  const made = await clean('2026-12-10');
+  const before = Date.now();
+  await submit(made.workId);
+  const sent = await item(made.workId);
+  assert.equal(typeof sent.data.submittedAt, 'string');
+  assert.match(sent.data.submittedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.ok(Math.abs(Date.parse(sent.data.submittedAt) - before) < 120000, 'stamped now');
+  assert.equal(sent.data.submittedBy, users[CLEANER]);
+  // On time by the stamp: 18:00 London on the clean's day is the line.
+  const onTime = async (at, day) => (await owner('select private.workspace_clean_form_on_time($1::jsonb,$2::date) v', [{ phase: 'review', submittedBy: users[CLEANER], submittedAt: at }, day]))[0].v;
+  assert.equal(await onTime('2026-12-10T18:00:00.000Z', '2026-12-10'), true, 'GMT in December: 18:00 exactly is on time');
+  assert.equal(await onTime('2026-12-10T18:00:01.000Z', '2026-12-10'), false);
+  assert.equal(await onTime('2026-07-10T17:00:00.000Z', '2026-07-10'), true, 'BST in July: 17:00 UTC is 18:00 London');
+  assert.equal(await onTime('2026-07-10T17:01:00.000Z', '2026-07-10'), false);
+  // The definition keeps the first stamp when a clean is sent again after a review.
+  assert.match(await definition('private.workspace_operations_action(jsonb)'), /'submittedAt',coalesce\(d\.data->'submittedAt'/);
+});

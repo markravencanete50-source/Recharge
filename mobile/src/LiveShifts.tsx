@@ -151,28 +151,26 @@ const DAILY_KEYS = Object.keys(DAILY_WORK) as DailyKey[];
 function TargetsSheet({ p, targets, visible, onClose, onDone }: { p: Palette; targets: TeamPerformance["targets"]; visible: boolean; onClose: () => void; onDone: () => Promise<void> }) {
   const [green, setGreen] = useState(String(targets.greenMinutes));
   const [amber, setAmber] = useState(String(targets.amberMinutes));
-  const [pass, setPass] = useState(String(targets.passPercent));
-  const [bonus, setBonus] = useState(targets.bonusPercents.join(", "));
   const [weight, setWeight] = useState(String(targets.workWeight));
   const [daily, setDaily] = useState<Record<DailyKey, string>>(() => Object.fromEntries(DAILY_KEYS.map(k => [k, String(targets.dailyTargets[k])])) as Record<DailyKey, string>);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const request = useRequestId(visible ? ["targets", targets.version, green, amber, pass, bonus, weight, ...DAILY_KEYS.map(k => daily[k])].join(":") : null);
+  const request = useRequestId(visible ? ["targets", targets.version, green, amber, weight, ...DAILY_KEYS.map(k => daily[k])].join(":") : null);
   async function save() {
-    const tiers = bonus.split(",").map(x => x.trim()).filter(Boolean).map(Number);
-    const [g, a, s, w] = [Number(green), Number(amber), Number(pass), Number(weight)];
+    const [g, a, w] = [Number(green), Number(amber), Number(weight)];
     const perDay = DAILY_KEYS.map(k => Number(daily[k]));
-    if (![g, a, s, w, ...tiers].every(Number.isInteger) || g < 1 || a <= g || s < 1 || s > 100 || w < 0 || w > 100 || tiers.some(t => t < 1 || t > 100) || tiers.length > 5) { setError("Use whole numbers: amber must be longer than green, and percentages between 0 and 100."); return; }
+    if (![g, a, w].every(Number.isInteger) || g < 1 || a <= g || w < 0 || w > 100) { setError("Use whole numbers: amber must be longer than green, and percentages between 0 and 100."); return; }
     if (!perDay.every(n => Number.isInteger(n) && n >= 0 && n <= 99)) { setError("Daily targets are whole numbers from 0 to 99."); return; }
     setBusy(true); setError("");
     try {
-      await writeTeams({ action: "saveTargets", requestId: request.get(), version: targets.version, greenMinutes: g, amberMinutes: a, passPercent: s, bonusPercents: tiers,
+      // The pass mark and tiers are no longer edited here (each area's bonus is set in KPIs); the stored values go back unchanged.
+      await writeTeams({ action: "saveTargets", requestId: request.get(), version: targets.version, greenMinutes: g, amberMinutes: a, passPercent: targets.passPercent, bonusPercents: targets.bonusPercents,
         workWeight: w, dailyTargets: Object.fromEntries(DAILY_KEYS.map((k, i) => [k, perDay[i]])) as Record<DailyKey, number> });
       request.done(); onClose(); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
-    <Sheet palette={p} visible={visible} onClose={onClose} title="Targets and bonuses" subtitle="How replies and daily work are scored" icon="hourglass">
+    <Sheet palette={p} visible={visible} onClose={onClose} title="Reply and daily-work targets" subtitle="How replies and daily work are scored. Bonuses are set in KPIs." icon="hourglass">
       <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Guest replies</Text>
       <Field label="Green: reply within (minutes)" value={green} onChange={setGreen} p={p} />
       <Field label="Amber: reply within (minutes)" value={amber} onChange={setAmber} p={p} />
@@ -182,8 +180,7 @@ function TargetsSheet({ p, targets, visible, onClose, onDone }: { p: Palette; ta
       <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Score</Text>
       <Field label="Daily work counts for (% of the score)" value={weight} onChange={setWeight} p={p} placeholder="40" />
       <Text style={[ui.small, { color: p.muted }]}>The rest is replies in green. With {Number(weight) || 0}% daily work, someone with 90% green replies and 100% daily work scores {Math.floor(90 * (100 - (Number(weight) || 0)) / 100 + (Number(weight) || 0))}%.</Text>
-      <Field label="On track: score of at least (%)" value={pass} onChange={setPass} p={p} />
-      <Field label="Bonus tiers (score %, comma separated)" value={bonus} onChange={setBonus} p={p} placeholder="95, 100" />
+      <Text style={[ui.small, { color: p.muted }]}>Bonus targets and tiers are set for each area under KPIs on this screen.</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : "Save targets"} primary p={p} disabled={busy} onPress={() => void save()} />
     </Sheet>

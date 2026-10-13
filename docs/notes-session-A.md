@@ -164,7 +164,23 @@ Alex wants his own KPIs, edited by admins in the app, with one per area counting
 - Team performance: each person's tag is their bonus KPI's value and tier. The owner reply times list no longer shows a tier from the old targets.
 - Team performance → KPIs (admins only): area tabs, the list with "Counts for the bonus", "Switched off" and "Placeholder" tags and who changed it last; add, edit, switch off or on, move up or down.
 
-**`workspace_performance_targets` still works** and is still read by: the reply grades in `workspace_response_rows` (green and amber minutes); `score`, `onTrack` and `bonusTier` in the `teamPerformance` read; the client relations owner reply times (pass mark and tiers); the daily-work targets and their weight; and the "Change the targets" sheet. Only the screens' bonus moved to the KPIs. Changing the pass mark or tiers there no longer changes anyone's bonus, so that sheet could lose those two fields later.
+**`workspace_performance_targets` still works** and is still read by:
+- the reply grades in `workspace_response_rows` (green and amber minutes);
+- `score`, `onTrack` and `bonusTier` in the `teamPerformance` read;
+- the client relations owner reply times (pass mark and tiers);
+- the daily-work targets and their weight.
+
+Only the screens' bonus moved to the KPIs.
+
+**Targets sheet (lead's follow-up):** the "Change the targets" sheet (now "Reply and daily-work targets") no longer shows the pass mark or the bonus tiers.
+- It sends the stored values back unchanged, so nothing that looks like a bonus setting stays there.
+- What is left: the green and amber reply minutes, the daily-work targets per Stays shift day, and how much daily work counts in the score.
+- The stored pass mark still sets "on track" in Team performance; it can only be changed in the database now.
+
+**Clean form `submittedAt` (lead's follow-up, `20261015120000_clean_form_submitted_at.sql`):**
+- The server stamps `data.submittedAt` when the cleaner sends the form. The app sends nothing new.
+- A clean sent back after a review keeps its first stamp.
+- "Cleaning forms in on time" uses the stamp when it is there (at or before 18:00 London on the clean's day). Older cleans without it fall back to the reminder markers.
 
 ## Round 5: Accounts, fewer buttons
 Lee: "minimize buttons as much as possible, so users will not be overwhelmed."
@@ -221,6 +237,7 @@ Apply in filename order, before deploying the Worker (the Worker code is unchang
 7. `20261014160000_owner_work_staff_fields.sql`
 8. `20261015100000_kpi_tracker.sql` (round 5; needs nothing new in the Worker beyond the updated teams schemas)
 9. `20261015110000_payout_stay_summary.sql` (round 5; the Worker needs the updated finance schemas for the `payoutStay` report)
+10. `20261015120000_clean_form_submitted_at.sql` (round 5; after 20261015100000)
 
 Things to tell the team after:
 - Clean form reminders start at 18:00, and the management flag comes at 09:00 the next day.
