@@ -422,6 +422,70 @@ screens, and the bar follows them. Two things to know:
   green minutes, the guest part follows them, not 5.
 - The 50/50 weighting is in the migration. The KPI screens have no field for it, so changing it means a small migration.
 
+## Round 7 (17 October): open any update, older updates, and help for round 6
+
+**1. Open any update.** In round 6, tapping an update whose work item was not in the loaded work list did nothing. Now the app
+reads that one item and opens the tracker detail sheet.
+- Read: `GET /api/mobile/operations?workId=<id>` calls `workspace_operation_read(target)`.
+- Rules: the same as the work list (`workspace_operation_access` and `workspace_operation_view`). Owners get only their own
+  client-visible items, in the owner view, with no staff names or staff fields.
+- Refusals: an item someone may not see gives the same "Work item not found" (404) as an id that does not exist. The app says
+  "That item is no longer available to you." Nothing about the item is sent.
+- Tests: an owner tapping a staff-only item at their own property, an item at someone else's property and a made-up id get the
+  same refusal. A cleaner is refused items not assigned to them. Signed-out callers are refused.
+
+**2. Older updates.** The feed still opens on the newest 50. At the end, "Show older updates" loads the 50 before the oldest one
+shown, again and again, until a page comes back short.
+- Read: `GET /api/mobile/portfolio?section=notifications&before=<update id>` calls `workspace_notifications_read(before_id)`.
+- Order: newest first, by time then id, so updates that share a time are never skipped or repeated across pages (tested with
+  130 updates, ten at the same moment).
+- Cursor: it must be one of your own updates.
+- Owners: pages hold only their own updates, with "Recharge" for who did it, as in round 6.
+- Older pages are marked read like the first.
+- The query moved: the notifications branch of `workspace_controls_read` is replaced whole by a call to the new function (no
+  cursor), so there is one copy of the query. Later patches to the feed must anchor in `workspace_notifications_read`.
+
+**Migration `20261017300000_updates_open_and_older.sql`** (not applied):
+- `workspace_operation_read` and `workspace_notifications_read`, each private with a public wrapper. They are granted to signed-in
+  users like the work list and feed reads; each checks who is asking.
+- The branch replacement. It runs only while the branch still holds the round 6 query, and raises if the branch is not found once
+  or does not look as expected.
+- Safe to run twice (tested).
+- `tests/notice-details-database.test.mjs` now checks the round 6 migration's second run before the later ones, because
+  20261017300000 moves the query it patched.
+
+**3. Help for round 6.** Seven answers in `lib/access-faq.ts`, which both the Help page and the help sheet read:
+- "What do the updates under the bell say?" (titles, Automatic and Recharge, bursts, tapping, Show older)
+- "Where are my Favorites?" (always first in the menu, straight after Home)
+- "Why are some choices in a dropdown?"
+- "What do Needs a reply, Engaged and Closed mean in Messages?" (admins, super admins, Stays)
+- "What is Today's checklist?" (admins)
+- "Can I delete a client enquiry?" (admins)
+- "How is the management bonus measured?" (team roles)
+
+Owners see none of the team-only answers. `tests/help-round6.test.mjs` checks who sees which answer, the wording against what was
+built, no dashes, and sentences of 40 words or fewer. The older "What appears in Recent activity?" answer describes this device's
+own history (tool and record views), while the Updates page is also titled Recent activity. I left it as it is; it is worth
+renaming one of the two.
+
+**Screenshots** (sample data, phone width, light and dark):
+- `docs/screenshots/round7-updates-top-*.png`: the note after tapping an item that is not loaded. With no backend in the sample,
+  it shows the "could not be opened just now" wording.
+- `docs/screenshots/round7-updates-end-*.png`: "Show older updates".
+- `docs/screenshots/round7-help-*.png`: the Engaged answer.
+
+**Files:**
+- `supabase/migrations/20261017300000_updates_open_and_older.sql`
+- `lib/journey-policy.ts`, `lib/journey-server.ts` (operations read by `workId`)
+- `lib/portfolio-policy.ts`, `lib/portfolio-server.ts` (the `before` cursor)
+- `lib/notice-details.ts` (`mergeNotices`, `oldestNoticeId`, `mayHaveOlder`, `workItemFrom`)
+- `mobile/src/backend/client.ts` (`readWorkItem`, `readOlderNotices`)
+- `mobile/src/LivePages.tsx` (`LiveActivity`)
+- `lib/access-faq.ts`
+- Tests:
+  - New: `updates-open-older.test.mjs`, `updates-open-older-database.test.mjs`, `help-round6.test.mjs`
+  - Updated: `notice-details.test.mjs`, `notice-details-database.test.mjs`
+
 ## Not done yet (waiting for the client)
 
 - Inbound email into Messages (design above; to be built later).
@@ -479,6 +543,10 @@ Round 6, management bonus: apply `20261016310000_management_bonus_combined.sql` 
 `20261015100000`), then redeploy the app soon after. Until the app is redeployed, the bar shows the new name without the two parts,
 and the old app cannot save an edit to that KPI (it does not know the measure). Before the migration, the new app shows the bar
 as today.
+
+Round 7: apply `20261017300000_updates_open_and_older.sql` after the round 6 migrations (it needs `20261016300000`), then redeploy
+the backend and the app. The app before it keeps working; the new app needs it for opening an item that is not loaded and for
+Show older updates (until then, those say the item could not be opened, or that older updates could not be loaded).
 
 Round 5: apply `20261015300000_chat_notice_every_message.sql`, `20261015310000_guest_message_notices.sql`,
 `20261015320000_owner_chat_closed.sql` and `20261015330000_guest_message_notices_onboarded.sql` in that order, then redeploy the backend and the app (the app's Close button and the
