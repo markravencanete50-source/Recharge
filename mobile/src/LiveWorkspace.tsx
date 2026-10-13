@@ -19,7 +19,7 @@ import { orderPhoneBar, orderWorkViews, parseMenuLayout, phoneMoreGroups, stored
 import { onMenuLayoutSaved } from "./MenuLayoutStore";
 import { updatesBell } from "../../lib/header-actions";
 import { NavigationBar, liveNavigationFor } from "./NavigationBar";
-import { FaqShortcut, useFaqShortcut } from "./FaqShortcut";
+import { useFaqShortcut } from "./FaqShortcut";
 import { FilterBar } from "./FilterBar";
 import { RechargeSplash } from "./RechargeSplash";
 import { GreetingCard } from "./WelcomeMoment";
@@ -591,9 +591,10 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const header = headerPalette(p);
   const ownerActions = { unread: chatUnread, openForm: setForm };
   const title = tab === "work" && currentView ? WORK_VIEW_LABEL[currentView] : panel.groups.flatMap(g => g.links).find(l => l.kind === "page" && l.section === tab)?.label ?? nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : tab === "todo" ? "To-do list" : tab === "calendar" ? "Calendar" : tab === "decisions" ? (isWorkspaceAdmin(account.role) ? "Management approvals" : "Your requests") : "Home");
-  // The floating Help button; the page leaves room under its last item while it shows.
-  // Not in Messages, where it would sit over the send button.
-  const showFaq = !faqShortcut.hidden && tab !== "help" && tab !== "inbox" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help")));
+  // Help sits in the header on wide screens and in the Menu on phones, never floating over the page, where it
+  // used to cover the Approve button at the end of a row. It can be turned off in Profile and preferences.
+  const showFaq = desktop && !faqShortcut.hidden && tab !== "help";
+  const menuHelp = !nav.some(item => item.value === "help");
   // On phones the team's Favorites button floats just above Help (or where Help would be).
   const showFavorites = !desktop && team && tab !== "favorites";
   return (
@@ -627,6 +628,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
                   {messagesBadge > 0 && <Bump value={messagesBadge} pointerEvents="none" style={{ position: "absolute", top: -4, right: -4 }}><View pointerEvents="none" style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View></Bump>}
                 </View>
                 {!narrowHeader && <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={refreshAll} />}
+                {showFaq && <IconButton label="Help and FAQs" icon="help-circle" palette={header} onPress={() => navigate("help")} />}
                 {(desktop || width >= 440) && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
                 <MotionPress accessibilityRole="button" accessibilityLabel={`Open profile and preferences, ${roleLabel}`} onPress={() => setSettings(true)} style={{ minHeight: 48, minWidth: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: desktop ? 14 : 0, borderRadius: 999, backgroundColor: desktop ? p.headerControl : "transparent", borderWidth: desktop ? 1 : 0, borderColor: p.headerBorder }}>
                   {desktop && <View style={{ maxWidth: 180 }}><Text numberOfLines={1} style={{ color: p.headerText, fontSize: 14, fontWeight: "600" }}>{profile.displayName}</Text><Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 11 }}>{roleLabel}</Text></View>}
@@ -635,7 +637,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
               </View>
             </View>
           </View>
-          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} refreshControl={desktop ? undefined : <RefreshControl refreshing={pulling} onRefresh={() => void pullToRefresh()} tintColor={p.primary} colors={[p.primary]} />} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, (showFaq || showFavorites) && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
+          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} refreshControl={desktop ? undefined : <RefreshControl refreshing={pulling} onRefresh={() => void pullToRefresh()} tintColor={p.primary} colors={[p.primary]} />} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, showFavorites && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
               {demo ? <DemoBanner palette={p} viewing={viewAs?.person ? `${viewAs.person.fullName} (${viewAsLabel(viewAs.role)})` : null} onViewAs={() => setViewAsOpen(true)} onLive={() => onDemo(false)} />
                 : !!viewAs && <ViewAsBanner palette={p} view={viewAs} note={viewNote} onChange={() => setViewAsOpen(true)} onBack={() => void onViewAs(null)} />}
@@ -644,9 +646,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
             </Animated.View></View>
           </ScrollView>
-          {/* On phones Home has its own help links and some bottom bars include Help, so the floating button stays out of the way there. */}
-          {showFaq && <FaqShortcut palette={p} tucked={tucked} onOpen={() => navigate("help")} onHide={() => faqShortcut.setHidden(true)} />}
-          {showFavorites && <FavoritesShortcut palette={p} tucked={tucked} lifted={showFaq} count={favorites.items.length} onOpen={() => navigate("favorites")} />}
+          {showFavorites && <FavoritesShortcut palette={p} tucked={tucked} lifted={false} count={favorites.items.length} onOpen={() => navigate("favorites")} />}
           {!desktop && <NavigationBar role={account.role} items={nav} section={tab} onNavigate={navigate} palette={p} />}
         </View>
       </KeyboardAvoidingView>
@@ -665,6 +665,12 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
             ))}
           </View>
         ))}
+        {menuHelp && <MotionPress accessibilityRole="button" accessibilityLabel="Help and FAQs" onPress={() => { setPhoneMenu(false); navigate("help"); }}
+          style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 4, borderBottomWidth: 1, borderColor: p.border }]}>
+          <Feather name="help-circle" size={17} color={p.muted} />
+          <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 15 }}>Help and FAQs</Text>
+          <Feather name="chevron-right" size={16} color={p.muted} />
+        </MotionPress>}
       </Sheet>}
       <Sheet palette={p} visible={settings} onClose={() => { setSettings(false); setConfirmOut(false); }} title="Profile & preferences" subtitle="Your account and comfort settings" icon="people">
         <View style={{ borderRadius: 22, padding: 18, gap: 6, backgroundColor: p.header, overflow: "hidden" }}>
@@ -701,7 +707,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
             <View style={{ height: 1, backgroundColor: p.border, marginLeft: 68 }} />
             <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>
               <FeatureTile icon="help-circle" size={36} palette={p} />
-              <View style={{ flex: 1, gap: 2 }}><Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Show FAQ shortcut</Text><Text style={[ui.small, { color: p.muted }]}>A Help button in the corner of every page.</Text></View>
+              <View style={{ flex: 1, gap: 2 }}><Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Show FAQ shortcut</Text><Text style={[ui.small, { color: p.muted }]}>A Help button at the top of every page on wide screens. On phones Help is in the Menu.</Text></View>
               <Switch accessibilityLabel="Show FAQ shortcut" value={!faqShortcut.hidden} onValueChange={value => faqShortcut.setHidden(!value)} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
             </View>
           </View>
