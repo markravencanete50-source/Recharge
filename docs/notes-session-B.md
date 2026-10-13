@@ -268,7 +268,8 @@ Lee approved section 5. Built on `claude/serene-babbage-xgqaus` after merging th
   from the property, its details are left as they are. Enquiries answered before the migration have no
   property and keep the old path.
 - **Closing** an enquiry whose property is still at the enquiry stage archives the journey and the property,
-  and cancels the work item. Nothing is deleted. A property that has moved on is left alone.
+  and marks the work item declined, as for any archived journey (`workspace_onboarding_status_guard` allows
+  nothing else, and still refuses every other change). Nothing is deleted. A property that has moved on is left alone.
 - **Privacy.**
   - Owners, cleaners, the cleaning manager and Ready have no assignment, so they never see it.
   - Accounts could read every property (the table policy and `workspace_can_property`). Both now leave out
@@ -321,14 +322,25 @@ If Lee wants them converted, one more migration in my range can call
 
 ## Open points
 
-1. Run the two database tests above before merging. The first run of
-   `client-enquiries-database` against an early draft failed with a syntax error, which led to the
-   "Start valuing" patch being rewritten as one self-contained block. The rewritten version has not been
-   run.
-   Every patch anchor is a single line, so the migration does not depend on line endings. `.gitattributes`
-   now checks SQL out as CRLF, and a two-line anchor would not match a function that was created from LF
-   text on the live database.
-2. Lee: convert the enquiries answered before this change, or not (query above).
-3. Lee: should unvalued enquiries count in the portfolio summary and on the map? They currently do, as
+1. **Database tests.** The Lead ran them on `c2a8bbc`: 11 of 13 passed, including all of
+   `client-enquiries-database`. Both failures are now fixed:
+   - Closing tried to set the onboarding work item to "cancelled". `workspace_onboarding_status_guard`
+     allows only "declined" once a journey is archived, so it is now set to "declined", the journey's own
+     rule. The test also checks that the guard still refuses cancelled, completed and declined from anyone
+     else.
+   - The "runs twice" test passed the whole migration to `db.query`. It now uses `db.exec`.
+
+   Every patch anchor is a single line, so the migration does not depend on line endings: `.gitattributes`
+   checks SQL out as CRLF, and the live functions may have been created from LF text.
+2. **Lee:** convert the enquiries answered before this change, or not (query above).
+3. **Lee:** should unvalued enquiries count in the portfolio summary and on the map? They currently do, as
    onboarding.
-4. Accounts no longer see properties at the enquiry stage, including ones the team adds by hand.
+
+## Tell the team
+
+- Accounts no longer see a property while it is at the enquiry stage, including one the team adds by hand
+  before valuing it. It appears for them as soon as it is valued (estimate stage onwards).
+- Every answered enquiry form is now in Properties straight away, as "Onboarding · New enquiry". Closing
+  the enquiry archives that property.
+- "Possible duplicate" on an enquiry means: check the other property and close one if it is the same place.
+  Nothing is merged automatically.

@@ -175,7 +175,11 @@ test('closing a new enquiry archives its property; one that has moved on is left
   const closed = await act({ action: 'closeEnquiry', enquiryId: sent.id, version: (await read()).items.find(e => e.id === sent.id).version, note: 'Same place as another enquiry' });
   assert.equal(closed.status, 'closed');
   const [after] = await owner('select p.status,j.stage,w.status as work from public.workspace_properties p join private.workspace_journeys j on j.property_id=p.id join public.workspace_work_items w on w.id=$2 where p.id=$1', [row.property_id, j.work_id]);
-  assert.deepEqual(after, { status: 'archived', stage: 'archived', work: 'cancelled' }, 'archived, nothing deleted');
+  assert.deepEqual(after, { status: 'archived', stage: 'archived', work: 'declined' }, 'archived, nothing deleted');
+  // The onboarding guard still refuses any other change to a journey's work item.
+  const other = await answered(ADMIN);
+  const [{ work_id: otherWork }] = await owner('select work_id from private.workspace_journeys where property_id=$1', [other.row.property_id]);
+  for (const status of ['cancelled', 'completed', 'declined']) await assert.rejects(owner('update public.workspace_work_items set status=$2 where id=$1', [otherWork, status]), /Use the property onboarding journey/, status);
   // An estimate already published from the property: closing the enquiry keeps the property going.
   const moved = await answered(ADMIN);
   await owner("update private.workspace_journeys set stage='estimate' where property_id=$1", [moved.row.property_id]);
@@ -190,7 +194,8 @@ test('the team can still add an enquiry by hand, and the migration runs twice wi
   const patched = ['private.workspace_enquiry_public(jsonb)', 'private.workspace_client_enquiry_action(jsonb)', 'private.workspace_client_enquiry_view(private.workspace_client_enquiries)', 'private.workspace_assign_onboarding_team()'];
   const defs = async () => Promise.all(patched.map(async f => (await owner('select pg_get_functiondef($1::regprocedure) d', [f]))[0].d));
   const before = await defs();
-  await owner(await fs.readFile('supabase/migrations/' + MIGRATION, 'utf8'));
+  await db.exec('reset role');
+  await db.exec(await fs.readFile('supabase/migrations/' + MIGRATION, 'utf8'));
   assert.deepEqual(await defs(), before);
   assert.equal((await owner("select count(*)::int n from pg_constraint where conrelid='private.workspace_client_enquiries'::regclass and pg_get_constraintdef(oid) like '%property_id IS NOT NULL%'"))[0].n, 1);
   const { row } = await answered(ADMIN);

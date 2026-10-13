@@ -14,8 +14,9 @@
 -- spacing, punctuation and the postcode's space ignored), and duplicate_reason says why ('same_address', or
 -- 'existing_client' when the landlord said they already work with us).
 -- Start valuing reuses that property: the team's corrections (name, address, region, type, rooms, enquiry
--- details) are saved onto it instead of creating a second one. Closing the enquiry archives the property,
--- cancels its work item and archives the journey, while the journey is still at stage enquiry.
+-- details) are saved onto it instead of creating a second one. Closing the enquiry archives the journey and
+-- the property and marks the onboarding work item declined (the journey's own rule for an archived journey,
+-- which workspace_onboarding_status_guard enforces), while the journey is still at stage enquiry.
 -- Privacy: owners, cleaners and Ready have no assignment, so never see it. Accounts read every property
 -- (table policy and workspace_can_property); both now leave out a property whose journey is still at stage
 -- enquiry, whoever created it.
@@ -119,7 +120,8 @@ begin
 end $fn$;
 
 -- Closing an enquiry whose property nobody has valued yet archives the property: the journey, the property
--- and its onboarding work item. Nothing is deleted. A property that has moved on is left as it is.
+-- and its onboarding work item, which reads declined like any archived journey's (the onboarding status guard
+-- allows only that once the journey is archived). Nothing is deleted. A property that has moved on is left as it is.
 create or replace function private.workspace_enquiry_archive_property(prop uuid) returns void language plpgsql security definer set search_path='' as $fn$
 declare j private.workspace_journeys;
 begin
@@ -128,7 +130,7 @@ begin
  if j.property_id is null or j.stage<>'enquiry' then return;end if;
  update private.workspace_journeys set stage='archived',version=version+1,updated_at=now() where property_id=prop;
  update public.workspace_properties set status='archived',version=version+1,updated_at=now() where id=prop;
- update public.workspace_work_items set status='cancelled',version=version+1,updated_at=now() where id=j.work_id and status not in ('completed','cancelled','declined');
+ update public.workspace_work_items set status='declined',version=version+1,updated_at=now() where id=j.work_id and status<>'declined';
 end $fn$;
 
 revoke all on function private.workspace_enquiry_property_name(text),private.workspace_address_key(text),private.workspace_enquiry_create_property(uuid),
