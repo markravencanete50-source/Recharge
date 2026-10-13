@@ -12,7 +12,8 @@ export const calendarScheduleSchema = z.object({
     dueOn: z.string().nullable(), dueTime: z.string().nullable().default(null), endTime: z.string().nullable().default(null), assigneeId: z.string().nullable(), assigneeName: z.string().nullable(), kind: z.string().nullable(), version: z.number(),
   })),
   stays: z.array(z.object({ reservationId: z.string(), propertyId: z.string(), propertyName: z.string(), checkIn: z.string(), checkOut: z.string(), guests: z.number().nullable(), channel: z.string().nullable().optional(),
-    // The guest's name, for staff other than cleaners; null or missing when no conversation names the guest.
+    // The guest's name, for staff other than cleaners: from the guest conversation that carries the stay's booking code
+    // (migration 20261014330000 dropped the match on dates, which could name a stay after an enquiry). Null or missing otherwise.
     guestName: z.string().nullable().optional() })),
   payments: z.array(z.object({
     statementId: uuid, propertyId: uuid, propertyName: z.string(), period: z.string(), status: z.enum(['draft', 'issued', 'paid']), payoutMinor: z.number(),
