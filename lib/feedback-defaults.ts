@@ -17,17 +17,22 @@ export const REFLECTION_MIN_CHARS = 3;
 // Admins read reflections up to this many days at a time (read section 'reflections').
 export const REFLECTIONS_WINDOW_DAYS = 31;
 
-// --- B2: clean forms (migration 20261012170000_clean_form_warnings) -------------------------------
-// SQL: private.workspace_clean_form_due_by() and private.workspace_clean_form_zone(). A clean is
-// Outstanding until this time on its day (UK time), then it is a Warning once the day has passed.
+// --- B2: clean forms (migrations 20261012170000_clean_form_warnings, 20261014100000_clean_form_reminders) ---
+// SQL: private.workspace_clean_form_due_time(), private.workspace_clean_form_escalate_time() and
+// private.workspace_clean_form_zone(). Client answer 8: after this time on its day (UK time) a clean with no form
+// is Unsubmitted and its cleaner is reminded; from CLEAN_FORM_ESCALATE_AT the next day it is a Warning and goes to
+// management.
 export const CLEAN_FORM_DUE_BY = '18:00';
+export const CLEAN_FORM_ESCALATE_AT = '09:00';
 export const CLEAN_FORM_ZONE = 'Europe/London';
-// SQL: private.workspace_clean_form_effect(). A missing form tags the clean (data.warning) and raises
-// a management flag. It never changes what a cleaner is paid, and the cleaner can still submit late.
+// A missing form tags the clean (data.warning) and raises a management flag. It never changes what a cleaner is
+// paid and the cleaner can still submit late, but their invoice for the clean cannot be approved until the form is in.
 export const CLEAN_FORM_WARNING = 'no_form';
-export const CLEAN_FORM_WARNING_EFFECT = { tag: true, flagManagement: true, payEffect: 'none', lateSubmitAllowed: true } as const;
-// The sweep handles at most this many cleans per run.
+export const CLEAN_FORM_WARNING_EFFECT = { tag: true, flagManagement: true, payEffect: 'none', lateSubmitAllowed: true, remindCleaner: true, invoiceApprovalNeedsForm: true } as const;
 export const CLEAN_FORM_SWEEP_LIMIT = 200;
+// Session A: mid-stay cleans (client answer 5, "Forget this for now"). SQL: private.workspace_mid_stay_cleans_enabled()
+// (migration 20261014110000_mid_stay_switch). OFF: the run creates none and leaves existing ones exactly as they are.
+export const MID_STAY_CLEANS_ENABLED = false;
 
 // --- B3: direct-booking follow-ups (migration 20261012180000_direct_booking_followups) -------------
 // The minimum number of nights is NOT mirrored here: it is the booking policy's minimum_nights

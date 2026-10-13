@@ -137,7 +137,9 @@ export function flagNotes(flags: readonly string[], blockedReasons: readonly str
   const unknownFee = countOf(flags, 'ota_fee_unknown'), over = countOf(flags, 'clean_over_agreed') - countOf(blockedReasons, 'clean_unreviewed');
   const noCost = countOf(flags, 'clean_cost_unknown'), ownerAmount = countOf(flags, 'owner_stay_amount_ignored');
   if (unknownFee) notes.push(unknownFee === 1 ? 'A platform stay has no fee on its payout, so no platform fee is taken off for it.' : `${formatCount(unknownFee)} platform stays have no fee on their payout, so no platform fee is taken off for them.`);
-  if (over > 0) notes.push(over === 1 ? '1 clean cost more than the agreed fee. Its review, or the actual-cost setting, decides what the owner pays.' : `${formatCount(over)} cleans cost more than the agreed fee. Their reviews, or the actual-cost setting, decide what the owner pays.`);
+  if (over > 0) notes.push(over === 1 ? '1 clean\'s invoice is above the agreed fee. The owner still pays the agreed fee; review it under clean costs.' : `${formatCount(over)} cleans' invoices are above the agreed fee. The owner still pays the agreed fee; review them under clean costs.`);
+  const levyNoClean = countOf(flags, 'levy_cleaning_fee_unknown');
+  if (levyNoClean) notes.push(levyNoClean === 1 ? 'A platform stay has no cleaning fee on its payout, so its visitor levy is worked out on the whole amount.' : `${formatCount(levyNoClean)} platform stays have no cleaning fee on their payout, so their visitor levy is worked out on the whole amount.`);
   if (noCost) notes.push(noCost === 1 ? '1 clean is charged at actual cost but has no cost on record, so the agreed fee is used.' : `${formatCount(noCost)} cleans are charged at actual cost but have no cost on record, so the agreed fee is used.`);
   if (ownerAmount) notes.push('An owner stay has an amount on it. Owner stays count as nights booked only.');
   const changed = countOf(flags, 'stay_changed_after_statement');
@@ -151,14 +153,14 @@ export function flagNotes(flags: readonly string[], blockedReasons: readonly str
 // The figures, in the order they come off
 
 const LINE_TITLE: Record<(typeof STATEMENT_LINE_KINDS)[number], string> = {
-  ota_fee: 'Platform fees', changeover: 'Changeovers', management_fee: 'Management fee', vat: 'VAT', payable: 'Other payables',
+  ota_fee: 'Platform fees', visitor_levy: 'Visitor levy', changeover: 'Changeovers', management_fee: 'Management fee', vat: 'VAT', payable: 'Other payables',
 };
 export type LineGroup = { kind: (typeof STATEMENT_LINE_KINDS)[number]; title: string; totalMinor: number; lines: { label: string; when: string | null; amountMinor: number }[] };
 // The lines grouped in the order they come off (platform fees, changeovers, management fee, VAT, other payables),
 // each group in date order as the database sent it. Empty groups are left out.
 export function lineGroups(lines: readonly StatementLineView[], now: Date = new Date()): LineGroup[] {
   const when = (line: StatementLineView): string | null => {
-    if (!line.date || (line.kind !== 'ota_fee' && line.kind !== 'changeover' && line.kind !== 'payable')) return null;
+    if (!line.date || (line.kind !== 'ota_fee' && line.kind !== 'visitor_levy' && line.kind !== 'changeover' && line.kind !== 'payable')) return null;
     const day = line.date.slice(0, 10);
     return parseDay(day) === null ? null : (day.slice(0, 4) === londonYear.format(now) ? dayOnly : dayYear).format(at(day));
   };
@@ -191,19 +193,24 @@ const deduct = (minor: number) => formatMoney(-minor);
 // property charges it. The figures are checked against each other: gross less every deduction must be the payout, and the
 // itemised lines must add up to each deduction. Anything that does not is returned in `problems`, never smoothed over.
 export function previewSummary(p: StatementPreview): PreviewSummary {
-  const terms = p.terms, owes = p.payoutMinor < 0;
+  const terms = p.terms, owes = p.payoutMinor < 0, levy = p.visitorLevyMinor ?? 0;
+  const levyTerms = (terms as { visitorLevy?: { enabled?: boolean; rateBps?: number; nightCap?: number | null; feeAfterLevy?: boolean } | null }).visitorLevy ?? null;
+  const levyShown = levy !== 0 || levyTerms?.enabled === true;
+  const levyNote = levyTerms?.nightCap ? `For the first ${plural(levyTerms.nightCap, 'night')} of each stay, on the accommodation without the cleaning fee` : 'On the accommodation without the cleaning fee';
+  const feeAfterLevy = levy !== 0 && levyTerms?.feeAfterLevy !== false;
   const rows: SummaryRow[] = [
     { key: 'gross', label: 'Gross revenue', value: formatMoney(p.grossMinor), note: 'Guest payments for the stays in this period, before platform fees' },
     { key: 'ota_fee', label: 'Platform fees', value: deduct(p.otaFeesMinor), note: 'Airbnb, Booking.com and Vrbo fees' },
-    { key: 'changeover', label: `Changeovers (${p.cleaningCount})`, value: deduct(p.changeoversMinor), note: `Charged at the ${(CLEAN_MODE_LABEL[terms.cleanChargeMode] ?? terms.cleanChargeMode).toLowerCase()}, unless a review decided otherwise` },
-    { key: 'management_fee', label: `Management fee (${formatBps(terms.managementFeeBps)})`, value: deduct(p.feeMinor), note: `${formatMoney(p.feeBaseMinor)}, ${terms.feeBase === 'gross' ? 'the gross revenue' : 'the payout after platform fees'}, at ${formatBps(terms.managementFeeBps)}` },
+    ...(levyShown ? [{ key: 'visitor_levy', label: levyTerms?.rateBps != null ? `Visitor levy (${formatBps(levyTerms.rateBps)})` : 'Visitor levy', value: deduct(levy), note: levyNote }] : []),
+    { key: 'changeover', label: `Changeovers (${p.cleaningCount})`, value: deduct(p.changeoversMinor), note: 'Charged at the agreed fee for each clean' },
+    { key: 'management_fee', label: `Management fee (${formatBps(terms.managementFeeBps)})`, value: deduct(p.feeMinor), note: `${formatMoney(p.feeBaseMinor)}, ${terms.feeBase === 'payout_after_ota_fees' ? 'the payout after platform fees' : terms.feeBase === 'gross' ? 'the gross revenue' : feeAfterLevy ? 'the payout after platform fees, the visitor levy and changeovers' : 'the payout after platform fees and changeovers'}, at ${formatBps(terms.managementFeeBps)}` },
     ...(terms.vatOnFee ? [{ key: 'vat', label: `VAT on the management fee (${vatRateText(terms.vatRateBps)})`, value: deduct(p.vatMinor) }] : []),
     { key: 'payable', label: 'Other payables', value: deduct(p.payablesMinor), note: 'Approved repairs and supplies received in this period' },
   ];
   const problems: string[] = [];
-  if (p.grossMinor - p.otaFeesMinor - p.changeoversMinor - p.feeMinor - p.vatMinor - p.payablesMinor !== p.payoutMinor) problems.push('The figures do not add up to the payout.');
+  if (p.grossMinor - p.otaFeesMinor - levy - p.changeoversMinor - p.feeMinor - p.vatMinor - p.payablesMinor !== p.payoutMinor) problems.push('The figures do not add up to the payout.');
   const sum = (kind: StatementLineView['kind']) => p.lines.filter(l => l.kind === kind).reduce((total, l) => total + l.amountMinor, 0);
-  const expected: [StatementLineView['kind'], number][] = [['ota_fee', p.otaFeesMinor], ['changeover', p.changeoversMinor], ['management_fee', p.feeMinor], ['vat', p.vatMinor], ['payable', p.payablesMinor]];
+  const expected: [StatementLineView['kind'], number][] = [['ota_fee', p.otaFeesMinor], ['visitor_levy', levy], ['changeover', p.changeoversMinor], ['management_fee', p.feeMinor], ['vat', p.vatMinor], ['payable', p.payablesMinor]];
   if (expected.some(([kind, total]) => sum(kind) !== total)) problems.push('The itemised lines do not add up to the totals.');
   return {
     occupancy: occupancyText(p.nightsBooked, p.nightsAvailable), rows, problems,
@@ -264,12 +271,13 @@ export function statementTrackerItem(row: StatementRowInput, statement: Statemen
   const address = addressOf(property) || row.propertyName, propertyName = property?.name?.trim() || row.propertyName;
   const status = statement?.status, paid = status === 'paid', issued = status === 'issued' || paid, drafted = !!statement;
   const owes = !!statement && statement.payoutMinor < 0;
-  const mode = row.terms?.cleanChargeMode ?? null;
 
   // The two checks before a statement exists. A loaded check gives the exact reasons; otherwise the list's counts do.
   const reasons = ctx.preview?.blockedReasons;
   const staysOpen = reasons ? countOf(reasons, 'stay_unsettled') : row.unsettledPayouts + row.missingDetails;
-  const cleansOpen = reasons ? countOf(reasons, 'clean_unreviewed') : mode === 'actual_cost' ? 0 : row.cleansToReview ?? 0;
+  // Client answer 4: a clean costing more than agreed is flagged for staff but no longer holds a statement up, so only an
+  // older server's reasons can still list one.
+  const cleansOpen = reasons ? countOf(reasons, 'clean_unreviewed') : 0;
   const reconciled = drafted || staysOpen === 0, cleansReviewed = drafted || cleansOpen === 0;
   const ready = reconciled && cleansReviewed && termsSet(row);
 

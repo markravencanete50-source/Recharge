@@ -100,6 +100,11 @@ export function recordInvoiceAction(input: { requestId: string; supplier: string
   if (mismatch) return { error: mismatch };
   return { action: { action: 'recordCleanerInvoice', requestId: input.requestId, supplier, reference, invoiceDate: input.invoiceDate, totalMinor: input.totalMinor, lines: input.lines.map(line => ({ workId: line.workId, amountMinor: line.amountMinor as number })) } };
 }
+// Client answer 8: a cleaner invoice is approved only once every clean on it has its clean form (the database
+// refuses otherwise). formIn comes from workspace_cleaner_invoice_view; a line without it (an older server) never blocks.
+export function cleansWithoutForm<L extends { live?: boolean; formIn?: boolean }>(lines: readonly L[] | null | undefined): L[] {
+  return (lines ?? []).filter(line => line.live !== false && line.formIn === false);
+}
 export const REJECT_NOTE_MIN = 5;
 export function decideInvoiceAction(input: { requestId: string; invoiceId: string; decision: 'approve' | 'reject'; note: string }): { error: string } | { action: DecideInvoice } {
   const note = input.note.trim();
@@ -132,4 +137,24 @@ export function reviewCleanAction(input: { requestId: string; workId: string; de
   if (!input.decision) return { error: 'Choose what the owner is charged: the agreed fee or the actual cost.' };
   if (note.length < REVIEW_NOTE_MIN || note.length > REVIEW_NOTE_MAX) return { error: `Write a reason of ${REVIEW_NOTE_MIN} to ${REVIEW_NOTE_MAX.toLocaleString('en-GB')} characters.` };
   return { action: { action: 'reviewCleanCost', requestId: input.requestId, workId: input.workId, decision: input.decision, note } };
+}
+
+// --- The visitor levy on the Terms sheet (20261014150000) -----------------------------------------------------
+// The fields as typed, and what setStatementTerms takes: the rate as a percentage, the most nights of a stay levied
+// (empty: every night) and the first check-in day levied (empty: every stay). Switched off, only that is sent, so the
+// rate and dates stay for next time.
+export type VisitorLevyForm = { enabled: boolean; rate: string; cap: string; from: string };
+export type VisitorLevyValue = { enabled: boolean; rateBps?: number; nightCap?: number | null; from?: string | null };
+const realDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && new Date(day + 'T00:00:00Z').toISOString().slice(0, 10) === day;
+export function visitorLevyInput(form: VisitorLevyForm): { error: string } | { value: VisitorLevyValue } {
+  if (!form.enabled) return { value: { enabled: false } };
+  const rate = form.rate.trim(), cap = form.cap.trim(), from = form.from.trim();
+  if (!/^\d{1,3}(\.\d{1,2})?$/.test(rate) || Number(rate) > 100) return { error: 'Enter the visitor levy rate as a percentage, for example 5.' };
+  if (cap && (!/^\d{1,3}$/.test(cap) || Number(cap) < 1 || Number(cap) > 366)) return { error: 'Enter the most nights levied, from 1 to 366, or leave it empty for every night.' };
+  if (from && !realDay(from)) return { error: 'Enter the first check-in day levied as YYYY-MM-DD, or leave it empty for every stay.' };
+  return { value: { enabled: true, rateBps: Math.round(Number(rate) * 100), nightCap: cap ? Number(cap) : null, from: from || null } };
+}
+// The form from the property's settings: 5% when the levy has never been set.
+export function visitorLevyForm(levy: { enabled: boolean; rateBps: number; nightCap: number | null; from: string | null } | null | undefined): VisitorLevyForm {
+  return { enabled: levy?.enabled === true, rate: String((levy?.rateBps ?? 500) / 100), cap: levy?.nightCap != null ? String(levy.nightCap) : '', from: levy?.from ?? '' };
 }

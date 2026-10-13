@@ -15,7 +15,7 @@ import { Button, Field, IconChip, london, message, Loading, Notice, RefreshButto
 import { readFinance, readOperations, readTeams, writeFinance, writeOperation, WorkspaceApiError } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { cleanerInvoicesReportSchema, cleansToReviewReportSchema, EVIDENCE_KINDS, EXPENSE_CATEGORIES, expenseMoves, expenseSchema, isFinanceRole, jobsSchema, overviewSchema, pounds, type CleanCostReview, type Expense, type Job } from "../../lib/accounts-live";
-import { awaitingCleans, cleansFreedByRejection, cleansOnLiveInvoices, decideInvoiceAction, invoiceMismatch, invoiceTasksToClose, overrunMinor, recordInvoiceAction, reviewTag, splitCleansToReview, sumMinor, type AwaitingClean } from "../../lib/accounts-work";
+import { awaitingCleans, cleansFreedByRejection, cleansOnLiveInvoices, cleansWithoutForm, decideInvoiceAction, invoiceMismatch, invoiceTasksToClose, overrunMinor, recordInvoiceAction, reviewTag, splitCleansToReview, sumMinor, type AwaitingClean } from "../../lib/accounts-work";
 import { cleanerRatesSchema } from "../../lib/cleans-live";
 import { formatDay, formatMoney, plural } from "../../lib/format";
 import { poundsToMinor } from "../../lib/repairs-live";
@@ -422,6 +422,11 @@ function InvoiceDecision({ p, invoice, onDone }: { p: Palette; invoice: PayableI
   const approveId = useRequestId("decide:" + invoice.id + ":approve");
   const rejectId = useRequestId("decide:" + invoice.id + ":reject:" + note.trim());
   if (invoice.status !== "to_approve") return null;
+  // No approval until every clean on the invoice has its clean form (client answer 8); the database refuses it too.
+  const noForm = cleansWithoutForm(invoice.lines);
+  const noFormText = noForm.length
+    ? `${plural(noForm.length, "clean")} on this invoice ${noForm.length === 1 ? "has" : "have"} no clean form yet${noForm.some(l => l.cleanDate) ? ` (${noForm.map(l => [l.propertyName, l.cleanDate ? formatDay(l.cleanDate) : ""].filter(Boolean).join(", ")).join("; ")})` : ""}. The invoice can be approved once the cleaner sends ${noForm.length === 1 ? "it" : "them"}.`
+    : "";
   // Closes the tasks still open for this invoice's cleans. Each keeps its own request id, so a retry never closes the same task twice.
   async function closeTasks(): Promise<boolean> {
     try {
@@ -473,9 +478,10 @@ function InvoiceDecision({ p, invoice, onDone }: { p: Palette; invoice: PayableI
           </View>
         </>
         : <>
+          {!!noFormText && <Notice text={noFormText} p={p} />}
           {!!error && <Notice text={error} p={p} tone="bad" />}
           <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-            <Button label={busy ? "Approving…" : "Approve invoice"} icon="check" primary p={p} disabled={busy} onPress={() => void decide("approve")} />
+            <Button label={busy ? "Approving…" : "Approve invoice"} icon="check" primary p={p} disabled={busy || noForm.length > 0} onPress={() => void decide("approve")} />
             <Button label="Reject" icon="x" p={p} disabled={busy} onPress={() => { setRejecting(true); setError(""); }} />
           </View>
         </>}

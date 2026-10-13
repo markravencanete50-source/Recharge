@@ -137,7 +137,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
           <Button label="Cancel" p={p} onPress={() => { setEmergency(false); setNote(""); }} />
         </View>
       </View>}
-      {shift && !open && <Pills p={p} values={DEPARTMENTS} value={department as (typeof DEPARTMENTS)[number]} onChange={setDepartment} label={d => DEPARTMENT_LABEL[d]} />}
+      {shift && !open && <Tag p={p} tone="plain" label={DEPARTMENT_LABEL[department] ?? department} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <DayReflection palette={p} visible={reflecting} onClose={() => setReflecting(false)} onClockOut={async () => { try { await clockOut(); } catch (e) { await load(); throw e; } }} />
     </View>

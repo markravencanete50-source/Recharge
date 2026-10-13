@@ -72,11 +72,11 @@ const line = (channel, reference, amountMinor, { gross = null, commission = null
 });
 const lineView = lines => lines.map(l => [l.kind, l.refId, l.amountMinor]);
 // The figures statementFor and the SQL share, in one shape.
-const figures = r => ({ grossMinor: r.grossMinor, otaFeesMinor: r.otaFeesMinor, changeoversMinor: r.changeoversMinor, feeBaseMinor: r.feeBaseMinor, feeMinor: r.feeMinor,
+const figures = r => ({ grossMinor: r.grossMinor, otaFeesMinor: r.otaFeesMinor, visitorLevyMinor: r.visitorLevyMinor, changeoversMinor: r.changeoversMinor, feeBaseMinor: r.feeBaseMinor, feeMinor: r.feeMinor,
   vatMinor: r.vatMinor, payablesMinor: r.payablesMinor, payoutMinor: r.payoutMinor, nightsBooked: r.nightsBooked, nightsAvailable: r.nightsAvailable,
   flags: r.flags, blocked: r.blocked, blockedReasons: r.blockedReasons,
   lines: r.lines.map(l => ({ kind: l.kind, date: l.date, label: l.label, amountMinor: l.amountMinor, refId: l.refId })),
-  stays: r.stays.map(s => ({ id: s.id ?? s.reservationId, nights: s.nights, nightsInPeriod: s.nightsInPeriod, counted: s.counted, grossMinor: s.grossMinor, otaFeeMinor: s.otaFeeMinor, payoutMinor: s.payoutMinor })) });
+  stays: r.stays.map(s => ({ id: s.id ?? s.reservationId, nights: s.nights, nightsInPeriod: s.nightsInPeriod, counted: s.counted, grossMinor: s.grossMinor, otaFeeMinor: s.otaFeeMinor, payoutMinor: s.payoutMinor, levyMinor: s.levyMinor })) });
 const compute = async (prop, from, to, method = 'nights') => (await sql('select private.workspace_statement_compute($1,$2,$3,$4,null) c', [prop, from, to, method]))[0].c;
 
 await sql('insert into private.workspace_cleaner_rates(cleaner_id,rate_minor,updated_by) values($1,5500,$3),($2,5800,$3)', [users[CLEANER_A], users[CLEANER_B], users[ADMIN]]);
@@ -101,7 +101,7 @@ await as(ACCOUNTS);
 await finance({ action: 'importPayoutReport', channel: 'airbnb', fileName: 'airbnb-nov.csv', lines: [line('airbnb', 'HMNOV0001', 50000, { hostFee: 1546 })] });
 await finance({ action: 'importPayoutReport', channel: 'vrbo', fileName: 'vrbo-nov.csv', lines: [line('vrbo', 'HA-NOV0001', 39008, { gross: 42400, commission: 3392 })] });
 await finance({ action: 'importPayoutReport', channel: 'booking_com', fileName: 'booking-nov.csv', lines: [line('booking_com', '5550000001', 60192, { gross: 72000 })] });
-// The 15 Nov clean cost 7500 on the cleaner's invoice; the others cost the cleaners' rates.
+// The 15 Nov clean cost 7500 on the cleaner's invoice; the others have no invoice yet, so no actual cost.
 await payables({ action: 'recordCleanerInvoice', supplier: 'Person 5', cleanerId: users[CLEANER_B], reference: 'NOV-15', invoiceDate: '2025-11-30', totalMinor: 7500, lines: [{ workId: C2, amountMinor: 7500 }] });
 
 // The same facts, as statementFor takes them.
@@ -115,21 +115,21 @@ const exampleInput = (over = {}) => ({
     { id: BOOK, channel: 'booking_com', checkIn: '2025-11-26', checkOut: '2025-12-03', status: 'confirmed', settledMinor: 60192, itemisedFeesMinor: 72000 - 60192 },
   ],
   cleans: [
-    { id: C1, date: '2025-11-08', actualCostMinor: 5500, decision: null, reviewed: false },
+    { id: C1, date: '2025-11-08', actualCostMinor: null, decision: null, reviewed: false },
     { id: C2, date: '2025-11-15', actualCostMinor: 7500, decision: 'agreed_fee', reviewed: true },
-    { id: C3, date: '2025-11-22', actualCostMinor: 5500, decision: null, reviewed: false },
-    { id: C4, date: '2025-12-03', actualCostMinor: 5500, decision: null, reviewed: false },
+    { id: C3, date: '2025-11-22', actualCostMinor: null, decision: null, reviewed: false },
+    { id: C4, date: '2025-12-03', actualCostMinor: null, decision: null, reviewed: false },
   ],
   payables: [{ id: P1, date: '2025-11-10', description: 'Boiler service', amountMinor: 6000 }, { id: P2, date: '2025-11-25', description: 'Light bulbs', amountMinor: 2500 }],
   ...over,
 });
 const preparedNov = { id: null };
 
-test('worked example: November waits for the dear clean to be reviewed, then matches the brief to the penny', async () => {
+test('worked example: November flags the dear clean for staff without waiting for its review, and matches the brief to the penny', async () => {
   await as(ACCOUNTS);
-  await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, period: '2025-11' }), /Review the cleans that cost more than agreed first/);
+  // Client answer 4: the owner pays the agreed fee, so the dear clean is flagged but does not hold the statement up.
   const preview = await report('statementPreview', { propertyId: EX, from: '2025-11-01', to: '2025-12-01' });
-  assert.deepEqual([preview.blocked, preview.blockedReasons, preview.flags], [true, [`clean_unreviewed:${C2}`], [`clean_over_agreed:${C2}`]]);
+  assert.deepEqual([preview.blocked, preview.blockedReasons, preview.flags], [false, [], [`clean_over_agreed:${C2}`]]);
   await payables({ action: 'reviewCleanCost', workId: C2, decision: 'agreed_fee', note: 'Deep clean after a party; agreed fee only' });
 
   const s = await finance({ action: 'prepareStatement', propertyId: EX, period: '2025-11' });
@@ -138,17 +138,18 @@ test('worked example: November waits for the dear clean to be reviewed, then mat
   assert.equal(s.grossMinor, 175374);
   assert.equal(s.otaFeesMinor, 13372);
   assert.equal(s.cleaningMinor, 18000); assert.equal(s.cleaningCount, 3);
-  assert.equal(s.feeBps, 1500); assert.equal(s.feeMinor, 24300);
-  assert.equal(s.vatRateBps, 2000); assert.equal(s.vatMinor, 4860);
+  // The fee is charged after platform fees and changeovers (client answer 1): 144002 x 15% = 21600.3, so 21600.
+  assert.equal(s.feeBps, 1500); assert.equal(s.feeMinor, 21600);
+  assert.equal(s.vatRateBps, 2000); assert.equal(s.vatMinor, 4320);
   assert.equal(s.expensesMinor, 8500);
-  assert.equal(s.payoutMinor, 106342);
+  assert.equal(s.payoutMinor, 109582);
   assert.equal(s.revenueMinor, 175374 - 13372, 'booking income after OTA fees, as before');
   assert.deepEqual([s.nightsBooked, s.nightsAvailable, s.occupancyBps], [15, 30, 5000]);
   assert.equal(s.cleanChargeMode, 'agreed_fee');
   assert.deepEqual(lineView(s.detail.lines), [
     ['ota_fee', AIR, 1546], ['ota_fee', VRBO, 3392], ['ota_fee', BOOK, 8434],
     ['changeover', C1, 6000], ['changeover', C2, 6000], ['changeover', C3, 6000],
-    ['management_fee', null, 24300], ['vat', null, 4860],
+    ['management_fee', null, 21600], ['vat', null, 4320],
     ['payable', P1, 6000], ['payable', P2, 2500],
   ]);
   assert.deepEqual(s.detail.lines.map(l => l.label), ['Airbnb fees', 'Vrbo fees', 'Booking.com fees', 'Changeover clean', 'Changeover clean', 'Changeover clean',
@@ -180,7 +181,7 @@ test('worked example: December takes the rest of the Booking.com stay, and the t
   assert.equal(nov.grossMinor + booking.grossMinor, 72000);
   assert.equal(nov.otaFeeMinor + booking.otaFeeMinor, 11808);
   assert.equal(nov.amountMinor + booking.amountMinor, 60192);
-  assert.deepEqual(lineView(dec.detail.lines), [['ota_fee', BOOK, 3374], ['changeover', C4, 6000], ['management_fee', null, 2580], ['vat', null, 516]]);
+  assert.deepEqual(lineView(dec.detail.lines), [['ota_fee', BOOK, 3374], ['changeover', C4, 6000], ['management_fee', null, 1680], ['vat', null, 336]]);
   assert.deepEqual(figures(await compute(EX, '2025-12-01', '2026-01-01')), figures(statementFor(exampleInput({ from: '2025-12-01', to: '2026-01-01', payables: [] }))));
 });
 
@@ -189,7 +190,7 @@ test('preparing the same period again keeps one statement; an overlapping period
   const again = await finance({ action: 'prepareStatement', propertyId: EX, from: '2025-11-01', to: '2025-12-01' });
   assert.equal(again.id, preparedNov.id, 'the month and the same dates are one statement');
   assert.equal(again.version, 2);
-  assert.equal(again.payoutMinor, 106342);
+  assert.equal(again.payoutMinor, 109582);
   await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, from: '2025-11-15', to: '2025-12-15' }), /already covers part of these dates/);
   await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, from: '2025-10-20', to: '2025-11-02' }), /already covers part of these dates/);
   await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, from: '2025-11-05', to: '2025-11-05' }), /must end after it starts/);
@@ -203,41 +204,41 @@ test('preparing the same period again keeps one statement; an overlapping period
   await assert.rejects(finance({ action: 'prepareStatement', propertyId: EX, from: later.d, to: later.e }), /period that has started/);
 });
 
-test('actual-cost mode, 15% against 12%, and VAT off', async () => {
+test('a property still marked actual cost, 15% against 12%, and VAT off', async () => {
   const prepare = async () => { await as(ACCOUNTS); return finance({ action: 'prepareStatement', propertyId: EX, period: '2025-11' }); };
   const tsNov = over => statementFor(exampleInput(over));
-  // Actual cost on the property; the review chose the agreed fee for the dear clean, so only the cheaper two move.
+  // Client answer 4: the property's old actual-cost setting no longer changes the charge, nor does a review choosing
+  // actual cost. The owner pays the agreed fee for every clean, and the statement says so.
   await as(ADMIN); await terms(EX, { cleanChargeMode: 'actual_cost' });
   let s = await prepare();
-  assert.equal(s.cleaningMinor, 5500 + 6000 + 5500);
-  assert.equal(s.payoutMinor, tsNov({ terms: { ...exampleInput().terms, cleanChargeMode: 'actual_cost' } }).payoutMinor);
-  // The review now says actual cost too: 18500 in changeovers.
+  assert.equal(s.cleaningMinor, 18000);
+  assert.equal(s.payoutMinor, 109582);
+  assert.equal(s.cleanChargeMode, 'agreed_fee');
   await as(ACCOUNTS);
   await payables({ action: 'reviewCleanCost', workId: C2, decision: 'actual_cost', note: 'Owner agreed to pay the deep clean' });
   s = await prepare();
-  assert.equal(s.cleaningMinor, 18500);
-  assert.equal(s.payoutMinor, 106342 - 500);
-  assert.equal(s.cleanChargeMode, 'actual_cost');
+  assert.equal(s.cleaningMinor, 18000);
+  assert.equal(s.payoutMinor, 109582);
   assert.deepEqual(figures(await compute(EX, '2025-11-01', '2025-12-01')),
     figures(tsNov({ terms: { ...exampleInput().terms, cleanChargeMode: 'actual_cost' }, cleans: exampleInput().cleans.map(c => c.id === C2 ? { ...c, decision: 'actual_cost' } : c) })));
   await as(ADMIN); await terms(EX);
   await as(ACCOUNTS);
   await payables({ action: 'reviewCleanCost', workId: C2, decision: 'agreed_fee', note: 'Deep clean after a party; agreed fee only' });
 
-  // 12% instead of 15%: 162002 x 12% = 19440.24, so 19440, and VAT 3888.
+  // 12% instead of 15%: 144002 x 12% = 17280.24, so 17280, and VAT 3456.
   await as(ADMIN); await terms(EX, { managementFeeBps: 1200 });
   s = await prepare();
-  assert.deepEqual([s.feeBps, s.feeMinor, s.vatMinor, s.payoutMinor], [1200, 19440, 3888, 175374 - 13372 - 18000 - 19440 - 3888 - 8500]);
+  assert.deepEqual([s.feeBps, s.feeMinor, s.vatMinor, s.payoutMinor], [1200, 17280, 3456, 175374 - 13372 - 18000 - 17280 - 3456 - 8500]);
   assert.equal(s.detail.lines.find(l => l.kind === 'management_fee').label, 'Management fee (12%)');
   assert.equal(s.payoutMinor, tsNov({ terms: { ...exampleInput().terms, managementFeeBps: 1200 } }).payoutMinor);
   // VAT off: no VAT line, the payout is VAT higher.
   await as(ADMIN); await terms(EX, { vatOnFee: false });
   s = await prepare();
-  assert.deepEqual([s.feeMinor, s.vatMinor, s.vatRateBps, s.payoutMinor], [24300, 0, 0, 106342 + 4860]);
+  assert.deepEqual([s.feeMinor, s.vatMinor, s.vatRateBps, s.payoutMinor], [21600, 0, 0, 109582 + 4320]);
   assert.equal(s.detail.lines.some(l => l.kind === 'vat'), false);
   await as(ADMIN); await terms(EX);
   s = await prepare();
-  assert.equal(s.payoutMinor, 106342);
+  assert.equal(s.payoutMinor, 109582);
 });
 
 test('a stay or payout under an issued statement is locked for any period it overlaps', async () => {
@@ -270,7 +271,7 @@ test('owners read the issued statement without the internal details', async () =
   const s = mine.find(x => x.id === nov.id);
   assert.ok(s, 'the owner sees their issued statement');
   for (const key of ['internal', 'cleanCosts', 'alreadyCounted']) assert.equal(s.detail[key], undefined, `no ${key} for owners`);
-  assert.deepEqual([s.payoutMinor, s.grossMinor, s.vatMinor, s.nightsBooked, s.nightsAvailable, s.occupancyBps], [106342, 175374, 4860, 15, 30, 5000]);
+  assert.deepEqual([s.payoutMinor, s.grossMinor, s.vatMinor, s.nightsBooked, s.nightsAvailable, s.occupancyBps], [109582, 175374, 4320, 15, 30, 5000]);
   assert.deepEqual(lineView(s.detail.lines).map(l => l[0]), ['ota_fee', 'ota_fee', 'ota_fee', 'changeover', 'changeover', 'changeover', 'management_fee', 'vat', 'payable', 'payable']);
   const text = JSON.stringify(mine);
   for (const secret of ['actualMinor', 'Deep clean after a party', 'clean_over_agreed', 'cleanCosts', 'costSource', 'chargedMinor', 'alreadyCounted']) assert.equal(text.includes(secret), false, `owners never see ${secret}`);
@@ -298,13 +299,16 @@ test('a statement waits while a stay in the period is unsettled', async () => {
   const error = await finance({ action: 'prepareStatement', propertyId: U, period: '2025-09' }).then(() => null, e => e);
   assert.match(error.message, /Reconcile every stay in the period first/);
   assert.deepEqual(JSON.parse(error.detail), [`stay_unsettled:${WAIT}`, `stay_unsettled:${DIRECT_U}`]);
-  // An unsettled stay and an unreviewed dear clean: both reasons in one message.
+  // A dear clean (its invoice is above the agreed fee) adds no reason of its own: client answer 4, the owner pays the
+  // agreed fee and the clean is only flagged for staff.
   const dear = await clean(U, '2025-09-06', users[CLEANER_C]);
-  await sql('insert into private.workspace_cleaner_rates(cleaner_id,rate_minor,updated_by) values($1,9000,$2)', [users[CLEANER_C], users[ADMIN]]);
   await as(ACCOUNTS);
-  await assert.rejects(finance({ action: 'prepareStatement', propertyId: U, period: '2025-09' }), /Reconcile every stay in the period and review the cleans/);
+  await payables({ action: 'recordCleanerInvoice', supplier: 'Person 7', cleanerId: users[CLEANER_C], reference: 'SEP-06', invoiceDate: '2025-09-30', totalMinor: 9000, lines: [{ workId: dear, amountMinor: 9000 }] });
+  const again = await finance({ action: 'prepareStatement', propertyId: U, period: '2025-09' }).then(() => null, e => e);
+  assert.deepEqual(JSON.parse(again.detail), [`stay_unsettled:${WAIT}`, `stay_unsettled:${DIRECT_U}`]);
+  const preview = await report('statementPreview', { propertyId: U, from: '2025-09-01', to: '2025-10-01' });
+  assert.ok(preview.flags.includes(`clean_over_agreed:${dear}`));
   // A statement that ends before the unsettled stays can be prepared.
-  await payables({ action: 'reviewCleanCost', workId: dear, decision: 'agreed_fee', note: 'Rate rise not passed on' });
   const early = await finance({ action: 'prepareStatement', propertyId: U, from: '2025-09-01', to: '2025-09-03' });
   assert.deepEqual([early.grossMinor, early.nightsBooked, early.nightsAvailable], [0, 0, 2]);
 });
@@ -381,23 +385,32 @@ function generator(seed) {
 }
 const isoDay = n => new Date(n * 86400000).toISOString().slice(0, 10);
 
-test('200 seeded random scenarios: the SQL statement equals statementFor', async () => {
-  const random = generator(20261012), int = (low, high) => low + Math.floor(random() * (high - low + 1)), pick = list => list[int(0, list.length - 1)];
+test('200 seeded random scenarios: the SQL statement equals statementFor', () => randomScenarios(20261012, 'Random'));
+async function randomScenarios(seed, name) {
+  const random = generator(seed), int = (low, high) => low + Math.floor(random() * (high - low + 1)), pick = list => list[int(0, list.length - 1)];
+  // The visitor levy (20261014150000) draws from its own generator, so every other choice is as it was before it.
+  const levyRandom = generator(seed + 7), lint = (low, high) => low + Math.floor(levyRandom() * (high - low + 1)), lpick = list => list[lint(0, list.length - 1)];
+  let withLevy = 0;
   const chance = p => random() < p;
   const day0 = Date.UTC(2024, 0, 1) / 86400000;
   const cleaners = [users[CLEANER_A], users[CLEANER_B], users[CLEANER_C]];
   const dayN = iso => Date.parse(iso + 'T00:00:00Z') / 86400000;
   let prepared = 0, blockedCount = 0, withOldStatement = 0, withOwnerStay = 0, proRated = 0, withStoredCopy = 0, withRelier = 0, withNeighbour = 0;
-  const seen = { changed: 0, conflict: 0, relied: 0, fromCopy: 0 };
+  const seen = { changed: 0, conflict: 0, relied: 0, fromCopy: 0, levied: 0 };
   for (let i = 0; i < 200; i++) {
-    const label = `scenario ${i}`;
+    const label = `${name} scenario ${i}`;
     // Owner stays share one code index across the database: keep at most one alive.
     await sql("delete from private.workspace_reservations where channel='other' and channel_reference='Owner stay'");
-    const prop = await property(`Random ${i}`);
+    const prop = await property(`${name} ${i}`);
     const t = { managementFeeBps: pick([1200, 1500, 1250, 0, 10000, int(0, 10000)]), vatOnFee: chance(0.6), cleaningCostMinor: pick([0, 6000, int(1, 20000)]), cleanChargeMode: chance(0.6) ? 'agreed_fee' : 'actual_cost' };
     await sql('insert into private.workspace_property_financials(property_id,management_fee_bps,cleaning_cost_minor,vat_on_fee,clean_charge_mode) values($1,$2,$3,$4,$5)',
       [prop, t.managementFeeBps, t.cleaningCostMinor, t.vatOnFee, t.cleanChargeMode]);
     const fromN = day0 + int(0, 600), toN = fromN + int(1, 100), from = isoDay(fromN), to = isoDay(toN), method = chance(0.7) ? 'nights' : 'check_in_month';
+    if (levyRandom() < 0.5) {
+      t.visitorLevy = { enabled: true, rateBps: lpick([500, 500, 300, 0, lint(1, 10000)]), nightCap: lpick([null, 5, 5, lint(1, 30)]), from: lpick([null, null, isoDay(fromN + lint(-60, 60))]) };
+      await sql('update private.workspace_property_financials set levy_enabled=true,levy_rate_bps=$2,levy_night_cap=$3,levy_from=$4 where property_id=$1', [prop, t.visitorLevy.rateBps, t.visitorLevy.nightCap, t.visitorLevy.from]);
+      withLevy++;
+    }
     // The cleaners' rates for this scenario (the third cleaner has none).
     const rates = { [cleaners[0]]: int(1, 20000), [cleaners[1]]: int(1, 20000) };
     await sql('delete from private.workspace_cleaner_rates where cleaner_id=$1', [cleaners[2]]);
@@ -413,7 +426,7 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
       const amount = chance(0.1) ? int(0, 99990000) : int(0, 5000000);
       const ota = ['airbnb', 'booking_com', 'vrbo'].includes(channel);
       const code = ota ? `R${i}-${k}-${int(0, 1e9)}` : channel === 'owner' ? 'Owner stay' : null;
-      let payout = amount, settled = null, fee = null, model = null;
+      let payout = amount, settled = null, fee = null, model = null, cleaningFee = null;
       if (ota) {
         model = pick(['matched', 'matched', 'matched', 'agreed', 'agreedBeforeFunds', 'different', 'none', 'noReference']);
         if (model === 'agreed' || model === 'different') payout = amount + int(1, 5000);
@@ -433,8 +446,9 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
         } else if (feeKind === 'gross') { gross = Math.min(100000000, lineAmount + int(-1000, 1000000)); fee = gross - lineAmount; }
         const [rep] = await sql(`insert into private.workspace_payout_reports(channel,file_name,content_hash,line_count,total_minor,new_line_count,new_minor,uploaded_by,request_id)
           values($1,'random.csv',md5(random()::text),1,$2,1,$2,$3,gen_random_uuid()) returning id`, [channel, lineAmount, users[ACCOUNTS]]);
-        await sql(`insert into private.workspace_payout_lines(report_id,channel,reference,amount_minor,gross_minor,commission_minor,host_fee_minor,payment_fee_minor) values($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [rep.id, channel, code, lineAmount, gross, parts.commission, parts.host, parts.payment]);
+        cleaningFee = levyRandom() < 0.6 ? lint(0, 200000) : null;
+        await sql(`insert into private.workspace_payout_lines(report_id,channel,reference,amount_minor,gross_minor,commission_minor,host_fee_minor,payment_fee_minor,cleaning_fee_minor) values($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [rep.id, channel, code, lineAmount, gross, parts.commission, parts.host, parts.payment, cleaningFee]);
         if (model === 'matched') settled = lineAmount;
         if (model === 'agreed') {
           settled = int(0, 10000000);
@@ -444,7 +458,7 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
         settled = int(0, 10000000);
         await sql('insert into private.workspace_payout_agreements(reservation_id,received_snapshot_minor,agreed_minor,note,agreed_by) values($1,null,$2,$3,$4)', [id, settled, 'Agreed in a test', users[ACCOUNTS]]);
       } else if (!ota) settled = payout;
-      tsStays.push({ id, channel: channel === 'owner' ? 'other' : channel, checkIn: isoDay(checkInN), checkOut: isoDay(checkOutN), status, settledMinor: settled, itemisedFeesMinor: fee, ownerStay: channel === 'owner' });
+      tsStays.push({ id, channel: channel === 'owner' ? 'other' : channel, checkIn: isoDay(checkInN), checkOut: isoDay(checkOutN), status, settledMinor: settled, itemisedFeesMinor: fee, cleaningFeeMinor: cleaningFee, ownerStay: channel === 'owner' });
     }
     const statement = (owner, start, end, statementMethod, status, detail) => sql(`insert into private.workspace_owner_statements(property_id,period_start,period_end,method,status,revenue_minor,cleaning_count,cleaning_minor,expenses_minor,fee_bps,fee_minor,payout_minor,detail,prepared_by,issued_at)
       values($1,$2,$3,$4,$5,0,0,0,0,0,0,0,$6::jsonb,$7,case when $5='draft' then null else now() end)`, [owner, start, end, statementMethod, status, JSON.stringify(detail), users[ADMIN]]);
@@ -475,11 +489,14 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
           const inN = dayN(s.checkIn) + int(-5, 5), nights = int(1, 40), gross = int(0, 5000000), fee = chance(0.7) ? int(0, gross) : 0;
           copy = { grossMinor: gross, otaFeeMinor: fee, settledMinor: chance(0.8) ? gross - fee : int(0, 5000000), nights, checkIn: isoDay(inN), checkOut: isoDay(inN + nights) };
         }
+        // A copy made since the levy holds the stay's levy and levied nights; an older one has none.
+        if (levyRandom() < 0.5) { copy.levyMinor = lint(0, 300000); copy.levyNights = lint(1, copy.nights); }
         return { s, copy, whole: chance(0.7) };
       });
       await statement(elsewhere ? await property(`Random ${i} before the move`) : prop, '2019-01-01', '2019-02-01', method, pick(['issued', 'paid']), {
         stays: basisHeld.map(({ s, copy, whole }) => ({ reservationId: s.id, counted: true, stayGrossMinor: copy.grossMinor, stayOtaFeeMinor: copy.otaFeeMinor, staySettledMinor: copy.settledMinor,
-          stayNights: copy.nights, stayCheckIn: copy.checkIn, stayCheckOut: copy.checkOut, wholeStay: whole })) });
+          stayNights: copy.nights, stayCheckIn: copy.checkIn, stayCheckOut: copy.checkOut, wholeStay: whole,
+          ...(copy.levyMinor !== undefined ? { stayLevyMinor: copy.levyMinor, stayLevyNights: copy.levyNights } : {}) })) });
       for (const { s, copy } of basisHeld) s.storedShare = { ...copy, otherProperty: elsewhere };
     }
     // Sometimes a statement relies on another to count some of them in full (its alreadyCounted). Unless another
@@ -513,15 +530,16 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
       const assignee = pick([...cleaners, null]);
       const billable = chance(0.8);
       const id = await clean(prop, isoDay(dueN), assignee, billable ? {} : pick([{ status: 'waiting', phase: 'assigned' }, { status: 'completed', phase: 'assigned' }]));
-      let actual = assignee && rates[assignee] !== undefined ? rates[assignee] : null;
+      // The actual cost is the invoice line only (client answer 4); the cleaners' rates no longer count.
+      let actual = null;
       const invoiceBy = assignee ?? cleaners[0];
       if (chance(0.15)) {
-        const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,status,created_by,request_id) values('Random cleaner',$1,$2,'2025-01-01',$3,'rejected',$4,gen_random_uuid()) returning id", [invoiceBy, `X-${i}-${k}`, 100, users[ACCOUNTS]]);
+        const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,status,created_by,request_id) values('Random cleaner',$1,$2,'2025-01-01',$3,'rejected',$4,gen_random_uuid()) returning id", [invoiceBy, `${name} X-${i}-${k}`, 100, users[ACCOUNTS]]);
         await sql('insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor,live) values($1,$2,$3,$4,false)', [inv.id, id, prop, int(1, 30000)]);
       }
       if (chance(0.4)) {
         const amount = int(1, 30000);
-        const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,created_by,request_id) values('Random cleaner',$1,$2,'2025-01-01',$3,$4,gen_random_uuid()) returning id", [invoiceBy, `L-${i}-${k}`, amount, users[ACCOUNTS]]);
+        const [inv] = await sql("insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,created_by,request_id) values('Random cleaner',$1,$2,'2025-01-01',$3,$4,gen_random_uuid()) returning id", [invoiceBy, `${name} L-${i}-${k}`, amount, users[ACCOUNTS]]);
         await sql('insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor) values($1,$2,$3,$4)', [inv.id, id, prop, amount]);
         actual = amount;
       }
@@ -549,6 +567,7 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
     if (ts.blockedReasons.some(x => x.startsWith('stay_method_conflict:'))) seen.conflict++;
     if (ts.blockedReasons.some(x => x.startsWith('stay_relied_on:'))) seen.relied++;
     if (ts.stays.some(x => x.counted && tsStays.find(y => y.id === x.id)?.storedShare)) seen.fromCopy++;
+    if (ts.visitorLevyMinor !== 0) seen.levied++;
     if (ts.blocked) { blockedCount++; continue; }
     // Prepared and stored: the same figures.
     await asDb(); await db.exec('delete from private.workspace_write_limits');
@@ -570,4 +589,5 @@ test('200 seeded random scenarios: the SQL statement equals statementFor', async
   assert.ok(proRated >= 20, `pro-rated ${proRated}`);
   assert.ok(withStoredCopy >= 40 && withRelier >= 15 && withNeighbour >= 10, `stored copies ${withStoredCopy}, reliers ${withRelier}, neighbours ${withNeighbour}`);
   assert.ok(seen.fromCopy >= 20 && seen.changed >= 20 && seen.conflict >= 8 && seen.relied >= 5, JSON.stringify(seen));
-});
+  assert.ok(withLevy >= 60 && seen.levied >= 30, `levy on ${withLevy} properties, levied in ${seen.levied} scenarios`);
+}

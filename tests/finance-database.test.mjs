@@ -176,8 +176,9 @@ test('payout reports reconcile by reservation code and owner statements follow a
   assert.equal(statement.revenueMinor, 46000 + 52000 + 61000);
   assert.equal(statement.cleaningCount, 1); assert.equal(statement.cleaningMinor, 6500);
   assert.equal(statement.expensesMinor, 18500);
-  assert.equal(statement.feeMinor, Math.round(159000 * 0.15));
-  assert.equal(statement.payoutMinor, 159000 - 6500 - 18500 - Math.round(159000 * 0.15));
+  // The fee is charged after platform fees and changeovers (client answer 1): (159000 - 6500) x 15%.
+  assert.equal(statement.feeMinor, Math.round((159000 - 6500) * 0.15));
+  assert.equal(statement.payoutMinor, 159000 - 6500 - 18500 - Math.round((159000 - 6500) * 0.15));
   assert.equal(statement.detail.stays.length, 3);
   statement = await finance({ action: 'prepareStatement', propertyId: property, period: month.m });
   assert.equal(statement.version, 2);

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'vite';
 
-// Clean forms (B1 and B2): the form state of a clean at an instant (18:00 UK on the day, Warning the
-// day after, also across the clock changes), the forms that are in, the counts, the next action, the
+// Clean forms (B1 and B2, client answer 8): the form state of a clean at an instant (Unsubmitted after 18:00 UK
+// on the day, Warning from 09:00 the next day, also across the clock changes), the forms that are in, the counts, the next action, the
 // "Sent to management" line and the tick the review needs before a clean can be accepted.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 after(() => vite.close());
@@ -26,14 +26,20 @@ test('the cut-off is 18:00 UK time on the clean day: outstanding after it, not d
   assert.equal(f.formState(c, at('2026-11-09T22:00:00Z')), 'not_due', 'the day before');
 });
 
-test('the warning begins when the day after the clean begins, in UK time', () => {
+test('the warning begins at 09:00 UK time the day after the clean; until then the clean is unsubmitted', () => {
+  assert.equal(defaults.CLEAN_FORM_ESCALATE_AT, '09:00');
+  assert.equal(f.FORM_STATE_LABEL.outstanding, 'Unsubmitted');
   const c = clean('2026-11-10');
-  assert.equal(f.formState(c, at('2026-11-11T00:00:00Z')), 'warning');
+  assert.equal(f.formState(c, at('2026-11-11T00:00:00Z')), 'outstanding');
+  assert.equal(f.formState(c, at('2026-11-11T08:59:59Z')), 'outstanding');
+  assert.equal(f.formState(c, at('2026-11-11T09:00:00Z')), 'warning');
   assert.equal(f.formState(c, at('2026-11-14T10:00:00Z')), 'warning');
-  // In summer UK midnight is 23:00 UTC the evening before.
+  // In summer 09:00 UK is 08:00 UTC.
   const s = clean('2026-07-10');
-  assert.equal(f.formState(s, at('2026-07-10T22:59:59Z')), 'outstanding');
-  assert.equal(f.formState(s, at('2026-07-10T23:00:00Z')), 'warning');
+  assert.equal(f.formState(s, at('2026-07-11T07:59:59Z')), 'outstanding');
+  assert.equal(f.formState(s, at('2026-07-11T08:00:00Z')), 'warning');
+  // The database reminder shows at once, whatever the device's clock says.
+  assert.equal(f.formState(clean('2026-11-10', {}, { unsubmittedAt: '2026-11-10T18:01:00Z' }), at('2026-11-10T17:00:00Z')), 'outstanding');
 });
 
 test('the cut-off holds across the clock changes (spring forward 29 March, back 25 October 2026)', () => {
@@ -53,10 +59,12 @@ test('the cut-off holds across the clock changes (spring forward 29 March, back 
   const before = clean('2026-10-24');
   assert.equal(f.formState(before, at('2026-10-24T17:30:00Z')), 'outstanding');
   assert.equal(f.formState(before, at('2026-10-24T22:59:59Z')), 'outstanding');
-  assert.equal(f.formState(before, at('2026-10-24T23:00:00Z')), 'warning');
-  // The long day of 25 October is 25 hours, so its warning begins at 00:00 UTC on the 26th.
-  assert.equal(f.formState(autumn, at('2026-10-25T23:59:59Z')), 'outstanding');
-  assert.equal(f.formState(autumn, at('2026-10-26T00:00:00Z')), 'warning');
+  assert.equal(f.formState(before, at('2026-10-24T23:00:00Z')), 'outstanding', 'midnight UK, not yet the next morning');
+  // The clocks have gone back by the next morning, so its warning begins at 09:00 UTC on the 25th.
+  assert.equal(f.formState(before, at('2026-10-25T08:59:59Z')), 'outstanding');
+  assert.equal(f.formState(before, at('2026-10-25T09:00:00Z')), 'warning');
+  assert.equal(f.formState(autumn, at('2026-10-26T00:00:00Z')), 'outstanding');
+  assert.equal(f.formState(autumn, at('2026-10-26T09:00:00Z')), 'warning');
 });
 
 test('a form that is in is submitted whatever the time, even late', () => {
@@ -164,7 +172,7 @@ test('accepting a clean needs the "form checked and guest happy" tick; rejecting
 test('the Cleans screens show the forms column, the filter, the tick and the flag button', () => {
   const live = readFileSync('mobile/src/LiveCleans.tsx', 'utf8'), who = readFileSync('mobile/src/DefaultCleaners.tsx', 'utf8');
   assert.match(live, /label: "Submitted forms"/);
-  assert.match(live, /Outstanding forms/);
+  assert.match(live, /Unsubmitted forms/);
   assert.match(live, /FORM_CHECKED_LABEL/);
   assert.match(live, /REJECT_NOTE/);
   assert.match(live, /<FlagButton /);
