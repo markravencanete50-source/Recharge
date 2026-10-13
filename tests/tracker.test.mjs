@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 // what owners see instead), the next action, progress, and the order items are listed in.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 after(() => vite.close());
-const { lastUpdateOf, updateStamp, nextActionOf, progressOf, sortTracker, addressOf } = await vite.ssrLoadModule('/lib/tracker.ts');
+const { lastUpdateOf, updateStamp, updateLine, nextActionOf, progressOf, sortTracker, addressOf } = await vite.ssrLoadModule('/lib/tracker.ts');
 
 const NOW = new Date('2026-10-12T12:00:00Z');
 const step = (key, state) => ({ key, label: key, state });
@@ -45,6 +45,16 @@ test('owners read Recharge, never a staff name', () => {
   assert.equal(updateStamp(named, NOW, true), 'Today 14:05 · Recharge');
   assert.equal(updateStamp(at('2026-10-12T13:05:00Z'), NOW, true), 'Today 14:05 · Recharge');
   assert.ok(!updateStamp(named, NOW, true).includes('Morag'));
+});
+
+test('a row reads the stamp and then what changed; owners get the stamp with no name and no step', () => {
+  const u = { at: '2026-10-12T13:05:00Z', by: 'Morag Reid', what: 'Invoice recorded' };
+  assert.equal(updateLine(u, NOW), 'Today 14:05 · Morag Reid · Invoice recorded');
+  assert.equal(updateLine({ ...u, what: null }, NOW), 'Today 14:05 · Morag Reid');
+  assert.equal(updateLine({ ...u, what: '  ' }, NOW), 'Today 14:05 · Morag Reid');
+  assert.equal(updateLine(u, NOW, true), 'Today 14:05 · Recharge');
+  assert.ok(!updateLine(u, NOW, true).includes('Morag'));
+  assert.equal(updateLine(null, NOW), 'No update yet');
 });
 
 test('the last update is any change, falling back to when the item was created', () => {

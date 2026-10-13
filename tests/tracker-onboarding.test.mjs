@@ -45,14 +45,14 @@ test('ONBOARDING_STEPS is today\'s seven phases, each owning its stages exactly 
 
 test('each stage reads its step, progress, next step and who must act', () => {
   const cases = [
-    ['enquiry', 0, 'New enquiry', 'Send the estimate', 'Stays'],
-    ['estimate', 1, 'Estimate', 'Owner decides on the estimate', 'Stays'],
-    ['agreement', 2, 'Agreement', 'Agreement to sign', 'Stays'],
-    ['form', 3, 'Property setup', 'Set-up form to complete', 'Stays'],
+    ['enquiry', 0, 'New enquiry', 'Send the estimate', 'Guest relations'],
+    ['estimate', 1, 'Estimate', 'Owner decides on the estimate', 'Guest relations'],
+    ['agreement', 2, 'Agreement', 'Agreement to sign', 'Guest relations'],
+    ['form', 3, 'Property setup', 'Set-up form to complete', 'Guest relations'],
     ['invoice', 4, 'Invoice', 'Onboarding invoice', 'Accounts'],
     ['inspection_to_book', 5, 'Inspection', 'Book the inspection', 'Ready'],
     ['inspection_booked', 5, 'Inspection', 'Inspection booked, then record the findings', 'Ready'],
-    ['inspection_complete', 6, 'Inspection', 'Record the live listing', 'Stays'],
+    ['inspection_complete', 6, 'Inspection', 'Record the live listing', 'Guest relations'],
   ];
   for (const [stage, done, status, next, waiting] of cases) {
     const item = onboardingTrackerItem(journey(stage), ctx());
@@ -95,7 +95,7 @@ test('the next action is the form this person may use at that stage, and waits o
   assert.deepEqual(item.nextAction, { label: 'Publish the estimate', actionKey: 'publishEstimate' });
   assert.equal(item.steps[0].actionKey, 'publishEstimate');
   // A form that belongs to another stage is not the next action.
-  assert.deepEqual(onboardingTrackerItem(root(journey('estimate', { workId: 'w-e' })), ctx({ forms: () => forms })).nextAction, { label: 'Waiting for Stays' });
+  assert.deepEqual(onboardingTrackerItem(root(journey('estimate', { workId: 'w-e' })), ctx({ forms: () => forms })).nextAction, { label: 'Waiting for Guest relations' });
   const owned = onboardingTrackerItem(journey('agreement', { clientId: RES, ownerAccount: true }), ctx());
   assert.deepEqual(owned.nextAction, { label: 'Waiting for the owner' });
   assert.deepEqual(onboardingTrackerItem(journey('invoice', { clientId: RES, ownerAccount: true }), ctx()).nextAction, { label: 'Waiting for Accounts' });
@@ -167,7 +167,7 @@ test('a client enquiry form is a row at the enquiry step', () => {
   assert.deepEqual(answered.nextAction, { label: 'Start valuing', actionKey: 'startValuing' });
   assert.deepEqual(answered.lastUpdate, { at: '2026-10-12T16:40:00Z', by: 'Sam Roy', what: 'Form answered' });
   assert.deepEqual(answered.steps[0].checks.map(c => c.done), [true, true, true]);
-  assert.deepEqual(enquiryTrackerItem(enquiry('received', { answers: ANSWERS }), ctx({ canAct: false })).nextAction, { label: 'Waiting for Stays' });
+  assert.deepEqual(enquiryTrackerItem(enquiry('received', { answers: ANSWERS }), ctx({ canAct: false })).nextAction, { label: 'Waiting for Guest relations' });
 });
 
 test('enquiries come first, answered forms before waiting ones, then each stage in order', () => {

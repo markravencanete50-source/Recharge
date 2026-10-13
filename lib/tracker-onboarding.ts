@@ -24,15 +24,15 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = ONBOARDING_PHASES.
 // is finished when its report is in (inspection_complete), and a live property has finished all seven.
 type StageDef = { reached: number; next: string; waitingOn: string; owner?: boolean; actions: readonly string[] };
 export const ONBOARDING_STAGES: Readonly<Record<string, StageDef>> = {
-  enquiry: { reached: 0, next: 'Send the estimate', waitingOn: 'Stays', actions: ['publishEstimate'] },
-  estimate: { reached: 1, next: 'Owner decides on the estimate', waitingOn: 'Stays', owner: true, actions: ['decideEstimate'] },
-  reviewing: { reached: 1, next: 'Owner decides on the estimate', waitingOn: 'Stays', owner: true, actions: ['decideEstimate'] },
-  agreement: { reached: 2, next: 'Agreement to sign', waitingOn: 'Stays', owner: true, actions: ['publishAgreement', 'signAgreement'] },
-  form: { reached: 3, next: 'Set-up form to complete', waitingOn: 'Stays', owner: true, actions: ['submitForm', 'recordInvoiceOutside', 'createOnboardingInvoice', 'linkInvoice'] },
+  enquiry: { reached: 0, next: 'Send the estimate', waitingOn: 'Guest relations', actions: ['publishEstimate'] },
+  estimate: { reached: 1, next: 'Owner decides on the estimate', waitingOn: 'Guest relations', owner: true, actions: ['decideEstimate'] },
+  reviewing: { reached: 1, next: 'Owner decides on the estimate', waitingOn: 'Guest relations', owner: true, actions: ['decideEstimate'] },
+  agreement: { reached: 2, next: 'Agreement to sign', waitingOn: 'Guest relations', owner: true, actions: ['publishAgreement', 'signAgreement'] },
+  form: { reached: 3, next: 'Set-up form to complete', waitingOn: 'Guest relations', owner: true, actions: ['submitForm', 'recordInvoiceOutside', 'createOnboardingInvoice', 'linkInvoice'] },
   invoice: { reached: 4, next: 'Onboarding invoice', waitingOn: 'Accounts', actions: ['createOnboardingInvoice', 'linkInvoice', 'recordInvoiceOutside'] },
   inspection_to_book: { reached: 5, next: 'Book the inspection', waitingOn: 'Ready', actions: ['bookInspection'] },
   inspection_booked: { reached: 5, next: 'Inspection booked, then record the findings', waitingOn: 'Ready', actions: ['completeInspection'] },
-  inspection_complete: { reached: 6, next: 'Record the live listing', waitingOn: 'Stays', actions: ['makeLive'] },
+  inspection_complete: { reached: 6, next: 'Record the live listing', waitingOn: 'Guest relations', actions: ['makeLive'] },
   live: { reached: 7, next: 'Live', waitingOn: '', actions: [] },
   archived: { reached: 1, next: 'Archived', waitingOn: '', actions: [] },
 };
@@ -52,7 +52,7 @@ function stepsFor(reached: number, closed: boolean, extra: (i: number) => Partia
 type OnboardingContext = TrackerContext & {
   // The root onboarding work item of a journey, which gives the last update and the forms this person may use.
   workOf?: (workId: string) => OperationView | undefined;
-  // True when this person can start valuing an enquiry or send it a new link (admins and Stays).
+  // True when this person can start valuing an enquiry or send it a new link (admins and Guest relations).
   canAct?: boolean;
 };
 
@@ -131,8 +131,8 @@ export function enquiryTrackerItem(e: ClientEnquiry, ctx: OnboardingContext): Tr
   const address = a ? oneLine(a.propertyAddress) : `${e.recipientName} (${e.recipientEmail})`;
   const who = a?.fullName || e.recipientName;
   const next = NEXT_FOR_ENQUIRY[step] ?? STEP_LABEL[step];
-  const nextAction: TrackerItem['nextAction'] = step === 'received' ? (ctx.canAct ? { label: 'Start valuing', actionKey: 'startValuing' } : { label: 'Waiting for Stays' })
-    : step === 'expired' ? (ctx.canAct ? { label: 'Send a new link', actionKey: 'resendEnquiry' } : { label: 'Waiting for Stays' }) : { label: 'Waiting for the landlord' };
+  const nextAction: TrackerItem['nextAction'] = step === 'received' ? (ctx.canAct ? { label: 'Start valuing', actionKey: 'startValuing' } : { label: 'Waiting for Guest relations' })
+    : step === 'expired' ? (ctx.canAct ? { label: 'Send a new link', actionKey: 'resendEnquiry' } : { label: 'Waiting for Guest relations' }) : { label: 'Waiting for the landlord' };
   // Who last moved it: the landlord when they opened or answered the form, the sender when it was sent.
   const when = e.submittedAt ?? e.openedAt ?? e.sentAt;
   const update: TrackerUpdate = { at: when, by: e.submittedAt || e.openedAt ? who : e.sentByName, what: e.submittedAt ? 'Form answered' : e.openedAt ? 'Form opened' : 'Form sent' };

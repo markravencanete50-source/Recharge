@@ -18,9 +18,9 @@ const CHECKS = [
   { key: 'insurance', label: 'Buildings and public liability insurance' },
 ];
 const STATUS = ['To apply', 'Applied', 'Checks done', 'Granted'];
-// What is needed after each phase. Only Stays (or an admin) record licensing steps.
+// What is needed after each phase. Only Guest relations (the stays role) or an admin record licensing steps.
 const NEXT = ['Submit the application', 'Record the safety checks', 'Record the licence grant'];
-const WAITING_ON = 'Stays';
+const WAITING_ON = 'Guest relations';
 const text = (v: unknown) => typeof v === 'string' ? v.trim() : '';
 
 export function licensingTrackerItem(work: OperationView, ctx: TrackerContext): TrackerItem<OperationView> {
