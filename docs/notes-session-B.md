@@ -454,11 +454,66 @@ Built on `claude/serene-babbage-xgqaus` after merging `main` (`b25d02f`). One mi
   - 7 need build output (prepared Worker, preview, hosted routes, icon fonts, Cloudflare redirect).
 - `npx tsc --noEmit -p mobile/tsconfig.json`: no errors. ESLint: no errors on the changed files.
 
-## Questions for Lee
+## Decisions (Lee and the Lead, 13 October)
 
-1. Moving links between sections: answered yes by Lee, and built.
-2. **Phone bar:** it keeps today's destinations (at most five), only reordered. Should the editor also choose
-   which destinations are on the bar? Should the new phone Menu button replace a bar slot instead of sitting
-   in the header?
-3. **Home tools** (the tiles on Home) are not part of the menu order. Should they follow it too?
-4. **Section names** cannot be renamed from the editor, only reordered.
+1. Links can move between sections: Lee said yes, and it is built (`128e016`).
+2. Phone bar: decided by the Lead. It stays as built: the bar follows the section order, and the Menu
+   button sits in the phone header. There is no editor control for the bar this round. Lee can change this
+   later.
+3. Home tools: decided by the Lead. They keep their own order this round. Lee can change this later.
+4. Section titles: decided by the Lead. They cannot be renamed in the editor. Lee can change this later.
+
+# Round 5, third task: the property and person picker is search only (Lee)
+
+Lee: "don't add property names just make it searchable, the less buttons the less confusion."
+
+## What changed
+
+- **One picker:** `mobile/src/SearchPicker.tsx` (`SearchPicker`, `PropertySelect`). It is used in 28 places.
+  The rule is in `lib/search-picker.ts` (`pickerView`). Matching (`lib/search-options.ts`) is unchanged.
+- **Long lists (more than 8 options):**
+  - **before anything is typed:** only the search box, the fixed options ("Every property", "All
+    properties", "Not sure yet", "Me") and the current choice as one selected chip (with `clearable`,
+    tapping it clears the choice). When nothing is chosen, a line says "Nothing chosen yet. Type to find
+    one of the 101 properties.";
+  - **once something is typed:** the best matches (up to 12) as before, the current choice kept first,
+    "Showing x of y properties. Keep typing to narrow it down." when there are more, and "Nothing matches
+    ..." when there are none.
+- **Short lists (8 or fewer):** unchanged. Every option is a chip, with no search box.
+- **Placeholder:** `PropertySelect` now reads "Search for a property by name, street or postcode".
+
+## Every screen that uses it
+
+- **A choice is needed, and the button waits for it:** Create clean (`LiveCleans.tsx`, the button is
+  disabled until a property is chosen) and Check figures in Statements (`AccountsStatements.tsx`, disabled
+  with "Choose a property to check its figures"). Both are fine.
+- **A choice is needed, but the button only checks when pressed** (an error names the property): Record a
+  stay (`StaySheet.tsx`), Report a repair and New routine plan (`LiveRepairs.tsx`), and Supplier invoice
+  (`AccountsPayable.tsx`). They still work, and the picker now says "Nothing chosen yet". **Suggested
+  follow-up (not done; these files are not mine this round):** disable each Save until a property is
+  chosen, as Create clean does.
+- **The first property is already chosen:** Restock requests (`LiveTools.tsx`). Fine.
+- **Choosing acts at once (the picker always starts empty):** Give someone a property (`LivePeople.tsx`,
+  type, then tap to assign), Find a person (`LivePeople.tsx`) and New to-do's property step
+  (`HubItemSheet.tsx`). Fine: type, tap, done.
+- **Filters with a fixed option:** Checklist templates (Every property), Calendar property and person
+  filters (All properties / everyone), Guest inbox property (Not sure yet), Team events (Me). Fine.
+- **Optional, clearable:** Receivable (stay, property, client), Performance filter, Cleaner invoices
+  property filter, Messages property, To-do property, Team time owner and backup. Fine.
+- **People pickers that are usually short:** Assign a cleaner (`LiveCleans.tsx`, only the cleaners who can
+  take that clean), To-do assignee, Team time person. Unchanged while 8 or fewer.
+- **Feels wrong: the Messages property filter in the guest inbox** (`InboxChips.tsx`). Its chips carried a
+  count per property ("Leith flat (3)"), so the team could see where messages were waiting. On a long
+  list those counts are now hidden until something is typed. Lee to decide: keep it search only, or show
+  the properties with waiting messages there. Not special-cased.
+- `LiveHub.tsx` also uses it, but that screen is retired and not routed.
+
+## Tests
+
+- `tests/search-picker.test.mjs`, 5 of 5 pass:
+  - no chips before typing on a long list;
+  - fixed options and the current choice still shown;
+  - matches (the same as `searchOptions`) appear when typing, with the count and the no-match state;
+  - short lists unchanged;
+  - the component uses the view.
+- `tests/search-and-cancel.test.mjs`, 7 of 7 pass (matching unchanged).
