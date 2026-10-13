@@ -4,8 +4,9 @@ import { Text } from "./Typography";
 import { ChoiceField } from "./ChoiceField";
 import { PropertySelect, SearchPicker } from "./SearchPicker";
 import { Chip } from "./SheetTable";
-import { Button, Field, message, Notice, london, useRequestId } from "./LiveKit";
+import { Button, Field, message, Notice, useRequestId } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
+import { DateField } from "./CalendarPicker";
 import { ui, type Palette } from "./theme";
 import { writeTeams } from "./backend/client";
 import { poundsToMinor } from "../../lib/repairs-live";
@@ -64,7 +65,7 @@ export function HubItemSheet({ p, hub, account, properties, target, onClose, onS
     if (f.amount?.trim() && amount === null) { setError("Enter the amount in pounds, for example 149.99."); return; }
     const assign = (f.assign || "me") as Assign;
     if (kind === "todo" && assign === "department" && !f.department) { setError("Choose the department."); return; }
-    if (f.dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(f.dueOn)) { setError("Enter the date as YYYY-MM-DD."); return; }
+    if (f.dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(f.dueOn)) { setError("Choose the date."); return; }
     if (f.link && !/^https:\/\//.test(f.link.trim())) { setError("Use a secure link starting https://"); return; }
     setBusy(true); setError("");
     try {
@@ -106,7 +107,7 @@ export function HubItemSheet({ p, hub, account, properties, target, onClose, onS
             onChange={d => setF(v => ({ ...v, department: d }))} />}
         </>}
         {kind !== "todo" && <Field label={kind === "approval" ? "Amount, £" : kind === "aircover" ? "Amount claimed, £" : "Amount, £"} value={f.amount ?? ""} onChange={set("amount")} p={p} placeholder="0.00" />}
-        {(kind === "todo" || kind === "invoice") && <Field label={kind === "todo" ? "Due (optional, YYYY-MM-DD)" : "Send by (optional, YYYY-MM-DD)"} value={f.dueOn ?? ""} onChange={set("dueOn")} p={p} placeholder={london(new Date())} />}
+        {(kind === "todo" || kind === "invoice") && <DateField p={p} label={kind === "todo" ? "Due (optional)" : "Send by (optional)"} mode="single" wholeMonthLink={false} empty="Choose a date" clearable value={{ from: f.dueOn ?? "", to: f.dueOn ?? "" }} onChange={next => set("dueOn")(next.from)} />}
         {kind === "aircover" && <Field label="Reservation code (optional)" value={f.reference ?? ""} onChange={set("reference")} p={p} placeholder="HMABCD1234" />}
         {(kind === "aircover" || kind === "invoice") && <Field label={kind === "invoice" ? "Invoice link (optional)" : "Claim link (optional)"} value={f.link ?? ""} onChange={set("link")} p={p} placeholder="https://" />}
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property (optional)</Text>

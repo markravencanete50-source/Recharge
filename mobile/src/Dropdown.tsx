@@ -3,7 +3,7 @@ import { Platform, ScrollView, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
-import { ui, type Palette } from "./theme";
+import { radius, ui, type Palette } from "./theme";
 import { filterChoices } from "../../lib/choice-control";
 
 // One closed control that shows the current choice ("All regions"). On the web it is the browser's own select; on the phone
@@ -17,7 +17,7 @@ export function Dropdown<T extends string>({ p, label, value, options, onChange,
 }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState("");
   const current = options.find(o => o.value === value)?.label ?? "";
-  const box = { minHeight: 48, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: open ? p.primary : p.border, backgroundColor: p.surface };
+  const box = { minHeight: 48, paddingHorizontal: 14, borderRadius: radius.control, borderWidth: 1, borderColor: open ? p.primary : p.border, backgroundColor: p.surface };
   const caption = hideLabel ? null : <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text>;
   if (Platform.OS === "web" && !searchable) {
     return (
@@ -40,12 +40,12 @@ export function Dropdown<T extends string>({ p, label, value, options, onChange,
         <Feather name={open ? "chevron-up" : "chevron-down"} size={16} color={p.muted} />
       </MotionPress>
       {open && <View style={{ gap: 8 }}>
-        {searchable && <View {...(Platform.OS === "web" ? { dataSet: { bareInput: "true" } } : {})} style={[ui.row, { gap: 10, paddingHorizontal: 14, minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background }]}>
+        {searchable && <View {...(Platform.OS === "web" ? { dataSet: { bareInput: "true" } } : {})} style={[ui.row, { gap: 10, paddingHorizontal: 14, minHeight: 48, borderRadius: radius.control, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background }]}>
           <Feather name="search" size={18} color={p.muted} />
           <TextInput value={query} onChangeText={setQuery} placeholder={`Search ${options.length} choices`} placeholderTextColor={p.muted} accessibilityLabel={`Search ${label}`} autoCapitalize="none" autoCorrect={false} autoFocus
             style={{ flex: 1, minWidth: 0, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14, ...(Platform.OS === "web" ? { outlineStyle: "none" } as object : {}) }} />
         </View>}
-        <View accessibilityRole="menu" style={{ borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, overflow: "hidden" }}>
+        <View accessibilityRole="menu" style={{ borderRadius: radius.control, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, overflow: "hidden" }}>
           <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={searchable ? { maxHeight: 320 } : undefined}>
             {shown.map((o, i) => (
               <MotionPress key={o.value} accessibilityRole="menuitem" accessibilityState={{ selected: o.value === value }} accessibilityLabel={o.label} onPress={() => { setOpen(false); setQuery(""); onChange(o.value); }}

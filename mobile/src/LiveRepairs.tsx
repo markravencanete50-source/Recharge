@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { FlagButton } from "./ManagementFlag";
 import { AirCoverFlag } from "./AirCoverFlag";
-import { ScrollView, View } from "react-native";
+import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
@@ -13,8 +13,10 @@ import { CHOOSE_PROPERTY_FIRST, saveDisabled } from "../../lib/search-picker";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
-import { ui, type Palette } from "./theme";
-import { addDays, Anchor, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton } from "./LiveKit";
+import { DateField } from "./CalendarPicker";
+import { Dropdown } from "./Dropdown";
+import { icon, radius, space, ui, type Palette } from "./theme";
+import { addDays, Anchor, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading } from "./LiveKit";
 import { formatMoney } from "../../lib/format";
 import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeOperation, writeTeams } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
@@ -111,40 +113,39 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
 
-      <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-        {canStart(account, "report-repair") && <Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} />}
-        <RefreshButton p={p} loading={loading} onPress={() => void load()} />
-      </View>
+      {canStart(account, "report-repair") && <View style={{ flexDirection: "row" }}><Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} /></View>}
 
       <Section title="Reactive maintenance" p={p}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {[{ phase: "action", label: `Needs you · ${mineToAct.length}` }, { phase: "open", label: "All open" }, ...REPAIR_STAGES.map(s => ({ phase: s.phase, label: `${s.label} · ${counts[s.phase] ?? 0}` }))].map(chip => (
-            <MotionPress key={chip.phase} accessibilityRole="button" accessibilityState={{ selected: stage === chip.phase }} onPress={() => setStage(chip.phase)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: stage === chip.phase ? p.primary : p.surface, borderWidth: 1, borderColor: stage === chip.phase ? p.primary : p.border }}>
-              <Text style={{ color: stage === chip.phase ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{chip.label}</Text>
-            </MotionPress>
-          ))}
-        </ScrollView>
+        <Dropdown p={p} label="Show" value={stage} onChange={setStage}
+          options={[{ value: "action", label: `Needs you · ${mineToAct.length}` }, { value: "open", label: "All open" }, ...REPAIR_STAGES.map(s => ({ value: s.phase, label: `${s.label} · ${counts[s.phase] ?? 0}` }))]} />
         <ListSearchBox p={p} search={search} nouns="repairs" />
-        {search.missed ? null : shown.length ? shown.map(r => {
-          const phase = String(r.data.phase), step = repairStep(account.role, phase), stageNow = repairStage(r.data), label = REPAIR_STAGES.find(s => s.phase === stageNow)?.label ?? phase;
-          const declined = declineNote(r.data), followUp = canCloseRepair(account.role, phase);
-          return (
-            <MotionPress key={r.workId} accessibilityRole="button" accessibilityLabel={`${nameOf(r.propertyId)}, ${label}`} onPress={() => setOpenId(r.workId)} style={[ui.card, { gap: 8, backgroundColor: p.surface, borderColor: step || followUp ? p.primary : p.border }]}>
-              <View style={ui.between}><Text numberOfLines={1} style={{ color: p.text, fontWeight: "700", flex: 1 }}>{nameOf(r.propertyId)}</Text><Feather name="chevron-right" size={18} color={p.muted} /></View>
-              <Text numberOfLines={2} style={[ui.small, { color: p.text }]}>{typeof r.data.issue === "string" ? r.data.issue : r.title}</Text>
-              <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-                <Tag label={label} tone={stageNow === "paid" || phase === "completed" || phase === "resolved" ? "good" : step ? "wait" : "plain"} p={p} />
-                {r.data.urgent === true && <Tag label="Urgent" tone="bad" p={p} />}
-                {r.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
-                {typeof r.data.repairType === "string" && <Tag label={repairTypeLabel(r.data.repairType)} tone="plain" p={p} />}
-                <Text style={[ui.small, { color: p.muted }]}>{estimateText(r.data)}</Text>
-              </View>
-              {!!declined && <Text numberOfLines={2} style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{declined}</Text>}
-              {step && <Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Next for you: {STEP_TITLE[step]}</Text>}
-              {followUp && <Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Next for you: update the quote or close the repair</Text>}
-            </MotionPress>
-          );
-        }) : !loading && <Notice text={stage === "action" ? "Nothing is waiting for you." : "No repairs in this view."} p={p} />}
+        {search.missed ? null : shown.length ? <View style={{ borderRadius: radius.tile, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, overflow: "hidden" }}>
+          {shown.map((r, i) => {
+            const phase = String(r.data.phase), step = repairStep(account.role, phase), stageNow = repairStage(r.data), label = REPAIR_STAGES.find(s => s.phase === stageNow)?.label ?? phase;
+            const declined = declineNote(r.data), followUp = canCloseRepair(account.role, phase);
+            const problem = typeof r.data.issue === "string" && r.data.issue ? r.data.issue : r.title;
+            const updated = londonDayOf(r.lastActivityAt ?? r.updatedAt);
+            const flags = [r.data.urgent === true && "Urgent", r.data.hazard === true && "Safety hazard"].filter(Boolean).join(" · ");
+            const next = step ? STEP_TITLE[step] : followUp ? "Update the quote or close the repair" : "";
+            return (
+              // One thin row a repair: property and problem, then status, cost and when it last moved.
+              <MotionPress key={r.workId} accessibilityRole="button" accessibilityLabel={`${nameOf(r.propertyId)}, ${label}${next ? ". Next for you: " + next : ""}`} onPress={() => setOpenId(r.workId)}
+                style={[ui.row, { gap: space.row, minHeight: 56, paddingVertical: 8, paddingHorizontal: space.field, borderTopWidth: i ? 1 : 0, borderColor: p.border, borderLeftWidth: 3, borderLeftColor: next ? p.primary : "transparent" }]}>
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text numberOfLines={1} style={{ color: p.text, fontSize: 14 }}><Text style={{ fontWeight: "600" }}>{nameOf(r.propertyId)}</Text>{` · ${problem}`}</Text>
+                  <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>
+                    <Text style={{ color: stageNow === "paid" || phase === "completed" || phase === "resolved" ? p.success : step ? p.waiting : p.muted, fontWeight: "600" }}>{label}</Text>
+                    {` · ${estimateText(r.data)}${updated ? ` · updated ${daysFromNow(updated, today)}` : ""}`}
+                    {!!flags && <Text style={{ color: p.danger, fontWeight: "600" }}>{` · ${flags}`}</Text>}
+                  </Text>
+                  {!!declined && <Text numberOfLines={1} style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{declined}</Text>}
+                  {!!next && <Text numberOfLines={1} style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Next for you: {next}</Text>}
+                </View>
+                <Feather name="chevron-right" size={icon.row} color={p.muted} />
+              </MotionPress>
+            );
+          })}
+        </View> : !loading && <Notice text={stage === "action" ? "Nothing is waiting for you." : "No repairs in this view."} p={p} />}
       </Section>
 
       {routines && showRoutines && (
@@ -340,7 +341,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
           <Text style={[ui.small, { color: p.muted }]}>This repair is above the management approval limit.{typeof repair.data.ownerApprovedAt === "string" ? " The owner has approved it." : " It is within the owner’s own limit."}</Text>
           <Field label="Note for the team (optional)" value={f("managementNote")} onChange={set("managementNote")} p={p} multiline />
         </>}
-        {(step === "approveBudget" || step === "approveManagement" || closable) && (declining ? <View style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border }}>
+        {(step === "approveBudget" || step === "approveManagement" || closable) && (declining ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }}>
           <Text style={{ color: p.text, fontWeight: "700" }}>{declining === "close" ? "Close the repair" : forOwner ? "The owner declined the cost" : "Decline the cost"}</Text>
           <Text style={[ui.small, { color: p.muted }]}>{declining === "close" ? "The repair is closed without the work going ahead. The owner sees it in their updates." : role === "client" ? "Recharge sees your reason on the repair and can get a new quote or close it." : forOwner ? "Record what the owner said. The repair can then be re-quoted or closed." : "Stays see the reason on the repair and can re-quote or close it."}</Text>
           <Field label={declining === "close" ? "Why it is closed" : "Why"} value={f("declineReason")} onChange={set("declineReason")} p={p} multiline placeholder={declining === "close" ? "For example: the owner is arranging it themselves" : "For example: please get a second quote first"} />
@@ -352,12 +353,12 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         {step === "referReady" && <>
           <View style={{ gap: 8 }}>
             <Text style={{ color: p.text, fontWeight: "700" }}>{REPAIR_GUIDES[type].label}: go through these with the guest</Text>
-            <View style={[ui.row, { gap: 8, padding: 10, borderRadius: 12, backgroundColor: p.cautionWash, alignItems: "flex-start" }]}><Feather name="alert-triangle" size={15} color={p.danger} style={{ marginTop: 2 }} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{SAFETY_STOP}</Text></View>
+            <View style={[ui.row, { gap: 8, padding: 10, borderRadius: radius.control, backgroundColor: p.cautionWash, alignItems: "flex-start" }]}><Feather name="alert-triangle" size={icon.row} color={p.danger} style={{ marginTop: 2 }} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{SAFETY_STOP}</Text></View>
             {REPAIR_GUIDES[type].checks.map(c => {
               const on = ticked.includes(c);
               return (
-                <MotionPress key={c} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => setTicked(t => on ? t.filter(x => x !== c) : [...t, c])} style={[ui.row, { gap: 12, minHeight: 46, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: on ? p.successWash : p.elevated }]}>
-                  <Feather name={on ? "check-square" : "square"} size={19} color={on ? p.success : p.muted} />
+                <MotionPress key={c} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => setTicked(t => on ? t.filter(x => x !== c) : [...t, c])} style={[ui.row, { gap: 12, minHeight: 46, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.control, backgroundColor: on ? p.successWash : p.elevated }]}>
+                  <Feather name={on ? "check-square" : "square"} size={icon.control} color={on ? p.success : p.muted} />
                   <Text style={{ color: p.text, flex: 1 }}>{c}</Text>
                 </MotionPress>
               );
@@ -372,11 +373,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
           <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
         </>}
         {step === "bookRepair" && <>
-          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-            <Button label="Today" p={p} onPress={() => set("repairOn")(today)} />
-            <Button label="Tomorrow" p={p} onPress={() => set("repairOn")(addDays(today, 1))} />
-          </View>
-          <Field label="Repair date (YYYY-MM-DD)" value={f("repairOn")} onChange={set("repairOn")} p={p} />
+          <DateField p={p} label="Repair date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today} value={{ from: f("repairOn"), to: f("repairOn") }} onChange={next => set("repairOn")(next.from)} />
           <Field label="Contractor" value={f("contractor")} onChange={set("contractor")} p={p} />
           <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
         </>}
@@ -387,7 +384,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
           <PhotoPicker key={"after:" + resetKey} p={p} workId={repair.workId} purpose="maintenance" label="After photos (optional)" hint="The finished repair. They go to Accounts with your report." onChange={(ids, loading) => { setAfterIds(ids); setUploading(loading); }} />
           <Text style={[ui.small, { color: p.muted }]}>Completing sends the cost to Accounts as a draft expense, with your report and the before and after photos.</Text>
         </>}
-        {canReviseQuote(role, phase) && (quoting ? <View style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border }}>
+        {canReviseQuote(role, phase) && (quoting ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }}>
           <Text style={{ color: p.text, fontWeight: "700" }}>Update the quote</Text>
           <Text style={[ui.small, { color: p.muted }]}>{phase === "owner_declined" ? "The new quote goes back to the owner to approve." : "If the new quote is higher and over the owner’s approval limit, it goes to the owner first (and above the management limit, to management). The repair carries on once approved."}</Text>
           <Field label={`New quote (now ${pounds(repair.data.estimatedCostMinor)})`} value={f("quote")} onChange={set("quote")} p={p} placeholder="£0.00" />
@@ -397,7 +394,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
             <Button label="Cancel" p={p} onPress={() => setQuoting(false)} />
           </View>
         </View> : <Button label="Update the quote" icon="edit-3" p={p} onPress={() => setQuoting(true)} />)}
-        {canResolveRepair(role, phase) && (resolving ? <View style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border }}>
+        {canResolveRepair(role, phase) && (resolving ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }}>
           <Text style={{ color: p.text, fontWeight: "700" }}>Resolved without a visit</Text>
           <Text style={[ui.small, { color: p.muted }]}>Use this when troubleshooting fixed it and no one needs to attend. The repair is closed as resolved and the owner and team are told.</Text>
           <Field label="What fixed it (the owner can read this)" value={f("resolution")} onChange={set("resolution")} p={p} multiline placeholder="For example: reset the boiler with the guest and the heating came back" />
