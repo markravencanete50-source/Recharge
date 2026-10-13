@@ -1,7 +1,7 @@
 import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
-import { noticeCopy } from "../../lib/notice-copy";
+import { noticeRow, type NoticeRow } from "../../lib/notice-details";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { MotionPress } from "./motion";
 import { departmentColor, ui, type Palette } from "./theme";
@@ -22,6 +22,7 @@ function kindLook(kind: string): { icon: DimensionalName; tone: DepartmentTone }
   if (/onboard|enquiry/.test(kind)) return { icon: "key", tone: "clients" };
   if (/invoice|payment|payout|expense|statement/.test(kind)) return { icon: "coins", tone: "accounts" };
   if (/booking|stay|guest/.test(kind)) return { icon: "calendar", tone: "stays" };
+  if (/pricing|listing/.test(kind)) return { icon: "tag", tone: "stays" };
   return { icon: "clipboard", tone: "stays" };
 }
 export const shortDate = (iso: string) => /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : "";
@@ -59,23 +60,36 @@ const NOTICE_LOOKS: Record<string, { icon: DimensionalName; tone: DepartmentTone
   cleaning: { icon: "spray", tone: "cleans" }, finance: { icon: "coins", tone: "accounts" },
   reports: { icon: "chart", tone: "clients" }, reservation: { icon: "calendar", tone: "stays" },
   stays: { icon: "calendar", tone: "stays" }, training: { icon: "medal", tone: "stays" },
-  handover: { icon: "people", tone: "stays" },
+  handover: { icon: "people", tone: "stays" }, guest: { icon: "chat", tone: "stays" },
 };
 function noticeLook(type: string): { icon: DimensionalName; tone: DepartmentTone } {
   const [area = "", ...rest] = type.split(".");
   if (area === "operations") return /reservation/i.test(type) ? NOTICE_LOOKS.reservation : kindLook(/cleaning/i.test(type) ? "clean" : "repair");
   return NOTICE_LOOKS[area] ?? kindLook(rest.join("."));
 }
-export function LiveNoticeRow({ notice, palette: p }: { notice: NoticeView; palette: Palette }) {
-  const look = noticeLook(notice.event_type);
-  const when = new Date(notice.created_at).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  return (
-    <View style={[ui.row, { gap: 14, paddingVertical: 12 }]}>
-      <View style={{ backgroundColor: p.wash, width: 42, height: 42, borderRadius: 14, justifyContent: "center", alignItems: "center" }}><DimensionalIcon name={look.icon} size={30} color={p.primary} /></View>
-      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-        <Text numberOfLines={2} style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{noticeCopy(notice.event_type).title}</Text>
-        <Text style={[ui.small, { color: p.muted }]}>{when}</Text>
+// One update: what it is ("Repair: Boiler not working"), then where, who and when. Tapping opens the work item or Messages
+// when there is somewhere to go (lib/notice-details.ts).
+export function LiveNoticeRow({ notice, palette: p, onPress }: { notice: NoticeView; palette: Palette; onPress?: () => void }) {
+  return <NoticeRowView row={noticeRow(notice)} palette={p} icon={noticeIcon(notice.event_type, notice.work_kind)} onPress={onPress} />;
+}
+// `clock`: the list is already grouped by day, so show the time alone.
+export function NoticeRowView({ row, palette: p, icon, onPress, open, clock = false }: { row: NoticeRow; palette: Palette; icon: DimensionalName; onPress?: () => void; open?: boolean; clock?: boolean }) {
+  const body = (
+    <View style={[ui.row, { gap: 12, paddingVertical: 10 }]}>
+      <View style={{ backgroundColor: p.wash, width: 36, height: 36, borderRadius: 12, justifyContent: "center", alignItems: "center" }}><DimensionalIcon name={icon} size={24} color={p.primary} /></View>
+      <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
+        <View style={[ui.row, { gap: 8, minWidth: 0 }]}>
+          <Text numberOfLines={1} style={{ color: p.text, fontSize: 14, fontWeight: row.unread ? "600" : "500", flex: 1, minWidth: 0 }}>{row.title}</Text>
+          <Text numberOfLines={1} style={[ui.small, { color: row.unread ? p.primary : p.muted, flexShrink: 0, fontVariant: ["tabular-nums"] }]}>{clock ? row.clock : row.when}</Text>
+        </View>
+        {!!row.detail && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{row.detail}</Text>}
       </View>
+      {row.unread && <View accessibilityLabel="Unread" style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: p.primary }} />}
+      {!!onPress && <Feather name={open === undefined ? "chevron-right" : open ? "chevron-up" : "chevron-down"} size={16} color={p.muted} />}
     </View>
   );
+  return onPress ? <MotionPress accessibilityRole="button" accessibilityLabel={`${row.title}. ${row.line}`} onPress={onPress}>{body}</MotionPress> : body;
 }
+// The icon for an update: by the kind of work when there is one (a clean, a repair, pricing), else by the event's area.
+export const noticeIcon = (eventType: string, workKind?: string | null) => (workKind ? kindLook(workKind) : noticeLook(eventType)).icon;
+

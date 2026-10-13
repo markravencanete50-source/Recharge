@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_PHOTO_BYTES,photoFormat } from './integration-policy';
-import { noticeCopy } from './notice-copy';
+import { noticeCopyFor } from './notice-details';
 
 async function jsonRequest(url:string,init:RequestInit,readOnly=false):Promise<Record<string,unknown>> {
   let response:Response;
@@ -43,7 +43,7 @@ export async function uploadPrivatePhoto(settings:IntegrationSettings,publicId:s
 export async function deliverNotification(settings:IntegrationSettings,job:DeliveryJob):Promise<DeliveryResult> {
   // Each kind of update has its own wording (lib/notice-copy.ts). It never includes private property
   // names, addresses, bank details, access codes or job notes.
-  const { title, message: text } = noticeCopy(job.eventType);
+  const { title, message: text } = noticeCopyFor(job.eventType, job.workKind);
   if(job.channel==='email') {
     const headers={Authorization:`Bearer ${settings.RESEND_API_KEY}`,'Content-Type':'application/json'};
     if(job.state==='accepted') {
