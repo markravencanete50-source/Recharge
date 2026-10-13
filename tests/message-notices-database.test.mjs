@@ -20,6 +20,9 @@ const definition = async sig => (await db.query('select pg_get_functiondef($1::r
 const SIGS = ['private.chat_notice_due(uuid,uuid)', 'private.workspace_guest_message_recipients(uuid)', 'private.workspace_guest_message_notices()'];
 const firstRun = await Promise.all(SIGS.map(definition));
 for (const m of MINE) await db.exec(await fs.readFile(`supabase/migrations/${m}.sql`, 'utf8'));
+// 20261015330000 replaces the recipient rule (adds the onboarding check); put it back on top, as the real order would.
+const LATER = ['20261015330000_guest_message_notices_onboarded'];
+for (const m of LATER) await db.exec(await fs.readFile(`supabase/migrations/${m}.sql`, 'utf8'));
 const secondRun = await Promise.all(SIGS.map(definition));
 after(() => db.close());
 
