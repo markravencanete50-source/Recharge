@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TEAM_EVENT_KINDS, type RotaPlan } from './workspace-teams-policy';
-import { ROTA_HOURS, ROTA_LABEL } from './team-time';
+import { londonClock, ROTA_HOURS, ROTA_LABEL } from './team-time';
 
 // The live calendar: what the shared schedule holds for each day (cleans, arrivals and departures,
 // repairs, routine visits, inspections, other dated work and, for admins and accounts, payment
@@ -150,6 +150,8 @@ export const teamEventsSchema = z.object({
     id: uuid, userId: uuid, fullName: z.string().nullable().default(null), role: z.string().default(''), kind: z.enum(TEAM_EVENT_KINDS), title: z.string(),
     startsOn: z.string(), endsOn: z.string(), startTime: z.string().nullable().default(null), endTime: z.string().nullable().default(null),
     location: z.string().nullable().default(''), mine: z.boolean().default(false), version: z.number().default(1),
+    // Who last added, changed or cancelled it and when (migration 20261014300000); `added` is true while nobody has changed it since.
+    editedById: z.string().nullable().default(null), editedBy: z.string().nullable().default(null), editedAt: z.string().nullable().default(null), added: z.boolean().nullable().default(null),
   })).default([]),
 });
 export type TeamEvents = z.infer<typeof teamEventsSchema>;
@@ -257,6 +259,15 @@ export function eventClock(e: Pick<TeamEvent, 'startTime' | 'endTime' | 'startsO
 }
 // "Mon 2 Nov to Fri 6 Nov", or "Mon 2 Nov" for one day.
 export const eventDates = (e: Pick<TeamEvent, 'startsOn' | 'endsOn'>) => e.startsOn === e.endsOn ? weekdayDay(e.startsOn) : `${weekdayDay(e.startsOn)} to ${weekdayDay(e.endsOn)}`;
+// Who last edited a team event and when, in UK time: { label: 'Last changed', who: 'Sam Reid', when: 'Tue 13 Oct at 14:05',
+// text: 'Last changed by Sam Reid on Tue 13 Oct at 14:05' }. 'Added' while nobody has changed it since. Null when the database does not say.
+export function eventEdited(e: Pick<TeamEvent, 'editedById' | 'editedBy' | 'editedAt' | 'added'>, myId: string | null | undefined) {
+  if (!e.editedAt || Number.isNaN(Date.parse(e.editedAt))) return null;
+  const label = e.added ? 'Added' : 'Last changed', mine = !!e.editedById && e.editedById === myId;
+  const who = mine ? 'You' : e.editedBy || 'A team member';
+  const when = `${weekdayDay(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date(e.editedAt)))} at ${londonClock(e.editedAt)}`;
+  return { label, who, when, text: `${label} by ${mine ? 'you' : e.editedBy || 'a team member'} on ${when}` };
+}
 
 export type PersonStatus = 'working' | 'away' | 'off' | 'unplanned';
 export type PersonDay = {
