@@ -70,7 +70,8 @@ const screens = [
   ['MenuOrderEditor.tsx', 'Menu order: role (8)', [/<ChoicePills p=\{p\} name="Role" values=\{MENU_ROLES\}/], [/<Pills p=\{p\} values=\{MENU_ROLES\}/]],
   ['OwnerExpenses.tsx', 'Owner expenses: the property (search picker) and the month', [/<PropertySelect p=\{p\} properties=\{properties\.map/, /<ChoicePills p=\{p\} name="Month"/], [/<Pills p=\{p\} values=\{properties\.map/]],
   ['LiveGuestInbox.tsx', 'Log a guest message: channel', [/<ChoicePills p=\{p\} name="Channel" values=\{OFFERED_CHANNELS\}/], []],
-  ['LiveCalendar.tsx', 'Calendar: team filter', [/<ChoicePills p=\{p\} name="Team"/], []],
+  ['LiveCalendar.tsx', 'Calendar: views in one segmented control, the team filter in one dropdown', [/<Segmented p=\{p\} label="Calendar view"/, /<Dropdown p=\{p\} label="Team" hideLabel/], [/<Pills p=\{p\} values=\{MODES\}/]],
+  ['LiveRepairs.tsx', 'Maintenance: the stage filter in one dropdown, no Refresh button', [/<Dropdown p=\{p\} label="Show" value=\{stage\}/], [/RefreshButton/, /<ScrollView horizontal/]],
 ];
 for (const [file, what, present, gone] of screens) {
   test(`${file}: ${what}`, () => {

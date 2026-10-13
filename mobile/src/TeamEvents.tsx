@@ -8,7 +8,8 @@ import { Chip } from "./SheetTable";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, message, Notice, Tag, useRequestId, type IconName } from "./LiveKit";
 import { writeTeams } from "./backend/client";
-import { ui, type Palette } from "./theme";
+import { DateField } from "./CalendarPicker";
+import { radius, icon, ui, type Palette } from "./theme";
 import {
   eventClock, eventDates, eventEdited, eventIsAllDay, TEAM_EVENT_COLOUR, TEAM_EVENT_LABEL, whoIsWhere, whoIsWhereWeek, type PersonDay, type PersonStatus, type TeamEvent, type TeamEventKind,
 } from "../../lib/calendar-live";
@@ -41,7 +42,7 @@ export function EventRow({ p, event, day, showPerson = true, first = false, onPr
         <Text numberOfLines={1} style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{event.title}</Text>
         <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{detail}</Text>
       </View>
-      {!!onPress && <Feather name="chevron-right" size={17} color={p.muted} />}
+      {!!onPress && <Feather name="chevron-right" size={icon.row} color={p.muted} />}
     </MotionPress>
   );
 }
@@ -49,7 +50,7 @@ export function EventRow({ p, event, day, showPerson = true, first = false, onPr
 function Line({ p, icon, label, value }: { p: Palette; icon: IconName; label: string; value: string }) {
   return (
     <View style={[ui.row, { gap: 12, paddingVertical: 2 }]}>
-      <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name={icon} size={16} color={p.text} /></View>
+      <View style={{ width: 36, height: 36, borderRadius: radius.control, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name={icon} size={16} color={p.text} /></View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[ui.small, { color: p.muted }]}>{label}</Text>
         <Text selectable style={{ color: p.text, fontSize: 15, fontWeight: "500" }}>{value}</Text>
@@ -89,7 +90,7 @@ export function TeamEventSheet({ palette: p, visible, event, day, canEditAll, my
   // The same rules the database applies, so a mistake is caught before it is sent.
   function problem() {
     if (title.trim().length < 2) return "Give it a short title.";
-    if (!isDay(startsOn) || !isDay(endsOn)) return "Enter the dates as YYYY-MM-DD.";
+    if (!isDay(startsOn) || !isDay(endsOn)) return "Choose the dates.";
     if (endsOn < startsOn) return "The end date must be on or after the start date.";
     if (Date.parse(endsOn) - Date.parse(startsOn) > 365 * 86400000) return "Choose up to a year.";
     if ((startTime && !validClock(startTime)) || (endTime && !validClock(endTime))) return "Enter times as HH:MM, for example 10:30.";
@@ -147,10 +148,7 @@ export function TeamEventSheet({ palette: p, visible, event, day, canEditAll, my
           </View>
         </View>
         <Field label="Title" value={title} onChange={setTitle} p={p} placeholder={PLACEHOLDER[kind]} />
-        <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-          <View style={{ flex: 1, minWidth: 140 }}><Field label="From (YYYY-MM-DD)" value={startsOn} onChange={setStartsOn} p={p} placeholder={day} /></View>
-          <View style={{ flex: 1, minWidth: 140 }}><Field label="To (YYYY-MM-DD)" value={endsOn} onChange={setEndsOn} p={p} placeholder={day} /></View>
-        </View>
+        <DateField p={p} label="Dates (one day: choose it twice)" wholeMonthLink={false} value={{ from: startsOn, to: endsOn }} onChange={next => { setStartsOn(next.from); setEndsOn(next.to); }} />
         <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
           <View style={{ flex: 1, minWidth: 140 }}><Field label="Starts (HH:MM, optional)" value={startTime} onChange={setStartTime} p={p} placeholder="10:00" /></View>
           <View style={{ flex: 1, minWidth: 140 }}><Field label="Ends (optional)" value={endTime} onChange={setEndTime} p={p} placeholder="11:30" /></View>
@@ -215,7 +213,7 @@ export function WhoIsWhere({ p, rota, events, days, day, today, myId, loading, p
         ) : groups.map(([status, items]) => (
           <View key={status} style={{ gap: 6 }}>
             <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{STATUS_HEAD[status]} · {items.length}</Text>
-            <View style={{ borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
+            <View style={{ borderRadius: radius.card, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
               {items.map((x, i) => (
                 <View key={x.userId} style={{ borderTopWidth: i ? 1 : 0, borderColor: p.border }}>
                   <View style={[ui.row, { gap: 12, padding: 14, alignItems: "center" }]}>
@@ -238,7 +236,7 @@ export function WhoIsWhere({ p, rota, events, days, day, today, myId, loading, p
       {!!week.length && (
         <View style={{ gap: 8 }}>
           <Text accessibilityRole="header" style={{ color: p.text, fontSize: 17, fontWeight: "600" }}>This week</Text>
-          <View style={{ borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
+          <View style={{ borderRadius: radius.card, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
             {week.map((row, i) => (
               <View key={row.userId} style={{ gap: 8, padding: 14, borderTopWidth: i ? 1 : 0, borderColor: p.border }}>
                 <Text numberOfLines={1} style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{name(row)}</Text>

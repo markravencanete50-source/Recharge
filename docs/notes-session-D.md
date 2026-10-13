@@ -337,3 +337,20 @@ due). This adds the checklist inside the Management centre. No migration.
 - Tried in the interactive demo (Playwright): empty state, Set up the checklist → three Management tasks added →
   back in Management the three appear, one ticked ("1 of 3 done", "Ticked by Sam Taylor at 14:54"), dark mode, and
   the open ones are on the To-do list with the ticked one under Done. Screenshots `round6-checklist-*`.
+
+## Round 6: E's sweep items 13, 16, 17 and 21
+
+- **17, typed dates:** every "(YYYY-MM-DD)" field outside Session A's Accounts screens is now the shared calendar
+  field (`DateField`): New clean, Book a repair, Work time (Calendar), Local event and Team time take one day, and
+  Record a stay, Edit a stay and Team event take a range. DateField was extended (`empty`, `clearable`, and empty
+  strings open on this month) rather than adding a second date component. The extra Today/Tomorrow buttons went,
+  because the calendar has its own Today link. The Hub item due date is the lead branch's version, kept as it was.
+  Still typed, and left for Session A: AccountsPayable (3), AccountsReceivable (1), AccountsStatements (1).
+- **13, Maintenance:** the stage filter is one dropdown ("Show"), each repair is one thin row (property and
+  problem; status, cost and last update; "Next for you" when it is yours), and the Refresh button is gone.
+- **16, Calendar:** the four views are one Segmented control; the team filter is a dropdown.
+- **21:** the files touched here use `radius` and `icon` from theme.ts (round 44px buttons left as circles).
+- **Tests:** `tests/date-fields.test.mjs` checks that no YYYY-MM-DD is left outside the Accounts screens and that the
+  forms use DateField; `choice-control` and `team-calendar` were updated for the new controls.
+- **Screenshots (phone, dark, Demo):** `round6-sweep-1` Maintenance, `-2` the thin rows, `-3` the calendar views and
+  team dropdown, `-4` the team event dates on the calendar field.

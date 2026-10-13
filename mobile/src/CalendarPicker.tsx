@@ -3,7 +3,7 @@ import { Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
-import { ui, type Palette } from "./theme";
+import { radius, ui, type Palette } from "./theme";
 import {
   WEEKDAYS, cellLabel, isDay, monthLabel, monthOf, moveFocus, pickDay, pickerWeeks, rangeLabel, shiftMonth, wholeMonth, type DateRange, type PickerCell,
 } from "../../lib/calendar-picker";
@@ -107,7 +107,9 @@ function Day({ p, c, size, stretch, focused, noun, onPress }: { p: Palette; c: P
 
 // One field that shows the chosen period ("1 Oct 2026 to 31 Oct 2026") and opens the calendar under it. A range is only
 // handed back once both ends are chosen, so a screen never reads half a range.
-export function DateField({ p, label, mode = "range", value, onChange, wholeMonthLink = true, today }: { p: Palette; label: string; mode?: "single" | "range"; value: { from: string; to: string }; onChange: (next: { from: string; to: string }) => void; wholeMonthLink?: boolean; today?: string }) {
+// `empty` is what the closed field says before anything is chosen ("Choose dates" by default; "Choose a date" for one day).
+// `clearable` adds "Clear date" under a chosen value, for optional dates; it hands back empty strings.
+export function DateField({ p, label, mode = "range", value, onChange, wholeMonthLink = true, today, empty, clearable = false }: { p: Palette; label: string; mode?: "single" | "range"; value: { from: string; to: string }; onChange: (next: { from: string; to: string }) => void; wholeMonthLink?: boolean; today?: string; empty?: string; clearable?: boolean }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | null>(null);
   const shown = draft ?? value;
@@ -118,16 +120,19 @@ export function DateField({ p, label, mode = "range", value, onChange, wholeMont
   return (
     <View style={{ gap: 6 }}>
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text>
-      <MotionPress accessibilityRole="button" accessibilityLabel={`${label}: ${rangeLabel(value)}. ${open ? "Close" : "Open"} the calendar`} accessibilityState={{ expanded: open }} onPress={() => { setOpen(o => !o); setDraft(null); }}
-        style={[ui.row, { gap: 10, minHeight: 48, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: open ? p.primary : p.controlBorder, backgroundColor: p.surface }]}>
+      <MotionPress accessibilityRole="button" accessibilityLabel={`${label}: ${rangeLabel(value, empty)}. ${open ? "Close" : "Open"} the calendar`} accessibilityState={{ expanded: open }} onPress={() => { setOpen(o => !o); setDraft(null); }}
+        style={[ui.row, { gap: 10, minHeight: 48, paddingHorizontal: 14, borderRadius: radius.control, borderWidth: 1, borderColor: open ? p.primary : p.controlBorder, backgroundColor: p.surface }]}>
         <Feather name="calendar" size={16} color={p.muted} />
-        <Text style={{ flex: 1, color: p.text, fontSize: 15 }}>{rangeLabel(shown)}</Text>
+        <Text style={{ flex: 1, color: shown.from ? p.text : p.muted, fontSize: 15 }}>{rangeLabel(shown, empty)}</Text>
         <Feather name={open ? "chevron-up" : "chevron-down"} size={16} color={p.muted} />
       </MotionPress>
       {open && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 6 }]}>
         {mode === "range" && <Text style={[ui.small, { color: p.muted }]}>{draft?.from ? "Now choose the last day." : "Choose the first day, then the last."}</Text>}
-        <CalendarPicker p={p} mode={mode} value={shown} onChange={change} wholeMonthLink={wholeMonthLink} clearable={false} today={today} />
+        <CalendarPicker p={p} mode={mode} value={{ from: shown.from || null, to: shown.to || null }} onChange={change} wholeMonthLink={wholeMonthLink} clearable={false} today={today} />
       </View>}
+      {clearable && !!value.from && !open && <MotionPress accessibilityRole="button" accessibilityLabel={`Clear ${label}`} onPress={() => onChange({ from: "", to: "" })} style={{ alignSelf: "flex-start", minHeight: 36, justifyContent: "center" }}>
+        <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Clear date</Text>
+      </MotionPress>}
     </View>
   );
 }

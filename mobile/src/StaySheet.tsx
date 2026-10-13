@@ -4,6 +4,7 @@ import { PropertySelect } from "./SearchPicker";
 import { CHOOSE_PROPERTY_FIRST, saveDisabled } from "../../lib/search-picker";
 import { Sheet } from "./TeamFlows";
 import { Text } from "./Typography";
+import { DateField } from "./CalendarPicker";
 import { ui, type Palette } from "./theme";
 import { addDays, Button, Field, london, message, Notice, useRequestId } from "./LiveKit";
 import { platformCode } from "./LiveAccounts";
@@ -79,10 +80,7 @@ export function StaySheet({ p, visible, properties, onClose, onDone, minimumNigh
     <Sheet palette={p} visible={visible} onClose={onClose} title="Record a stay" subtitle="Accounts uses the platform code to match the payout" icon="calendar">
       <PropertyPills p={p} properties={properties} value={propertyId} onChange={setPropertyId} />
       <Field label="Guest name or booking reference" value={reference} onChange={setReference} p={p} />
-      <View style={[ui.row, { gap: 10 }]}>
-        <View style={{ flex: 1 }}><Field label="Check-in (YYYY-MM-DD)" value={checkIn} onChange={setCheckIn} p={p} /></View>
-        <View style={{ flex: 1 }}><Field label="Check-out" value={checkOut} onChange={setCheckOut} p={p} /></View>
-      </View>
+      <DateField p={p} label="Check-in to check-out" wholeMonthLink={false} today={today} value={{ from: checkIn, to: checkOut }} onChange={next => { setCheckIn(next.from); setCheckOut(next.to); }} />
       {nights !== null && <Text style={[ui.small, { color: followUp ? p.primary : p.muted }]}>{nights} {nights === 1 ? "night" : "nights"}{followUp ? `. Stays of ${minimumNights} nights or more get a direct-booking follow-up for the team.` : ""}</Text>}
       <Pills p={p} values={["confirmed", "enquiry"] as const} value={status} onChange={setStatus} label={v => v === "confirmed" ? "Confirmed" : "Enquiry"} />
       <Pills p={p} values={CHANNELS} value={channel} onChange={setChannel} label={v => CHANNEL_LABEL[v]} />
