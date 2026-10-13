@@ -13,6 +13,7 @@ import { shiftChangesSchema, type ShiftChanges } from "../../lib/workspace-teams
 import { describeChange, minutesDelta } from "../../lib/productivity";
 import { DecisionsReport } from "./LiveOversight";
 import { DailyTaskSettings } from "./DailyTaskSettings";
+import { ManagementChecklist } from "./ManagementChecklist";
 import { ReflectionReview } from "./ReflectionReview";
 import { ManagementApprovals } from "./ManagementApprovals";
 import { ResponsibilitiesTab, RotaTab } from "./LiveTeamTime";
@@ -61,6 +62,8 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
   const focus = useWorkFocus();
   const [view, setView] = useState<ManagementView>(() => MANAGEMENT_VIEWS.find(v => v === focus?.sub) ?? "queue");
   const [productivityTab, setProductivityTab] = useState<"days" | "changes">("days");
+  // "Set up the checklist" opens Daily tasks showing Management's only.
+  const [dailyOnly, setDailyOnly] = useState<"management" | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -79,6 +82,8 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Management</Text>
         <Text style={[ui.body, { color: p.muted }]}>Everything waiting on a management decision, in one place.</Text>
       </View>
+      {/* Today's Management daily tasks, ticked here or on the To-do list (the same to-dos). */}
+      <ManagementChecklist p={p} account={account} onSetUp={() => { setDailyOnly("management"); setView("dailytasks"); }} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && view === "team" && <Loading p={p} />}
       <Pills p={p} values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", productivity: "Productivity", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", reflections: "Day reflections", dailytasks: "Daily tasks", rota: "Rota", responsibilities: "Responsibilities", access: "Access control" })[v]} />
@@ -105,7 +110,7 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
       {view === "training" && <LiveTraining palette={p} manage />}
       {view === "decisions" && <DecisionsReport palette={p} />}
       {view === "reflections" && <ReflectionReview palette={p} />}
-      {view === "dailytasks" && <DailyTaskSettings p={p} account={account} />}
+      {view === "dailytasks" && <DailyTaskSettings p={p} account={account} only={dailyOnly} onShowAll={() => setDailyOnly(null)} />}
       {view === "rota" && <RotaTab p={p} account={account} />}
       {view === "responsibilities" && <ResponsibilitiesTab p={p} account={account} />}
       {view === "productivity" && <LiveProductivity key={productivityTab} palette={p} account={account} initial={productivityTab} />}

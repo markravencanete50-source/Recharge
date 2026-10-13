@@ -306,3 +306,34 @@ fragments: a body like `{target && <>…</>}` was one child, so the gap never ap
   be triggered in a headless browser; the test checks its rule. Checked in Chromium only here; Edge is Chromium,
   Firefox honours option colours and `:autofill`, Safari draws its own pop-up list and ignores option colours (it
   was already readable there).
+
+## Round 6: management checklist
+
+Alex: "Can we add a daily checklist for management centre, which shows up in to-do list as well?" The data side
+already existed (Management → Daily tasks: the database adds each task to its department's to-do every day it is
+due). This adds the checklist inside the Management centre. No migration.
+
+- **"Today's checklist"** (`mobile/src/ManagementChecklist.tsx`), at the top of Management above the view picker:
+  today's to-dos made from the Management daily tasks, in the order they were made, each with a tick box. "3 of 5
+  done" in the corner. A ticked item stays, struck through, with one thin line under it: "Ticked by Morag Campbell
+  at 09:14" (UK time, from the to-do's own `decidedBy` / `decidedAt`).
+- **The same to-dos as the To-do list**: it reads the same hub (`readTeams({ section: "hub" })`) and ticks with the
+  To-do list's own action (`moveHubItem`, status done or open, with a request id kept for retries), so the two
+  always agree. Unticking reopens it. Opening Management asks the database to make today's daily to-dos
+  (`ensureDailyTodos`, idempotent, as the To-do list does), so a task set up a minute ago shows today.
+- **Which rows** (`lib/management-checklist.ts`, `managementChecklist`): kind to-do, department management, made
+  from a daily task (has a template), due today, open or done. Hand-made to-dos, other departments' and other days'
+  are left out.
+- **Who sees it**: admins, super admins, and anyone whose department (on the rota) is management, which the hub read
+  already returns. Nobody else: the card renders nothing.
+- **Empty state**: "No daily checklist yet." Admins also get "Set up the checklist", which opens Daily tasks showing
+  Management only ("Showing Management only… Show every department"), with new tasks preset to Management
+  (`DailyTaskSettings` gains `only` and `onShowAll`).
+- Theme tokens only (surface, border, text, muted, success, primary); checked in light and dark.
+- Not touched: `lib/todo.ts`, `HubItemSheet.tsx`, the To-do list, the view picker row.
+- Tests: `tests/management-checklist.test.mjs` (which rows count; who sees it and who may set it up; ticking is the
+  To-do list's `moveHubItem`, valid for the server's schema, and the same call the To-do list makes; the card's place
+  and the set-up link; no hard-coded colours).
+- Tried in the interactive demo (Playwright): empty state, Set up the checklist → three Management tasks added →
+  back in Management the three appear, one ticked ("1 of 3 done", "Ticked by Sam Taylor at 14:54"), dark mode, and
+  the open ones are on the To-do list with the ticked one under Done. Screenshots `round6-checklist-*`.
