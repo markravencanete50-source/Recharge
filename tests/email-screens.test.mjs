@@ -37,5 +37,21 @@ test('unknown senders are mounted in the Clients tab for admins and Stays only, 
 
 test('the new screen uses theme tokens only', () => {
   assert.doesNotMatch(unknown, /#[0-9a-fA-F]{3,8}\b|rgba?\(|"(white|black|red|green|blue)"/);
-  for (const token of ['p.text', 'p.muted', 'p.border', 'p.wash']) assert.ok(unknown.includes(token), token);
+  for (const token of ['p.text', 'p.muted', 'p.border', 'p.surface']) assert.ok(unknown.includes(token), token);
+  assert.doesNotMatch(unknown, /p\.wash/, 'a quiet bordered panel like the other lists, not the loud wash');
+});
+
+test('review fixes: attachment chip fits a phone, a paperclip leads it, the panel is one collapsible line remembered per device, a nameless sender shows the subject below', () => {
+  const chip = inbox.slice(inbox.indexOf('{m.files.map'), inbox.indexOf('</MotionPress>', inbox.indexOf('{m.files.map')));
+  assert.match(chip, /maxWidth: "100%"/);
+  assert.match(chip, /<Feather name="paperclip" size=\{14\}/);
+  assert.match(chip, /numberOfLines=\{1\}[^\n]*flexShrink: 1/);
+  assert.match(chip, /flexShrink: 0/);
+  assert.match(unknown, /Unknown senders \(\{rows\.length\}\)/);
+  assert.match(unknown, /name=\{expanded \? "chevron-up" : "chevron-down"\}/);
+  assert.match(unknown, /const OPEN_KEY = "rc-unknown-senders-open"/);
+  assert.match(unknown, /AsyncStorage\.setItem\(OPEN_KEY/);
+  assert.match(unknown, /\{expanded && <View/);
+  assert.match(unknown, /borderWidth: 1, borderColor: p\.border, backgroundColor: p\.surface/);
+  assert.match(unknown, /\{r\.name \? <View[\s\S]*: <>[\s\S]*\{r\.from\}[\s\S]*\{!!r\.subject && <Text numberOfLines=\{1\}/);
 });

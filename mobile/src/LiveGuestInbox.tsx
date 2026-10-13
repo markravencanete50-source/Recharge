@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Linking, Platform, ScrollView, TextInput, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { ChoicePills } from "./ChoiceField";
 import { PropertySelect } from "./SearchPicker";
@@ -214,9 +215,10 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
                 </View>
                 {m.files.map(file => (
                   <MotionPress key={file.id} accessibilityRole="link" accessibilityLabel={`Open ${file.filename}`} onPress={() => void openFile(file.id)}
-                    style={[ui.row, { gap: 6, alignSelf: team ? "flex-end" : "flex-start", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
+                    style={[ui.row, { gap: 6, alignSelf: team ? "flex-end" : "flex-start", maxWidth: "100%", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
+                    <Feather name="paperclip" size={14} color={p.muted} />
                     <Text numberOfLines={1} style={[ui.small, { color: p.primary, fontWeight: "600", flexShrink: 1 }]}>{file.filename}</Text>
-                    <Text style={[ui.small, { color: p.muted }]}>{file.bytes < 1024 * 1024 ? `${Math.max(1, Math.round(file.bytes / 1024))} KB` : `${(file.bytes / 1024 / 1024).toFixed(1)} MB`}</Text>
+                    <Text style={[ui.small, { color: p.muted, flexShrink: 0 }]}>{file.bytes < 1024 * 1024 ? `${Math.max(1, Math.round(file.bytes / 1024))} KB` : `${(file.bytes / 1024 / 1024).toFixed(1)} MB`}</Text>
                   </MotionPress>
                 ))}
                 <Text style={[ui.small, { color: p.muted, fontSize: 11, textAlign: team ? "right" : "left" }]}>{team ? `${m.author ? (m.delivery === "sent" ? `Sent by ${m.author}` : m.author) : "Team"} · ` : ""}{chatTime(m.sentAt)}</Text>
