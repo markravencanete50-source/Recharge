@@ -28,7 +28,15 @@ lead developer's and are not in this note. Drafted by Session C from every sessi
   - The person a to-do is for, and the person who set it, get an update when someone adds one.
   - New to-do: "Who is it for" is a dropdown (Me, A person, A department), and the due date opens a calendar.
   - Each heading shows 10 rows; "Show all" opens the rest.
-- **Trackers** (purchases, licensing, onboarding, accounts and the others) use the same thin rows on a computer.
+- **Trackers** (purchases, licensing, onboarding, accounts and the others) use the same thin rows on a computer. These
+  tables always fit their card, even with the side menu open: long text is cut short with "…", and Status, Due and
+  Progress always show.
+- **Dates open a calendar** instead of being typed as YYYY-MM-DD: New clean, Record a stay, Edit a stay, Book a repair,
+  Work time, Local event, Team event, Team time and a to-do's due date.
+- **Calendar:** the four views are one switch, and the team filter is a dropdown.
+- **Maintenance:** a "Show" dropdown in place of the row of filter buttons, one thin row per repair (property, problem,
+  status, cost, last update), and no Refresh button.
+- **Notes such as "Your tools have been updated"** are a quiet card with a thin coloured edge, not a bright band.
 - **Dark mode** is easier to read: cards stand out from the page, and chosen buttons and tabs are clearly marked, including
   the department strip and the Work tabs on a phone. The banners at the top of pages follow the theme too.
 - **On a phone:**
@@ -86,6 +94,8 @@ keep a copy of everything, as now.
   senders** (admins and Client relations). Assign it to an owner (the address is remembered) or dismiss it.
 - **Attachments:** photos (JPEG, PNG, WebP, GIF) and PDFs up to 10 MB each open from the message. Spam and mail that fails
   its checks never appears.
+- Unknown senders is a quiet panel you can fold away; the app remembers that on each device. Attachments show as a small
+  paperclip chip that fits a phone.
 - Owners, cleaners and Ready never see guest emails.
 
 ### Guest relations
@@ -103,10 +113,16 @@ keep a copy of everything, as now.
 - **Pricing on the To-do page:** each heading shows 10 rows, with "Show all" for the rest (all automatic pricing rows are
   still made).
 - **Client enquiries → Start valuing:** the area is a dropdown with a search, and the property type a dropdown.
+- **Client enquiries, sending the form:** "Send the form to a landlord" is a normal button. "Send the form" now emails the
+  form to the landlord by itself, from ownerrelations@ (their reply goes back to ownerrelations@). This works as soon as
+  the round is live. The link with Copy and "Open my email app" shows only if the email could not be sent; the enquiry
+  then says "Email failed" with Try again.
 
 ### Cleaning manager
 
 - **Rejected clean** and other sheets are no longer squashed together.
+- **New clean:** the date opens a calendar.
+- **Calendar:** the four views are one switch, and the team filter is a dropdown.
 - **Usual cleaners** for a property are picked with a search.
 - Updates, To-do, Favorites (in Today) and dropdowns as for everyone.
 
@@ -119,6 +135,8 @@ keep a copy of everything, as now.
 ### Ready
 
 - **Reporting a repair:** the type of repair is a dropdown with a search.
+- **Maintenance:** a "Show" dropdown, one thin row per repair (property, problem, status, cost, last update), and no
+  Refresh button. Booking a repair: the date opens a calendar.
 - Updates, To-do, Favorites (in Today), trackers in thin rows and dropdowns as for everyone.
 
 ### Accounts
@@ -168,6 +186,12 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 11. **On a phone (390 px wide):** the logo is not covered; Menu, the bell, Messages and your picture are in the header, and
     Search, View as, Refresh and the dark-mode switch are at the top of the Menu. No Favorites star floats over the page.
     The "New property enquiry" card on Home is a plain card with one Add button.
+12. **Maintenance:** a "Show" dropdown, thin repair rows (property, problem, status, cost, last update), no Refresh button.
+13. **Calendar:** the four views are one switch; the team filter is a dropdown. Add a local or team event: the date opens a
+    calendar.
+14. **To-do and trackers at full width with the side menu open:** the table fits its card; Status, Due and Progress show.
+15. **Client enquiries:** "Send the form to a landlord" is a normal button, and "Send the form" emails the landlord from
+    ownerrelations@ with no link shown.
 
 ### Guest relations
 
@@ -191,6 +215,9 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 5. **Email:** an email from an owner's sign-in address to ownerrelations@ appears in that owner's conversation in
    Messages, Clients, and a reply from the app reaches them from ownerrelations@. An email from an unknown address waits
    under Unknown senders: assign it to an owner and it moves into their conversation.
+6. **Client enquiries → Send the form to a landlord** (a normal button), to a test email address: "Send the form" sends it,
+   no link or Copy button shows, and the email arrives from ownerrelations@. Replying to it goes to ownerrelations@.
+7. **Record a stay** and **Edit a stay:** the dates open a calendar; nothing asks for YYYY-MM-DD.
 
 ### Cleaning manager
 
@@ -198,6 +225,8 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 2. **Cleaning desk → Disputes:** open a rejected clean; the sheet's sections have space between them.
 3. **Updates:** "Clean: …" titles with the property.
 4. **To-do:** thin rows on a computer; open one and add an update.
+5. **New clean:** the date opens a calendar; nothing asks for YYYY-MM-DD.
+6. **Calendar:** the four views are one switch; the team filter is a dropdown.
 
 ### Cleaner
 
@@ -212,6 +241,7 @@ Use View as (or a test account) for each role. Check on a computer and on a phon
 2. **Report a repair:** type of repair is a dropdown with a search.
 3. **Ready desk** trackers: thin one-line rows on a computer.
 4. **Updates:** "Repair: …" titles open the repair.
+5. **Maintenance:** a "Show" dropdown, thin repair rows, no Refresh button; Book a repair opens a calendar for the date.
 
 ### Accounts
 
