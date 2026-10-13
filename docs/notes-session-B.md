@@ -237,3 +237,283 @@ same way.
 **Either way:** follow-ups already open for stays of exactly seven nights stay open. The team can close them;
 this read-only query lists them:
 `select w.id, w.title from public.workspace_work_items w join private.workspace_domain_details d on d.work_id = w.id join private.workspace_reservations r on r.id::text = d.data->>'reservationId' where d.kind = 'direct_booking' and w.status not in ('completed','cancelled') and r.check_out - r.check_in = 7;`
+
+# Round 5 (15 October 2026): every new enquiry in Properties straight away (built)
+
+Lee approved section 5. Built on `claude/serene-babbage-xgqaus` after merging the lead branch
+(`claude/fervent-brahmagupta-8qd03b`, fast-forward to `5a113a3`). One migration:
+`20261015200000_enquiry_property_on_submit.sql`. Not applied anywhere.
+
+## What happens now
+
+- **Submit** (`workspace_enquiry_public`, action `submit`). In the same transaction as the answers, it creates:
+  - the property: status onboarding, named from the first line of the address by the same rule as
+    `valuationDraft`, region from the address, `created_by` = the sender;
+  - the journey: stage `enquiry`, no owner, and only the property's facts (WCs, parking, garden, photo link,
+    existing client);
+  - the "Property onboarding" work item, `created_by` = the sender.
+
+  The landlord's name, email, phone, correspondence address and notes stay on the enquiry. One submit per
+  link and the 30-day expiry are unchanged.
+- **Onboarding team:** the journey's existing insert trigger gives Guest relations staff with property
+  onboarding their usual assignment. Nobody is signed in during a public submit, so the trigger now falls
+  back to the work item's creator (the sender) for `granted_by`.
+- **Duplicates.** Flagged, never merged, using two new columns on the enquiry:
+  - `duplicate_of` is another property in use at the same address (case, punctuation, spacing, the
+    postcode's space and a trailing UK or Scotland are ignored);
+  - `duplicate_reason` is `same_address`, or `existing_client` when the landlord said they already work with
+    us.
+- **Start valuing** reuses the property. The team's corrections (name, address, region, type, rooms,
+  enquiry details) are saved onto it and no second property is made. If an estimate was already published
+  from the property, its details are left as they are. Enquiries answered before the migration have no
+  property and keep the old path.
+- **Closing** an enquiry whose property is still at the enquiry stage archives the journey and the property,
+  and marks the work item declined, as for any archived journey (`workspace_onboarding_status_guard` allows
+  nothing else, and still refuses every other change). Nothing is deleted. A property that has moved on is left alone.
+- **Privacy.**
+  - Owners, cleaners, the cleaning manager and Ready have no assignment, so they never see it.
+  - Accounts could read every property (the table policy and `workspace_can_property`). Both now leave out
+    a property whose journey is still at stage `enquiry`. **This also hides enquiries the team adds by
+    hand from Accounts until they are valued**, which matches the rule; flagging it in case Accounts relied
+    on it.
+  - The `enquiry.received` notice is unchanged. Giving it a property would change who reads it under
+    `activity_scoped`, so `activity_scoped` and `workspace_activity` are untouched.
+- **App:**
+  - `LiveEnquiries.tsx`: the button reads "Check the details and value" when the property already exists
+    ("Start valuing" for older enquiries); a "Possible duplicate" badge on the row with a note in the sheet;
+    an "Open" link to the property; the close sheet says the property is archived too.
+  - `lib/tracker-onboarding.ts`: one row per property; the journey row carries "From: the enquiry form" and
+    the duplicate flag, for staff only.
+  - `lib/property-table.ts`: the Properties table shows the stage "New enquiry".
+  - `lib/client-enquiry.ts`: the new fields, with defaults so older reads still parse. Once the property
+    moves on, the enquiry's step follows the property.
+
+## Existing answered enquiries (no backfill, for Lee to decide)
+
+Enquiries answered before this migration and not yet valued keep today's flow: their property is made when
+someone presses Start valuing. To list them (not run; no contact details selected):
+
+```sql
+select e.id, e.status, e.submitted_at, e.sent_by
+from private.workspace_client_enquiries e
+where e.status = 'received' and e.property_id is null
+order by e.submitted_at;
+```
+
+If Lee wants them converted, one more migration in my range can call
+`private.workspace_enquiry_create_property(id)` for each of them.
+
+## Files outside my original list
+
+- `lib/client-enquiry.ts`: the enquiry schema and step.
+- New test files: `tests/enquiry-property-database.test.mjs` and `tests/enquiry-property.test.mjs`.
+
+## Tests
+
+- **App side:** `tests/enquiry-property.test.mjs`, 6 of 6 pass.
+- **Related non-database tests:** tracker-onboarding, property-table, enquiry-and-preview, tracker-sections,
+  navigation-v2 and wiring-v2: 87 of 88 pass. The 1 failure is the known CRLF check in `wiring-v2`.
+- **Types and lint:** `npx tsc --noEmit -p mobile/tsconfig.json` passes. ESLint on the changed files is
+  clean apart from an unused `web` import in `LiveEnquiries.tsx` that was already on `main`.
+- **Database tests:** `tests/enquiry-property-database.test.mjs` covers create, privacy per role,
+  duplicates, Start valuing reuse, closing, older enquiries, and running twice. It and the existing
+  `tests/client-enquiries-database.test.mjs` have **not been run yet**: running database tests was blocked
+  by this session's permission check midway through this round. See the open points.
+
+## Open points
+
+1. **Database tests.** The Lead ran them on `c2a8bbc`: 11 of 13 passed, including all of
+   `client-enquiries-database`. Both failures are now fixed:
+   - Closing tried to set the onboarding work item to "cancelled". `workspace_onboarding_status_guard`
+     allows only "declined" once a journey is archived, so it is now set to "declined", the journey's own
+     rule. The test also checks that the guard still refuses cancelled, completed and declined from anyone
+     else.
+   - The "runs twice" test passed the whole migration to `db.query`. It now uses `db.exec`.
+
+   Every patch anchor is a single line, so the migration does not depend on line endings: `.gitattributes`
+   checks SQL out as CRLF, and the live functions may have been created from LF text.
+2. **Lee:** convert the enquiries answered before this change, or not (query above).
+3. **Lee:** should unvalued enquiries count in the portfolio summary and on the map? They currently do, as
+   onboarding.
+
+## Tell the team
+
+- Accounts no longer see a property while it is at the enquiry stage, including one the team adds by hand
+  before valuing it. It appears for them as soon as it is valued (estimate stage onwards).
+- Every answered enquiry form is now in Properties straight away, as "Onboarding · New enquiry". Closing
+  the enquiry archives that property.
+- "Possible duplicate" on an enquiry means: check the other property and close one if it is the same place.
+  Nothing is merged automatically.
+
+# Round 5, second task: menu order per role (Lee's request)
+
+Built on `claude/serene-babbage-xgqaus` after merging `main` (`b25d02f`). One migration:
+`20261015210000_menu_layouts.sql`. Not applied anywhere. For this round Session B owns the navigation.
+
+## What it does
+
+- **Access control → Menu order** (super admins only; a new People / Menu order switch at the top of
+  Access control, in `mobile/src/MenuOrderEditor.tsx`):
+  - pick a role (Super admin, Admin, Guest relations, Cleaning manager, Cleaner, Ready, Accounts, Owner);
+  - move its sections up or down, and the links inside each section up or down;
+  - press **Save and publish**. **Undo changes** and **Reset this role to default** are there too, with
+    "Last changed by X on ...".
+
+  The move buttons are plain 44-point buttons with labels such as "Move section Overview up", so they work
+  on a phone, with a keyboard and with a screen reader. There is no drag.
+- **Live preview:** it shows the phone bar, the left panel and the phone menu's sections for that role. It
+  is built by the same code the app uses (`rolePanel` with the layout, then `orderPhoneBar`), with the
+  role's usual tools.
+- **Arrange only, never grant.** `lib/menu-layout.ts` (`applyMenuLayout`):
+  - it starts from the sections and links the role and its tools allow, then applies the saved layout;
+  - **links can move between sections** (Lee's answer): each section lists its links in order, and a link
+    belongs to the section that lists it. If a layout lists a link under two sections, the first wins:
+    sections in the saved order first, then any other listed sections;
+  - a link the layout does not list (for example a tool added later) goes back to its default section,
+    after the listed ones, in its default order;
+  - unknown keys, keys the role does not have, sections the role does not have, and repeats are ignored;
+  - a section left with no links is hidden in the app. The editor keeps it ("Empty: hidden for this role
+    until a link is moved here"), so links can be moved back.
+- **Move to section:** every link in the editor has a "Move to…" button. It opens a row of plain buttons,
+  one per other section, and the link goes to the end of the chosen section. Move up and Move down work as
+  before.
+- **Stable keys:**
+  - each section now has a key in `lib/role-panel.ts` (`overview`, `departments`, `calendar-messages`,
+    `management`, `more`, `start`, `today`, `work`, `guests-listings`, `my-day`, `my-work`, `me`,
+    `cleaning-team`, `cleaning-desk`, `jobs`, `ready-desk`, `accounts`, `money`, `costs`,
+    `your-properties`, `requests`);
+  - links use their existing keys (`page:home`, `area:stays`, `tool:payouts`...);
+  - renaming a section title keeps its key.
+- **Desktop and phone use the same merged menu** (`mobile/src/LiveWorkspace.tsx`):
+  - **Desktop:** the left panel is `rolePanel(role, modules, layout)`.
+  - **Phone bar:** the same destinations as today, reordered by where they come in the merged menu (Work
+    counts as the first Work area). So the first sections fill the bar.
+  - **Phone menu:** there was no More menu on phones. A new **Menu** button in the phone header opens a
+    sheet with every section in order, without the places already on the bar.
+  - **Work tabs:** the phone's Work area tabs follow the order of the areas too. Which area opens first does
+    not change.
+- **View as:**
+  - **a person:** the reads run as that person, so the menu shown is their role's;
+  - **a role preview** (no person): the app takes that role's layout from the super admin's list of every
+    role;
+  - **Demo mode:** uses the default order.
+- **Publishing:**
+  - after Save, the editor's own app updates at once, through `mobile/src/MenuLayoutStore.ts`, when the
+    saved role is the editor's own;
+  - everyone else gets it on the existing one-minute quiet refresh, or when they reopen the app;
+  - the read is one small row.
+
+## Database (`20261015210000_menu_layouts.sql`)
+
+- `private.workspace_menu_layouts`: one row per role (`sections` array, `items` object of arrays, `version`,
+  `updated_by`, `updated_at`). Empty arrays mean the default order.
+- Team read `menuLayout`: anyone signed in gets **their own role's** layout, order data only (role,
+  sections, items, version).
+- Team read `menuLayouts`: super admins get every role's layout, with who changed it and when.
+- Team actions `saveMenuLayout` and `resetMenuLayout`:
+  - super admins only;
+  - optimistic version check (version 0 is a role never changed);
+  - keys must be stable keys (lower case, digits, `: _ = -`), each once, at most 40 sections and 80 links
+    per section;
+  - a retried request gets the same answer (action receipts).
+- Every save or reset writes `workspace_access_events` (`menu_order_saved` / `menu_order_reset`). The person
+  and the actor are both the super admin, the old order is in `old_access`, and the role and new order are in
+  `new_access`. Access control's history shows "Menu order saved · Guest relations".
+- Routes are appended after the hub anchors in `workspace_teams_read` and `workspace_teams_action`. They
+  are single-line anchors with sentinels, so the migration is safe to run twice.
+- Schemas: `lib/workspace-teams-policy.ts` gained the two read sections and the two actions (at the end
+  of their lists).
+
+## Tests
+
+- `tests/menu-layout.test.mjs`, 13 of 13 pass:
+  - the merge never adds a tool the role lacks and never loses one, and lists each link once;
+  - a link moved between sections shows there on desktop, on the phone bar and in the phone menu;
+  - a link listed twice stays in the first section;
+  - an emptied section is hidden in the app and kept in the editor;
+  - a moved link disappears when the role loses its tool, and a new tool appears in its default section;
+  - saved order applied;
+  - unknown and duplicate keys ignored;
+  - new tools fall in at their default place;
+  - the desktop panel, phone bar, phone menu and Work tabs agree;
+  - the editor's moves, and the preview equals what the role gets;
+  - request schemas;
+  - wiring.
+- `tests/menu-layout-database.test.mjs`, 5 of 5 pass:
+  - own-role read only, order data only;
+  - only super admins can save or reset (admin, staff and owners refused);
+  - version check;
+  - keys checked;
+  - access history and retry;
+  - the migration runs twice.
+- Database tests that share the patched team routes, plus the two enquiry ones: management-flags,
+  enquiry-property, client-enquiries, team-calendar, aircover-links, day-reflection, daily-tasks,
+  access-control. 67 of 67 pass.
+- Whole non-database suite: 849 of 861. The 12 failures fail on `main` too:
+  - 5 are line-ending checks: this checkout's files predate the new `.gitattributes` and are LF;
+  - 7 need build output (prepared Worker, preview, hosted routes, icon fonts, Cloudflare redirect).
+- `npx tsc --noEmit -p mobile/tsconfig.json`: no errors. ESLint: no errors on the changed files.
+
+## Decisions (Lee and the Lead, 13 October)
+
+1. Links can move between sections: Lee said yes, and it is built (`128e016`).
+2. Phone bar: decided by the Lead. It stays as built: the bar follows the section order, and the Menu
+   button sits in the phone header. There is no editor control for the bar this round. Lee can change this
+   later.
+3. Home tools: decided by the Lead. They keep their own order this round. Lee can change this later.
+4. Section titles: decided by the Lead. They cannot be renamed in the editor. Lee can change this later.
+
+# Round 5, third task: the property and person picker is search only (Lee)
+
+Lee: "don't add property names just make it searchable, the less buttons the less confusion."
+
+## What changed
+
+- **One picker:** `mobile/src/SearchPicker.tsx` (`SearchPicker`, `PropertySelect`). It is used in 28 places.
+  The rule is in `lib/search-picker.ts` (`pickerView`). Matching (`lib/search-options.ts`) is unchanged.
+- **Long lists (more than 8 options):**
+  - **before anything is typed:** only the search box, the fixed options ("Every property", "All
+    properties", "Not sure yet", "Me") and the current choice as one selected chip (with `clearable`,
+    tapping it clears the choice). When nothing is chosen, a line says "Nothing chosen yet. Type to find
+    one of the 101 properties.";
+  - **once something is typed:** the best matches (up to 12) as before, the current choice kept first,
+    "Showing x of y properties. Keep typing to narrow it down." when there are more, and "Nothing matches
+    ..." when there are none.
+- **Short lists (8 or fewer):** unchanged. Every option is a chip, with no search box.
+- **Placeholder:** `PropertySelect` now reads "Search for a property by name, street or postcode".
+
+## Every screen that uses it
+
+- **A choice is needed, and the button waits for it:** Create clean (`LiveCleans.tsx`, the button is
+  disabled until a property is chosen) and Check figures in Statements (`AccountsStatements.tsx`, disabled
+  with "Choose a property to check its figures"). Both are fine.
+- **A choice is needed, but the button only checks when pressed** (an error names the property): Record a
+  stay (`StaySheet.tsx`), Report a repair and New routine plan (`LiveRepairs.tsx`), and Supplier invoice
+  (`AccountsPayable.tsx`). They still work, and the picker now says "Nothing chosen yet". **Suggested
+  follow-up (not done; these files are not mine this round):** disable each Save until a property is
+  chosen, as Create clean does.
+- **The first property is already chosen:** Restock requests (`LiveTools.tsx`). Fine.
+- **Choosing acts at once (the picker always starts empty):** Give someone a property (`LivePeople.tsx`,
+  type, then tap to assign), Find a person (`LivePeople.tsx`) and New to-do's property step
+  (`HubItemSheet.tsx`). Fine: type, tap, done.
+- **Filters with a fixed option:** Checklist templates (Every property), Calendar property and person
+  filters (All properties / everyone), Guest inbox property (Not sure yet), Team events (Me). Fine.
+- **Optional, clearable:** Receivable (stay, property, client), Performance filter, Cleaner invoices
+  property filter, Messages property, To-do property, Team time owner and backup. Fine.
+- **People pickers that are usually short:** Assign a cleaner (`LiveCleans.tsx`, only the cleaners who can
+  take that clean), To-do assignee, Team time person. Unchanged while 8 or fewer.
+- **Feels wrong: the Messages property filter in the guest inbox** (`InboxChips.tsx`). Its chips carried a
+  count per property ("Leith flat (3)"), so the team could see where messages were waiting. On a long
+  list those counts are now hidden until something is typed. Lee to decide: keep it search only, or show
+  the properties with waiting messages there. Not special-cased.
+- `LiveHub.tsx` also uses it, but that screen is retired and not routed.
+
+## Tests
+
+- `tests/search-picker.test.mjs`, 5 of 5 pass:
+  - no chips before typing on a long list;
+  - fixed options and the current choice still shown;
+  - matches (the same as `searchOptions`) appear when typing, with the count and the no-match state;
+  - short lists unchanged;
+  - the component uses the view.
+- `tests/search-and-cancel.test.mjs`, 7 of 7 pass (matching unchanged).

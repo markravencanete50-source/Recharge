@@ -1,4 +1,4 @@
-import { enquiryStep, STEP_LABEL, STEP_TONE, type ClientEnquiry } from './client-enquiry';
+import { DUPLICATE_LABEL, duplicateNote, enquiryStep, STEP_LABEL, STEP_TONE, type ClientEnquiry } from './client-enquiry';
 import { formatDay, formatMoney } from './format';
 import { addressOf, lastUpdateOf, nextActionOf, progressOf, type TrackerItem, type TrackerStep, type TrackerTone, type TrackerUpdate } from './tracker';
 import type { TrackerContext } from './tracker-sections';
@@ -165,10 +165,21 @@ export function sortOnboarding<T extends TrackerItem>(items: readonly T[]): T[] 
   return [...items].sort((a, b) => Number(a.closed) - Number(b.closed) || Number(!isEnquiryRow(a)) - Number(!isEnquiryRow(b)) || rank(a) - rank(b) || stageOf(a) - stageOf(b) || touched(a) - touched(b) || a.address.localeCompare(b.address) || a.id.localeCompare(b.id));
 }
 
+// A property made from an answered enquiry form (migration 20261015200000) is one row: its journey. For staff
+// it carries where it came from and any possible-duplicate flag; the landlord's contact details stay on the
+// enquiry. Owners never get these (they never see an unvalued property anyway).
+export function withEnquiry(item: TrackerItem, e: ClientEnquiry | undefined, ctx: Pick<OnboardingContext, 'owner' | 'now'>): TrackerItem {
+  if (!e || ctx.owner || e.status === 'closed') return item;
+  const details: Detail[] = [...item.details, { label: 'From', value: 'The enquiry form' + (e.submittedAt ? ', answered ' + formatDay(e.submittedAt.slice(0, 10), ctx.now) : '') }];
+  if (e.duplicateReason) details.push({ label: DUPLICATE_LABEL, value: duplicateNote(e), tone: 'bad' });
+  return { ...item, details, search: [item.search, e.duplicateReason ? DUPLICATE_LABEL : ''].filter(Boolean).join(' ') };
+}
+
 // Every row for the screen. Journeys are staff and owner alike; client enquiries are staff only, and only
-// the ones not yet valued (once valued, the property's own journey is the row).
+// the ones without a property yet (once a property exists, from the form or from valuing, its journey is the row).
 export function onboardingTrackerItems(journeys: readonly JourneyView[], enquiries: readonly ClientEnquiry[], ctx: OnboardingContext): TrackerItem[] {
-  const rows: TrackerItem[] = journeys.map(j => onboardingTrackerItem(j, ctx));
+  const byProperty = new Map(enquiries.filter(e => e.propertyId).map(e => [e.propertyId!, e] as const));
+  const rows: TrackerItem[] = journeys.map(j => withEnquiry(onboardingTrackerItem(j, ctx), byProperty.get(j.propertyId), ctx));
   if (!ctx.owner) for (const e of enquiries) {
     if (e.propertyId || e.status === 'closed' || !(OPEN_ENQUIRY_STEPS as readonly string[]).includes(enquiryStep(e, ctx.now.getTime()))) continue;
     rows.push(enquiryTrackerItem(e, ctx));
