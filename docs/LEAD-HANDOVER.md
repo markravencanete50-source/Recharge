@@ -102,6 +102,7 @@ If it doesn't, Lee relays messages by pasting them into each session, or the new
 | C | – | `session_017q1kW6zE6djgXB76GoS9gF` | `claude/determined-cori-5jpfoj` | Opus 5.5 | team, people, bonus, notices and Updates, chat; migrations `20261016300000–399999` |
 | D | "4th Developer" | `session_01HkEF7tiRFSCw16C8ErtC1Z` | `claude/round6-forms-session-d` | Sonnet 5.5 (switch pending) | forms, sheets, demo, enquiry form, Management checklist; migrations `20261016400000–499999` |
 | E | UI/UX | `session_01FkZ7wvBwi6Yb6jwxQq1MSy` | `claude/round6-uiux-session-e` | Opus 5.5 | theme tokens (`lib/design-tokens.ts`, `theme.ts`, only E edits them), contrast test, design review of every branch |
+| F | "6th Developer (Email)" | `session_01Msce2EGBrVPZMznwLwpew2` | `claude/round6-email-session-f` | Opus 5.5 | guest and client email through Resend (`guestrelations@` and `ownerrelations@rechargegroup.co.uk`): domain verification with Lee, inbound webhook, threading, replies out; migrations `20261016500000–599999` |
 
 **Model choice:**
 - Opus for database, privacy and money logic.
