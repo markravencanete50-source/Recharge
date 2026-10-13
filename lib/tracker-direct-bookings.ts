@@ -40,6 +40,19 @@ const money = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? form
 export type StayInfo = { reservationId: string; checkIn: string; checkOut: string; channel: string | null; guestName: string | null };
 export type DirectBookingContext = TrackerContext & { stays?: ReadonlyMap<string, StayInfo> };
 
+// The schedule read answers up to 62 days at a time (lib/workspace-teams-policy.ts and the SQL both cap it), so
+// a long look-ahead is asked for in consecutive windows. Direct-booking stays are long and booked well ahead.
+export const SCHEDULE_WINDOW_DAYS = 62;
+export function scheduleWindows(today: string, daysBack = 14, daysAhead = 400): { from: string; to: string }[] {
+  const shift = (iso: string, days: number) => { const d = new Date(iso.slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
+  const out: { from: string; to: string }[] = [], last = shift(today, daysAhead);
+  for (let from = shift(today, -daysBack); from <= last; from = shift(from, SCHEDULE_WINDOW_DAYS + 1)) {
+    const end = shift(from, SCHEDULE_WINDOW_DAYS);
+    out.push({ from, to: end > last ? last : end });
+  }
+  return out;
+}
+
 // Reads the stays out of a schedule answer ({ stays: [...] }) or a bare list. Anything unreadable is left out.
 export function parseStays(raw: unknown): Map<string, StayInfo> {
   const list = Array.isArray(raw) ? raw : raw && typeof raw === 'object' && Array.isArray((raw as { stays?: unknown }).stays) ? (raw as { stays: unknown[] }).stays : [];

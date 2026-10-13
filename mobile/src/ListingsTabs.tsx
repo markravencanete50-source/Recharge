@@ -10,7 +10,7 @@ import { ListingSheet, PricingSheet, ReviewSheet } from "./ListingSheets";
 import { readOperations, readTeams } from "./backend/client";
 import { ui } from "./theme";
 import type { SectionProps } from "./SectionProps";
-import { parseFlags, withFlags, type Flag } from "../../lib/management-flags";
+import { canFlag, canFlagTarget, FLAG_NEEDS_RECORD_HINT, parseFlags, withFlags, type Flag } from "../../lib/management-flags";
 import type { TrackerItem } from "../../lib/tracker";
 import {
   listingHealthTrackerItems, parseStayDates, PRICING_HORIZON_DAYS, pricingTrackerItems, relistingTrackerItems, reviewTrackerItems,
@@ -103,7 +103,9 @@ function ListingsSection({ palette: p, account, properties, journeys, work, onFo
           {!isWork && !!copy.log && mayLog && (kind !== "pricing" || !!source?.nights.length) && <Button label={copy.log.label} icon={copy.log.icon} primary p={p} onPress={startLog} />}
           {kind === "pricing" && !!source?.pending && <Button label="Record the applied price" icon="check" p={p} onPress={() => { setOpenId(null); onOpenWork(source.pending!); }} />}
           {!!openWork && <Button label={isWork ? "Open the full ticket" : "Open the latest record"} icon="external-link" p={p} onPress={() => { setOpenId(null); onOpenWork(openWork); }} />}
-          <FlagButton p={p} role={account.role} target={{ ...(open.workId ? { workId: open.workId } : {}), propertyId: open.propertyId, title: `${copy.title}: ${open.address}` }} onDone={() => void load(false)} />
+          {canFlagTarget(open)
+            ? <FlagButton p={p} role={account.role} target={{ workId: open.workId, propertyId: open.propertyId, title: `${copy.title}: ${open.address}` }} onDone={() => void load(false)} />
+            : canFlag(account.role) && <View style={{ gap: 6 }}><Button label="Flag for management" icon="flag" p={p} disabled onPress={() => undefined} /><Text style={[ui.small, { color: p.muted }]}>{FLAG_NEEDS_RECORD_HINT}</Text></View>}
         </View>}
       </TrackerDetailSheet>
       <ListingSheet p={p} property={listingFor} onClose={() => setListingFor(null)} onDone={done} />

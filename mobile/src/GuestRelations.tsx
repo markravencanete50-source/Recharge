@@ -10,6 +10,7 @@ import { LiveCleans } from "./LiveCleans";
 import { LiveRepairs } from "./LiveRepairs";
 import { PreventativeList } from "./PreventativeList";
 import { StaySheet } from "./StaySheet";
+import { StaysRoutineCard } from "./StaysRoutineCard";
 import type { SectionProps } from "./SectionProps";
 import { ui } from "./theme";
 import { canStart } from "../../lib/home-tools";
@@ -22,7 +23,8 @@ import { GUEST_SUB_LABEL, defaultGuestSub, guestSubsFor, pickSub, type GuestSub 
 //   reactive      repairs from report to completion (LiveRepairs)
 //   preventative  routine visits (PreventativeList)
 // A link's `sub` picks the section (Work → Guest relations → AirCover opens it); otherwise the role's own
-// first section opens. "Record a stay" sits in the header, and a link with `open: "record-stay"` opens it.
+// first section opens. Stays and admins see Today's routine above the chips (StaysRoutineCard).
+// "Record a stay" sits in the header, and a link with `open: "record-stay"` opens it.
 // The host builds the SectionProps once and passes them in; `onRefresh` asks it to read the work list
 // again after a stay is recorded.
 export function GuestRelations(props: SectionProps & { onRefresh?: () => void | Promise<void>; minimumNights?: number }) {
@@ -41,6 +43,7 @@ export function GuestRelations(props: SectionProps & { onRefresh?: () => void | 
         </View>
         {canStart(account, "record-stay") && <Button label="Record a stay" icon="plus" primary p={p} onPress={() => setRecording(true)} />}
       </View>
+      <StaysRoutineCard palette={p} account={account} properties={properties} work={props.work} />
       {subs.length > 1 && <Pills p={p} values={subs} value={sub} onChange={setSub} label={v => GUEST_SUB_LABEL[v]} wrap={false} />}
       {sub === "cleans" && <LiveCleans palette={p} account={account} properties={properties} onForm={props.onForm} />}
       {sub === "bookings" && <DirectBookings {...props} />}

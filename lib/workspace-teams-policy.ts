@@ -182,9 +182,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('recordVisitForm'), requestId: id, workId: id, version, answers: z.array(visitAnswerSchema).min(1).max(30),
     note: z.string().trim().max(2000).default(''), photoIds: z.array(id).max(20).optional() }).strict(),
   // The team calendar: your own absences, meetings and so on (admins can change anyone's).
-  z.object({ action: z.literal('saveTeamEvent'), requestId: id, id: id.optional(), userId: id.optional(), kind: z.enum(TEAM_EVENT_KINDS), title: text(2, 200), startsOn: date, endsOn: date,
+  z.object({ action: z.literal('saveTeamEvent'), requestId: id, id: id.optional(), version: version.optional(), userId: id.optional(), kind: z.enum(TEAM_EVENT_KINDS), title: text(2, 200), startsOn: date, endsOn: date,
     startTime: clockTime.nullable().optional(), endTime: clockTime.nullable().optional(), location: z.string().trim().max(200).optional() }).strict(),
-  z.object({ action: z.literal('cancelTeamEvent'), requestId: id, id }).strict(),
+  z.object({ action: z.literal('cancelTeamEvent'), requestId: id, id, version: version.optional() }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'flagForManagement') {
     if (value.source === 'work' && (!value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'Flag work with its work id only' });

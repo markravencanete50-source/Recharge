@@ -52,8 +52,8 @@ export const WORKSPACE_MAP: Record<ModuleId, Destination> = {
 export const GUEST_RELATIONS_SUBS = ["cleans", "bookings", "aircover", "reactive", "preventative"] as const;
 export const CLIENT_RELATIONS_SUBS = ["onboarding", "enquiries", "licensing", "listings", "pricing", "reviews", "relisting", "purchases"] as const;
 // Management's own tabs and Accounts' tabs, as the screens know them today.
-export const MANAGEMENT_SUBS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "decisions", "reflections", "dailytasks", "access"] as const;
-export const ACCOUNTS_SUBS = ["expenses", "payouts", "statements", "receivable", "performance"] as const;
+export const MANAGEMENT_SUBS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "decisions", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
+export const ACCOUNTS_SUBS = ["expenses", "payouts", "statements", "receivable", "performance", "aircover"] as const;
 export type WorkSub = { view: WorkView; sub: string; label: string; words: string };
 export const WORK_SUBS: readonly WorkSub[] = [
   { view: "stays", sub: "cleans", label: "Changeover cleans", words: "cleans cleaning changeovers turnover guest relations" },

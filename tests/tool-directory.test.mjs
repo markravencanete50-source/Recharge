@@ -28,7 +28,8 @@ test('team roles all have All work, and admins can open the Guest relations and 
   assert.ok(workViewsFor('admin').includes('stays') && workViewsFor('admin').includes('clients'));
   assert.deepEqual(toolsFor('client', ['client-furnishing']).map(t => t.place.kind), ['calculator'], 'the calculator runs inside the app');
   assert.deepEqual(toolsFor('stays', ['aircover-reporting']).map(t => [t.place.kind, t.place.view, t.place.sub]), [['work', 'stays', 'aircover']], 'AirCover is its own Guest relations section');
-  assert.deepEqual(toolsFor('accounts', ['aircover-reporting']).map(t => t.place.kind), ['tracker'], 'a role without Guest relations keeps the simple tracker');
+  assert.deepEqual(toolsFor('accounts', ['aircover-reporting']).map(t => [t.place.kind, t.place.view, t.place.sub]), [['work', 'accounts', 'aircover']], 'a role without Guest relations opens AirCover in Accounts');
+  assert.deepEqual(toolsFor('ready', ['aircover-reporting']).map(t => t.place.kind), ['tracker'], 'a role with neither Guest relations nor Accounts keeps the simple tracker');
 });
 
 test('Accounts are not sent to a Properties tab they cannot open', () => {

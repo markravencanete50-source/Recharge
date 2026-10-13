@@ -115,7 +115,7 @@ export function VisitMoves({ p, role, visit, onRecord, onDone }: { p: Palette; r
   async function move(status: "in_progress" | "in_review" | "approved" | "completed") {
     if (busy) return;
     setBusy(true); setError("");
-    try { await writeWorkspace({ action: "transitionWork", workId: visit.workId, version: visit.version, status, note: note.trim(), requestId: request.get() }); request.done(); setNote(""); await onDone(); }
+    try { await writeWorkspace({ action: "transitionWork", workId: visit.workId, version: visit.version, status, note: note.trim(), requestId: request.get(status) }); request.done(status); setNote(""); await onDone(); }
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (

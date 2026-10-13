@@ -94,7 +94,7 @@ function flagSpec(flag: ApprovalFlag, ctx: ApprovalContext): Spec {
   if (flag.amountMinor != null) add('Amount', formatMoney(flag.amountMinor));
   return {
     badge: request ? 'Request' : flag.source === 'clean_form' ? 'Clean form' : 'Flag', propertyId: flag.propertyId ?? null, propertyName, address,
-    title: text(flag.title) || 'Flagged for management', amountMinor: flag.amountMinor ?? null, since: flag.createdAt, by: text(flag.raisedByName) || null, automatic: !flag.raisedBy && !flag.raisedByName,
+    title: text(flag.title) || 'Flagged for management', amountMinor: flag.amountMinor ?? null, since: flag.createdAt, by: text(flag.raisedByName) || null, automatic: flag.source === 'clean_form',
     action: APPROVAL_DECIDE, actionLabel: 'Decide', next: 'Resolve or decline', details, ...(flag.workId ? { workId: flag.workId } : {}), version: flag.version,
   };
 }

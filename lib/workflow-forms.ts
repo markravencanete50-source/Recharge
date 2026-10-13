@@ -186,3 +186,9 @@ export function workItemForms(a:WorkspaceAccount,w:OperationView,journeys:readon
  if(w.kind==='inspection')return [...own,...journeyForms(a,j).filter(f=>INSPECTION_STEPS.includes(f.key))];
  return own;
 }
+
+// Direct-booking offers wait for the confirmed discount policy, so that step shows as unavailable until then.
+export const DISCOUNT_POLICY_WAITING='The discount policy awaits confirmation.';
+export function gateDiscountPolicy(forms:readonly WorkflowForm[],policyConfirmed:boolean):WorkflowForm[]{
+  return forms.map(f=>f.key==='prepareQuote'&&!policyConfirmed&&!f.unavailable?{...f,unavailable:DISCOUNT_POLICY_WAITING}:f);
+}

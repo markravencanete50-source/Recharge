@@ -8,6 +8,7 @@ import { CountUp, Entrance, MotionPress } from "./motion";
 import { StateGraphic } from "./StateGraphic";
 import { followUpsDue } from "../../lib/portfolio-overview";
 import { ShiftCard } from "./LiveShifts";
+import { EndOfDayCard } from "./EndOfDayCard";
 import { CleanerMonthCard } from "./CleanerPay";
 import { OwnerHome } from "./LiveOwnerHome";
 import { HomeFavorites, HomeTools } from "./HomeTools";
@@ -125,6 +126,8 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
       {(account.role === "admin" || account.role === "super_admin") && <AdminHome palette={p} desktop={desktop} onTool={onTool} />}
       {/* Clock in and out and pauses come first for the team. */}
       {!isClient && <ShiftCard palette={p} account={account} />}
+      {/* Stays with nobody clocked in sign the day off here (a reflection needs an open shift). */}
+      {!isClient && <EndOfDayCard palette={p} account={account} />}
       {/* Owners keep their tools; the team's own Favorites replace them (no action pills any more). */}
       {isClient && <HomeTools palette={p} account={account} properties={properties} desktop={desktop} onOpen={onTool} onAll={() => onNavigate("help")} />}
       {!isClient && <HomeFavorites palette={p} account={account} properties={properties} entries={favoriteEntries} onOpenEntry={onOpenEntry} onTool={onTool} onSection={onNavigate} />}

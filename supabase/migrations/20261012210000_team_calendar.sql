@@ -1,6 +1,7 @@
 -- Team calendar (client ask A9):
 --  * the guest's name on a stay in the calendar, for staff other than cleaners. Reservations carry no name, so it comes from the
---    guest conversation about that stay: matched on the platform booking code first, else on the same property and the same dates.
+--    guest conversation about that stay: matched on the platform booking code first, else on the same property and the same dates
+--    (only when no conversation carries the stay's code and the dates point at one name, otherwise no name).
 --    Owners and cleaners (and the cleaning manager) never receive it; an owner's own stay never has one.
 --  * team events: your own absences, meetings, time away, training and so on. You add and cancel your own, admins anyone's.
 --    The whole team (cleaners too) reads them for a window of up to 62 days; owners never do.
@@ -38,13 +39,15 @@ begin
    where t.guest_name is not null and t.reservation_ref is not null and upper(t.reservation_ref)=any(codes) and (t.property_id is null or t.property_id=r.property_id)
    order by (t.property_id is not null) desc,t.last_message_at desc nulls last,t.created_at desc limit 1;
  end if;
- -- 2. else the conversation for the same property and dates, unless it belongs to another confirmed stay's booking code
- if guest is null then
-  select t.guest_name into guest from private.workspace_guest_threads t
+ -- 2. else the conversation for the same property and dates, unless it belongs to another confirmed stay's booking code.
+ --    Only when no conversation carries this stay's code (named or not), and only when the date match is not
+ --    ambiguous: every matching conversation must give the same name (two enquiries on the same dates give none).
+ if guest is null and not exists(select 1 from private.workspace_guest_threads t
+   where t.reservation_ref is not null and upper(t.reservation_ref)=any(codes) and (t.property_id is null or t.property_id=r.property_id)) then
+  select case when count(distinct t.guest_name)=1 then min(t.guest_name) end into guest from private.workspace_guest_threads t
    where t.guest_name is not null and t.property_id=r.property_id and t.check_in=r.check_in and t.check_out=r.check_out
     and (t.reservation_ref is null or not exists(select 1 from private.workspace_reservations o where o.property_id=r.property_id and o.id<>r.id and o.status='confirmed'
-      and upper(t.reservation_ref)=any(private.workspace_stay_codes(o.channel_reference,o.reference))))
-   order by t.last_message_at desc nulls last,t.created_at desc limit 1;
+      and upper(t.reservation_ref)=any(private.workspace_stay_codes(o.channel_reference,o.reference))));
  end if;
  return guest;
 end $fn$;

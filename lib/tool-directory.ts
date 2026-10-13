@@ -67,9 +67,10 @@ const PLACES: Record<ModuleId, ToolPlace> = {
   'replenishment-requests': { kind: 'tracker', where: 'A simple tracker: add and close restock requests' },
 };
 
-// A Work view the role cannot open falls back to All work, except AirCover, which the simple tracker
-// still serves for a role without Guest relations (Accounts can hold the tool).
+// A Work view the role cannot open falls back to All work, except AirCover: a role without Guest relations
+// opens it in Accounts (Work → Accounts → AirCover), and a role with neither keeps the simple tracker.
 const FALLBACK: Partial<Record<ModuleId, ToolPlace>> = { 'aircover-reporting': { kind: 'tracker', where: 'A simple tracker: add and close AirCover claims' } };
+const AIRCOVER_IN_ACCOUNTS: ToolPlace = work('accounts', 'Work → Accounts → AirCover', 'aircover');
 
 export type Tool = { id: ModuleId; name: string; description: string; place: ToolPlace };
 // The person's tools, each with where it lives for their role. A Work view the role cannot open
@@ -80,7 +81,7 @@ export function toolsFor(role: string, modules: readonly string[]): Tool[] {
   const onPropertiesTab = (place: ToolPlace) => place.kind === 'tab' && place.tab === 'properties';
   return MODULES.filter(m => modules.includes(m.id) && !(role === 'accounts' && onPropertiesTab(PLACES[m.id as ModuleId]))).map(m => {
     let place = PLACES[m.id as ModuleId];
-    if (place.kind === 'work' && !views.includes(place.view)) place = FALLBACK[m.id as ModuleId] ?? work('all', 'Work → All work');
+    if (place.kind === 'work' && !views.includes(place.view)) place = m.id === 'aircover-reporting' && views.includes('accounts') ? AIRCOVER_IN_ACCOUNTS : FALLBACK[m.id as ModuleId] ?? work('all', 'Work → All work');
     return { id: m.id as ModuleId, name: m.name, description: m.description, place };
   });
 }

@@ -9,6 +9,7 @@ import { CountUp, Entrance, MotionPress } from './motion';
 import { Text } from './Typography';
 import { primaryFill, ui, type Palette } from './theme';
 import { MyPerformance } from './MyPerformance';
+import { TimesheetTab } from './LiveTeamTime';
 import type { WorkspaceAccount } from '../../lib/workspace-account-policy';
 import type { OperationView } from '../../lib/workflow-forms';
 // The team's "My performance" page: the person's own numbers first (when the host passes `account`), then the
@@ -26,6 +27,7 @@ export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporti
   return <View style={{gap:24}}>
     <Entrance sessionKey={'reports:'+role+':heading'}><View style={{gap:8}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>{account?'My performance':snapshot.title}</Text><Text style={[ui.body,{color:p.muted}]}>{account?'Your own numbers: replies, tasks done, time worked and your bonus tier.':snapshot.description}</Text></View></Entrance>
     {account&&<MyPerformance palette={p} account={account} work={work} page/>}
+    {account&&account.role!=='client'&&<View style={{gap:12}}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>My timesheet</Text><TimesheetTab p={p} account={account}/></View>}
     {account&&<View style={{gap:4}}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{snapshot.title}</Text><Text style={[ui.small,{color:p.muted}]}>{snapshot.description}</Text></View>}
     <View style={[ui.row,{gap:12,flexWrap:'wrap'}]}>
       <MotionPress accessibilityRole="button" accessibilityLabel="Choose analytics date range" onPress={onDates} style={[ui.button,card,{borderWidth:1,flexGrow:desktop?0:1,gap:10}]}><Feather name="calendar" size={18} color={p.primary}/><Text style={[ui.small,{color:p.text,flexShrink:1,fontWeight:'600'}]}>{periodLabel(period)}</Text><Feather name="chevron-down" size={16} color={p.muted}/></MotionPress>

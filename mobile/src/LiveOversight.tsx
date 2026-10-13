@@ -246,7 +246,7 @@ function departments(o: Overview): { tone: Tone; icon: IconName; title: string; 
     { tone: "stays", icon: "calendar", title: "Stays", target: work("stays"), metrics: [
       { label: "Listings to check today", value: o.stays.listingsToCheck, attention: o.stays.listingsToCheck > 0, target: listings },
       { label: "Empty nights to price this week", value: o.stays.emptyNights, attention: o.stays.emptyNights > 0, target: listings },
-      { label: "Re-listings open", value: o.stays.relistingsOpen, attention: o.stays.relistingsOpen > 0, target: work("stays", { section: "Re-listings" }) },
+      { label: "Re-listings open", value: o.stays.relistingsOpen, attention: o.stays.relistingsOpen > 0, target: { kind: "work", view: "clients", sub: "relisting" } },
       ...(o.stays.guestsWaiting != null ? [{ label: "Guests waiting for a reply", value: o.stays.guestsWaiting, attention: o.stays.guestsWaiting > 0, target: work("stays", { sub: "inbox" }) }] : []),
     ] },
     { tone: "cleans", icon: "check-square", title: "Cleans", target: work("cleans"), metrics: [

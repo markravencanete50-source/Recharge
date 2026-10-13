@@ -20,6 +20,8 @@ import { AccountsPayable, ExpenseSheet, List, NewExpenseSheet, Pills, Row, type 
 import { AccountsStatements, TermsSheet, type StatementRow } from "./AccountsStatements";
 import { AccountsReceivable } from "./AccountsReceivable";
 import { AccountsPerformance } from "./AccountsPerformance";
+import { AirCoverList } from "./AirCoverList";
+import type { SectionProps } from "./SectionProps";
 export { ExpenseSheet, Initials, Line, List, Pills, Row, type NoteAsk } from "./AccountsPayable";
 import { CHANNEL_LABEL, expensesSchema, isFinanceRole, monthLabel, overviewSchema, payoutImportSchema, policySchema, pounds, reconciliationSchema, shiftMonth, statementsSchema, type Expense, type PayoutImport, type PayoutRow } from "../../lib/accounts-live";
 import { poundsToMinor } from "../../lib/repairs-live";
@@ -34,7 +36,7 @@ import type { z } from "zod";
 // Airbnb, Booking.com and Vrbo and shows, stay by stay, whether the money arrived.
 type Reconciliation = z.infer<typeof reconciliationSchema>;
 type NeedsDetails = Reconciliation["needsDetails"][number];
-type Tab = "expenses" | "payouts" | "statements" | "receivable" | "performance";
+type Tab = "expenses" | "payouts" | "statements" | "receivable" | "performance" | "aircover";
 
 // What the platform calls its reservation code, as staff will see it on the payout report.
 export function platformCode(channel: string): { label: string; placeholder: string } {
@@ -184,13 +186,14 @@ function unmatchedTag(stayStatus: string | null | undefined): [string, "wait" | 
   return ["No stay found", "wait"];
 }
 
-export function LiveAccounts({ palette: p, account, properties }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
+// `sectionProps` is what the Work area gives every section list; with it, Accounts also holds the AirCover claims tab.
+export function LiveAccounts({ palette: p, account, properties, sectionProps }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; sectionProps?: SectionProps }) {
   const saved = useSaved();
   const role = account.role, management = role === "admin" || role === "super_admin";
   const thisMonth = london(new Date()).slice(0, 7);
   const [period, setPeriod] = useState(thisMonth);
   const focus = useWorkFocus();
-  const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements", "receivable", "performance"] as const).find(v => v === focus?.sub && ((v !== "receivable" && v !== "performance") || isFinanceRole(account.role))) ?? "expenses");
+  const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements", "receivable", "performance", "aircover"] as const).find(v => v === focus?.sub && ((v !== "receivable" && v !== "performance" && v !== "aircover") || isFinanceRole(account.role)) && (v !== "aircover" || !!sectionProps)) ?? "expenses");
   const [status, setStatus] = useState<Expense["status"]>("to_approve");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [limit, setLimit] = useState<LimitState | null>(null);
@@ -305,6 +308,7 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
       <View style={[ui.row, { gap: 8 }]}>
         {(isFinanceRole(role) ? ["expenses", "payouts", "statements", "receivable"] as const : ["expenses", "payouts", "statements"] as const).map(v => <Button key={v} label={{ expenses: "Expenses", payouts: "Reconciliation", statements: "Statements", receivable: "Receivable" }[v]} primary={view === v} p={p} onPress={() => setView(v)} />)}
         {isFinanceRole(role) && <Button key="performance" label="Performance" primary={view === "performance"} p={p} onPress={() => setView("performance")} />}
+        {isFinanceRole(role) && !!sectionProps && <Button key="aircover" label="AirCover" primary={view === "aircover"} p={p} onPress={() => setView("aircover")} />}
       </View>
 
       {view === "expenses" && <AccountsPayable p={p} account={account} role={role} management={management} overview={overview} status={status} setStatus={setStatus} expenses={expenses} limit={limit} loading={loading} load={load} setAsk={setAsk} setOpenExpense={setOpenExpense} setCreating={setCreating} properties={properties} />}
@@ -354,6 +358,8 @@ export function LiveAccounts({ palette: p, account, properties }: { palette: Pal
       {view === "receivable" && <AccountsReceivable p={p} account={account} properties={properties} />}
 
       {view === "performance" && <AccountsPerformance p={p} account={account} properties={properties} />}
+
+      {view === "aircover" && !!sectionProps && <AirCoverList {...sectionProps} />}
 
       <ExpenseSheet p={p} role={role} id={openExpense} limit={limit?.minor ?? null} onClose={() => setOpenExpense(null)} onAsk={a => { setOpenExpense(null); setAsk(a); }} onDone={saved(load)} />
       <NewExpenseSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={saved(load)} />

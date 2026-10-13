@@ -15,6 +15,7 @@ import { DecisionsReport } from "./LiveOversight";
 import { DailyTaskSettings } from "./DailyTaskSettings";
 import { ReflectionReview } from "./ReflectionReview";
 import { ManagementApprovals } from "./ManagementApprovals";
+import { ResponsibilitiesTab, RotaTab } from "./LiveTeamTime";
 import { readTeams, WorkspaceApiError } from "./backend/client";
 import { managementSchema, type Management } from "../../lib/management-live";
 import { performanceSchema } from "../../lib/cleans-live";
@@ -24,7 +25,8 @@ import type { z } from "zod";
 
 // Live Management: the approvals list (everything waiting on admins, in ManagementApprovals), the
 // cleaning team's month, training, the team's day reflections and the daily tasks added to each to-do
-// list. The team's rota, timesheets and hours are under Productivity and Team performance. Read from
+// list. Admins also plan the rota and keep the responsibilities register here; everyone's own timesheet
+// is on My performance, and the team's hours are under Productivity and Team performance. Read from
 // and written to the backend only.
 
 // Changes to people's hours waiting for a super admin (the Productivity Tool's approvals).
@@ -49,7 +51,7 @@ function ShiftChangesWaiting({ p, onOpen }: { p: Palette; onOpen: () => void }) 
   );
 }
 
-const MANAGEMENT_VIEWS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "decisions", "reflections", "dailytasks", "access"] as const;
+const MANAGEMENT_VIEWS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "decisions", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
 type ManagementView = (typeof MANAGEMENT_VIEWS)[number];
 export function LiveManagement({ palette: p, account, properties, work, onOpenWork }: { palette: Palette; account: WorkspaceAccount } & Partial<Pick<SectionProps, "properties" | "work" | "onOpenWork">>) {
   const [queue, setQueue] = useState<Management | null>(null);
@@ -79,7 +81,7 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && view === "team" && <Loading p={p} />}
-      <Pills p={p} values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", productivity: "Productivity", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", reflections: "Day reflections", dailytasks: "Daily tasks", access: "Access control" })[v]} />
+      <Pills p={p} values={MANAGEMENT_VIEWS.filter(v => v !== "access" || account.role === "super_admin")} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", productivity: "Productivity", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", reflections: "Day reflections", dailytasks: "Daily tasks", rota: "Rota", responsibilities: "Responsibilities", access: "Access control" })[v]} />
 
       {view === "access" && <AccessControl palette={p} account={account} />}
       {/* Flags, requests and every pending decision arrive in one list (ManagementApprovals). */}
@@ -104,6 +106,8 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
       {view === "decisions" && <DecisionsReport palette={p} />}
       {view === "reflections" && <ReflectionReview palette={p} />}
       {view === "dailytasks" && <DailyTaskSettings p={p} account={account} />}
+      {view === "rota" && <RotaTab p={p} account={account} />}
+      {view === "responsibilities" && <ResponsibilitiesTab p={p} account={account} />}
       {view === "productivity" && <LiveProductivity key={productivityTab} palette={p} account={account} initial={productivityTab} />}
       {view === "performance" && <LiveTeamPerformance palette={p} role={account.role} />}
       {(view === "people" || view === "properties") && <LivePeople palette={p} account={account} view={view} />}

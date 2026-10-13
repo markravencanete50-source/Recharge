@@ -101,7 +101,7 @@ export function TeamEventSheet({ palette: p, visible, event, day, canEditAll, my
     setBusy(true); setError("");
     try {
       await writeTeams({
-        action: "saveTeamEvent", requestId: request.get(), ...(event ? { id: event.id } : who ? { userId: who } : {}),
+        action: "saveTeamEvent", requestId: request.get(), ...(event ? { id: event.id, version: event.version } : who ? { userId: who } : {}),
         kind, title: title.trim(), startsOn, endsOn, startTime: startTime || null, endTime: endTime || null, location: location.trim(),
       });
       request.done(); await onSaved(); onClose();
@@ -111,7 +111,7 @@ export function TeamEventSheet({ palette: p, visible, event, day, canEditAll, my
     if (busy || !event) return;
     setBusy(true); setError("");
     try {
-      await writeTeams({ action: "cancelTeamEvent", requestId: cancelRequest.get(), id: event.id });
+      await writeTeams({ action: "cancelTeamEvent", requestId: cancelRequest.get(), id: event.id, version: event.version });
       cancelRequest.done(); await onSaved(); onClose();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }

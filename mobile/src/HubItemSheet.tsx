@@ -81,8 +81,8 @@ export function HubItemSheet({ p, hub, account, properties, target, onClose, onS
     if (status === "declined" && kind === "approval" && (f.note ?? "").trim().length < 5) { setError("Say why it is declined."); return; }
     setBusy(true); setError("");
     try {
-      await writeTeams({ action: "moveHubItem", requestId: moveRequest.get(), id: item.id, version: item.version, status, ...((f.note ?? "").trim() ? { note: f.note.trim() } : {}), ...(kind === "aircover" && status === "paid" && settled !== null ? { settledMinor: settled } : {}) });
-      moveRequest.done(); await onSaved();
+      await writeTeams({ action: "moveHubItem", requestId: moveRequest.get(status), id: item.id, version: item.version, status, ...((f.note ?? "").trim() ? { note: f.note.trim() } : {}), ...(kind === "aircover" && status === "paid" && settled !== null ? { settledMinor: settled } : {}) });
+      moveRequest.done(status); await onSaved();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
 

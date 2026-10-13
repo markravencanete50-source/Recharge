@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import { z } from "zod";
 import { Text } from "./Typography";
@@ -6,11 +6,11 @@ import { Anchor, london, message } from "./LiveKit";
 import { FlagButton } from "./ManagementFlag";
 import { TrackerDetailSheet, TrackerList } from "./Tracker";
 import { VisitDates, VisitForm, VisitMoves } from "./VisitForm";
-import { readOperations } from "./backend/client";
+import { readOperations, readTeams } from "./backend/client";
 import { ui } from "./theme";
 import type { SectionProps } from "./SectionProps";
 import { RECORD_VISIT_KEY, preventativeTrackerItems } from "../../lib/tracker-repairs";
-import { withFlags, type Flag } from "../../lib/management-flags";
+import { parseFlags, withFlags, type Flag } from "../../lib/management-flags";
 import { operationViewSchema } from "../../lib/workspace-view";
 import type { OperationView } from "../../lib/workflow-forms";
 
@@ -19,9 +19,17 @@ import type { OperationView } from "../../lib/workflow-forms";
 // "Record visit" opens the visit form; once a form exists the visit can be sent for review and signed off.
 // Staff only: owners never see this list. Reads nothing on first show: the routine visits come from `work`;
 // after a change it asks for the work list again so the row moves straight away.
-// `flags` is optional: a host that already holds the open management flags can pass them so rows show Flagged.
-export function PreventativeList({ palette: p, account, properties, work, flags = [] }: SectionProps & { flags?: Flag[] }) {
+// `flags` is optional: a host that already holds the open management flags can pass them so rows show Flagged;
+// without them the list reads the flags itself (leniently: whoever cannot see them simply has none).
+export function PreventativeList({ palette: p, account, properties, work, flags: given }: SectionProps & { flags?: Flag[] }) {
   const hidden = account.role === "client";
+  const [ownFlags, setOwnFlags] = useState<Flag[]>([]);
+  const flags = given ?? ownFlags;
+  const loadFlags = useCallback(async () => {
+    if (given) return;
+    try { setOwnFlags(parseFlags((await readTeams({ section: "flags" })).data)); } catch { /* no flags to show */ }
+  }, [given]);
+  useEffect(() => { if (hidden) return; let active = true; queueMicrotask(() => { if (active) void loadFlags(); }); return () => { active = false; }; }, [loadFlags, hidden]);
   const [fresh, setFresh] = useState<{ base: readonly OperationView[]; list: OperationView[] } | null>(null);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -59,7 +67,7 @@ export function PreventativeList({ palette: p, account, properties, work, flags 
           {!!open && !!visit && <View style={{ gap: 14 }}>
             <VisitDates p={p} data={visit.data} today={today} />
             <VisitMoves key={visit.workId + ":" + visit.version} p={p} role={account.role} visit={target(visit)!} onRecord={() => { setOpenId(null); setRecordingId(open.id); }} onDone={async () => { setOpenId(null); await reload(); }} />
-            <FlagButton p={p} role={account.role} target={{ workId: visit.workId, propertyId: visit.propertyId, title: `${open.title} at ${open.address}` }} onDone={() => void reload()} />
+            <FlagButton p={p} role={account.role} target={{ workId: visit.workId, propertyId: visit.propertyId, title: `${open.title} at ${open.address}` }} onDone={() => { void reload(); void loadFlags(); }} />
           </View>}
         </TrackerDetailSheet>
         <VisitForm p={p} visit={target(recording)} today={today} onClose={() => setRecordingId(null)} onDone={async () => { await reload(); }} />

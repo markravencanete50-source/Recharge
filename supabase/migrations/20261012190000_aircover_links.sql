@@ -6,8 +6,8 @@
 --    trigger gives a plain message when reopening a claim would make a second live one.
 -- 2. private.workspace_aircover_action(input), reached through workspace_teams_action:
 --      flagAirCover {workId, title?, amountMinor?, reference?}
---    Any team role that can work the ticket (workspace_can_work), or that keeps AirCover claims in the
---    hub (stays, accounts, admins), can flag a maintenance or routine_visit ticket. The claim starts at
+--    Any team role that can work the ticket (workspace_can_work), or accounts and admins (who keep AirCover
+--    claims in the hub and see every property), can flag a maintenance or routine_visit ticket. The claim starts at
 --    'to_claim' with the ticket's title and property (and its stay when the ticket names one). Accounts
 --    and admins are notified. The client (owner) role is refused. Idempotent through the action receipts.
 -- 3. private.workspace_aircover_read(target_property), reached through workspace_teams_read('aircover'):
@@ -60,7 +60,7 @@ begin
  perform private.workspace_json_keys(input,array['action','requestId','workId','title','amountMinor','reference']);
  if jsonb_typeof(input->'workId') is distinct from 'string' then raise exception 'Choose the issue to claim for' using errcode='22023';end if;
  select * into w from public.workspace_work_items x where x.id=(input->>'workId')::uuid;
- if w.id is null or not (private.workspace_can_work(w.id) or private.workspace_hub_keeps('aircover')) then raise exception 'Record not found' using errcode='P0002';end if;
+ if w.id is null or not (private.workspace_can_work(w.id) or (private.workspace_hub_keeps('aircover') and actor in ('accounts','admin','super_admin'))) then raise exception 'Record not found' using errcode='P0002';end if;
  select * into d from private.workspace_domain_details x where x.work_id=w.id;
  if d.work_id is null or d.kind not in ('maintenance','routine_visit') then raise exception 'Only a maintenance ticket can be flagged as a claim' using errcode='22023';end if;
  if exists(select 1 from private.workspace_hub_items i where i.work_id=w.id and i.kind='aircover' and i.status in ('to_claim','claimed')) then

@@ -119,6 +119,12 @@ test('any team role that can work a maintenance ticket can flag it, with default
   assert.equal(hub.items.find(i => i.id === first.id).workId, work.boiler);
 });
 
+test('a stays person with no access to the property cannot start a claim on its tickets', async () => {
+  await as(ROAMING);
+  await assert.rejects(flag(work.boiler), /Record not found/);
+  await assert.rejects(flag(work.farJob), /Record not found/);
+});
+
 test('only maintenance and routine visits are claimable, and the inputs are checked', async () => {
   await as(ADMIN);
   await assert.rejects(flag(work.clean), /Only a maintenance ticket/);

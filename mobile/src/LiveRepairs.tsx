@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
+import { FlagButton } from "./ManagementFlag";
+import { AirCoverFlag } from "./AirCoverFlag";
 import { ScrollView, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
@@ -10,7 +12,7 @@ import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton } from "./LiveKit";
+import { addDays, Anchor, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton } from "./LiveKit";
 import { formatMoney } from "../../lib/format";
 import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeOperation, writeTeams } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
@@ -23,6 +25,9 @@ import { canStart } from "../../lib/home-tools";
 import { canCloseRepair, canReportRepair, canResolveRepair, canReviseQuote, daysFromNow, declineNote, londonDayOf, poundsToMinor, repairClosed, repairStage, repairStep, REPAIR_STAGES, RESOLUTION_MAX, RESOLUTION_MIN, routinePlanSchema, visitChecklist, visitDates, visitFormOf, type RepairStep } from "../../lib/repairs-live";
 import { VisitDates, VisitForm, VisitMoves } from "./VisitForm";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { canFlagAirCover } from "../../lib/aircover-flag";
+import { PurchaseOrdersList } from "./PurchaseOrdersList";
+import type { SectionProps } from "./SectionProps";
 
 // Live repairs: the maintenance pipeline from report to completed repair, and
 // Ready's routine visits. Every action here is checked again by the database.
@@ -33,7 +38,8 @@ const pounds = (minor: unknown) => typeof minor === "number" ? formatMoney(minor
 const estimateText = (data: Record<string, unknown>) => data.estimatedCostMinor === 0 && data.phase === "triage" ? "Cost not known yet" : `Estimate ${pounds(data.estimatedCostMinor)}`;
 const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", approveManagement: "Approve the cost (management)", referReady: "Refer to Ready", bookRepair: "Book the repair", completeRepair: "Complete the repair" };
 
-export function LiveRepairs({ palette: p, account, properties, showRoutines = true }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; showRoutines?: boolean }) {
+// `sectionProps` (from the Work area) lets Ready also see the purchase orders below the repairs.
+export function LiveRepairs({ palette: p, account, properties, showRoutines = true, sectionProps }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; showRoutines?: boolean; sectionProps?: SectionProps }) {
   const saved = useSaved();
   const today = london(new Date());
   const [repairs, setRepairs] = useState<Operation[]>([]);
@@ -157,6 +163,8 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
           {plans.map(plan => <Text key={plan.id} style={[ui.small, { color: p.muted }]}>{plan.propertyName}: {plan.title} · {plan.frequency} on day {plan.dayOfMonth}{plan.active ? "" : " · paused"}</Text>)}
         </Section>
       )}
+
+      {account.role === "ready" && !!sectionProps && account.modules.includes("purchase-order") && <Anchor id="section-purchase-orders"><PurchaseOrdersList {...sectionProps} /></Anchor>}
 
       <RepairSheet p={p} account={account} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today} onClose={() => setOpenId(null)} onDone={saved(async () => { setOpenId(null); await load(); })} />
       <ReportSheet p={p} account={account} visible={reporting} properties={properties} onClose={() => setReporting(false)} onDone={saved(async () => { setReporting(false); await load(); })} />
@@ -399,6 +407,8 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         {!step && <Notice text={phase === "resolved" ? "This repair was resolved without a visit." : phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will refer this to Ready." : "Nothing for you to do at this stage."} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         {step && !declining && !resolving && <Button label={busy ? "Saving…" : uploading ? "Saving photos…" : forOwner ? "Record the owner's approval" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading} onPress={() => void save()} />}
+        {role !== "client" && <FlagButton p={p} role={role} target={{ workId: repair.workId, propertyId: repair.propertyId, title: `Repair at ${propertyName}` }} onDone={() => void onDone()} />}
+        {canFlagAirCover(role) && <AirCoverFlag key={repair.workId} p={p} role={role} workId={repair.workId} title={`Repair at ${propertyName}`} />}
         {role !== "client" && <PropertyTeamChatButton palette={p} propertyId={repair.propertyId} workId={repair.workId} />}
       </>}
     </Sheet>

@@ -105,11 +105,14 @@ export function Section({ title, count, p, children }: { title: string; count?: 
 
 // One request identifier per attempt, kept until it succeeds, so a retry after a
 // lost response replays the original action instead of creating a duplicate.
+// One id per attempt, kept until it is done so a retry after a lost reply reuses it. `action` (the button pressed,
+// the status chosen) is part of the key when one screen offers several moves, so a different choice gets its own id.
 export function useRequestId(key: string | null) {
   const ids = useRef(new Map<string, string>());
+  const keyFor = (action?: string) => key && action ? key + "|" + action : key;
   return {
-    get: () => { if (!key) return Crypto.randomUUID(); if (!ids.current.has(key)) ids.current.set(key, Crypto.randomUUID()); return ids.current.get(key)!; },
-    done: () => { if (key) ids.current.delete(key); },
+    get: (action?: string) => { const k = keyFor(action); if (!k) return Crypto.randomUUID(); if (!ids.current.has(k)) ids.current.set(k, Crypto.randomUUID()); return ids.current.get(k)!; },
+    done: (action?: string) => { const k = keyFor(action); if (k) ids.current.delete(k); },
   };
 }
 

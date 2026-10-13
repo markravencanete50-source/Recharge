@@ -187,6 +187,29 @@ test('the newest conversation wins when two carry the same code', async () => {
   assert.equal((await guestOf(ADMIN, id)).guestName, 'New Name');
 });
 
+test('a date match gives a name only when it is not ambiguous, and never when a conversation carries the stay\'s code', async () => {
+  await asDatabase();
+  const nameOf = async id => (await sql('select private.workspace_stay_guest_name($1) name', [id]))[0].name;
+  // The reviewer's case: a direct stay with no booking code, and an enquiry on the same dates.
+  const direct = await stay(iso(7), iso(9), { channel: 'direct', code: null, reference: 'Direct 7' });
+  await thread(null, 'Enquiry Only Ed', { checkIn: iso(7), checkOut: iso(9) });
+  assert.equal(await nameOf(direct), 'Enquiry Only Ed', 'one conversation on the dates still names the stay');
+  // A second enquiry on the same dates: which one booked is unknown, so no name.
+  await thread(null, 'Another Enquirer', { checkIn: iso(7), checkOut: iso(9) });
+  assert.equal(await nameOf(direct), null, 'ambiguous dates give no name');
+  assert.equal((await guestOf(STAYS, direct))?.guestName ?? null, null);
+  // Two conversations from the same guest are not ambiguous.
+  const twice = await stay(iso(1), iso(2), { channel: 'direct', code: null, reference: 'Direct 1' });
+  await thread(null, 'Tina Twice', { checkIn: iso(1), checkOut: iso(2) });
+  await thread(null, 'Tina Twice', { checkIn: iso(1), checkOut: iso(2) });
+  assert.equal(await nameOf(twice), 'Tina Twice');
+  // The stay's own conversation exists but carries no name yet: the dates are not used to guess one.
+  const coded = await stay(iso(31), iso(32), { code: 'HM-UNNAMED' });
+  await thread('HM-UNNAMED', null);
+  await thread(null, 'Date Dora', { checkIn: iso(31), checkOut: iso(32) });
+  assert.equal(await nameOf(coded), null, 'a stay with a code-matching conversation never borrows a name by date');
+});
+
 test('team events: your own are saved, read by the whole team and cancelled; owners never see them', async () => {
   await as(STAYS);
   const made = await act({ action: 'saveTeamEvent', kind: 'absence', title: 'Annual leave', startsOn: iso(2), endsOn: iso(4) });

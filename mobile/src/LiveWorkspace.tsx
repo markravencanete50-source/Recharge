@@ -57,7 +57,7 @@ import { CelebrateProvider } from "./Celebrate";
 import { Anchor, AnchorRegistry, WorkFocusContext, dayLabel, type WorkFocus } from "./LiveKit";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
-import { inspectionReportFrom, workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
+import { gateDiscountPolicy, inspectionReportFrom, workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 import { WorkPhotos } from "./Photos";
 import { SignOutUploadsWarning, UploadBanner } from "./UploadStatus";
 import { pendingUploadCount } from "./uploadQueue";
@@ -462,7 +462,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const reportFrom = openJourney ? inspectionReportFrom(account, openJourney) : null;
   // Kinds with a tracker adapter (purchase orders, licensing) open with the shared tracker detail; the rest keep the plain sheet.
   // Direct-booking offers wait for the confirmed discount policy, so that step shows as unavailable until then.
-  const formsFor = (w: OperationView): WorkflowForm[] => workItemForms(account, w, journeys, work).map(f => f.key === "prepareQuote" && !policyConfirmed && !f.unavailable ? { ...f, unavailable: "The discount policy awaits confirmation." } : f);
+  const formsFor = (w: OperationView): WorkflowForm[] => gateDiscountPolicy(workItemForms(account, w, journeys, work), policyConfirmed);
   const openTracker = openWork ? trackerItemFor(openWork, { property: id => properties.find(x => x.id === id), forms: formsFor, now: new Date(), owner: account.role === "client", role: account.role }) : null;
   // What every section list is given, built once here (mobile/src/SectionProps.ts).
   const sectionProps: SectionProps = { palette: p, account, properties, journeys, work, onForm: setForm, onOpenWork: setOpenWork, onTool: openTool };
@@ -498,8 +498,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       {currentView === "stays" && <GuestRelations key={"stays:" + (focus?.nonce ?? "")} {...sectionProps} onRefresh={() => refresh(true)} minimumNights={policy?.minimum_nights} />}
       {currentView === "clients" && <ClientRelations key={"clients:" + (focus?.nonce ?? "")} {...sectionProps} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} />}
       {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onForm={setForm} />}
-      {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} />}
-      {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
+      {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} sectionProps={sectionProps} />}
+      {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} sectionProps={sectionProps} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
       {currentView === "all" && <>
         <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
         {policy && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch", gap: 12 }]}>
@@ -548,7 +548,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} openConversation={chatTarget?.id}
         updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} />
-    : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view) => { setTab(next); if (view) setWorkView(view); }} />;
+    : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view, sub) => { setTab(next); if (view) setWorkView(view); setFocus(sub ? { sub, nonce: Date.now() } : null); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;
   const header = headerPalette(p);

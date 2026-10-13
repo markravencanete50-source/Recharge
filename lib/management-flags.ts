@@ -69,6 +69,11 @@ export function orderApprovals<T extends ApprovalEntry>(entries: readonly T[]): 
 }
 export const mergeApprovals = <T extends ApprovalEntry>(flags: Flag[], others: readonly T[]): (T | ApprovalEntry<Flag>)[] => orderApprovals<T | ApprovalEntry<Flag>>([...flags.map(flagEntry), ...others]);
 
+// A row with no record yet (no work item, no hub item) cannot be flagged: flagForManagement is strict and takes no
+// property, so the flag would reach management as "Not about a property" and the row would never show Flagged.
+export const FLAG_NEEDS_RECORD_HINT = 'Log a check first, then you can flag it';
+export const canFlagTarget = (target: Pick<FlagTarget, 'workId' | 'hubItemId'>): boolean => !!(target.workId || target.hubItemId);
+
 // The action FlagButton sends: the source follows the target. Reason needs FLAG_MIN_CHARS or more;
 // the amount is optional pounds, turned into pence.
 export function flagAction(target: FlagTarget, reason: string, amount: string, requestId: string): { action: Extract<TeamsAction, { action: 'flagForManagement' }> } | { error: string } {
