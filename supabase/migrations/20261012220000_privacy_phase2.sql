@@ -27,10 +27,10 @@
 --       anything refers to it (the existing removable check), so these references cannot block.
 --    The deletes run after the access removal and before the removable check, and touch only tables that
 --    nothing else references (reflections and team events have no dependants), so no foreign key blocks.
--- B. Owners no longer receive a repair's resolution text or who resolved it: private.workspace_operation_view
---    strips 'resolution' and 'resolvedBy' (added by resolveRepair in 20261012200000) for the client role,
---    next to the troubleshooting and evidence keys it already strips. Owners still see the phase 'resolved',
---    the completed status and resolvedAt.
+-- B. Owners keep a repair's resolution note (they approve the repair and its cost, so they should read how it
+--    was resolved) but no longer receive who resolved it: private.workspace_operation_view strips 'resolvedBy'
+--    (a staff id added by resolveRepair in 20261012200000) for the client role, next to the troubleshooting and
+--    evidence keys it already strips. Owners see the phase 'resolved', the completed status, resolvedAt and the note.
 --
 -- Every patch reads the LATEST definition, requires its anchor exactly once, keeps the anchor word for word
 -- at the start of its replacement, and is skipped once its sentinel is present, so the migration is safe
@@ -68,11 +68,11 @@ declare
  delete from private.workspace_day_reflections where user_id=target;
  update private.workspace_management_flags set raised_by=null,decided_by=case when decided_by=target then null else decided_by end where raised_by=target;$q$,
    $q$delete from private.workspace_day_reflections where user_id=target;$q$],
-  -- B. Owners: no resolution text and no resolver.
+  -- B. Owners: the resolution note stays visible, the resolver does not.
   ['private.workspace_operation_view(uuid)',
    $q$d.data-'guestEvidence'-'reservationId'-'troubleshooting'-'warrantyContactEvidence'$q$,
-   $q$d.data-'guestEvidence'-'reservationId'-'troubleshooting'-'warrantyContactEvidence'-'resolution'-'resolvedBy'$q$,
-   $q$-'warrantyContactEvidence'-'resolution'-'resolvedBy'$q$]
+   $q$d.data-'guestEvidence'-'reservationId'-'troubleshooting'-'warrantyContactEvidence'-'resolvedBy'$q$,
+   $q$-'warrantyContactEvidence'-'resolvedBy'$q$]
  ];
  definition text;found_count integer;
 begin

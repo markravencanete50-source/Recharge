@@ -927,3 +927,9 @@ All are idempotent and bounded per run, so a late or doubled tick is harmless.
 - Nothing here has been run against a live service. Screens that only render with a real login (the
   new lists and sheets) were not screenshotted in the sample-data preview; check them with real staff
   and owner accounts after the migrations are applied.
+
+### Decisions confirmed by Lee (2026-10-13)
+
+- Owners can read a repair's resolution note (the note written when Stays resolve a repair without a visit). They approve the repair and its cost, so they should see how it was resolved. They still do not receive who resolved it (`resolvedBy` is stripped for the client role in migration 20261012220000). The resolve box in Maintenance says "the owner can read this".
+- Ready, Accounts and the Cleaning Manager do not sign off the day separately. They clock in and out, and the end-of-day reflection before clocking out (what they did, what went well or not, what needs attention) is their sign-off. No extra migration is needed for `signOffDay`.
+- Open to-dos carry over to the next day. The daily to-dos are added automatically each day (hourly cron and once per device on opening the To-do page), so tomorrow's list shows the unfinished items plus any new ones.

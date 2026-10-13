@@ -398,7 +398,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         {canResolveRepair(role, phase) && (resolving ? <View style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border }}>
           <Text style={{ color: p.text, fontWeight: "700" }}>Resolved without a visit</Text>
           <Text style={[ui.small, { color: p.muted }]}>Use this when troubleshooting fixed it and no one needs to attend. The repair is closed as resolved and the owner and team are told.</Text>
-          <Field label="What fixed it" value={f("resolution")} onChange={set("resolution")} p={p} multiline placeholder="For example: reset the boiler with the guest and the heating came back" />
+          <Field label="What fixed it (the owner can read this)" value={f("resolution")} onChange={set("resolution")} p={p} multiline placeholder="For example: reset the boiler with the guest and the heating came back" />
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <Button label={busy ? "Saving…" : "Mark as resolved"} primary p={p} disabled={busy} onPress={() => void resolve()} />
             <Button label="Cancel" p={p} onPress={() => setResolving(false)} />

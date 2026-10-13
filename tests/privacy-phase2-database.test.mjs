@@ -5,8 +5,8 @@ import { PGlite } from '@electric-sql/pglite';
 
 // Privacy for the Phase 2 records (20261012220000): "Download my data" holds the person's own reflections,
 // team events and the flags they raised; deleting the account erases the reflections and team events and
-// anonymises the flags (management decisions stay on record). Owners no longer receive a repair's resolution
-// text or who resolved it. Every other migration is applied first; this one is applied from its .sql (or its
+// anonymises the flags (management decisions stay on record). Owners keep a repair's resolution note
+// (they approve the repair) but do not receive who resolved it. Every other migration is applied first; this one is applied from its .sql (or its
 // .sql.draft while it is being developed) twice, to prove it is safe to run again.
 const MINE = '20261012220000_privacy_phase2';
 const dir = 'supabase/migrations/';
@@ -108,7 +108,7 @@ test('anchors occur once, the patches landed once, and the migration runs twice 
   assert.equal(count(del, 'delete from private.workspace_day_reflections where user_id=target;'), 1);
   assert.ok(del.includes(ANCHORS[1][1] + '\n -- Phase 2 records'), 'the deletes follow the access removal');
   assert.ok(del.indexOf('workspace_day_reflections') < del.indexOf('pg_constraint'), 'the deletes run before the removable check');
-  assert.equal(count(opView, "-'warrantyContactEvidence'-'resolution'-'resolvedBy'"), 1);
+  assert.equal(count(opView, "-'warrantyContactEvidence'-'resolvedBy'"), 1);
   assert.deepEqual(afterSecond, afterFirst, 'a second run changes nothing');
   assert.ok(!mine.includes(String.fromCharCode(0x2014)), 'no em dashes');
   assert.ok(!/(^|[^\r])\n/.test(mine), 'the migration keeps CRLF line endings');
@@ -216,22 +216,21 @@ test('an admin who deletes their account leaves their decisions on record under 
   assert.equal((await read('flags')).flags.find(f => f.id === payFlag.id).decidedByName, 'Deleted user');
 });
 
-test('owners see a repair resolved and completed, but not the resolution text or who resolved it', async () => {
+test('owners see a repair resolved and completed with its resolution note, but not who resolved it', async () => {
   await as(STAYS);
   const repair = await ops({ action: 'createOperation', propertyId: HOME, kind: 'maintenance', data: { issue: 'Radiator cold in the hall', estimatedCostMinor: 0, hazard: false, repairType: 'heating' } });
   assert.equal(repair.data.phase, 'triage');
-  const resolved = await ops({ action: 'updateOperation', workId: repair.workId, version: repair.version, step: 'resolveRepair', data: { resolution: 'Internal: guest broke it, did not charge owner' } });
-  assert.equal(resolved.data.resolution, 'Internal: guest broke it, did not charge owner', 'staff keep the text');
+  const resolved = await ops({ action: 'updateOperation', workId: repair.workId, version: repair.version, step: 'resolveRepair', data: { resolution: 'Bled the radiator and reset the boiler pressure' } });
+  assert.equal(resolved.data.resolution, 'Bled the radiator and reset the boiler pressure', 'staff keep the text');
   assert.equal(resolved.data.resolvedBy, users[STAYS]);
   await as(OWNER);
   const seen = (await rpc('workspace_operations_read', [HOME])).find(w => w.workId === repair.workId);
   assert.equal(seen.data.phase, 'resolved');
   assert.equal(seen.status, 'completed');
   assert.ok(seen.data.resolvedAt, 'when it was resolved is fine to show');
-  assert.equal('resolution' in seen.data, false);
+  assert.equal(seen.data.resolution, 'Bled the radiator and reset the boiler pressure', 'the owner approves the repair, so they read the note');
   assert.equal('resolvedBy' in seen.data, false);
-  assert.ok(!JSON.stringify(seen).includes('guest broke it'), 'the resolution text is nowhere in what the owner gets');
   await as(STAYS);
   const staff = (await rpc('workspace_operations_read', [HOME])).find(w => w.workId === repair.workId);
-  assert.equal(staff.data.resolution, 'Internal: guest broke it, did not charge owner');
+  assert.equal(staff.data.resolution, 'Bled the radiator and reset the boiler pressure');
 });
