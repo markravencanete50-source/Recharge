@@ -25,3 +25,8 @@ export function pickerView<T extends SearchOption>(options: readonly T[], query:
   const chips = chosen && !shown.some(o => o.id === chosen.id) ? [chosen, ...shown] : [...shown];
   return { searchable, typing, chips, shown: shown.length, matches, more: matches > shown.length, none: !matches };
 }
+
+// A form that needs a property (Record a stay, Report a repair, New routine plan, Supplier invoice) keeps its
+// Save button disabled until one is chosen, with this line under the picker. The server still checks too.
+export const CHOOSE_PROPERTY_FIRST = 'Choose a property first.';
+export const saveDisabled = (busy: boolean, propertyId: string | null | undefined) => busy || !propertyId;

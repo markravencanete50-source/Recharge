@@ -517,3 +517,63 @@ Lee: "don't add property names just make it searchable, the less buttons the les
   - short lists unchanged;
   - the component uses the view.
 - `tests/search-and-cancel.test.mjs`, 7 of 7 pass (matching unchanged).
+
+## Lee's four acceptance screens: before and after
+
+All four use the shared picker (`AccountsStatements.tsx` line 298, `AccountsReceivable.tsx` line 66,
+`AccountsPerformance.tsx` line 102, and `HubItemSheet.tsx` for AirCover's "Add a claim"), so the change
+covers them. None shows a chip before typing now.
+
+**How the shots were taken:** these screens only render with a signed-in backend. So a temporary route
+(not committed) rendered the real `SearchPicker` / `PropertySelect` with each screen's own props (empty
+text, `clearable`, placeholder, nouns). It used made-up data of the reported size, 101 properties and 332
+stays, and Playwright took the shots in Chromium.
+- **Before:** the picker as it was at `128e016`.
+- **After:** the current picker. A third shot for each screen shows it after typing.
+- The surrounding screens are not in the shots.
+
+| Screen | Before | After | After typing |
+| --- | --- | --- | --- |
+| Statements → Prepare a statement → Property | ![](screenshots/session-b/before-statements.png) | ![](screenshots/session-b/after-statements.png) | ![](screenshots/session-b/after-statements-typed.png) |
+| Receivable → Record invoice → Guest stay | ![](screenshots/session-b/before-receivable.png) | ![](screenshots/session-b/after-receivable.png) | ![](screenshots/session-b/after-receivable-typed.png) |
+| Performance → Filters → Property | ![](screenshots/session-b/before-performance.png) | ![](screenshots/session-b/after-performance.png) | ![](screenshots/session-b/after-performance-typed.png) |
+| AirCover → Add a claim → Property | ![](screenshots/session-b/before-aircover.png) | ![](screenshots/session-b/after-aircover.png) | ![](screenshots/session-b/after-aircover-typed.png) |
+
+Before, each showed 12 chips, with property names, or for stays the property, HA code and dates, plus
+"Showing 12 of 101 properties" or "Showing 12 of 332 stays". After: the search box and "Nothing chosen yet.
+Type to find one of the ...". Typing shows up to 12 matches with "Showing x of y. Keep typing to narrow it
+down."
+
+## Follow-up: Save waits for a property
+
+- **Where:** Record a stay (`StaySheet.tsx`), Report a repair and New routine plan (`LiveRepairs.tsx`), and
+  Supplier invoice (`AccountsPayable.tsx`, edited for this change only).
+- **What:** Save stays disabled until a property is chosen, and "Choose a property first." shows just above
+  it while none is chosen. The rule is one helper, `saveDisabled(busy, propertyId)` with
+  `CHOOSE_PROPERTY_FIRST`, in `lib/search-picker.ts`.
+- **Unchanged:** each form's own check when saving, and the server's check.
+- **Tests:** `tests/search-picker.test.mjs` checks the rule (disabled with no property or while saving,
+  enabled once one is chosen) and, per screen, that the Save button uses it and the hint is shown. 11 of 11
+  pass. The screens are checked from their source, because this repository has no React Native
+  renderer for tests.
+- **Guest inbox filter counts:** left as they are. Session C's Messages redesign removes that filter.
+
+## Updates bell and pull to refresh (from Session C's Messages redesign, options 1 and 3)
+
+- **Updates bell** in the header, on desktop and the phone, for every role, beside Messages:
+  - its badge is the number of unread notices (`updatesBell` in `lib/header-actions.ts`, using
+    `unreadNotices`, "99+" past 99);
+  - it opens the Updates feed with `navigate("activity")`: the team land on Messages showing the feed, and
+    owners land on their Updates page;
+  - its screen-reader label is "Updates, 3 unread";
+  - `LiveChat.tsx` is unchanged;
+  - in a role preview (View as a role), the super admin's notices are not kept, so the badge stays empty.
+- **Pull to refresh** on the phone: a `RefreshControl` on the workspace's page `ScrollView` runs the same
+  quiet refresh as the one-minute timer (`refresh(true)`). Not on desktop.
+- **Tests:** `tests/header-actions.test.mjs`, 4 of 4 pass:
+  - the count, badge and label, the same for every role;
+  - the bell is in the header with no role or screen-size condition, with its badge;
+  - it opens the Updates feed;
+  - pull to refresh calls the quiet refresh.
+
+  The header is checked from source; there is no React Native renderer for tests here.

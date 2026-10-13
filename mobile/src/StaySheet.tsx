@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View } from "react-native";
 import { PropertySelect } from "./SearchPicker";
+import { CHOOSE_PROPERTY_FIRST, saveDisabled } from "../../lib/search-picker";
 import { Sheet } from "./TeamFlows";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
@@ -90,7 +91,8 @@ export function StaySheet({ p, visible, properties, onClose, onDone, minimumNigh
         <View style={{ flex: 1 }}><Field label="Payout (optional)" value={payout} onChange={setPayout} p={p} placeholder="£0.00" /></View>
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      <Button label={busy ? "Saving…" : "Save stay"} primary p={p} disabled={busy} onPress={() => void save()} />
+      {!propertyId && <Text style={[ui.small, { color: p.muted }]}>{CHOOSE_PROPERTY_FIRST}</Text>}
+      <Button label={busy ? "Saving…" : "Save stay"} primary p={p} disabled={saveDisabled(busy, propertyId)} onPress={() => void save()} />
     </Sheet>
   );
 }
