@@ -100,6 +100,10 @@ test('fewer buttons: no channel chips, no Refresh, a small + to log a guest mess
   assert.doesNotMatch(live + guests, /RefreshButton|label="Log a guest message"/);
   assert.match(guests, /action=\{\{ icon: "plus", label: "Log a guest message", onPress: \(\) => setLogging\(true\) \}\}/);
   assert.match(guests, /<QuietLine p=\{p\} tone="bad" text=\{`\$\{red\} guest/);
+  // Helper lines wrap on a phone rather than being cut short with an ellipsis (Session E, item 19).
+  const quiet = layout.slice(layout.indexOf('export function QuietLine'), layout.indexOf('export function MessagesSplit'));
+  assert.doesNotMatch(quiet, /numberOfLines/);
+  assert.match(quiet, /<Text style=\{\[ui\.small, \{ color: ink, flex: 1 \}\]\}>\{text\}<\/Text>/);
   assert.match(live, /icon: "edit-3", label: clients \? "New message to an owner" : "New message"/);
 });
 
