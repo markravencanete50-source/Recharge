@@ -25,7 +25,7 @@ export function Dropdown<T extends string>({ p, label, value, options, onChange,
         {caption}
         {createElement("select", {
           "aria-label": label, value, disabled, onChange: (e: { target: { value: string } }) => onChange(e.target.value as T),
-          style: { minHeight: 48, padding: "0 12px", borderRadius: 12, border: `1px solid ${p.border}`, background: p.surface, color: p.text, fontSize: 15, fontFamily: "inherit", fontWeight: 400 },
+          style: { minHeight: 48, padding: "0 12px", borderRadius: 12, border: `1px solid ${p.border}`, background: p.surface, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular, system-ui, sans-serif", fontWeight: 400 },
         }, options.map(o => createElement("option", { key: o.value, value: o.value }, o.label)))}
       </View>
     );
