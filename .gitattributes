@@ -1,3 +1,8 @@
 # Shell scripts run under bash, which cannot read Windows (CRLF) line endings.
 *.sh text eol=lf
 *.mjs text eol=lf
+# The house style keeps TypeScript and SQL sources in CRLF, and the line-ending tests check the
+# checked-out files. Stored as LF; every checkout (Windows, Linux, CI) gets CRLF so the tests agree.
+*.ts text eol=crlf
+*.tsx text eol=crlf
+*.sql text eol=crlf
