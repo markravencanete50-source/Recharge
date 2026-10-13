@@ -354,6 +354,59 @@ the new props.
   them and shows as "Pricing: 50 new tasks". Raising the limit means replacing the notifications branch whole.
 - A work item not in the loaded work list (older or closed) has no tap target yet; opening by id would need a single-item read.
 
+## Round 6: management bonus
+
+Alex: "Managers bonus will be based off of how guest relations and client relations perform." Since round 5 the bonus bar comes
+from the KPI tracker (Session A, `20261015100000_kpi_tracker.sql`, `lib/kpis.ts`): `BONUS_SCHEMES` in `lib/feedback-defaults.ts`
+is gone, and each area's bonus is its bonus KPI. So this is a new KPI measure, not a new scheme.
+
+- **The measure, `teams_combined`** (management area only, higher is better, no minutes):
+  - Guest relations: every guest message in the period answered within the green minutes of the performance targets (5 on the live
+    database), out of the waits settled for those minutes. It is the same sum as the guest reply KPIs, team-wide, whoever was on shift.
+  - Client relations: the average daily-work percentage of the people whose KPI area is client relations (their rota department).
+    It is worked out the same way as the team value of "Daily work done".
+  - Combined: the average of the two, equal weight, rounded down. If one team has nothing to measure, the other is used alone. If
+    neither has, there is no value, and the bar reads "Nothing to measure yet".
+- **The bonus KPI**: the seeded management KPI ("Performance score") moves to the new measure and is named "Guest relations and
+  Client relations, combined". It is still a placeholder at 80, with tiers at 90 and 95. If an admin has already changed its
+  target, tiers or placeholder flag on the live database, those are kept. The move is in the KPI change log (an edit by nobody,
+  like the seed). It only happens while the KPI is still on the performance score, so a second run does nothing. Admins can also
+  add the measure to other management KPIs in the KPI screen; the database refuses it for any other area.
+- **On the bar** (My performance): "Management · Guest relations and Client relations, combined" above the bar. Under it, each
+  team's figure, e.g. "Guest relations 86% · Client relations 74%", or "nothing to measure yet" for a team with nothing.
+- **Who gets it**: admins and super admins (Team performance shows every manager's bar and the management team row), and anyone
+  whose rota department is management (only their own bar). The KPI read already gives a KPI's values only to people in its area,
+  and to admins. The measure also checks the caller itself, so nobody else gets a team figure through it, even if the read
+  changes. That covers owners (who are refused the read anyway), cleaners, Ready, and guest and client relations staff. The parts
+  are team totals: an area, a percentage and a count, never a name or a per-person figure.
+- **Cost**: each management bonus value reads the guest replies of the period and the daily work of each client relations person.
+  An admin's read does this once per manager plus once for the team row. That is a handful of people today; if it grows, work it
+  out once per read.
+
+**Migration `20261016310000_management_bonus_combined.sql`** (not applied):
+- `workspace_kpi_measures()` is replaced whole, with the new entry at the end. Only `20261015100000` defines it.
+- New `workspace_kpi_teams_combined(start_on, end_on)`, revoked from the app roles.
+- Anchor-and-append patches:
+  - a `teams_combined` branch in `workspace_kpi_person_value` and in `workspace_kpi_team_value`;
+  - `workspace_kpi_result` passes `parts` through.
+- The seed move.
+- Safe to run twice (tested).
+
+**Files:**
+- `lib/kpis.ts` (Session A's): the label, an optional `parts` on the result, and `parts` on `KpiProgress`.
+- `lib/workspace-teams-policy.ts`: `teams_combined` added at the end of `KPI_MEASURES`.
+- `lib/my-performance.ts`: `bonusPartsLine`.
+- `mobile/src/MyPerformance.tsx`: the line under the bar.
+- Tests: `tests/management-bonus.test.mjs` and `tests/management-bonus-database.test.mjs` are new.
+  `tests/kpi-tracker-database.test.mjs` now expects the management seed on `teams_combined`.
+
+**Question for Alex:**
+- Weighting: is it 50/50 between Guest relations and Client relations, or should one count more?
+- Target and tiers: what are the real ones for the management bonus? They are placeholders at 80% target, 90% tier 1 and 95%
+  tier 2 until he says.
+- Guest relations part: should it be the 5-minute reply rate (the green minutes, the same as the guest relations bonus KPI)? Or
+  should it be the guest relations bonus KPI itself, whatever an admin later sets it to?
+
 ## Not done yet (waiting for the client)
 
 - Inbound email into Messages (design above; to be built later).
@@ -406,6 +459,11 @@ notice per conversation the next time someone writes there.
 
 Round 6: apply `20261016300000_notice_details.sql`, then redeploy the backend and the app (the app reads the new fields as
 optional, so either order works).
+
+Round 6, management bonus: apply `20261016310000_management_bonus_combined.sql` after `20261016300000` (it needs the KPI tracker,
+`20261015100000`), then redeploy the app soon after. Until the app is redeployed, the bar shows the new name without the two parts,
+and the old app cannot save an edit to that KPI (it does not know the measure). Before the migration, the new app shows the bar
+as today.
 
 Round 5: apply `20261015300000_chat_notice_every_message.sql`, `20261015310000_guest_message_notices.sql`,
 `20261015320000_owner_chat_closed.sql` and `20261015330000_guest_message_notices_onboarded.sql` in that order, then redeploy the backend and the app (the app's Close button and the

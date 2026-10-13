@@ -81,7 +81,7 @@ const reflectionNote = z.string().trim().max(2000);
 export const reflectionItemSchema = z.object({ kind: z.string().trim().min(1).max(40), ref: z.string().trim().max(80).nullable().optional(), label: text(1, 200) }).strict();
 export const visitAnswerSchema = z.object({ item: text(1, 200), done: z.boolean(), note: z.string().trim().max(500).optional() }).strict();
 // The KPI measure keys (private.workspace_kpi_measures() holds their labels, directions and areas).
-export const KPI_MEASURES = ['guest_reply_within', 'guest_reply_over', 'daily_work_done', 'performance_score', 'clean_forms_on_time'] as const;
+export const KPI_MEASURES = ['guest_reply_within', 'guest_reply_over', 'daily_work_done', 'performance_score', 'clean_forms_on_time', 'teams_combined'] as const;
 const kpiPercent = z.number().int().min(0).max(100);
 export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('decideComplaint'), requestId: id, workId: id, version, outcome: z.enum(['upheld', 'overturned']), note }).strict(),
