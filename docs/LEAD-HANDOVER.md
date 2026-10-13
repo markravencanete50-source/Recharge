@@ -177,6 +177,33 @@ Lee asked for every developer to stop. Each session was interrupted and told to 
 The lead branch is at `d3fde42` and later; its last full run, on `850ca09` with B, C and D merged, passed 1514/1514. Anything unpushed
 has to be redone from these notes, unless Lee asks a developer to push it as work in progress.
 
+## 5b. Rounds 6 to 8: ready to go live (13 October 2026, evening)
+
+Everything from A–F is merged into the lead branch. Full `npm test` on `e4baea3` passed **1618/1618**. After that only
+C's go-live note (documents) and F's one-line Unknown senders layout were added; their tests and the style and contrast
+tests pass, and tsc is clean. E signed off the design of every screen in light and dark, at 1440 and 390.
+
+- Install file: `supabase/install-pending.sql`, seven migrations in one transaction (to-do updates, delete client
+  enquiry, notice details, management bonus combined, inbound email, updates open and older, management bonus weighting).
+  It is checked against the files one by one (0 differences). On live, the 14 functions it patches match the local build,
+  and live has nothing after `20261015330000`.
+- Team note: `docs/GO-LIVE-ROUND-6-8.md` (C).
+- Email set-up after deploy: `docs/EMAIL.md` (F).
+- Go-live order:
+  1. Lee runs `supabase/install-pending.sql` in the Supabase SQL editor.
+  2. Lee merges the pull request; Cloudflare deploys.
+  3. The client enquiry email works straight away (RESEND_API_KEY is already a Secret).
+  4. Inbound email and replies by email follow `docs/EMAIL.md`: the EMAIL_REPLIES_ENABLED Secret, receiving on
+     `in.rechargegroup.co.uk` (MX for `in` only, in Cloudflare), the Resend webhook and its Secret, and Fasthosts
+     forward-and-keep-copy rules.
+- Lee to check in the Supabase dashboard: the sender of Auth emails (sign-in, invite, password) is neither mailbox.
+
+Next round (not blocking):
+- A: Dropdown closed box and menu use p.controlBorder; the typed dates left in AccountsPayable, AccountsReceivable and
+  AccountsStatements.
+- D: the TeamEvents label "Dates (one day: choose it twice)" becomes "Dates" with a helper line.
+- B: on phones, the Client enquiries stat tile labels wrap; shorten them.
+
 ## 6. Waiting on Lee
 
 - Switch A and D to Sonnet (`/model claude-sonnet-5-5` in each session).
