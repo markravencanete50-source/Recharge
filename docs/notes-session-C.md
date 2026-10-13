@@ -416,12 +416,11 @@ Other places that say "waiting for a reply" mean guests or owners waiting on us 
 times), so they stay. The comment in `20261015320000_owner_chat_closed.sql` still says "Waiting for reply"; that migration is live
 and is left as it is.
 
-**Question for Alex:**
-- Weighting: is it 50/50 between Guest relations and Client relations, or should one count more?
-- Target and tiers: what are the real ones for the management bonus? They are placeholders at 80% target, 90% tier 1 and 95%
-  tier 2 until he says.
-- Guest relations part: should it be the 5-minute reply rate (the green minutes, the same as the guest relations bonus KPI)? Or
-  should it be the guest relations bonus KPI itself, whatever an admin later sets it to?
+**Answered (Lee, 13 October):** the guest part is the 5-minute reply rate. Alex sets the targets and tiers himself in the KPI
+screens, and the bar follows them. Two things to know:
+- The guest part reads the green minutes of the performance targets, which are 5 on the live database. If an admin changes the
+  green minutes, the guest part follows them, not 5.
+- The 50/50 weighting is in the migration. The KPI screens have no field for it, so changing it means a small migration.
 
 ## Not done yet (waiting for the client)
 
