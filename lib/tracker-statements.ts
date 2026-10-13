@@ -50,6 +50,14 @@ export function rangeFromDates(from: string, to: string): StatementRange | null 
 export function monthRange(month: string): StatementRange | null {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? rangeOf(month + '-01', nextMonthStart(month)) : null;
 }
+// Dates chosen on the calendar (first and last day, both included). A whole calendar month is the page's month, as the old
+// month chips were (it moves the page when the page lets it); any other dates are custom and go through customRange, so
+// the request is the same as before: `from` and the day after the last day.
+export function pickStatementDates(next: { from: string; to: string }, period: string, movesPage: boolean): { month: string } | { custom: { from: string; last: string } } {
+  const whole = monthRange(next.from.slice(0, 7));
+  if (whole && whole.from === next.from && whole.lastDay === next.to && (movesPage || whole.month === period)) return { month: whole.month! };
+  return { custom: { from: next.from, last: next.to } };
+}
 // Custom dates as typed: the first day and the LAST day included (both YYYY-MM-DD). The range sent to the
 // database ends the day after, because `to` is not included. `today` is today's date in London.
 export function customRange(fromText: string, lastDayText: string, today: string): StatementRange | { error: string } {

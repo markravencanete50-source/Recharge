@@ -166,6 +166,49 @@ Alex wants his own KPIs, edited by admins in the app, with one per area counting
 
 **`workspace_performance_targets` still works** and is still read by: the reply grades in `workspace_response_rows` (green and amber minutes); `score`, `onTrack` and `bonusTier` in the `teamPerformance` read; the client relations owner reply times (pass mark and tiers); the daily-work targets and their weight; and the "Change the targets" sheet. Only the screens' bonus moved to the KPIs. Changing the pass mark or tiers there no longer changes anyone's bonus, so that sheet could lose those two fields later.
 
+## Round 5: Accounts, fewer buttons
+Lee: "minimize buttons as much as possible, so users will not be overwhelmed."
+
+**Shared pieces (new files)**
+- `mobile/src/CalendarPicker.tsx` with `lib/calendar-picker.ts`:
+  - a compact month calendar for one day or a range, built on the team calendar's `monthGrid`;
+  - optional counts on each day, month arrows, and "Today" and "Whole month" links;
+  - 44pt day cells on the phone, arrow keys and Page Up and Down on the web.
+  - `DateField` is one field showing the period ("1 Oct 2026 to 31 Oct 2026") that opens the calendar under it.
+  - `LiveCalendar.tsx` is not touched.
+- `mobile/src/Dropdown.tsx`: one control showing the current choice. On the web it is the browser's select; on the phone, a plain list under it.
+
+**Platform stays (Reconciliation)**
+- The row of day chips is now the calendar. Each day shows how many stays in view check in that day, after the search, platform and status filters.
+- Choosing a day narrows the figures and the list to it. A heading names the day and has "Approve these N", with the same held-back rules as before.
+- Choosing the day again, or "All dates", clears it.
+- "Approve all N" at the top always covers the whole filtered set.
+- Logic: `lib/payout-calendar.ts`.
+
+**Approve the payout**
+- `mobile/src/PayoutApproveSheet.tsx` lists, before the amount box:
+  - the property and its address;
+  - the guest (staff only) and the number of guests;
+  - the platform, the reservation code and the Hostaway reference;
+  - check-in, check-out and nights;
+  - the money: expected, received or "Not received yet", the difference (highlighted when not zero), and gross, platform fee and net when known;
+  - the matched payout lines;
+  - any warnings: cancelled, the same amount on several lines, money changed after the statement, or the stay changed since the statement;
+  - one line saying what approving does.
+- The amount, "Why this amount is right" and the button are unchanged. The note is still always required (5 characters), as before.
+- Extended the read: the new finance report `payoutStay` (`20261015110000_payout_stay_summary.sql`, finance roles only, read only) adds the guest name, stay status, payout lines, the issued statement holding the stay, and the two statement warnings.
+- `LiveAccounts.tsx` opens the new sheet from `openPayout`. `AccountsPayable.tsx` is not touched.
+
+**Statements**: the month chips and "Custom dates" are replaced by one date field:
+- it defaults to the page's month;
+- "Whole month" on the calendar picks a month, which moves the page's month as the chips did (`pickStatementDates` in `lib/tracker-statements.ts`);
+- any other range is custom and sends the same request as typed dates did.
+
+**Performance**:
+- "This month / Last month / Last 3 months / This year / Choose dates" is replaced by one date field, defaulting to this month.
+- Region and Channel are dropdowns with the same values as before.
+- The property chips shown when there are 8 or fewer properties are left for Session B's search-only picker change.
+
 ## Deploy order for this session's migrations
 Apply in filename order, before deploying the Worker (the Worker code is unchanged by this session):
 
@@ -177,6 +220,7 @@ Apply in filename order, before deploying the Worker (the Worker code is unchang
 6. `20261014150000_visitor_levy.sql`
 7. `20261014160000_owner_work_staff_fields.sql`
 8. `20261015100000_kpi_tracker.sql` (round 5; needs nothing new in the Worker beyond the updated teams schemas)
+9. `20261015110000_payout_stay_summary.sql` (round 5; the Worker needs the updated finance schemas for the `payoutStay` report)
 
 Things to tell the team after:
 - Clean form reminders start at 18:00, and the management flag comes at 09:00 the next day.
