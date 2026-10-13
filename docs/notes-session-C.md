@@ -222,6 +222,88 @@ data: show them only to people who can read the conversation, and include them i
 stays as it is) and a route to the Worker; at Fasthosts, a forwarding rule on each of the two mailboxes to its inbound address,
 keeping a copy; for replies, a sending service with SPF and DKIM records for rechargegroup.co.uk added at whoever hosts the DNS.
 
+## 7. Round 5 (15 October): notices on every message, guest message notices, and the Messages redesign
+
+Lee's decisions, relayed by the lead developer and confirmed here: guest messages notify Stays and the admins at any hour; owner
+chats keep today's owner team; one notice per message, not per conversation.
+
+### Notices
+
+- **`20261015300000_chat_notice_every_message.sql`**: `private.chat_notice_due` now always says yes, so the send branch (patched in
+  `20261014320000`) tells everyone in the chat's audience about **every** message. Who hears a chat is unchanged; the sender,
+  anyone who blocked the sender, and anyone outside the audience are still never told. `private.chat_notified` is still written
+  but nothing reads it now. **Busy chats now push and email on every message** (only for notices under 24 hours old, as before).
+- **`20261015310000_guest_message_notices.sql`**: every guest message adds a `guest.message` activity row (with the property, no
+  work item, no actor except the person who logged it by hand) and a notice for every active admin and super admin, and every
+  active Stays person who holds the guest communication tool and is assigned to that property as staff (for a conversation not yet
+  matched to a property: every such Stays person). Never the person who logged it, never owners, cleaners or Ready. Built as one
+  `AFTER INSERT ... FOR EACH STATEMENT` trigger on `private.workspace_guest_messages` over the rows actually inserted, instead of
+  anchor-patching the Hostaway import: it covers `workspace_hostaway_messages_ingest`, `workspace_guest_messages_ingest` (any other
+  feed, later inbound email) and `logMessage` alike, and a message already stored is never counted twice. Only guest messages sent
+  in the last 24 hours notify, so a first import of 14 days of history does not flood anyone. Team replies notify nobody. The
+  trigger swallows its own errors (a warning), so a notice can never stop a message being stored. The workflow notice routes are
+  not involved (they only fire for activity with a work item). Wording: `guest.message` in `lib/notice-copy.ts` ("New guest
+  message", no names or property).
+- **Owner chats**: unchanged, and now proved by a test: an owner's message tells every admin, the client relations (or
+  management) rota, and Stays on that owner's properties, on every message; the team's messages tell the owner.
+- Not filtered: a Stays person still mid-onboarding is told about guest messages they cannot open until onboarding is done.
+- Tests: `tests/message-notices-database.test.mjs` (new). `chat-database` and `team-channels-database` now expect one notice per
+  message; `chat-notices-database` leaves `…300000` out, as it proves the round 4 rule on its own.
+
+### Messages redesign (Lee: "keep it simple, clean, and professional", "like a messenger or WhatsApp")
+
+**Before** (Guests tab, five rows of controls above the list): tabs Guests / Clients / Team / Updates; a row of `#` channel chips
+(Everyone, Management, Guest relations, Client relations, Cleaning, Ready, Accounts) on every tab; "Log a guest message" and
+"Refresh" buttons; six status chips (Needs a reply, Unread, Mine, Open, Done, All); a property search with property chips ("All
+properties", one chip per property, "Showing 12 of 63"). A guest conversation opened as a pop-up sheet.
+
+**After:**
+- **Tabs**: Guests, Clients and Team only, as one quiet segmented control (`messageTabs` in `lib/workspace-chat-policy.ts`; the
+  role rules are unchanged: Guests for anyone allowed guest messaging with the tool, Clients for admins, Stays and anyone already in
+  an owner conversation, Team for everyone on the team; owners have no tabs, just their conversation with Recharge).
+- **No channel chips.** Department channels are ordinary conversations in the Team list, by latest message, with the group
+  avatar and no `#`.
+- **Status** (Guests and Clients only): Needs a reply (the other side spoke last; attention colour), Waiting for reply (we
+  answered last and it is open; green), Closed (done). Each shows its count. Team has no status filter. Guests use the existing wait
+  and Done; Clients use who spoke last (`last.fromOwner`, already in the list) and a new Closed state (below).
+- **One search box**, filtering as you type: "Search guest or property" (guest's name, property name, property address, booking
+  reference), "Search owner or property" (owner's name, property names and addresses), "Search conversations or people" (the
+  conversation's name, people's names, the last writer). The property chips and "All properties" are gone.
+- **Opening a conversation**: in place, never a pop-up. Desktop: the list on the left (360 px), the open conversation on the right.
+  Phone: the list; tapping a conversation shows it full screen with a back arrow; the tabs come back with the list. Same for
+  Guests, Clients and Team. Everything a guest conversation could do stays (Send through Hostaway, save a reply, "I replied on the
+  platform", the guest wrote again, Close and Reopen, guest details).
+- **Fewer buttons**: no Refresh (the list refreshes itself every 15 seconds, guests every 30, an open conversation every 3 to 15).
+  "Log a guest message" is a small "+" beside the search (labelled for screen readers); "New message" is a small pencil there too.
+  The long-wait warning and the "Hostaway isn't connected" note are one quiet line each.
+- **Updates**: no longer a tab. Every link to Updates (Home's Updates tile, Recent activity, "View all", the tools list) still
+  opens Messages with the feed, now shown in place under an "Updates" heading with a back arrow to Messages, so nothing becomes
+  unreachable for any role. Owners keep their own Activity page.
+- **Clients' Closed** (`20261015320000_owner_chat_closed.sql`): `chat_conversations.closed_at/closed_by` (owner conversations
+  only), action `closeConversation {conversationId, closed}` for the owner team (`chat_owner_team`), any new message reopens it (a
+  trigger), and `chat_summary` returns `closed` for the team's view only (owners never see it). A Close / Reopen button sits in the
+  header of an owner conversation on the team side. Test: `tests/owner-chat-closed-database.test.mjs`.
+- Files: `mobile/src/LiveChat.tsx`, `mobile/src/LiveGuestInbox.tsx` (the sheet became `GuestThreadPane`), new
+  `mobile/src/MessagesLayout.tsx` (search bar, status filter, quiet line, list-and-thread split, thread header),
+  `mobile/src/ChatParts.tsx` (channel avatar), `lib/inbox-filters.ts` (statuses, counts, search; the old chip helpers are kept for
+  their tests), `lib/workspace-chat-policy.ts`. `mobile/src/InboxChips.tsx` was deleted (nothing else used it). Tests:
+  `tests/messages-redesign.test.mjs` (new); `guest-inbox-policy` and `wiring-v2` updated for "no Updates tab".
+
+**For Session B (navigation files, not edited here):**
+1. There is no notifications button in the header today. To make Updates reachable from the header as well, add one beside the
+   search button in `mobile/src/LiveWorkspace.tsx` for team roles that calls `navigate("activity")` (it already lands on Messages
+   with the feed), with a count of `unreadNotices(notices).length`.
+2. Optional clean-up: send team roles to the existing Activity page instead of Messages. In `LiveWorkspace.tsx`, set
+   `const updatesLink = false;`, drop the `if (value === "activity" && team) { openLink({ section: "inbox", messagesTab: "updates" }) ... }`
+   redirect, stop passing `updates`/`initialTab` to `<LiveChat>`, and change `pageLink('activity')` in `lib/workspace-map.ts` to
+   `{ section: 'activity' }`. `tests/wiring-v2.test.mjs` asserts the current wiring and would need the same change. LiveChat works
+   either way.
+3. Pull-to-refresh on phones needs a `RefreshControl` on the workspace's page `ScrollView` in `LiveWorkspace.tsx` that reloads
+   the current page; Messages already refreshes itself, so this is a nicety.
+
+**Not checked visually:** the screens need a real login, so they were not screenshotted; check desktop and phone with a Stays
+account and an admin after deploy.
+
 ## Not done yet (waiting for the client)
 
 - Inbound email into Messages (design above; to be built later).
@@ -271,3 +353,8 @@ Apply in filename order after the round 3 migrations: `20261014300000_team_calen
 `20261014310000_guest_messaging_roles.sql`, `20261014320000_chat_notices.sql`, `20261014330000_stay_guest_name_dates.sql`, then
 redeploy. The app works before and after each of them. Warn the team before `…320000`: people with unread conversations get one
 notice per conversation the next time someone writes there.
+
+Round 5: apply `20261015300000_chat_notice_every_message.sql`, `20261015310000_guest_message_notices.sql` and
+`20261015320000_owner_chat_closed.sql` in that order, then redeploy the backend and the app (the app's Close button and the
+Clients status need `…320000`; before it, every owner conversation reads as open). Warn the team first: every chat message and
+every guest message now sends a notice, and push and email follow when they are switched on.

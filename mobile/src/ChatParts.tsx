@@ -35,7 +35,7 @@ function usePhoto(userId?: string | null, version?: string | null) {
   }, [key, userId, version]);
   return loaded && loaded.key === key ? loaded.source : null;
 }
-export function PersonAvatar({ p, name, userId, photo, colour, size = 44, online = false, icon, tint }: { p: Palette; name: string; userId?: string | null; photo?: string | null; colour?: keyof typeof avatarColors | null; size?: number; online?: boolean; icon?: "users" | "home" | "hash"; tint?: string }) {
+export function PersonAvatar({ p, name, userId, photo, colour, size = 44, online = false, icon, tint }: { p: Palette; name: string; userId?: string | null; photo?: string | null; colour?: keyof typeof avatarColors | null; size?: number; online?: boolean; icon?: "users" | "home"; tint?: string }) {
   const source = usePhoto(userId, photo);
   const [failed, setFailed] = useState(false);
   const dot = Math.max(10, Math.round(size * 0.27));
@@ -52,7 +52,8 @@ export function PersonAvatar({ p, name, userId, photo, colour, size = 44, online
 }
 // The picture for a conversation: the other person's photo, a group's or channel's icon.
 export function ConversationAvatar({ p, c, size = 44 }: { p: Palette; c: Conversation; size?: number }) {
-  const icon = c.department ? "hash" as const : c.kind === "group" ? "users" as const : c.kind === "owner" && !c.peer ? "home" as const : undefined;
+  // Department channels look like any group (no '#'): they are ordinary conversations in the Team tab.
+  const icon = c.department || c.kind === "group" ? "users" as const : c.kind === "owner" && !c.peer ? "home" as const : undefined;
   return <PersonAvatar p={p} name={c.title} userId={c.peer?.userId} photo={c.peer?.photo} size={size} icon={icon} online={presenceOf(c.peer?.seenAt) === "online"} tint={c.kind === "owner" ? p.cautionWash : undefined} />;
 }
 

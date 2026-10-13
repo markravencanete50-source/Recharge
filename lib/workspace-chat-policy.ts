@@ -74,6 +74,8 @@ export const chatActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('addMembers'), conversationId: uuid, userIds: z.array(uuid).min(1).max(50) }).strict(),
   z.object({ action: z.literal('removeMember'), conversationId: uuid, userId: uuid }).strict(),
   z.object({ action: z.literal('renameGroup'), conversationId: uuid, title: z.string().trim().min(2, 'Give the group a name of 2 to 80 characters').max(80).optional() }).strict(),
+  // The team closes or reopens an owner conversation (the Clients tab's Closed filter); a new message reopens it.
+  z.object({ action: z.literal('closeConversation'), conversationId: uuid, closed: z.boolean() }).strict(),
 // A message is words, photos or a video, or any of them together; never nothing.
 ]).superRefine((input, ctx) => { if (input.action === 'send' && !input.body && !input.attachments?.length) ctx.addIssue({ code: 'custom', path: ['body'], message: 'Write a message' }); });
 export type ChatAction = z.infer<typeof chatActionSchema>;
@@ -94,6 +96,8 @@ export const conversationSchema = z.object({
   // For the inbox chips: the reader's own conversation (a member, has written, or looks after the
   // owner's property) and the properties it is about.
   mine: z.boolean().optional(), propertyIds: z.array(uuid).default([]),
+  // An owner conversation the team has closed (the team's view only; migration 20261015320000).
+  closed: z.boolean().default(false),
 });
 export type Conversation = z.infer<typeof conversationSchema>;
 // The channels first, in their fixed order, then everything else as the list gave it (newest first).
@@ -163,6 +167,16 @@ export function chatTime(iso: string, now = new Date()) {
 export const GUEST_MESSAGING_BLOCKED_ROLES = ['client', 'cleans', 'ready'] as const;
 export const hasGuestInbox = (account: { role: string; modules: readonly string[] }) =>
   !(GUEST_MESSAGING_BLOCKED_ROLES as readonly string[]).includes(account.role) && account.modules.includes('guest-communication');
+
+// The tabs of Messages (round 5): Guests for the guest inbox, Clients for the people who answer owners (or anyone who
+// already has an owner conversation), and Team for everyone on the team. Never an Updates tab. Owners get no tabs:
+// their Messages is their one conversation with Recharge.
+export type MessagesTab = 'guests' | 'clients' | 'team';
+export function messageTabs(account: { role: string; modules: readonly string[] }, hasOwnerConversation = false): MessagesTab[] {
+  if (account.role === 'client') return [];
+  const clients = ['admin', 'super_admin', 'stays'].includes(account.role) || hasOwnerConversation;
+  return [...(hasGuestInbox(account) ? ['guests' as const] : []), ...(clients ? ['clients' as const] : []), 'team'];
+}
 
 // Saved replies: short answers the team inserts into a reply to guests or owners, then edits.
 export const SAVED_AUDIENCES = ['guest', 'owner', 'all'] as const;
