@@ -282,3 +282,27 @@ fragments: a body like `{target && <>…</>}` was one child, so the gap never ap
   arrays and empty slots; stable unique keys; Sheet uses it with the gap and padding unchanged).
 - Screenshots: `round6-sheet-1/2` (Rejected clean before and after), `round6-sheet-3/4` (the oversight decision
   sheet, same bug).
+
+## Round 6, second fix: the public New Property Enquiry Form (app/enquiry)
+
+1. **Invisible options.** A select's open list is drawn by the browser. In the dark theme the page's light text was
+   inherited by `<option>` on the browser's own white list (only the highlighted row showed). The options and
+   optgroups now get the page's colours explicitly (`--rc-surface` behind `--rc-text`), and in the dark theme the
+   selects take `color-scheme: dark`. The closed select is unchanged.
+2. **The second box on the address fields.** The app-wide focus outline (`input:focus-visible, textarea:focus-visible
+   { outline … !important }` in `lib/design-tokens.ts`) drew a light-green rectangle inside the field's own frame.
+   Each field's frame now carries `data-bare-input` (the existing switch for fields that show focus themselves), and
+   the form's inputs, textareas and selects lose any focus outline or shadow, so the frame's border is the one focus
+   style. Autofill paints no box: the `:-webkit-autofill` / `:autofill` inset box-shadow in the field's own background
+   with its own text colour, and a 600000s transition delay. The field frame no longer animates (no transition).
+   Same for every field on the page.
+- The form's choices already follow the rule: the long lists are styled native selects (property type 9, rooms 16,
+  start, enquiry type), the yes/no questions are pills.
+- Test: `tests/enquiry-form-fields.test.mjs` (option colours, dark color-scheme, the autofill rule, one focus
+  style and no motion, the selects).
+- Screenshots (`round6-enquiry-*`, Chromium): before and after, dark and light, with the address focused and typed
+  in and the Property type select shown open as a list (a headless screenshot can't draw the native pop-up list, so
+  the select is given `size=9` for the picture; the option colours are the same ones the pop-up uses). Autofill can't
+  be triggered in a headless browser; the test checks its rule. Checked in Chromium only here; Edge is Chromium,
+  Firefox honours option colours and `:autofill`, Safari draws its own pop-up list and ignores option colours (it
+  was already readable there).
