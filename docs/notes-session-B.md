@@ -517,3 +517,29 @@ Lee: "don't add property names just make it searchable, the less buttons the les
   - short lists unchanged;
   - the component uses the view.
 - `tests/search-and-cancel.test.mjs`, 7 of 7 pass (matching unchanged).
+
+## Lee's four acceptance screens: before and after
+
+All four use the shared picker (`AccountsStatements.tsx` line 298, `AccountsReceivable.tsx` line 66,
+`AccountsPerformance.tsx` line 102, and `HubItemSheet.tsx` for AirCover's "Add a claim"), so the change
+covers them. None shows a chip before typing now.
+
+**How the shots were taken:** these screens only render with a signed-in backend. So a temporary route
+(not committed) rendered the real `SearchPicker` / `PropertySelect` with each screen's own props (empty
+text, `clearable`, placeholder, nouns). It used made-up data of the reported size, 101 properties and 332
+stays, and Playwright took the shots in Chromium.
+- **Before:** the picker as it was at `128e016`.
+- **After:** the current picker. A third shot for each screen shows it after typing.
+- The surrounding screens are not in the shots.
+
+| Screen | Before | After | After typing |
+| --- | --- | --- | --- |
+| Statements → Prepare a statement → Property | ![](screenshots/session-b/before-statements.png) | ![](screenshots/session-b/after-statements.png) | ![](screenshots/session-b/after-statements-typed.png) |
+| Receivable → Record invoice → Guest stay | ![](screenshots/session-b/before-receivable.png) | ![](screenshots/session-b/after-receivable.png) | ![](screenshots/session-b/after-receivable-typed.png) |
+| Performance → Filters → Property | ![](screenshots/session-b/before-performance.png) | ![](screenshots/session-b/after-performance.png) | ![](screenshots/session-b/after-performance-typed.png) |
+| AirCover → Add a claim → Property | ![](screenshots/session-b/before-aircover.png) | ![](screenshots/session-b/after-aircover.png) | ![](screenshots/session-b/after-aircover-typed.png) |
+
+Before, each showed 12 chips, with property names, or for stays the property, HA code and dates, plus
+"Showing 12 of 101 properties" or "Showing 12 of 332 stays". After: the search box and "Nothing chosen yet.
+Type to find one of the ...". Typing shows up to 12 matches with "Showing x of y. Keep typing to narrow it
+down."
