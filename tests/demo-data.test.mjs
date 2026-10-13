@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { createServer } from 'vite';
 
-// Demo mode answers reads from a recorded sample business: requests are matched with dates made
-// relative, answers are moved to the current day, and the shipped file parses.
+// The recorded demo: the fallback where the interactive demo (tests/demo-browser*.test.mjs) can't run,
+// on the phone app or without WebAssembly. Requests are matched with dates made relative, answers are
+// moved to the current day, and the shipped file parses.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 const { demoKey, demoLooseKey, shiftDates, daysBetween, demoAnswer, demoDataSchema, demoPeople } = await vite.ssrLoadModule('/lib/demo-data.ts');
 after(() => vite.close());
@@ -60,4 +61,12 @@ test('the shipped sample business parses and covers every role', { skip: !exists
     assert.ok(Object.keys(persona.responses).length > 5, role + ' has recorded answers');
     for (const id of [...Object.values(persona.responses), ...Object.values(persona.loose)]) assert.ok(id in shipped.answers, `${role}: answer ${id} is in the file`);
   }
+});
+
+test('the browser app tries the interactive demo first and keeps the recording as its fallback', () => {
+  const client = readFileSync('mobile/src/backend/client.ts', 'utf8');
+  const open = client.slice(client.indexOf('async function openDemoData'), client.indexOf('// "Reset demo"'));
+  assert.ok(open.includes('startDemoEngine()') && open.indexOf('startDemoEngine()') < open.indexOf('/workspace/demo-data.json'), 'the interactive demo first');
+  assert.match(open, /\/workspace\/demo-data\.json/, 'the recording is still the fallback');
+  assert.match(client, /readOnly: viewOnly !== "" \|\| \(demo !== null && !demoEngine\)/, 'only the recorded demo is read-only');
 });

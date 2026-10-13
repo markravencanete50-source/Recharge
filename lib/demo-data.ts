@@ -1,11 +1,16 @@
 import { z } from 'zod';
 import { workspaceAccountSchema, type WorkspaceAccount } from './workspace-account-policy';
 
-// Demo mode: a super admin can show the whole app filled with a sample business without writing to
-// the real database. The sample business is a file of recorded answers (mobile/web-static/demo-data.json,
-// made by scripts/build-demo-data.mjs from the real database functions and a seeded business), one set
-// per role. While demo mode is on, every read the app makes is answered from that file, dates moved so
-// the sample stays current, and nothing is ever sent to be saved.
+// Demo mode: a super admin can show the whole app filled with a sample business without touching the
+// real database. In the browser app the demo is interactive: the backend runs in the browser on a
+// private copy of the sample business (scripts/demo/browser, mobile/src/demo), and this file only
+// supplies the shape the app keeps per persona (the account of each sample person).
+//
+// The recording below is the fallback where that can't run (the phone app, or a browser without
+// WebAssembly): a file of recorded answers (mobile/web-static/demo-data.json, made by
+// scripts/build-demo-data.mjs from the real database functions and a seeded business), one set per
+// role. Then every read is answered from that file, dates moved so the sample stays current, and
+// nothing is sent to be saved.
 
 export const DEMO_ROLES = ['super_admin', 'admin', 'stays', 'cleaning_manager', 'cleans', 'ready', 'accounts', 'client'] as const;
 export type DemoRole = (typeof DEMO_ROLES)[number];
