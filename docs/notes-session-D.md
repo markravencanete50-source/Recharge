@@ -262,3 +262,23 @@ For the Lead to route (not mine this round):
 - Every existing test that reads the changed files passes (305). `tsc -p mobile` and ESLint are clean.
 
 Screenshots: `docs/session-D-screenshots/round6-*`.
+
+## Round 6, first fix: sheets whose body is a fragment had no space between blocks
+
+Lee: the "Rejected clean" sheet (`CleanDisputes`) "has so much overlapping". `Sheet` (`mobile/src/TeamFlows.tsx`)
+spaces its children 16px apart, one `Stagger` each, but it took them with `Children.toArray`, which does not open
+fragments: a body like `{target && <>…</>}` was one child, so the gap never applied inside it.
+
+- `lib/sheet-children.ts` (new): `flattenSheetChildren` opens fragments and arrays recursively, drops empty slots and
+  keeps stable keys (the element's own key, else its position, prefixed by the fragment it sat in). `Sheet` maps
+  that instead. The 16px gap and 20px padding are unchanged. `CleanDisputes.tsx` needed no change.
+- Every sheet whose body is (or contains) a fragment now spaces its blocks like the rest: Accounts flows (3 sheets),
+  expense sheet, calendar picker sheets, chat safety menu, checklist templates, Rejected clean, day reflection, hub
+  item, access control (link made), team calendar work, clean sheet, client enquiries (2), onboarding (4), oversight
+  decision, property page selection, privacy copy, productivity person, repairs (2), team time (2), training course,
+  team events, visit form. None relied on the old tight grouping: their tight groups are already inside their own
+  `View`s (e.g. the decision buttons in `<View style={{ gap: 8 }}>`).
+- Test: `tests/sheet-children.test.mjs` (a fragment's children are spaced like direct children; nested fragments,
+  arrays and empty slots; stable unique keys; Sheet uses it with the gap and padding unchanged).
+- Screenshots: `round6-sheet-1/2` (Rejected clean before and after), `round6-sheet-3/4` (the oversight decision
+  sheet, same bug).
