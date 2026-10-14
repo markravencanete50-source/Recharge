@@ -4,8 +4,9 @@ import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, Loading, london, message, Notice, Section, StatGrid, StatTile, useRequestId } from "./LiveKit";
+import { Button, Field, Loading, message, Notice, Section, StatGrid, StatTile, useRequestId } from "./LiveKit";
 import { PropertySelect, SearchPicker } from "./SearchPicker";
+import { DateField } from "./CalendarPicker";
 import { TrackerDetailSheet, TrackerList } from "./Tracker";
 import { List, Row } from "./AccountsPayable";
 import { readFinance, writeTeams } from "./backend/client";
@@ -60,7 +61,7 @@ function InvoiceSheet({ p, form, report, properties, onClose, onDone }: { p: Pal
       <Field label="What it is for" value={v.title} onChange={set("title")} p={p} placeholder="Direct stay, 4 Leith Walk" />
       <Field label="Amount" value={v.amount} onChange={set("amount")} p={p} placeholder="£0.00" />
       <Field label="Invoice number (optional)" value={v.reference} onChange={set("reference")} p={p} />
-      <Field label="Send by (optional, YYYY-MM-DD)" value={v.dueOn} onChange={set("dueOn")} p={p} placeholder={london(new Date())} />
+      <DateField p={p} label="Send by (optional)" mode="single" value={{ from: v.dueOn, to: v.dueOn }} onChange={d => set("dueOn")(d.from)} wholeMonthLink={false} empty="No date" clearable />
       <View style={{ gap: 8 }}>
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Guest stay (optional)</Text>
         <SearchPicker p={p} options={stayOptions} value={v.reservationId} onChange={chooseStay} clearable placeholder="Search stays by property, code or date" nouns="stays" empty="No recent stays to choose from." />
