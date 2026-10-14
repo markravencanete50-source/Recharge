@@ -1,5 +1,6 @@
 import { businessContext,businessResponse,databaseFailure,viewAsFailure } from './business-server';
 import { portfolioReadSchema,portfolioActionSchema } from './portfolio-policy';
+import { validationReason } from './operations-policy';
 import { weeklyReportCsv } from './weekly-report';
 import { authSecurityConfiguration,requestQuota } from './auth-security';
 import { boundedJson,isSameOrigin,securityHeaders } from './auth-security-policy';
@@ -22,7 +23,7 @@ export async function portfolioRoute(request:Request,native=false){
   const quota=await requestQuota(request,'business-user',60,60,session.account.userId);
   if(!quota.allowed){const response=businessResponse({error:'Too many updates. Please wait.'},429);response.headers.set('Retry-After',String(quota.retryAfter));return response;}
   const parsed=portfolioActionSchema.safeParse(await boundedJson(request));
-  if(!parsed.success)return businessResponse({error:'Check the property details'},400);
+  if(!parsed.success)return businessResponse({error:validationReason(parsed.error)},400);
   const result=await session.client.rpc('workspace_portfolio_action',{input:parsed.data});return result.error?databaseFailure(result.error):businessResponse({data:result.data,ok:true});
  }catch(error){return viewAsFailure(error)??businessResponse({error:'The property portfolio is temporarily unavailable'},503);}
 }
