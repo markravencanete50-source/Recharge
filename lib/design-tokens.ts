@@ -53,7 +53,7 @@ export const designTokens = {
     // fill under the pointer. washBorder: the outline of a secondary (wash) button. selected,
     // onSelected and selectedBorder: a chosen pill, tab or option, quieter than a primary button in
     // dark mode so a row of pills doesn't read as a row of actions. hover: a row or option under the pointer.
-    disabled: "#6A786F",
+    disabled: "#647169",
     primaryHover: "#315F50",
     washBorder: "#C9D5C4",
     selected: "#1F3D38",
