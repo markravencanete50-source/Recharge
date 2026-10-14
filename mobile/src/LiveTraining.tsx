@@ -16,6 +16,7 @@ import { fileKind, fileSize, MAX_TRAINING_FILE_BYTES } from "../../lib/training-
 import { readableStage } from "../../lib/workspace-view";
 import { videoEmbed } from "../../lib/video-embed";
 import { StaffContracts } from "./LiveOnboarding";
+import { pillBox, pillInk } from "./Pills";
 
 // Live Training: everyone sees the courses meant for their role and marks them
 // done; management writes, edits and publishes courses and sees completions.
@@ -153,7 +154,7 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {AUDIENCES.map(value => {
           const on = audience.includes(value);
-          return <MotionPress key={value} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => toggle(value)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}><Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{AUDIENCE_LABEL[value]}</Text></MotionPress>;
+          return <MotionPress key={value} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => toggle(value)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", ...pillBox(p, on) }}><Text style={{ color: pillInk(p, on), fontSize: 13, fontWeight: "600" }}>{AUDIENCE_LABEL[value]}</Text></MotionPress>;
         })}
       </View>
       <Field label="Summary (optional)" value={summary} onChange={setSummary} p={p} />

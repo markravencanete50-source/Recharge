@@ -12,6 +12,7 @@ import { CLEAN_COST_MINOR, MANAGEMENT_FEE_BPS, samplePayoutReports, updateExpens
 import { ownerStatement, readPayoutReport, reconcile, type MatchRow, type PayoutRow } from "../../lib/payout-reconciliation";
 import { PAYOUT_CHANNEL_LABEL, RECONCILED_CHANNELS, type PayoutChannel } from "../../lib/payout-report-formats";
 import { exportReport } from "./exportReport";
+import { pillBox, pillInk } from "./Pills";
 
 const pence = (minor: number) => "£" + (minor / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const shadow = Platform.OS === "web" ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" } : { elevation: 2 };
@@ -22,8 +23,8 @@ function Pills({ values, selected, onSelect, palette: p }: { values: string[]; s
       {values.map(value => {
         const on = value === selected;
         return (
-          <MotionPress key={value} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => onSelect(value)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-            <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{value}</Text>
+          <MotionPress key={value} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => onSelect(value)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", ...pillBox(p, on) }}>
+            <Text style={{ color: pillInk(p, on), fontSize: 13, fontWeight: "600" }}>{value}</Text>
           </MotionPress>
         );
       })}
@@ -212,11 +213,11 @@ export function OwnerStatements({ palette: p, desktop }: { palette: Palette; des
         {steps.map((label, index) => {
           const done = index + 1 < step, current = index + 1 === step;
           return (
-            <View key={label} style={[ui.row, { gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: current ? p.primary : done ? p.successWash : p.surface, borderWidth: 1, borderColor: current ? p.primary : p.border }]}>
-              <View style={{ width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: current ? p.onPrimary : done ? p.success : p.elevated }}>
-                {done ? <Feather name="check" size={13} color={p.onSuccess} /> : <Text style={{ fontSize: 12, fontWeight: "700", color: current ? p.primary : p.muted }}>{index + 1}</Text>}
+            <View key={label} style={[ui.row, { gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: current ? p.selected : done ? p.successWash : p.surface, borderWidth: 1, borderColor: current ? p.selectedBorder : p.controlBorder }]}>
+              <View style={{ width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: current ? p.onSelected : done ? p.success : p.elevated }}>
+                {done ? <Feather name="check" size={13} color={p.onSuccess} /> : <Text style={{ fontSize: 12, fontWeight: "700", color: current ? p.selected : p.muted }}>{index + 1}</Text>}
               </View>
-              <Text style={{ fontSize: 13, fontWeight: "600", color: current ? p.onPrimary : p.text }}>{label}</Text>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: pillInk(p, current) }}>{label}</Text>
             </View>
           );
         })}

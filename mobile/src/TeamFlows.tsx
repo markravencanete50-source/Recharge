@@ -11,6 +11,7 @@ import { depth, space, ui, web, type Palette } from "./theme";
 import { InSheet } from "./LiveKit";
 import { WORKSPACE_MAP } from "../../lib/workspace-map";
 import type { Tool, WorkspaceRole } from "./model";
+import { pillBox, pillInk } from "./Pills";
 import {
   CHANNELS, CLEANER_PERFORMANCE, CLEANER_THREADS, CLEANS_TO_APPROVE, CLEAN_CHECKLIST, COURSES, DAILY_ROUTINE,
   QUICK_TOOLS, REPAIR_STAGES, ROUTINE_VISITS, TEAM_THREADS, type Course, type InboxChannel, type Thread,
@@ -413,10 +414,10 @@ export function TeamInbox({ palette: p, role }: { palette: Palette; role: Worksp
             const selected = channel === entry.key;
             const unread = threads.filter(thread => thread.unread && (entry.key === "all" || thread.channel === entry.key)).length;
             return (
-              <MotionPress key={entry.key} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setChannel(entry.key)} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: selected ? p.primary : p.surface, borderWidth: 1, borderColor: selected ? p.primary : p.border }]}>
-                <Feather name={entry.icon} size={14} color={selected ? p.onPrimary : p.text} />
-                <Text style={{ color: selected ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{entry.label}</Text>
-                {!!unread && <View style={{ minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: selected ? p.onPrimary : p.primary, alignItems: "center", justifyContent: "center" }}><Text style={{ color: selected ? p.primary : p.onPrimary, fontSize: 11, fontWeight: "700" }}>{unread}</Text></View>}
+              <MotionPress key={entry.key} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setChannel(entry.key)} style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, ...pillBox(p, selected) }]}>
+                <Feather name={entry.icon} size={14} color={pillInk(p, selected)} />
+                <Text style={{ color: pillInk(p, selected), fontSize: 13, fontWeight: "600" }}>{entry.label}</Text>
+                {!!unread && <View style={{ minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: selected ? p.onSelected : p.primary, alignItems: "center", justifyContent: "center" }}><Text style={{ color: selected ? p.selected : p.onPrimary, fontSize: 11, fontWeight: "700" }}>{unread}</Text></View>}
               </MotionPress>
             );
           })}
@@ -498,8 +499,8 @@ export function TrainingCentre({ palette: p, role }: { palette: Palette; role: W
         {categories.map(entry => {
           const selected = entry === category;
           return (
-            <MotionPress key={entry} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setCategory(entry)} style={{ minHeight: 40, paddingHorizontal: 14, justifyContent: "center", borderRadius: 999, backgroundColor: selected ? p.primary : p.surface, borderWidth: 1, borderColor: selected ? p.primary : p.border }}>
-              <Text style={{ color: selected ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{entry}</Text>
+            <MotionPress key={entry} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setCategory(entry)} style={{ minHeight: 40, paddingHorizontal: 14, justifyContent: "center", borderRadius: 999, ...pillBox(p, selected) }}>
+              <Text style={{ color: pillInk(p, selected), fontSize: 13, fontWeight: "600" }}>{entry}</Text>
             </MotionPress>
           );
         })}

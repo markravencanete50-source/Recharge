@@ -32,6 +32,7 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { canFlagAirCover } from "../../lib/aircover-flag";
 import { PurchaseOrdersList } from "./PurchaseOrdersList";
 import type { SectionProps } from "./SectionProps";
+import { pillBox, pillInk } from "./Pills";
 
 // Live repairs: the maintenance pipeline from report to completed repair, and
 // Ready's routine visits. Every action here is checked again by the database.
@@ -493,19 +494,19 @@ function PlanSheet({ p, visible, properties, account, onClose, onDone }: { p: Pa
     try { await writeTeams({ action: "saveRoutinePlan", requestId: request.get(), propertyId, moduleId, title: title.trim(), checklist, frequency, dayOfMonth, assigneeId: mine ? account.userId : null, active: true }); request.done(); setTitle(""); setChecks(""); await onDone(); }
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
-  const pill = (on: boolean) => ({ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" as const, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border });
+  const pill = (on: boolean) => ({ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" as const, ...pillBox(p, on) });
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="New routine" subtitle="Visits are created each period from this plan" icon="calendar">
       <PropertyChips p={p} properties={properties} value={propertyId} onChange={setPropertyId} />
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {([["routine-bin-garden-board", "Bins and garden"], ["safety-maintenance", "Safety checks"], ["ready-schedule", "Other Ready visit"]] as const).map(([id, label]) => (
-          <MotionPress key={id} accessibilityRole="radio" accessibilityState={{ selected: moduleId === id }} onPress={() => setModuleId(id)} style={pill(moduleId === id)}><Text style={{ color: moduleId === id ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label}</Text></MotionPress>
+          <MotionPress key={id} accessibilityRole="radio" accessibilityState={{ selected: moduleId === id }} onPress={() => setModuleId(id)} style={pill(moduleId === id)}><Text style={{ color: pillInk(p, moduleId === id), fontSize: 13, fontWeight: "600" }}>{label}</Text></MotionPress>
         ))}
       </View>
       <Field label="Title" value={title} onChange={setTitle} p={p} placeholder="For example: Monthly bins and garden" />
       <Field label="Checks, one per line" value={checks} onChange={setChecks} p={p} multiline />
       <View style={{ flexDirection: "row", gap: 8 }}>
-        {(["monthly", "quarterly"] as const).map(x => <MotionPress key={x} accessibilityRole="radio" accessibilityState={{ selected: frequency === x }} onPress={() => setFrequency(x)} style={pill(frequency === x)}><Text style={{ color: frequency === x ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{x === "monthly" ? "Monthly" : "Every 3 months"}</Text></MotionPress>)}
+        {(["monthly", "quarterly"] as const).map(x => <MotionPress key={x} accessibilityRole="radio" accessibilityState={{ selected: frequency === x }} onPress={() => setFrequency(x)} style={pill(frequency === x)}><Text style={{ color: pillInk(p, frequency === x), fontSize: 13, fontWeight: "600" }}>{x === "monthly" ? "Monthly" : "Every 3 months"}</Text></MotionPress>)}
       </View>
       <Field label="Day of the month (1–28)" value={day} onChange={setDay} p={p} />
       {account.role === "ready" && <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: mine }} onPress={() => setMine(m => !m)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: p.elevated }]}><Feather name={mine ? "check-square" : "square"} size={20} color={mine ? p.success : p.muted} /><Text style={{ color: p.text, flex: 1 }}>Assign these visits to me</Text></MotionPress>}

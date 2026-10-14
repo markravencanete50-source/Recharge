@@ -58,7 +58,7 @@ test('Pills lives in its own file; AccountsPayable re-exports it; every screen i
   for (const file of readdirSync('mobile/src').filter(f => f.endsWith('.tsx') && f !== 'Pills.tsx' && f !== 'AccountsFlows.tsx')) {
     const text = source(file);
     if (!/<Pills /.test(text)) continue;
-    assert.match(text, /import \{ Pills \} from "\.\/Pills";|import \{ Pills \} from "\.\/Pills"/, file);
+    assert.match(text, /import \{[^}]*\bPills\b[^}]*\} from "\.\/Pills";/, file); // pillBox and pillInk may share the line
     assert.doesNotMatch(text, /import \{[^}]*\bPills\b[^}]*\} from "\.\/(AccountsPayable|LiveAccounts)"/, file);
   }
 });

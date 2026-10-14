@@ -150,3 +150,9 @@ failures in either theme.
 | Plain sign-in panel (wide screens) | `LiveSignIn.tsx`: the left panel is the logo, "Welcome back." with one line, and the house. The team chips, the four example activity cards and the footer line are gone. |
 
 Screenshots: `docs/screenshots/session-e/round9/before/` and `after/`: a page title (Properties), the Messages search focused with "mark", and the sign-in screen, light and dark, 1440 and 390.
+
+## Next round: one look for chosen chips (Lee: "yes go ahead")
+
+Every chip that is chosen (a pill, a day in a strip, a step, a segment, a rating) now uses A's `pillBox` and `pillInk` from `Pills.tsx`: the `selected` tokens, forest in light and deep green with a mint edge in dark, never a solid mint block. An unchosen chip gets the 3:1 `controlBorder` outline. Converted: the day strips (`LiveStays`, `TeamEvents` WhoIsWhere), the channel and training chips (`TeamFlows`), the property status chips and the "Last N days" segment (`LivePages`, its track moved to `wash`), the clean report answers (`CleanReport`), the picker chips (`SearchPicker`), the Accounts filter chips and the statement steps (`AccountsFlows`), the repair schedule (`LiveRepairs`), the furnishing steps and rooms (`LiveFurnishing`), the audience chips (`LiveOnboarding`, `LiveTraining`), "Photo required" (`ChecklistTemplates`) and the 1-to-N rating (`ListingSheets`). Counts inside a chosen chip turn inside out (`onSelected` ground, `selected` ink). Checkbox squares, the today circle and primary buttons stay solid on purpose.
+
+`tests/chosen-chips.test.mjs` fails if a pressable carrying a selected or checked state fills with solid primary. `tests/pills-dropdown.test.mjs` now lets `pillBox` and `pillInk` share the line that imports `Pills` from `./Pills` (it still checks the import comes from `Pills.tsx`).
