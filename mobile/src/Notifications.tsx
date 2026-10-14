@@ -107,13 +107,20 @@ let lastChime = 0;
 export function playChime(force = false) {
   if (!audio || audio.state !== "running" || (!force && (!soundOn() || Date.now() - lastChime < 5000))) return;
   lastChime = Date.now();
-  // Two short soft notes, a fifth apart.
-  for (const [freq, at] of [[880, 0], [1318.5, 0.14]] as const) {
-    const osc = audio.createOscillator(), gain = audio.createGain(), start = audio.currentTime + at;
-    osc.type = "sine"; osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.0001, start); gain.gain.exponentialRampToValueAtTime(0.18, start + 0.02); gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
-    osc.connect(gain).connect(audio.destination); osc.start(start); osc.stop(start + 0.4);
-  }
+  // Three clear rising notes (C, E, G), loud enough to hear across a room (Lee, 14 October: "too low").
+  // Each note is a tone and its octave, through a compressor so it stays loud without distorting.
+  const out = audio.createDynamicsCompressor();
+  out.threshold.value = -18; out.knee.value = 6; out.ratio.value = 6;
+  out.connect(audio.destination);
+  [[1046.5, 0], [1318.5, 0.17], [1568, 0.34]].forEach(([freq, at]) => {
+    const start = audio!.currentTime + at;
+    for (const [type, mult, peak] of [["triangle", 1, 0.85], ["sine", 2, 0.3]] as const) {
+      const osc = audio!.createOscillator(), gain = audio!.createGain();
+      osc.type = type; osc.frequency.value = freq * mult;
+      gain.gain.setValueAtTime(0.0001, start); gain.gain.exponentialRampToValueAtTime(peak, start + 0.015); gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.6);
+      osc.connect(gain).connect(out); osc.start(start); osc.stop(start + 0.65);
+    }
+  });
 }
 
 const rowStyle = [ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }];
@@ -156,7 +163,7 @@ export function NotificationsSetting({ p }: { p: Palette }) {
       <View style={rowStyle}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Sound for new updates</Text>
-          <Text style={[ui.small, { color: p.muted }]}>A soft chime when a new update or message arrives while Recharge is open.</Text>
+          <Text style={[ui.small, { color: p.muted }]}>A chime when a new update or message arrives while Recharge is open, also when it is minimized or behind other windows.</Text>
         </View>
         <Switch accessibilityLabel="Sound for new updates" value={sound} onValueChange={value => { setSound(value); setSoundState(value); if (value) playChime(true); }} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
       </View>
