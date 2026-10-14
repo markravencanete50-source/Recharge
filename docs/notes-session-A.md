@@ -320,6 +320,20 @@ Lee: "in the properties remove those location buttons, it should be searchable o
   - the New expense sheet (`*-new-expense`) and its date field open (`*-new-expense-date`).
 - Taken in the interactive demo in headless Chromium, served the way `tests/demo-browser-e2e.test.mjs` serves it.
 
+## Round 8 leftovers: the last typed dates and the dropdown edge
+- The closed Dropdown box (and its web `select`) now uses `controlBorder` (3:1), not the hairline `border`.
+- Every remaining typed "YYYY-MM-DD" date is now a single-day `DateField`:
+  - Accounts receivable, "Send by (optional)": says "No date" until one is chosen, and has "Clear date";
+  - Statement terms, "Levy stays checking in from (optional)": says "Every stay" until one is chosen, and has "Clear date".
+- Accounts payable's three dates (Received on, the draft's Received on, Invoice date) were already `DateField`s from round 6.
+- `tests/date-fields.test.mjs` now fails if any "YYYY-MM-DD" placeholder is left anywhere in `mobile/src`, and it checks the Dropdown border.
+- No migration.
+
+**Dark-mode screenshots** (`docs/screenshots/session-a/dark-dates/`), taken at `37442b9`, desktop 1440×900 and phone 390×844:
+- the Accounts section dropdown, closed (`*-dropdown-box`);
+- Record invoice, "Send by" closed and open (`*-send-by`, `*-send-by-open`);
+- Statement terms with the levy on, the levy date closed and open (`*-levy-from`, `*-levy-from-open`).
+
 
 Apply in filename order, before deploying the Worker (the Worker code is unchanged by this session):
 

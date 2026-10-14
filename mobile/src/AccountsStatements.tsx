@@ -157,7 +157,7 @@ export function TermsSheet({ p, row, onClose, onDone }: { p: Palette; row: State
       {levy.enabled && <>
         <Field label="Visitor levy (% of the accommodation)" value={levy.rate} onChange={rate => setLevy(l => ({ ...l, rate }))} p={p} placeholder="5" />
         <Field label="Most nights levied per stay (empty for every night)" value={levy.cap} onChange={cap => setLevy(l => ({ ...l, cap }))} p={p} placeholder="5" />
-        <Field label="Levy stays checking in from (YYYY-MM-DD, empty for every stay)" value={levy.from} onChange={from => setLevy(l => ({ ...l, from }))} p={p} placeholder="2026-07-24" />
+        <DateField p={p} label="Levy stays checking in from (optional)" mode="single" value={{ from: levy.from, to: levy.from }} onChange={d => setLevy(l => ({ ...l, from: d.from }))} wholeMonthLink={false} empty="Every stay" clearable />
       </>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Saving…" : "Save terms"} primary p={p} disabled={busy} onPress={() => void save()} />
