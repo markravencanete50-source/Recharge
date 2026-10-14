@@ -8,6 +8,7 @@ import { useCelebrate } from "./Celebrate";
 import { SearchPicker } from "./SearchPicker";
 import { Button, message, Notice, Tag, Loading } from "./LiveKit";
 import { ThreadHeader } from "./MessagesLayout";
+import { HiddenMessage, InboxMessageSafety, MessageMenuButton } from "./ChatSafety";
 import { emailFileLink, readChat, readClientEmail, writeClientEmail } from "./backend/client";
 import { clientEmailDetailSchema, clientEmailStatus, type ClientEmailThread as Thread } from "../../lib/client-email-policy";
 import { MESSAGE_STATUS_LABEL } from "../../lib/inbox-filters";
@@ -45,6 +46,8 @@ export function ClientEmailThreadPane({ p, threadId, onBack, onChanged, onAssign
   const [data, setData] = useState<ReturnType<typeof clientEmailDetailSchema.parse> | null>(null);
   const [reply, setReply] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(""), [note, setNote] = useState("");
   const [assigning, setAssigning] = useState(false), [owners, setOwners] = useState<{ id: string; label: string }[] | null>(null), [ownerId, setOwnerId] = useState("");
+  // The email whose menu is open (Report message, Session C), as in Team chat.
+  const [reporting, setReporting] = useState<ReturnType<typeof clientEmailDetailSchema.parse>["messages"][number] | null>(null);
   const scroller = useRef<ScrollView>(null);
   const load = useCallback(async () => {
     try { setData(clientEmailDetailSchema.parse((await readClientEmail({ section: "thread", threadId })).data)); setError(""); }
@@ -98,9 +101,12 @@ export function ClientEmailThreadPane({ p, threadId, onBack, onChanged, onAssign
             const team = m.direction === "out";
             return (
               <View key={m.id} style={{ alignSelf: team ? "flex-end" : "flex-start", maxWidth: "86%", gap: 3 }}>
-                <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomRightRadius: team ? 6 : 18, borderBottomLeftRadius: team ? 18 : 6, backgroundColor: team ? p.primary : p.surface, borderWidth: team ? 0 : 1, borderColor: p.border }}>
-                  <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20 }}>{m.body}</Text>
-                </View>
+                {m.hidden ? <HiddenMessage p={p} /> : <View style={[ui.row, { gap: 4, alignItems: "flex-end" }]}>
+                  <View style={{ flexShrink: 1, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomRightRadius: team ? 6 : 18, borderBottomLeftRadius: team ? 18 : 6, backgroundColor: team ? p.primary : p.surface, borderWidth: team ? 0 : 1, borderColor: p.border }}>
+                    <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20 }}>{m.body}</Text>
+                  </View>
+                  {!team && <MessageMenuButton p={p} onPress={() => setReporting(m)} />}
+                </View>}
                 {m.files.map(file => (
                   <MotionPress key={file.id} accessibilityRole="link" accessibilityLabel={`Open ${file.filename}`} onPress={() => void openFile(file.id)}
                     style={[ui.row, { gap: 6, alignSelf: team ? "flex-end" : "flex-start", maxWidth: "100%", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
@@ -137,6 +143,7 @@ export function ClientEmailThreadPane({ p, threadId, onBack, onChanged, onAssign
         </View>}
       </>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
+      {reporting && <InboxMessageSafety key={reporting.id} p={p} source="client_email" id={reporting.id} from={t?.name ?? t?.address ?? "the sender"} body={reporting.body} at={reporting.sentAt} onClose={() => setReporting(null)} />}
     </View>
   );
 }

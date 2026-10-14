@@ -18,6 +18,7 @@ import { MESSAGE_STATUS_LABEL, byLatest, emptyStatusMessage, guestFacts, guestSt
 import { MessagesSplit, QuietLine, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { chatTime } from "../../lib/workspace-chat-policy";
 import { SavedReplies } from "./SavedReplies";
+import { HiddenMessage, InboxMessageSafety, MessageMenuButton } from "./ChatSafety";
 import type { PropertyView } from "../../lib/workspace-view";
 
 // The guest inbox (the Guests tab of Messages): every conversation with guests, the longest wait first, filtered
@@ -136,6 +137,8 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
   const [reply, setReply] = useState(""), [guestText, setGuestText] = useState("");
   const [editing, setEditing] = useState(false), [guest, setGuest] = useState(""), [property, setProperty] = useState<string | null>(null), [booking, setBooking] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [note, setNote] = useState("");
+  // The guest message whose menu is open (Report message), as in Team chat.
+  const [reporting, setReporting] = useState<Loaded["messages"][number] | null>(null);
   const scroller = useRef<ScrollView>(null);
   const load = useCallback(async () => {
     try { setData(inboxThreadSchema.parse((await readInbox({ section: "thread", threadId })).data)); setError(""); }
@@ -210,9 +213,12 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
             const team = m.direction === "team";
             return (
               <View key={m.id} style={{ alignSelf: team ? "flex-end" : "flex-start", maxWidth: "86%", gap: 3 }}>
-                <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomRightRadius: team ? 6 : 18, borderBottomLeftRadius: team ? 18 : 6, backgroundColor: team ? p.primary : p.surface, borderWidth: team ? 0 : 1, borderColor: p.border }}>
-                  <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20, fontStyle: m.body ? "normal" : "italic" }}>{m.body ?? "Replied on the platform"}</Text>
-                </View>
+                {m.hidden ? <HiddenMessage p={p} /> : <View style={[ui.row, { gap: 4, alignItems: "flex-end" }]}>
+                  <View style={{ flexShrink: 1, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomRightRadius: team ? 6 : 18, borderBottomLeftRadius: team ? 18 : 6, backgroundColor: team ? p.primary : p.surface, borderWidth: team ? 0 : 1, borderColor: p.border }}>
+                    <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20, fontStyle: m.body ? "normal" : "italic" }}>{m.body ?? "Replied on the platform"}</Text>
+                  </View>
+                  {!team && <MessageMenuButton p={p} onPress={() => setReporting(m)} />}
+                </View>}
                 {m.files.map(file => (
                   <MotionPress key={file.id} accessibilityRole="link" accessibilityLabel={`Open ${file.filename}`} onPress={() => void openFile(file.id)}
                     style={[ui.row, { gap: 6, alignSelf: team ? "flex-end" : "flex-start", maxWidth: "100%", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
@@ -263,6 +269,7 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
         </View>}
       </>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
+      {reporting && <InboxMessageSafety key={reporting.id} p={p} source="guest" id={reporting.id} from={t?.guestName ?? "the guest"} body={reporting.body ?? ""} at={reporting.sentAt} onClose={() => setReporting(null)} />}
     </View>
   );
 }
@@ -288,11 +295,11 @@ function useSeenThreads() {
   return { seen, mark };
 }
 
-export function GuestInbox({ palette: p, properties, desktop = false, onChanged }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void }) {
+export function GuestInbox({ palette: p, properties, desktop = false, onChanged, openThread }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void; openThread?: string }) {
   // Every recent conversation is read once; the status and the search filter it here. Newest message first (byLatest).
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const [data, setData] = useState<ReturnType<typeof inboxListSchema.parse> | null>(null);
-  const [error, setError] = useState(""), [logging, setLogging] = useState(false), [openId, setOpenId] = useState<string | null>(null);
+  const [error, setError] = useState(""), [logging, setLogging] = useState(false), [openId, setOpenId] = useState<string | null>(openThread ?? null);
   const [, setTick] = useState(0);
   const { seen, mark } = useSeenThreads();
   const open = (id: string | null) => { if (id) mark(id); else if (openId) mark(openId); setOpenId(id); };

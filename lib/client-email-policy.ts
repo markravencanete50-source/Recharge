@@ -23,7 +23,7 @@ const fileSchema = z.object({ id: uuid, filename: z.string(), mime: z.string(), 
 export const clientEmailListSchema = z.object({ threads: z.array(clientEmailThreadSchema), canSend: z.boolean().default(false) });
 export const clientEmailDetailSchema = z.object({
   thread: clientEmailThreadSchema, canSend: z.boolean().default(false),
-  messages: z.array(z.object({ id: uuid, direction: z.enum(['in', 'out']), body: z.string(), sentAt: z.string(), author: z.string().nullable(), files: z.array(fileSchema).default([]) })),
+  messages: z.array(z.object({ id: uuid, direction: z.enum(['in', 'out']), body: z.string(), hidden: z.boolean().default(false), sentAt: z.string(), author: z.string().nullable(), files: z.array(fileSchema).default([]) })),
 });
 // The status filter Clients uses for every conversation: the other side spoke last and it is open (Needs a reply), we did (Engaged), or closed.
 export const clientEmailStatus = (t: Pick<ClientEmailThread, 'status' | 'waitingSince'>) => t.status === 'closed' ? 'closed' as const : t.waitingSince ? 'reply' as const : 'waiting' as const;

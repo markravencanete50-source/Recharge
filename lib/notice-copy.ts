@@ -18,6 +18,9 @@ const EXACT: Record<string, NoticeCopy> = {
   'guest.message': copy('New guest message', 'A guest has sent a message. Open Messages to reply.'),
   // Session F, round 7: email to ownerrelations@ from someone who is not an owner yet (migration 20261019500000).
   'client.email': copy('New client email', 'Someone has emailed client relations. Open Messages, Clients to reply.'),
+  // Session C: a guest or client message reported by the team (migration 20261020300000), to admins, then to whoever reported it.
+  'inbox.reported': copy('A guest or client message was reported', 'Someone has reported a message from a guest or client. Open Reported messages to read it, then hide it in the app or dismiss the report.'),
+  'inbox.report_hidden': copy('Your report was reviewed', 'An admin hid the message you reported in the app. Thanks for letting us know.'),
   'journey.createEnquiry': copy('New property enquiry', 'A new property enquiry has been started.'),
   'journey.publishEstimate': copy('Your estimate is ready', 'Recharge has prepared an estimate for your property, with expected nightly rates and comparable listings. You can review it and choose how to go ahead.'),
   'journey.decideEstimate': copy('Estimate decision recorded', 'A decision has been recorded on a property estimate.'),

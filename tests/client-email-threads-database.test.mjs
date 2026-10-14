@@ -21,7 +21,7 @@ for (const file of files.slice(0, cut)) await db.exec(await fs.readFile('supabas
 await db.exec(`set role service_role`);
 await db.query('select public.workspace_email_owner_ingest($1)', [{ emailId: 'old_1', from: 'landlord@example.org', fromName: 'Lena Lord', subject: 'Flat in Leith', text: 'Can you manage my flat?', messageId: '<old-1@mail.example.org>' }]);
 await db.exec('reset role');
-for (const file of files.slice(cut)) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+await db.exec(await fs.readFile(`supabase/migrations/${MINE}.sql`, 'utf8'));
 const SIGS = ['private.workspace_email_owner_ingest(jsonb)', 'private.workspace_client_email_action(jsonb)', 'private.workspace_email_files(uuid[])', 'private.workspace_email_owner_reply_queue()'];
 const definitions = () => Promise.all(SIGS.map(async s => (await db.query('select pg_get_functiondef($1::regprocedure) d', [s])).rows[0].d));
 const firstRun = await definitions();
@@ -29,6 +29,8 @@ const threadsBefore = (await db.query('select count(*)::int n from private.works
 await db.exec(await fs.readFile(`supabase/migrations/${MINE}.sql`, 'utf8'));
 const secondRun = await definitions();
 const threadsAfter = (await db.query('select count(*)::int n from private.workspace_client_email_threads')).rows[0].n;
+// Then the later migrations (20261020300000 patches the email files and the client email reads for hidden messages).
+for (const file of files.slice(cut + 1)) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 after(() => db.close());
 
 const roles = ['super_admin', 'stays', 'stays', 'client', 'cleans', 'ready', 'admin'];
