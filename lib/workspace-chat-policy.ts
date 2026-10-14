@@ -19,6 +19,9 @@ export const chatReadSchema = z.discriminatedUnion('section', [
 export const REPORT_REASONS = ['offensive', 'harassment', 'media', 'spam', 'other'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
 export const MAX_REPORT_NOTE = 500;
+// Where a reported guest or client message lives: a guest conversation, or an email to client relations.
+export const INBOX_REPORT_SOURCES = ['guest', 'client_email'] as const;
+export type InboxReportSource = (typeof INBOX_REPORT_SOURCES)[number];
 // Reactions, one per person per message; tapping yours again takes it off.
 export const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🎉', '✅'] as const;
 // Photos and a video in a message: up to 5 photos (15 MB each) and 1 video (50 MB).
@@ -63,6 +66,8 @@ export const chatActionSchema = z.discriminatedUnion('action', [
   // Safety: report a message that is not yours (one open report per message), and block or
   // unblock a person. Blocking hides their messages from you; it changes nothing for anyone else.
   z.object({ action: z.literal('reportMessage'), requestId: uuid, messageId: uuid, reason: z.enum(REPORT_REASONS), note: z.string().trim().max(MAX_REPORT_NOTE, `Keep the note to ${MAX_REPORT_NOTE} characters`).optional() }).strict(),
+  // A message from a guest (Messages > Guests) or from someone emailing client relations (Clients) is reported the same way.
+  z.object({ action: z.literal('reportInboxMessage'), requestId: uuid, source: z.enum(INBOX_REPORT_SOURCES), messageId: uuid, reason: z.enum(REPORT_REASONS), note: z.string().trim().max(MAX_REPORT_NOTE, `Keep the note to ${MAX_REPORT_NOTE} characters`).optional() }).strict(),
   z.object({ action: z.literal('blockUser'), userId: uuid }).strict(),
   z.object({ action: z.literal('unblockUser'), userId: uuid }).strict(),
   // One-off upload links for photos and a video, sent straight to storage; discardFiles lets go of
@@ -128,6 +133,7 @@ export const blockedPersonSchema = z.object({ userId: uuid, fullName: z.string()
 export type BlockedPerson = z.infer<typeof blockedPersonSchema>;
 export const blockedPeopleSchema = z.array(blockedPersonSchema);
 export const reportedSchema = z.object({ reported: z.literal(true), reportId: uuid, authorId: uuid, blocked: z.boolean() });
+export const inboxReportedSchema = z.object({ reported: z.literal(true), reportId: uuid });
 export const preparedFilesSchema = z.object({ files: z.array(z.object({ id: uuid, path: z.string(), mime: z.string(), uploadUrl: z.string().url() })) });
 export const chatFileLinksSchema = z.record(z.string(), z.object({ url: z.string().url(), mime: z.string(), name: z.string(), kind: z.enum(['image', 'video']) }));
 

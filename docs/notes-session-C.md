@@ -569,6 +569,46 @@ nulls last limit 300`).
 
 **Screenshots:** `docs/screenshots/messages-newest-first-{light,dark}.png`, before and after on Needs a reply, with sample data.
 
+## Reporting guest and client messages (14 October)
+
+Lee: "in the channel manager there is no button to report a message; it should have one, since we already built the reported
+messages." Until now only Team chat messages could be reported.
+
+- Messages > Guests and Clients: every incoming message (a guest's message from Hostaway or logged by hand, a guest email, an
+  email to ownerrelations@ from someone who is not an owner yet) has the same "…" beside it as Team chat. It opens the same
+  sheet: Report message, a reason, an optional note, "Report sent". There is no Block (guests and email senders have no
+  account). Our own messages, and replies the team recorded, have no "…". `ReportForm` in ChatSafety.tsx is now shared by
+  Team chat and these, so there is one design.
+- Who can report: whoever can open that conversation (Guests: `guest_inbox_can`; Clients: `workspace_email_owner_team`). The
+  limits and the "already reported" rule are Team chat's, counted across both kinds of report.
+- Reported messages (admins and super admins): the reports sit beside the Team chat ones, labelled Guest message, Guest email
+  or Client email, with the guest or sender, the property, and "Open the conversation" (it opens Messages on that conversation).
+  The choice is Dismiss or "Hide in the app": the team sees "Hidden by an admin" instead of the words and files, in the
+  conversation and the list. The confirm says it cannot delete anything from Airbnb, Booking.com or the sender's mailbox.
+  Admins still read what it said in the report.
+- Notices: `inbox.reported` to admins and super admins; then `inbox.report_hidden` (or the existing `chat.report_reviewed`) to
+  whoever reported it. Owners never get either. The activity rows carry no property or work item; I did not change
+  `activity_scoped`.
+- Database: `20261020300000_inbox_message_reports.sql` (the next number after my last range; tell me if you want another).
+  New table `private.inbox_reports` (a source, `guest` or `client_email`, and a reference to the one message), and
+  `hidden_at`/`hidden_by` on `private.workspace_guest_messages` and `private.workspace_client_email_messages`.
+  - Replaced whole: `private.chat_reports_read()` only (defined in 20261012010000, never patched since).
+  - New: `private.inbox_report_action(jsonb)`, `private.inbox_report_view(private.inbox_reports)`,
+    `private.inbox_report_decide(jsonb)` (all revoked from public, anon and authenticated; reached through the chat and team
+    actions).
+  - Patched by anchor and append: `workspace_chat_action` (reportInboxMessage), `workspace_teams_action` (decideMessageReport),
+    `guest_thread_json` (list preview), `workspace_guest_inbox_read` (body, `hidden`, files), `workspace_client_email_json`
+    (preview), `workspace_client_email_read` (body, `hidden`, files) and `workspace_email_files` (a hidden message's files no
+    longer open).
+- F's files: I added the "…" and the hidden line to `ClientEmailThread.tsx`, and an optional `hidden` to the message schema in
+  `lib/client-email-policy.ts`; F's database test now runs its migration again before the later ones are applied. The Team
+  chat moderation test re-runs this migration after the two it re-runs, since this one replaces the reports read.
+- One line in `LiveWorkspace.tsx`: Reported messages gets `onOpenConversation={openMessages}`. `LiveChat.tsx` opens a
+  `guest:<id>` link in Guests and an `email:<id>` link in Clients.
+- Tests: `tests/inbox-message-reports.test.mjs` (7) and `tests/inbox-message-reports-database.test.mjs` (8).
+- Screens: `docs/screenshots/report-*.png` (guest conversation, the report sheet, client email, Reported messages, the hide
+  confirm), light and dark, 1440 and 390, from the real screens with sample data.
+
 ## Not done yet (waiting for the client)
 
 - Inbound email into Messages (design above; to be built later).
@@ -638,3 +678,8 @@ Round 5: apply `20261015300000_chat_notice_every_message.sql`, `20261015310000_g
 `20261015320000_owner_chat_closed.sql` and `20261015330000_guest_message_notices_onboarded.sql` in that order, then redeploy the backend and the app (the app's Close button and the
 Clients status need `…320000`; before it, every owner conversation reads as open). Warn the team first: every chat message and
 every guest message now sends a notice, and push and email follow when they are switched on.
+
+Reporting guest and client messages: apply `20261020300000_inbox_message_reports.sql` after `20261019500000` (it patches the client
+email reads), then redeploy the backend and the app straight after. Between the two, Reported messages in the old app fails to
+load once someone has reported a guest or client message (the old app expects an account behind every report); nothing else
+changes. Before the migration, the new app shows the "…" but sending a report fails, and Reported messages lists Team chat only.

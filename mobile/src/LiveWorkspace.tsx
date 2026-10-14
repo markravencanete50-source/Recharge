@@ -575,7 +575,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
     : tab === "enquiries" ? <LiveEnquiries palette={p} account={account} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} />
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
-    : tab === "moderation" ? <LiveModeration palette={p} />
+    : tab === "moderation" ? <LiveModeration palette={p} onOpenConversation={openMessages} />
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} openConversation={chatTarget?.id}
         updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} />

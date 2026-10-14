@@ -353,7 +353,8 @@ test('dismissing a report leaves the message; nobody decides a report about thei
 
 test('applying the migration again changes nothing', async () => {
   const before = (await owner("select md5(string_agg(pg_get_functiondef(p.oid),'' order by p.oid::text)) h from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname like any(array['workspace_chat_%','chat_%','workspace_teams_%'])"))[0].h;
-  for (const file of ['20261012010000_chat_reports_blocks.sql', '20261012030000_chat_report_outcomes.sql']) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+  // 20261020300000 replaces the reports read whole (guest and client message reports beside these), so it runs again after them.
+  for (const file of ['20261012010000_chat_reports_blocks.sql', '20261012030000_chat_report_outcomes.sql', '20261020300000_inbox_message_reports.sql']) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   const after2 = (await owner("select md5(string_agg(pg_get_functiondef(p.oid),'' order by p.oid::text)) h from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname like any(array['workspace_chat_%','chat_%','workspace_teams_%'])"))[0].h;
   assert.equal(after2, before);
   assert.ok(migrations.includes('20261012010000_chat_reports_blocks.sql') && migrations.includes('20261012030000_chat_report_outcomes.sql'));
