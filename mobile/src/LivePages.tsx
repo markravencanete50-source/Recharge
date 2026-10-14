@@ -23,6 +23,7 @@ import { OnboardingPipeline, PortfolioInsights, type PropertyFilter } from "./Li
 import { PropertiesTable } from "./PropertiesTable";
 import { EstimateExplorer } from "./LiveEstimate";
 import { EstimateDeliveryCard } from "./EstimateDelivery";
+import { OwnerAccountCard, ownerAccountEmailOf } from "./OwnerAccountCard";
 import { ScotlandMap } from "./ScotlandMap";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
 import { readEstimate } from "../../lib/estimate-projection";
@@ -321,7 +322,7 @@ function AgreementCopy({ j, p, propertyName }: { j: JourneyView; p: Palette; pro
   </View>;
 }
 
-function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: JourneyView; p: Palette; account: WorkspaceAccount; propertyName: string; onForm: (f: WorkflowForm) => void; work: OperationView[] }) {
+function JourneyDetails({ j, p, account, propertyName, onForm, work, onRefresh }: { j: JourneyView; p: Palette; account: WorkspaceAccount; propertyName: string; onForm: (f: WorkflowForm) => void; work: OperationView[]; onRefresh?: () => void }) {
   const comparables = estimateComparables(j.estimate), [linkError, setLinkError] = useState("");
   const progress = onboardingProgress(j.stage), linked = work.filter(w => w.propertyId === j.propertyId && w.workId !== j.workId), reportFrom = inspectionReportFrom(account, j);
   return (
@@ -343,6 +344,7 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: Jour
       {j.estimate && !readEstimate(j.estimate) && <View style={{ gap: 6 }}><Text style={{ color: p.text, fontWeight: "700" }}>Your estimate</Text>{[["Low nightly rate", "lowRateMinor"], ["Expected nightly rate", "mediumRateMinor"], ["High nightly rate", "highRateMinor"]].map(([label, key]) => <Text key={key} style={{ color: p.text }}>{label}: {money(j.estimate?.[key])}</Text>)}</View>}
       {j.estimate && typeof j.estimate.comments === "string" && !!j.estimate.comments.trim() && <View style={{ gap: 4 }}><Text style={{ color: p.text, fontWeight: "700" }}>{account.role === "client" ? "Notes from Recharge" : "Estimate notes"}</Text><Text style={[ui.body, { color: p.muted }]}>{j.estimate.comments}</Text></View>}
       {account.role !== "client" && !!j.estimateDelivery && ["estimate", "reviewing"].includes(j.stage) && <EstimateDeliveryCard key={j.version} p={p} propertyId={j.propertyId} delivery={j.estimateDelivery} />}
+      {["stays", "admin", "super_admin"].includes(account.role) && !["enquiry", "estimate", "reviewing", "archived"].includes(j.stage) && (!!ownerAccountEmailOf(j) || !j.ownerAccount) && <OwnerAccountCard key={"owner" + j.version} p={p} propertyId={j.propertyId} email={ownerAccountEmailOf(j)} hasAccount={!!j.ownerAccount} onDone={() => onRefresh?.()} />}
       {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
       {j.estimate && account.role === "client" && ["estimate", "reviewing"].includes(j.stage) && <EstimateGuide palette={p} />}
       {!!comparables.length && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Comparable properties</Text>{comparables.map(c => <SoftButton key={c.url} label={c.name + " · " + money(c.adrMinor) + " a night"} icon="external-link" palette={p} onPress={() => void Linking.openURL(c.url).catch(() => setLinkError("The comparable link could not be opened."))} />)}{!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}</View>}
@@ -498,7 +500,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   const table = usesPropertyTable(account.role);
   const openForm = (form: WorkflowForm) => { setSelected(null); onForm(form); };
   const closeDetail = () => { setSelected(null); setExportMessage(""); };
-  const journeyBlock = (property: PropertyView) => journey ? <JourneyDetails j={journey} p={p} account={account} propertyName={property.name} onForm={openForm} work={work} /> : null;
+  const journeyBlock = (property: PropertyView) => journey ? <JourneyDetails j={journey} p={p} account={account} propertyName={property.name} onForm={openForm} work={work} onRefresh={onRefresh} /> : null;
   // What follows the profile in a property's detail: new work, work at the property, reports and invoices.
   const moreFor = (property: PropertyView) => (
     <>
