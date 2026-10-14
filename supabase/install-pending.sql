@@ -1,4 +1,4 @@
--- Named pop-ups and Round 1: the 3 migrations not yet installed, in filename order, in ONE transaction.
+-- Named pop-ups clean-up and Round 1 enquiry form: the 2 migrations not yet installed, in filename order, in ONE transaction.
 -- Paste the whole file into the Supabase SQL editor for project brixfalrrmzqoioggvfx and run it once.
 -- If any statement fails, nothing is applied. Each migration is recorded in supabase_migrations.schema_migrations
 -- under its filename version. Generated from supabase/migrations; do not edit by hand.
@@ -6,7 +6,7 @@
 
 begin;
 set local lock_timeout='20s';
-do $guard$ begin if exists(select 1 from supabase_migrations.schema_migrations where version like '20261020700000%' or version like '20261020800000%' or version like '20261020850000%') then raise exception 'Named pop-ups and Round 1 is already installed (or partly): stop and check'; end if; end $guard$;
+do $guard$ begin if exists(select 1 from supabase_migrations.schema_migrations where version like '20261020700000%' or version like '20261020800000%') then raise exception 'Named pop-ups clean-up and Round 1 enquiry form is already installed (or partly): stop and check'; end if; end $guard$;
 
 -- ===== 20261020700000_direct_push =====
 -- Direct pop-ups (Lee, 14 October: "make it more direct: Mark, new guest message; John, guest, replied"). A pop-up now names the
@@ -240,41 +240,5 @@ begin
 end $patch$;
 
 insert into supabase_migrations.schema_migrations(version,name) values ('20261020800000','enquiry_duplicates');
-
--- ===== 20261020850000_no_lunch_pauses =====
--- Lunch comes off the clock (Alex, client meeting): team members can no longer start a Lunch pause. Lunch is unpaid
--- anyway; Break and Emergency stay exactly as they are. Shifts from before keep their lunch pauses: the table still
--- allows them, they are still read and totalled by the stored pay rule, and the app shows them as "Lunch" in the history.
--- Starting a lunch pause is refused with "Choose a break or an emergency" (Lee: no mention of lunch). Someone already on a lunch pause when this is installed can
--- still go back to work or clock out as before.
--- Patched by anchor (sentinel, an anchor that must occur once): private.workspace_pause_action (defined in
--- 20261011010000; nothing later patches it).
--- Safe to run twice.
-
-do $patch$
-declare
- fixes text[][]:=array[
-  -- Starting a pause: a break or an emergency only.
-  ['private.workspace_pause_action(jsonb)',
-   $q$if coalesce(input->>'kind','') not in ('lunch','break','emergency') then raise exception 'Choose lunch, a break or an emergency' using errcode='22023';end if;$q$,
-   $q$if coalesce(input->>'kind','') not in ('break','emergency') then raise exception 'Choose a break or an emergency' using errcode='22023';end if;$q$,
-   $q$not in ('break','emergency') then raise exception 'Choose a break or an emergency'$q$]
- ];
- definition text;hits integer;
-begin
- for i in 1..array_length(fixes,1) loop
-  definition:=pg_get_functiondef(fixes[i][1]::regprocedure);
-  if position(fixes[i][4] in definition)=0 then
-   hits:=(length(definition)-length(replace(definition,fixes[i][2],'')))/length(fixes[i][2]);
-   if hits<>1 then raise exception 'Patch anchor found % times in % (patch %)',hits,fixes[i][1],i;end if;
-   execute replace(definition,fixes[i][2],fixes[i][3]);
-   if position(fixes[i][4] in pg_get_functiondef(fixes[i][1]::regprocedure))=0 then raise exception 'Patch did not take in % (patch %)',fixes[i][1],i;end if;
-  end if;
- end loop;
-end $patch$;
-
-revoke all on function private.workspace_pause_action(jsonb) from public,anon,authenticated;
-
-insert into supabase_migrations.schema_migrations(version,name) values ('20261020850000','no_lunch_pauses');
 
 commit;
