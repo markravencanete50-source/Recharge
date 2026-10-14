@@ -16,7 +16,9 @@ export const journeyViewSchema=z.object({propertyId:z.string().uuid(),clientId:z
  // the agreement step, the agreement the contract in use would make.
  agreementFormat:z.enum(['text','outline']).optional(),agreementTemplate:agreementTemplateRefSchema.nullable().optional(),agreementDraft:agreementDraftSchema.nullable().optional(),
  // The owner's app account made on Proceed and its email (migration 20261020880000), for the team.
- ownerAccountEmail:ownerAccountEmailSchema.nullable().optional()});
+ ownerAccountEmail:ownerAccountEmailSchema.nullable().optional(),
+ // The categories for the owner's own costs on the estimate (migration 20261020890000), for the team's form.
+ ownCostCategories:z.array(z.string()).nullable().optional()});
 export const operationViewSchema=z.object({workId:z.string().uuid(),propertyId:z.string().uuid(),moduleId:z.string(),title:z.string(),kind:z.string(),status:z.string(),version:z.number(),assigneeId:z.string().nullable(),dueOn:z.string().nullable().optional(),dueTime:z.string().nullable().optional(),endTime:z.string().nullable().optional(),createdAt:z.string().optional(),updatedAt:z.string().optional(),updatedBy:z.string().nullable().optional(),updatedEvent:z.string().nullable().optional(),lastActivityAt:z.string().nullable().optional(),data:z.record(z.unknown())});
 export const invoiceViewSchema=z.object({id:z.string().uuid(),property_id:z.string().uuid(),work_id:z.string().uuid().nullable().optional(),reference:z.string(),amount_minor:z.number(),currency:z.string(),status:z.string(),version:z.number()});
 export const reportViewSchema=z.object({title:z.string(),description:z.string(),propertyLabel:z.string(),propertyCount:z.number(),propertyAvailable:z.boolean(),sources:z.array(z.object({key:z.enum(['workflows','repairs','cleans','onboarding','mail']),name:z.string(),available:z.boolean(),records:z.array(z.object({date:z.string(),status:z.enum(['waiting','progress','complete']),count:z.number().optional()}))}))});

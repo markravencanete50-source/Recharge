@@ -6,7 +6,7 @@ import { GrowBar, MotionPress, Pop, TweenNumber } from "./motion";
 import { ui, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
 import { formatBps, formatMoney, plural } from "../../lib/format";
-import { AVAILABLE_NIGHTS, DIRECT_RANGE, OCCUPANCY_RANGE, SCENARIOS, directBookingGain, hasFees, project, readEstimate, snap, startingChoices, type Choices } from "../../lib/estimate-projection";
+import { AVAILABLE_NIGHTS, DIRECT_RANGE, OCCUPANCY_RANGE, SCENARIOS, directBookingGain, hasFees, netProfit, project, readEstimate, snap, startingChoices, type Choices } from "../../lib/estimate-projection";
 
 // The owner explores their estimate: pick how the year might go, how busy the property is and how
 // many guests book direct, and see what they could earn. Nothing here is saved or sent anywhere.
@@ -55,7 +55,7 @@ export function EstimateExplorer({ palette: p, estimate, owner }: { palette: Pal
   const splitFocus = useChartFocus(), [splitWidth, setSplitWidth] = useState(0);
   if (!published || !choices) return null;
   const start = startingChoices(published), fees = hasFees(published);
-  const result = project(published, choices), gain = directBookingGain(published, choices);
+  const result = project(published, choices), gain = directBookingGain(published, choices), net = netProfit(estimate, result);
   const set = (next: Partial<Choices>) => setChoices({ ...choices, ...next });
   const changed = choices.scenario !== start.scenario || choices.occupancyBps !== start.occupancyBps || choices.directBookingBps !== start.directBookingBps;
   const total = result.grossMinor || 1;
@@ -109,6 +109,13 @@ export function EstimateExplorer({ palette: p, estimate, owner }: { palette: Pal
         <Line p={p} label={`Platform fees (${formatBps(published.otaFeeBps!).replace(".0%", "%")} on non-direct bookings)`} value={result.platformFeesMinor!} tone="minus" />
         <Line p={p} label={`Recharge management (${formatBps(published.managementFeeBps!).replace(".0%", "%")})`} value={result.managementFeesMinor!} tone="minus" />
         <Line p={p} label={owner ? "Your earnings" : "Owner earnings"} value={result.ownerMinor!} strong />
+      </View>}
+      {/* The owner's own monthly costs, when the team added them (migration 20261020890000), and what is left. */}
+      {net && <View style={{ gap: 0 }}>
+        <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700", paddingBottom: 4 }}>{owner ? "Your own costs" : "Owner’s own costs"}</Text>
+        {net.costs.map(c => <Line key={c.category} p={p} label={`${c.category}, a month`} value={c.monthlyMinor} tone="minus" />)}
+        <Line p={p} label="Estimated net profit per month" value={net.monthlyNetMinor} strong />
+        <Line p={p} label="Estimated net profit per year" value={net.yearlyNetMinor} strong />
       </View>}
       {!!gain && gain > 0 && <View style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.successWash }]}>
         <Feather name="trending-up" size={17} color={p.success} />
