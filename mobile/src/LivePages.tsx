@@ -22,6 +22,7 @@ import { PropertyProfile } from "./LivePropertyProfile";
 import { OnboardingPipeline, PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
 import { PropertiesTable } from "./PropertiesTable";
 import { EstimateExplorer } from "./LiveEstimate";
+import { EstimateDeliveryCard } from "./EstimateDelivery";
 import { ScotlandMap } from "./ScotlandMap";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
 import { readEstimate } from "../../lib/estimate-projection";
@@ -319,6 +320,7 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: Jour
       {!!j.invoiceOutsideAt && <Text style={[ui.small, { color: p.muted }]}>Onboarding invoice handled outside the app: {j.invoiceOutsideNote}</Text>}
       {j.estimate && !readEstimate(j.estimate) && <View style={{ gap: 6 }}><Text style={{ color: p.text, fontWeight: "700" }}>Your estimate</Text>{[["Low nightly rate", "lowRateMinor"], ["Expected nightly rate", "mediumRateMinor"], ["High nightly rate", "highRateMinor"]].map(([label, key]) => <Text key={key} style={{ color: p.text }}>{label}: {money(j.estimate?.[key])}</Text>)}</View>}
       {j.estimate && typeof j.estimate.comments === "string" && !!j.estimate.comments.trim() && <View style={{ gap: 4 }}><Text style={{ color: p.text, fontWeight: "700" }}>{account.role === "client" ? "Notes from Recharge" : "Estimate notes"}</Text><Text style={[ui.body, { color: p.muted }]}>{j.estimate.comments}</Text></View>}
+      {account.role !== "client" && !!j.estimateDelivery && ["estimate", "reviewing"].includes(j.stage) && <EstimateDeliveryCard key={j.version} p={p} propertyId={j.propertyId} delivery={j.estimateDelivery} />}
       {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
       {j.estimate && account.role === "client" && ["estimate", "reviewing"].includes(j.stage) && <EstimateGuide palette={p} />}
       {!!comparables.length && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Comparable properties</Text>{comparables.map(c => <SoftButton key={c.url} label={c.name + " · " + money(c.adrMinor) + " a night"} icon="external-link" palette={p} onPress={() => void Linking.openURL(c.url).catch(() => setLinkError("The comparable link could not be opened."))} />)}{!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}</View>}

@@ -63,6 +63,20 @@ Client relations, Client enquiries, "Send the enquiry form" now emails the form 
 - The sheet has one button, "Send the form" (and "Send the new link"). The link with Copy and "Open my email app" appears only when email is not ready or the send failed. The enquiry row shows "Email failed" with **Try again**.
 - **Worker secrets to add:** none. To switch the form's email off: `ENQUIRY_EMAIL_ENABLED=false`. Because the key is already set and the domain is verified, enquiry emails start as soon as this is deployed.
 
+## The estimate is emailed with a private link
+
+Migration 20261019520000, `lib/estimate-link.ts`, `lib/estimate-link-server.ts`, `app/estimate`.
+
+- **When it's sent:** the team publishes (or republishes) an estimate on a journey with no owner account. If the enquiry has an email address and the enquiry email switch is ready (`RESEND_API_KEY`, `ENQUIRY_EMAIL_ENABLED` not `false`), the server emails it straight after the publish.
+- **Who it's from:** `ownerrelations@`, with replies to `ownerrelations@`, so they land in Messages, Clients.
+- **What's in it:** the property, the low, expected and high nightly rates, the notes, up to 3 comparables with their links, and one button, **View your estimate**.
+- **Retries:** the request id is derived from the publish, so a retried publish never sends a second email.
+- **The link:** made from the request. Only its hash is stored. It lasts 30 days and needs no sign-in.
+- **The client's page** (`/estimate?t=…`) shows the rates, the notes, similar properties and a small explorer, using the same sums as the owner app.
+- **The client's answer:** Proceed, Review later (with a follow-up date) or Decline, plus optional feedback. This records the same decision as `decideEstimate`: the journey moves on, the team is notified, and "Owner decides on the estimate" ticks.
+- **What the team sees:** "Estimate sent" only once the email for the current estimate has gone. Otherwise it shows "Estimate ready": published but not emailed, the email failed, or the enquiry has no email address. The property's Onboarding card has **Email the estimate** (or **Resend the estimate**) and **Copy link**, which gives a link to send by hand and also works when email isn't set up.
+- **Screenshots:** `docs/screenshots/session-f/estimate-*.png`.
+
 ## Two addresses, never mixed (Lee's rule)
 
 - **Guests:** `guestrelations@rechargegroup.co.uk`. Comes in to Messages, Guests; every reply goes out from it, with reply-to the same.
