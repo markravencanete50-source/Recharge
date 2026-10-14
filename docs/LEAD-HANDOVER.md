@@ -293,6 +293,19 @@ keys or APP_ORIGIN in the Worker Secrets are the suspects. If the answer is "Sen
 the device's own notification settings (Focus, Do not disturb, or the browser not being allowed by the operating
 system).
 
+## 5f. Email tabs (14 October 2026, built by the lead at Lee's request, migration `20261020600000`)
+
+Lee asked for Messages tabs in this order: Guests, Clients, Guest emails, Client emails, Team. Every email lives in an email tab
+(Lee chose "Email tabs only"):
+- **Guest emails** (guestrelations@): guest email already had its own conversations (source `email`), so this is the screen
+  only (`isGuestEmail` in `lib/guest-inbox-policy.ts`). Guests shows the platform conversations.
+- **Client emails** (ownerrelations@): email from an owner's address no longer goes into the owner's app conversation. It starts
+  or joins a client email conversation linked to that owner (`ownerId`, `ownerName`). "Assign to owner" became "Link to owner",
+  and the conversation stays in Client emails. Only admins, super admins and the client relations and management rota see it.
+- This applies to new email from now on. On 14 October live had no mixed conversations: 0 email messages in platform threads
+  and 0 owner chat messages from email. The old outbox path for owner chats that took email stays for any older ones.
+- On phones the five tabs scroll sideways.
+
 ## 6. Waiting on Lee
 
 - Switch A and D to Sonnet (`/model claude-sonnet-5-5` in each session).

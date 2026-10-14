@@ -13,7 +13,7 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Tag, Loading } from "./LiveKit";
 import { Pills } from "./Pills";
 import { emailFileLink, readInbox, writeInbox } from "./backend/client";
-import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
+import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, isGuestEmail, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
 import { MESSAGE_STATUS_LABEL, byLatest, emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, QuietLine, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { chatTime } from "../../lib/workspace-chat-policy";
@@ -295,7 +295,8 @@ function useSeenThreads() {
   return { seen, mark };
 }
 
-export function GuestInbox({ palette: p, properties, desktop = false, onChanged, openThread }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void; openThread?: string }) {
+// emails: Messages > Guest emails (guestrelations@) shows only email conversations; Guests shows the rest (Lee, 14 October).
+export function GuestInbox({ palette: p, properties, desktop = false, onChanged, openThread, emails = false }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void; openThread?: string; emails?: boolean }) {
   // Every recent conversation is read once; the status and the search filter it here. Newest message first (byLatest).
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const [data, setData] = useState<ReturnType<typeof inboxListSchema.parse> | null>(null);
@@ -315,8 +316,9 @@ export function GuestInbox({ palette: p, properties, desktop = false, onChanged,
     const tick = setInterval(() => { if (active) setTick(n => n + 1); }, 20000);
     return () => { active = false; clearInterval(poll); clearInterval(tick); };
   }, [load]);
-  const red = data ? data.threads.filter(t => t.status === "open" && waitGrade(t.waitingSince, data.targets)?.grade === "red").length : 0;
-  const threads = byLatest(data?.threads ?? [], t => t.lastMessageAt, t => t.id);
+  const mine = (data?.threads ?? []).filter(t => isGuestEmail(t) === emails);
+  const red = data ? mine.filter(t => t.status === "open" && waitGrade(t.waitingSince, data.targets)?.grade === "red").length : 0;
+  const threads = byLatest(mine, t => t.lastMessageAt, t => t.id);
   // The search looks at the guest's name, the property's name and address, and the booking reference.
   const address = new Map(properties.map(x => [x.id, x.address] as const));
   const found = threads.filter(t => matchesSearch(query, [t.guestName, t.propertyName, t.propertyId ? address.get(t.propertyId) : null, t.reservationRef]));
@@ -326,7 +328,7 @@ export function GuestInbox({ palette: p, properties, desktop = false, onChanged,
     <View style={{ gap: 10 }}>
       <SearchBar p={p} value={query} onChange={setQuery} placeholder="Search guest or property" action={{ icon: "plus", label: "Log a guest message", onPress: () => setLogging(true) }} />
       {data && <StatusFilter p={p} value={status} counts={statusCounts(found, guestStatus)} onChange={setStatus} />}
-      {data && !data.connected && <QuietLine p={p} icon="info" text="Hostaway isn't connected yet: log each guest message by hand." />}
+      {data && !data.connected && !emails && <QuietLine p={p} icon="info" text="Hostaway isn't connected yet: log each guest message by hand." />}
       {red > 0 && <QuietLine p={p} tone="bad" text={`${red} guest${red === 1 ? " has" : "s have"} waited longer than ${data?.targets.amberMinutes} minutes.`} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!data && !error ? <Loading p={p} /> : data && (

@@ -1,3 +1,3 @@
 -- Nothing pending. Every migration in supabase/migrations is installed in the Supabase project.
--- 20261020500000_notifications_fix (bell, pop-up results, device status) was installed on 14 October 2026 from the
--- install file by the lead, at Lee's request, and went live with pull request #11.
+-- 20261020600000_email_tabs (Guest emails and Client emails tabs) was installed on 14 October 2026 from the install file by the
+-- lead, at Lee's request, and went live with pull request #13.

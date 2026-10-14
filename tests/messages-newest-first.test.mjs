@@ -54,13 +54,13 @@ test('the status buttons only filter: each status keeps the time order', () => {
 
 test('Guests, Clients and Team all use it; the wait warning and tags stay', () => {
   const guests = readFileSync('mobile/src/LiveGuestInbox.tsx', 'utf8'), chat = readFileSync('mobile/src/LiveChat.tsx', 'utf8');
-  assert.match(guests, /const threads = byLatest\(data\?\.threads \?\? \[\], t => t\.lastMessageAt, t => t\.id\);/);
-  // Chat conversations and (Clients only) email conversations go through the same byLatest, by time, ids never colliding.
-  assert.match(chat, /const inTab = byLatest<Row>\(\[\.\.\.\(list \?\? \[\]\)\.filter\(c => tabs\.length < 2 \|\| tabOf\(c\) === tab\)\.map\(chatRow\), \.\.\.\(tab === "clients" \? emails\.map\(emailRow\) : \[\]\)\], r => r\.at, r => r\.id\);/);
+  assert.match(guests, /const threads = byLatest\(mine, t => t\.lastMessageAt, t => t\.id\);/);
+  // Client emails lists email conversations, every other tab chat conversations, through the same byLatest (email tabs, Lee 14 October).
+  assert.match(chat, /const inTab = byLatest<Row>\(tab === "clientEmails" \? emails\.map\(emailRow\) : \(list \?\? \[\]\)\.filter\(c => tabs\.length < 2 \|\| tabOf\(c\) === tab\)\.map\(chatRow\), r => r\.at, r => r\.id\);/);
   assert.match(chat, /const emailRow = \(t: ClientEmailThread\): Row => \(\{ kind: "email", id: "email:" \+ t\.id, at: t\.lastMessageAt, t \}\);/);
   assert.equal((chat.match(/byLatest[<(]/g) ?? []).length, 1, 'one sort only');
   // The red-wait warning still counts every open conversation, and the row tags are unchanged.
-  assert.match(guests, /const red = data \? data\.threads\.filter\(t => t\.status === "open" && waitGrade\(t\.waitingSince, data\.targets\)\?\.grade === "red"\)\.length : 0;/);
+  assert.match(guests, /const red = data \? mine\.filter\(t => t\.status === "open" && waitGrade\(t\.waitingSince, data\.targets\)\?\.grade === "red"\)\.length : 0;/);
   assert.match(guests, /Needs a reply · waiting \$\{waitLabel\(wait\.minutes\)\}/);
   // A refresh does not close the open conversation: its pane is keyed by its id, not by the list.
   assert.match(guests, /const detail = openId \? <GuestThreadPane key=\{openId\}/);

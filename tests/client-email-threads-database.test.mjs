@@ -5,7 +5,8 @@ import { PGlite } from '@electric-sql/pglite';
 
 // Email to ownerrelations@ from someone who is not an owner yet becomes a client email conversation (Lee, 14 October): the client
 // team reads and answers it (from ownerrelations@, once per request), their answer comes back into the same conversation, it closes
-// and reopens, and "Assign to owner" moves the history into the owner's conversation. Owners, cleaners and Ready never see it.
+// and reopens. Since the email tabs (20261020600000), "Link to owner" keeps the conversation in Client emails and names the owner,
+// and email from an owner's address is a client email conversation too. Owners, cleaners and Ready never see it.
 const MINE = '20261019500000_client_email_threads';
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -174,20 +175,37 @@ test('one conversation per person, but a new subject shows: its message starts w
   await act({ action: 'close', threadId: first.threadId });
 });
 
-test('assigning to an owner moves the whole history into their conversation, without emailing it again, and remembers the address', async () => {
+test('linking to an owner keeps the conversation in Client emails, names the owner and remembers the address; their next email joins it', async () => {
   const [t] = (await list()).filter(x => x.address === 'new.landlord@example.org');
   const before = (await thread(t.id)).messages;
   await assert.rejects(act({ action: 'assign', threadId: t.id, ownerId: users[STAYS] }), /Owner not found/);
-  const moved = await act({ action: 'assign', threadId: t.id, ownerId: users[OWNER] });
-  const rows = await sql('select author_id,body from private.chat_messages where conversation_id=$1 order by created_at,id', [moved.conversationId]);
-  assert.equal(rows.length, before.length);
-  assert.deepEqual(rows.map(r => r.author_id === users[OWNER] ? 'owner' : 'team'), before.map(m => m.direction === 'in' ? 'owner' : 'team'));
-  assert.equal((await sql('select count(*)::int n from private.workspace_email_outbox'))[0].n, 0, 'the moved replies are not sent again');
-  assert.ok(!(await list()).some(x => x.id === t.id), 'gone from the list');
-  await assert.rejects(thread(t.id), /Conversation not found/);
-  // Their next email goes straight to the owner's conversation, and a team reply there is emailed from ownerrelations@ (the outbox).
-  assert.equal((await ownerIn(mail({ text: 'Thanks!' }))).matched, 'owner');
-  await as(CLIENT_REL);
-  await rpc('workspace_chat_action', [{ action: 'send', requestId: crypto.randomUUID(), conversationId: moved.conversationId, body: 'You are welcome.' }]);
-  assert.equal((await sql('select to_address from private.workspace_email_outbox'))[0].to_address, 'new.landlord@example.org');
+  const linked = await act({ action: 'assign', threadId: t.id, ownerId: users[OWNER] });
+  assert.equal(linked.thread.id, t.id);
+  assert.equal(linked.thread.ownerId, users[OWNER]);
+  assert.equal(linked.thread.ownerName, 'Person ' + OWNER);
+  assert.equal((await thread(t.id)).messages.length, before.length, 'nothing moved');
+  assert.equal((await sql("select count(*)::int n from private.chat_conversations where kind='owner' and owner_id=$1", [users[OWNER]]))[0].n, 0, 'no app conversation made');
+  assert.equal((await sql('select owner_id from private.workspace_email_owner_addresses where address=$1', ['new.landlord@example.org']))[0].owner_id, users[OWNER]);
+  // Their next email, now from an owner's address, joins the same client email conversation.
+  const next = await ownerIn(mail({ text: 'Thanks!' }));
+  assert.equal(next.matched, 'owner');
+  assert.equal(next.threadId, t.id);
+  assert.equal((await sql("select count(*)::int n from private.chat_messages m join private.chat_conversations c on c.id=m.conversation_id where c.kind='owner'"))[0].n, 0);
+});
+
+test('email from an owner account address is a client email conversation linked to that owner, never their app conversation', async () => {
+  const r = await ownerIn(mail({ emailId: 'owner_direct_1', from: `ce${OWNER}@example.com`, subject: 'Boiler at the flat', text: 'The boiler is making a noise.', messageId: '<owner-direct-1@mail.example.org>' }));
+  assert.equal(r.matched, 'owner');
+  const t = (await list()).find(x => x.id === r.threadId);
+  assert.equal(t.ownerName, 'Person ' + OWNER);
+  assert.equal(t.subject, 'Boiler at the flat');
+  assert.equal((await sql("select count(*)::int n from private.chat_conversations where kind='owner' and owner_id=$1", [users[OWNER]]))[0].n, 0);
+  // The owner never sees the client team's email conversations.
+  await as(OWNER);
+  await assert.rejects(rpc('workspace_client_email_read', ['list', null]), /Client relations access required/);
+  // The migration runs twice without change.
+  const def = async () => (await sql("select pg_get_functiondef('private.workspace_client_email_action(jsonb)'::regprocedure) d"))[0].d + (await sql("select pg_get_functiondef('private.workspace_client_email_json(private.workspace_client_email_threads)'::regprocedure) d"))[0].d;
+  const once = await def();
+  await db.exec(await fs.readFile('supabase/migrations/20261020600000_email_tabs.sql', 'utf8'));
+  assert.equal(await def(), once);
 });

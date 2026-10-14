@@ -14,20 +14,23 @@ const source = file => readFileSync('mobile/src/' + file, 'utf8');
 const live = source('LiveChat.tsx'), guests = source('LiveGuestInbox.tsx'), layout = source('MessagesLayout.tsx');
 const GUEST_TOOL = ['guest-communication'];
 
-test('the tabs per role: Guests, Clients and Team at most, never Updates; owners have none', () => {
+test('the tabs per role: Guests, Clients, Guest emails, Client emails and Team, never Updates; owners have none', () => {
   const tabs = (role, modules = GUEST_TOOL, hasOwner = false) => chat.messageTabs({ role, modules }, hasOwner);
-  assert.deepEqual(tabs('super_admin'), ['guests', 'clients', 'team']);
-  assert.deepEqual(tabs('admin'), ['guests', 'clients', 'team']);
-  assert.deepEqual(tabs('stays'), ['guests', 'clients', 'team']);
-  assert.deepEqual(tabs('stays', []), ['clients', 'team'], 'Stays without the guest tool');
-  assert.deepEqual(tabs('accounts'), ['guests', 'team'], 'accounts with the tool');
-  assert.deepEqual(tabs('cleaning_manager'), ['guests', 'team']);
-  assert.deepEqual(tabs('accounts', [], true), ['clients', 'team'], 'anyone already in an owner conversation sees Clients');
+  const ALL = ['guests', 'clients', 'guestEmails', 'clientEmails', 'team'];
+  assert.deepEqual(tabs('super_admin'), ALL, 'in the order Lee asked for');
+  assert.deepEqual(tabs('admin'), ALL);
+  assert.deepEqual(tabs('stays'), ALL);
+  assert.deepEqual(tabs('stays', []), ['clients', 'clientEmails', 'team'], 'Stays without the guest tool');
+  assert.deepEqual(tabs('accounts'), ['guests', 'guestEmails', 'team'], 'accounts with the tool');
+  assert.deepEqual(tabs('cleaning_manager'), ['guests', 'guestEmails', 'team']);
+  assert.deepEqual(tabs('accounts', [], true), ['clients', 'team'], 'anyone already in an owner conversation sees Clients, but not the client mailbox');
   for (const role of ['cleans', 'ready']) assert.deepEqual(tabs(role), ['team'], role + ' never gets Guests, even with the tool');
   assert.deepEqual(tabs('client'), [], 'owners have no tabs');
   for (const role of ['super_admin', 'admin', 'stays', 'accounts', 'cleaning_manager', 'cleans', 'ready', 'client'])
     assert.ok(!tabs(role, GUEST_TOOL, true).includes('updates'), role + ' has no Updates tab');
-  assert.match(live, /const TAB_LABEL: Record<Tab, string> = \{ guests: "Guests", clients: "Clients", team: "Team" \};/);
+  assert.match(live, /const TAB_LABEL: Record<Tab, string> = \{ guests: "Guests", clients: "Clients", guestEmails: "Guest emails", clientEmails: "Client emails", team: "Team" \};/);
+  assert.match(live, /tab === "guestEmails" \? <GuestInbox key="guest-emails" emails/);
+  assert.match(guests, /const mine = \(data\?\.threads \?\? \[\]\)\.filter\(t => isGuestEmail\(t\) === emails\);/);
   assert.match(live, /messageTabs\(account,/);
   assert.doesNotMatch(live, /"updates" as const|TAB_ICON/);
 });
