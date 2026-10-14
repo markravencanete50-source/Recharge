@@ -25,9 +25,10 @@ import { CLIENT_SUB_LABEL, clientSubsFor, defaultClientSub, pickSub, type Client
 //   purchases    purchase orders (PurchaseOrdersList)
 // Guest relations staff and admins see Today's routine above the chips: the listing checks and the empty
 // nights to price (StaysRoutineCard, part "clients"). A link's `sub` picks the section; otherwise Onboarding opens. The host builds the SectionProps once
-// and passes them in; `onOpenProperty` is where a won enquiry goes (the property's page).
-export function ClientRelations(props: SectionProps & { onOpenProperty: (propertyId: string) => void }) {
-  const { palette: p, account, onOpenProperty } = props;
+// and passes them in; `onOpenProperty` is where a won enquiry goes (the property's page), and `onRefresh` reloads the
+// properties and journeys after an enquiry is deleted.
+export function ClientRelations(props: SectionProps & { onOpenProperty: (propertyId: string) => void; onRefresh?: () => Promise<void> | void }) {
+  const { palette: p, account, onOpenProperty, onRefresh } = props;
   const focus = useWorkFocus();
   const subs = clientSubsFor(account.role, account.modules);
   const [sub, setSub] = useState<ClientSub>(() => pickSub(subs, focus?.sub, defaultClientSub(subs)));
@@ -40,7 +41,7 @@ export function ClientRelations(props: SectionProps & { onOpenProperty: (propert
       <StaysRoutineCard palette={p} account={account} properties={props.properties} work={props.work} part="clients" />
       {subs.length > 1 && <Pills p={p} title="Client relations section" values={subs} value={sub} onChange={setSub} label={v => CLIENT_SUB_LABEL[v]} />}
       {sub === "onboarding" && <OnboardingTracker {...props} />}
-      {sub === "enquiries" && <LiveEnquiries palette={p} account={account} onOpenProperty={onOpenProperty} />}
+      {sub === "enquiries" && <LiveEnquiries palette={p} account={account} onOpenProperty={onOpenProperty} onRefresh={onRefresh} />}
       {sub === "licensing" && <LicensingList {...props} />}
       {sub === "listings" && <ListingHealthList {...props} />}
       {sub === "pricing" && <PricingList {...props} />}
