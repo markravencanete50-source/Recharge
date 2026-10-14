@@ -224,6 +224,10 @@ Next round (not blocking):
 - F: `69bd8d5`, the email subject on its own line in the Clients pane on phones.
 - E: chosen chips use A's pillBox and pillInk (Lee approved).
 
+Email sender picture: Lee decided (14 October) not to create Google accounts for the two mailboxes, so Gmail keeps the
+letter avatar. The Recharge logo goes inside the emails instead (F). BIMI (DMARC enforcement plus a paid VMC/CMC
+certificate) is the option for later if Alex wants the logo in every inbox.
+
 ## 6. Waiting on Lee
 
 - Switch A and D to Sonnet (`/model claude-sonnet-5-5` in each session).
