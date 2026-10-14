@@ -421,7 +421,7 @@ function PortfolioCard({ palette: p, summary, properties, onOpen }: { palette: P
   return (
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 14 }]}>
       <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Portfolio</Text>
-      <StatGrid>
+      <StatGrid showZeros>
         {stats.map(([label, value, icon]) => <StatTile key={label} p={p} icon={icon} tone="stays" label={label} value={value} />)}
       </StatGrid>
       <View style={{ flexDirection: wide ? "row" : "column", gap: 20, alignItems: wide ? "flex-start" : "stretch" }}>

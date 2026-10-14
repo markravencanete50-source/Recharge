@@ -6,7 +6,7 @@ import { Text } from "./Typography";
 import { ListSearchBox, PropertySelect, SearchPicker, useListSearch } from "./SearchPicker";
 import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
-import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { pillBox, pillInk } from "./Pills";
 import { Chip, SheetTable, cellText, type Column } from "./SheetTable";
@@ -22,7 +22,7 @@ import { ChecklistTemplatesSheet, useChecklistTemplates } from "./ChecklistTempl
 import { DefaultCleanersSheet, FormStateTag, WhoIsCleaning } from "./DefaultCleaners";
 import { CleanCheckForm, CleanCheckSummary, conditionOf, unanswered, type ItemRow } from "./CleanReport";
 import { DateField } from "./CalendarPicker";
-import { radius, ui, type Palette } from "./theme";
+import { radius, space, textSize, ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
 import { candidatesSchema, disputeFor, guestLine, monthPay, performanceSchema, problemsOf, scheduleSchema, type CleanerMonth } from "../../lib/cleans-live";
@@ -120,8 +120,9 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   const jobRow = openJob ? schedule.work.find(w => w.workId === openJob) : undefined;
   const guests = useMemo(() => new Map((schedule.cleanGuests ?? []).map(g => [g.workId, g])), [schedule.cleanGuests]);
   const propertyName = (id: string) => properties.find(x => x.id === id)?.name ?? schedule.work.find(w => w.propertyId === id)?.propertyName ?? "Property";
-  const reviewSearch = useListSearch(toReview, op => [propertyName(op.propertyId), op.title, op.data.report]);
-  const unassignedSearch = useListSearch(unassigned, op => [propertyName(op.propertyId), op.title, typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""]);
+  // Long lists show their first rows with "Show more".
+  const reviewSearch = useListSearch(toReview, op => [propertyName(op.propertyId), op.title, op.data.report], LIST_PREVIEW);
+  const unassignedSearch = useListSearch(unassigned, op => [propertyName(op.propertyId), op.title, typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""], LIST_PREVIEW);
   const cleanerName = (id: unknown) => performance.find(r => r.cleanerId === id)?.fullName ?? cleaners.find(([cid]) => cid === id)?.[1] ?? "Cleaner";
   const decided = !manager ? (mine?.decidedComplaints ?? []) : [];
 
@@ -143,7 +144,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   const asTable = manager && width >= 1024;
 
   return (
-    <View style={{ gap: 20 }}>
+    <View style={{ gap: space.section }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{manager ? "Cleaning team" : "Your cleans"}</Text>
         <Text style={[ui.body, { color: p.muted }]}>{manager ? "Schedule, review and assign every clean you look after." : "Your jobs, checklists and results, straight from the office."}</Text>
@@ -191,10 +192,10 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       )}
 
       {manager && (
-        <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+        <View style={{ flexDirection: "row", gap: space.row, flexWrap: "wrap" }}>
           {canStart(account, "new-clean") && <Button label="New clean" icon="plus" primary p={p} onPress={() => setCreating(true)} />}
-          {templates.data?.canEdit && <Button label="Checklists" icon="check-square" p={p} onPress={() => setEditingChecklists(true)} />}
-          {["admin", "super_admin", "cleaning_manager", "stays"].includes(account.role) && <Button label="Property cleaners" icon="users" p={p} onPress={() => setEditingCleaners(true)} />}
+          {templates.data?.canEdit && <Button label="Checklists" icon="check-square" quiet p={p} onPress={() => setEditingChecklists(true)} />}
+          {["admin", "super_admin", "cleaning_manager", "stays"].includes(account.role) && <Button label="Property cleaners" icon="users" quiet p={p} onPress={() => setEditingCleaners(true)} />}
           <RefreshButton p={p} loading={loading} onPress={() => void load()} />
         </View>
       )}
@@ -208,7 +209,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {[["everyone", "All cleaners"] as const, ...cleaners].map(([id, name]) => (
               <MotionPress key={id} accessibilityRole="button" accessibilityState={{ selected: cleaner === id }} onPress={() => setCleaner(id)} style={[{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" }, pillBox(p, cleaner === id)]}>
-                <Text style={{ color: pillInk(p, cleaner === id), fontSize: 13, fontWeight: "600" }}>{name}</Text>
+                <Text style={{ color: pillInk(p, cleaner === id), fontSize: textSize.small, fontWeight: "600" }}>{name}</Text>
               </MotionPress>
             ))}
           </ScrollView>
@@ -224,8 +225,8 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
             const on = d === day, count = cleans.filter(w => w.dueOn === d).length, due = manager ? byDay[d]?.missing ?? 0 : 0;
             return (
               <MotionPress key={d} accessibilityRole="button" accessibilityLabel={`${dayLabel(d)}, ${count} cleans${due ? `, ${due} ${due === 1 ? "form" : "forms"} unsubmitted` : ""}`} accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ width: 58, paddingVertical: 10, borderRadius: radius.control, alignItems: "center", gap: 4, backgroundColor: on ? p.selected : p.surface, borderWidth: 1, borderColor: on ? p.selectedBorder : p.border }}>
-                <Text style={{ fontSize: 11, color: on ? p.onSelected : p.muted }}>{dayLabel(d).split(" ")[0]}</Text>
-                <Text style={{ fontSize: 17, fontWeight: "700", color: on ? p.onSelected : p.text }}>{dayLabel(d).split(" ")[1]}</Text>
+                <Text style={{ fontSize: textSize.caption, color: on ? p.onSelected : p.muted }}>{dayLabel(d).split(" ")[0]}</Text>
+                <Text style={{ fontSize: textSize.heading, fontWeight: "600", color: on ? p.onSelected : p.text }}>{dayLabel(d).split(" ")[1]}</Text>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: count ? (on ? p.onSelected : due ? p.danger : p.primary) : "transparent" }} />
               </MotionPress>
             );
@@ -255,6 +256,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
                 <Text style={[ui.small, { color: p.muted }]}>Forms: {formsText(formsIn(op.data))}</Text>
               </MotionPress>
             )) : <Notice text="Every submitted clean has been reviewed." p={p} />}
+            <ShowMore p={p} hidden={reviewSearch.hidden} onPress={reviewSearch.showAll} />
           </Section>
           {canDecide && (
             <Section title="Disputes to decide" count={complaints.length} p={p}>
@@ -282,6 +284,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
                 <Text style={[ui.small, { color: p.muted }]}>{typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : "No date"} · tap to assign a cleaner</Text>
               </MotionPress>
             )) : <Notice text="Every clean has a cleaner." p={p} />}
+            <ShowMore p={p} hidden={unassignedSearch.hidden} onPress={unassignedSearch.showAll} />
           </Section>
           <Section title="Cleaner performance this month" p={p}>
             {performance.length ? performance.map(row => {
@@ -369,7 +372,7 @@ function CleanCard({ p, row, manager, showDate, onOpen }: { p: Palette; row: Cle
     <MotionPress accessibilityRole="button" accessibilityLabel={cleanLabel(row)} onPress={() => onOpen(w.workId)} style={[ui.card, { gap: 8, backgroundColor: p.surface, borderColor: p.border }]}>
       <View style={[ui.between, { gap: 8 }]}>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text numberOfLines={2} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{row.address}</Text>
+          <Text numberOfLines={2} style={{ color: p.text, fontSize: textSize.body, fontWeight: "600" }}>{row.address}</Text>
           {!!sub && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{sub}</Text>}
         </View>
         <Feather name="chevron-right" size={18} color={p.muted} />
@@ -483,7 +486,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
       {op && <>
         <View style={{ gap: 8, padding: 12, borderRadius: 14, backgroundColor: p.wash }}>
           <View style={[ui.between, { gap: 8 }]}>
-            <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700", flex: 1 }}>Submitted forms</Text>
+            <Text accessibilityRole="header" style={{ color: p.text, fontSize: textSize.body, fontWeight: "600", flex: 1 }}>Submitted forms</Text>
             <FormStateTag p={p} state={state} late={late} />
           </View>
           <Text style={[ui.small, { color: p.muted }]}>{formsText(formsIn(op.data))}</Text>
@@ -505,7 +508,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
             : !dispute.responded && !!dispute.complaintWorkId && <Button label="Give your side" icon="message-square" p={p} onPress={() => onRespond(dispute.complaintWorkId!)} />)}
         </View>}
         {!!problems.length && <View style={{ gap: 6 }}>
-          <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Problems reported</Text>
+          <Text accessibilityRole="header" style={{ color: p.text, fontSize: textSize.body, fontWeight: "600" }}>Problems reported</Text>
           {problems.map(x => (
             <View key={x.repairWorkId} style={{ gap: 4, padding: 12, borderRadius: 14, backgroundColor: p.wash }}>
               <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
@@ -525,7 +528,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
           <CleanCheckForm p={p} answers={answers} items={items} onAnswers={setAnswers} onItems={setItems} />
           {/* The owner's mailbox permission from onboarding: the cleaner records doing exactly that. */}
           {mailPreference && <View style={{ gap: 8 }}>
-            <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Post</Text>
+            <Text accessibilityRole="header" style={{ color: p.text, fontSize: textSize.body, fontWeight: "600" }}>Post</Text>
             <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: mailDone }} onPress={() => setMailDone(v => !v)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: mailDone ? p.successWash : p.elevated }]}>
               <Feather name={mailDone ? "check-square" : "square"} size={20} color={mailDone ? p.success : p.muted} />
               <Text style={{ color: p.text, flex: 1 }}>There was post, and I {MAIL_DONE[mailPreference]} as the owner asked</Text>
@@ -561,7 +564,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
         </>}
 
         {canAssign && <>
-          <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{op.assigneeId ? "Reassign this clean" : "Assign a cleaner"}</Text>
+          <Text accessibilityRole="header" style={{ color: p.text, fontSize: textSize.body, fontWeight: "600" }}>{op.assigneeId ? "Reassign this clean" : "Assign a cleaner"}</Text>
           {candidates.length ? <SearchPicker p={p} value={op.assigneeId ?? ""} placeholder="Search cleaners by name" nouns="cleaners"
             options={candidates.map(c => ({ id: c.userId, label: c.fullName + (c.userId === op.assigneeId ? " · assigned" : "") }))}
             onChange={id => { if (!busy && id !== op.assigneeId) void run(() => writeWorkspace({ action: "assignWork", workId: op.workId, version: op.version, userId: id })); }} />

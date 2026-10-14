@@ -7,7 +7,7 @@ import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
-import { ui, type Palette } from "./theme";
+import { space, textSize, ui, type Palette } from "./theme";
 import { Button, Field, Loading, london, message, Notice, Section, StatGrid, StatTile, useRequestId, useWorkFocus, type IconName } from "./LiveKit";
 import { formatCount, formatDay, formatMoney, plural } from "../../lib/format";
 import { fitsPayoutUpload, MAX_PAYOUT_LINES, readPayoutLines, transferSummary } from "../../lib/payout-reconciliation";
@@ -291,7 +291,7 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
   ];
 
   return (
-    <View style={{ gap: 20 }}>
+    <View style={{ gap: space.section }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Accounts</Text>
         <Text style={[ui.body, { color: p.muted }]}>Approve costs with evidence, reconcile platform payouts and pay owners.</Text>
@@ -299,7 +299,7 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
 
       <View style={[ui.between, { gap: 8 }]}>
         <MotionPress accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => setPeriod(shiftMonth(period, -1))} style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}><Feather name="chevron-left" size={20} color={p.primary} /></MotionPress>
-        <Text style={{ color: p.text, fontSize: 17, fontWeight: "700" }}>{monthLabel(period)}</Text>
+        <Text style={{ color: p.text, fontSize: textSize.heading, fontWeight: "600" }}>{monthLabel(period)}</Text>
         <MotionPress accessibilityRole="button" accessibilityLabel="Next month" accessibilityState={{ disabled: period >= thisMonth }} disabled={period >= thisMonth} onPress={() => setPeriod(shiftMonth(period, 1))} style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: period >= thisMonth ? p.elevated : p.wash }}><Feather name="chevron-right" size={20} color={period >= thisMonth ? p.muted : p.primary} /></MotionPress>
       </View>
 

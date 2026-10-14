@@ -4,7 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { ExpandChevron, GrowBar, MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
-import { Button, Loading, Notice, Tag } from "./LiveKit";
+import { Button, LIST_PREVIEW, Loading, Notice, ShowMore, Tag, usePreview } from "./LiveKit";
 import { SoftButton } from "./LivePages";
 import { ListSearchBox, useListSearch } from "./SearchPicker";
 import { WorkHistory } from "./WorkHistory";
@@ -137,6 +137,8 @@ export function TrackerList({ p, items, onOpen, empty, loading = false, error = 
   const table = layout === "table" || (layout === "auto" && width >= DESKTOP);
   const shown = [...search.shown], open = groups ? shown.filter(i => !i.closed) : shown, done = groups ? shown.filter(i => i.closed) : [];
   const doneShown = doneOpen || !!search.query.trim();
+  // A long open list shows its first rows with "Show more" (a search shows every match).
+  const preview = usePreview(open, search.query.trim() || sectionOf ? open.length : LIST_PREVIEW);
   const draw = (rows: TrackerItem[]) => table
     ? <ThinTable p={p} columns={columnsFor(p, owner, percent)} rows={rows} keyOf={i => i.id} onRow={onOpen} labelOf={i => labelOf(i, updateLine(i.lastUpdate, new Date(), owner), percent)} />
     : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>{rows.map((i, n) => <TrackerRow key={i.id} p={p} item={i} onOpen={onOpen} owner={owner} first={!n} percent={percent} />)}</View>;
@@ -147,7 +149,8 @@ export function TrackerList({ p, items, onOpen, empty, loading = false, error = 
       {loading && !items.length && <Loading p={p} />}
       {!loading && !error && !items.length && <Notice text={empty} p={p} />}
       {!!items.length && <ListSearchBox p={p} search={search} nouns="items" />}
-      {!!open.length && !sectionOf && draw(open)}
+      {!!open.length && !sectionOf && draw([...preview.shown])}
+      {!sectionOf && <ShowMore p={p} hidden={preview.hidden} onPress={preview.showAll} />}
       {sections.map(s => (
         <View key={s.heading || "other"} style={{ gap: 8 }}>
           {!!s.heading && <Text accessibilityRole="header" style={heading(p)}>{s.heading} · {s.items.length}</Text>}

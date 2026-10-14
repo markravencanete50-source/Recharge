@@ -6,7 +6,7 @@ import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { message, Notice } from "./LiveKit";
 import { readTeams, writeTeams } from "./backend/client";
-import { ui, type Palette } from "./theme";
+import { space, ui, type Palette } from "./theme";
 import { todoHubSchema, type TodoHub } from "../../lib/todo";
 import { londonDay } from "../../lib/today-board";
 import { canSetUpChecklist, checklistProgress, managementChecklist, seesManagementChecklist, tickAction, tickedLine, type ChecklistRow } from "../../lib/management-checklist";
@@ -40,10 +40,19 @@ export function ManagementChecklist({ p, account, onSetUp }: { p: Palette; accou
 
   // Admins see it straight away; others once the read says their department is management.
   if (!seesManagementChecklist(account.role, hub?.department ?? null)) return null;
+  // Nothing set up yet: one quiet line and the set-up link, not a whole card saying so.
+  if (hub && !rows.length && !error) return (
+    <View accessibilityLabel="Today's checklist" style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+      <Text style={[ui.small, { color: p.muted }]}>No daily checklist yet.</Text>
+      {canSetUpChecklist(account.role) && <MotionPress accessibilityRole="link" onPress={onSetUp} style={{ minHeight: 44, justifyContent: "center" }}>
+        <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Set up the checklist</Text>
+      </MotionPress>}
+    </View>
+  );
   return (
-    <View accessibilityLabel="Today's checklist" style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8, paddingVertical: 14 }]}>
+    <View accessibilityLabel="Today's checklist" style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: space.tight }]}>
       <View style={[ui.between, { gap: 12 }]}>
-        <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "600" }}>Today&apos;s checklist</Text>
+        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Today&apos;s checklist</Text>
         {!!rows.length && <Text style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{progress.label}</Text>}
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
@@ -53,12 +62,12 @@ export function ManagementChecklist({ p, account, onSetUp }: { p: Palette; accou
           <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Set up the checklist</Text>
         </MotionPress>}
       </View>}
-      {rows.map((row, n) => {
+      {rows.map(row => {
         const line = tickedLine(row);
         return (
           <MotionPress key={row.id} accessibilityRole="checkbox" accessibilityState={{ checked: row.done, disabled: busy === row.id }} accessibilityLabel={(row.done ? "Reopen: " : "Tick: ") + row.title}
             disabled={!!busy} onPress={() => void tick(row)}
-            style={[ui.row, { gap: 10, alignItems: "flex-start", minHeight: 40, paddingVertical: 6, borderTopWidth: n ? 1 : 0, borderTopColor: p.border, opacity: busy && busy !== row.id ? 0.7 : 1 }]}>
+            style={[ui.row, { gap: 10, alignItems: "flex-start", minHeight: 44, paddingVertical: 6, opacity: busy && busy !== row.id ? 0.7 : 1 }]}>
             <Feather name={row.done ? "check-square" : "square"} size={18} color={row.done ? p.success : p.muted} style={{ marginTop: 1 }} />
             <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
               <Text numberOfLines={2} style={{ color: row.done ? p.muted : p.text, fontSize: 14, lineHeight: 20, textDecorationLine: row.done ? "line-through" : "none" }}>{row.title}</Text>

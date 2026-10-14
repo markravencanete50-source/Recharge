@@ -9,7 +9,7 @@ import * as Crypto from "expo-crypto";
 import { Loading, message, Notice, Tag } from "./LiveKit";
 import { Initials } from "./LiveAccounts";
 import { Sheet } from "./TeamFlows";
-import { ui, type Palette } from "./theme";
+import { space, textSize, ui, type Palette } from "./theme";
 import { readTeams, writeTeams } from "./backend/client";
 import { defaultCleanersSchema, type DefaultCleaners } from "../../lib/workspace-teams-policy";
 import { FORM_STATE_LABEL, FORM_STATE_TONE, isMissing, type FormState } from "../../lib/clean-forms";
@@ -113,20 +113,20 @@ export function WhoIsCleaning({ p, cleans, onOpen }: { p: Palette; cleans: Today
     // One card per cleaner (side by side on a computer): their initials, how many cleans, and each one.
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
       {rows.map(([key, g]) => (
-        <View key={key || "none"} style={[ui.card, { flexGrow: 1, flexBasis: 300, minWidth: 0, gap: 10, backgroundColor: p.surface, borderColor: key ? p.border : p.danger }]}>
+        <View key={key || "none"} style={[ui.card, { flexGrow: 1, flexBasis: 300, minWidth: 0, gap: space.tight, backgroundColor: p.surface, borderColor: key ? p.border : p.danger }]}>
           <View style={[ui.between, { gap: 10 }]}>
             <View style={[ui.row, { gap: 10, flex: 1, minWidth: 0 }]}>
               {key ? <Initials p={p} name={g.name} tone="cleans" size={36} /> : <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: p.dangerWash }}><Feather name="user-x" size={16} color={p.danger} /></View>}
-              <Text numberOfLines={1} style={{ color: key ? p.text : p.danger, fontWeight: "700", fontSize: 15, flex: 1 }}>{g.name}</Text>
+              <Text numberOfLines={1} style={{ color: key ? p.text : p.danger, fontWeight: "600", fontSize: textSize.body, flex: 1 }}>{g.name}</Text>
             </View>
             <View style={{ paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, backgroundColor: p.background }}><Text style={[ui.small, { color: p.muted, fontWeight: "700", fontVariant: ["tabular-nums"] }]}>{g.cleans.length} {g.cleans.length === 1 ? "clean" : "cleans"}{formsDue(g.cleans) ? ` · ${formsDue(g.cleans)} outstanding` : ""}</Text></View>
           </View>
           {g.cleans.map(c => (
-            <MotionPress key={c.workId} {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={`${c.propertyName}, ${PHASE[c.phase]?.[0] ?? "Open"}${c.formState ? `, forms ${FORM_STATE_LABEL[c.formState].toLowerCase()}` : ""}`} onPress={() => onOpen(c.workId)} style={[ui.between, { gap: 8, minHeight: 40, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 10 }]}>
+            <MotionPress key={c.workId} {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={`${c.propertyName}, ${PHASE[c.phase]?.[0] ?? "Open"}${c.formState ? `, forms ${FORM_STATE_LABEL[c.formState].toLowerCase()}` : ""}`} onPress={() => onOpen(c.workId)} style={[ui.between, { gap: 8, minHeight: 44, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 10 }]}>
               <Text numberOfLines={1} style={{ color: p.text, flex: 1, minWidth: 0 }}>{c.propertyName}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 6 }}>
                 <Tag label={PHASE[c.phase]?.[0] ?? "Open"} tone={PHASE[c.phase]?.[1] ?? "plain"} p={p} />
-                {!!c.formState && <FormStateTag p={p} state={c.formState} late={c.late} />}
+                {!!c.formState && (isMissing(c.formState) || c.late) && <FormStateTag p={p} state={c.formState} late={c.late} />}
               </View>
             </MotionPress>
           ))}

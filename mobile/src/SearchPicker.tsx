@@ -87,11 +87,14 @@ export { matchesSearch };
 
 // The same for lists a screen lays out itself: `textOf` gives the words a row is found by (a
 // string, or the values it shows). The box only appears past eight rows.
-export function useListSearch<T>(rows: readonly T[], textOf: (row: T) => unknown) {
-  const [query, setQuery] = useState("");
+// `limit` shows the first rows only until "Show more" (LiveKit ShowMore with hidden and showAll); a search shows
+// every match.
+export function useListSearch<T>(rows: readonly T[], textOf: (row: T) => unknown, limit?: number) {
+  const [query, setQuery] = useState(""), [all, setAll] = useState(false);
   const searchable = rows.length > SEARCH_LIST_ABOVE, typed = searchable ? query.trim() : "";
-  const shown = typed ? rows.filter(row => matchesSearch(normalise(textOfRow(textOf(row))), typed)) : rows;
-  return { query, setQuery, searchable, total: rows.length, shown, missed: !!typed && !shown.length };
+  const matched = typed ? rows.filter(row => matchesSearch(normalise(textOfRow(textOf(row))), typed)) : rows;
+  const shown = limit && !typed && !all && matched.length > limit + 1 ? matched.slice(0, limit) : matched;
+  return { query, setQuery, searchable, total: rows.length, shown, missed: !!typed && !matched.length, hidden: matched.length - shown.length, showAll: () => setAll(true) };
 }
 export function ListSearchBox({ p, search, nouns }: { p: Palette; search: { query: string; setQuery: (v: string) => void; searchable: boolean; total: number; missed: boolean }; nouns: string }) {
   if (!search.searchable) return null;

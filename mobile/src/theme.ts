@@ -55,8 +55,14 @@ export const depth = {
 export const radius = { tag: 8, control: 14, tile: 18, card: 24, sheet: 28, pill: 999 } as const;
 //   icon.inline  inside small text and tags · icon.row  in rows, buttons and fields · icon.header  header and tab bar
 export const icon = { inline: 14, row: 16, control: 18, header: 20 } as const;
-// Spacing steps: gaps inside a row, between fields, between sections of a sheet or page.
-export const space = { tight: 6, row: 10, field: 14, section: 20, page: 24 } as const;
+// Spacing steps: gaps inside a row, between fields, between sections of a sheet or page. A little more room than
+// before (Alex: "give things more space to breathe"): 6/10/14/20/24 became 8/12/16/24/32.
+export const space = { tight: 8, row: 12, field: 16, section: 24, page: 32 } as const;
+// One even type scale (Alex: "a bit jumpy just now with big and small"). Six sizes, each a small step from the
+// next: captions 12, small text 13, body 15, headings 17, figures 22 and page titles 26 (was 11 to 32).
+//   caption  uppercase labels above figures, tags   ·  small  supporting lines   ·  body  reading text
+//   heading  section and card titles   ·  figure  the numbers in tiles and counts   ·  title  the page title
+export const textSize = { caption: 12, small: 13, body: 15, heading: 17, figure: 22, title: 26 } as const;
 // The primary action: a flat solid fill, no gradient, sheen or coloured shadow.
 export const primaryFill = (p: { primary: string; isDark?: boolean }) => ({ backgroundColor: p.primary });
 export const ui = StyleSheet.create({
@@ -71,23 +77,23 @@ export const ui = StyleSheet.create({
     padding: 20,
     paddingTop: 24,
     paddingBottom: 112,
-    gap: 24,
+    gap: space.page,
     width: "100%",
     maxWidth: 760,
     alignSelf: "center",
   },
   title: {
-    fontSize: 32,
+    fontSize: textSize.title,
     fontWeight: "700",
-    letterSpacing: -1.3,
-    lineHeight: 40,
+    letterSpacing: -0.6,
+    lineHeight: 34,
     paddingRight: 3,
   },
   // Small uppercase labels above figures and groups.
   label: {
-    fontSize: 11,
+    fontSize: textSize.caption,
     fontWeight: "700",
-    letterSpacing: 1.2,
+    letterSpacing: 0.8,
     lineHeight: 16,
     textTransform: "uppercase",
   },
@@ -97,19 +103,19 @@ export const ui = StyleSheet.create({
     letterSpacing: 0,
     marginBottom: 6,
   },
-  body: { fontSize: 15, lineHeight: 23 },
-  small: { fontSize: 13, lineHeight: 20 },
+  body: { fontSize: textSize.body, lineHeight: 23 },
+  small: { fontSize: textSize.small, lineHeight: 20 },
   sectionTitle: {
-    fontSize: 19,
+    fontSize: textSize.heading,
     fontWeight: "600",
-    letterSpacing: -0.5,
-    lineHeight: 26,
+    letterSpacing: -0.2,
+    lineHeight: 24,
   },
   card: {
     borderWidth: 1,
     borderRadius: radius.card,
-    padding: 18,
-    gap: 12,
+    padding: 20,
+    gap: 14,
     ...(Platform.OS === "web"
       ? { boxShadow: "var(--rc-elev-1),var(--rc-sheen)" }
       : { shadowColor: "#0B1F1A", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 1 }),
@@ -144,9 +150,9 @@ export const ui = StyleSheet.create({
     gap: 10,
   },
   statValue: {
-    fontSize: 32,
+    fontSize: textSize.figure,
     fontWeight: "600",
-    letterSpacing: -1.2,
+    letterSpacing: -0.4,
     fontVariant: ["tabular-nums"],
   },
   tag: {

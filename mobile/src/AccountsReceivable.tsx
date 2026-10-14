@@ -163,7 +163,7 @@ export function AccountsReceivable({ p, account, properties }: { p: Palette; acc
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && !report && <Loading p={p} />}
       {!!report && <>
-        <StatGrid>
+        <StatGrid showZeros>
           <StatTile p={p} icon="send" tone="accounts" label="To send" value={formatMoney(totals?.toSendMinor ?? 0)} detail={plural(totals?.toSendCount ?? 0, "invoice")} attention={(totals?.toSendCount ?? 0) > 0} />
           <StatTile p={p} icon="clock" tone="accounts" label="To settle" value={formatMoney(totals?.toSettleMinor ?? 0)} detail={`${plural(totals?.toSettleCount ?? 0, "invoice")} waiting for payment`} attention={(totals?.toSettleCount ?? 0) > 0} />
           <StatTile p={p} icon="file-plus" tone="accounts" label="Needs an invoice" value={totals?.needsInvoiceCount ?? 0} detail="Direct bookings" attention={(totals?.needsInvoiceCount ?? 0) > 0} />
