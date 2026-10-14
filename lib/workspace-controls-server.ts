@@ -25,7 +25,9 @@ export async function workspaceControls(request: Request, native = false) {
     }
     const input = controlsActionSchema.safeParse(await boundedJson(request));
     if (!input.success) return businessResponse({ error: input.error.issues[0]?.message || 'Check the update' }, 400);
-    const result = await session.client.rpc('workspace_controls_action', { input: input.data });
+    const result = input.data.action === 'markAllNotificationsRead'
+      ? await session.client.rpc('workspace_notifications_read_all', { up_to: Number(input.data.upTo) })
+      : await session.client.rpc('workspace_controls_action', { input: input.data });
     return result.error ? databaseFailure(result.error) : businessResponse({ data: result.data, ok: true });
   } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: 'Workspace controls are temporarily unavailable' }, 503); }
 }

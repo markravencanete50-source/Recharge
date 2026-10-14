@@ -7,7 +7,7 @@ import { createServer } from 'vite';
 // same grants as the database, and screens that say what the database will refuse.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 const { READY_STAGES, REPAIR_STAGES } = await vite.ssrLoadModule('/lib/repairs-live.ts');
-const { unreadNotices, noticeViewSchema, MARK_READ_PER_VISIT } = await vite.ssrLoadModule('/lib/workspace-view.ts');
+const { unreadNotices, noticeViewSchema } = await vite.ssrLoadModule('/lib/workspace-view.ts');
 const { canStart } = await vite.ssrLoadModule('/lib/home-tools.ts');
 const { canEditStay, stayLines } = await vite.ssrLoadModule('/lib/property-profile.ts');
 const { queueCount, managementSchema } = await vite.ssrLoadModule('/lib/management-live.ts');
@@ -29,9 +29,8 @@ test('Home counts unread updates only, and Activity marks them read', () => {
   const notices = [{ id: 3, event_type: 'a', created_at: 'x', read_at: null }, { id: 2, event_type: 'b', created_at: 'x', read_at: '2026-10-09T10:00:00Z' }, { id: 1, event_type: 'c', created_at: 'x' }];
   assert.deepEqual(unreadNotices(notices).map(n => n.id), [3, 1]);
   assert.equal(noticeViewSchema.parse(notices[1]).read_at, '2026-10-09T10:00:00Z', 'the read time survives parsing');
-  assert.ok(MARK_READ_PER_VISIT > 0 && MARK_READ_PER_VISIT <= 20, 'a visit never bursts past the request quota');
   assert.match(source('LiveHome.tsx'), /unreadNotices\(notices\)\.length/);
-  assert.match(source('LivePages.tsx'), /writeControls\(\{ action: "markNotificationRead"/);
+  assert.match(source('LivePages.tsx'), /writeControls\(\{ action: "markAllNotificationsRead"/, 'one request, however long the backlog');
 });
 
 test('Work-view buttons follow the same tool grants as Home', () => {

@@ -55,7 +55,7 @@ import { matchesSearch, normalise } from "../../lib/search-options";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import { faqsForAccess } from "../../lib/access-faq";
 import { dateKey, parseAnalyticsDate, periodError, periodLabel, presetPeriod, type AnalyticsPeriod } from "../../lib/analytics";
-import { estimateComparables, MARK_READ_PER_VISIT, noticeViewSchema, onboardingProgress, readableStage, unreadNotices, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
+import { estimateComparables, noticeViewSchema, onboardingProgress, readableStage, unreadNotices, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
 import { createOperationForms, inspectionReportFrom, journeyForms, newEnquiryForm, operationForms, workflowValues, type JourneyView, type OperationView, type WorkflowField, type WorkflowForm } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { PhotoPicker, WorkPhotos } from "./Photos";
@@ -601,20 +601,27 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
   const [olderState, setOlderState] = useState<"idle" | "loading" | "failed">("idle");
   const [more, setMore] = useState<boolean | null>(null);
   const all = useMemo(() => mergeNotices(notices, older), [notices, older]);
-  // Opening Activity marks the listed updates read (one request each, newest first, never twice),
-  // so Home's Updates count only shows what is new. Older pages, once shown, are marked read the same way.
-  const tried = useRef(new Set<number>());
+  // Opening Activity marks every update up to the newest one shown read, in one request (Lee, 14 October:
+  // one request per update left a long backlog at "99+"), so the bell only counts what is new. One that
+  // arrives while the page is open is marked the same way when it shows.
+  const readUpTo = useRef(0), sending = useRef(false);
   useEffect(() => {
-    const ids = unreadNotices(all).map(n => n.id).filter(id => !tried.current.has(id)).slice(0, MARK_READ_PER_VISIT);
-    if (!ids.length) return;
-    ids.forEach(id => tried.current.add(id));
+    const ids = unreadNotices(all).map(n => n.id);
+    if (!ids.length || sending.current) return;
+    const newest = Math.max(...ids);
+    const shown = (upTo: number) => {
+      const read = ids.filter(id => id <= upTo);
+      if (!read.length) return;
+      onRead?.(read); setOlder(list => list.some(n => read.includes(n.id)) ? list.map(n => read.includes(n.id) ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n) : list);
+    };
+    // Older pages are already read on the server (everything up to the newest was).
+    if (newest <= readUpTo.current) { shown(readUpTo.current); return; }
+    sending.current = true;
     void (async () => {
-      const read: number[] = [];
-      for (const id of ids) {
-        try { await writeControls({ action: "markNotificationRead", requestId: Crypto.randomUUID(), eventId: String(id) }); read.push(id); }
-        catch { break; /* offline or rate-limited: try again next visit */ }
-      }
-      if (read.length) { onRead?.(read); setOlder(list => list.some(n => read.includes(n.id)) ? list.map(n => read.includes(n.id) ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n) : list); }
+      try { await writeControls({ action: "markAllNotificationsRead", requestId: Crypto.randomUUID(), upTo: String(newest) }); readUpTo.current = newest; }
+      catch { return; /* offline or rate-limited: tried again with the next refresh */ }
+      finally { sending.current = false; }
+      shown(newest);
     })();
   }, [all, onRead]);
   const showOlder = async () => {

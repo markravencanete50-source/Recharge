@@ -64,7 +64,7 @@ import { gateDiscountPolicy, inspectionReportFrom, workItemForms, type JourneyVi
 import { WorkPhotos } from "./Photos";
 import { SignOutUploadsWarning, UploadBanner } from "./UploadStatus";
 import { pendingUploadCount } from "./uploadQueue";
-import { NotificationsSetting, refreshNotificationLink, unlinkNotifications } from "./Notifications";
+import { NotificationsPrompt, NotificationsSetting, playChime, readyChime, refreshNotificationLink, unlinkNotifications } from "./Notifications";
 import { LiveChat, useGuestWaiting } from "./LiveChat";
 import { LiveCalendar } from "./LiveCalendar";
 import { OpenMessagesContext } from "./PropertyTeamChat";
@@ -232,6 +232,19 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // Guests waiting for a reply join the badge for people with the guest inbox (read once a minute).
   const { waiting: guestWaiting, reload: loadWaiting } = useGuestWaiting(account);
   const messagesBadge = chatUnread + (guestWaiting ?? 0);
+  // A soft chime when a new update or message arrives while Recharge is open (web; Profile > Sound for new
+  // updates). Not for what was already waiting when the app opened, and not while viewing as someone else.
+  const openedAt = useRef(0), heardNotice = useRef(0), heardBadge = useRef(0);
+  useEffect(() => { openedAt.current = Date.now(); return readyChime(); }, []);
+  useEffect(() => {
+    const newest = Math.max(0, ...notices.filter(n => !n.read_at).map(n => n.id));
+    if (newest > heardNotice.current && Date.now() - openedAt.current > 20_000 && !viewAs) playChime();
+    heardNotice.current = Math.max(heardNotice.current, newest, ...notices.map(n => n.id));
+  }, [notices, viewAs]);
+  useEffect(() => {
+    if (messagesBadge > heardBadge.current && Date.now() - openedAt.current > 20_000 && !viewAs) playChime();
+    heardBadge.current = messagesBadge;
+  }, [messagesBadge, viewAs]);
   // "Message the property team" (and similar) opens Messages on one conversation.
   const [chatTarget, setChatTarget] = useState<{ id: string; nonce: number } | null>(null);
   // Set when Messages should open on its Updates tab (an old Updates link or a notice).
@@ -636,6 +649,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
               {demo ? <DemoBanner palette={p} viewing={viewAs?.person ? `${viewAs.person.fullName} (${viewAsLabel(viewAs.role)})` : null} onViewAs={() => setViewAsOpen(true)} onLive={() => onDemo(false)} />
                 : !!viewAs && <ViewAsBanner palette={p} view={viewAs} note={viewNote} onChange={() => setViewAsOpen(true)} onBack={() => void onViewAs(null)} />}
               {!!accessNote && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderLeftWidth: 3, borderLeftColor: p.primary }]}><Feather name="shield" size={16} color={p.primary} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{accessNote}</Text><MotionPress accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setAccessNote("")} style={{ minHeight: 36, minWidth: 36, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={p.muted} /></MotionPress></View>}
+              {team && !demo && !viewAs && <NotificationsPrompt p={p} />}
               <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}><WorkJumpContext.Provider value={jump}><OwnerActions.Provider value={ownerActions}>{animatedPage}</OwnerActions.Provider></WorkJumpContext.Provider></WorkFocusContext.Provider></AnchorRegistry.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
             </Animated.View></View>

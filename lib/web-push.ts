@@ -59,32 +59,39 @@ export async function encryptPush(payload: Uint8Array, p256dh: string, authSecre
 // Only the browsers' own push services: Chrome, Edge and Android (Google), Firefox, Windows and Safari.
 // Any other address would make the backend post to a server of someone's choosing.
 export const PUSH_SERVICE = /^https:\/\/(fcm\.googleapis\.com|android\.googleapis\.com|[a-z0-9-]+(\.[a-z0-9-]+)*\.push\.services\.mozilla\.com|[a-z0-9-]+(\.[a-z0-9-]+)*\.notify\.windows\.com|web\.push\.apple\.com)\//;
-export type WebPushJob = { endpoint: string; p256dh: string; auth: string; eventType?: string | null; workKind?: string | null };
-// Sends one notice. 'gone' means the browser no longer accepts notifications.
-export async function sendWebPush(job: WebPushJob, keys: WebPushKeys): Promise<'sent' | 'gone' | 'failed'> {
-  if (!PUSH_SERVICE.test(job.endpoint)) return 'gone';
-  const { title, message } = noticeCopyFor(job.eventType, job.workKind);
+export type WebPushJob = { endpoint: string; p256dh: string; auth: string; eventType?: string | null; workKind?: string | null; outboxId?: number | string; subscriptionId?: string };
+export type WebPushOutcome = 'sent' | 'gone' | 'failed';
+// What the push service answered: its HTTP status, or 0 when it could not be reached at all.
+export type WebPushResult = { outcome: WebPushOutcome; status: number };
+// Sends one notice and keeps the push service's answer. 'gone' means the browser no longer accepts notifications.
+// Urgency high: phones deliver it straight away instead of holding it until they wake up.
+export async function sendWebPushResult(job: WebPushJob, keys: WebPushKeys, copy?: { title: string; message: string }): Promise<WebPushResult> {
+  if (!PUSH_SERVICE.test(job.endpoint)) return { outcome: 'gone', status: 0 };
+  const { title, message } = copy ?? noticeCopyFor(job.eventType, job.workKind);
   const body = await encryptPush(encoder.encode(JSON.stringify({ title, body: message, url: '/workspace/live' })), job.p256dh, job.auth);
   try {
     const response = await fetch(job.endpoint, {
       method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(10_000), body: bytes(body),
-      headers: { Authorization: await vapidHeader(job.endpoint, keys), 'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream', TTL: '86400', Urgency: 'normal' },
+      headers: { Authorization: await vapidHeader(job.endpoint, keys), 'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream', TTL: '86400', Urgency: 'high' },
     });
-    if (response.status === 404 || response.status === 410) return 'gone';
-    return response.ok ? 'sent' : 'failed';
-  } catch { return 'failed'; }
+    if (response.status === 404 || response.status === 410) return { outcome: 'gone', status: response.status };
+    return { outcome: response.ok ? 'sent' : 'failed', status: response.status };
+  } catch { return { outcome: 'failed', status: 0 }; }
 }
+export const sendWebPush = async (job: WebPushJob, keys: WebPushKeys): Promise<WebPushOutcome> => (await sendWebPushResult(job, keys)).outcome;
 
 // Every minute (worker/index.ts): send the waiting notices to the browsers that allowed them.
 export async function dispatchWebPush(settings: IntegrationSettings, rpc: <T>(name: string, args: Record<string, unknown>) => Promise<T>) {
   const keys = webPushKeys(settings);
   if (!keys) return { mode: 'unconfigured', sent: 0 };
   const jobs = await rpc<WebPushJob[]>('integration_claim_web_push', {});
-  let sent = 0;
+  let sent = 0, failed = 0;
   for (const job of jobs) {
-    const outcome = await sendWebPush(job, keys);
-    if (outcome === 'sent') sent++;
+    const { outcome, status } = await sendWebPushResult(job, keys);
+    if (outcome === 'sent') sent++; else failed++;
+    // Kept for each notice and device, so the office can see whether pop-ups really arrive.
+    if (job.outboxId !== undefined && job.subscriptionId) await rpc('integration_web_push_result', { outbox: Number(job.outboxId), subscription: job.subscriptionId, outcome, status_code: status }).catch(() => undefined);
     if (outcome === 'gone') await rpc('integration_remove_web_push', { target_endpoint: job.endpoint }).catch(() => undefined);
   }
-  return { mode: 'configured', sent, claimed: jobs.length };
+  return { mode: 'configured', sent, failed, claimed: jobs.length };
 }

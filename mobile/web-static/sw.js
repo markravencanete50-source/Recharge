@@ -8,6 +8,8 @@ self.addEventListener("push", event => {
   const url = typeof data.url === "string" && data.url.startsWith("/workspace") ? data.url : "/workspace/live";
   event.waitUntil(self.registration.showNotification(data.title || "Recharge", {
     body: data.body || "There is an update in Recharge.", icon: "/workspace/icon-192.png", badge: "/workspace/icon-192.png", data: { url },
+    // Each notice is its own pop-up with the device's usual sound; phones also buzz.
+    vibrate: [120, 60, 120], timestamp: Date.now(),
   }));
 });
 self.addEventListener("notificationclick", event => {
