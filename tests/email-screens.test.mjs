@@ -35,6 +35,8 @@ test('email to ownerrelations@ from someone who is not an owner yet is a convers
   assert.match(chat, /counts=\{statusCounts\(found, statusOf\)\}/);
   assert.match(unknown, /Send emails your reply to \{t\.address\} from ownerrelations@rechargegroup\.co\.uk/);
   assert.match(unknown, /label="Assign to owner"/);
+  // On a phone the subject has its own line under the address, so a long address never hides it.
+  assert.match(unknown, /\{!!t\?\.subject && <Text numberOfLines=\{2\} style=\{\[ui\.small, \{ color: p\.text \}\]\}>\{t\.subject\}<\/Text>\}/);
   assert.match(unknown, /Linking\.openURL\(\(await emailFileLink\(id\)\)\.url\)/);
 });
 
