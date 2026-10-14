@@ -254,6 +254,11 @@ Full suite 1710 of 1710. Checked on live: the migration is recorded and the limi
 Open with Lee: "Ask management" has no person field. Lee will decide later between "who it's about" and "who should
 decide".
 
+Repairs troubleshooting: Lee decided (14 October) to keep the guided checklist (`lib/repair-guides.ts`, Resolved or
+refer to Ready). There are no AI suggestions for now; they would need an AI service key as a Worker Secret.
+
+Clean cost flag (Alex D6) is built and live: Clean cost review (`CleanCostReview.tsx`, migration `20261012090000`).
+
 Email sender picture: Lee decided (14 October) not to create Google accounts for the two mailboxes, so Gmail keeps the
 letter avatar. The Recharge logo goes inside the emails instead (F). BIMI (DMARC enforcement plus a paid VMC/CMC
 certificate) is the option for later if Alex wants the logo in every inbox.
