@@ -207,6 +207,19 @@ Next round (not blocking):
 - D: the TeamEvents label "Dates (one day: choose it twice)" becomes "Dates" with a helper line.
 - B: on phones, the Client enquiries stat tile labels wrap; shorten them.
 
+## 5c. Round 9: LIVE (14 October 2026; main 1d3c3c6, pull request #6, install SQL run by Lee)
+
+Follow-ups after rounds 6 to 8: newest message or email on top (C); email conversations in Messages → Clients for
+people who are not owners yet, answered from ownerrelations@ (F); no em dashes and no line under page titles, one search
+field with no inner box, plain sign-in panel (E); date field fixes (A, D); "Add a local event" on top (B); phone and
+token fixes (A, B). One migration, `20261019500000_client_email_threads`. Full `npm test` on `fe9f479` passed
+**1658/1658**; E signed off every screen in light and dark, at 1440 and 390. Checked on live after Lee ran the SQL: the
+migration is recorded, the threads table and 9 functions exist, and staff can read the conversations.
+
+Next round (not blocking):
+- F: `69bd8d5`, the email subject on its own line in the Clients pane on phones.
+- E: chosen chips use A's pillBox and pillInk (Lee approved).
+
 ## 6. Waiting on Lee
 
 - Switch A and D to Sonnet (`/model claude-sonnet-5-5` in each session).
