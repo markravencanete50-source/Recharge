@@ -19,12 +19,14 @@ const SIGS = ['private.workspace_guest_reply_begin(private.workspace_guest_threa
 const definitions = async () => Promise.all(SIGS.map(async s => (await db.query('select pg_get_functiondef($1::regprocedure) def', [s])).rows[0].def));
 const firstRun = await definitions();
 await db.exec(await fs.readFile(`supabase/migrations/${MINE}.sql`, 'utf8'));
+// 20261019500000 replaces three of these functions whole; put it back on top, as the real order would.
+for (const later of files.filter(f => f > MINE + '.sql')) await db.exec(await fs.readFile('supabase/migrations/' + later, 'utf8'));
 const secondRun = await definitions();
 // The hostaway sync is paused for the new business; email does not depend on it.
 after(() => db.close());
 
 const roles = ['super_admin', 'stays', 'stays', 'stays', 'cleans', 'ready', 'client', 'client', 'accounts'];
-const [ADMIN, STAYS, NO_TOOL, CLIENT_REL, CLEANER, READY, OWNER, OTHER_OWNER, ACCOUNTS] = roles.map((_, i) => i);
+const [ADMIN, STAYS, NO_TOOL, CLIENT_REL, CLEANER, READY, OWNER, OTHER_OWNER] = roles.map((_, i) => i);
 const users = roles.map((_, i) => `99100000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
 const session = i => users[i].replace('9910', '9920');
 for (let i = 0; i < users.length; i++) {
@@ -47,7 +49,7 @@ const rpc = async (name, args = []) => (await db.query(`select public.${name}(${
 beforeEach(async () => {
   await db.exec('reset role');
   await db.exec(`delete from private.workspace_write_limits;delete from private.workspace_email_outbox;delete from private.workspace_email_attachments;delete from private.workspace_email_messages;
-   delete from private.workspace_email_unknown_senders;delete from private.workspace_email_owner_addresses;delete from private.workspace_email_inbound;
+   delete from private.workspace_email_unknown_senders;delete from private.workspace_client_email_threads;delete from private.workspace_email_owner_addresses;delete from private.workspace_email_inbound;
    delete from private.workspace_guest_reply_requests;delete from private.workspace_guest_messages;delete from private.workspace_guest_threads;
    delete from private.chat_messages;delete from private.chat_members;delete from private.chat_conversations`);
 });
@@ -225,21 +227,14 @@ test('owner email goes into that owner\'s conversation; an unknown sender waits 
   // An unknown address is held, not matched by name even when the name is the owner's.
   const unknown = await ownerIn(mail({ from: 'someone@elsewhere.org', fromName: 'Person 6', subject: 'Hello', text: 'I own a flat.' }));
   assert.equal(unknown.matched, 'unknown');
-  assert.equal((await sql("select count(*)::int n from private.chat_messages"))[0].n, 2, 'the unknown sender is not in any conversation');
+  assert.equal((await sql("select count(*)::int n from private.chat_messages"))[0].n, 2, 'the unknown sender is not in any owner conversation');
+  // Since 20261019500000 it is a client email conversation (tested in full in client-email-threads-database); assigning moves it.
   await as(CLIENT_REL);
-  const list = await rpc('workspace_email_unknown_read');
-  assert.equal(list.senders.length, 1);
-  assert.equal(list.senders[0].from, 'someone@elsewhere.org');
-  for (const who of [STAYS, OWNER, CLEANER, READY, ACCOUNTS]) {
-    await as(who);
-    await assert.rejects(rpc('workspace_email_unknown_read'), /Client relations access required/, 'role ' + who);
-  }
-  // Assigning posts it to the owner's conversation and remembers the address.
-  await as(CLIENT_REL);
-  await assert.rejects(rpc('workspace_email_unknown_action', [{ action: 'assign', id: list.senders[0].id, ownerId: users[STAYS] }]), /Owner not found/);
-  await rpc('workspace_email_unknown_action', [{ action: 'assign', id: list.senders[0].id, ownerId: users[OWNER] }]);
+  const { threads } = await rpc('workspace_client_email_read', ['list', null]);
+  assert.equal(threads.length, 1);
+  assert.equal(threads[0].address, 'someone@elsewhere.org');
+  await rpc('workspace_client_email_action', [{ action: 'assign', threadId: threads[0].id, ownerId: users[OWNER] }]);
   assert.equal((await sql("select count(*)::int n from private.chat_messages"))[0].n, 3);
-  assert.equal((await rpc('workspace_email_unknown_read')).senders.length, 0);
   assert.deepEqual(await ownerIn(mail({ from: 'someone@elsewhere.org' })), { stored: true, matched: 'owner' });
 });
 

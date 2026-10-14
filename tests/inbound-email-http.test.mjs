@@ -188,6 +188,10 @@ test('the pure checks: mailboxes, addresses, text, file types', () => {
   assert.equal(policy.messageText('Hi\n> quoted\nBye', ''), 'Hi\nBye');
   assert.equal(policy.messageText('', '<p>Hello&nbsp;there</p><style>x{}</style>'), 'Hello there');
   assert.equal(policy.messageText('x'.repeat(9000), '').length, 5000);
+  // Gmail wraps a long quote header over two lines: it is cut there too, and a line merely starting "On" is kept.
+  assert.equal(policy.messageText('I want to inquire.\n\nOn Wed, Oct 14, 2026 at 11:00 AM Recharge Group <\nguestrelations@rechargegroup.co.uk> wrote:\n\n> Test Received.', ''), 'I want to inquire.');
+  assert.equal(policy.messageText('Thanks.\nOn Wed, Oct 14, 2026 at 11:00 AM\nRecharge Group\n<guestrelations@rechargegroup.co.uk> wrote:', ''), 'Thanks.');
+  assert.equal(policy.messageText('We arrive Friday.\nOn Saturday we leave early.\nThanks', ''), 'We arrive Friday.\nOn Saturday we leave early.\nThanks');
   assert.equal(policy.attachmentType(new Uint8Array(20).fill(0)), null);
   assert.equal(policy.attachmentType(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8]))?.mime, 'image/jpeg');
 });

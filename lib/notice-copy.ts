@@ -16,6 +16,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'chat.message_removed': copy('An admin removed one of your messages', 'It broke the team\'s acceptable use rules. Contact an admin if you think this was a mistake.'),
   // Session C, round 5: every guest message tells Stays on the property and the admins (migration 20261015310000).
   'guest.message': copy('New guest message', 'A guest has sent a message. Open Messages to reply.'),
+  // Session F, round 7: email to ownerrelations@ from someone who is not an owner yet (migration 20261019500000).
+  'client.email': copy('New client email', 'Someone has emailed client relations. Open Messages, Clients to reply.'),
   'journey.createEnquiry': copy('New property enquiry', 'A new property enquiry has been started.'),
   'journey.publishEstimate': copy('Your estimate is ready', 'Recharge has prepared an estimate for your property, with expected nightly rates and comparable listings. You can review it and choose how to go ahead.'),
   'journey.decideEstimate': copy('Estimate decision recorded', 'A decision has been recorded on a property estimate.'),
