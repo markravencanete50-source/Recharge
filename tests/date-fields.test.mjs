@@ -23,7 +23,7 @@ test('the converted forms use the shared calendar field', () => {
     'LocalEvents.tsx': /<DateField p=\{p\} label="Date" mode="single"/,
     'TeamEvents.tsx': /<DateField p=\{p\} label="Dates" hint="Choose the first day, then the last\. For one day, choose it twice\."/,
     'LiveTeamTime.tsx': /<DateField p=\{p\} label="Date" mode="single"/,
-    'HubItemSheet.tsx': /<DateField p=\{p\} label=\{kind === "todo" \? "Due \(optional\)" : "Send by \(optional\)"\} mode="single"/,
+    'HubItemSheet.tsx': /<DateField p=\{p\} label=\{kind === "todo" \? "Due date \(optional\)" : "Send by \(optional\)"\} mode="single"/,
     // Accounts (Session A): an optional date is clearable and says what an empty one means.
     'AccountsPayable.tsx': /<DateField p=\{p\} label="Invoice date" mode="single"/,
     'AccountsReceivable.tsx': /<DateField p=\{p\} label="Send by \(optional\)" mode="single" value=\{\{ from: v\.dueOn, to: v\.dueOn \}\} onChange=\{d => set\("dueOn"\)\(d\.from\)\} wholeMonthLink=\{false\} empty="No date" clearable \/>/,

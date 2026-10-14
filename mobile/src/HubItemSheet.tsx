@@ -25,15 +25,20 @@ export function PropertyPicker({ p, properties, title, visible, onClose, onPick 
 }
 
 const KIND_TITLE: Record<HubItem["kind"], [string, string]> = {
-  todo: ["To-do", "What needs doing"], approval: ["Approval ticket", "What needs management's approval"],
+  todo: ["To-do", "Area: what to do, for example Pricing: check the rates at Rose Cottage"], approval: ["Approval ticket", "What needs management's approval"],
   aircover: ["AirCover claim", "What happened"], invoice: ["Invoice to send", "Who it is for and what it covers"],
 };
 
 // Who a to-do is for: the person adding it, a named person, or a whole department. One dropdown (round 6,
-// from Alex's video); "A person" or "A department" then shows a second dropdown for which one.
+// from Alex's video); "A person" or "A department" then shows a second dropdown for which one. The labels say
+// plainly what each choice does (Alex, client meeting): "Assign to: Me / A person / A department", and each
+// department with the work it covers.
 type Assign = "me" | "person" | "department";
 export const ASSIGN_OPTIONS: { value: Assign; label: string }[] = [{ value: "me", label: "Me" }, { value: "person", label: "A person" }, { value: "department", label: "A department" }];
-export const DEPARTMENT_OPTIONS = [{ value: "", label: "Choose a department" }, ...DEPARTMENTS.map(d => ({ value: d as string, label: DEPARTMENT_LABEL[d] }))];
+export const DEPARTMENT_HINT: Record<string, string> = {
+  guest_relations: "guests and their stays", client_relations: "owners, pricing and onboarding", ready: "repairs and maintenance",
+};
+export const DEPARTMENT_OPTIONS = [{ value: "", label: "Choose a department" }, ...DEPARTMENTS.map(d => ({ value: d as string, label: DEPARTMENT_HINT[d] ? `${DEPARTMENT_LABEL[d]} (${DEPARTMENT_HINT[d]})` : DEPARTMENT_LABEL[d] }))];
 
 // Adding or changing one row, and moving it along (done, approved, claimed, sent, paid).
 // `defaults` pre-fills a NEW to-do, for example the department of the heading it was added under.
@@ -99,16 +104,16 @@ export function HubItemSheet({ p, hub, account, properties, target, onClose, onS
         <Field label={title} value={f.title ?? ""} onChange={set("title")} p={p} placeholder={placeholder} />
         <Field label="Details (optional)" value={f.details ?? ""} onChange={set("details")} p={p} multiline />
         {kind === "todo" && <>
-          <Dropdown p={p} label="Who is it for?" value={(f.assign || "me") as Assign} options={ASSIGN_OPTIONS} onChange={a => setF(v => ({ ...v, assign: a }))} />
-          {f.assign === "person" && <Dropdown p={p} label="Which person?" value={f.assigneeId ?? ""} onChange={id => setF(v => ({ ...v, assigneeId: id }))}
-            options={[{ value: "", label: "Choose a person" }, ...(hub?.people ?? []).map(x => ({ value: x.userId, label: x.userId === account.userId ? "Me" : x.fullName || "Team member" }))]} />}
-          {f.assign === "department" && <Dropdown p={p} label="Which department?" value={f.department ?? ""} options={DEPARTMENT_OPTIONS} onChange={d => setF(v => ({ ...v, department: d }))} />}
+          <Dropdown p={p} label="Assign to" value={(f.assign || "me") as Assign} options={ASSIGN_OPTIONS} onChange={a => setF(v => ({ ...v, assign: a }))} />
+          {f.assign === "person" && <Dropdown p={p} label="Person to assign it to" value={f.assigneeId ?? ""} onChange={id => setF(v => ({ ...v, assigneeId: id }))}
+            options={[{ value: "", label: "Choose a person" }, ...(hub?.people ?? []).map(x => ({ value: x.userId, label: x.userId === account.userId ? `Me${x.fullName ? ` (${x.fullName})` : ""}` : x.fullName || "Team member" }))]} />}
+          {f.assign === "department" && <Dropdown p={p} label="Department to assign it to" value={f.department ?? ""} options={DEPARTMENT_OPTIONS} onChange={d => setF(v => ({ ...v, department: d }))} />}
         </>}
         {kind !== "todo" && <Field label={kind === "approval" ? "Amount, £" : kind === "aircover" ? "Amount claimed, £" : "Amount, £"} value={f.amount ?? ""} onChange={set("amount")} p={p} placeholder="0.00" />}
         {(kind === "todo" || kind === "invoice") && <View style={{ gap: 4 }}>
-          <DateField p={p} label={kind === "todo" ? "Due (optional)" : "Send by (optional)"} mode="single" wholeMonthLink={false} today={london(new Date())} value={{ from: f.dueOn ?? "", to: f.dueOn ?? "" }} onChange={r => setF(v => ({ ...v, dueOn: r.from }))} />
-          {!!f.dueOn && <MotionPress accessibilityRole="button" accessibilityLabel="Remove the date" onPress={() => setF(v => ({ ...v, dueOn: "" }))} style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }}>
-            <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>No date</Text>
+          <DateField p={p} label={kind === "todo" ? "Due date (optional)" : "Send by (optional)"} mode="single" wholeMonthLink={false} today={london(new Date())} empty={kind === "todo" ? "No due date" : undefined} value={{ from: f.dueOn ?? "", to: f.dueOn ?? "" }} onChange={r => setF(v => ({ ...v, dueOn: r.from }))} />
+          {!!f.dueOn && <MotionPress accessibilityRole="button" accessibilityLabel={kind === "todo" ? "Remove the due date" : "Remove the date"} onPress={() => setF(v => ({ ...v, dueOn: "" }))} style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start" }}>
+            <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>{kind === "todo" ? "Remove the due date" : "No date"}</Text>
           </MotionPress>}
         </View>}
         {kind === "aircover" && <Field label="Reservation code (optional)" value={f.reference ?? ""} onChange={set("reference")} p={p} placeholder="HMABCD1234" />}

@@ -134,12 +134,13 @@ test('180 automatic pricing rows are kept; the section shows ten with "Show all 
 
 // ---------- the screens (no React Native renderer in the tests, so they are read from source) ----------
 
-test('the New to-do form: one "Who is it for" dropdown, a second one for which person or department', () => {
+test('the New to-do form: one "Assign to" dropdown, a second one for which person or department', () => {
   const sheet = source('mobile/src/HubItemSheet.tsx');
   assert.match(sheet, /import \{ Dropdown \} from "\.\/Dropdown";/, "Session A's dropdown, not a new one");
-  assert.match(sheet, /<Dropdown p=\{p\} label="Who is it for\?" value=\{\(f\.assign \|\| "me"\) as Assign\} options=\{ASSIGN_OPTIONS\}/);
-  assert.match(sheet, /\{f\.assign === "person" && <Dropdown p=\{p\} label="Which person\?"/);
-  assert.match(sheet, /\{f\.assign === "department" && <Dropdown p=\{p\} label="Which department\?" value=\{f\.department \?\? ""\} options=\{DEPARTMENT_OPTIONS\}/);
+  assert.match(sheet, /<Dropdown p=\{p\} label="Assign to" value=\{\(f\.assign \|\| "me"\) as Assign\} options=\{ASSIGN_OPTIONS\}/);
+  assert.match(sheet, /\{f\.assign === "person" && <Dropdown p=\{p\} label="Person to assign it to"/);
+  assert.match(sheet, /\{f\.assign === "department" && <Dropdown p=\{p\} label="Department to assign it to" value=\{f\.department \?\? ""\} options=\{DEPARTMENT_OPTIONS\}/);
+  assert.doesNotMatch(sheet, /label="Who is it for\?"|label="Which person\?"|label="Which department\?"/, 'the old vague labels are gone');
   assert.match(sheet, /\{ value: "me", label: "Me" \}, \{ value: "person", label: "A person" \}, \{ value: "department", label: "A department" \}/);
   assert.doesNotMatch(sheet, /ASSIGN_CHOICES|<Chip /, 'no row of chips for who');
   assert.match(sheet, /Choose the person\./);
@@ -148,9 +149,10 @@ test('the New to-do form: one "Who is it for" dropdown, a second one for which p
 test('the New to-do form: the due date is a DateField, and the property is the search-only picker', () => {
   const sheet = source('mobile/src/HubItemSheet.tsx');
   assert.match(sheet, /import \{ DateField \} from "\.\/CalendarPicker";/);
-  assert.match(sheet, /<DateField p=\{p\} label=\{kind === "todo" \? "Due \(optional\)" : "Send by \(optional\)"\} mode="single" wholeMonthLink=\{false\}/);
+  assert.match(sheet, /<DateField p=\{p\} label=\{kind === "todo" \? "Due date \(optional\)" : "Send by \(optional\)"\} mode="single" wholeMonthLink=\{false\}/);
+  assert.match(sheet, /empty=\{kind === "todo" \? "No due date" : undefined\}/, 'an empty due date says so');
   assert.match(sheet, /onChange=\{r => setF\(v => \(\{ \.\.\.v, dueOn: r\.from \}\)\)\}/);
-  assert.match(sheet, /No date/, 'an optional date can be removed');
+  assert.match(sheet, /Remove the due date/, 'an optional due date can be removed');
   assert.doesNotMatch(sheet, /YYYY-MM-DD\)"/, 'no typed date box');
   assert.match(sheet, /<PropertySelect p=\{p\} properties=\{properties\} value=\{f\.propertyId \?\? ""\}/);
   assert.match(source('mobile/src/SearchPicker.tsx'), /pickerView\(options, query, value\)/, 'the picker is search only on long lists');
