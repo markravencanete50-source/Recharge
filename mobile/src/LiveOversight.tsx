@@ -264,7 +264,7 @@ function departments(o: Overview): { tone: Tone; icon: IconName; title: string; 
     ] },
     { tone: "accounts", icon: "file-text", title: "Accounts", target: work("accounts"), metrics: [
       { label: o.accounts.overLimit ? `Expenses to approve (${formatCount(o.accounts.overLimit)} over the limit)` : "Expenses to approve", value: o.accounts.expensesToApprove, attention: o.accounts.expensesToApprove > 0, target: work("accounts", { sub: "expenses" }) },
-      { label: "Payouts to reconcile this month", value: o.accounts.payoutsToReconcile, attention: o.accounts.payoutsToReconcile > 0, target: work("accounts", { sub: "payouts" }) },
+      { label: "Payouts overdue to reconcile", value: o.accounts.payoutsToReconcile, attention: o.accounts.payoutsToReconcile > 0, target: work("accounts", { sub: "payouts" }) },
       { label: "Statements to issue", value: o.accounts.statementsToIssue, attention: o.accounts.statementsToIssue > 0, target: work("accounts", { sub: "statements" }) },
     ] },
   ];
