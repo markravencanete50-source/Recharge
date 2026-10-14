@@ -41,7 +41,9 @@ function PersonRow({ p, person, first, onPress }: { p: Palette; person: AccessPe
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{person.fullName || "No name yet"}</Text>
-        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{person.email ?? person.phone ?? "No contact"} · <Text style={[ui.small, { color: online ? p.success : p.muted, fontWeight: online ? "700" : "400" }]}>{presenceText(person)}</Text></Text>
+        {/* Contact and sign-in on lines of their own, so neither runs past the edge on a phone. */}
+        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{person.email ?? person.phone ?? "No contact"}</Text>
+        <Text numberOfLines={1} style={[ui.small, { color: online ? p.success : p.muted, fontWeight: online ? "700" : "400" }]}>{presenceText(person)}</Text>
         <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
           <Tag label={roleLabel(person.role)} tone="plain" p={p} />
           <Tag label={label} tone={tone} p={p} />

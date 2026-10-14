@@ -133,11 +133,12 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
                 style={[ui.row, { gap: space.row, minHeight: 56, paddingVertical: 8, paddingHorizontal: space.field, borderTopWidth: i ? 1 : 0, borderColor: p.border, borderLeftWidth: 3, borderLeftColor: next ? p.primary : "transparent" }]}>
                 <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                   <Text numberOfLines={1} style={{ color: p.text, fontSize: 14 }}><Text style={{ fontWeight: "600" }}>{nameOf(r.propertyId)}</Text>{` · ${problem}`}</Text>
-                  <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>
+                  {/* Status, cost and last update wrap rather than run past the edge on a phone; urgent and hazard get their own line. */}
+                  <Text style={[ui.small, { color: p.muted }]}>
                     <Text style={{ color: stageNow === "paid" || phase === "completed" || phase === "resolved" ? p.success : step ? p.waiting : p.muted, fontWeight: "600" }}>{label}</Text>
                     {` · ${estimateText(r.data)}${updated ? ` · updated ${daysFromNow(updated, today)}` : ""}`}
-                    {!!flags && <Text style={{ color: p.danger, fontWeight: "600" }}>{` · ${flags}`}</Text>}
                   </Text>
+                  {!!flags && <Text style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{flags}</Text>}
                   {!!declined && <Text numberOfLines={1} style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{declined}</Text>}
                   {!!next && <Text numberOfLines={1} style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Next for you: {next}</Text>}
                 </View>

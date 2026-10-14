@@ -354,3 +354,36 @@ due). This adds the checklist inside the Management centre. No migration.
   forms use DateField; `choice-control` and `team-calendar` were updated for the new controls.
 - **Screenshots (phone, dark, Demo):** `round6-sweep-1` Maintenance, `-2` the thin rows, `-3` the calendar views and
   team dropdown, `-4` the team event dates on the calendar field.
+
+## Round 8 leftover: date fields checked in the demo (14 October 2026)
+
+- **Labels:** Team event's range is labelled "Dates", and its how-to ("Choose the first day, then the last. For one
+  day, choose it twice.") sits in the open calendar, where Record a stay has its own. DateField takes a `hint` for
+  that line. No other DateField label carries instructions (a test checks).
+- **Checked in the interactive demo on a 390px phone, dark, with the keyboard:** Book a repair, Work time,
+  Local event (edit), Team time (add a shift), Edit a stay (range) and Team event (range). Each opens on the
+  chosen day's month (today's when nothing is chosen), shows the today ring, and saves what was picked.
+- **Fixed in the shared picker (CalendarPicker.tsx), so every date field gets it:**
+  - Keyboard picks were wrong. The arrow keys moved the ring but not the browser's focus, and Enter was handled
+    twice (the day's own press and the grid's handler), so a team event picked as 16 to 19 October saved as
+    14 October. Now the arrows move the focus with the ring, Enter and Space press that one day, and the grid is
+    one Tab stop (the focused, chosen or today's day) instead of 42.
+  - On a phone a field near the bottom of a sheet opened its calendar below the fold; the open calendar now
+    scrolls into view.
+  - The range wash now runs under the facing half of the first and last days, so the range reads as one band;
+    the browser's square focus outline is replaced by the picker's own round ring.
+- **Seen, not mine to fix:** on a property sheet opened from Favorites, "Add a local event" opens its form behind
+  the property sheet, so nothing seems to happen until the sheet is closed. That form's date is the older workflow
+  date field (`LivePages` Field, type "date"), not DateField. Editing an existing event uses DateField and works.
+- **Demo dates:** Hogmanay shows as 1 January in the demo because the demo moves every sample date with today.
+- Screenshots: `round8-dates-*` in `docs/session-D-screenshots/`.
+
+## Round 9 sweep items R2 and R3 (from E)
+
+- **R2, Maintenance rows at 390 px:** the status line (status · cost · updated) wraps instead of being held to
+  one line, and "Urgent · Safety hazard" has its own red line under it. Screenshot `round9-r2-maintenance-rows-dark`.
+- **R3, Access control rows at 390 px:** the contact and "Signed in … ago" are on lines of their own. A coloured
+  part nested inside a one-line text ran past the edge on the web. Screenshot `round9-r3-access-rows-dark`; in the
+  demo nothing in those rows reaches past the right edge.
+- **Test:** `tests/phone-fit-rows.test.mjs` (B's `phone-fit.test.mjs` style, kept separate so the two don't clash
+  when the branches meet).
