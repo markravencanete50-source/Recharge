@@ -334,6 +334,21 @@ Lee: "in the properties remove those location buttons, it should be searchable o
 - Record invoice, "Send by" closed and open (`*-send-by`, `*-send-by-open`);
 - Statement terms with the levy on, the levy date closed and open (`*-levy-from`, `*-levy-from-open`).
 
+## Round 9: E's sweep, R1 and R7
+- R1 (Cleans → Schedule at 1440, the cleaning manager's table, also the Cleans tab in Guest relations):
+  - At 1440 with the sidebar open, the table was 1250 px of fixed columns in a card about 1134 px wide, so it scrolled sideways and "Last update" was cut off.
+  - The sizes are now in `lib/clean-schedule-table.ts`. Status (170) and Submitted forms (210) are fixed. Property grows. Cleaner, Next action and Last update shrink to their minimum, and their text ends in "…" after two lines.
+  - `SheetTable` has an opt-in `fit`: it measures its card and sizes the columns with B's `thinWidths` (`lib/thin-table.ts`), with no sideways scroll. Its other callers are unchanged.
+  - Measured in the demo at 1440: the table runs from 284 to 1420 px, and "Last update" from 1249 to 1419 px.
+- R7: the Cleans day strip (Schedule, and the cleaner's My cleans) draws the chosen day with `selected`, `onSelected` and `selectedBorder`, like the calendar. The cleaner filter chips above it use `pillBox` and `pillInk`.
+- Not merged: E's `331b772` (the CalendarPicker selected tokens). The merge was blocked by this session's permissions. R1 and R7 don't depend on it.
+- Tests: `tests/clean-schedule-table.test.mjs`. `tests/clean-forms.test.mjs` now finds the "Submitted forms" label in the new lib file.
+- Still a solid primary fill on a chosen chip, outside R7, for whoever owns them: the LiveStays day strip, and the chips in TeamFlows, TeamEvents, LivePages, CleanReport, SearchPicker, AccountsFlows, LiveRepairs, LiveFurnishing, LiveOnboarding and LiveTraining.
+
+**Screenshots** (`docs/screenshots/session-a/round9/`), in both themes (`dark-*`, `light-*`), desktop 1440×900 and phone 390×844:
+- `*-schedule`: the manager's Schedule, the table on desktop and the cards on the phone;
+- `*-your-cleans`: the cleaner's day strip, viewing as Ewan Stewart.
+
 
 Apply in filename order, before deploying the Worker (the Worker code is unchanged by this session):
 
