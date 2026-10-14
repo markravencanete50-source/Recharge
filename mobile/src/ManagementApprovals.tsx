@@ -17,7 +17,8 @@ import { ui, type Palette } from "./theme";
 import type { SectionProps } from "./SectionProps";
 import { managementSchema, type Management } from "../../lib/management-live";
 import { canFlag } from "../../lib/management-flags";
-import { policySchema, pounds } from "../../lib/accounts-live";
+import { policySchema } from "../../lib/accounts-live";
+import { repairLimit, repairLimitSummary } from "../../lib/repair-approvals";
 import { hubSchema, type Hub, type HubItem } from "../../lib/workspace-teams-policy";
 import type { PropertyView } from "../../lib/workspace-view";
 import type { TrackerItem } from "../../lib/tracker";
@@ -157,9 +158,9 @@ export function ManagementApprovals({ palette: p, account, properties = NO_PROPE
     [flags, hub, queue, now, owner, admin, account.userId, properties]);
   const waiting = openApprovalCount(items);
 
-  const changeRepairLimit = () => repairPolicy && setAsk({ title: "Management approval for repairs", subtitle: "Repairs costing more than this also need an admin’s approval, after the owner’s", min: 0, confirm: "Save limit",
-    amount: { label: "Limit (leave 0 to switch it off)", initial: repairPolicy.limit == null ? "0" : (repairPolicy.limit / 100).toFixed(2) },
-    build: (_note, minor) => ({ action: "setRepairApprovalLimit", requestId: "", version: repairPolicy.version, managementRepairLimitMinor: minor ? minor : null }) });
+  const changeRepairLimit = () => repairPolicy && setAsk({ title: "Repair approval limit", subtitle: "Repairs under this amount are approved automatically. At or over it, management approve first, then the owner.", min: 0, confirm: "Save limit",
+    amount: { label: "Limit", initial: (repairLimit(repairPolicy.limit) / 100).toFixed(2) },
+    build: (_note, minor) => ({ action: "setRepairApprovalLimit", requestId: "", version: repairPolicy.version, managementRepairLimitMinor: minor ?? null }) });
 
   // Tapping a row opens the sheet that decides it: the existing sheet for the existing kinds.
   function open(row: TrackerItem) {
@@ -205,7 +206,7 @@ export function ManagementApprovals({ palette: p, account, properties = NO_PROPE
         <RefreshButton p={p} loading={loading} onPress={() => void load()} />
         {admin && repairPolicy && <Button label="Change the repair limit" icon="sliders" p={p} onPress={changeRepairLimit} />}
       </View>
-      {admin && repairPolicy && <Text style={[ui.small, { color: p.muted }]}>{repairPolicy.limit == null ? "Repair limit: off. Repairs need only the owner’s approval, above their own limit." : `Repairs above ${pounds(repairPolicy.limit)} need an admin’s approval too, after the owner’s.`}</Text>}
+      {admin && repairPolicy && <Text style={[ui.small, { color: p.muted }]}>{repairLimitSummary(repairPolicy.limit)}</Text>}
 
       <AskManagementSheet p={p} visible={asking} onClose={() => setAsking(false)} onDone={saved(load)} />
       <FlagDecisionSheet p={p} item={source?.kind === "flag" ? detail : null} canDecide={admin} userId={account.userId} onClose={closeDetail} onDone={saved(load)} onOpenItem={openFlagItem} />

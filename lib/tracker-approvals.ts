@@ -129,8 +129,9 @@ function managementSpec(source: Exclude<ApprovalSource, { kind: 'flag' | 'hub' }
       const r = source.repair;
       return { badge: 'Repair quote', tone: r.urgent || r.hazard ? 'bad' : 'wait', propertyId: r.propertyId, propertyName: r.propertyName, address: text(r.propertyName) || 'No property', title: text(r.issue) || text(r.title) || 'Repair over the limit',
         amountMinor: r.estimatedCostMinor, since: r.waitingSince, by: null, automatic: true, action: APPROVAL_DECIDE, actionLabel: 'Decide', next: 'Approve or decline the repair cost', workId: r.workId, version: r.version,
-        details: [{ label: 'Owner', value: r.ownerApprovedAt ? 'Owner approved it' : 'Within the owner’s own limit' }, ...(r.urgent ? [{ label: 'Urgent', value: 'Yes', tone: 'bad' as const }] : []), ...(r.hazard ? [{ label: 'Safety hazard', value: 'Yes', tone: 'bad' as const }] : []),
-          ...(r.limitMinor != null ? [{ label: 'Management limit', value: formatMoney(r.limitMinor) }] : [])] };
+        details: [...(r.quoteSource === 'contractor' ? [{ label: 'Quote', value: 'Contractor estimate' }] : []),
+          { label: 'Owner', value: r.ownerApprovedAt ? 'Owner approved it' : r.ownerNext === false ? 'Within the owner’s own limit' : 'Asked after you approve' }, ...(r.urgent ? [{ label: 'Urgent', value: 'Yes', tone: 'bad' as const }] : []), ...(r.hazard ? [{ label: 'Safety hazard', value: 'Yes', tone: 'bad' as const }] : []),
+          ...(r.limitMinor != null ? [{ label: 'Repair limit', value: formatMoney(r.limitMinor) }] : [])] };
     }
     case 'stalled': {
       const s = source.stalled, ready = !s.canRemindAt || Date.parse(s.canRemindAt) <= ctx.now.getTime();

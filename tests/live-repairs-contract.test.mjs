@@ -66,6 +66,13 @@ test('a repair moves from report to completion with each role acting only where 
   await as(STAYS);
   await operation({ action: 'createOperation', requestId: crypto.randomUUID(), propertyId: property, kind: 'maintenance', data: { issue: 'Kitchen tap leaking under the sink', estimatedCostMinor: poundsToMinor('185'), hazard: false } });
   let [repair] = await repairsFor(property);
+  // At or over the £100 limit: management approve first, then the owner.
+  assert.equal(repair.data.phase, 'management_approval');
+  for (const role of ['stays', 'ready', 'client']) assert.equal(repairStep(role, 'management_approval'), null);
+  await as(ADMIN);
+  [repair] = await repairsFor(property);
+  await step('super_admin', repair, {});
+  [repair] = await repairsFor(property);
   assert.equal(repair.data.phase, 'owner_approval');
   for (const role of ['stays', 'ready', 'admin']) assert.equal(repairStep(role, 'owner_approval'), null);
 

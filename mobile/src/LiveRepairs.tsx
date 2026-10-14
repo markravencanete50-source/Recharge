@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { FlagButton } from "./ManagementFlag";
 import { AirCoverFlag } from "./AirCoverFlag";
-import { View } from "react-native";
+import { Linking, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
@@ -33,6 +33,7 @@ import { canFlagAirCover } from "../../lib/aircover-flag";
 import { PurchaseOrdersList } from "./PurchaseOrdersList";
 import type { SectionProps } from "./SectionProps";
 import { pillBox, pillInk } from "./Pills";
+import { autoApprovalLabel, QUOTE_SOURCE_LABEL, repairWhatsAppLink, type QuoteSource } from "../../lib/repair-approvals";
 
 // Live repairs: the maintenance pipeline from report to completed repair, and
 // Ready's routine visits. Every action here is checked again by the database.
@@ -41,6 +42,7 @@ type Visit = z.infer<typeof scheduleSchema>["work"][number];
 const pounds = (minor: unknown) => typeof minor === "number" ? formatMoney(minor) : "–";
 // A repair reported with no estimate waits in triage; say so rather than showing £0.00.
 const estimateText = (data: Record<string, unknown>) => data.estimatedCostMinor === 0 && data.phase === "triage" ? "Cost not known yet" : `Estimate ${pounds(data.estimatedCostMinor)}`;
+const SOURCE_OPTIONS = (["team", "contractor"] as const).map(value => ({ value, label: QUOTE_SOURCE_LABEL[value] }));
 const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", approveManagement: "Approve the cost (management)", referReady: "Refer to Ready", bookRepair: "Book the repair", completeRepair: "Complete the repair" };
 
 // `sectionProps` (from the Work area) lets Ready also see the purchase orders below the repairs.
@@ -171,7 +173,8 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
 
       {account.role === "ready" && !!sectionProps && account.modules.includes("purchase-order") && <Anchor id="section-purchase-orders"><PurchaseOrdersList {...sectionProps} /></Anchor>}
 
-      <RepairSheet p={p} account={account} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today} onClose={() => setOpenId(null)} onDone={saved(async () => { setOpenId(null); await load(); })} />
+      <RepairSheet p={p} account={account} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today}
+        ownerPhone={open ? sectionProps?.journeys.find(j => j.propertyId === open.propertyId)?.enquiry?.phone ?? null : null} onClose={() => setOpenId(null)} onDone={saved(async () => { setOpenId(null); await load(); })} />
       <ReportSheet p={p} account={account} visible={reporting} properties={properties} onClose={() => setReporting(false)} onDone={saved(async () => { setReporting(false); await load(); })} />
       <PlanSheet p={p} visible={planning} properties={properties} account={account} onClose={() => setPlanning(false)} onDone={saved(async () => { setPlanning(false); await load(); })} />
       <VisitSheet p={p} role={account.role} visit={visit} op={visitOps.find(o => o.workId === visitId)} plans={plans} today={today} onClose={() => setVisitId(null)} onRecord={() => { setRecordingId(visitId); setVisitId(null); }} onDone={saved(async () => { setVisitId(null); await load(); })} />
@@ -204,7 +207,8 @@ function RepairPhotos({ p, repair }: { p: Palette; repair: Operation }) {
   );
 }
 
-function RepairSheet({ p, account, role, repair, propertyName, today, onClose, onDone }: { p: Palette; account: WorkspaceAccount; role: string; repair?: Operation; propertyName: string; today: string; onClose: () => void; onDone: () => Promise<void> }) {
+// ownerPhone: the owner's number from their enquiry, when we hold one, for "Send by WhatsApp".
+function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone, onClose, onDone }: { p: Palette; account: WorkspaceAccount; role: string; repair?: Operation; propertyName: string; today: string; ownerPhone?: string | null; onClose: () => void; onDone: () => Promise<void> }) {
   const phase = String(repair?.data.phase ?? ""), step = repair ? repairStep(role, phase, account.teamOnly) : null;
   // Team beta: Stays or an admin records the owner's answer, with how the owner gave it.
   const forOwner = role !== "client" && phase === "owner_approval";
@@ -222,7 +226,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
   // Closing a repair that is still in triage without a visit: Stays or management write what fixed it.
   const [resolving, setResolving] = useState(false);
   const request = useRequestId(repair ? repair.workId + ":" + repair.version : null);
-  const quoteRequest = useRequestId(repair && quoting ? ["quote", repair.workId, repair.version, fields.quote ?? "", fields.quoteReason ?? ""].join(":") : null);
+  const quoteRequest = useRequestId(repair && quoting ? ["quote", repair.workId, repair.version, fields.quote ?? "", fields.quoteReason ?? "", fields.quoteSource ?? "team"].join(":") : null);
   const resolveRequest = useRequestId(repair && resolving ? ["resolve", repair.workId, repair.version, fields.resolution ?? ""].join(":") : null);
   const declineRequest = useRequestId(repair && declining ? [declining, repair.workId, repair.version, fields.declineReason ?? ""].join(":") : null);
   const set = (k: string) => (v: string) => setFields(f => ({ ...f, [k]: v }));
@@ -248,7 +252,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
     if (step === "completeRepair") {
       const cost = poundsToMinor(f("actualCost"));
       if (f("report").trim().length < 10 || f("guestUpdate").trim().length < 5 || cost === null) return "Add the repair report, the actual cost and the guest update.";
-      if (typeof repair?.data.estimatedCostMinor === "number" && cost > repair.data.estimatedCostMinor) return "The cost is above the approved estimate. Use “Update the quote” first; if it is over the owner’s limit they approve it, then you can complete the repair.";
+      if (typeof repair?.data.estimatedCostMinor === "number" && cost > repair.data.estimatedCostMinor) return "The cost is above the approved estimate. Use “Update the quote” first; it goes for approval if it needs it, then you can complete the repair.";
       return { report: f("report").trim(), actualCostMinor: cost, guestUpdate: f("guestUpdate").trim(), ...(afterIds.length ? { photoIds: afterIds } : {}) };
     }
     return "Nothing to do.";
@@ -269,7 +273,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
     if (quote === null || f("quoteReason").trim().length < 5) { setError("Add the new quote and why it changed."); return; }
     setBusy(true); setError("");
     try {
-      await writeOperation({ action: "updateOperation", requestId: quoteRequest.get(), workId: repair.workId, version: repair.version, step: "reviseQuote", data: { quoteMinor: quote, reason: f("quoteReason").trim() } } as Parameters<typeof writeOperation>[0]);
+      await writeOperation({ action: "updateOperation", requestId: quoteRequest.get(), workId: repair.workId, version: repair.version, step: "reviseQuote", data: { quoteMinor: quote, reason: f("quoteReason").trim(), quoteSource: (f("quoteSource") || "team") as QuoteSource } } as Parameters<typeof writeOperation>[0]);
       quoteRequest.done(); setQuoting(false); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
@@ -307,6 +311,9 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
           {typeof repair.data.repairType === "string" && <Tag label={repairTypeLabel(repair.data.repairType)} tone="plain" p={p} />}
           {repair.data.urgent === true && <Tag label="Urgent" tone="bad" p={p} />}
           {repair.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
+          {repair.data.quoteSource === "contractor" && <Tag label="Contractor estimate" tone="plain" p={p} />}
+          {!!autoApprovalLabel(repair.data) && <Tag label={autoApprovalLabel(repair.data)!} tone="good" p={p} />}
+          {typeof repair.data.managementApprovedAt === "string" && <Tag label="Management approved" tone="good" p={p} />}
           {typeof repair.data.ownerApprovedAt === "string" && <Tag label="Owner approved" tone="good" p={p} />}
           {typeof repair.data.quoteRevisedAt === "string" && <Tag label="Quote updated" tone="wait" p={p} />}
           {typeof repair.data.paidAt === "string" && <Tag label="Paid by Accounts" tone="good" p={p} />}
@@ -340,7 +347,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         )}
         <Detail label="How the owner agreed" value={repair.data.ownerAgreement} p={p} />
         {step === "approveManagement" && !declining && <>
-          <Text style={[ui.small, { color: p.muted }]}>This repair is above the management approval limit.{typeof repair.data.ownerApprovedAt === "string" ? " The owner has approved it." : " It is within the owner’s own limit."}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{repair.data.quoteSource === "contractor" ? "A contractor estimate, which management always approve." : "At or over the repair limit."}{typeof repair.data.ownerApprovedAt === "string" ? " The owner has already approved it." : " Once you approve, the owner is asked, unless they pre-authorised it on their set-up form."}</Text>
           <Field label="Note for the team (optional)" value={f("managementNote")} onChange={set("managementNote")} p={p} multiline />
         </>}
         {(step === "approveBudget" || step === "approveManagement" || closable) && (declining ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }}>
@@ -388,9 +395,11 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         </>}
         {canReviseQuote(role, phase) && (quoting ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }}>
           <Text style={{ color: p.text, fontWeight: "700" }}>Update the quote</Text>
-          <Text style={[ui.small, { color: p.muted }]}>{phase === "owner_declined" ? "The new quote goes back to the owner to approve." : "If the new quote is higher and over the owner’s approval limit, it goes to the owner first (and above the management limit, to management). The repair carries on once approved."}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{phase === "owner_declined" ? "The new quote goes back to the owner to approve (to management first if it needs it)." : "A higher quote under the repair limit is approved automatically. At or over it, management approve first, then the owner. A contractor estimate always goes to management. The repair carries on once approved."}</Text>
           <Field label={`New quote (now ${pounds(repair.data.estimatedCostMinor)})`} value={f("quote")} onChange={set("quote")} p={p} placeholder="£0.00" />
           <Field label="Why it changed" value={f("quoteReason")} onChange={set("quoteReason")} p={p} multiline placeholder="For example, the part needs replacing, not repairing" />
+          <Text style={{ color: p.text, fontWeight: "600" }}>Where the quote came from</Text>
+          <ChoiceField p={p} label="Where the quote came from" value={(f("quoteSource") || "team") as QuoteSource} onChange={set("quoteSource")} options={SOURCE_OPTIONS} />
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <Button label={busy ? "Saving…" : "Save the new quote"} primary p={p} disabled={busy} onPress={() => void reviseQuote()} />
             <Button label="Cancel" p={p} onPress={() => setQuoting(false)} />
@@ -408,6 +417,13 @@ function RepairSheet({ p, account, role, repair, propertyName, today, onClose, o
         {!step && <Notice text={phase === "resolved" ? "This repair was resolved without a visit." : phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will refer this to Ready." : "Nothing for you to do at this stage."} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         {step && !declining && !resolving && <Button label={busy ? "Saving…" : uploading ? "Saving photos…" : forOwner ? "Record the owner's approval" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading} onPress={() => void save()} />}
+        {team && <View style={{ gap: 6 }}>
+          <Button label="Send by WhatsApp" icon="message-circle" p={p} onPress={() => void Linking.openURL(repairWhatsAppLink({
+            propertyName, issue: typeof repair.data.issue === "string" ? repair.data.issue : repair.title, phase, estimateMinor: typeof repair.data.estimatedCostMinor === "number" ? repair.data.estimatedCostMinor : null,
+            quoteSource: repair.data.quoteSource === "contractor" ? "contractor" : "team", autoApproval: autoApprovalLabel(repair.data), repairOn: typeof repair.data.repairOn === "string" ? repair.data.repairOn : null,
+          }, ownerPhone)).catch(() => setError("WhatsApp could not be opened on this device."))} />
+          <Text style={[ui.small, { color: p.muted }]}>{ownerPhone ? "Opens a chat with the owner, with the repair summary ready to send." : "Opens WhatsApp with the repair summary ready. Choose who to send it to."}</Text>
+        </View>}
         {role !== "client" && <FlagButton p={p} role={role} target={{ workId: repair.workId, propertyId: repair.propertyId, title: `Repair at ${propertyName}` }} onDone={() => void onDone()} />}
         {canFlagAirCover(role) && <AirCoverFlag key={repair.workId} p={p} role={role} workId={repair.workId} title={`Repair at ${propertyName}`} />}
         {role !== "client" && <PropertyTeamChatButton palette={p} propertyId={repair.propertyId} workId={repair.workId} />}
@@ -439,6 +455,7 @@ function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: 
   }, [canLink, propertyId]);
   const [issue, setIssue] = useState("");
   const [estimate, setEstimate] = useState("");
+  const [source, setSource] = useState<QuoteSource>("team");
   const [hazard, setHazard] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -447,11 +464,11 @@ function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: 
     const cost = poundsToMinor(estimate);
     if (!propertyId || issue.trim().length < 5 || cost === null) { setError("Choose the property, describe the issue and add an estimate."); return; }
     setBusy(true); setError("");
-    try { await writeOperation({ action: "createOperation", requestId: request.get(), propertyId, kind: "maintenance", data: { issue: issue.trim(), estimatedCostMinor: cost, hazard, repairType: type, urgent: urgent || hazard, ...(reservationId ? { reservationId } : {}) } }); request.done(); setIssue(""); setEstimate(""); setHazard(false); setUrgent(false); setType("other"); await onDone(); }
+    try { await writeOperation({ action: "createOperation", requestId: request.get(), propertyId, kind: "maintenance", data: { issue: issue.trim(), estimatedCostMinor: cost, hazard, repairType: type, urgent: urgent || hazard, ...(reservationId ? { reservationId } : {}), ...(account.role !== "client" && cost > 0 ? { quoteSource: source } : {}) } }); request.done(); setIssue(""); setEstimate(""); setSource("team"); setHazard(false); setUrgent(false); setType("other"); await onDone(); }
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
-    <Sheet palette={p} visible={visible} onClose={onClose} title="Report a repair" subtitle="Above the owner's limit, the owner approves the cost first" icon="hardhat">
+    <Sheet palette={p} visible={visible} onClose={onClose} title="Report a repair" subtitle={account.role === "client" ? "Recharge check the cost with you when it needs your approval" : "Under the repair limit it is approved automatically. At or over it, management approve first, then the owner."} icon="hardhat">
       <PropertyChips p={p} properties={properties} value={propertyId} onChange={setPropertyId} />
       <Text style={{ color: p.text, fontWeight: "700" }}>Type of repair</Text>
       <ChoiceField p={p} label="Type of repair" value={type} onChange={setType} options={(Object.keys(REPAIR_GUIDES) as RepairType[]).map(t => ({ value: t, label: REPAIR_GUIDES[t].label }))} />
@@ -461,6 +478,11 @@ function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: 
         <SearchPicker p={p} options={stays.map(s => ({ id: s.id, label: s.dates + (s.when === "now" ? " · staying now" : "") }))} value={reservationId} onChange={setReservationId} clearable placeholder="Search the stays by date" nouns="stays" />
       </>}
       <Field label="Estimated cost" value={estimate} onChange={setEstimate} p={p} placeholder="£0.00" />
+      {account.role !== "client" && !!poundsToMinor(estimate) && <>
+        <Text style={{ color: p.text, fontWeight: "600" }}>Where the estimate came from</Text>
+        <ChoiceField p={p} label="Where the estimate came from" value={source} onChange={setSource} options={SOURCE_OPTIONS} />
+        {source === "contractor" && <Text style={[ui.small, { color: p.muted }]}>Management approve every contractor estimate, whatever the amount.</Text>}
+      </>}
       <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: hazard }} onPress={() => setHazard(h => !h)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: hazard ? p.dangerWash : p.elevated }]}>
         <Feather name={hazard ? "check-square" : "square"} size={20} color={hazard ? p.danger : p.muted} />
         <Text style={{ color: p.text, flex: 1 }}>This is a safety hazard</Text>
