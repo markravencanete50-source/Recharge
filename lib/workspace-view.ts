@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { estimateDeliverySchema } from './estimate-link';
 import { MAX_COMPARABLES } from './journey-policy';
+import { agreementDraftSchema, agreementTemplateRefSchema } from './agreement-template';
 // The property read returns table rows, so its last change arrives as updated_at; it is carried as updatedAt.
 const propertyRowSchema=z.object({id:z.string().uuid(),name:z.string(),address:z.string(),region:z.string(),status:z.string(),version:z.number(),bedrooms:z.number(),latitude:z.number().nullish(),longitude:z.number().nullish(),updated_at:z.string().optional(),updatedAt:z.string().optional()});
 export const propertyViewSchema=propertyRowSchema.transform(({updated_at,updatedAt,...p}):Omit<z.infer<typeof propertyRowSchema>,'updated_at'>=>{const at=updatedAt??updated_at;return at===undefined?p:{...p,updatedAt:at};});
@@ -9,7 +10,10 @@ export const journeyViewSchema=z.object({propertyId:z.string().uuid(),clientId:z
  propertyType:z.string().nullable().optional(),bathrooms:z.number().nullable().optional(),
  enquiry:z.object({contactName:z.string().optional(),companyName:z.string().optional(),email:z.string().optional(),phone:z.string().optional(),existingClient:z.boolean().optional(),wcs:z.number().optional(),parking:z.string().optional(),garden:z.string().optional(),photoLink:z.string().optional(),notes:z.string().optional()}).optional(),ownerAccount:z.boolean().optional(),invoiceOutsideAt:z.string().nullable().optional(),invoiceOutsideNote:z.string().optional(),
  // The estimate emailed with a private link (migration 20261019520000): sent, sending or ready; null with an owner account.
- estimateDelivery:estimateDeliverySchema.nullable().optional()});
+ estimateDelivery:estimateDeliverySchema.nullable().optional(),
+ // The agreement made from an uploaded contract (migration 20261020870000): its format and contract, and for the team at
+ // the agreement step, the agreement the contract in use would make.
+ agreementFormat:z.enum(['text','outline']).optional(),agreementTemplate:agreementTemplateRefSchema.nullable().optional(),agreementDraft:agreementDraftSchema.nullable().optional()});
 export const operationViewSchema=z.object({workId:z.string().uuid(),propertyId:z.string().uuid(),moduleId:z.string(),title:z.string(),kind:z.string(),status:z.string(),version:z.number(),assigneeId:z.string().nullable(),dueOn:z.string().nullable().optional(),dueTime:z.string().nullable().optional(),endTime:z.string().nullable().optional(),createdAt:z.string().optional(),updatedAt:z.string().optional(),updatedBy:z.string().nullable().optional(),updatedEvent:z.string().nullable().optional(),lastActivityAt:z.string().nullable().optional(),data:z.record(z.unknown())});
 export const invoiceViewSchema=z.object({id:z.string().uuid(),property_id:z.string().uuid(),work_id:z.string().uuid().nullable().optional(),reference:z.string(),amount_minor:z.number(),currency:z.string(),status:z.string(),version:z.number()});
 export const reportViewSchema=z.object({title:z.string(),description:z.string(),propertyLabel:z.string(),propertyCount:z.number(),propertyAvailable:z.boolean(),sources:z.array(z.object({key:z.enum(['workflows','repairs','cleans','onboarding','mail']),name:z.string(),available:z.boolean(),records:z.array(z.object({date:z.string(),status:z.enum(['waiting','progress','complete']),count:z.number().optional()}))}))});

@@ -26,7 +26,8 @@ import { EstimateDeliveryCard } from "./EstimateDelivery";
 import { ScotlandMap } from "./ScotlandMap";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
 import { readEstimate } from "../../lib/estimate-projection";
-import { agreementDocument, agreementFileName } from "../../lib/agreement-copy";
+import { agreementDocument, agreementFileName, agreementReadable } from "../../lib/agreement-copy";
+import { agreementTemplateForms, journeyAgreement } from "../../lib/agreement-template";
 import type { BudgetItem } from "../../lib/accounts-work";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
@@ -45,7 +46,7 @@ import { StateGraphic } from "./StateGraphic";
 import { Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
 import { departmentColor, primaryFill, space, ui, web, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
-import { WorkspaceApiError, readOlderNotices, readWorkItem, workspaceRequest, writeControls } from "./backend/client";
+import { WorkspaceApiError, agreementFileLink, readOlderNotices, readWorkItem, workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
 import { weeklyReportDocument, weeklyReportFileName } from "../../lib/weekly-report";
 import { isWorkspaceAdmin } from "../../lib/modules";
@@ -297,18 +298,25 @@ function localEventForm(propertyId: string): WorkflowForm {
   };
 }
 
-// The signed agreement, kept as a page the owner and the team can open, print or save.
+// The agreement, kept as a page the owner and the team can open, print or save as a PDF: once published, and once
+// signed with who accepted it. An agreement made from a PDF contract (migration 20261020870000) also downloads the PDF.
 function AgreementCopy({ j, p, propertyName }: { j: JourneyView; p: Palette; propertyName: string }) {
   const [note, setNote] = useState("");
-  if (!j.signedName) return null;
+  const a = journeyAgreement(j), pdf = a.agreementTemplate?.kind === "pdf" ? a.agreementTemplate : null;
+  if (!j.agreement) return null;
   const save = async () => {
     try {
-      await exportReport(agreementDocument({ propertyName, agreement: j.agreement, revision: j.signedRevision ?? j.agreementRevision, signedName: j.signedName!, signedAt: j.signedAt ?? null }), agreementFileName(propertyName), { mime: "text/html", uti: "public.html" });
-      setNote(Platform.OS === "web" ? "Saved. Open it to read, print or save as a PDF." : "Ready to save or share.");
+      await exportReport(agreementDocument({ propertyName, agreement: j.agreement, revision: j.signedName ? j.signedRevision ?? j.agreementRevision : j.agreementRevision, signedName: j.signedName ?? null, signedAt: j.signedAt ?? null,
+        format: a.agreementFormat ?? "text", attachment: pdf ? { fileName: pdf.fileName, sha256: pdf.sha256 } : null }), agreementFileName(propertyName), { mime: "text/html", uti: "public.html" });
+      setNote(Platform.OS === "web" ? "Saved. Open it and choose Print or save as PDF." : "Ready to save or share. Open it and choose Print or save as PDF.");
     } catch (e) { setNote(message(e)); }
   };
+  const contract = async () => {
+    try { await Linking.openURL((await agreementFileLink(pdf!.id, j.propertyId)).url); setNote(""); } catch (e) { setNote(message(e)); }
+  };
   return <View style={{ gap: 6 }}>
-    <SoftButton label="Download a copy of the signed agreement" icon="download" palette={p} onPress={() => void save()} />
+    <SoftButton label={j.signedName ? "Download a copy of the signed agreement" : "Download the agreement"} icon="download" palette={p} onPress={() => void save()} />
+    {!!pdf && <SoftButton label="Download the contract (PDF)" icon="download" palette={p} onPress={() => void contract()} />}
     {!!note && <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>{note}</Text>}
   </View>;
 }
@@ -338,11 +346,12 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: Jour
       {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
       {j.estimate && account.role === "client" && ["estimate", "reviewing"].includes(j.stage) && <EstimateGuide palette={p} />}
       {!!comparables.length && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Comparable properties</Text>{comparables.map(c => <SoftButton key={c.url} label={c.name + " · " + money(c.adrMinor) + " a night"} icon="external-link" palette={p} onPress={() => void Linking.openURL(c.url).catch(() => setLinkError("The comparable link could not be opened."))} />)}{!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}</View>}
-      {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{j.agreement}</Text>{j.signedName && <Text style={{ color: p.success }}>Accepted by {j.signedName}{j.signedAt ? " on " + new Date(j.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }) : ""}.</Text>}<AgreementCopy j={j} p={p} propertyName={propertyName} /></View>}
+      {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{agreementReadable(j.agreement, journeyAgreement(j).agreementFormat)}</Text>{j.signedName && <Text style={{ color: p.success }}>Accepted by {j.signedName}{j.signedAt ? " on " + new Date(j.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }) : ""}.</Text>}<AgreementCopy j={j} p={p} propertyName={propertyName} /></View>}
       {j.inspectionReport && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Inspection findings</Text><InspectionResult palette={p} j={j} /><Text selectable style={[ui.body, { color: p.text }]}>{j.inspectionReport}</Text></View>}
       <JourneyQuestions palette={p} j={j} owner={account.role === "client"} />
       <JourneyPhotos j={j} p={p} account={account} />
-      {journeyForms(account, j).map(f => <SoftButton key={f.key} label={f.title} icon={f.key === "askQuestion" ? "plus" : "arrow-right"} palette={p} onPress={() => onForm(f)} />)}
+      {account.role !== "client" && !!journeyAgreement(j).agreementDraft?.missing.length && j.stage === "agreement" && !j.signedName && <Text style={[ui.small, { color: p.muted }]}>The contract in use leaves these blank for this property: {journeyAgreement(j).agreementDraft!.missing.join(", ")}.</Text>}
+      {[...agreementTemplateForms(account, j), ...journeyForms(account, j)].map(f => <SoftButton key={f.key} label={f.title} icon={f.key === "askQuestion" ? "plus" : "arrow-right"} palette={p} onPress={() => onForm(f)} />)}
       {!!reportFrom && <Text style={[ui.small, { color: p.muted }]}>Report from {dayLabel(reportFrom)}</Text>}
       {!!linked.length && <Text style={[ui.small, { color: p.muted }]}>{linked.length} connected team {linked.length === 1 ? "handover" : "handovers"}</Text>}
     </View>
