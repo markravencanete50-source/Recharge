@@ -221,7 +221,7 @@ export function useChatUploads(conversationId: string) {
 export function PendingFiles({ p, items, onRemove, onRetry }: { p: Palette; items: PendingFile[]; onRemove: (key: string) => void; onRetry: (key: string) => void }) {
   if (!items.length) return null;
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
       {items.map(x => (
         <View key={x.key} style={{ width: 76, height: 76, borderRadius: 14, overflow: "hidden", backgroundColor: p.wash, borderWidth: 1, borderColor: x.status === "failed" ? p.danger : p.border }}>
           {x.kind === "image" ? <Image source={{ uri: x.uri }} style={{ width: 76, height: 76 }} resizeMode="cover" accessibilityLabel={x.name} />
