@@ -15,7 +15,7 @@ import { TrackerDetailSheet, TrackerList } from "./Tracker";
 import { CleanCostReviewSheet } from "./CleanCostReview";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { departmentColor, ui, type Palette } from "./theme";
-import { Button, Field, IconChip, london, message, Loading, Notice, RefreshButton, Section, Tag, useRequestId, type IconName, type Tone } from "./LiveKit";
+import { Button, Field, IconChip, LIST_PREVIEW, london, message, Loading, Notice, RefreshButton, Section, ShowMore, Tag, useRequestId, type IconName, type Tone } from "./LiveKit";
 import { readFinance, readOperations, readTeams, writeFinance, writeOperation, WorkspaceApiError } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { cleanerInvoicesReportSchema, cleansToReviewReportSchema, EVIDENCE_KINDS, EXPENSE_CATEGORIES, expenseMoves, expenseSchema, isFinanceRole, jobsSchema, overviewSchema, pounds, type CleanCostReview, type Expense, type Job } from "../../lib/accounts-live";
@@ -378,7 +378,7 @@ function CleansToReview({ p, properties, tick }: { p: Palette; properties: reado
   const [open, setOpen] = useState<CleanCostReview | null>(null), [showReviewed, setShowReviewed] = useState(false);
   const { toReview, reviewed } = useMemo(() => splitCleansToReview(report.data?.cleans ?? []), [report.data]);
   const addressFor = useCallback((c: CleanCostReview) => addressOf(properties.find(x => x.id === c.propertyId)) || c.propertyName, [properties]);
-  const search = useListSearch(toReview, c => [addressFor(c), c.cleanerName ?? "", c.propertyName]);
+  const search = useListSearch(toReview, c => [addressFor(c), c.cleanerName ?? "", c.propertyName], LIST_PREVIEW);
   const card = (rows: CleanCostReview[]) => (
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
       {rows.map((c, n) => <CleanRow key={c.workId} p={p} clean={c} address={addressFor(c)} first={!n} onPress={() => setOpen(c)} />)}
@@ -392,6 +392,7 @@ function CleansToReview({ p, properties, tick }: { p: Palette; properties: reado
       {!report.loading && !report.error && !toReview.length && <Notice text="No cleans are waiting for a cost review." p={p} />}
       {!!toReview.length && <ListSearchBox p={p} search={search} nouns="cleans" />}
       {!!search.shown.length && card([...search.shown])}
+      <ShowMore p={p} hidden={search.hidden} onPress={search.showAll} noun="more cleans" />
       {!!reviewed.length && <View style={{ gap: 10 }}>
         <MotionPress accessibilityRole="button" accessibilityState={{ expanded: showReviewed }} accessibilityLabel={`Reviewed, ${reviewed.length}`} onPress={() => setShowReviewed(v => !v)} style={[ui.row, { gap: 6, minHeight: 44, alignSelf: "flex-start" }]}>
           <Text style={{ color: p.muted, fontSize: 13, fontWeight: "600" }}>Reviewed · {reviewed.length}</Text>

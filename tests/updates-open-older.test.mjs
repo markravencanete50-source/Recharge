@@ -25,9 +25,9 @@ test('pages of updates join newest first, each once, and the next page starts fr
   assert.deepEqual([d.mayHaveOlder(50), d.mayHaveOlder(49), d.mayHaveOlder(0)], [true, false, false]);
 });
 
-test('the single-item read: the item, or nothing (a demo list without it, another item, or junk)', () => {
+test('the single-item read: the item, or nothing (a list without it, another item, or junk)', () => {
   assert.equal(d.workItemFrom(item(), W).workId, W);
-  assert.equal(d.workItemFrom([item('33333333-3333-4333-8333-333333333333'), item()], W).workId, W, 'picked out of a demo list');
+  assert.equal(d.workItemFrom([item('33333333-3333-4333-8333-333333333333'), item()], W).workId, W, 'picked out of a list');
   assert.equal(d.workItemFrom([item('33333333-3333-4333-8333-333333333333')], W), null);
   assert.equal(d.workItemFrom(item('33333333-3333-4333-8333-333333333333'), W), null, 'never a different item');
   assert.equal(d.workItemFrom({ error: 'Record not found' }, W), null);

@@ -124,8 +124,11 @@ export function orderWorkViews<T extends string>(views: readonly T[], panel: Rol
   return views.map((v, i) => ({ v, i, r: rank(v) })).sort((a, b) => a.r - b.r || a.i - b.i).map(x => x.v);
 }
 
-// The phone's More list: every section in order with the links the bar does not already show.
+// The phone's More list: every section in order with the links the bar does not already show. Management centre
+// stays listed with the other departments, in the desktop sidebar's order, even when the bar's Work button opens
+// it (Lee approved: it was missing from the admins' phone menu).
+export const MENU_KEEPS = 'area:management';
 export function phoneMoreGroups(panel: RolePanel, bar: readonly { value: string }[]): PanelGroup[] {
-  const onBar = new Set(bar.map(b => barLinkKey(b.value, panel)).filter((k): k is string => !!k));
+  const onBar = new Set(bar.map(b => barLinkKey(b.value, panel)).filter((k): k is string => !!k && k !== MENU_KEEPS));
   return panel.groups.map(g => ({ ...g, links: g.links.filter((l: PanelLink) => !onBar.has(l.key)) })).filter(g => g.links.length);
 }

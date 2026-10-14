@@ -40,7 +40,7 @@ import { LiveAccounts } from "./LiveAccounts";
 import { LiveManagement } from "./LiveManagement";
 import { GuestRelations } from "./GuestRelations";
 import { ClientRelations } from "./ClientRelations";
-import { TodoList, TodoSummary } from "./TodoList";
+import { TodoList } from "./TodoList";
 import { ManagementApprovals } from "./ManagementApprovals";
 import { FlagButton, FlagRoleContext } from "./ManagementFlag";
 import type { SectionProps } from "./SectionProps";
@@ -89,11 +89,8 @@ import { FurnishingSheet } from "./LiveFurnishing";
 import { buildSearchIndex, type SearchEntry } from "../../lib/workspace-search";
 import { toolsFor, type Tool } from "../../lib/tool-directory";
 import { canViewAs, previewAccount, previewKeeps, readSavedView, viewAsKey, viewAsLabel, viewAsName, viewOnlyMessage, VIEW_AS_ENDED, type ViewAs } from "../../lib/view-as";
-import { demoInteractive, loadDemoData, setDemo, setViewOnly, startViewAs, stopViewAs } from "./backend/client";
-import { onDemoChanged } from "./demo/notes";
+import { setViewOnly, startViewAs, stopViewAs } from "./backend/client";
 import { ViewAsBanner, ViewAsSheet } from "./ViewAs";
-import { DemoBanner, DemoSwitchRow, DemoSwitching, ModeSwitch } from "./DemoMode";
-import { DEMO_SAVE_MESSAGE, type DemoData, type DemoRole } from "../../lib/demo-data";
 import { STAFF_ROLES } from "./LiveOnboarding";
 import { onboardingSchema } from "../../lib/management-live";
 
@@ -142,7 +139,7 @@ function IconButton({ label, icon, onPress, palette: p }: { label: string; icon:
   );
 }
 
-function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p, theme, setTheme, onSignedOut, onDeleted, onAccount, welcomeOnOpen, demo, demoBusy, demoNote, onDemo }: { account: WorkspaceAccount; realAccount: WorkspaceAccount; viewAs: ViewAs | null; onViewAs: (view: ViewAs | null) => Promise<void>; notice: string; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onDeleted: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean; demo: boolean; demoBusy: boolean; demoNote: string; onDemo: (on: boolean) => void }) {
+function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p, theme, setTheme, onSignedOut, onDeleted, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; realAccount: WorkspaceAccount; viewAs: ViewAs | null; onViewAs: (view: ViewAs | null) => Promise<void>; notice: string; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onDeleted: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
   // On narrow phones Refresh moves into Profile to make room: under 360px wide, and under 400px for a super admin, whose
@@ -204,8 +201,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [anchors] = useState(() => new Map<string, View>());
   const onScrolling = (y: number) => setScrolled(y > 12);
   const profile: Profile = { displayName: account.fullName || account.email || "Your profile", avatar: account.avatar };
-  // Who is online in Messages: this app checks in every minute while it is open (not in the demo or while viewing as someone).
-  usePresenceHeartbeat(!demo && !viewAs);
+  // Who is online in Messages: this app checks in every minute while it is open (not while viewing as someone).
+  usePresenceHeartbeat(!viewAs);
   const roleLabel = readableStage(account.role);
 
   useEffect(() => {
@@ -271,7 +268,6 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // The menu order: your own role's (as the person viewed, while viewing as someone), or for a role preview,
   // that role's from the super admin's list of every role. A failed read keeps the order already shown.
   const loadMenuLayout = useCallback(async () => {
-    if (demo) return;
     try {
       if (rolePreview) {
         const all = z.array(storedMenuLayoutSchema).parse((await readTeams({ section: "menuLayouts" })).data);
@@ -281,7 +277,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
         if (own && typeof own.role === "string") setMenuState({ role: own.role, layout: parseMenuLayout(own) });
       }
     } catch { /* the default order, or the one already shown */ }
-  }, [demo, rolePreview]);
+  }, [rolePreview]);
   // A save in the Menu order editor shows here at once when it is this role's.
   useEffect(() => onMenuLayoutSaved((role, layout) => { if (role === account.role) setMenuState({ role, layout }); }), [account.role]);
   const refresh = useCallback(async (quiet = false) => {
@@ -368,10 +364,6 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   }, [refresh]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void loadReport(period); }); return () => { active = false; }; }, [loadReport, period]);
   const refreshAll = () => { void refresh(); void loadReport(period); void loadUnread(); void loadWaiting(); };
-  // The interactive demo: screens reload straight after Reset demo and the automatic jobs.
-  const refreshAllRef = useRef(refreshAll);
-  useEffect(() => { refreshAllRef.current = refreshAll; });
-  useEffect(() => onDemoChanged(() => refreshAllRef.current()), []);
 
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
@@ -396,7 +388,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // Search and Favorites: one list of everything this person can open, from what is already loaded.
   // A role preview has nobody's favorites (not the super admin's own); a person view shows theirs.
   // Every role keeps Favorites, owners too (round 6).
-  const favorites = useFavoritesStore(!(viewAs && !viewAs.person), demo && !demoInteractive() ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
+  const favorites = useFavoritesStore(!(viewAs && !viewAs.person), viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
   // Viewing as a team member who hasn't finished their start-up checklist: say why their tools are empty.
   const [viewNote, setViewNote] = useState("");
   useEffect(() => {
@@ -500,7 +492,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     else if (t.kind === "tab") setPanelPick({ key: link.key, tab: t.tab, view: "" });
   };
   const panelSelected = panelPick && panelPick.tab === tab && (tab !== "work" || panelPick.view === currentView) ? panelPick.key : tab === "work" ? "area:" + currentView : "page:" + tab;
-  const panelViewing = demo ? { name: viewAs?.person ? `Demo · ${viewAs.person.fullName}` : "Demo mode", detail: demoInteractive() ? "A sample business in this browser. Try anything." : "A sample business. Nothing you do here is saved." } : viewAs ? viewAs.person
+  const panelViewing = viewAs ? viewAs.person
     ? { name: `Viewing as ${viewAs.person.fullName}`, detail: `Exactly what this ${viewAsLabel(viewAs.role).toLowerCase()} sees. Nothing can be changed.` }
     : { name: `${viewAsLabel(viewAs.role)} preview`, detail: `The ${viewAsLabel(viewAs.role)} menus and tools only. Nothing can be changed.` } : null;
   // Cards inside a page (Stays' routine) open another place, or scroll to a section on the same page.
@@ -591,7 +583,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     </>
   );
   const page = tab === "home"
-    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={section => (section === "activity" ? navigate(section) : setTab(section))} onTool={openTool} favoriteEntries={entries} onOpenEntry={openEntry} tasks={team ? <TodoSummary {...sectionProps} onOpenAll={() => navigate("todo")} /> : undefined} />
+    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={section => (section === "activity" ? navigate(section) : setTab(section))} onTool={openTool} favoriteEntries={entries} onOpenEntry={openEntry} />
     : tab === "todo" ? <TodoList {...sectionProps} />
     : tab === "decisions" ? <ManagementApprovals palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />
     : tab === "calendar" ? <LiveCalendar palette={p} account={account} work={work} desktop={desktop} properties={properties} onOpenWork={setOpenWork} onOpenView={openView} />
@@ -624,7 +616,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <FavoritesContext.Provider value={favorites}><FlagRoleContext.Provider value={account.role}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
-        {desktop && !sidebarHidden && <RoleNavigation panel={panel} selected={panelSelected} palette={p} onOpen={openPanel} badges={{ "page:inbox": messagesBadge }} viewing={panelViewing} onBack={demo ? () => (viewAs ? void onViewAs(null) : onDemo(false)) : viewAs ? () => void onViewAs(null) : undefined} backLabel={demo && !viewAs ? "Switch to Live" : undefined} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} me={{ name: profile.displayName, userId: account.userId, photo: account.photo }} />}
+        {desktop && !sidebarHidden && <RoleNavigation panel={panel} selected={panelSelected} palette={p} onOpen={openPanel} badges={{ "page:inbox": messagesBadge }} viewing={panelViewing} onBack={viewAs ? () => void onViewAs(null) : undefined} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} me={{ name: profile.displayName, userId: account.userId, photo: account.photo }} />}
         {desktop && sidebarHidden && <View style={{ width: 64, backgroundColor: p.isDark ? p.surface : p.background, borderRightWidth: 1, borderColor: p.border }}><View style={{ height: 81, alignItems: "center", justifyContent: "center", backgroundColor: p.header }}><IconButton label="Show left panel" icon="chevrons-right" palette={header} onPress={() => setSidebarHidden(false)} /></View></View>}
         <View {...(Platform.OS === "web" ? { dataSet: { canvas: "" } } : {})} style={[ui.fill, { minWidth: 0 }]}>
           {offline && <View accessibilityRole="alert" style={{ backgroundColor: p.cautionWash, padding: 12 }}><Text style={[ui.small, { color: p.text }]}>You are offline. Photos are saved on this device; other changes will fail until you reconnect.</Text></View>}
@@ -639,7 +631,6 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
               <View style={[ui.row, { gap: 8 }]}>
                 {!desktop && <IconButton label="Menu" icon="menu" palette={header} onPress={() => setPhoneMenu(true)} />}
                 {!desktop && team && inHeader("search") && <IconButton label="Search" icon="search" palette={header} onPress={() => setSearchOpen(true)} />}
-                {canViewAs(realAccount) && width >= 900 && <ModeSwitch palette={p} demo={demo} busy={demoBusy} onChange={onDemo} />}
                 {canViewAs(realAccount) && inHeader("viewAs") && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
                 <View>
                   <IconButton label={bell.label} icon="bell" palette={header} onPress={() => navigate(bell.section)} />
@@ -661,10 +652,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           </View>
           <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} refreshControl={desktop ? undefined : <RefreshControl refreshing={pulling} onRefresh={() => void pullToRefresh()} tintColor={p.primary} colors={[p.primary]} />} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
-              {demo ? <DemoBanner palette={p} viewing={viewAs?.person ? `${viewAs.person.fullName} (${viewAsLabel(viewAs.role)})` : null} onViewAs={() => setViewAsOpen(true)} onLive={() => onDemo(false)} />
-                : !!viewAs && <ViewAsBanner palette={p} view={viewAs} note={viewNote} onChange={() => setViewAsOpen(true)} onBack={() => void onViewAs(null)} />}
+              {!!viewAs && <ViewAsBanner palette={p} view={viewAs} note={viewNote} onChange={() => setViewAsOpen(true)} onBack={() => void onViewAs(null)} />}
               {!!accessNote && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderLeftWidth: 3, borderLeftColor: p.primary }]}><Feather name="shield" size={16} color={p.primary} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{accessNote}</Text><MotionPress accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setAccessNote("")} style={{ minHeight: 36, minWidth: 36, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={p.muted} /></MotionPress></View>}
-              {team && !demo && !viewAs && <NotificationsPrompt p={p} />}
+              {team && !viewAs && <NotificationsPrompt p={p} />}
               <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}><WorkJumpContext.Provider value={jump}><OwnerActions.Provider value={ownerActions}>{animatedPage}</OwnerActions.Provider></WorkJumpContext.Provider></WorkFocusContext.Provider></AnchorRegistry.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
             </Animated.View></View>
@@ -745,7 +735,6 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
             </View>
           </View>
         </View>
-        {canViewAs(realAccount) && <DemoSwitchRow palette={p} demo={demo} busy={demoBusy} note={demoNote} onChange={on => { setSettings(false); onDemo(on); }} />}
         {canViewAs(realAccount) && <SoftButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}: change` : "View the app as someone else"} icon="arrow-right" palette={p} onPress={() => { setSettings(false); setViewAsOpen(true); }} />}
         {!inHeader("refresh") && <SoftButton label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" palette={p} onPress={() => { setSettings(false); refreshAll(); }} />}
         <SoftButton label="Blocked people" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setBlockedOpen(true); }} />
@@ -790,7 +779,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <SearchPanel visible={searchOpen} onClose={() => setSearchOpen(false)} palette={p} entries={entries} onOpen={openEntry} />
       <TrackerSheet palette={p} tool={tracker} properties={properties} onClose={() => setTracker(null)} />
       <FurnishingSheet palette={p} visible={calculator} onClose={() => setCalculator(false)} />
-      {canViewAs(realAccount) && <ViewAsSheet palette={p} visible={viewAsOpen} current={viewAs} onClose={() => setViewAsOpen(false)} onChoose={onViewAs} demo={demo} />}
+      {canViewAs(realAccount) && <ViewAsSheet palette={p} visible={viewAsOpen} current={viewAs} onClose={() => setViewAsOpen(false)} onChoose={onViewAs} />}
       <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
       {welcome === "splash" && <RechargeSplash palette={p} onDone={() => setWelcome("greeting")} />}
       </OpenMessagesContext.Provider></CelebrateProvider></FlagRoleContext.Provider></FavoritesContext.Provider>
@@ -822,55 +811,9 @@ function Screen() {
   // starts a recorded view on the server, which answers with the account the app then shows.
   const [viewAs, setViewAsState] = useState<ViewAs | null>(() => { try { return readSavedView(globalThis.sessionStorage?.getItem("rc-view-as")); } catch { return null; } });
   const [person, setPerson] = useState<WorkspaceAccount | null>(null), [viewNotice, setViewNotice] = useState("");
-  // Demo mode (lib/demo-data.ts), super admins only: the recorded sample business in place of the
-  // real records, as its super admin or, through View as, as one of its people. Kept for this tab.
-  const [demo, setDemoState] = useState<{ data: DemoData; role: DemoRole } | null>(null);
-  const [demoBusy, setDemoBusy] = useState<"on" | "off" | null>(null), [demoNote, setDemoNote] = useState("");
-  const demoAccount = demo ? demo.data.personas[demo.role]?.account ?? null : null;
   const viewing = account && canViewAs(account) ? viewAs : null;
-  const shown = useMemo(() => demoAccount ?? (!account || !viewing ? account : viewing.person ? (person?.userId === viewing.person.userId ? person : null) : previewAccount(account, viewing.role)), [demoAccount, account, viewing, person]);
-  const switchDemo = useCallback(async (on: boolean) => {
-    setDemoNote("");
-    setDemoBusy(on ? "on" : "off");
-    // A moment for the switch to show, so the change of data reads as one deliberate step.
-    const pause = new Promise(resolve => setTimeout(resolve, 650));
-    try {
-      if (!on) {
-        await pause;
-        setDemo(null); setDemoState(null); setViewAsState(null); setPerson(null); setViewOnly("");
-        try { globalThis.sessionStorage?.removeItem("rc-demo"); globalThis.sessionStorage?.removeItem("rc-view-as"); } catch { /* storage unavailable */ }
-        router.setParams({ section: "home" });
-        return;
-      }
-      // A view of a real person ends first: the demo has its own people.
-      if (viewAs?.person) void stopViewAs().catch(() => undefined);
-      const [data] = await Promise.all([loadDemoData(), pause]);
-      const next = { data, role: "super_admin" as const };
-      setViewOnly(""); setViewAsState(null); setPerson(null); setWelcome(false);
-      setDemo(next); setDemoState(next);
-      try { globalThis.sessionStorage?.setItem("rc-demo", "on"); globalThis.sessionStorage?.removeItem("rc-view-as"); } catch { /* storage unavailable */ }
-      router.setParams({ section: "home" });
-    } catch (e) { setDemoNote(message(e)); } finally { setDemoBusy(null); }
-  }, [viewAs]);
-  // After a refresh, a tab that was in demo mode opens the demo again.
-  const demoResumed = useRef(false);
-  useEffect(() => {
-    if (demoResumed.current || !account || !canViewAs(account)) return;
-    demoResumed.current = true;
-    let saved = false;
-    try { saved = globalThis.sessionStorage?.getItem("rc-demo") === "on"; } catch { saved = false; }
-    if (saved) queueMicrotask(() => void switchDemo(true));
-  }, [account, switchDemo]);
+  const shown = useMemo(() => !account || !viewing ? account : viewing.person ? (person?.userId === viewing.person.userId ? person : null) : previewAccount(account, viewing.role), [account, viewing, person]);
   const changeView = useCallback(async (next: ViewAs | null, quiet = false) => {
-    // In the demo, viewing as someone shows that sample person's recorded screens; nothing is sent.
-    if (demo) {
-      const role = (next?.role ?? "super_admin") as DemoRole;
-      if (!demo.data.personas[role]) throw new WorkspaceApiError("That person isn't in the demo business.", 404);
-      const moved = { ...demo, role };
-      setDemo(moved); setDemoState(moved); setViewAsState(next);
-      if (!quiet) { setWelcome(false); router.setParams({ section: "home" }); }
-      return;
-    }
     // Nothing may be saved from the moment a view starts; the start itself is sent as the super admin.
     const shownNext = next?.person ? await startViewAs(next.person.userId) : null;
     if (viewAs?.person && !next?.person) void stopViewAs().catch(() => undefined);
@@ -880,7 +823,7 @@ function Screen() {
     setPerson(shownNext); setViewNotice("");
     if (!quiet) { setWelcome(false); router.setParams({ section: "home" }); }
     setViewAsState(next);
-  }, [viewAs, demo]);
+  }, [viewAs]);
   // After a refresh, a person view picks up again (and is recorded again); if it can't, back to your own view.
   const resumed = useRef(false);
   useEffect(() => {
@@ -888,7 +831,7 @@ function Screen() {
     resumed.current = true;
     changeView(viewAs, true).catch(() => { setViewOnly(""); setViewAsState(null); try { globalThis.sessionStorage?.removeItem("rc-view-as"); } catch { /* storage unavailable */ } });
   }, [account, viewAs, changeView]);
-  const signedOut = useCallback(() => { setViewOnly(""); setDemo(null); setDemoState(null); try { globalThis.sessionStorage?.removeItem("rc-demo"); } catch { /* storage unavailable */ } setAccount(null); }, []);
+  const signedOut = useCallback(() => { setViewOnly(""); setAccount(null); }, []);
   // After deleting their account the person lands on sign-in with a confirmation.
   const deleted = useCallback(() => { setNotice(ACCOUNT_DELETED); setAccount(null); }, []);
   if (checking) return <View style={[ui.fill, { backgroundColor: p.header, alignItems: "center", justifyContent: "center", gap: 20 }]}><CompanyLogo palette={headerPalette(p)} width={180} /><ActivityIndicator accessibilityLabel="Restoring your session" color={p.headerText} /></View>;
@@ -898,10 +841,8 @@ function Screen() {
   // New team members sign their contract and finish required training first.
   return (
     <OnboardingGate key={account.userId} account={account} palette={p} onSignOut={() => { void unlinkNotifications().then(() => signOut()).catch(() => undefined).finally(() => setAccount(null)); }}>
-      {shown ? <Workspace key={(demo ? "demo:" + demo.role + ":" : "") + viewAsKey(viewing)} account={shown} realAccount={account} viewAs={viewing} onViewAs={changeView} notice={viewNotice} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onDeleted={deleted} onAccount={setAccount} welcomeOnOpen={welcome}
-          demo={!!demo} demoBusy={!!demoBusy} demoNote={demoNote} onDemo={on => void switchDemo(on)} />
+      {shown ? <Workspace key={viewAsKey(viewing)} account={shown} realAccount={account} viewAs={viewing} onViewAs={changeView} notice={viewNotice} palette={p} theme={theme} setTheme={setTheme} onSignedOut={signedOut} onDeleted={deleted} onAccount={setAccount} welcomeOnOpen={welcome} />
         : <View style={[ui.fill, { backgroundColor: p.background, alignItems: "center", justifyContent: "center" }]}><ActivityIndicator accessibilityLabel="Opening the view" color={p.primary} /></View>}
-      <DemoSwitching palette={p} visible={!!demoBusy} toDemo={demoBusy === "on"} />
     </OnboardingGate>
   );
 }

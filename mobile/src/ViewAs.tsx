@@ -7,13 +7,13 @@ import { ChoiceField } from "./ChoiceField";
 import { SearchPicker } from "./SearchPicker";
 import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
-import { demoInteractive, readViewAsPeople, WorkspaceApiError } from "./backend/client";
+import { readViewAsPeople, WorkspaceApiError } from "./backend/client";
 import { viewAsGroups, viewAsKey, viewAsLabel, viewAsName, type ViewAs, type ViewAsPerson } from "../../lib/view-as";
 
 // The super admin's "View as" picker: each role, with the people in it. Picking a person shows
 // exactly what they see; a role nobody has yet can still be previewed with its screens and tools.
-export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose, demo = false }: {
-  palette: Palette; visible: boolean; current: ViewAs | null; onClose: () => void; onChoose: (view: ViewAs | null) => Promise<void>; demo?: boolean;
+export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose }: {
+  palette: Palette; visible: boolean; current: ViewAs | null; onClose: () => void; onChoose: (view: ViewAs | null) => Promise<void>;
 }) {
   const [people, setPeople] = useState<ViewAsPerson[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState("");
   useEffect(() => {
@@ -49,11 +49,9 @@ export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose, d
   };
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="View as someone else" subtitle="See exactly what each person sees" icon="people">
-      <Text style={[ui.small, { color: p.muted }]}>{demo
-        ? "Pick one of the demo business's people to see the demo as they would: their Home, tools, properties, work and messages. " + (demoInteractive() ? "What you do as them stays in this browser's demo." : "Nothing is saved.")
-        : "Pick a person to see the app exactly as they do: their Home, tools, properties, work and messages. Nothing can be changed while you look, private chats stay hidden, and each view is recorded in Access history."}</Text>
+      <Text style={[ui.small, { color: p.muted }]}>{"Pick a person to see the app exactly as they do: their Home, tools, properties, work and messages. Nothing can be changed while you look, private chats stay hidden, and each view is recorded in Access history."}</Text>
       {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text></View>}
-      {option(null, demo ? "The demo's super admin" : "Myself", "Super admin, everything", "user")}
+      {option(null, "Myself", "Super admin, everything", "user")}
       {!people ? <View style={{ paddingVertical: 20, alignItems: "center" }}><ActivityIndicator accessibilityLabel="Loading people" color={p.primary} /></View> : <>
         {/* Everyone in one search-only picker (lists of people never show as cards), then one dropdown for a role's screens. */}
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 13, fontWeight: "800", paddingTop: 6 }}>A person</Text>

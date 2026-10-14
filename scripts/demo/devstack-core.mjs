@@ -1,5 +1,4 @@
-// What the devstack puts in place of Supabase, for the Node review server (server.mjs) and the
-// in-browser demo (browser/engine.mjs) alike: a client that runs PostgREST-style calls on the local
+// What the devstack puts in place of Supabase, for the Node review server (server.mjs): a client that runs PostgREST-style calls on the local
 // database as the signed-in person, the service-role client, and the source of the few server-only
 // modules that are swapped at build or load time. Everything else (routes, schemas, database
 // functions) is the repo's own.
@@ -115,8 +114,8 @@ export function createDevstack({ dev, current, storage, links, env }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The server-only modules, swapped at module-resolution time (Vite in server.mjs, esbuild for the
-// browser demo). Keys are paths from the repo root.
+// The server-only modules, swapped at module-resolution time (Vite in server.mjs). Keys are paths
+// from the repo root.
 export const STUBS = {
   'lib/supabase-server.ts': `import { confirmedContact } from './registration-policy';
 const ds = () => globalThis.__devstack;

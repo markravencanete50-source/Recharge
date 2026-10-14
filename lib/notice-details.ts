@@ -117,7 +117,7 @@ export function oldestNoticeId(notices: readonly Pick<NoticeDetail, 'id' | 'crea
 }
 // Whether there may be older updates: the last page that came back was full.
 export const mayHaveOlder = (lastPage: number) => lastPage >= NOTICE_PAGE;
-// One work item from the single-item read. A demo answer may be the whole list, so the item is picked out of it. Null when
+// One work item from the single-item read. An answer that is a whole list has the item picked out of it. Null when
 // it is not there.
 export function workItemFrom(data: unknown, workId: string): OperationView | null {
   const raw = Array.isArray(data) ? data.find(x => x && typeof x === 'object' && (x as { workId?: unknown }).workId === workId) : data;

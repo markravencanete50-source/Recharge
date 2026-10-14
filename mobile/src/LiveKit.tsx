@@ -4,7 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { Entrance, MotionPress, Shimmer, Stagger, SwapIn, TweenNumber } from "./motion";
-import { departmentColor, depth, primaryFill, space, ui, web, type Palette } from "./theme";
+import { departmentColor, primaryFill, space, textSize, ui, web, type Palette } from "./theme";
 import { formatCount } from "../../lib/format";
 import { sectionAnchor } from "../../lib/home-tools";
 import { readableError } from "../../lib/error-copy";
@@ -31,15 +31,16 @@ export const dayLabel = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDa
 // The primary action is a flat forest fill; the others are a quiet mint wash that deepens on hover. On phones and inside sheets buttons span the width;
 // on a computer's page they size to their label, so a lone action doesn't stretch across the screen.
 export const InSheet = createContext(false);
-export function Button({ label, onPress, p, primary = false, disabled = false, icon }: { label: string; onPress: () => void; p: Palette; primary?: boolean; disabled?: boolean; icon?: ComponentProps<typeof Feather>["name"] }) {
-  const ink = disabled ? p.disabled : primary ? p.onPrimary : p.primary;
+export function Button({ label, onPress, p, primary = false, quiet = false, disabled = false, icon }: { label: string; onPress: () => void; p: Palette; primary?: boolean; quiet?: boolean; disabled?: boolean; icon?: ComponentProps<typeof Feather>["name"] }) {
+  const ink = disabled ? p.disabled : primary ? p.onPrimary : quiet ? p.text : p.primary;
   const { width } = useWindowDimensions(), sheet = useContext(InSheet);
   const hug = width >= 900 && !sheet;
   // Primary: the solid fill. Secondary: a wash with a visible edge, so on a dark card it still reads as a button.
+  // Quiet: an outline only, for the less used actions beside a page's main one, so one button leads.
   // Disabled: a raised strip with a quiet outline and the disabled label.
   return (
     <MotionPress {...(Platform.OS === "web" && !disabled ? { dataSet: { hover: primary ? "primary" : "tint" } } : {})} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-      style={[ui.button, hug ? { flexGrow: 0, alignSelf: "flex-start", minWidth: 180, paddingHorizontal: 22 } : { flexGrow: 1 }, disabled ? { backgroundColor: p.elevated, borderWidth: 1, borderColor: p.border } : primary ? primaryFill(p) : { backgroundColor: p.wash, borderWidth: 1, borderColor: p.washBorder }]}>
+      style={[ui.button, hug ? { flexGrow: 0, alignSelf: "flex-start", minWidth: 180, paddingHorizontal: 22 } : { flexGrow: 1 }, disabled ? { backgroundColor: p.elevated, borderWidth: 1, borderColor: p.border } : primary ? primaryFill(p) : quiet ? { borderWidth: 1, borderColor: p.border } : { backgroundColor: p.wash, borderWidth: 1, borderColor: p.washBorder }]}>
       {!!icon && <Feather name={icon} size={16} color={ink} />}
       <Text style={[ui.buttonText, { color: ink, letterSpacing: 0.1 }]}>{label}</Text>
     </MotionPress>
@@ -91,13 +92,12 @@ export function Loading({ p, rows = 3 }: { p: Palette; rows?: number }) {
 export function Section({ title, count, p, children }: { title: string; count?: number; p: Palette; children: ReactNode }) {
   // Each section can be opened directly from a Home tool by its heading (section-daily-checks).
   return (
-    <Anchor id={sectionAnchor(title)}><Entrance style={{ gap: 10 }}>
+    <Anchor id={sectionAnchor(title)}><Entrance style={{ gap: space.row }}>
+      {/* The heading on its own: no accent bar, so the page has fewer marks competing for the eye. */}
       <View style={[ui.between, { gap: 12 }]}>
-        <View style={[ui.row, { gap: 10, flexShrink: 1 }]}>
-          <View style={{ width: 4, height: 18, borderRadius: 2, backgroundColor: p.primary, opacity: 0.85 }} />
-          <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, flexShrink: 1 }]}>{title}</Text>
-        </View>
-        {count !== undefined && <Tag label={String(count)} tone={count ? "wait" : "good"} p={p} />}
+        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, flexShrink: 1 }]}>{title}</Text>
+        {/* A count of nothing says nothing: only a count that is waiting shows. */}
+        {!!count && <Tag label={String(count)} tone="wait" p={p} />}
       </View>
       {/* Cards and rows inside a section arrive one after another. */}
       {Children.toArray(children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
@@ -137,28 +137,35 @@ export function StatTile({ p, icon, tone, label, value, format = formatCount, de
 }) {
   // Phones show three compact tiles across (label, figure, icon); wider screens add the supporting line.
   const compact = useContext(StatCompact);
-  const figure = { color: p.text, fontSize: compact ? 24 : 30, lineHeight: compact ? 28 : 36, fontWeight: "700" as const, letterSpacing: compact ? -0.6 : -1, fontVariant: ["tabular-nums" as const] };
+  // The figure is one even size (textSize.figure, 20 on phones), so numbers no longer jump out of the page.
+  const figure = { color: p.text, fontSize: compact ? 20 : textSize.figure, lineHeight: compact ? 26 : 28, fontWeight: "700" as const, letterSpacing: -0.4, fontVariant: ["tabular-nums" as const] };
   const ink = tone ? departmentColor(tone, p).ink : p.primary;
   return (
     <View {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityLabel={[label, typeof value === "number" ? format(value) : value, detail].filter(Boolean).join(", ")}
-      style={{ flex: 1, minWidth: 0, padding: compact ? 12 : 18, gap: compact ? 6 : 10, borderRadius: compact ? 18 : 22, borderWidth: 1, borderColor: attention ? p.primary : p.border, backgroundColor: attention ? p.wash : p.surface, overflow: "hidden", ...depth.card }}>
-      {/* A thread of the tile's colour along its top edge. */}
-      {!compact && <View pointerEvents="none" style={{ position: "absolute", left: 18, right: 18, top: 0, height: 2, borderBottomLeftRadius: 2, borderBottomRightRadius: 2, backgroundColor: ink, opacity: attention ? 0.9 : 0.35 }} />}
+      style={{ flex: 1, minWidth: 0, padding: compact ? 14 : 20, gap: compact ? 6 : 8, borderRadius: compact ? 18 : 20, borderWidth: 1, borderColor: p.border, backgroundColor: attention ? p.wash : p.surface, overflow: "hidden" }}>
+      {/* Flat: one hairline border, no shadow and no coloured thread, so a row of tiles reads quietly. On a phone the
+          label is in sentence case, so a word such as "Unassigned" fits a third of the screen on one line. */}
       <View style={[ui.between, { gap: 6, alignItems: "flex-start" }]}>
-        <Text numberOfLines={2} style={{ color: p.muted, fontSize: compact ? 11 : 11, lineHeight: compact ? 14 : 16, fontWeight: "700", letterSpacing: compact ? 0.4 : 1, textTransform: "uppercase", flex: 1 }}>{label}</Text>
-        {!compact && <IconChip icon={icon} tone={tone} p={p} size={34} />}
+        <Text numberOfLines={2} style={{ color: p.muted, fontSize: textSize.caption, lineHeight: 16, fontWeight: "600", letterSpacing: compact ? 0 : 0.6, textTransform: compact ? "none" : "uppercase", flex: 1 }}>{label}</Text>
+        {!compact && <Feather name={icon} size={16} color={ink} />}
       </View>
       {typeof value === "number"
         ? <TweenNumber value={value} format={format} numberOfLines={1} adjustsFontSizeToFit style={figure} />
-        : <SwapIn swapKey={value}><Text numberOfLines={1} adjustsFontSizeToFit style={{ ...figure, fontSize: compact ? 17 : 22 }}>{value}</Text></SwapIn>}
+        : <SwapIn swapKey={value}><Text numberOfLines={1} adjustsFontSizeToFit style={{ ...figure, fontSize: compact ? 17 : 20 }}>{value}</Text></SwapIn>}
       {compact ? <Feather name={icon} size={15} color={tone ? departmentColor(tone, p).ink : p.primary} /> : !!detail && <Text numberOfLines={2} style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{detail}</Text>}
     </View>
   );
 }
-export function StatGrid({ children }: { children: ReactNode }) {
+// Counts of nothing are left out (Alex: "information overload"): a tile whose value is the number 0 does not show,
+// and when every tile is 0 one calm line says so. Reports and other screens that must show zeros pass showZeros.
+export const isZeroTile = (child: ReactNode) => isValidElement<{ value?: unknown }>(child) && child.props.value === 0;
+export function StatGrid({ children, showZeros = false, empty = "Nothing waiting" }: { children: ReactNode; showZeros?: boolean; empty?: string }) {
   const { width } = useWindowDimensions();
-  const items = Children.toArray(children);
+  const all = Children.toArray(children);
+  const items = showZeros ? all : all.filter(child => !isZeroTile(child));
   const compact = width < 600 && items.length <= 3;
+  const first = all[0], palette = isValidElement<{ p?: Palette }>(first) ? first.props.p : undefined;
+  if (!items.length && all.length) return palette ? <Calm p={palette} text={empty} /> : null;
   return (
     <StatCompact.Provider value={compact}>
       <View style={{ flexDirection: "row", flexWrap: compact ? "nowrap" : "wrap", gap: compact ? 8 : 12 }}>
@@ -166,4 +173,58 @@ export function StatGrid({ children }: { children: ReactNode }) {
       </View>
     </StatCompact.Provider>
   );
+}
+
+// The one calm line shown in place of a list of nothing ("Nothing waiting").
+export function Calm({ p, text = "Nothing waiting" }: { p: Palette; text?: string }) {
+  return <View accessible accessibilityLabel={text} style={[ui.row, { gap: 8, minHeight: 44 }]}>
+    <Feather name="check" size={16} color={p.success} />
+    <Text style={[ui.small, { color: p.muted, flex: 1 }]}>{text}</Text>
+  </View>;
+}
+
+// "Show 12 more" under a long list that shows its first few rows (lists keep the first LIST_PREVIEW).
+export const LIST_PREVIEW = 6;
+export function ShowMore({ p, hidden, onPress, noun = "more" }: { p: Palette; hidden: number; onPress: () => void; noun?: string }) {
+  if (hidden <= 0) return null;
+  return <MotionPress accessibilityRole="button" accessibilityLabel={`Show ${hidden} ${noun}`} onPress={onPress} style={[ui.row, { gap: 6, minHeight: 44, alignSelf: "flex-start", paddingHorizontal: 4 }]}>
+    <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Show {hidden} {noun}</Text>
+    <Feather name="chevron-down" size={16} color={p.primary} />
+  </MotionPress>;
+}
+// The first `limit` items until "Show more" is pressed. One row over the limit just shows: "Show 1 more" is a
+// button where the row itself would have fitted.
+export function usePreview<T>(items: readonly T[], limit = LIST_PREVIEW) {
+  const [all, setAll] = useState(false);
+  const shown = all || items.length <= limit + 1 ? items : items.slice(0, limit);
+  return { shown, hidden: items.length - shown.length, showAll: () => setAll(true) };
+}
+
+// A short list of counts, each line opening where the work is (the department cards). Lines counting 0 are left
+// out, and when every line is 0 one calm line says "Nothing waiting"; screens that must show zeros pass showZeros.
+// Long lists show their first few lines with "Show more".
+export type CountRow = { key?: string; label: string; value: number | string; attention?: boolean; onPress?: () => void };
+export function CountList({ p, rows, ink, showZeros = false, empty = "Nothing waiting", limit = LIST_PREVIEW }: {
+  p: Palette; rows: CountRow[]; ink?: { ink: string; wash: string }; showZeros?: boolean; empty?: string; limit?: number;
+}) {
+  const visible = showZeros ? rows : rows.filter(r => r.value !== 0);
+  const preview = usePreview(visible, limit);
+  if (!visible.length) return <Calm p={p} text={empty} />;
+  const colour = ink ?? { ink: p.primary, wash: p.wash };
+  return <View style={{ gap: 2 }}>
+    {preview.shown.map(m => (
+      <MotionPress key={m.key ?? m.label} {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole={m.onPress ? "button" : "text"} accessibilityLabel={`${m.label}: ${typeof m.value === "number" ? formatCount(m.value) : m.value}`} disabled={!m.onPress} onPress={() => m.onPress?.()}
+        style={[ui.row, { gap: 12, minHeight: 44, paddingVertical: 6, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 12 }]}>
+        <View style={{ minWidth: 40, alignItems: "flex-start" }}>
+          <View style={{ paddingHorizontal: m.attention ? 8 : 0, paddingVertical: m.attention ? 1 : 0, borderRadius: 999, backgroundColor: m.attention ? colour.wash : "transparent" }}>
+            {typeof m.value === "number"
+              ? <TweenNumber value={m.value} format={formatCount} style={{ color: m.attention ? colour.ink : p.text, fontSize: textSize.heading, lineHeight: 24, fontWeight: "600", fontVariant: ["tabular-nums"] }} />
+              : <Text style={{ color: m.attention ? colour.ink : p.text, fontSize: textSize.heading, lineHeight: 24, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{m.value}</Text>}
+          </View>
+        </View>
+        <Text numberOfLines={2} style={[ui.small, { color: m.attention ? p.text : p.muted, flex: 1 }]}>{m.label}</Text>
+      </MotionPress>
+    ))}
+    <ShowMore p={p} hidden={preview.hidden} onPress={preview.showAll} />
+  </View>;
 }

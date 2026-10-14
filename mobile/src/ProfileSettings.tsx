@@ -80,7 +80,7 @@ export function ProfileEditor({ p, account, onAccount }: { p: Palette; account: 
         <Text style={[ui.small, { color: p.muted }]}>{about.length}/160</Text>
         <Button label={busy === "save" ? "Saving…" : "Save"} icon="check" p={p} disabled={readOnly || !!busy || !changed} onPress={() => void run("save", () => writeProfile({ action: "saveProfile", about: about.trim() }), "Saved.")} />
       </View>
-      {readOnly && <Notice text="Your profile can't be changed while viewing the app as someone else or in the demo." p={p} />}
+      {readOnly && <Notice text="Your profile can't be changed while viewing the app as someone else." p={p} />}
       {!!done && <Notice text={done} p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
     </View>
@@ -88,7 +88,7 @@ export function ProfileEditor({ p, account, onAccount }: { p: Palette; account: 
 }
 
 // Who is online: while the app is open and in view it checks in every minute. Nothing is sent
-// while viewing as someone else or in the demo.
+// while viewing as someone else.
 export function usePresenceHeartbeat(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;

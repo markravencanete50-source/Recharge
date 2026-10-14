@@ -1,4 +1,4 @@
-// The part of the devstack database layer that runs anywhere (Node and the browser demo): the
+// The part of the devstack database layer that needs no file system: the
 // bootstrap Supabase gives every project, the dev people, and the per-call "act as" helpers that do
 // what Supabase's Data API (PostgREST) does for each request: one transaction, the caller's JWT
 // claims and request headers as transaction-local settings, `set local role`, the pre-request hook
