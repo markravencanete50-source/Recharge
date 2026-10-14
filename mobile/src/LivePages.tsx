@@ -183,7 +183,9 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
       <View style={{ flex: 1 }}><Text style={[ui.body, { color: p.text }]}>{f.label}</Text>{f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}</View>
     </MotionPress>
   );
-  const label = <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{f.label}{!f.required ? " (optional)" : ""}</Text>;
+  // In a group ("Comparable 1") the label is short and the heading says whether it is optional; screen readers hear both.
+  const label = <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{f.label}{!f.required && !f.group ? " (optional)" : ""}</Text>;
+  const named = f.group ? `${f.group} ${f.label.toLowerCase()}` : f.label;
   // A date in a workflow form (only "Add a local event" has one) uses the shared calendar field (D's round 8 review).
   if (f.type === "date") {
     const text = value ? String(value) : "";
@@ -199,9 +201,9 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
       {label}
       {f.type === "select" ? (
         // Few options as radio choices, more as a dropdown, a long list with a search box (ChoiceField).
-        <ChoiceField p={p} label={f.label} value={String(value ?? "")} options={f.options ?? []} onChange={onChange} disabled={disabled} />
+        <ChoiceField p={p} label={named} value={String(value ?? "")} options={f.options ?? []} onChange={onChange} disabled={disabled} />
       ) : (
-        <TextInput accessibilityLabel={f.label} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
+        <TextInput accessibilityLabel={named} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
           style={{ borderWidth: 1, borderRadius: 14, padding: 13, minHeight: f.type === "textarea" ? 110 : 50, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: p.background, color: p.text, borderColor: p.controlBorder, textAlignVertical: "top" }} />
       )}
       {!!f.suggestions?.length && <Suggestions p={p} label={f.label} items={f.suggestions} value={String(value ?? "")} disabled={disabled} onPick={s => { onChange(s.value); if (s.also) onAlso?.(s.also); }} />}
@@ -241,7 +243,9 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;
   // Each label belongs to the field under it: a field and its label sit close (space.tight), and the next label starts
   // a clear step further down (space.section), so a label never reads as a caption of the field above.
-  const shown = spec.fields.filter(f => !f.after || (values[f.after] !== undefined && values[f.after] !== "" && values[f.after] !== null));
+  // A group that waits on the one before (`after`) shows once that one is started, and never hides while it has values.
+  const filled = (v: unknown) => v !== undefined && v !== null && v !== "";
+  const shown = spec.fields.filter(f => !f.after || filled(values[f.after]) || spec.fields.some(g => g.group === f.group && filled(values[g.name])));
   return (
     <>
       <View style={{ gap: space.section }}>
