@@ -17,7 +17,7 @@ import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, PendingFile
 import { MessageSafety } from "./ChatSafety";
 import { BLOCKED_LABEL, REMOVED_LABEL } from "../../lib/chat-moderation";
 import { inboxListSchema } from "../../lib/guest-inbox-policy";
-import { clientStatus, emptyStatusMessage, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
+import { byLatest, clientStatus, emptyStatusMessage, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { ROLE_LABEL } from "../../lib/admin-live";
 import { previewHasConversation } from "../../lib/view-as";
@@ -341,7 +341,8 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   // Clients: Needs a reply, Engaged, Closed. Team: no status. Both: one search box.
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const choose = (t: Tab) => { picked.current = true; setTab(t); setOpen(null); setQuery(""); setStatus("reply"); };
-  const inTab = (list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab);
+  // Newest message first in every tab (byLatest); the status buttons only filter.
+  const inTab = byLatest((list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab), c => c.lastMessageAt, c => c.id);
   const placeText = new Map(properties.map(x => [x.id, [x.name, x.address].filter(Boolean).join(" ")] as const));
   const searchable = (c: Conversation) => [c.title, c.subtitle, c.propertyName, c.last?.authorName, ...c.propertyIds.map(id => placeText.get(id))];
   const found = inTab.filter(c => matchesSearch(query, searchable(c)));
