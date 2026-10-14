@@ -104,7 +104,7 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
       {loading && !report && <Loading p={p} />}
 
       {!!report && !!totals && <>
-        <StatGrid>
+        <StatGrid showZeros>
           <StatTile p={p} icon="briefcase" tone="accounts" label="Management fees" value={formatMoney(totals.managementFeeMinor)}
             detail={`${plural(totals.statementCount, "statement")} · VAT ${formatMoney(totals.vatMinor)} on its own`} />
           {totals.invoicedCleanCount !== undefined

@@ -73,7 +73,7 @@ export function LiveProductivity({ palette: p, account, initial = "days" }: { pa
   return (
     <View style={{ gap: 18 }}>
       <LockedHero p={p} onShift={onShift} direct={account.role === "super_admin"} />
-      <StatGrid>
+      <StatGrid showZeros>
         {current
           ? [
             <StatTile key="week" p={p} icon="clock" tone="stays" label="Hours this week" value={data ? teamWeek(data, mondayOf(today)) : 0} format={hoursTile} detail="The whole team, from Monday" />,

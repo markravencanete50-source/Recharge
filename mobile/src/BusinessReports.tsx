@@ -120,7 +120,7 @@ function Bar({ p, label, count, share, detail }: { p: Palette; label: string; co
 function EnquiriesView({ p, r }: { p: Palette; r: EnquiriesReport }) {
   const steps = funnelSteps(r.funnel);
   return <>
-    <StatGrid>
+    <StatGrid showZeros>
       <StatTile p={p} icon="inbox" label="Enquiries received" value={r.received} detail={`${SOURCE_LABEL.form} ${r.bySource.form} · ${SOURCE_LABEL.app} ${r.bySource.app}`} />
       <StatTile p={p} icon="zap" label={PRIORITY_LABEL} value={r.priority} detail="Forms that said they want to start as soon as possible" />
       <StatTile p={p} icon="clock" label="First reply" value={waitLabel(r.reply.medianMinutes)} detail={`Median · slowest ${waitLabel(r.reply.slowestMinutes)} · ${r.reply.waiting} with no reply yet`} />
@@ -149,7 +149,7 @@ function EnquiriesView({ p, r }: { p: Palette; r: EnquiriesReport }) {
 
 function RepairsView({ p, r }: { p: Palette; r: RepairsReport }) {
   return <>
-    <StatGrid>
+    <StatGrid showZeros>
       <StatTile p={p} icon="tool" label="Repairs raised" value={r.raised} detail={`${r.completed} finished in these dates`} />
       <StatTile p={p} icon="file-text" label="Quoted" value={formatMoney(r.quotedMinor)} detail={`On ${plural(r.quotedRepairs, "repair")} · final cost ${formatMoney(r.finalMinor)} on ${r.finalRepairs}`} />
       <StatTile p={p} icon="check-circle" label="Spend approved" value={formatMoney(r.spend.approvedMinor)} detail={`${formatMoney(r.spend.waitingMinor)} waiting · ${formatMoney(r.spend.rejectedMinor)} rejected`} />
@@ -170,7 +170,7 @@ function RepairsView({ p, r }: { p: Palette; r: RepairsReport }) {
 
 function TodosView({ p, r }: { p: Palette; r: TodosReport }) {
   return <>
-    <StatGrid>
+    <StatGrid showZeros>
       <StatTile p={p} icon="check-square" label="Done" value={r.done} detail={`Of ${plural(r.total, "to-do")} · ${r.doneLate} done late`} />
       <StatTile p={p} icon="alert-circle" label="Overdue" value={r.overdue} attention={r.overdue > 0} detail={`${r.open} still open`} />
     </StatGrid>
@@ -194,7 +194,7 @@ function MessagesView({ p, r }: { p: Palette; r: MessagesReport }) {
   const channels = [...r.byChannel].sort((a, b) => channelOrder(a.channel, b.channel));
   const received = channels.reduce((n, c) => n + c.received, 0), sent = channels.reduce((n, c) => n + c.sent, 0);
   return <>
-    <StatGrid>
+    <StatGrid showZeros>
       <StatTile p={p} icon="inbox" label="Received" value={received} detail={`On ${plural(channels.length, "channel")}`} />
       <StatTile p={p} icon="send" label="Sent" value={sent} detail="Replies and messages from the team" />
     </StatGrid>
@@ -225,7 +225,7 @@ function MessagesView({ p, r }: { p: Palette; r: MessagesReport }) {
 
 function TimeView({ p, r }: { p: Palette; r: TimeReport }) {
   return <>
-    <StatGrid>
+    <StatGrid showZeros>
       <StatTile p={p} icon="clock" label="Hours worked" value={formatDuration(r.minutes)} detail={`${plural(r.shifts, "shift")}${r.running ? ` · ${r.running} still running` : ""}`} />
       <StatTile p={p} icon="pause-circle" label="Unpaid pauses" value={formatDuration(r.unpaidMinutes)} detail="Taken off the hours" />
       <StatTile p={p} icon="trending-up" label="Overtime" value={formatDuration(r.overtimeMinutes)} detail="From when overtime was started" />
