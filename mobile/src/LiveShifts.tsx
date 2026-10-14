@@ -13,7 +13,7 @@ import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } f
 import { List, Row } from "./LiveAccounts";
 import { Pills } from "./Pills";
 import { readChat, readTeams, writeTeams } from "./backend/client";
-import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, PAUSE_LABEL, pausePolicySchema, type PauseKind, type PausePolicy, rotaListSchema, SHIFTS, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
+import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, PAUSE_LABEL, PAUSE_START_KINDS, pausePolicySchema, type PauseKind, type PausePolicy, type PauseStartKind, rotaListSchema, SHIFTS, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
 import { DAILY_WORK, DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { formatCount, formatDay, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -30,6 +30,7 @@ const sinceMinutes = (iso: string) => Math.max(0, Math.round((Date.now() - Date.
 const londonDay = (offset = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(Date.now() + offset * 86400000));
 const londonDayOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(iso));
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+const PAUSE_ICON = { break: "pause-circle", emergency: "alert-triangle" } as const satisfies Record<PauseStartKind, string>;
 
 // Home: the person's own shift, with clock in and out.
 export function ShiftCard({ palette: p, account }: { palette: Palette; account: WorkspaceAccount }) {
@@ -71,8 +72,8 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
       await load();
     } finally { setBusy(false); }
   }
-  // Pausing for lunch, a break or an emergency, going back to work, and overtime.
-  async function pause(action: "startPause" | "endPause" | "startOvertime", kind?: PauseKind) {
+  // Pausing for a break or an emergency, going back to work, and overtime. Lunch is no longer a pause.
+  async function pause(action: "startPause" | "endPause" | "startOvertime", kind?: PauseStartKind) {
     if (busy) return;
     setBusy(true); setError("");
     try {
@@ -118,11 +119,11 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
             <Feather name="play" size={16} color={p.text} /><Text style={[ui.buttonText, { color: p.text }]}>{busy ? "Saving…" : "Back to work"}</Text>
           </MotionPress>
         : <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {([["lunch", "coffee"], ["break", "pause-circle"], ["emergency", "alert-triangle"]] as const).map(([kind, icon]) => (
+            {PAUSE_START_KINDS.map(kind => (
               <MotionPress key={kind} accessibilityRole="button" accessibilityLabel={`${PAUSE_LABEL[kind]}${unpaid(kind) ? ", unpaid" : ""}`} disabled={busy}
                 onPress={() => kind === "emergency" ? setEmergency(v => !v) : void pause("startPause", kind)}
                 style={[ui.row, { gap: 8, minHeight: 42, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: kind === "emergency" ? p.danger : p.headerBorder, backgroundColor: emergency && kind === "emergency" ? p.dangerWash : p.headerControl }]}>
-                <Feather name={icon} size={15} color={kind === "emergency" ? (emergency ? p.danger : p.headerText) : p.headerText} />
+                <Feather name={PAUSE_ICON[kind]} size={15} color={kind === "emergency" ? (emergency ? p.danger : p.headerText) : p.headerText} />
                 <Text style={{ color: kind === "emergency" && emergency ? p.danger : p.headerText, fontWeight: "700", fontSize: 13 }}>{PAUSE_LABEL[kind]}</Text>
               </MotionPress>
             ))}
@@ -352,7 +353,7 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
   );
 }
 
-// Admins: whether lunch, breaks and emergencies count as paid time. Unpaid pauses come off the
+// Admins: whether breaks and emergencies count as paid time. Unpaid pauses come off the
 // hours in the timesheet, the Productivity Tool and team performance.
 export function PauseRules({ p }: { p: Palette }) {
   const [policy, setPolicy] = useState<PausePolicy | null>(null), [draft, setDraft] = useState<PausePolicy | null>(null);
@@ -363,20 +364,22 @@ export function PauseRules({ p }: { p: Palette }) {
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   if (!draft || !policy) return error ? <Notice text={error} p={p} tone="bad" /> : null;
-  const changed = draft.lunchPaid !== policy.lunchPaid || draft.breakPaid !== policy.breakPaid || draft.emergencyPaid !== policy.emergencyPaid;
+  const changed = draft.breakPaid !== policy.breakPaid || draft.emergencyPaid !== policy.emergencyPaid;
   async function save() {
     if (!draft || !policy) return;
     setBusy(true); setError(""); setSaved("");
     try {
-      const next = pausePolicySchema.parse((await writeTeams({ action: "savePausePolicy", requestId: Crypto.randomUUID(), lunchPaid: draft.lunchPaid, breakPaid: draft.breakPaid, emergencyPaid: draft.emergencyPaid, version: policy.version })).data);
+      const next = pausePolicySchema.parse((await writeTeams({ action: "savePausePolicy", requestId: Crypto.randomUUID(), lunchPaid: policy.lunchPaid, breakPaid: draft.breakPaid, emergencyPaid: draft.emergencyPaid, version: policy.version })).data);
       setPolicy(next); setDraft(next); setSaved("Saved. Hours are worked out with these rules from now on, including past pauses.");
     } catch (e) { setError(message(e)); await load(); } finally { setBusy(false); }
   }
-  const rows: [keyof Pick<PausePolicy, "lunchPaid" | "breakPaid" | "emergencyPaid">, string, string][] = [
-    ["lunchPaid", "Lunch", "The lunch pause"], ["breakPaid", "Breaks", "Short breaks"], ["emergencyPaid", "Emergencies", "Emergency pauses (managers are told)"]];
+  // Lunch is no longer a pause, so it has no switch here. Its stored rule is sent back unchanged above, so the
+  // lunch pauses on older shifts keep the totals they had.
+  const rows: [keyof Pick<PausePolicy, "breakPaid" | "emergencyPaid">, string, string][] = [
+    ["breakPaid", "Breaks", "Short breaks"], ["emergencyPaid", "Emergencies", "Emergency pauses (managers are told)"]];
   return (
     <Section title="Breaks and pay" p={p}>
-      <Text style={[ui.small, { color: p.muted }]}>Team members pause for lunch, a break or an emergency while clocked in, and switch to overtime when their shift is done. Choose which pauses count as paid time.</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Team members pause for a break or an emergency while clocked in, and switch to overtime when their shift is done. Choose which pauses count as paid time. Lunch is unpaid and is not recorded on the clock.</Text>
       <View style={{ borderRadius: 18, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
         {rows.map(([key, title, detail], i) => (
           <View key={key} style={[ui.between, { gap: 12, minHeight: 60, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>

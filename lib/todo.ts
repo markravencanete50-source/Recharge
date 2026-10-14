@@ -71,6 +71,8 @@ export type TodoRow = {
   // The newest update and how many there are (hub to-dos only; Automatic tasks have none).
   latest: TodoLatest | null; updateCount: number;
   derived?: DerivedKind; open?: TodoOpen; item?: TodoHubItem;
+  // Which Client relations filter an Automatic task sits under (see clientAreaOf).
+  area?: ClientArea;
 };
 
 // --- Headings ------------------------------------------------------------------------------------
@@ -132,7 +134,34 @@ export function derivedKindsFor(role: string): DerivedKind[] {
 }
 
 const REPAIR_WATCHED = ['triage', 'referred', 'booked', 'owner_declined', 'management_declined'];
-const LICENCE_NEXT: Record<string, string> = { '': 'Submit the licence application', to_apply: 'Submit the licence application', applied: 'Record the safety checks', checks_done: 'Record the licence grant' };
+
+// Every Automatic task's title reads "<Area>: <what to do>", with the property or the person in it (Alex,
+// client meeting: "Pricing: price 3 empty nights at Rose Cottage", "Onboarding: send the agreement to Sarah Jones").
+const REPAIR_ACTION: Record<string, string> = {
+  triage: 'check and refer the repair', referred: 'book the repair', booked: 'confirm the repair is done',
+  owner_declined: 're-quote or close the repair', management_declined: 're-quote or close the repair',
+};
+const REPAIR_DECLINED: Record<string, string> = { owner_declined: 'The owner declined the cost.', management_declined: 'Management declined the cost.' };
+const LICENCE_NEXT: Record<string, string> = { '': 'submit the licence application', to_apply: 'submit the licence application', applied: 'record the safety checks', checks_done: 'record the licence grant' };
+// Onboarding stages before the owner says yes are still enquiries.
+const ENQUIRY_STAGES = ['enquiry', 'estimate', 'reviewing'];
+const at = (place: string | null) => (place ? ' at ' + place : '');
+const forPlace = (place: string | null) => (place ? ' for ' + place : '');
+// What to do next on an onboarding, with who it is for (the owner's name, else "the owner of" the property).
+export function onboardingTitle(stage: string, who: string | null, place: string | null, j: Pick<JourneyView, 'agreementRevision' | 'invoiceId'>): string {
+  const to = who ? ' to ' + who : '', them = who ?? 'the owner';
+  switch (stage) {
+    case 'enquiry': return 'Enquiry: send the estimate' + to;
+    case 'estimate': case 'reviewing': return `Enquiry: get a decision on the estimate from ${them}`;
+    case 'agreement': return j.agreementRevision > 0 ? `Onboarding: get the agreement signed by ${them}` : 'Onboarding: send the agreement' + to;
+    case 'form': return `Onboarding: get the set-up form completed by ${them}`;
+    case 'invoice': return j.invoiceId ? `Onboarding: get the onboarding invoice paid by ${them}` : 'Onboarding: send the onboarding invoice' + to;
+    case 'inspection_to_book': return 'Onboarding: book the inspection' + at(place);
+    case 'inspection_booked': return 'Onboarding: carry out the inspection' + at(place);
+    case 'inspection_complete': return 'Onboarding: record the live listing' + forPlace(place);
+    default: return 'Onboarding: check the next step' + forPlace(place ?? who);
+  }
+}
 
 export type DeriveInput = {
   role: string; today: string; properties: readonly (PropertyLike & { status?: string })[];
@@ -147,11 +176,14 @@ export function deriveTasks(input: DeriveInput): TodoRow[] {
   const kinds = new Set(derivedKindsFor(role));
   const out: TodoRow[] = [];
   const addressFor = (id: string | null) => { const p = propertyOf(properties, id); return p ? addressOf(p) : null; };
-  const make = (kind: DerivedKind, key: string, heading: TodoHeading, row: Pick<TodoRow, 'title' | 'details' | 'propertyId' | 'dueOn' | 'since'> & { open: TodoOpen; address?: string | null }) => {
+  // The property's name for a title ("Rose Cottage"), else its address, else nothing.
+  const placeFor = (id: string | null) => { const p = propertyOf(properties, id); return p ? (p.name || addressOf(p) || null) : null; };
+  const make = (kind: DerivedKind, key: string, heading: TodoHeading, row: Pick<TodoRow, 'title' | 'details' | 'propertyId' | 'dueOn' | 'since'> & { open: TodoOpen; address?: string | null; area?: ClientArea }) => {
     out.push({
       id: `auto:${kind}:${key}`, source: 'derived', heading, title: row.title, details: row.details, propertyId: row.propertyId,
       address: row.address === undefined ? addressFor(row.propertyId) : row.address, dueOn: row.dueOn, who: null,
       done: false, automatic: true, since: row.since, touched: row.since, derived: kind, open: row.open, latest: null, updateCount: 0,
+      ...(row.area ? { area: row.area } : {}),
     });
   };
   const guestSide: TodoHeading = 'guest_relations';
@@ -170,9 +202,11 @@ export function deriveTasks(input: DeriveInput): TodoRow[] {
       const days = last ? Math.max(0, daysBetween(today, last)) : 0;
       const declined = phase === 'owner_declined' || phase === 'management_declined';
       if (!declined && days < REPAIR_UPDATE_AFTER_DAYS) continue;
+      // The issue as reported says which repair it is ("Boiler not firing"); the work title when there is none.
+      const issue = oneLine(text(w.data.issue)) || oneLine(w.title);
       make('repair_update', w.workId, guestSide, {
-        title: declined ? 'Re-quote or close: ' + w.title : 'Update the repair: ' + w.title,
-        details: declined ? 'The cost was declined.' : days === 1 ? 'No update for 1 day.' : `No update for ${days} days.`,
+        title: `Repair: ${REPAIR_ACTION[phase]}${at(placeFor(w.propertyId))}${issue ? ` (${issue})` : ''}`,
+        details: declined ? REPAIR_DECLINED[phase] : days === 1 ? 'No update for 1 day.' : `No update for ${days} days.`,
         propertyId: w.propertyId, dueOn: null, since: last, open: { workId: w.workId, target: TODO_TARGETS.repairs },
       });
     }
@@ -183,7 +217,10 @@ export function deriveTasks(input: DeriveInput): TodoRow[] {
     for (const p of properties) {
       if (p.status !== undefined && p.status !== 'active') continue;
       if (checked.has(p.id)) continue;
-      make('listing_check', p.id, listingSide, { title: 'Check the listing', details: 'Is it live, any new review, anything suspended.', propertyId: p.id, dueOn: today, since: '', open: { target: TODO_TARGETS.listingChecks } });
+      make('listing_check', p.id, listingSide, {
+        title: 'Listing: check the listing' + forPlace(placeFor(p.id)), details: 'Is it live, any new review, anything suspended.', propertyId: p.id, dueOn: today, since: '',
+        open: { target: TODO_TARGETS.listingChecks }, area: 'pricing',
+      });
     }
   }
 
@@ -193,8 +230,8 @@ export function deriveTasks(input: DeriveInput): TodoRow[] {
       const nights = Array.isArray(w.data.nights) ? w.data.nights.filter((n): n is string => typeof n === 'string').sort() : [];
       if (!nights.length) continue;
       make('pricing_gap', w.workId, pricingSide, {
-        title: nights.length === 1 ? 'Price 1 empty night' : `Price ${nights.length} empty nights`, details: 'Hold or change the price for each night, with a reason.',
-        propertyId: w.propertyId, dueOn: nights[0] ?? null, since: w.createdAt ?? '', open: { workId: w.workId, target: TODO_TARGETS.pricing },
+        title: `Pricing: price ${nights.length === 1 ? '1 empty night' : `${nights.length} empty nights`}${at(placeFor(w.propertyId))}`, details: 'Hold or change the price for each night, with a reason.',
+        propertyId: w.propertyId, dueOn: nights[0] ?? null, since: w.createdAt ?? '', open: { workId: w.workId, target: TODO_TARGETS.pricing }, area: 'pricing',
       });
     }
   }
@@ -202,7 +239,7 @@ export function deriveTasks(input: DeriveInput): TodoRow[] {
   if (kinds.has('guest_reply') && input.guestsWaiting && input.guestsWaiting.count > 0) {
     const n = input.guestsWaiting.count;
     make('guest_reply', 'inbox', guestSide, {
-      title: n === 1 ? '1 guest is waiting for a reply' : `${n} guests are waiting for a reply`, details: 'Open the guest messages and answer them.',
+      title: n === 1 ? 'Guest messages: reply to 1 waiting guest' : `Guest messages: reply to ${n} waiting guests`, details: 'Open the guest messages and answer them.',
       propertyId: null, address: null, dueOn: null, since: input.guestsWaiting.since ?? '', open: { target: TODO_TARGETS.guestInbox },
     });
   }
@@ -211,9 +248,11 @@ export function deriveTasks(input: DeriveInput): TodoRow[] {
     for (const r of onboardingRows(journeys)) {
       if (r.stage === 'live' || r.stage === 'archived') continue;
       const contact = r.contact && !addressFor(r.propertyId) ? r.contact : null;
+      const name = oneLine(r.journey.enquiry?.contactName) || null, place = placeFor(r.propertyId);
       make('onboarding', r.propertyId, clientSide, {
-        title: r.next, details: 'Onboarding next step.', propertyId: r.propertyId, address: addressFor(r.propertyId) ?? contact, dueOn: r.inspectionOn,
-        since: '', open: { workId: r.journey.workId, target: TODO_TARGETS.onboarding },
+        title: onboardingTitle(r.stage, name ?? (place ? 'the owner of ' + place : null), place ?? name, r.journey), details: [r.contact, r.phone, r.email].filter(Boolean).join(', ') || 'Onboarding next step.',
+        propertyId: r.propertyId, address: addressFor(r.propertyId) ?? contact, dueOn: r.inspectionOn,
+        since: '', open: { workId: r.journey.workId, target: TODO_TARGETS.onboarding }, area: ENQUIRY_STAGES.includes(r.stage) ? 'enquiries' : 'onboarding',
       });
     }
   }
@@ -224,12 +263,41 @@ export function deriveTasks(input: DeriveInput): TodoRow[] {
       const phase = text(w.data.phase);
       if (phase === 'granted') continue;
       make('licensing', w.workId, clientSide, {
-        title: LICENCE_NEXT[phase] ?? 'Licensing next step', details: text(w.data.authority) ? 'Licensing, ' + text(w.data.authority) + '.' : 'Licensing next step.',
-        propertyId: w.propertyId, dueOn: null, since: w.createdAt ?? '', open: { workId: w.workId, target: TODO_TARGETS.licensing },
+        title: 'Licensing: ' + (LICENCE_NEXT[phase] ?? 'check the next step') + forPlace(placeFor(w.propertyId)), details: text(w.data.authority) ? 'Licensing, ' + text(w.data.authority) + '.' : 'Licensing next step.',
+        propertyId: w.propertyId, dueOn: null, since: w.createdAt ?? '', open: { workId: w.workId, target: TODO_TARGETS.licensing }, area: 'onboarding',
       });
     }
   }
   return out;
+}
+
+// --- Client relations filters ------------------------------------------------------------------------
+
+// The chips under Client relations (Alex, client meeting): All, Pricing, Enquiries and Onboarding. Pricing gaps and
+// listing checks are Pricing (both sit on the Listings and pricing screen); onboarding before the owner says yes is
+// Enquiries, after it Onboarding, with licensing. A to-do a person added goes under an area when its title starts
+// with that area ("Pricing: ...", "Enquiry: ...", "Onboarding: ..."); any other shows only under All.
+export const CLIENT_FILTERS = ['all', 'pricing', 'enquiries', 'onboarding'] as const;
+export type ClientFilter = (typeof CLIENT_FILTERS)[number];
+export type ClientArea = Exclude<ClientFilter, 'all'>;
+export const CLIENT_FILTER_LABEL: Record<ClientFilter, string> = { all: 'All', pricing: 'Pricing', enquiries: 'Enquiries', onboarding: 'Onboarding' };
+const AREA_PREFIX: [RegExp, ClientArea][] = [[/^\s*pricing\s*:/i, 'pricing'], [/^\s*enquir(y|ies)\s*:/i, 'enquiries'], [/^\s*onboarding\s*:/i, 'onboarding']];
+export function clientAreaOf(row: Pick<TodoRow, 'area' | 'source' | 'title'>): ClientArea | null {
+  if (row.area) return row.area;
+  if (row.source !== 'hub') return null;
+  return AREA_PREFIX.find(([pattern]) => pattern.test(row.title))?.[1] ?? null;
+}
+export const matchesClientFilter = (row: Pick<TodoRow, 'area' | 'source' | 'title'>, filter: ClientFilter) => filter === 'all' || clientAreaOf(row) === filter;
+// How many open rows each chip holds.
+export function clientFilterCounts(rows: readonly TodoRow[]): Record<ClientFilter, number> {
+  const counts: Record<ClientFilter, number> = { all: 0, pricing: 0, enquiries: 0, onboarding: 0 };
+  for (const r of rows) {
+    if (r.done) continue;
+    counts.all++;
+    const area = clientAreaOf(r);
+    if (area) counts[area]++;
+  }
+  return counts;
 }
 
 // --- Ordering, groups and counts ---------------------------------------------------------------------

@@ -7,6 +7,7 @@ import { ExpandChevron, MotionPress } from "./motion";
 import { Button, Field, Loading, message, Notice, Tag, london, useRequestId } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { ThinTable, thinText, type ThinColumn } from "./Tracker";
+import { Chip } from "./LivePortfolio";
 import { useSaved } from "./Celebrate";
 import { HubItemSheet } from "./HubItemSheet";
 import { readInbox, readTeams, writeTeams } from "./backend/client";
@@ -16,9 +17,9 @@ import { formatDay } from "../../lib/format";
 import { inboxListSchema } from "../../lib/guest-inbox-policy";
 import type { HubItem } from "../../lib/workspace-teams-policy";
 import {
-  ROWS_PER_HEADING, SUMMARY_ROWS, TODO_COLUMNS, TODO_HEADINGS, TODO_HEADING_LABEL, deriveTasks, derivedKindsFor, dueState, ensureKey, groupTodo, hubRows, lastUpdateWords, needsEnsure, nextRows,
-  showAllLabel, sortTodoRows, todoCardLines, todoCells, todoCounts, todoHubSchema, todoLayout, updateTotal,
-  type TodoColumnKey, type TodoHeading, type TodoHub, type TodoRow,
+  CLIENT_FILTERS, CLIENT_FILTER_LABEL, ROWS_PER_HEADING, SUMMARY_ROWS, TODO_COLUMNS, TODO_HEADINGS, TODO_HEADING_LABEL, deriveTasks, derivedKindsFor, dueState, ensureKey, groupTodo, hubRows, lastUpdateWords, matchesClientFilter, needsEnsure, nextRows,
+  clientFilterCounts, showAllLabel, sortTodoRows, todoCardLines, todoCells, todoCounts, todoHubSchema, todoLayout, updateTotal,
+  type ClientFilter, type TodoColumnKey, type TodoHeading, type TodoHub, type TodoRow,
 } from "../../lib/todo";
 import { timeAgo, updateStamp } from "../../lib/tracker";
 
@@ -246,6 +247,8 @@ export function TodoList(props: SectionProps) {
   const [defaults, setDefaults] = useState<{ assign?: "me" | "person" | "department"; department?: string } | undefined>();
   const [more, setMore] = useState<ReadonlySet<TodoHeading>>(new Set());
   const [doneOpen, setDoneOpen] = useState(false);
+  // The chip chosen under Client relations: All, Pricing, Enquiries or Onboarding.
+  const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
   // The open detail, by id, so it shows the fresh row (and its updates) after every reload.
   const [detailId, setDetailId] = useState<string | null>(null);
   const detail = useMemo(() => rows.find(r => r.id === detailId) ?? null, [rows, detailId]);
@@ -278,7 +281,9 @@ export function TodoList(props: SectionProps) {
       {(!loading || !!rows.length) && <Text accessibilityLiveRegion="polite" style={small(p, { fontVariant: ["tabular-nums"] })}>{summary}</Text>}
 
       {(!loading || !!rows.length) && groups.filter(g => g.rows.some(r => !r.done) || g.always).map(g => {
-        const openRows = g.rows.filter(r => !r.done), expanded = more.has(g.heading), shown = expanded ? openRows : openRows.slice(0, ROWS_PER_HEADING);
+        // Client relations has its chips while it has open rows; the chosen one filters only that heading.
+        const chipCounts = g.heading === "client_relations" ? clientFilterCounts(g.rows) : null, filter = chipCounts?.all ? clientFilter : "all";
+        const openRows = g.rows.filter(r => !r.done && matchesClientFilter(r, filter)), expanded = more.has(g.heading), shown = expanded ? openRows : openRows.slice(0, ROWS_PER_HEADING);
         return (
           <View key={g.heading} style={{ gap: 8 }}>
             <View style={[ui.between, { gap: 12 }]}>
@@ -287,8 +292,13 @@ export function TodoList(props: SectionProps) {
                 <Feather name="plus" size={16} color={p.primary} /><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Add</Text>
               </MotionPress>
             </View>
+            {!!chipCounts && chipCounts.all > 0 && (
+              <View accessibilityRole="radiogroup" accessibilityLabel="Filter Client relations" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {CLIENT_FILTERS.map(f => <Chip key={f} p={p} label={CLIENT_FILTER_LABEL[f]} count={chipCounts[f]} on={clientFilter === f} onPress={() => setClientFilter(f)} />)}
+              </View>
+            )}
             {!openRows.length
-              ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, paddingHorizontal: 8 }]}><Text style={[ui.small, { color: p.muted, paddingVertical: 10, paddingHorizontal: 8 }]}>{g.heading === "personal" ? "Nothing on your own list. Add something you want to remember." : "Nothing to do here."}</Text></View>
+              ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, paddingHorizontal: 8 }]}><Text style={[ui.small, { color: p.muted, paddingVertical: 10, paddingHorizontal: 8 }]}>{g.heading === "personal" ? "Nothing on your own list. Add something you want to remember." : filter !== "all" ? `Nothing under ${CLIENT_FILTER_LABEL[filter]} right now.` : "Nothing to do here."}</Text></View>
               : <TodoRows p={p} rows={shown} today={today} table={table} busy={busy} onTick={onTick} onOpen={open} />}
             {openRows.length > ROWS_PER_HEADING && (
               <MotionPress accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setMore(prev => { const next = new Set(prev); if (next.has(g.heading)) next.delete(g.heading); else next.add(g.heading); return next; })} style={[ui.row, { gap: 6, minHeight: 44, alignSelf: "flex-start" }]}>

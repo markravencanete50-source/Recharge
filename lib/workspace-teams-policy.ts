@@ -151,11 +151,13 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('removeBudgetItem'), requestId: id, id, version }).strict(),
   z.object({ action: z.literal('signOffDay'), requestId: id, allVisible: z.literal(true), reviewsHandled: z.literal(true), suspensionsHandled: z.literal(true), relistingsDone: z.literal(true), note: z.string().trim().max(2000).default('') }).strict(),
   z.object({ action: z.literal('clockOut'), requestId: id }).strict(),
-  // While clocked in: pause for lunch, a break or an emergency, go back to work, or switch to overtime.
-  z.object({ action: z.literal('startPause'), requestId: id, kind: z.enum(['lunch', 'break', 'emergency']), note: z.string().trim().max(200).optional() }).strict(),
+  // While clocked in: pause for a break or an emergency, go back to work, or switch to overtime. Lunch is no
+  // longer a pause (Alex, client meeting); old lunch pauses are still read below.
+  z.object({ action: z.literal('startPause'), requestId: id, kind: z.enum(['break', 'emergency']), note: z.string().trim().max(200).optional() }).strict(),
   z.object({ action: z.literal('endPause'), requestId: id }).strict(),
   z.object({ action: z.literal('startOvertime'), requestId: id }).strict(),
-  // Admins: whether each kind of pause counts as paid time.
+  // Admins: whether each kind of pause counts as paid time. The screen no longer shows lunch and sends the
+  // stored lunch rule back unchanged, so old lunch pauses keep their totals.
   z.object({ action: z.literal('savePausePolicy'), requestId: id, lunchPaid: z.boolean(), breakPaid: z.boolean(), emergencyPaid: z.boolean(), version: z.number().int().positive() }).strict(),
   // Team feedback: admins and Stays send it; super admins mark it seen or done and reply.
   z.object({ action: z.literal('sendFeedback'), requestId: id, category: z.enum(['idea', 'problem', 'praise', 'other']), message: text(5, 2000) }).strict(),
