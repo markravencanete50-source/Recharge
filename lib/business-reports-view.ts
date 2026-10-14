@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { csvCell } from './analytics-export';
-import { START_WHEN } from './client-enquiry';
+import { PRIORITY_START } from './client-enquiry';
 import { formatMoney } from './format';
 import { DEPARTMENT_LABEL } from './hub';
 import { REPAIR_STAGES } from './repairs-live';
@@ -80,9 +80,9 @@ export type AnyReport = { enquiries: EnquiriesReport; repairs: RepairsReport; to
 
 // --- Names --------------------------------------------------------------------------------------------
 
-// Priority is the first answer to "When would you like to get started?" (lib/client-enquiry.ts START_WHEN). The database
-// compares with the same words; tests/business-reports-database.test.mjs checks they match.
-export const PRIORITY_START = START_WHEN[0];
+// Priority is the enquiry list's own (lib/client-enquiry.ts PRIORITY_START, the first "When would you like to get started?"
+// answer). The database compares with the same words; tests/business-reports.test.mjs checks they match.
+export { PRIORITY_START };
 export const PRIORITY_LABEL = 'Priority (as soon as possible)';
 export const startWhenName = (value: string) => value || 'Not answered';
 export const SOURCE_LABEL = { form: 'Enquiry form', app: 'Added in the app' } as const;

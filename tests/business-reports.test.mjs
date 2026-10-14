@@ -26,13 +26,16 @@ test('dates: the last 30 days to start, and up to 366 days', () => {
   }
 });
 
-test('labels: reply times, the funnel and months', () => {
+test('labels: reply times, the funnel and months', async () => {
   assert.deepEqual([null, 0, 45, 60, 125, 49 * 60].map(R.waitLabel), ['–', '0 min', '45 min', '1h 00m', '2h 05m', '2 days 1h']);
   assert.deepEqual(R.funnelSteps({ received: 10, estimate: 5, agreement: 2, live: 1, declined: 3 }).map(s => [s.label, s.count, s.fromPrevious, s.ofReceived]), [
     ['Enquiries received', 10, null, 100], ['Estimate sent', 5, 50, 50], ['Agreement signed', 2, 40, 20], ['Gone live', 1, 50, 10]]);
   assert.equal(R.funnelSteps({ received: 0, estimate: 0, agreement: 0, live: 0, declined: 0 })[1].fromPrevious, null, 'no dividing by nothing');
   assert.equal(R.monthName('2026-10'), 'October 2026');
-  assert.equal(R.PRIORITY_START, 'As soon as possible');
+  const { PRIORITY_START, START_WHEN } = await vite.ssrLoadModule('/lib/client-enquiry.ts');
+  assert.equal(R.PRIORITY_START, PRIORITY_START);
+  assert.equal(PRIORITY_START, START_WHEN[0]);
+  assert.ok(read('supabase/migrations/20261020860000_business_reports.sql').includes(`start_when='${PRIORITY_START}'`), 'the database counts the same answer as Priority');
   assert.equal(R.departmentName(''), 'Given to a person');
 });
 
