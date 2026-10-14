@@ -10,7 +10,7 @@ import { OnboardingTracker } from "./OnboardingTracker";
 import { PurchaseOrdersList } from "./PurchaseOrdersList";
 import { StaysRoutineCard } from "./StaysRoutineCard";
 import type { SectionProps } from "./SectionProps";
-import { ui } from "./theme";
+import { space, ui } from "./theme";
 import { CLIENT_SUB_LABEL, clientSubsFor, defaultClientSub, pickSub, type ClientSub } from "../../lib/relations-subs";
 
 // Client relations (the owners and their properties, before and after they join): one calm strip of
@@ -33,7 +33,7 @@ export function ClientRelations(props: SectionProps & { onOpenProperty: (propert
   const subs = clientSubsFor(account.role, account.modules);
   const [sub, setSub] = useState<ClientSub>(() => pickSub(subs, focus?.sub, defaultClientSub(subs)));
   return (
-    <View style={{ gap: 16 }}>
+    <View style={{ gap: space.section }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Client relations</Text>
         <Text style={[ui.body, { color: p.muted }]}>Onboarding, enquiries, licensing, listings, pricing, reviews and purchases for your clients’ properties.</Text>

@@ -15,8 +15,8 @@ import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { DateField } from "./CalendarPicker";
 import { Dropdown } from "./Dropdown";
-import { icon, radius, space, ui, type Palette } from "./theme";
-import { addDays, Anchor, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading } from "./LiveKit";
+import { icon, radius, space, textSize, ui, type Palette } from "./theme";
+import { addDays, Anchor, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading } from "./LiveKit";
 import { formatMoney } from "../../lib/format";
 import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeOperation, writeTeams } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
@@ -87,7 +87,7 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
   const counts = useMemo(() => Object.fromEntries(REPAIR_STAGES.map(s => [s.phase, repairs.filter(r => repairStage(r.data) === s.phase).length])), [repairs]);
   const mineToAct = repairs.filter(r => repairStep(account.role, String(r.data.phase), account.teamOnly) || canCloseRepair(account.role, String(r.data.phase)));
   const inStage = stage === "open" ? repairs.filter(r => !repairClosed(String(r.data.phase))) : stage === "action" ? mineToAct : repairs.filter(r => repairStage(r.data) === stage);
-  const search = useListSearch(inStage, r => [nameOf(r.propertyId), r.title, r.data.issue, typeof r.data.repairType === "string" ? repairTypeLabel(r.data.repairType) : "", REPAIR_STAGES.find(s => s.phase === repairStage(r.data))?.label]), shown = search.shown;
+  const search = useListSearch(inStage, r => [nameOf(r.propertyId), r.title, r.data.issue, typeof r.data.repairType === "string" ? repairTypeLabel(r.data.repairType) : "", REPAIR_STAGES.find(s => s.phase === repairStage(r.data))?.label], LIST_PREVIEW + 2), shown = search.shown;
   // Visits are created a batch at a time; keep asking until none are left.
   const [creatingVisits, setCreatingVisits] = useState(false), creating = useRef(false);
   async function createVisits() {
@@ -108,7 +108,7 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
   const recording = visits.find(v => v.workId === recordingId), recordingOp = visitOps.find(o => o.workId === recordingId);
 
   return (
-    <View style={{ gap: 20 }}>
+    <View style={{ gap: space.section }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Maintenance</Text>
         <Text style={[ui.body, { color: p.muted }]}>{account.role === "client" ? "Repairs at your properties, and costs waiting for your approval." : "Every repair from report to completion, with routine visits."}</Text>
@@ -150,12 +150,13 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
             );
           })}
         </View> : !loading && <Notice text={stage === "action" ? "Nothing is waiting for you." : "No repairs in this view."} p={p} />}
+        <ShowMore p={p} hidden={search.hidden} onPress={search.showAll} noun="more repairs" />
       </Section>
 
       {routines && showRoutines && (
         <Section title="Preventative maintenance" p={p}>
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-            <Button label="New routine" icon="repeat" p={p} onPress={() => setPlanning(true)} />
+            <Button label="New routine" icon="repeat" quiet p={p} onPress={() => setPlanning(true)} />
             <Button label={creatingVisits ? "Creating visits…" : "Create this month's visits"} icon="calendar" p={p} disabled={!plans.length || creatingVisits} onPress={() => void createVisits()} />
           </View>
           {visits.filter(v => v.status !== "completed").length ? visits.filter(v => v.status !== "completed").map(v => {
@@ -337,7 +338,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
         {team && ["referred", "booked"].includes(phase) && (addingBefore
           ? <PhotoPicker key={"before:" + resetKey} p={p} workId={repair.workId} purpose="maintenance" label="Photos before the repair" hint="The problem as you found it. Each photo is saved as you add it." onChange={(_ids, loading) => setUploading(loading)} />
           : <Button label="Add before photos" icon="camera" p={p} onPress={() => setAddingBefore(true)} />)}
-        {step && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{forOwner ? "Record the owner's approval" : STEP_TITLE[step]}</Text>}
+        {step && <Text accessibilityRole="header" style={{ color: p.text, fontSize: textSize.body, fontWeight: "600" }}>{forOwner ? "Record the owner's approval" : STEP_TITLE[step]}</Text>}
         {step === "approveBudget" && forOwner && !declining && <Field label="How the owner agreed" value={f("ownerAgreement")} onChange={set("ownerAgreement")} p={p} placeholder="For example: by phone with the owner on 10 October" />}
         {step === "approveBudget" && !declining && (
           <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: consent }} onPress={() => setConsent(c => !c)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: consent ? p.successWash : p.elevated }]}>
