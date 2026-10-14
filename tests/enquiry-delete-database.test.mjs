@@ -277,13 +277,16 @@ test('the enquiry it duplicated is kept, unlinked', async () => {
 test('the screen asks first, for admins only, and the server removes the stored copies', () => {
   const screen = readFileSync('mobile/src/LiveEnquiries.tsx', 'utf8');
   assert.match(screen, /canDelete=\{!!open && canDeleteEnquiry\(account\.role, open\)\}/);
-  assert.match(screen, /\{canDelete && <Button label="Delete enquiry" icon="trash-2"/);
+  // E's review: the enquiry sheet uses the same quiet red link as the Onboarding sheet.
+  assert.match(screen, /\{canDelete && <DeleteLink p=\{p\} onPress=\{\(\) => setMode\("delete"\)\} \/>\}/);
+  assert.doesNotMatch(screen, /<Button label="Delete enquiry" icon="trash-2" p=\{p\} onPress/);
   assert.match(screen, /<Text style=\{\[ui\.body, \{ color: p\.text \}\]\}>\{deleteEnquiryWarning\(e\)\}<\/Text>/);
   assert.match(screen, /writeTeams\(\{ action: "deleteEnquiry", requestId: request\.get\(\), enquiryId: e\.id, version: e\.version \}\)/);
   assert.match(screen, /label="Close this enquiry"/, 'Close is kept');
   // The property's Onboarding sheet: a quiet danger link at the bottom, under Flag for management, then the same sheet.
   assert.match(screen, /export function DeleteEnquiryAction\(/);
   assert.match(screen, /if \(!canDeleteEnquiry\(role, enquiry\)\) return null;/);
+  assert.match(screen, /<DeleteLink p=\{p\} onPress=\{\(\) => setOpen\(true\)\} \/>/);
   assert.match(screen, /<Feather name="trash-2" size=\{15\} color=\{p\.danger\} \/>\r?\n\s*<Text style=\{\{ color: p\.danger, fontSize: 14, fontWeight: "600" \}\}>Delete this enquiry<\/Text>/);
   const tracker = readFileSync('mobile/src/OnboardingTracker.tsx', 'utf8');
   const flag = tracker.indexOf('<FlagButton'), del = tracker.indexOf('<DeleteEnquiryAction');

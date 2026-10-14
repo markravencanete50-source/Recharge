@@ -295,7 +295,7 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
         </Group>}
         {["sent", "opened", "expired"].includes(step) && <Button label={e.emailStatus === "failed" ? "Try again" : "Send a new link"} icon="refresh-cw" primary={e.emailStatus === "failed"} p={p} onPress={() => setMode("resend")} />}
         {!["valuing", "estimate", "won", "declined", "closed"].includes(step) && <Button label="Close this enquiry" icon="x" p={p} onPress={() => setMode("close")} />}
-        {canDelete && <Button label="Delete enquiry" icon="trash-2" p={p} onPress={() => setMode("delete")} />}
+        {canDelete && <DeleteLink p={p} onPress={() => setMode("delete")} />}
       </>}
     </Sheet>
   );
@@ -343,16 +343,23 @@ function ValueSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: C
   );
 }
 
+// The quiet danger link for Delete, at the bottom of the enquiry sheet and the property's Onboarding sheet (E's review).
+function DeleteLink({ p, onPress }: { p: Palette; onPress: () => void }) {
+  return (
+    <MotionPress accessibilityRole="button" accessibilityLabel="Delete this enquiry" onPress={onPress} style={[ui.row, { gap: 8, minHeight: 44, alignSelf: "flex-start", paddingHorizontal: 4 }]}>
+      <Feather name="trash-2" size={15} color={p.danger} />
+      <Text style={{ color: p.danger, fontSize: 14, fontWeight: "600" }}>Delete this enquiry</Text>
+    </MotionPress>
+  );
+}
+
 // Delete from elsewhere (the property's Onboarding sheet): a quiet danger link at the bottom, then the same sheet.
 // Admins and super admins only, at the stages canDeleteEnquiry allows.
 export function DeleteEnquiryAction({ p, role, enquiry, onDeleted }: { p: Palette; role: string; enquiry: ClientEnquiry; onDeleted: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   if (!canDeleteEnquiry(role, enquiry)) return null;
   return <>
-    <MotionPress accessibilityRole="button" accessibilityLabel="Delete this enquiry" onPress={() => setOpen(true)} style={[ui.row, { gap: 8, minHeight: 44, alignSelf: "flex-start", paddingHorizontal: 4 }]}>
-      <Feather name="trash-2" size={15} color={p.danger} />
-      <Text style={{ color: p.danger, fontSize: 14, fontWeight: "600" }}>Delete this enquiry</Text>
-    </MotionPress>
+    <DeleteLink p={p} onPress={() => setOpen(true)} />
     {open && <DeleteSheet p={p} enquiry={enquiry} onClose={() => setOpen(false)} onDone={async () => { setOpen(false); await onDeleted(); }} />}
   </>;
 }

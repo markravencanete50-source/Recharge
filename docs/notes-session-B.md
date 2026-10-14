@@ -1085,3 +1085,6 @@ setter never changes, so behaviour is the same. The unused `web` import in `Live
   3. The Onboarding sheet.
   4. Its confirm sheet.
   5. Desktop light only: the list after a real delete (the Estimate group drops from 2 to 1).
+- **E's gate note, done:** the enquiry sheet now uses the same quiet red "Delete this enquiry" link as the
+  Onboarding sheet. Both share `DeleteLink` in `LiveEnquiries.tsx`, and it opens the same confirm sheet. Built on
+  the lead branch `5ca889c`. Screenshots: `delete-enquiry/{desktop-light,phone-dark}-6-enquiry-sheet-quiet-link.jpg`.
