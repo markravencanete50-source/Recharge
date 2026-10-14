@@ -28,11 +28,10 @@ const figures = (o = {}) => ({
 });
 const enquiries = received => ({ from: '', to: '', received, priority: 0, bySource: { form: 0, app: 0 }, byStart: [], funnel: { received, estimate: 0, agreement: 0, live: 0, declined: 0 },
   reply: { replied: 0, waiting: 0, medianMinutes: null, slowestMinutes: null, estimateSent: 0, estimateMedianMinutes: null, estimateSlowestMinutes: null }, rows: [] });
-const repairs = approvedMinor => ({ from: '', to: '', raised: 0, completed: 0, quotedMinor: 0, quotedRepairs: 0, finalMinor: 0, finalRepairs: 0, byStage: [], spend: { approvedMinor, waitingMinor: 0, rejectedMinor: 0, expenses: 0 }, byProperty: [] });
 const full = {
   month: figures({ grossRevenueMinor: 1_254_000, occupancyBps: 6420, nightsBooked: 321, nightsAvailable: 500, averageNightlyRateMinor: 10277 }),
   lastMonth: figures({ grossRevenueMinor: 1_120_000, occupancyBps: 6000, nightsBooked: 300, nightsAvailable: 510, averageNightlyRateMinor: 10277, managementFeeMinor: 375_000, statementCount: 12 }),
-  enquiries: enquiries(6), enquiriesBefore: enquiries(4), repairs: repairs(45_000), repairsBefore: repairs(60_000),
+  enquiries: enquiries(6), enquiriesBefore: enquiries(4), payoutsOverdue: 3,
   portfolio: { live: 14, onboarding: 3 },
 };
 const byKey = list => Object.fromEntries(list.map(f => [f.key, f]));
@@ -49,17 +48,19 @@ test('admins and super admins see the business figures; nobody else does', () =>
 
 test('eight figures with their values and changes against last month', () => {
   const list = ov.businessFigures(full, TODAY);
-  assert.deepEqual(list.map(f => f.key), ['bookings', 'occupancy', 'rate', 'nights', 'fees', 'properties', 'enquiries', 'repairs']);
+  assert.deepEqual(list.map(f => f.key), ['bookings', 'occupancy', 'rate', 'nights', 'fees', 'properties', 'enquiries', 'payouts']);
   const f = byKey(list);
-  assert.deepEqual([f.bookings.value, f.occupancy.value, f.rate.value, f.nights.value, f.fees.value, f.properties.value, f.enquiries.value, f.repairs.value],
-    ['£12.5k', '64.2%', '£102.77', '321', '£3,750', '14', '6', '£450']);
+  assert.deepEqual([f.bookings.value, f.occupancy.value, f.rate.value, f.nights.value, f.fees.value, f.properties.value, f.enquiries.value, f.payouts.value],
+    ['£12.5k', '64.2%', '£102.77', '321', '£3,750', '14', '6', '3']);
   assert.equal(f.bookings.change, null, 'a month in progress only counts settled payouts, so no arrow against a finished month');
   assert.equal(f.bookings.detail, 'Settled so far');
   assert.equal(f.occupancy.change.text, '▲ 4.2 pts vs Sept');
   assert.equal(f.rate.change.text, 'Same as Sept');
   assert.equal(f.nights.change.text, '▲ 7% vs Sept');
   assert.equal(f.enquiries.change.text, '▲ 50% vs Sept');
-  assert.equal(f.repairs.change.text, '▼ 25% vs Sept');
+  assert.equal(f.payouts.change, null, 'an overdue count has nothing to compare with');
+  assert.equal(f.payouts.label, 'Payouts overdue');
+  assert.equal(f.payouts.detail, 'Past their pay date');
   assert.match(f.enquiries.change.spoken, /the same days of Sept/);
   assert.equal(f.fees.change, null, 'fees are last month\'s, with nothing to compare');
   assert.equal(f.fees.detail, 'Issued for September');
@@ -82,12 +83,14 @@ test('a figure that cannot load shows a quiet "–", never an error; zeros are m
   assert.equal(some.enquiries.value, '–');
   assert.equal(some.bookings.value, '–');
   assert.equal(some.fees.value, '£3,750', 'last month still loaded');
-  assert.equal(some.repairs.value, '£450');
+  assert.equal(some.payouts.value, '3');
+  assert.equal(byKey(ov.businessFigures({ ...full, payoutsOverdue: null }, TODAY)).payouts.value, '–', 'the overview failed: payouts overdue reads "–"');
   // Nothing to compare with (last month empty or missing): no change line, and a zero is flagged as a zero.
-  const quiet = byKey(ov.businessFigures({ ...full, lastMonth: figures(), repairs: repairs(0), repairsBefore: null }, TODAY));
+  const quiet = byKey(ov.businessFigures({ ...full, lastMonth: figures(), payoutsOverdue: 0 }, TODAY));
   assert.equal(quiet.nights.change, null);
-  assert.equal(quiet.repairs.value, '£0');
-  assert.ok(quiet.repairs.zero && !quiet.repairs.missing);
+  assert.equal(quiet.payouts.value, '0');
+  assert.ok(quiet.payouts.zero && !quiet.payouts.missing);
+  assert.equal(quiet.payouts.detail, 'All in on time');
   // No occupancy (no nights available) reads "–" too.
   assert.equal(byKey(ov.businessFigures({ ...full, month: figures() }, TODAY)).occupancy.value, '–');
 });
@@ -97,7 +100,7 @@ test('each figure opens the page where its detail lives', () => {
   for (const key of ['bookings', 'occupancy', 'rate', 'nights', 'fees']) assert.deepEqual(f[key].open, { kind: 'work', view: 'accounts', sub: 'performance' }, key);
   assert.deepEqual(f.properties.open, { kind: 'page', section: 'properties' });
   assert.deepEqual(f.enquiries.open, { kind: 'tab', tab: 'enquiries' });
-  assert.deepEqual(f.repairs.open, { kind: 'tab', tab: 'analytics' });
+  assert.deepEqual(f.payouts.open, { kind: 'work', view: 'accounts', sub: 'payouts' }, 'Accounts → Reconciliation, as the Needs line');
   for (const x of Object.values(f)) if (x.open.kind !== 'page') assert.ok(deepLinkFor(x.open), x.key + ' opens somewhere');
 });
 
@@ -144,10 +147,11 @@ test('Home order for admins: greeting and search, This month, Needs your attenti
   assert.match(grid, /color: f\.missing \|\| f\.zero \? p\.muted : p\.text/);
   assert.doesNotMatch(grid, /p\.(danger|success|badge|cautionWash)/);
   assert.match(grid, /This month/);
-  // Only reads that already exist: the Performance report and the enquiries and repairs Business reports.
+  // Only reads that already exist: the Performance report, the enquiries Business report and management's overview.
   assert.match(oversight, /readFinance\(performanceRangeQuery\(range\)\)/);
   assert.match(oversight, /"reportEnquiries"/);
-  assert.match(oversight, /"reportRepairs"/);
+  assert.doesNotMatch(oversight, /"reportRepairs"/, 'repair spend left Home for payouts overdue');
+  assert.match(oversight, /payoutsOverdue: overview\?\.accounts\.payoutsToReconcile \?\? null/);
 });
 
 test('the phone menu lists Management centre for admins, first in Departments as on desktop', () => {

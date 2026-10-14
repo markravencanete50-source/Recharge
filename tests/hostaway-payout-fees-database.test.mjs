@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import { createServer } from 'vite';
 
-// 20261020820000: the sync keeps what the expected payout was worked out from (payout_breakdown), the payout row shows it,
+// 20261020900000: the sync keeps what the expected payout was worked out from (payout_breakdown), the payout row shows it,
 // and management's Home counts only payouts that are overdue and still missing or different.
-const MIGRATION = 'supabase/migrations/20261020820000_hostaway_payout_fees.sql';
+const MIGRATION = 'supabase/migrations/20261020900000_hostaway_payout_fees.sql';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const vite = await createServer({ configFile: false, root, resolve: { alias: { '@': root } }, server: { middlewareMode: true, hmr: false } });
 const { overviewSchema } = await vite.ssrLoadModule('/lib/oversight-policy.ts');

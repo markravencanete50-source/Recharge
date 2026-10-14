@@ -27,12 +27,12 @@ test('admins: decisions first, then guests and today\'s cleans; every waiting li
   assert.ok(lines.length > NEEDS_SHOWN, 'admins get every line; Home shows six and See all');
   assert.deepEqual(lines.map(needText), [
     '3 decisions waiting for management', '10 guests waiting for a reply', '8 cleans not assigned today', '1 clean waiting for review', '5 repairs to refer to Ready',
-    '4 expenses to approve', '307 payouts to reconcile', '2 re-listings open', '4 empty nights to price this week',
+    '4 expenses to approve', '307 payouts overdue to reconcile', '2 re-listings open', '4 empty nights to price this week',
   ]);
   assert.deepEqual(lines[0].open, MANAGEMENT_QUEUE);
   assert.ok(lines.slice(0, 3).every(l => l.urgent));
   const quiet = adminNeeds(overview({ stays: { guestsWaiting: 0, relistingsOpen: 0, emptyNights: 0 }, cleans: { unassignedToday: 0, toReview: 0 }, ready: { toRefer: 0 }, accounts: { expensesToApprove: 0 } }), 0);
-  assert.deepEqual(quiet.map(needText), ['307 payouts to reconcile'], 'zeros never show');
+  assert.deepEqual(quiet.map(needText), ['307 payouts overdue to reconcile'], 'zeros never show');
   assert.deepEqual(adminNeeds(overview({ stays: { guestsWaiting: 0, relistingsOpen: 0, emptyNights: 0 }, cleans: { unassignedToday: 0, toReview: 0 }, ready: { toRefer: 0 }, accounts: { expensesToApprove: 0, payoutsToReconcile: 0 } }), 0), [], 'nothing waiting: Home says All clear');
   assert.deepEqual(adminNeeds(null, 1).map(needText), ['1 decision waiting for management'], 'the overview may fail; the queue still shows');
   assert.equal(adminNeeds(overview({ stays: { guestsWaiting: null } }), 0)[0].key, 'unassigned', 'no guest inbox: that line is left out');

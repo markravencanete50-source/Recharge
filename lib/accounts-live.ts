@@ -53,7 +53,7 @@ export const payoutRowSchema = z.object({
   // than once (often an overlapping report). grossMinor and otaFeesMinor: the stay's gross and platform fees from its lines.
   lineCount: z.number().optional(), fundsReceived: z.boolean().optional(), agreedBeforeFunds: z.boolean().optional(),
   repeatedAmount: nullableMinor.optional(), grossMinor: nullableMinor.optional(), otaFeesMinor: nullableMinor.optional(),
-  // What Hostaway's expected payout was worked out from (20261020820000), in pence; optional for an older database.
+  // What Hostaway's expected payout was worked out from (20261020900000), in pence; optional for an older database.
   expectedBreakdown: z.object({
     source: z.enum(['airbnb', 'itemised', 'totals']), grossMinor: nullableMinor.optional(), commissionMinor: nullableMinor.optional(),
     guestFeeMinor: nullableMinor.optional(), paymentChargeMinor: nullableMinor.optional(), commissionVatMinor: nullableMinor.optional(),

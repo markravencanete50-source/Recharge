@@ -9,7 +9,7 @@ import { PGlite } from '@electric-sql/pglite';
 // straight to the database in the shape the upload screen sends: { channel, fileName, lines }.
 const MIGRATION = 'supabase/migrations/20261012080000_reconciliation_vrbo.sql';
 // Later migrations that patch private.workspace_payout_row by anchor (the run-twice test re-applies them).
-const LATER_PAYOUT_ROW_PATCHES = ['supabase/migrations/20261020820000_hostaway_payout_fees.sql'];
+const LATER_PAYOUT_ROW_PATCHES = ['supabase/migrations/20261020900000_hostaway_payout_fees.sql'];
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
 create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz);

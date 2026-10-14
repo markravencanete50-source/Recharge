@@ -1,7 +1,7 @@
 import { formatCount, formatMoney, formatMoneyShort } from './format';
 import { isWorkspaceAdmin } from './modules';
 import { formatOccupancy, periodRange, type PerformanceFigures, type PerformanceRange } from './performance';
-import type { EnquiriesReport, RepairsReport } from './business-reports-view';
+import type { EnquiriesReport } from './business-reports-view';
 import type { NeedOpen } from './home-needs';
 
 // "This month" on the admins' Home (Lee: Alex is the business owner, so his Home is the whole business at a glance):
@@ -12,20 +12,23 @@ import type { NeedOpen } from './home-needs';
 //   once its payout has settled, so a month in progress always trails a finished one: it has no change line.
 // * Management fees: the same report for last month, as fees come from statements issued after a month ends.
 // * Properties live (and onboarding): the property list Home already has (Properties shows the same count).
-// * New enquiries and repair spend: the Business reports for the 1st of this month to today, against the same days of
-//   last month (Reports → Business reports, with those dates).
+// * New enquiries: the enquiries Business report for the 1st of this month to today, against the same days of last
+//   month (Reports → Business reports, with those dates).
+// * Payouts overdue: management's overview (payoutsToReconcile, 20261020900000): Airbnb, Booking.com and Vrbo stays
+//   whose payout is past its expected date and still missing or different (Accounts → Reconciliation). It took the
+//   place of repair spend, the figure Alex is least likely to act on from Home (it was £0 most days).
 // A figure that can't load shows a quiet "–", never an error.
 
-export type FigureKey = 'bookings' | 'occupancy' | 'rate' | 'nights' | 'fees' | 'properties' | 'enquiries' | 'repairs';
+export type FigureKey = 'bookings' | 'occupancy' | 'rate' | 'nights' | 'fees' | 'properties' | 'enquiries' | 'payouts';
 export type FigureChange = { direction: 'up' | 'down' | 'same'; text: string; spoken: string };
 export type BusinessFigure = { key: FigureKey; label: string; value: string; detail: string; zero: boolean; missing: boolean; change: FigureChange | null; open: NeedOpen };
 export type OverviewData = {
   month: PerformanceFigures | null; lastMonth: PerformanceFigures | null;
   enquiries: EnquiriesReport | null; enquiriesBefore: EnquiriesReport | null;
-  repairs: RepairsReport | null; repairsBefore: RepairsReport | null;
+  payoutsOverdue: number | null;
   portfolio: { live: number; onboarding: number } | null;
 };
-export const EMPTY_OVERVIEW: OverviewData = { month: null, lastMonth: null, enquiries: null, enquiriesBefore: null, repairs: null, repairsBefore: null, portfolio: null };
+export const EMPTY_OVERVIEW: OverviewData = { month: null, lastMonth: null, enquiries: null, enquiriesBefore: null, payoutsOverdue: null, portfolio: null };
 export const MISSING = '–';
 
 // Only admins and super admins see the business figures; everyone else's Home is unchanged.
@@ -70,7 +73,7 @@ function pointsChange(now: number | null | undefined, before: number | null | un
 }
 
 const PERFORMANCE: NeedOpen = { kind: 'work', view: 'accounts', sub: 'performance' };
-const REPORTS: NeedOpen = { kind: 'tab', tab: 'analytics' };
+const RECONCILE: NeedOpen = { kind: 'work', view: 'accounts', sub: 'payouts' };
 const ENQUIRIES: NeedOpen = { kind: 'tab', tab: 'enquiries' };
 const PROPERTIES: NeedOpen = { kind: 'page', section: 'properties' };
 
@@ -83,7 +86,7 @@ export function businessFigures(d: OverviewData, today: string): BusinessFigure[
     const missing = value == null || !Number.isFinite(value);
     return { key, label, value: missing ? MISSING : show(value), detail, zero: !missing && value === 0, missing, change: missing ? null : change, open };
   };
-  const enquiries = d.enquiries?.received, repairs = d.repairs?.spend.approvedMinor;
+  const enquiries = d.enquiries?.received;
   return [
     figure('bookings', 'Bookings value', m?.grossRevenueMinor, formatMoneyShort, 'Settled so far', null, PERFORMANCE),
     figure('occupancy', 'Occupancy', m?.occupancyBps, v => formatOccupancy(v), m ? `${formatCount(m.nightsBooked)} of ${formatCount(m.nightsAvailable)} nights` : 'Booked of available',
@@ -93,7 +96,7 @@ export function businessFigures(d: OverviewData, today: string): BusinessFigure[
     figure('fees', 'Management fees', l?.managementFeeMinor, formatMoneyShort, `Issued for ${r.lastMonthLong}`, null, PERFORMANCE),
     figure('properties', 'Properties live', d.portfolio?.live, formatCount, d.portfolio ? (d.portfolio.onboarding ? `${formatCount(d.portfolio.onboarding)} onboarding` : 'None onboarding') : 'Live with Recharge', null, PROPERTIES),
     figure('enquiries', 'New enquiries', enquiries, formatCount, 'So far this month', percentChange(enquiries, d.enquiriesBefore?.received, vs, `the same days of ${vs}`), ENQUIRIES),
-    figure('repairs', 'Repair spend', repairs, formatMoneyShort, 'Approved so far', percentChange(repairs, d.repairsBefore?.spend.approvedMinor, vs, `the same days of ${vs}`), REPORTS),
+    figure('payouts', 'Payouts overdue', d.payoutsOverdue, formatCount, d.payoutsOverdue === 0 ? 'All in on time' : 'Past their pay date', null, RECONCILE),
   ];
 }
 
