@@ -2,7 +2,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { ArrowRight, CalendarDays, Check, CheckCircle2, ExternalLink } from "lucide-react";
 import { DECISION_LABEL, estimateComparablesOf, estimateDecisionSchema } from "@/lib/estimate-link";
-import { AVAILABLE_NIGHTS, DIRECT_RANGE, OCCUPANCY_RANGE, SCENARIOS, hasFees, project, readEstimate, startingChoices, type Choices } from "@/lib/estimate-projection";
+import { AVAILABLE_NIGHTS, DIRECT_RANGE, OCCUPANCY_RANGE, SCENARIOS, hasFees, netProfit, project, readEstimate, startingChoices, type Choices } from "@/lib/estimate-projection";
 import { formatBps, formatMoney, plural } from "@/lib/format";
 
 // The client's estimate: the nightly rates, the notes and similar properties, a small explorer (the same sums as the
@@ -18,7 +18,7 @@ function Explorer({ estimate }: { estimate: Record<string, unknown> }) {
   const start = useMemo(() => published ? startingChoices(published) : null, [published]);
   const [choices, setChoices] = useState<Choices | null>(start);
   if (!published || !choices || !start) return null;
-  const fees = hasFees(published), result = project(published, choices);
+  const fees = hasFees(published), result = project(published, choices), net = netProfit(estimate, result);
   const set = (next: Partial<Choices>) => setChoices(c => ({ ...c!, ...next }));
   const changed = choices.scenario !== start.scenario || choices.occupancyBps !== start.occupancyBps || choices.directBookingBps !== start.directBookingBps;
   return <section className="estimate-card" aria-labelledby="estimate-explore">
@@ -56,6 +56,12 @@ function Explorer({ estimate }: { estimate: Record<string, unknown> }) {
     </dl>}
     {/* What the two fees are, in plain words (Alex), beside the lines. */}
     {fees && <p className="enquiry-help">Airbnb and Booking.com keep a share of each booking made through their sites: that is the platform fee. Guests who book with us directly pay no platform fee. The management fee is what Recharge charges for running your let, as a share of the booking income.</p>}
+    {/* Your own monthly costs, when Recharge added them (migration 20261020890000), and what is left. */}
+    {net && <><h3>Your own costs</h3><dl className="estimate-lines" aria-label="Your own costs and estimated net profit">
+      {net.costs.map(c => <div key={c.category}><dt>{c.category}, a month</dt><dd>{"−" + pounds(c.monthlyMinor)}</dd></div>)}
+      <div data-strong="true"><dt>Estimated net profit per month</dt><dd>{(net.monthlyNetMinor < 0 ? "−" : "") + pounds(Math.abs(net.monthlyNetMinor))}</dd></div>
+      <div data-strong="true"><dt>Estimated net profit per year</dt><dd>{(net.yearlyNetMinor < 0 ? "−" : "") + pounds(Math.abs(net.yearlyNetMinor))}</dd></div>
+    </dl></>}
     <p className="enquiry-help">An estimate, not a guarantee. {fees ? "Before cleaning, maintenance, utilities and tax." : "We will add the fees when we talk, so you can see your earnings."} Assumes the property is available all {AVAILABLE_NIGHTS} nights of the year.</p>
     {changed && <button type="button" className="estimate-link-button" onClick={() => setChoices(start)}>Back to Recharge’s estimate</button>}
   </section>;

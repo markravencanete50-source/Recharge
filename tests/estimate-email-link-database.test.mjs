@@ -19,7 +19,8 @@ for (const file of files) await db.exec(await fs.readFile('supabase/migrations/'
 const SIGS = ['private.workspace_journey_view(private.workspace_journeys)', 'private.workspace_client_enquiry_view(private.workspace_client_enquiries)', 'private.workspace_estimate_link_action(jsonb)', 'private.workspace_estimate_public(jsonb)'];
 const definitions = () => Promise.all(SIGS.map(async s => (await db.query('select pg_get_functiondef($1::regprocedure) d', [s])).rows[0].d));
 const firstRun = await definitions();
-await db.exec(await fs.readFile('supabase/migrations/' + MINE, 'utf8'));
+// Run again with the migrations after it (20261020880000 patches workspace_estimate_public), each safe to run twice.
+for (const file of files.filter(f => f >= MINE)) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 const secondRun = await definitions();
 after(() => db.close());
 
