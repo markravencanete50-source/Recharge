@@ -1048,8 +1048,11 @@ setter never changes, so behaviour is the same. The unused `web` import in `Live
   message, for example "This property has an invoice recorded, so this enquiry can no longer be deleted. Archive it
   instead." Bookings, costs, owner statements, payout details, guest messages and photos on a work item are named
   the same way.
-  - A table added later blocks the delete instead of being orphaned. F's estimate-link and email records don't
-    exist yet on `main` or F's branch; when they land, they need adding to the cleared list, or a cascade.
+  - A table added later blocks the delete instead of being orphaned, unless it cascades.
+  - F's `private.workspace_estimate_links` (on `claude/estimate-email-session-f`, migration 20261019520000) cascades
+    on property delete, so its links go too. Checked by merging F's branch in a scratch worktree and running
+    the delete tests with a link on each property: 11 of 11 pass and no row is left. F's sent emails are kept as
+    correspondence; they have no key into the property or the enquiry.
 - **Audit:** the access history's `client_enquiry.deleted` entry now also keeps the property's address and name, and
   the stage it had reached, since its own history goes with it. It still holds no email or phone.
 - **Where:**
