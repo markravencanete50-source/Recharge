@@ -78,7 +78,7 @@ test('Reported messages: labelled by source, hidden rather than removed, with a 
   assert.match(src, /REPORT_SOURCE_LABEL\[r\.source\], r\.propertyName/);
   assert.match(read('mobile/src/LiveWorkspace.tsx'), /<LiveModeration palette=\{p\} onOpenConversation=\{openMessages\} \/>/);
   const chatList = read('mobile/src/LiveChat.tsx');
-  assert.match(chatList, /guestLink \? "guests" : openConversation\?\.startsWith\("email:"\) \? "clients"/);
+  assert.match(chatList, /guestLink \? "guests" : openConversation\?\.startsWith\("email:"\) \? "clientEmails"/);
   assert.match(chatList, /openThread=\{guestLink\}/);
 });
 
