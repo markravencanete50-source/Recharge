@@ -1,8 +1,14 @@
 import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
+import { validationReason } from './operations-policy';
 const id=z.string().uuid(), text=(max:number)=>z.string().trim().max(max), money=z.number().int().min(0).max(10000000);
 const date=z.string().refine(v=>Boolean(parseAnalyticsDate(v)),'Choose a valid date');
-const https=z.string().url().max(1000).refine(v=>new URL(v).protocol==='https:','Use HTTPS');
+// A link that does not parse ("Test") must fail validation, never throw: new URL throws, which used to surface as a 503.
+export const HTTPS_LINK_MESSAGE='The link must start with https://';
+export const isHttpsLink=(v:string)=>{try{return new URL(v).protocol==='https:';}catch{return false;}};
+const https=z.string({required_error:HTTPS_LINK_MESSAGE,invalid_type_error:HTTPS_LINK_MESSAGE}).max(1000).refine(isHttpsLink,HTTPS_LINK_MESSAGE);
+// A comparable on the estimate: the name, an https link and the nightly rate, each with a plain message.
+const comparable=z.object({name:text(160).min(1,'Add the name').refine(v=>!/^(https?:|www\.)/i.test(v),'Put the link in the link field'),url:https,adrMinor:z.number({required_error:'Add the nightly rate',invalid_type_error:'Add the nightly rate'}).int().min(0).max(10000000)}).strict();
 const base={requestId:id,propertyId:id,version:z.number().int().positive()};
 export const onboardingFormSchema=z.object({
  businessName:text(200).min(2),bankAccountName:text(200).min(2),bankAccountNumber:z.string().regex(/^\d{8}$/),bankSortCode:z.string().regex(/^\d{2}-?\d{2}-?\d{2}$/),
@@ -23,7 +29,7 @@ export const enquiryDetailsSchema=z.object({
 }).strict();
 export const journeyActionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('createEnquiry'),requestId:id,clientId:id.optional(),name:text(200).min(2),address:text(1000).min(5),region:text(200).default(''),propertyType:text(120).min(2),bedrooms:z.number().int().min(0).max(40),bathrooms:z.number().int().min(0).max(40),enquiry:enquiryDetailsSchema.optional()}).strict(),
- z.object({action:z.literal('publishEstimate'),...base,lowRateMinor:money.min(100),mediumRateMinor:money.min(100),highRateMinor:money.min(100),comparables:z.array(z.object({name:text(160).min(1),url:https,adrMinor:money}).strict()).max(3),comments:text(5000).default(''),occupancyBps:z.number().int().min(0).max(10000).optional(),directBookingBps:z.number().int().min(0).max(10000).optional(),otaFeeBps:z.number().int().min(0).max(10000).optional(),managementFeeBps:z.number().int().min(0).max(10000).optional()}).strict(),
+ z.object({action:z.literal('publishEstimate'),...base,lowRateMinor:money.min(100),mediumRateMinor:money.min(100),highRateMinor:money.min(100),comparables:z.array(comparable).max(3),comments:text(5000).default(''),occupancyBps:z.number().int().min(0).max(10000).optional(),directBookingBps:z.number().int().min(0).max(10000).optional(),otaFeeBps:z.number().int().min(0).max(10000).optional(),managementFeeBps:z.number().int().min(0).max(10000).optional()}).strict(),
  z.object({action:z.literal('decideEstimate'),...base,decision:z.enum(['proceed','review','decline']),feedback:text(5000).default(''),followUpOn:date.nullable().optional()}).strict(),
  z.object({action:z.literal('publishAgreement'),...base,agreement:text(10000).min(20)}).strict(),
  z.object({action:z.literal('signAgreement'),...base,agreementRevision:z.number().int().positive(),signedName:text(200).min(2),consent:z.literal(true)}).strict(),
@@ -40,3 +46,12 @@ export type JourneyAction=z.infer<typeof journeyActionSchema>;
 export const journeyReadSchema=z.object({propertyId:id.optional()}).strict();
 // The work list, or one work item by its id (opened from an update, migration 20261017300000).
 export const operationsReadSchema=z.object({propertyId:id.optional(),workId:id.optional()}).strict().refine(v=>!(v.propertyId&&v.workId),{message:'Choose a property or a work item'});
+// The journey route's 400 message. A comparable or a listing link is named in plain words ("Comparable 1 link: The link
+// must start with https://"); everything else reads as validationReason has it.
+const ITEM_LABELS:Record<string,[string,Record<string,string>]>={comparables:['Comparable',{name:'name',url:'link',adrMinor:'nightly rate'}],listingLinks:['Listing link',{platform:'platform',url:''}]};
+export function journeyValidationReason(error:z.ZodError):string{
+ const issue=error.issues[0],[list,index,key]=issue?.path??[],item=typeof list==='string'?ITEM_LABELS[list]:undefined;
+ if(!issue||!item||typeof index!=='number')return validationReason(error);
+ const part=typeof key==='string'?item[1][key]??key:'';
+ return `${item[0]} ${index+1}${part?' '+part:''}: ${issue.message}`;
+}
