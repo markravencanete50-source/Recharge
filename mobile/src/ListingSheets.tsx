@@ -133,7 +133,7 @@ export function ReviewSheet({ p, property, onClose, onDone }: { p: Palette; prop
         {Array.from({ length: outOf }, (_, i) => i + 1).map(n => (
           <MotionPress key={n} accessibilityRole="radio" accessibilityLabel={`${n} out of ${outOf}`} accessibilityState={{ selected: rating === n }} onPress={() => rate(n)}
             style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", ...pillBox(p, rating === n) }}>
-            <Text style={{ color: pillInk(p, rating === n), fontWeight: "700", fontVariant: ["tabular-nums"] }}>{n}</Text>
+            <Text style={{ color: pillInk(p, rating === n), fontWeight: "600", fontVariant: ["tabular-nums"] }}>{n}</Text>
           </MotionPress>
         ))}
       </View>}

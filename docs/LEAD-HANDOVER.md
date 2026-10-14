@@ -244,6 +244,21 @@ was OK. Checked on live after Lee ran the SQL: all four are recorded, the new ta
 Next round (not blocking), optional items from E:
 - The count numbers in the LivePortfolio and PayoutStays chips use weight 700; they could be 600.
 
+Lee's three fixes (pull request #9, main `a1f7a7e`, built by the lead at Lee's request, migration `20261020400000`):
+- The search panel results are never cut off, and "KPI" finds Performance.
+- Every email ends with the logo signature, with no logo at the top.
+- Up to 20 comparables on an estimate. The next one opens once the one before has a name.
+
+Full suite 1710 of 1710. Checked on live: the migration is recorded and the limit is 20.
+
+Open with Lee: "Ask management" has no person field. Lee will decide later between "who it's about" and "who should
+decide".
+
+Repairs troubleshooting: Lee decided (14 October) to keep the guided checklist (`lib/repair-guides.ts`, Resolved or
+refer to Ready). There are no AI suggestions for now; they would need an AI service key as a Worker Secret.
+
+Clean cost flag (Alex D6) is built and live: Clean cost review (`CleanCostReview.tsx`, migration `20261012090000`).
+
 Email sender picture: Lee decided (14 October) not to create Google accounts for the two mailboxes, so Gmail keeps the
 letter avatar. The Recharge logo goes inside the emails instead (F). BIMI (DMARC enforcement plus a paid VMC/CMC
 certificate) is the option for later if Alex wants the logo in every inbox.
@@ -254,7 +269,7 @@ certificate) is the option for later if Alex wants the logo in every inbox.
 - Whether to send the team note: "theme tokens only, check dark mode, don't edit theme files, E reviews before merge".
   The developers have since been told the main points one by one.
 - Taste calls:
-  - the Access control people filter (6 choices with live counts) as a dropdown: keep it, or go back to buttons?
+  - the Access control people filter (6 choices with live counts) as a dropdown: **settled 14 October, keep the dropdown.**
   - rows of exactly 5 buttons now scroll sideways on phones instead of wrapping: is that okay?
 - Check the public enquiry form once on an iPhone and on a Mac (D tested Chromium only).
 - Optional data steps from round 4: bonus tiers 90/95 in Team performance targets; the four wrong regions; the open

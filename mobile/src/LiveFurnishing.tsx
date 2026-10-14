@@ -70,7 +70,7 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
         {(["details", "list"] as const).map((s, i) => (
           <MotionPress key={s} accessibilityRole="tab" accessibilityState={{ selected: step === s }} onPress={() => setStep(s)}
             style={[ui.row, { flex: 1, gap: 8, minHeight: 46, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", ...pillBox(p, step === s) }]}>
-            <Text style={{ color: pillInk(p, step === s), fontWeight: "700" }}>{i + 1}. {s === "details" ? "Property details" : "Required quantities"}</Text>
+            <Text style={{ color: pillInk(p, step === s), fontWeight: "600" }}>{i + 1}. {s === "details" ? "Property details" : "Required quantities"}</Text>
           </MotionPress>
         ))}
       </View>
@@ -104,7 +104,7 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
             return (
               <Pop key={c.id} active={on}><MotionPress accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setCategory(c.id)}
                 style={[ui.row, { gap: 8, minHeight: 42, paddingHorizontal: 14, borderRadius: 14, ...pillBox(p, on) }]}>
-                <Text style={{ color: pillInk(p, on), fontWeight: "700" }}>{c.label}</Text>
+                <Text style={{ color: pillInk(p, on), fontWeight: "600" }}>{c.label}</Text>
                 <View style={{ paddingHorizontal: 7, paddingVertical: 1, borderRadius: 6, backgroundColor: on ? p.onSelected : p.wash }}><Text style={{ color: on ? p.selected : p.text, fontSize: 12, fontWeight: "700" }}>{c.lines.length}</Text></View>
               </MotionPress></Pop>
             );

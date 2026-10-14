@@ -33,7 +33,7 @@ export function Chip({ p, label, count, on, onPress }: { p: Palette; label: stri
     <Pop active={on}><MotionPress accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress}
       style={[ui.row, { gap: 8, minHeight: 40, paddingHorizontal: 12, borderRadius: 999 }, pillBox(p, on)]}>
       <Text style={{ color: pillInk(p, on), fontWeight: "600", fontSize: 13 }}>{label}</Text>
-      <Text style={{ color: pillInk(p, on, true), fontWeight: "700", fontSize: 13, fontVariant: ["tabular-nums"] }}>{formatCount(count)}</Text>
+      <Text style={{ color: pillInk(p, on, true), fontWeight: "600", fontSize: 13, fontVariant: ["tabular-nums"] }}>{formatCount(count)}</Text>
     </MotionPress></Pop>
   );
 }

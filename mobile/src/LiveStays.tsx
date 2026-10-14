@@ -130,7 +130,7 @@ export function LiveStays({ palette: p, account, properties, onOpenRepairs, onOp
             return (
               <MotionPress key={d} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ minWidth: 64, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 16, alignItems: "center", gap: 2, ...pillBox(p, on) }}>
                 <Text style={{ color: pillInk(p, on, true), fontSize: 11, fontWeight: "600" }}>{d === today ? "Today" : dayLabel(d).split(" ")[0]}</Text>
-                <Text style={{ color: pillInk(p, on), fontSize: 17, fontWeight: "700" }}>{Number(d.slice(8))}</Text>
+                <Text style={{ color: pillInk(p, on), fontSize: 17, fontWeight: "600" }}>{Number(d.slice(8))}</Text>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: busy ? (on ? p.onSelected : p.primary) : "transparent" }} />
               </MotionPress>
             );
