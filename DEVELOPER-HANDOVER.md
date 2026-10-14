@@ -2,6 +2,23 @@
 
 Start with `README.md`. It describes the parts of the platform and the commands.
 
+## Rounds 6 to 8 are live (14 October 2026)
+
+Six sessions (A: pills and long lists become dropdowns, Properties search only, Accounts and New expense dates; B: To-do
+update log and thin rows, Favorites in Overview, delete client enquiries, phone header, table widths; C: Updates titles,
+open any update and Show older, management bonus (Guest relations and Client relations combined, split set by admins),
+"Engaged" status, help text; D: forms rule, sheet spacing, public enquiry form, Management Today's checklist, Maintenance,
+Calendar, calendar-picker dates; E: dark mode, contrast test, design review of every branch; F: email for guests and
+clients through Resend) were integrated by the lead developer. Migrations `20261016200000` to `20261018300000` (seven)
+were installed in one transaction from `supabase/install-pending.sql`; `main` is `5763aa0` (pull request #4). Full suite
+1618 of 1618 before the last small changes. Details: `docs/notes-session-A.md` to `-F.md`, `docs/GO-LIVE-ROUND-6-8.md`
+(tell the team, checks per role), `docs/EMAIL.md` (guest and client email, and what Lee still sets up), and
+`docs/LEAD-HANDOVER.md` (how rounds ship, the team, the rules).
+
+Two email addresses, never mixed: `guestrelations@rechargegroup.co.uk` (guests, Messages → Guests) and
+`ownerrelations@rechargegroup.co.uk` (clients and owners, Messages → Clients, and the client enquiry form email). The
+domain's DNS is in Cloudflare. Email in and replies by email stay off until the steps in `docs/EMAIL.md` are done.
+
 ## Round 5 is live (13 October 2026)
 
 Four sessions (A: KPIs, Accounts calendars and dropdowns, payout summary; B: enquiry to property, menu order editor,
