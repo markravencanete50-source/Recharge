@@ -244,6 +244,16 @@ was OK. Checked on live after Lee ran the SQL: all four are recorded, the new ta
 Next round (not blocking), optional items from E:
 - The count numbers in the LivePortfolio and PayoutStays chips use weight 700; they could be 600.
 
+Lee's three fixes (pull request #9, main `a1f7a7e`, built by the lead at Lee's request, migration `20261020400000`):
+- The search panel results are never cut off, and "KPI" finds Performance.
+- Every email ends with the logo signature, with no logo at the top.
+- Up to 20 comparables on an estimate. The next one opens once the one before has a name.
+
+Full suite 1710 of 1710. Checked on live: the migration is recorded and the limit is 20.
+
+Open with Lee: "Ask management" has no person field. Lee will decide later between "who it's about" and "who should
+decide".
+
 Email sender picture: Lee decided (14 October) not to create Google accounts for the two mailboxes, so Gmail keeps the
 letter avatar. The Recharge logo goes inside the emails instead (F). BIMI (DMARC enforcement plus a paid VMC/CMC
 certificate) is the option for later if Alex wants the logo in every inbox.

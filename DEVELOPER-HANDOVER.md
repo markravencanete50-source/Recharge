@@ -2,6 +2,13 @@
 
 Start with `README.md`. It describes the parts of the platform and the commands.
 
+## Lee's three fixes are live (14 October 2026, pull request #9)
+
+- The search panel has a pixel height on computers, so its results never collapse.
+- "KPI" finds Performance.
+- Every email ends with the Recharge signature (`emailSignature` in `lib/email-brand.ts`).
+- Up to `MAX_COMPARABLES` (20) comparables on an estimate (migration `20261020400000`).
+
 ## Round 10 is live (14 October 2026)
 
 Integrated by the lead developer:
