@@ -171,3 +171,15 @@ test('every email carries the Recharge logo: a header on the enquiry form, a sig
   assert.ok(png.length < 60_000, 'small enough for an email');
   assert.match(await fs.readFile('worker/backend-route-policy.ts', 'utf8'), /"\/recharge-email-logo\.png"/);
 });
+
+test('the Supabase Auth templates Lee pastes carry the same logo and keep the links the app expects', async () => {
+  for (const [file, needs] of [['reset-password.html', ['{{ .ConfirmationURL }}']], ['confirm-signup.html', ['{{ .Token }}']]]) {
+    const html = await fs.readFile('docs/auth-email-templates/' + file, 'utf8');
+    assert.match(html, /<img src="https:\/\/app\.rechargegroup\.co\.uk\/recharge-email-logo\.png" alt="Recharge" width="180" height="50"/, file);
+    for (const n of needs) assert.ok(html.includes(n), `${file} keeps ${n}`);
+    assert.doesNotMatch(html, /—|<script/i, file);
+  }
+  // The app exchanges ?code= for a reset (app/auth/recovery) and verifies a typed code for a signup (app/api/mobile/account).
+  assert.match(await fs.readFile('app/api/session/recovery/route.ts', 'utf8'), /resetPasswordForEmail\(body\.data\.email, \{ redirectTo: `\$\{config\.origin\}\/auth\/recovery` \}\)/);
+  assert.match(await fs.readFile('app/api/mobile/account/route.ts', 'utf8'), /\{ email: address, token: code, type: "email" \}/);
+});

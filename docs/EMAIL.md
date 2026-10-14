@@ -88,6 +88,7 @@ Migration 20261019520000, `lib/estimate-link.ts`, `lib/estimate-link-server.ts`,
 - **Replies written in Messages:** both mailboxes send an HTML part. It holds the text as written, then a small signature: the logo at 108 by 30, "Recharge Group", and the mailbox the reply came from. Plain-text parts are unchanged.
 - **Staff notice emails:** these now send an HTML part with the logo on top and the same text. The plain text is unchanged, so every email we send carries the logo.
 - **The round avatar Gmail shows** for a sender comes from BIMI (DMARC at enforcement plus a paid VMC or CMC certificate) or from a Google account photo on the sending address. It is not set by the email itself Lee decided against both, so nothing is set up for it.
+- **Supabase Auth emails** (password reset, signup code) use Supabase's own templates. Branded versions and Lee's paste steps are in `docs/auth-email-templates/`. Paste them once this batch is live.
 - **Screenshots:** `docs/screenshots/session-f/email-*.png`.
 
 ## Two addresses, never mixed (Lee's rule)
