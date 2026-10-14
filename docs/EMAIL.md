@@ -21,6 +21,8 @@ sender -> Fasthosts mailbox (kept there) -> forwarding rule -> guestrelations@in
   that owner's one conversation as the owner. **Anyone else** (a new landlord, an enquiry, an owner without an account) gets an **email conversation in Messages, Clients**
   (migration 20261019500000, round 7): admins, super admins and the client relations rota read it and reply from `ownerrelations@` (once per request id, threaded); their
   answer comes back into it; Close / Reopen; **Assign to owner** moves the history into that owner's conversation and remembers the address. The old Unknown senders panel is gone.
+  One conversation per person: a new email from them on another subject (not a reply) joins it, starts with its `Subject:` line and becomes the
+  conversation's subject, so the row and header show it and the reply goes out as `Re: <it>` (migration 20261019510000).
 - **Replies out:** staff press Send in an email conversation: recorded once per request id (`workspace_guest_reply_requests`), emailed through Resend as
   `guestrelations@` with `In-Reply-To`, `References` and a fixed `Message-ID`, stored only after Resend accepted it. A team reply in an owner conversation whose latest owner
   message came by email is queued (`workspace_email_outbox`) and sent as `ownerrelations@` by the Worker every minute, once per row.
