@@ -1,31 +1,47 @@
+import { z } from 'zod';
 import { formatCount, formatMoney, formatMoneyShort } from './format';
 import { isWorkspaceAdmin } from './modules';
 import { formatOccupancy, periodRange, type PerformanceFigures, type PerformanceRange } from './performance';
-import type { EnquiriesReport, RepairsReport } from './business-reports-view';
+import { reportAnchor, type EnquiriesReport } from './business-reports-view';
 import type { NeedOpen } from './home-needs';
 
 // "This month" on the admins' Home (Lee: Alex is the business owner, so his Home is the whole business at a glance):
 // eight figures, each with a short label and, where it means something, a quiet change against last month. Every figure
 // comes from a read the app already makes, and each opens the page where its detail lives:
-// * Bookings value, occupancy, average nightly rate and nights booked: the Performance report for this calendar month
-//   (Accounts → Performance opens on the same dates), against last month's. Bookings value counts a platform stay only
-//   once its payout has settled, so a month in progress always trails a finished one: it has no change line.
+// * Bookings value, occupancy and average nightly rate: the Performance report for this calendar month (Accounts →
+//   Performance opens on the same dates), against last month's. Bookings value is the value as booked
+//   (bookedValueMinor, 20261020910000): every stay with nights in the month, settled or not, so this month and last
+//   are counted alike and the change line is fair. Nights booked is in occupancy's detail.
+// * Guest replies on time: the share of guest replies within the green target this month so far, against the same
+//   days of last month, in points (workspace_guest_reply_glance, 20261020910000, the rules of the Messages report and
+//   Team performance). It took the place of nights booked, which occupancy's detail already gives.
 // * Management fees: the same report for last month, as fees come from statements issued after a month ends.
 // * Properties live (and onboarding): the property list Home already has (Properties shows the same count).
-// * New enquiries and repair spend: the Business reports for the 1st of this month to today, against the same days of
-//   last month (Reports → Business reports, with those dates).
+// * New enquiries: the enquiries Business report for the 1st of this month to today, against the same days of last
+//   month (Reports → Business reports, with those dates).
+// * Payouts overdue: management's overview (payoutsToReconcile, 20261020900000): Airbnb, Booking.com and Vrbo stays
+//   whose payout is past its expected date and still missing or different (Accounts → Reconciliation). It took the
+//   place of repair spend, the figure Alex is least likely to act on from Home (it was £0 most days).
 // A figure that can't load shows a quiet "–", never an error.
 
-export type FigureKey = 'bookings' | 'occupancy' | 'rate' | 'nights' | 'fees' | 'properties' | 'enquiries' | 'repairs';
+export type FigureKey = 'bookings' | 'occupancy' | 'rate' | 'replies' | 'fees' | 'properties' | 'enquiries' | 'payouts';
 export type FigureChange = { direction: 'up' | 'down' | 'same'; text: string; spoken: string };
 export type BusinessFigure = { key: FigureKey; label: string; value: string; detail: string; zero: boolean; missing: boolean; change: FigureChange | null; open: NeedOpen };
+const replyWindow = z.object({
+  from: z.string(), to: z.string(), replies: z.number().int().min(0), onTime: z.number().int().min(0),
+  onTimeBps: z.number().int().min(0).max(10000).nullable(), medianMinutes: z.number().min(0).nullable(),
+});
+export const guestReplyGlanceSchema = z.object({ greenMinutes: z.number().int().nullable(), amberMinutes: z.number().int().nullable(), thisMonth: replyWindow, lastMonth: replyWindow });
+export type GuestReplyGlance = z.infer<typeof guestReplyGlanceSchema>;
 export type OverviewData = {
   month: PerformanceFigures | null; lastMonth: PerformanceFigures | null;
+  booked: number | null; bookedBefore: number | null;
+  replies: GuestReplyGlance | null;
   enquiries: EnquiriesReport | null; enquiriesBefore: EnquiriesReport | null;
-  repairs: RepairsReport | null; repairsBefore: RepairsReport | null;
+  payoutsOverdue: number | null;
   portfolio: { live: number; onboarding: number } | null;
 };
-export const EMPTY_OVERVIEW: OverviewData = { month: null, lastMonth: null, enquiries: null, enquiriesBefore: null, repairs: null, repairsBefore: null, portfolio: null };
+export const EMPTY_OVERVIEW: OverviewData = { month: null, lastMonth: null, booked: null, bookedBefore: null, replies: null, enquiries: null, enquiriesBefore: null, payoutsOverdue: null, portfolio: null };
 export const MISSING = '–';
 
 // Only admins and super admins see the business figures; everyone else's Home is unchanged.
@@ -60,18 +76,22 @@ function percentChange(now: number | null | undefined, before: number | null | u
   const up = pct > 0;
   return { direction: up ? 'up' : 'down', text: `${up ? '▲' : '▼'} ${Math.abs(pct)}% vs ${against}`, spoken: `${up ? 'up' : 'down'} ${Math.abs(pct)}% on ${spokenAgainst}` };
 }
-// Occupancy moves in percentage points: ▲ 4.2 pts.
-function pointsChange(now: number | null | undefined, before: number | null | undefined, against: string): FigureChange | null {
+// Occupancy and replies on time move in percentage points: ▲ 4.2 pts.
+function pointsChange(now: number | null | undefined, before: number | null | undefined, against: string, spokenAgainst = against): FigureChange | null {
   if (now == null || before == null || !Number.isFinite(now) || !Number.isFinite(before)) return null;
   const tenths = Math.round((now - before) / 10);
-  if (tenths === 0) return { direction: 'same', text: `Same as ${against}`, spoken: `the same as ${against}` };
+  if (tenths === 0) return { direction: 'same', text: `Same as ${against}`, spoken: `the same as ${spokenAgainst}` };
   const up = tenths > 0, pts = (Math.abs(tenths) / 10).toLocaleString('en-GB', { maximumFractionDigits: 1 });
-  return { direction: up ? 'up' : 'down', text: `${up ? '▲' : '▼'} ${pts} pts vs ${against}`, spoken: `${up ? 'up' : 'down'} ${pts} points on ${against}` };
+  return { direction: up ? 'up' : 'down', text: `${up ? '▲' : '▼'} ${pts} pts vs ${against}`, spoken: `${up ? 'up' : 'down'} ${pts} points on ${spokenAgainst}` };
 }
+// A share in basis points as a whole percentage: 9230 → "92%".
+export const formatShare = (bps: number) => `${Math.round(bps / 100)}%`;
 
 const PERFORMANCE: NeedOpen = { kind: 'work', view: 'accounts', sub: 'performance' };
-const REPORTS: NeedOpen = { kind: 'tab', tab: 'analytics' };
+const RECONCILE: NeedOpen = { kind: 'work', view: 'accounts', sub: 'payouts' };
 const ENQUIRIES: NeedOpen = { kind: 'tab', tab: 'enquiries' };
+// Reports → Business reports → Messages, for this month so far.
+const MESSAGES: NeedOpen = { kind: 'tab', tab: 'analytics', anchor: reportAnchor('messages') };
 const PROPERTIES: NeedOpen = { kind: 'page', section: 'properties' };
 
 // The eight figures, in reading order: money and occupancy first, then the pipeline and spend. Each detail fits one
@@ -83,17 +103,20 @@ export function businessFigures(d: OverviewData, today: string): BusinessFigure[
     const missing = value == null || !Number.isFinite(value);
     return { key, label, value: missing ? MISSING : show(value), detail, zero: !missing && value === 0, missing, change: missing ? null : change, open };
   };
-  const enquiries = d.enquiries?.received, repairs = d.repairs?.spend.approvedMinor;
+  const enquiries = d.enquiries?.received;
+  const replies = d.replies?.thisMonth, green = d.replies?.greenMinutes;
+  const repliesDetail = replies?.replies === 0 ? 'No replies yet' : green ? `within ${formatCount(green)} min` : 'Within the target';
   return [
-    figure('bookings', 'Bookings value', m?.grossRevenueMinor, formatMoneyShort, 'Settled so far', null, PERFORMANCE),
+    figure('bookings', 'Bookings value', d.booked, formatMoneyShort, 'Booked this month', percentChange(d.booked, d.bookedBefore, vs), PERFORMANCE),
     figure('occupancy', 'Occupancy', m?.occupancyBps, v => formatOccupancy(v), m ? `${formatCount(m.nightsBooked)} of ${formatCount(m.nightsAvailable)} nights` : 'Booked of available',
       pointsChange(m?.occupancyBps, l?.occupancyBps, vs), PERFORMANCE),
     figure('rate', 'Average nightly rate', m?.averageNightlyRateMinor, formatMoney, 'Priced nights only', percentChange(m?.averageNightlyRateMinor, l?.averageNightlyRateMinor, vs), PERFORMANCE),
-    figure('nights', 'Nights booked', m?.nightsBooked, formatCount, 'Owner stays included', percentChange(m?.nightsBooked, l?.nightsBooked, vs), PERFORMANCE),
+    figure('replies', 'Guest replies on time', replies?.onTimeBps, formatShare, repliesDetail,
+      pointsChange(replies?.onTimeBps, d.replies?.lastMonth.onTimeBps, vs, `the same days of ${vs}`), MESSAGES),
     figure('fees', 'Management fees', l?.managementFeeMinor, formatMoneyShort, `Issued for ${r.lastMonthLong}`, null, PERFORMANCE),
     figure('properties', 'Properties live', d.portfolio?.live, formatCount, d.portfolio ? (d.portfolio.onboarding ? `${formatCount(d.portfolio.onboarding)} onboarding` : 'None onboarding') : 'Live with Recharge', null, PROPERTIES),
     figure('enquiries', 'New enquiries', enquiries, formatCount, 'So far this month', percentChange(enquiries, d.enquiriesBefore?.received, vs, `the same days of ${vs}`), ENQUIRIES),
-    figure('repairs', 'Repair spend', repairs, formatMoneyShort, 'Approved so far', percentChange(repairs, d.repairsBefore?.spend.approvedMinor, vs, `the same days of ${vs}`), REPORTS),
+    figure('payouts', 'Payouts overdue', d.payoutsOverdue, formatCount, d.payoutsOverdue === 0 ? 'All in on time' : 'Past their pay date', null, RECONCILE),
   ];
 }
 

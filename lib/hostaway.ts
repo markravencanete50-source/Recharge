@@ -327,7 +327,8 @@ export async function fetchHostawayReservations(departureFrom: string): Promise<
   if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
   const rows: unknown[] = [];
   for (let offset = 0; offset < 5000; offset += 100) {
-    const page = await hostawayRequest<unknown[]>(`/reservations?limit=100&offset=${offset}&departureStartDate=${encodeURIComponent(departureFrom)}&sortOrder=arrivalDate`);
+    // includeResources=1: each reservation comes with its itemised finance lines (financeField) for the expected payout.
+    const page = await hostawayRequest<unknown[]>(`/reservations?limit=100&offset=${offset}&departureStartDate=${encodeURIComponent(departureFrom)}&sortOrder=arrivalDate&includeResources=1`);
     if (!Array.isArray(page)) throw new HostawayApiError("Hostaway returned an invalid reservation list", 502);
     rows.push(...page);
     if (page.length < 100) break;
@@ -337,7 +338,7 @@ export async function fetchHostawayReservations(departureFrom: string): Promise<
 
 export async function fetchHostawayReservation(id: string): Promise<unknown> {
   if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
-  return hostawayRequest<unknown>(`/reservations/${encodeURIComponent(id)}`);
+  return hostawayRequest<unknown>(`/reservations/${encodeURIComponent(id)}?includeResources=1`);
 }
 
 // Cancels a booking in Hostaway (it then tells the channel where it can: direct and Vrbo bookings).
