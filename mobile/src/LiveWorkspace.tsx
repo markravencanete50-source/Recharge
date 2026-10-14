@@ -527,7 +527,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} properties={properties} onOpenWork={setOpenWork} onOpenView={openView} />}
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />}
       {currentView === "stays" && <GuestRelations key={"stays:" + (focus?.nonce ?? "")} {...sectionProps} onRefresh={() => refresh(true)} minimumNights={policy?.minimum_nights} />}
-      {currentView === "clients" && <ClientRelations key={"clients:" + (focus?.nonce ?? "")} {...sectionProps} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} />}
+      {currentView === "clients" && <ClientRelations key={"clients:" + (focus?.nonce ?? "")} {...sectionProps} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} onRefresh={() => refresh(true)} />}
       {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onForm={setForm} />}
       {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} sectionProps={sectionProps} />}
       {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} sectionProps={sectionProps} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
@@ -575,7 +575,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
     : tab === "enquiries" ? <LiveEnquiries palette={p} account={account} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} />
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
-    : tab === "moderation" ? <LiveModeration palette={p} />
+    : tab === "moderation" ? <LiveModeration palette={p} onOpenConversation={openMessages} />
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} openConversation={chatTarget?.id}
         updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} />

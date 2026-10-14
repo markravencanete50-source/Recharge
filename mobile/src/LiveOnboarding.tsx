@@ -9,7 +9,7 @@ import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
-import { Pills } from "./Pills";
+import { Pills, pillBox, pillInk } from "./Pills";
 import { CourseSheet } from "./LiveTraining";
 import { readTeams, writeTeams } from "./backend/client";
 import { contractsSchema, coursesSchema, myContractsSchema, onboardingFor, onboardingProgress, onboardingSchema, ONBOARDED_ROLES, type Contract, type Course, type MyContract, type Onboarding, type StaffOnboarding } from "../../lib/management-live";
@@ -222,7 +222,7 @@ function ContractEditor({ p, contract, visible, onClose, onDone }: { p: Palette;
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {CONTRACT_AUDIENCES.map(value => {
           const on = audience.includes(value);
-          return <MotionPress key={value} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => toggle(value)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}><Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{AUDIENCE_LABEL[value]}</Text></MotionPress>;
+          return <MotionPress key={value} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => toggle(value)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", ...pillBox(p, on) }}><Text style={{ color: pillInk(p, on), fontSize: 13, fontWeight: "600" }}>{AUDIENCE_LABEL[value]}</Text></MotionPress>;
         })}
       </View>
       <Field label="Contract wording" value={body} onChange={setBody} p={p} multiline placeholder="Paste the full contract here" />

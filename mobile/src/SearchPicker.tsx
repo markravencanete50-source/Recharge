@@ -6,6 +6,7 @@ import { MotionPress } from "./motion";
 import { radius, ui, type Palette } from "./theme";
 import { matchesSearch, normalise, propertyOption, textOfRow, type SearchOption } from "../../lib/search-options";
 import { SHOW_SEARCH_ABOVE, pickerView } from "../../lib/search-picker";
+import { pillBox, pillInk } from "./Pills";
 
 // Choosing one property (or person) from a long list, on phones and on the web. A long list is search
 // only: before anything is typed it shows the search box, the fixed options and the current choice, and
@@ -34,8 +35,8 @@ export function SearchBox({ p, value, onChange, placeholder, label, pill = false
 function OptionChip({ p, label, on, onPress }: { p: Palette; label: string; on: boolean; onPress: () => void }) {
   return (
     <MotionPress accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={label} onPress={onPress}
-      style={{ minHeight: 40, maxWidth: "100%", paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-      <Text numberOfLines={1} style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label}</Text>
+      style={{ minHeight: 40, maxWidth: "100%", paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", ...pillBox(p, on) }}>
+      <Text numberOfLines={1} style={{ color: pillInk(p, on), fontSize: 13, fontWeight: "600" }}>{label}</Text>
     </MotionPress>
   );
 }

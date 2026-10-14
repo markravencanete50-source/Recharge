@@ -607,7 +607,7 @@ fieldset.enquiry-field { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 .enquiry-pill { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 92px; justify-content: center; padding: 0 18px; border-radius: 999px; border: 1px solid var(--rc-controlBorder); background: var(--rc-background); color: var(--rc-text); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, scale 200ms cubic-bezier(.2, 0, 0, 1); }
 .enquiry-pill input { position: absolute; opacity: 0; pointer-events: none; }
 .enquiry-pill:has(input:focus-visible) { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc-primary) 25%, transparent); }
-.enquiry-pill[data-on] { background: var(--rc-primary); border-color: var(--rc-primary); color: var(--rc-onPrimary); }
+.enquiry-pill[data-on] { background: var(--rc-selected); border-color: var(--rc-selectedBorder); color: var(--rc-onSelected); }
 .enquiry-pill:active { scale: .97; }
 .enquiry-drop { display: grid; justify-items: center; gap: 6px; padding: 26px 16px; border-radius: 18px; border: 1.5px dashed var(--rc-controlBorder); background: var(--rc-background); text-align: center; color: var(--rc-muted); cursor: pointer; transition: border-color 180ms ease, background-color 180ms ease, translate 200ms ease; }
 .enquiry-drop strong { color: var(--rc-text); font-size: 0.95rem; }
@@ -633,6 +633,49 @@ fieldset.enquiry-field { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 .enquiry-done h2 { font-size: 1.4rem; font-weight: 600; letter-spacing: -0.02em; color: var(--rc-text); }
 .enquiry-done p { font-size: 0.95rem; line-height: 1.55; color: var(--rc-text); }
 .enquiry-done-mark { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 20px; background: var(--rc-success); color: #fff; animation: enquiry-pop 700ms cubic-bezier(.34, 1.56, .64, 1) both; }
+/* The client's estimate page (app/estimate): the rates, notes, similar properties, the explorer and their answer. */
+.estimate-page { gap: 16px; }
+.estimate-card { display: grid; gap: 12px; padding: 20px 18px; border-radius: 20px; border: 1px solid var(--rc-border); background: var(--rc-background); min-width: 0; }
+.estimate-card h2 { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.01em; color: var(--rc-text); }
+.estimate-rates { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.estimate-rates > div { display: grid; gap: 2px; padding: 12px; border-radius: 14px; background: var(--rc-wash); min-width: 0; }
+.estimate-rates dt { font-size: 0.8rem; color: var(--rc-muted); }
+.estimate-rates dd { margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--rc-text); font-variant-numeric: tabular-nums; }
+.estimate-rates > div[data-strong] { background: var(--rc-selected); box-shadow: inset 0 0 0 1px var(--rc-selectedBorder); }
+.estimate-rates > div[data-strong] :is(dt, dd) { color: var(--rc-onSelected); }
+.estimate-notes { white-space: pre-line; font-size: 0.95rem; line-height: 1.55; color: var(--rc-text); overflow-wrap: anywhere; }
+.estimate-similar { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.estimate-similar a { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--rc-border); color: var(--rc-text); text-decoration: none; }
+.estimate-similar a:hover, .estimate-similar a:focus-visible { border-color: var(--rc-primary); }
+.estimate-similar span { flex: 1; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.estimate-similar small { color: var(--rc-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.estimate-similar svg { flex: none; color: var(--rc-primary); }
+.estimate-scenarios { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 4px; border-radius: 16px; background: var(--rc-wash); }
+.estimate-scenario { position: relative; display: grid; justify-items: center; gap: 2px; min-height: 52px; padding: 6px 4px; border-radius: 12px; border: 1px solid transparent; cursor: pointer; text-align: center; }
+.estimate-scenario input { position: absolute; opacity: 0; pointer-events: none; }
+.estimate-scenario strong { font-size: 0.85rem; color: var(--rc-muted); }
+.estimate-scenario span { font-size: 0.8rem; color: var(--rc-muted); font-variant-numeric: tabular-nums; }
+.estimate-scenario[data-on] { background: var(--rc-surface); border-color: var(--rc-border); }
+.estimate-scenario[data-on] strong { color: var(--rc-text); }
+.estimate-scenario[data-on] span { color: var(--rc-primary); }
+.estimate-scenario:has(input:focus-visible) { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc-primary) 25%, transparent); }
+.estimate-range { display: grid; gap: 6px; }
+.estimate-range > span { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9rem; color: var(--rc-text); }
+.estimate-range output { font-weight: 600; font-variant-numeric: tabular-nums; }
+.estimate-range input { width: 100%; min-height: 32px; accent-color: var(--rc-primary); }
+.estimate-range small { font-size: 0.8rem; color: var(--rc-muted); }
+.estimate-total { display: grid; gap: 2px; padding: 16px; border-radius: 18px; border: 1px solid var(--rc-selectedBorder); background: var(--rc-selected); color: var(--rc-onSelected); }
+.estimate-total > span { font-size: 0.85rem; opacity: 0.85; font-variant-numeric: tabular-nums; }
+.estimate-total strong { font-size: 2rem; line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; }
+.estimate-total strong small { font-size: 0.95rem; font-weight: 500; }
+.estimate-lines { display: grid; margin: 0; }
+.estimate-lines > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rc-border); font-size: 0.9rem; }
+.estimate-lines dt { color: var(--rc-muted); min-width: 0; }
+.estimate-lines dd { margin: 0; color: var(--rc-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.estimate-lines > div[data-strong] { border-bottom: 0; }
+.estimate-lines > div[data-strong] :is(dt, dd) { color: var(--rc-text); font-weight: 600; }
+.estimate-link-button { justify-self: start; min-height: 40px; padding: 0; border: 0; background: none; color: var(--rc-primary); font-weight: 600; cursor: pointer; }
+@media (max-width: 420px) { .estimate-card { padding: 16px 14px; } .estimate-total strong { font-size: 1.6rem; } }
 @keyframes enquiry-pop { from { scale: .4; opacity: 0; rotate: -12deg; } to { scale: 1; opacity: 1; rotate: 0deg; } }
 @media (min-width: 720px) {
   .enquiry-section { padding: 26px 24px; }

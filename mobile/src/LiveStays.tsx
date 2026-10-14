@@ -8,7 +8,7 @@ import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
 import { addDays, Button, dayLabel, london, Notice, Section, Tag, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
-import { Pills } from "./Pills";
+import { Pills, pillBox, pillInk } from "./Pills";
 import { readOperations, readTeams, WorkspaceApiError } from "./backend/client";
 import { workDetails } from "../../lib/work-details";
 import { scheduleSchema } from "../../lib/cleans-live";
@@ -128,10 +128,10 @@ export function LiveStays({ palette: p, account, properties, onOpenRepairs, onOp
           {days.map(d => {
             const on = d === day, busy = schedule.stays.some(s => s.checkIn === d || s.checkOut === d);
             return (
-              <MotionPress key={d} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ minWidth: 64, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 16, alignItems: "center", gap: 2, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-                <Text style={{ color: on ? p.onPrimary : p.muted, fontSize: 11, fontWeight: "600" }}>{d === today ? "Today" : dayLabel(d).split(" ")[0]}</Text>
-                <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 17, fontWeight: "700" }}>{Number(d.slice(8))}</Text>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: busy ? (on ? p.onPrimary : p.primary) : "transparent" }} />
+              <MotionPress key={d} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ minWidth: 64, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 16, alignItems: "center", gap: 2, ...pillBox(p, on) }}>
+                <Text style={{ color: pillInk(p, on, true), fontSize: 11, fontWeight: "600" }}>{d === today ? "Today" : dayLabel(d).split(" ")[0]}</Text>
+                <Text style={{ color: pillInk(p, on), fontSize: 17, fontWeight: "700" }}>{Number(d.slice(8))}</Text>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: busy ? (on ? p.onSelected : p.primary) : "transparent" }} />
               </MotionPress>
             );
           })}

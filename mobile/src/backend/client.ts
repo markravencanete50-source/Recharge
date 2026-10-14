@@ -226,7 +226,7 @@ async function demoResponse(path: string, body: unknown) {
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
 export const viewMode = () => ({ readOnly: viewOnly !== "" || (demo !== null && !demoEngine), person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|email-files|email-inbox|client-email|profile|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|profile|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (!demo && demoResume && !options.asSelf) await demoResumed();
   if (demo) return await demoResponse(path, body);
   // While a super admin views the app as someone else nothing is saved (this device's own
@@ -395,6 +395,8 @@ export const emailFileLink = async (id: string) => {
 // Client email conversations (ownerrelations@ from someone who is not an owner yet): list, one conversation, and reply / close / reopen / assign.
 export const readClientEmail = async (query: { section: 'list' } | { section: 'thread'; threadId: string }) => (await workspaceRequest('/api/mobile/client-email?' + new URLSearchParams(query))).json();
 export const writeClientEmail = async (action: import('../../../lib/client-email-policy').ClientEmailAction) => (await workspaceRequest('/api/mobile/client-email', action)).json();
+// The estimate emailed with a private link: email it again, or make a link to send by hand.
+export const writeEstimateLink = async (action: import('../../../lib/estimate-link').EstimateLinkAction) => (await workspaceRequest('/api/mobile/estimate-link', action)).json() as Promise<{ data?: { link: string; estimateDelivery: unknown } }>;
 export const readEmailInbox = async () => (await workspaceRequest('/api/mobile/email-inbox')).json();
 export const writeEmailInbox = async (action: { action: 'assign'; id: string; ownerId: string } | { action: 'dismiss'; id: string }) => (await workspaceRequest('/api/mobile/email-inbox', action)).json();
 // Management oversight: the business overview, an item's history, the decisions report and management's reminders.

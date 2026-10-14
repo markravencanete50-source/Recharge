@@ -21,6 +21,8 @@ sender -> Fasthosts mailbox (kept there) -> forwarding rule -> guestrelations@in
   that owner's one conversation as the owner. **Anyone else** (a new landlord, an enquiry, an owner without an account) gets an **email conversation in Messages, Clients**
   (migration 20261019500000, round 7): admins, super admins and the client relations rota read it and reply from `ownerrelations@` (once per request id, threaded); their
   answer comes back into it; Close / Reopen; **Assign to owner** moves the history into that owner's conversation and remembers the address. The old Unknown senders panel is gone.
+  One conversation per person: a new email from them on another subject (not a reply) joins it, starts with its `Subject:` line and becomes the
+  conversation's subject, so the row and header show it and the reply goes out as `Re: <it>` (migration 20261019510000).
 - **Replies out:** staff press Send in an email conversation: recorded once per request id (`workspace_guest_reply_requests`), emailed through Resend as
   `guestrelations@` with `In-Reply-To`, `References` and a fixed `Message-ID`, stored only after Resend accepted it. A team reply in an owner conversation whose latest owner
   message came by email is queued (`workspace_email_outbox`) and sent as `ownerrelations@` by the Worker every minute, once per row.
@@ -62,6 +64,32 @@ Client relations, Client enquiries, "Send the enquiry form" now emails the form 
 - One request makes one link and one email (Resend idempotency key `recharge-enquiry/<user>/<request>`); 40 forms an hour per person.
 - The sheet has one button, "Send the form" (and "Send the new link"). The link with Copy and "Open my email app" appears only when email is not ready or the send failed. The enquiry row shows "Email failed" with **Try again**.
 - **Worker secrets to add:** none. To switch the form's email off: `ENQUIRY_EMAIL_ENABLED=false`. Because the key is already set and the domain is verified, enquiry emails start as soon as this is deployed.
+
+## The estimate is emailed with a private link
+
+Migration 20261019520000, `lib/estimate-link.ts`, `lib/estimate-link-server.ts`, `app/estimate`.
+
+- **When it's sent:** the team publishes (or republishes) an estimate on a journey with no owner account. If the enquiry has an email address and the enquiry email switch is ready (`RESEND_API_KEY`, `ENQUIRY_EMAIL_ENABLED` not `false`), the server emails it straight after the publish.
+- **Who it's from:** `ownerrelations@`, with replies to `ownerrelations@`, so they land in Messages, Clients.
+- **What's in it:** the property, the low, expected and high nightly rates, the notes, up to 3 comparables with their links, and one button, **View your estimate**.
+- **Retries:** the request id is derived from the publish, so a retried publish never sends a second email.
+- **The link:** made from the request. Only its hash is stored. It lasts 30 days and needs no sign-in.
+- **The client's page** (`/estimate?t=…`) shows the rates, the notes, similar properties and a small explorer, using the same sums as the owner app.
+- **The client's answer:** Proceed, Review later (with a follow-up date) or Decline, plus optional feedback. This records the same decision as `decideEstimate`: the journey moves on, the team is notified, and "Owner decides on the estimate" ticks.
+- **What the team sees:** "Estimate sent" only once the email for the current estimate has gone. Otherwise it shows "Estimate ready": published but not emailed, the email failed, or the enquiry has no email address. The property's Onboarding card has **Email the estimate** (or **Resend the estimate**) and **Copy link**, which gives a link to send by hand and also works when email isn't set up.
+- **Screenshots:** `docs/screenshots/session-f/estimate-*.png`.
+
+## The Recharge logo in our emails
+
+`lib/email-brand.ts`, `public/recharge-email-logo.png`
+
+- **The image:** a 480 by 133 PNG (about 24 KB) cut from `recharge-company-logo.png`, on its own solid cream background. Email apps block SVG, and the solid background keeps it readable when a mail app shows the email dark. It is served from `https://app.rechargegroup.co.uk/recharge-email-logo.png`, with `alt="Recharge"` and the width and height set.
+- **Emails Recharge writes:** the enquiry form and the estimate email start with the logo, at 180 by 50.
+- **Replies written in Messages:** both mailboxes send an HTML part. It holds the text as written, then a small signature: the logo at 108 by 30, "Recharge Group", and the mailbox the reply came from. Plain-text parts are unchanged.
+- **Staff notice emails:** these now send an HTML part with the logo on top and the same text. The plain text is unchanged, so every email we send carries the logo.
+- **The round avatar Gmail shows** for a sender comes from BIMI (DMARC at enforcement plus a paid VMC or CMC certificate) or from a Google account photo on the sending address. It is not set by the email itself Lee decided against both, so nothing is set up for it.
+- **Supabase Auth emails** (password reset, signup code) use Supabase's own templates. Branded versions and Lee's paste steps are in `docs/auth-email-templates/`. Paste them once this batch is live.
+- **Screenshots:** `docs/screenshots/session-f/email-*.png`.
 
 ## Two addresses, never mixed (Lee's rule)
 

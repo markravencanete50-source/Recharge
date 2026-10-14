@@ -9,6 +9,7 @@ import { Button, Notice, StatGrid, StatTile } from "./LiveKit";
 import { exportReport } from "./exportReport";
 import { formatCount } from "../../lib/format";
 import { calculateFurnishing, clampInput, DEFAULT_LAYOUT, furnishingCsv, furnishingText, INPUTS, type Count, type Layout } from "../../lib/furnishing-calculator";
+import { pillBox, pillInk } from "./Pills";
 
 // The furnishing calculator, inside the app: enter the property layout and the full quantity list
 // for every category updates as you go. Copy or share it, or download it as a spreadsheet.
@@ -68,8 +69,8 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
       <View style={[ui.row, { gap: 8 }]}>
         {(["details", "list"] as const).map((s, i) => (
           <MotionPress key={s} accessibilityRole="tab" accessibilityState={{ selected: step === s }} onPress={() => setStep(s)}
-            style={[ui.row, { flex: 1, gap: 8, minHeight: 46, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: step === s ? p.primary : p.surface, borderWidth: 1, borderColor: step === s ? p.primary : p.border }]}>
-            <Text style={{ color: step === s ? p.onPrimary : p.text, fontWeight: "700" }}>{i + 1}. {s === "details" ? "Property details" : "Required quantities"}</Text>
+            style={[ui.row, { flex: 1, gap: 8, minHeight: 46, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", ...pillBox(p, step === s) }]}>
+            <Text style={{ color: pillInk(p, step === s), fontWeight: "700" }}>{i + 1}. {s === "details" ? "Property details" : "Required quantities"}</Text>
           </MotionPress>
         ))}
       </View>
@@ -102,9 +103,9 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
             const on = c.id === selected?.id;
             return (
               <Pop key={c.id} active={on}><MotionPress accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setCategory(c.id)}
-                style={[ui.row, { gap: 8, minHeight: 42, paddingHorizontal: 14, borderRadius: 14, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }]}>
-                <Text style={{ color: on ? p.onPrimary : p.text, fontWeight: "700" }}>{c.label}</Text>
-                <View style={{ paddingHorizontal: 7, paddingVertical: 1, borderRadius: 6, backgroundColor: on ? p.onPrimary : p.wash }}><Text style={{ color: on ? p.primary : p.text, fontSize: 12, fontWeight: "700" }}>{c.lines.length}</Text></View>
+                style={[ui.row, { gap: 8, minHeight: 42, paddingHorizontal: 14, borderRadius: 14, ...pillBox(p, on) }]}>
+                <Text style={{ color: pillInk(p, on), fontWeight: "700" }}>{c.label}</Text>
+                <View style={{ paddingHorizontal: 7, paddingVertical: 1, borderRadius: 6, backgroundColor: on ? p.onSelected : p.wash }}><Text style={{ color: on ? p.selected : p.text, fontSize: 12, fontWeight: "700" }}>{c.lines.length}</Text></View>
               </MotionPress></Pop>
             );
           })}

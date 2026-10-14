@@ -307,7 +307,9 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   // While a super admin views as someone nothing can be started or saved. A role preview (no person) reads the super admin's
   // own Messages, so it keeps only what that role could have (lib/view-as.ts). The workspace remounts when the view changes.
   const [mode] = useState(viewMode), preview = mode.readOnly && !mode.person ? account.role : null;
-  const [list, setList] = useState<Conversation[] | null>(null), [open, setOpen] = useState<string | null>(openConversation ?? null), [creating, setCreating] = useState(false), [error, setError] = useState("");
+  // A link can open a guest conversation ("guest:<id>", from Reported messages) in Guests, or a client email ("email:<id>") in Clients.
+  const guestLink = openConversation?.startsWith("guest:") ? openConversation.slice(6) : undefined;
+  const [list, setList] = useState<Conversation[] | null>(null), [open, setOpen] = useState<string | null>(guestLink ? null : openConversation ?? null), [creating, setCreating] = useState(false), [error, setError] = useState("");
   const loadList = useCallback(async () => {
     try {
       const all = z.array(conversationSchema).parse((await readChat({ section: "list" })).data);
@@ -341,7 +343,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const tabs: Tab[] = messageTabs(account, !!list?.some(c => c.kind === "owner"));
   const openUpdates = initialTab === "updates" && !openConversation && !!updates;
   const [showUpdates, setShowUpdates] = useState(openUpdates);
-  const [chosenTab, setTab] = useState<Tab>(openConversation ? "team" : guests ? "guests" : "team");
+  const [chosenTab, setTab] = useState<Tab>(guestLink ? "guests" : openConversation?.startsWith("email:") ? "clients" : openConversation ? "team" : guests ? "guests" : "team");
   const tab: Tab = tabs.includes(chosenTab) ? chosenTab : "team";
   const count = (t: Tab) => t === "guests" ? guestWaiting ?? 0 : (list ?? []).filter(c => tabOf(c) === t).reduce((sum, c) => sum + c.unread, 0)
     + (t === "clients" ? emails.filter(e => clientEmailStatus(e) === "reply").length : 0);
@@ -411,7 +413,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       {owner ? (open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View>
         : mode.readOnly && (list || preview) ? <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{preview ? "An owner's Messages is their conversation with Recharge. Choose an owner under View as to see theirs." : "This owner has not messaged Recharge yet."}</Text>
         : <Loading p={p} />)
-        : tab === "guests" ? <GuestInbox palette={p} properties={properties} desktop={desktop} onChanged={onUnread} />
+        : tab === "guests" ? <GuestInbox palette={p} properties={properties} desktop={desktop} onChanged={onUnread} openThread={guestLink} />
         : <MessagesSplit p={p} desktop={desktop} list={listView} detail={open ? thread(open, desktop ? undefined : () => { setOpen(null); void loadList(); }) : null} />}
       {creating && <NewConversation p={p} properties={properties} only={tabs.length < 2 ? undefined : tab === "clients" ? "owners" : "team"} onClose={() => setCreating(false)} onOpen={c => { setCreating(false); setOpen(c.id); void loadList(); }} />}
     </View>

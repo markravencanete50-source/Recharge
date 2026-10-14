@@ -52,6 +52,8 @@ test('email uses a stable idempotency key and acceptance does not imply delivery
  assert.deepEqual(await deliverNotification(settings,job),{state:'accepted',providerId:'receipt'});
  assert.equal(calls[0].init.headers['Idempotency-Key'],'recharge-notification/test-id');
  const payload=JSON.parse(calls[0].init.body);assert.match(payload.text,/Sign in/);assert.doesNotMatch(payload.text,/property|code|bank|guest/i);
+ // Every email carries the Recharge logo (Lee, 14 October); the HTML part is the same text with the logo on top, nothing more.
+ assert.match(payload.html,/^<div[^>]*><div[^>]*><img src="https:\/\/app\.rechargegroup\.co\.uk\/recharge-email-logo\.png" alt="Recharge" width="180" height="50"/);assert.doesNotMatch(payload.html.replace(/<[^>]+>/g,' '),/property|code|bank|guest/i);assert.ok(payload.html.includes('Sign in'));
  assert.deepEqual(await deliverNotification(settings,{...job,state:'accepted',providerId:'receipt'}),{state:'pending'});
  globalThis.fetch=async()=>Response.json({id:'receipt',last_event:'delivered'});
  assert.deepEqual(await deliverNotification(settings,{...job,state:'accepted',providerId:'receipt'}),{state:'delivered'});

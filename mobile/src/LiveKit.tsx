@@ -4,7 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { Entrance, MotionPress, Shimmer, Stagger, SwapIn, TweenNumber } from "./motion";
-import { departmentColor, depth, primaryFill, ui, web, type Palette } from "./theme";
+import { departmentColor, depth, primaryFill, space, ui, web, type Palette } from "./theme";
 import { formatCount } from "../../lib/format";
 import { sectionAnchor } from "../../lib/home-tools";
 import { readableError } from "../../lib/error-copy";
@@ -59,7 +59,7 @@ export function RefreshButton({ p, loading = false, onPress }: { p: Palette; loa
 export function Field({ label, value, onChange, p, multiline = false, placeholder, email = false }: { label: string; value: string; onChange: (v: string) => void; p: Palette; multiline?: boolean; placeholder?: string; email?: boolean }) {
   const [focused, setFocused] = useState(false);
   return (
-    <View style={{ gap: 7 }}>
+    <View style={{ gap: space.tight }}>
       <Text style={[ui.small, { color: focused ? p.primary : p.muted, fontWeight: "600" }]}>{label}</Text>
       <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={p.muted} multiline={multiline} accessibilityLabel={label} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         {...(email ? { autoCapitalize: "none" as const, autoCorrect: false, keyboardType: "email-address" as const, autoComplete: "email" as const } : {})}

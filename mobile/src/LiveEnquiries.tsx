@@ -22,14 +22,14 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 // Client Enquiries: send the New Property Enquiry Form to a landlord (by email, or a link to send
 // yourself), see every answer when it comes back, and start valuing the property from it.
 type Filter = "value" | "waiting" | "progress" | "all";
-const FILTER_STEPS: Record<Exclude<Filter, "all">, EnquiryStep[]> = { value: ["received"], waiting: ["sent", "opened", "expired"], progress: ["valuing", "estimate", "won"] };
+const FILTER_STEPS: Record<Exclude<Filter, "all">, EnquiryStep[]> = { value: ["received"], waiting: ["sent", "opened", "expired"], progress: ["valuing", "estimate_ready", "estimate", "won"] };
 const ago = (iso: string) => {
   const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
   return minutes < 1 ? "just now" : minutes < 60 ? `${minutes} min ago` : minutes < 48 * 60 ? `${Math.round(minutes / 60)} h ago` : `${Math.round(minutes / 1440)} days ago`;
 };
 const fileSize = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
-export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette: Palette; account: WorkspaceAccount; onOpenProperty: (id: string) => void }) {
+export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }: { palette: Palette; account: WorkspaceAccount; onOpenProperty: (id: string) => void; onRefresh?: () => Promise<void> | void }) {
   const [data, setData] = useState<ClientEnquiries | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter | null>(null);
@@ -67,7 +67,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette
       </View>
       <SendSheet p={p} visible={sending} emailReady={!!data?.emailReady} onClose={() => setSending(false)} onSent={load} />
       <EnquirySheet key={open?.id ?? "none"} p={p} enquiry={open} step={open ? steps.get(open.id)! : "sent"} emailReady={!!data?.emailReady} onClose={() => setOpenId(null)} onChanged={load}
-        canDelete={!!open && canDeleteEnquiry(account.role, open)} onDeleted={async () => { setOpenId(null); await load(); }}
+        canDelete={!!open && canDeleteEnquiry(account.role, open)} onDeleted={async () => { setOpenId(null); await Promise.all([load(), onRefresh?.()]); }}
         onOpenProperty={id => { setOpenId(null); onOpenProperty(id); }} />
     </View>
   );
@@ -295,7 +295,7 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
         </Group>}
         {["sent", "opened", "expired"].includes(step) && <Button label={e.emailStatus === "failed" ? "Try again" : "Send a new link"} icon="refresh-cw" primary={e.emailStatus === "failed"} p={p} onPress={() => setMode("resend")} />}
         {!["valuing", "estimate", "won", "declined", "closed"].includes(step) && <Button label="Close this enquiry" icon="x" p={p} onPress={() => setMode("close")} />}
-        {canDelete && <Button label="Delete enquiry" icon="trash-2" p={p} onPress={() => setMode("delete")} />}
+        {canDelete && <DeleteLink p={p} onPress={() => setMode("delete")} />}
       </>}
     </Sheet>
   );
@@ -343,7 +343,28 @@ function ValueSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: C
   );
 }
 
-// Delete (admins and super admins): asks first, in a sheet. The database refuses one that has moved on.
+// The quiet danger link for Delete, at the bottom of the enquiry sheet and the property's Onboarding sheet (E's review).
+function DeleteLink({ p, onPress }: { p: Palette; onPress: () => void }) {
+  return (
+    <MotionPress accessibilityRole="button" accessibilityLabel="Delete this enquiry" onPress={onPress} style={[ui.row, { gap: 8, minHeight: 44, alignSelf: "flex-start", paddingHorizontal: 4 }]}>
+      <Feather name="trash-2" size={15} color={p.danger} />
+      <Text style={{ color: p.danger, fontSize: 14, fontWeight: "600" }}>Delete this enquiry</Text>
+    </MotionPress>
+  );
+}
+
+// Delete from elsewhere (the property's Onboarding sheet): a quiet danger link at the bottom, then the same sheet.
+// Admins and super admins only, at the stages canDeleteEnquiry allows.
+export function DeleteEnquiryAction({ p, role, enquiry, onDeleted }: { p: Palette; role: string; enquiry: ClientEnquiry; onDeleted: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  if (!canDeleteEnquiry(role, enquiry)) return null;
+  return <>
+    <DeleteLink p={p} onPress={() => setOpen(true)} />
+    {open && <DeleteSheet p={p} enquiry={enquiry} onClose={() => setOpen(false)} onDone={async () => { setOpen(false); await onDeleted(); }} />}
+  </>;
+}
+
+// Delete (admins and super admins): asks first, in a sheet. The database refuses one past the agreement, or with money or bookings.
 function DeleteSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: ClientEnquiry; onClose: () => void; onDone: () => Promise<void> }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const request = useRequestId(["delete", e.id, e.version].join(":"));

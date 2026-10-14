@@ -1025,3 +1025,66 @@ setter never changes, so behaviour is the same. The unused `web` import in `Live
   4. The DateField open.
   5. The saved event listed.
   6. Its edit sheet on top.
+
+# Delete enquiries at any stage up to the agreement (Lead, from Lee: "WE SHOULD BE ABLE TO DELETE ENQUIRIES")
+
+- **Starting point:** `main` at `d49603f` (a fast-forward). **Migration:** `20261020210000_delete_enquiry_through_agreement.sql`.
+  No range was given this round; it sorts after everything on `main` and on F's branch. Not applied anywhere.
+- **Who and when:**
+  - Admins and super admins only.
+  - Allowed at any stage up to and including the agreement while it is unsigned and the property isn't live:
+    enquiry, estimate, reviewing, agreement, or closed before anything was signed.
+  - A signature, an invoice on the journey, a stage past the agreement, or a live property is refused: "The
+    agreement is signed or the property is live, so this enquiry can no longer be deleted. Archive it instead."
+- **What goes, in one transaction:**
+  - The enquiry, its answers and photos. Photos are queued in `private.workspace_storage_removals` and removed by the
+    server straight away, as in round 6.
+  - The property, the journey and its questions, and the estimate model.
+  - Every work item on the property, with its updates, details and upload intents.
+  - The activity and notices, and the management flags and to-dos about it.
+  - The listing links, local events, access logins, default cleaners and the team's access.
+- **What stops it:** `private.workspace_enquiry_blocker` reads every refusing foreign key into the property, its work
+  items and the enquiry, except the tables the delete clears. Anything left there stops the delete with a plain
+  message, for example "This property has an invoice recorded, so this enquiry can no longer be deleted. Archive it
+  instead." Bookings, costs, owner statements, payout details, guest messages and photos on a work item are named
+  the same way.
+  - A table added later blocks the delete instead of being orphaned, unless it cascades.
+  - F's `private.workspace_estimate_links` (on `claude/estimate-email-session-f`, migration 20261019520000) cascades
+    on property delete, so its links go too. Checked by merging F's branch in a scratch worktree and running
+    the delete tests with a link on each property: 11 of 11 pass and no row is left. F's sent emails are kept as
+    correspondence; they have no key into the property or the enquiry.
+- **Audit:** the access history's `client_enquiry.deleted` entry now also keeps the property's address and name, and
+  the stage it had reached, since its own history goes with it. It still holds no email or phone.
+- **Where:**
+  - The enquiry sheet: the round-6 "Delete enquiry" button, now shown at every allowed stage.
+  - The property's Onboarding sheet (Client relations → Onboarding): a quiet red "Delete this enquiry" link below
+    Flag for management, then the same confirm sheet.
+  - The copy names what goes: "Delete this enquiry? This also removes the onboarding for 17 Warrender Park Road
+    (3F2), its estimate and history. This can’t be undone." No em dashes.
+  - After a delete, the workspace reloads its properties and journeys (`onRefresh`, passed through ClientRelations).
+- **Files outside my usual area:** `mobile/src/LiveWorkspace.tsx`, one line: `onRefresh` on `<ClientRelations>`.
+- **Replaced functions** (md5 of `pg_get_functiondef`, for fingerprinting live first):
+  - `private.workspace_client_enquiry_delete(jsonb)`: before `7270e5bdd888596bd02e32f06321158a`, after
+    `341fb0731a138090670d840945985764`.
+  - `private.workspace_enquiry_moved_on(uuid,uuid)`, before `5bac84c957e720bb593d046e89674b76`: dropped.
+  - `private.workspace_enquiry_blocker(uuid,uuid[],uuid)`: new, `bbdd310a13a3bad21182ac7e75713141`.
+  - `private.workspace_teams_action(jsonb)`: unchanged, `c6b698ebb9ea9c5ba7c015960a7cceb5`.
+- **Tests:** `tests/enquiry-delete-database.test.mjs`, 11 of 11 pass.
+  - Deletes at estimate, reviewing, agreement (published, unsigned), declined, and with an owner linked, each with a
+    to-do, a flag, a question, the estimate model and a local event. Nothing is left.
+  - No row in any table points at the deleted property, work item or enquiry.
+  - Refused when signed, signed then closed, live, live with no signature on record, past the agreement, with an
+    invoice, or with bookings. Nothing is deleted or queued, and no audit entry is written.
+  - Refused for non-admins. The migration runs twice without change.
+  - Full suite: 1657 of 1665 pass; the 7 failures are the known build-output tests.
+  - tsc is clean (root: only the existing landing/remotion errors), and ESLint is clean.
+- **Screenshots:** `docs/screenshots/session-b/delete-enquiry/`, light and dark at 1440×900 and 390×844, on the demo
+  stack with an estimate published on Eilidh Robertson's enquiry:
+  1. The enquiry sheet.
+  2. Its confirm sheet.
+  3. The Onboarding sheet.
+  4. Its confirm sheet.
+  5. Desktop light only: the list after a real delete (the Estimate group drops from 2 to 1).
+- **E's gate note, done:** the enquiry sheet now uses the same quiet red "Delete this enquiry" link as the
+  Onboarding sheet. Both share `DeleteLink` in `LiveEnquiries.tsx`, and it opens the same confirm sheet. Built on
+  the lead branch `5ca889c`. Screenshots: `delete-enquiry/{desktop-light,phone-dark}-6-enquiry-sheet-quiet-link.jpg`.

@@ -37,9 +37,9 @@ test('keys are stable and unique: own keys kept, positions otherwise, prefixed b
   assert.deepEqual(again.map(x => x.key), list.map(x => x.key), 'the same body gives the same keys');
 });
 
-test('Sheet staggers every flattened child with the 16px gap and 20px padding unchanged', () => {
+test('Sheet staggers every flattened child with the section gap (20px) and 20px padding', () => {
   const flows = readFileSync('mobile/src/TeamFlows.tsx', 'utf8');
   assert.match(flows, /flattenSheetChildren\(content\.children\)\.map\(\(\{ key, node \}, n\) => <Stagger key=\{key\} index=\{n\}>/);
-  assert.match(flows, /contentContainerStyle=\{\{ padding: 20, gap: 16,/);
+  assert.match(flows, /contentContainerStyle=\{\{ padding: 20, gap: space\.section,/);
   assert.doesNotMatch(flows, /Children\.toArray\(content\.children\)/);
 });
