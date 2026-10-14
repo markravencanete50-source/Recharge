@@ -347,6 +347,18 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // Stay up to date without tapping refresh: every minute while the app is open and in view, and
   // straight away when someone comes back to it. Paused while a form or sheet is open.
   useEffect(() => { editing.current = !!form || !!openWork || settings || dates || busy; }, [form, openWork, settings, dates, busy]);
+  // A pop-up just arrived (the service worker tells every open Recharge window, even minimized): refresh now so
+  // the new update shows and the chime plays straight away. While a form is open the page stays as it is and only chimes.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.serviceWorker) return;
+    const onPush = (event: MessageEvent) => {
+      if ((event.data as { type?: string } | null)?.type !== "recharge-push") return;
+      if (editing.current) { if (!viewAs) playChime(); } else void refresh(true);
+      void loadUnread();
+    };
+    navigator.serviceWorker.addEventListener("message", onPush);
+    return () => navigator.serviceWorker.removeEventListener("message", onPush);
+  }, [refresh, loadUnread, viewAs]);
   useEffect(() => {
     const tick = () => { if (AppState.currentState === "active" && !editing.current && Date.now() - lastRefresh.current > 50_000) void refresh(true); };
     const timer = setInterval(tick, 60_000);

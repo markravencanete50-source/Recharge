@@ -138,3 +138,13 @@ test('each notice goes once to each browser of its person, and only while they h
  await db.exec('reset role');assert.equal((await db.query('select count(*)::int n from private.workspace_web_push')).rows[0].n,0);
  await db.close();
 });
+
+test('on computers the pop-up stays until clicked, and an open Recharge window chimes the moment it arrives',async()=>{
+ const sw=await fs.readFile('mobile/web-static/sw.js','utf8');
+ assert.match(sw,/requireInteraction: true/);assert.match(sw,/tag: "recharge", renotify: true/,'a new one replaces the last and alerts again');
+ assert.match(sw,/postMessage\(\{ type: "recharge-push" \}\)/);
+ const page=await fs.readFile('mobile/src/LiveWorkspace.tsx','utf8');
+ assert.match(page,/type !== "recharge-push"/);
+ const chime=await fs.readFile('mobile/src/Notifications.tsx','utf8');
+ assert.match(chime,/createDynamicsCompressor/,'loud without distorting');
+});
