@@ -2,7 +2,7 @@ import { authSecurityConfiguration,requestQuota } from './auth-security';
 import { boundedJson,isSameOrigin } from './auth-security-policy';
 import { isNativeRequest } from './native-request-policy';
 import { businessContext,businessResponse,databaseFailure,viewAsFailure } from './business-server';
-import { journeyReadSchema,journeyActionSchema,operationsReadSchema } from './journey-policy';
+import { journeyReadSchema,journeyActionSchema,journeyValidationReason,operationsReadSchema } from './journey-policy';
 import { operationsActionSchema, validationReason } from './operations-policy';
 export const journeyRoute=(request:Request,native=false)=>workflowRoute(request,native,'journey');
 export const operationsRoute=(request:Request,native=false)=>workflowRoute(request,native,'operations');
@@ -24,7 +24,7 @@ async function workflowRoute(request:Request,native:boolean,kind:'journey'|'oper
   const quota=await requestQuota(request,'business-user',60,60,session.account.userId);
   if(!quota.allowed){const response=businessResponse({error:'Too many updates. Please wait.'},429);response.headers.set('Retry-After',String(quota.retryAfter));return response;}
   const parsed=(kind==='journey'?journeyActionSchema:operationsActionSchema).safeParse(await boundedJson(request));
-  if(!parsed.success)return businessResponse({error:validationReason(parsed.error)},400);
+  if(!parsed.success)return businessResponse({error:kind==='journey'?journeyValidationReason(parsed.error):validationReason(parsed.error)},400);
   const result=await session.client.rpc(kind==='journey'?'workspace_journey_action':'workspace_operations_action',{input:parsed.data});
   if(result.error)return databaseFailure(result.error);
   // A published estimate without an owner account is emailed to the enquiry with a private link (migration 20261019520000).

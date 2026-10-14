@@ -7,7 +7,7 @@ import { Artwork } from "./Artwork";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { Entrance, MotionPress, Stagger, usePresence, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
-import { depth, ui, web, type Palette } from "./theme";
+import { depth, space, ui, web, type Palette } from "./theme";
 import { InSheet } from "./LiveKit";
 import { WORKSPACE_MAP } from "../../lib/workspace-map";
 import type { Tool, WorkspaceRole } from "./model";
@@ -79,7 +79,7 @@ export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, chi
               </MotionPress>
             </View>
           </View>
-          <ScrollView style={{ width: "100%" }} contentContainerStyle={{ padding: 20, gap: 16, minWidth: 0, maxWidth: "100%" }} keyboardShouldPersistTaps="handled">
+          <ScrollView style={{ width: "100%" }} contentContainerStyle={{ padding: 20, gap: space.section, minWidth: 0, maxWidth: "100%" }} keyboardShouldPersistTaps="handled">
             <InSheet.Provider value>{shown && flattenSheetChildren(content.children).map(({ key, node }, n) => <Stagger key={key} index={n}>{node as ReactNode}</Stagger>)}</InSheet.Provider>
           </ScrollView>
         </Animated.View>
