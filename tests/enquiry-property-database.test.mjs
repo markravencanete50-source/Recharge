@@ -46,18 +46,20 @@ const hash = token => createHash('sha256').update(token).digest('hex');
 const token = () => createHash('sha256').update(crypto.randomUUID()).digest('hex');
 const pub = input => rpc('workspace_enquiry_public', [input]);
 const ANSWERS = enquiryAnswersSchema.parse({
-  fullName: 'Alex Morgan', companyName: 'Morgan Lets Ltd', correspondenceAddress: '4 Queen Street\nEdinburgh EH2 1JE', email: 'alex@example.com', phone: '07700 900123', existingClient: 'no',
+  fullName: 'Alex Morgan', companyName: 'Morgan Lets Ltd', email: 'alex@example.com', phone: '07700 900123',
   propertyAddress: '12 Shore Road, Leith, Edinburgh EH6 6RG', propertyType: 'Flat', bedrooms: 2, wcs: 1, bathrooms: 1, parking: 'Free on-street', garden: 'Shared', mediaLink: 'https://photos.example.com/album',
   shortLet: 'no', furnishQuote: 'yes', compliance: 'yes', startWhen: 'Within a month', notes: 'Call me after 6pm on 07700 900999', enquiryType: "I'd like a free performance estimate",
 });
-// The team sends a form (as `sender`), the landlord answers it through the site's server.
+// The team sends a form (as `sender`), the landlord answers it through the site's server. Each landlord has their own
+// email and phone, so only the address can make a duplicate here (the contact check: enquiry-duplicates-database).
+let landlords = 0;
 async function answered(sender = ADMIN, extra = {}) {
-  const t = token();
+  const t = token(), n = ++landlords, contact = { email: `alex${n}@example.com`, phone: `07700 9${String(n).padStart(5, '0')}` };
   await as(sender);
-  const input = teamsActionSchema.parse({ action: 'inviteEnquiry', requestId: crypto.randomUUID(), name: 'Alex Morgan', email: 'alex@example.com', subject: 'Your free estimate', body: 'Hello {form link}', delivery: 'link' });
+  const input = teamsActionSchema.parse({ action: 'inviteEnquiry', requestId: crypto.randomUUID(), name: 'Alex Morgan', email: contact.email, subject: 'Your free estimate', body: 'Hello {form link}', delivery: 'link' });
   const sent = await rpc('workspace_teams_action', [{ ...input, tokenHash: hash(t) }]);
   await asServer();
-  assert.deepEqual(await pub({ action: 'submit', tokenHash: hash(t), answers: { ...ANSWERS, ...extra } }), { state: 'answered' });
+  assert.deepEqual(await pub({ action: 'submit', tokenHash: hash(t), answers: { ...ANSWERS, ...contact, ...extra } }), { state: 'answered' });
   const [row] = await owner('select * from private.workspace_client_enquiries where id=$1', [sent.id]);
   return { t, sent, row };
 }
@@ -72,8 +74,8 @@ test('a submitted form puts the property in Properties at once, with no owner an
   assert.deepEqual([p.name, p.address, p.region, p.status, p.bedrooms, p.created_by], ['12 Shore Road', ANSWERS.propertyAddress, 'Edinburgh', 'onboarding', 2, users[ADMIN]]);
   const [j] = await owner('select * from private.workspace_journeys where property_id=$1', [row.property_id]);
   assert.deepEqual([j.stage, j.client_id, j.property_type, j.bathrooms], ['enquiry', null, 'Flat', 1]);
-  assert.deepEqual(j.enquiry, { wcs: 1, parking: 'Free on-street', garden: 'Shared', photoLink: 'https://photos.example.com/album', existingClient: false });
-  for (const secret of ['Alex', 'alex@example.com', '07700', 'Queen Street', 'Morgan Lets', '6pm']) assert.ok(!JSON.stringify({ p, j }).includes(secret), secret + ' stays on the enquiry');
+  assert.deepEqual(j.enquiry, { wcs: 1, parking: 'Free on-street', garden: 'Shared', photoLink: 'https://photos.example.com/album' });
+  for (const secret of ['Alex', 'alex', '@example.com', '07700', 'Morgan Lets', '6pm']) assert.ok(!JSON.stringify({ p, j }).includes(secret), secret + ' stays on the enquiry');
   const [w] = await owner('select * from public.workspace_work_items where id=$1', [j.work_id]);
   assert.deepEqual([w.module_id, w.title, w.created_by, w.status], ['property-onboarding', 'Property onboarding', users[ADMIN], 'waiting']);
   const assigned = await owner('select user_id,assignment,granted_by from public.workspace_property_assignments where property_id=$1 order by user_id', [row.property_id]);
@@ -128,9 +130,9 @@ test('duplicates are flagged, not merged', async () => {
   await as(ADMIN);
   const view = (await read()).items.find(e => e.id === same.sent.id);
   assert.deepEqual([view.duplicateOf, view.duplicateOfName, view.duplicateReason], [existing, 'Cramond flat', 'same_address']);
-  // They said they already work with us, at a new address.
+  // "Are you an existing client?" is no longer asked (20261020800000); a form sent with it all the same flags nothing.
   const told = await answered(ADMIN, { propertyAddress: '8 Harbour Lane, Oban PA34 5AA', existingClient: 'yes' });
-  assert.deepEqual([told.row.duplicate_of, told.row.duplicate_reason], [null, 'existing_client']);
+  assert.deepEqual([told.row.duplicate_of, told.row.duplicate_reason], [null, '']);
   // An archived property at that address is not a duplicate.
   await owner("update public.workspace_properties set status='archived' where id=$1", [existing]);
   const [{ id: other }] = await owner('select property_id as id from private.workspace_client_enquiries where id=$1', [same.sent.id]);

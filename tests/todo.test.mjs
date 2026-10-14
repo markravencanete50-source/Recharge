@@ -123,20 +123,20 @@ test('derived tasks: pricing gaps, guests waiting, onboarding and licensing', ()
   const rows = T.deriveTasks({ role: 'admin', today: TODAY, properties, work, journeys, guestsWaiting: { count: 2, since: '2026-10-13T08:00:00Z' } });
   const by = k => rows.filter(r => r.derived === k);
   assert.equal(by('pricing_gap').length, 1);
-  assert.equal(by('pricing_gap')[0].title, 'Price 2 empty nights');
+  assert.equal(by('pricing_gap')[0].title, 'Pricing: price 2 empty nights at Flat 1');
   assert.equal(by('pricing_gap')[0].dueOn, '2026-10-14');
   assert.equal(by('pricing_gap')[0].heading, 'client_relations');
   assert.equal(by('guest_reply').length, 1);
-  assert.equal(by('guest_reply')[0].title, '2 guests are waiting for a reply');
+  assert.equal(by('guest_reply')[0].title, 'Guest messages: reply to 2 waiting guests');
   assert.equal(by('guest_reply')[0].heading, 'guest_relations');
-  assert.deepEqual(by('onboarding').map(r => r.title), ['Agreement to sign']);
+  assert.deepEqual(by('onboarding').map(r => r.title), ['Onboarding: get the agreement signed by the owner of Flat 1'], 'no contact name: the owner of the property');
   assert.equal(by('onboarding')[0].open.workId, id(300));
-  assert.deepEqual(by('licensing').map(r => r.title).sort(), ['Record the safety checks', 'Submit the licence application']);
+  assert.deepEqual(by('licensing').map(r => r.title).sort(), ['Licensing: record the safety checks for Flat 1', 'Licensing: submit the licence application for Flat 1']);
   assert.ok(rows.every(r => r.automatic && r.source === 'derived' && r.id.startsWith('auto:')));
   assert.equal(new Set(rows.map(r => r.id)).size, rows.length);
   // Nobody waiting means no guest task; one guest reads in the singular.
   assert.equal(T.deriveTasks({ role: 'admin', today: TODAY, properties: [], work: [], journeys: [], guestsWaiting: { count: 0, since: null } }).length, 0);
-  assert.equal(T.deriveTasks({ role: 'admin', today: TODAY, properties: [], work: [], journeys: [], guestsWaiting: { count: 1, since: null } })[0].title, '1 guest is waiting for a reply');
+  assert.equal(T.deriveTasks({ role: 'admin', today: TODAY, properties: [], work: [], journeys: [], guestsWaiting: { count: 1, since: null } })[0].title, 'Guest messages: reply to 1 waiting guest');
 });
 
 test('derived tasks: roles that do not work guest or client relations get none', () => {
@@ -248,4 +248,111 @@ test('the screens use the pinned actions and shared pieces', () => {
   const sheet = readFileSync('mobile/src/HubItemSheet.tsx', 'utf8');
   assert.match(sheet, /A department/);
   assert.match(sheet, /export function HubItemSheet\(/);
+});
+
+// ---------- clearer titles and the Client relations filters (Alex, client meeting) ----------
+
+const journey = (n, stage, extra = {}) => ({ propertyId: id(900 + n), clientId: null, workId: id(400 + n), stage, version: 1, agreement: '', agreementRevision: 0, signedName: null, inspectionReport: null, invoiceId: null, estimate: null, form: null, ...extra });
+const cottage = (n, name, extra = {}) => prop(n, { name, ...extra });
+
+test('every Automatic title reads "<Area>: <what to do>" with the property or the person in it', () => {
+  const properties = [cottage(1, 'Rose Cottage'), cottage(2, 'Harbour Flat'), cottage(3, 'Glen Lodge', { status: 'onboarding' })];
+  const work = [
+    op(1, 'pricing_gap', { nights: ['2026-10-14', '2026-10-15', '2026-10-16'] }),
+    op(2, 'pricing_gap', { nights: ['2026-10-20'] }, { propertyId: id(902) }),
+    op(3, 'maintenance', { phase: 'referred', issue: 'Boiler not firing' }, { lastActivityAt: '2026-10-08T09:00:00Z' }),
+    op(4, 'maintenance', { phase: 'owner_declined', issue: 'New sofa' }, { propertyId: id(902) }),
+    op(5, 'maintenance', { phase: 'management_declined' }, { title: 'Repair request', propertyId: id(902) }),
+    op(6, 'maintenance', { phase: 'triage', issue: 'Dripping tap' }, { updatedAt: '2026-10-01T09:00:00Z' }),
+    op(7, 'maintenance', { phase: 'booked', issue: 'Broken window' }, { updatedAt: '2026-10-01T09:00:00Z' }),
+    op(8, 'licensing', { phase: 'checks_done' }, { propertyId: id(903) }),
+  ];
+  const rows = T.deriveTasks({ role: 'admin', today: TODAY, properties, work, journeys: [], guestsWaiting: null });
+  const title = (kind, workId) => rows.find(r => r.derived === kind && r.open.workId === workId).title;
+  assert.equal(title('pricing_gap', id(201)), 'Pricing: price 3 empty nights at Rose Cottage');
+  assert.equal(title('pricing_gap', id(202)), 'Pricing: price 1 empty night at Harbour Flat');
+  assert.equal(title('repair_update', id(203)), 'Repair: book the repair at Rose Cottage (Boiler not firing)');
+  assert.equal(title('repair_update', id(204)), 'Repair: re-quote or close the repair at Harbour Flat (New sofa)');
+  assert.equal(rows.find(r => r.open?.workId === id(204)).details, 'The owner declined the cost.');
+  assert.equal(title('repair_update', id(205)), 'Repair: re-quote or close the repair at Harbour Flat (Repair request)', 'no issue: the work title');
+  assert.equal(rows.find(r => r.open?.workId === id(205)).details, 'Management declined the cost.');
+  assert.equal(title('repair_update', id(206)), 'Repair: check and refer the repair at Rose Cottage (Dripping tap)');
+  assert.equal(title('repair_update', id(207)), 'Repair: confirm the repair is done at Rose Cottage (Broken window)');
+  assert.equal(title('licensing', id(208)), 'Licensing: record the licence grant for Glen Lodge');
+  assert.deepEqual(rows.filter(r => r.derived === 'listing_check').map(r => r.title).sort(), ['Listing: check the listing for Harbour Flat', 'Listing: check the listing for Rose Cottage']);
+  // A property the list does not know: the title still says what to do, without "at".
+  const unknown = T.deriveTasks({ role: 'stays', today: TODAY, properties: [], work: [op(9, 'pricing_gap', { nights: ['2026-10-14', '2026-10-15'] })], journeys: [] });
+  assert.equal(unknown[0].title, 'Pricing: price 2 empty nights');
+  for (const r of rows) assert.match(r.title, /^(Pricing|Repair|Listing|Licensing|Onboarding|Enquiry|Guest messages): [a-z]/, r.title);
+});
+
+test('onboarding titles: the next action for each stage, to the contact by name', () => {
+  const properties = [cottage(1, 'Rose Cottage', { status: 'onboarding' })];
+  const sarah = { contactName: 'Sarah Jones', email: 'sarah@example.com', phone: '07700 900123' };
+  const titleAt = (stage, extra = {}) => T.deriveTasks({ role: 'stays', today: TODAY, properties, work: [], journeys: [journey(1, stage, { enquiry: sarah, ...extra })] }).find(r => r.derived === 'onboarding')?.title;
+  assert.equal(titleAt('enquiry'), 'Enquiry: send the estimate to Sarah Jones');
+  assert.equal(titleAt('estimate'), 'Enquiry: get a decision on the estimate from Sarah Jones');
+  assert.equal(titleAt('reviewing'), 'Enquiry: get a decision on the estimate from Sarah Jones');
+  assert.equal(titleAt('agreement'), 'Onboarding: send the agreement to Sarah Jones');
+  assert.equal(titleAt('agreement', { agreementRevision: 1 }), 'Onboarding: get the agreement signed by Sarah Jones');
+  assert.equal(titleAt('form'), 'Onboarding: get the set-up form completed by Sarah Jones');
+  assert.equal(titleAt('invoice'), 'Onboarding: send the onboarding invoice to Sarah Jones');
+  assert.equal(titleAt('invoice', { invoiceId: id(77) }), 'Onboarding: get the onboarding invoice paid by Sarah Jones');
+  assert.equal(titleAt('inspection_to_book'), 'Onboarding: book the inspection at Rose Cottage');
+  assert.equal(titleAt('inspection_booked'), 'Onboarding: carry out the inspection at Rose Cottage');
+  assert.equal(titleAt('inspection_complete'), 'Onboarding: record the live listing for Rose Cottage');
+  assert.equal(titleAt('live'), undefined);
+  // The details give the contact to reach.
+  const row = T.deriveTasks({ role: 'stays', today: TODAY, properties, work: [], journeys: [journey(1, 'form', { enquiry: sarah })] })[0];
+  assert.equal(row.details, 'Sarah Jones, 07700 900123, sarah@example.com');
+  // With no contact name and no property, "the owner".
+  assert.equal(T.onboardingTitle('form', null, null, { agreementRevision: 0, invoiceId: null }), 'Onboarding: get the set-up form completed by the owner');
+});
+
+test('Client relations filters: All, Pricing, Enquiries and Onboarding, with counts of open rows', () => {
+  assert.deepEqual(T.CLIENT_FILTERS.map(f => T.CLIENT_FILTER_LABEL[f]), ['All', 'Pricing', 'Enquiries', 'Onboarding']);
+  const properties = [cottage(1, 'Rose Cottage'), cottage(2, 'Glen Lodge', { status: 'onboarding' }), cottage(3, 'Mill House', { status: 'onboarding' })];
+  const work = [op(1, 'pricing_gap', { nights: ['2026-10-14'] }), op(2, 'licensing', { phase: 'applied' }, { propertyId: id(902) }), op(3, 'listing_health', { checkedOn: '2026-10-01' })];
+  const derived = T.deriveTasks({ role: 'stays', today: TODAY, properties, work, journeys: [journey(2, 'enquiry'), journey(3, 'agreement')] });
+  const hub = rowsOf([
+    todo(1, { department: 'client_relations', title: 'Pricing: check the Christmas rates' }),
+    todo(2, { department: 'client_relations', title: 'enquiry: call back Mr Brown' }),
+    todo(3, { department: 'client_relations', title: 'Onboarding : chase the keys' }),
+    todo(4, { department: 'client_relations', title: 'Ring the owner about the bins' }),
+    todo(5, { department: 'client_relations', title: 'Pricing: done already', status: 'done' }),
+  ], properties);
+  const client = [...derived, ...hub].filter(r => r.heading === 'client_relations');
+  const area = r => T.clientAreaOf(r);
+  const byKind = k => client.find(r => r.derived === k);
+  assert.equal(area(byKind('pricing_gap')), 'pricing');
+  assert.equal(area(byKind('listing_check')), 'pricing', 'listing checks sit with pricing');
+  assert.equal(area(byKind('licensing')), 'onboarding');
+  assert.equal(area(client.find(r => r.derived === 'onboarding' && r.propertyId === id(902))), 'enquiries', 'before the owner says yes: an enquiry');
+  assert.equal(area(client.find(r => r.derived === 'onboarding' && r.propertyId === id(903))), 'onboarding');
+  assert.deepEqual(hub.map(area), ['pricing', 'enquiries', 'onboarding', null, 'pricing'], 'a person\'s to-do by the area its title starts with');
+  // A to-do with no area shows only under All.
+  const plain = hub[3];
+  assert.equal(T.matchesClientFilter(plain, 'all'), true);
+  for (const f of ['pricing', 'enquiries', 'onboarding']) assert.equal(T.matchesClientFilter(plain, f), false, f);
+  // An Automatic task is placed by its kind, never by its title.
+  assert.equal(T.clientAreaOf({ source: 'derived', title: 'Pricing: looks like it', area: undefined }), null);
+  // Counts are of open rows: the done hub to-do is not counted. Rose Cottage is live, so it has a listing check too.
+  assert.deepEqual(T.clientFilterCounts(client), { all: 9, pricing: 3, enquiries: 2, onboarding: 3 });
+});
+
+test('the To-do page shows the Client relations chips and filters only that heading', () => {
+  const list = readFileSync('mobile/src/TodoList.tsx', 'utf8');
+  assert.match(list, /import \{ Chip \} from "\.\/LivePortfolio";/, 'the counted chip used elsewhere');
+  assert.match(list, /const chipCounts = g\.heading === "client_relations" \? clientFilterCounts\(g\.rows\) : null, filter = chipCounts\?\.all \? clientFilter : "all";/);
+  assert.match(list, /g\.rows\.filter\(r => !r\.done && matchesClientFilter\(r, filter\)\)/);
+  assert.match(list, /CLIENT_FILTERS\.map\(f => <Chip key=\{f\} p=\{p\} label=\{CLIENT_FILTER_LABEL\[f\]\} count=\{chipCounts\[f\]\} on=\{clientFilter === f\}/);
+  assert.match(list, /Nothing under \$\{CLIENT_FILTER_LABEL\[filter\]\} right now\./);
+});
+
+test('the New to-do form labels: assign to, departments with what they cover, the due date', () => {
+  const sheet = readFileSync('mobile/src/HubItemSheet.tsx', 'utf8');
+  assert.match(sheet, /\{ value: "me", label: "Me" \}, \{ value: "person", label: "A person" \}, \{ value: "department", label: "A department" \}/);
+  assert.match(sheet, /guest_relations: "guests and their stays", client_relations: "owners, pricing and onboarding", ready: "repairs and maintenance"/);
+  assert.match(sheet, /`\$\{DEPARTMENT_LABEL\[d\]\} \(\$\{DEPARTMENT_HINT\[d\]\}\)`/);
+  assert.match(sheet, /Area: what to do, for example Pricing: check the rates at Rose Cottage/);
 });

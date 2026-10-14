@@ -1,3 +1,4 @@
 -- Nothing pending. Every migration in supabase/migrations is installed in the Supabase project.
--- 20261020600000_email_tabs (Guest emails and Client emails tabs) was installed on 14 October 2026 from the install file by the
--- lead, at Lee's request, and went live with pull request #13.
+-- 20261020700000_direct_push, 20261020800000_enquiry_duplicates and 20261020850000_no_lunch_pauses were installed on
+-- 14 October 2026: the lunch part and most of the pop-up parts by the lead, the rest by Lee from the install file (the
+-- database tool here cannot run statements that delete or drop). They went live with pull request #14.

@@ -170,6 +170,8 @@ test('one conversation per person, but a new subject shows: its message starts w
   const def = async () => (await sql("select pg_get_functiondef('private.workspace_client_email_in(text,text,text,text,text,timestamptz,text,text,text[],jsonb)'::regprocedure) d"))[0].d;
   const once = await def();
   await db.exec(await fs.readFile('supabase/migrations/20261019510000_client_email_new_subject.sql', 'utf8'));
+  // 20261020700000 patches this function by anchor (direct pop-ups); put it back on top, as the real order would.
+  await db.exec(await fs.readFile('supabase/migrations/20261020700000_direct_push.sql', 'utf8'));
   assert.equal(await def(), once, 'the round-2 migration runs twice without change');
   assert.match(once, /new_topic/);
   await act({ action: 'close', threadId: first.threadId });

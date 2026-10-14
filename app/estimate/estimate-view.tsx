@@ -6,7 +6,8 @@ import { AVAILABLE_NIGHTS, DIRECT_RANGE, OCCUPANCY_RANGE, SCENARIOS, hasFees, pr
 import { formatBps, formatMoney, plural } from "@/lib/format";
 
 // The client's estimate: the nightly rates, the notes and similar properties, a small explorer (the same sums as the
-// owner app's "Explore your estimate", lib/estimate-projection.ts), and their answer: Proceed, Review later or Decline.
+// owner app's "Explore your estimate", lib/estimate-projection.ts), and their answer: Proceed, No, thank you, or Thank you,
+// I'll be in touch (with a date for us to check in).
 type Decision = keyof typeof DECISION_LABEL;
 const pounds = (minor: number) => formatMoney(Math.round(minor / 100) * 100).replace(/\.00$/, "");
 const percent = (bps: number) => formatBps(bps).replace(".0%", "%");
@@ -53,6 +54,8 @@ function Explorer({ estimate }: { estimate: Record<string, unknown> }) {
       <div><dt>Recharge management ({percent(published.managementFeeBps!)})</dt><dd>{"−" + pounds(result.managementFeesMinor!)}</dd></div>
       <div data-strong="true"><dt>Your earnings</dt><dd>{pounds(result.ownerMinor!)}</dd></div>
     </dl>}
+    {/* What the two fees are, in plain words (Alex), beside the lines. */}
+    {fees && <p className="enquiry-help">Airbnb and Booking.com keep a share of each booking made through their sites: that is the platform fee. Guests who book with us directly pay no platform fee. The management fee is what Recharge charges for running your let, as a share of the booking income.</p>}
     <p className="enquiry-help">An estimate, not a guarantee. {fees ? "Before cleaning, maintenance, utilities and tax." : "We will add the fees when we talk, so you can see your earnings."} Assumes the property is available all {AVAILABLE_NIGHTS} nights of the year.</p>
     {changed && <button type="button" className="estimate-link-button" onClick={() => setChoices(start)}>Back to Recharge’s estimate</button>}
   </section>;
@@ -116,7 +119,7 @@ export function EstimateView({ token, state: initial, estimate, followUpOn }: { 
         </div>
       </fieldset>
       {decision === "review" && <div className="auth-field enquiry-field" data-invalid={field === "followUpOn" ? "true" : undefined}>
-        <label htmlFor="estimate-date">When should we follow up?</label>
+        <label htmlFor="estimate-date">If we haven’t heard from you, when should we check in?</label>
         <div className="auth-control" data-bare-input="true"><CalendarDays aria-hidden size={17} className="auth-control-icon" />
           <input id="estimate-date" type="date" min={today()} value={date} onChange={e => { setDate(e.target.value); setField(""); }} required />
         </div>

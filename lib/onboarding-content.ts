@@ -29,7 +29,7 @@ export const PROCESS: { step: string; detail: string }[] = [
 
 export const OWNER_FAQ: { q: string; a: string }[] = [
   { q: 'How is my estimate worked out?', a: 'From the nightly rates similar properties nearby achieve (the comparables shown) and how often they are booked. Use "Explore your estimate" to try a quieter or stronger year, a different occupancy, or more direct bookings.' },
-  { q: 'What if I need more time to decide?', a: 'Choose "I need more time" with a date. We will check in with you then, and nothing moves on until you decide.' },
+  { q: 'What if I need more time to decide?', a: 'Choose "Thank you, I’ll be in touch" with a date. We will check in with you then, and nothing moves on until you decide.' },
   { q: 'Who decides on repairs?', a: 'You set a limit per repair in the property set-up form. Repairs under it go ahead so guests are not left waiting; anything over it comes to you to approve first. You can also name a contractor or warranty provider for us to contact first.' },
   { q: 'How do I get paid?', a: 'Your earnings are paid to the bank account you give in the property set-up form, and you will see a statement for each period. Your payout details are only shown when someone asks to see them.' },
   { q: 'What happens to my post?', a: 'You choose in the set-up form: photograph it, open and photograph it, or leave it somewhere safe. Photographed post appears in your mailbox in the app.' },

@@ -112,9 +112,11 @@ test('a row opens its work item, a chat or guest notice opens Messages, and a bu
   assert.deepEqual([split.detail, split.when], ['Harbour Flat · Sam Reid', '13 Oct, 13:39']);
 });
 
-test('email and push name the type of work, and still carry no property, title or names', () => {
+test('email names the type of work and still carries no property, title or names; pop-ups are direct (Lee, 14 October)', () => {
   assert.deepEqual(d.noticeCopyFor('handover.created', 'daily_pricing').title, 'Pricing: New task for your team');
   assert.deepEqual(d.noticeCopyFor('handover.created', null).title, 'New task for your team');
   assert.equal(d.noticeCopyFor('operations.updateOperation.completeRepair', 'maintenance').title, 'Repair: Repair completed');
-  for (const file of ['lib/integration-providers.ts', 'lib/web-push.ts']) assert.match(source(file), /noticeCopyFor\(job\.eventType, job\.workKind\)/, file);
+  assert.match(source('lib/integration-providers.ts'), /noticeCopyFor\(job\.eventType, job\.workKind\)/);
+  // Pop-ups are encrypted for one device, so they name who and what (lib/push-copy.ts, tested in push-copy.test.mjs).
+  assert.match(source('lib/web-push.ts'), /pushCopy\(job\.eventType, job\.workKind, job\.details \?\? \{\}\)/);
 });

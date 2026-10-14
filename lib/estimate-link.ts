@@ -32,10 +32,11 @@ export type EstimateLinkAction = z.infer<typeof estimateLinkActionSchema>;
 // The client's answer on the page.
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a follow-up date');
 export const estimateDecisionSchema = z.object({
-  token: z.string().regex(estimateTokenPattern), decision: z.enum(['proceed', 'review', 'decline'], { message: 'Choose Proceed, Review later or Decline' }),
+  token: z.string().regex(estimateTokenPattern), decision: z.enum(['proceed', 'review', 'decline'], { message: 'Choose how you would like to go ahead' }),
   feedback: z.string().max(5000, 'Feedback can be up to 5,000 characters').default(''), followUpOn: isoDate.nullable().optional(),
 }).strict().refine(v => v.decision !== 'review' || !!v.followUpOn, { message: 'Choose a follow-up date', path: ['followUpOn'] });
-export const DECISION_LABEL = { proceed: 'Proceed', review: 'Review later', decline: 'Decline' } as const;
+// The three answers on the page, in this order (Alex, client meeting): go ahead, say no, or take time and come back to us.
+export const DECISION_LABEL = { proceed: 'Proceed', decline: 'No, thank you', review: 'Thank you, I’ll be in touch' } as const;
 
 const comparablesOf = (estimate: Record<string, unknown>) => (Array.isArray(estimate.comparables) ? estimate.comparables : [])
   .filter((c): c is { name: string; url: string; adrMinor: number } => !!c && typeof c === 'object' && typeof (c as { name?: unknown }).name === 'string' && typeof (c as { url?: unknown }).url === 'string' && /^https:\/\//.test((c as { url: string }).url))

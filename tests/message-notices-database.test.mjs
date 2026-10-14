@@ -21,7 +21,8 @@ const SIGS = ['private.chat_notice_due(uuid,uuid)', 'private.workspace_guest_mes
 const firstRun = await Promise.all(SIGS.map(definition));
 for (const m of MINE) await db.exec(await fs.readFile(`supabase/migrations/${m}.sql`, 'utf8'));
 // 20261015330000 replaces the recipient rule (adds the onboarding check); put it back on top, as the real order would.
-const LATER = ['20261015330000_guest_message_notices_onboarded'];
+// 20261020700000 replaces the guest notice trigger whole (direct pop-ups keep the guest's name and message): also put back on top.
+const LATER = ['20261015330000_guest_message_notices_onboarded', '20261020700000_direct_push'];
 for (const m of LATER) await db.exec(await fs.readFile(`supabase/migrations/${m}.sql`, 'utf8'));
 const secondRun = await Promise.all(SIGS.map(definition));
 after(() => db.close());
