@@ -24,8 +24,11 @@ export function replySignature(address: string) {
     + `<a href="mailto:${escape(address)}" style="color:#4E6259;text-decoration:none">${escape(address)}</a></div></td></tr></table>`;
 }
 
-/** A reply's HTML: the text exactly as written (paragraphs and line breaks kept, links not added), then the signature. */
-export function replyHtml(text: string, address: string) {
-  const body = text.replace(/\r\n?/g, '\n').trim().split(/\n{2,}/).map(part => `<p style="margin:0 0 14px">${escape(part).replace(/\n/g, '<br>')}</p>`).join('');
-  return `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.6;color:#152D28;max-width:560px">${body}${replySignature(address)}</div>`;
-}
+const paragraphs = (text: string) => text.replace(/\r\n?/g, '\n').trim().split(/\n{2,}/).map(part => `<p style="margin:0 0 14px">${escape(part).replace(/\n/g, '<br>')}</p>`).join('');
+const frame = (inner: string) => `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.6;color:#152D28;max-width:560px">${inner}</div>`;
+
+/** A reply's HTML: the text exactly as written (paragraphs and line breaks kept, links not added), then the signature. Every reply. */
+export const replyHtml = (text: string, address: string) => frame(paragraphs(text) + replySignature(address));
+
+/** A plain-text email Recharge sends (the staff notice emails), with the logo at the top. */
+export const noticeHtml = (text: string) => frame(emailHeader() + paragraphs(text));

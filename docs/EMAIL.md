@@ -86,8 +86,8 @@ Migration 20261019520000, `lib/estimate-link.ts`, `lib/estimate-link-server.ts`,
 - **The image:** a 480 by 133 PNG (about 24 KB) cut from `recharge-company-logo.png`, on its own solid cream background. Email apps block SVG, and the solid background keeps it readable when a mail app shows the email dark. It is served from `https://app.rechargegroup.co.uk/recharge-email-logo.png`, with `alt="Recharge"` and the width and height set.
 - **Emails Recharge writes:** the enquiry form and the estimate email start with the logo, at 180 by 50.
 - **Replies written in Messages:** both mailboxes send an HTML part. It holds the text as written, then a small signature: the logo at 108 by 30, "Recharge Group", and the mailbox the reply came from. Plain-text parts are unchanged.
-- **Staff notice emails:** these are plain text only, so they carry no logo.
-- **The round avatar Gmail shows** for a sender comes from BIMI (DMARC at enforcement plus a paid VMC or CMC certificate) or from a Google account photo on the sending address. It is not set by the email itself.
+- **Staff notice emails:** these now send an HTML part with the logo on top and the same text. The plain text is unchanged, so every email we send carries the logo.
+- **The round avatar Gmail shows** for a sender comes from BIMI (DMARC at enforcement plus a paid VMC or CMC certificate) or from a Google account photo on the sending address. It is not set by the email itself Lee decided against both, so nothing is set up for it.
 - **Screenshots:** `docs/screenshots/session-f/email-*.png`.
 
 ## Two addresses, never mixed (Lee's rule)
