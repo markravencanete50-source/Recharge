@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { ChoiceField, ChoicePills } from "./ChoiceField";
 import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, dayLabel, Field, london, message, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { writeOperation } from "./backend/client";
 import { poundsToMinor } from "../../lib/repairs-live";
 import { type PropertyView } from "../../lib/workspace-view";
@@ -84,7 +85,7 @@ export function PricingSheet({ p, target, onClose, onDone }: { p: Palette; targe
   }
   return (
     <Sheet palette={p} visible={!!target} onClose={onClose} title="Price a vacant night" subtitle={target?.property.name} icon="coins">
-      {target && <Pills p={p} values={target.nights} value={night} onChange={setNight} label={dayLabel} />}
+      {target && <ChoicePills p={p} name="Night" values={target.nights} value={night} onChange={setNight} label={dayLabel} />}
       <Field label="Current nightly rate" value={current} onChange={setCurrent} p={p} placeholder="£0.00" />
       <Pills p={p} values={["hold", "change"] as const} value={decision} onChange={setDecision} label={v => v === "hold" ? "Hold the rate" : "Change the rate"} />
       {decision === "change" && <Field label="New nightly rate" value={proposed} onChange={setProposed} p={p} placeholder="£0.00" />}
@@ -102,6 +103,7 @@ export function ReviewSheet({ p, property, onClose, onDone }: { p: Palette; prop
   const [outOf, setOutOf] = useState<5 | 10>(5);
   const [rating, setRating] = useState(5);
   const [sentiment, setSentiment] = useState<(typeof SENTIMENTS)[number]>("positive");
+  const rate = (n: number) => { setRating(n); setSentiment(n / outOf >= 0.8 ? "positive" : n / outOf >= 0.6 ? "neutral" : "negative"); };
   const [summary, setSummary] = useState("");
   const [response, setResponse] = useState("");
   const [relist, setRelist] = useState(false);
@@ -123,14 +125,18 @@ export function ReviewSheet({ p, property, onClose, onDone }: { p: Palette; prop
     <Sheet palette={p} visible={!!property} onClose={onClose} title="Log a guest review" subtitle={property?.name} icon="medal">
       <Pills p={p} values={PLATFORMS} value={platform} onChange={v => { setPlatform(v); if (v === "Booking.com") scale(10); else if (outOf === 10) scale(5); }} label={v => v} />
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Rating out of {outOf}</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {/* Out of 5: five round buttons. Out of 10: one dropdown (the "fewer buttons" rule). */}
+      {outOf > 5 ? <ChoiceField p={p} label={`Rating out of ${outOf}`} value={rating ? String(rating) : ""}
+        options={[...(rating ? [] : [{ value: "", label: "Choose a rating" }]), ...Array.from({ length: outOf }, (_, i) => ({ value: String(i + 1), label: `${i + 1} out of ${outOf}` }))]}
+        onChange={v => { const n = Number(v); if (n) rate(n); }} />
+      : <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {Array.from({ length: outOf }, (_, i) => i + 1).map(n => (
-          <MotionPress key={n} accessibilityRole="radio" accessibilityLabel={`${n} out of ${outOf}`} accessibilityState={{ selected: rating === n }} onPress={() => { setRating(n); setSentiment(n / outOf >= 0.8 ? "positive" : n / outOf >= 0.6 ? "neutral" : "negative"); }}
+          <MotionPress key={n} accessibilityRole="radio" accessibilityLabel={`${n} out of ${outOf}`} accessibilityState={{ selected: rating === n }} onPress={() => rate(n)}
             style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: rating === n ? p.primary : p.surface, borderWidth: 1, borderColor: rating === n ? p.primary : p.border }}>
             <Text style={{ color: rating === n ? p.onPrimary : p.text, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{n}</Text>
           </MotionPress>
         ))}
-      </View>
+      </View>}
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Good or bad</Text>
       <Pills p={p} values={SENTIMENTS} value={sentiment} onChange={setSentiment} label={v => ({ positive: "Good", neutral: "Mixed", negative: "Bad" })[v]} />
       <Field label="What the guest said" value={summary} onChange={setSummary} p={p} multiline placeholder="The main points of the review" />

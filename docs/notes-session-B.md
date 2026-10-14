@@ -577,3 +577,371 @@ down."
   - pull to refresh calls the quiet refresh.
 
   The header is checked from source; there is no React Native renderer for tests here.
+
+# Round 6: the To-do page and the New to-do form (from Alex's video)
+
+## 1. Updates on a to-do
+
+- **Database** (`supabase/migrations/20261016200000_todo_updates.sql`, in the 20261016200000 to
+  20261016299999 range):
+  - New table `private.workspace_hub_item_updates`: the to-do, the text (1 to 2,000 characters), the kind
+    (`note`, `done` or `reopened`), who wrote it and when.
+  - RLS is on and signed-in users have no direct access; the write limit trigger applies.
+  - New action `addTodoUpdate` `{ requestId, id, text }`, routed from `workspace_teams_action` after the hub
+    route. It uses action receipts, so a repeated request returns the same answer.
+- **Who can add updates:** anyone who can see the to-do, using the to-do's own rule
+  (`private.workspace_hub_can_see`): the admin, the person it is for, the person who set it, or the
+  department's team.
+  - Owners are refused: the client role gets "Team access required", the same as the hub read.
+  - A to-do the person cannot see reads "To-do not found".
+  - Approvals, claims and invoices take no updates.
+- **Who hears about an update:** the person it is for and the person who set it get a notice
+  (`hub.todo_updated`). The writer does not.
+- **Ticking:** ticking a to-do done logs "Marked done", and unticking it logs "Reopened" (`moveHubItem`).
+- **The hub view:** for a to-do it now returns `updateCount` (the running total) and `updates`, the last
+  100, newest first. Other kinds return 0 and `[]`.
+- **Patches:** three anchor-and-append patches with sentinels: the hub view, the hub action and the teams
+  route. All anchors are single lines, because of the CRLF checkout.
+- **Run twice:** the table and indexes use "if not exists", the functions are replaced, and the patches
+  have sentinels. A test runs the migration a second time and checks that nothing changes.
+- **Not applied anywhere.** Lee or the Lead applies it.
+- **App:** the `addTodoUpdate` schema is added at the end of the union in `lib/workspace-teams-policy.ts`.
+  `lib/todo.ts` adds `todoUpdateSchema`, and `todoHubItemSchema` gains `updateCount` and `updates`, both
+  defaulting to empty so older answers still parse. Each row now has `latest` and `updateCount`.
+- **The detail** (`TodoDetailSheet` in `TodoList.tsx`) opens when a to-do row is clicked. It shows:
+  - where, when and who;
+  - Mark done or Reopen, and Edit (which opens the existing form);
+  - "3 updates · Last update 2h ago by Dan Fraser";
+  - the "Add update" box;
+  - the full history, newest first. Each entry shows the text, the stamp ("Today 12:34 · Dan Fraser") and
+    how long ago.
+
+  Automatic tasks still open their work, as before.
+
+## 2. New to-do form (`HubItemSheet.tsx`)
+
+- **Who is it for** is now one `Dropdown` (Session A's `mobile/src/Dropdown.tsx`) with Me, A person and
+  A department. "A person" shows a second dropdown, "Which person?", over the team; "A department" shows
+  "Which department?". The chips are gone. Saving "A person" with no one chosen says "Choose the person."
+- **The due date** (and "Send by" on an invoice) is Session A's `DateField` in single mode, in place of the
+  typed YYYY-MM-DD box. "No date" removes it.
+- **The property** stays the shared `PropertySelect`, which is search only on long lists since round 5.
+- **For Session A:** in single mode, the empty `DateField` reads "Choose dates" (plural), from
+  `rangeLabel`'s default. I did not change Session A's file.
+
+## 3. Thin, spreadsheet-like rows
+
+- **The table:** `ThinTable` in `mobile/src/Tracker.tsx`. It has one line per row, 40 px rows
+  (`THIN_ROW`), a 32 px header in the wash colour, and it scrolls sideways when the columns are wider
+  than the screen.
+- **The trackers use it too:** `TrackerList` now draws `ThinTable` in place of `SheetTable`.
+  - The tracker columns are unchanged, but each is now one line: the address with the title after it, the
+    status with Flagged beside it, and so on.
+  - So every tracker table (purchases, licensing, onboarding, accounts and the rest) has the same density.
+    Phone cards are unchanged.
+- **To-do on a computer** (from 1,024 px, `todoLayout`), with these columns:
+  - tick;
+  - property (the full address, or "–");
+  - task (the title, with the description truncated on the same line);
+  - latest update;
+  - updated by;
+  - when ("2h ago");
+  - due ("Today", "12 Oct", red when overdue);
+  - status (To do, Automatic or Done).
+
+  The columns are in `TODO_COLUMNS` and what each shows is in `todoCells`. Clicking a row opens the
+  detail.
+- **The empty cell:** the brief asked for an em dash, but the To-do and Tracker files have a no-em-dash test. So empty
+  cells use the "–" the sheet tables already use (`EMPTY_CELL` in `lib/tracker.ts`).
+- **To-do on a phone:** a two-line card (`todoCardLines`). The first line is the task and the due day. The
+  second is the property and the latest update (who and when), or the description when there is no
+  update. The tick is a 44 px target.
+- **Same rows everywhere:** the automatic sections, the four headings and the Done list all use these
+  rows, and the Home summary card uses the phone card.
+- **New in `lib/tracker.ts`:** `timeAgo`.
+
+## 4. Pricing overload
+
+- **Unchanged:** the automatic pricing rows are still made the same way, so all 180 are kept.
+- **Change:** each heading now shows 10 rows (`ROWS_PER_HEADING`, was 8). The button reads "Show all N"
+  (for example "Show all 185" under Client relations with 180 pricing rows), and "Show fewer" once open.
+
+## Tests
+
+- **`tests/todo-updates-database.test.mjs`** (PGlite, all migrations): 8 of 8 pass. It covers:
+  - adding updates, newest first, with who and the running total;
+  - visibility: own, department and admin; others get "To-do not found";
+  - owners refused, with no table access;
+  - "Marked done" and "Reopened", and nothing for approvals;
+  - input checks and a repeated request;
+  - notices;
+  - running the migration twice.
+- **`tests/todo-rows.test.mjs`**: 16 of 16 pass. It covers:
+  - the log reaching the rows;
+  - update kinds and the action schema;
+  - `timeAgo`;
+  - the column order and what each column shows;
+  - the phone card;
+  - phone versus desktop (1,023 px gives cards, 1,024 px the table);
+  - "Last update X ago by Y";
+  - the 180 pricing rows with "Show all 180";
+  - the form's dropdowns and `DateField`;
+  - the screens' table, cards, 44 px ticks and detail;
+  - the tracker using the thin table;
+  - no em dashes.
+
+  The screens are checked from source, because there is no React Native renderer for tests here.
+- **Existing tests still pass:** `todo`, `tracker`, `tracker-onboarding`, `hub-database`, `hub-policy`,
+  `daily-tasks-notice-routes-database`, `wiring-fixes-v2`, `management-approvals` and `search-picker`
+  (98 of 98).
+- **No test file outside my area was changed.**
+- **Checks:** mobile TypeScript (`npx tsc --noEmit -p mobile/tsconfig.json`) and ESLint on the changed
+  files are clean.
+
+## Screenshots (sample data)
+
+**How they were taken:** a temporary route (not committed) rendered the real `TodoList` from sample data.
+The sample has 180 properties, 180 pricing gaps, 3 listing checks due and 10 hub to-dos with updates, for
+a Stays persona. The hub read came through the app's demo answers. Playwright took the shots in Chromium.
+
+| Desktop | Desktop, detail | Desktop, New to-do |
+| --- | --- | --- |
+| ![](screenshots/session-b/round6-todo-desktop.png) | ![](screenshots/session-b/round6-todo-desktop-detail.png) | ![](screenshots/session-b/round6-todo-desktop-form.png) |
+
+| Phone | Phone, detail |
+| --- | --- |
+| ![](screenshots/session-b/round6-todo-phone.png) | ![](screenshots/session-b/round6-todo-phone-detail.png) |
+
+# Round 6, second task: Favorites always in the Overview (Lee)
+
+Lee: "the favorites feature should always be in the overview for easy access regardless of which role we
+have."
+
+- **Menu (`lib/role-panel.ts`):** `page:favorites` is now in every role's first section, straight after
+  Home, and is gone from More.
+  - The first sections are: Overview for super admin, admin and Accounts; Today for Guest relations,
+    Cleaning team and Ready; My day for Cleaners; Your properties for Owners.
+  - The team-only limit on the Favorites page is removed, so owners get it too.
+- **Search (`lib/workspace-search.ts`):** the Favorites page is in everyone's search list.
+- **`LiveWorkspace.tsx`, so owners can use Favorites:**
+  - the Favorites store loads for every role (still blank in a role preview);
+  - the favorites context is given to every role, so the stars show for owners too;
+  - the floating Favorites button on the phone shows for every role;
+  - the "Save to Favorites" button on an open work item shows for every role;
+  - the Favorites section is no longer limited to team roles.
+- **Owners in the database: no migration was needed.** `workspace_favorites` and
+  `workspace_save_favorites` accept any active role and only ever touch the caller's own row
+  (`auth.uid()`).
+- **Owners can only use what they can open:** a saved key is resolved against the person's own search
+  list (`resolveFavorites`). A key the owner cannot open, for example a team page, is kept with its label
+  so it can be removed, but it never opens. Owners can only pin from screens they already have.
+- **Menu order (`lib/menu-layout.ts`):**
+  - `LOCKED_LINKS = ['page:favorites']`.
+  - The merge only places a locked link from its own section. Listed elsewhere, it goes back to its own
+    section.
+  - `moveItemTo` does nothing for it. It can still move up and down within its section, and it goes
+    wherever its section goes.
+- **Menu order editor (`MenuOrderEditor.tsx`):** no "Move to…" for Favorites. A lock icon and a note
+  show: "Favorites stays in Overview for every role, so it is always easy to reach. It can move up or down
+  here."
+- **The phone:** the bar and the Menu are built from the same merged panel, so Favorites is either on the
+  bar or first in the Menu (tested for all eight roles).
+- **Tests:**
+  - **New, `tests/favorites-overview.test.mjs`:** 6 of 6 pass. It covers all eight roles, a saved layout
+    that cannot move Favorites out, the phone, owners' list resolving only what they can open, the
+    editor's lock, and a database check that owners pin and unpin their own list and nobody else sees it.
+  - **Tests outside my area that I changed,** because they said owners have no Favorites or that To-do
+    comes straight after Home:
+    - `tests/role-panel.test.mjs`: owners have Favorites; the team order is now Home, Favorites, To-do.
+    - `tests/navigation-v2.test.mjs`: `page:favorites` removed from the owner's "never" list.
+    - `tests/workspace-search.test.mjs`: owners have the Favorites page.
+  - **My own round 5 tests:** `tests/menu-layout.test.mjs`, four expectations updated for Favorites in the
+    first section. The "emptied section" case now empties Calendar & messages, because Today keeps the
+    locked Favorites.
+  - **Related tests:** app-wiring, business-workspace, favorites-database, header-actions,
+    menu-layout-database, mobile-workspace, qa-wiring-fixes, role-authorization-matrix, search-and-cancel,
+    view-as-database, view-as-http, wiring-fixes-v2, workspace-access and workspace-web-path all pass.
+    wiring-v2 has only its known line-ending failure.
+
+# Round 6, third task: delete client enquiries (Lee)
+
+Lee: "we should be able to delete client enquiries." For example the test entry "Mark Raven Canete ·
+Optimal · Tinibgan · Valuing".
+
+## The screen (`LiveEnquiries.tsx`)
+
+- **The button:** "Delete enquiry" in the enquiry's detail, for admins and super admins only
+  (`canDeleteEnquiry` in `lib/client-enquiry.ts`).
+- **When it shows:** only while the enquiry has not moved on. That means not yet answered, or its property
+  is still at the enquiry stage, or it was archived by closing the enquiry.
+- **Confirmation:** it asks first, in a sheet (no browser dialog): "Delete this enquiry? This removes the
+  enquiry, its answers and photos, and the property it created. This can’t be undone." An enquiry that
+  never made a property leaves out the part about the property.
+- **Close** is unchanged.
+
+## The database (`supabase/migrations/20261016210000_delete_client_enquiry.sql`, not applied)
+
+- **New action `deleteEnquiry`** `{ requestId, enquiryId, version }`, routed from `workspace_teams_action`.
+  - Admins and super admins only. Everyone else gets "Only management can delete an enquiry", including
+    owners and Guest relations staff with onboarding.
+  - It has a version check and action receipts.
+- **Allowed only while it has not moved on.** All of these must hold:
+  - the journey is at `enquiry`, or `archived` by Close;
+  - no owner (journey `client_id`, or a client assignment);
+  - no signed agreement and no invoice on the journey;
+  - the property is still `onboarding` or `archived`;
+  - nothing else refers to the property or the onboarding item.
+- **How "nothing else refers to it" is checked:** `workspace_enquiry_moved_on` reads the foreign keys, so a
+  table added later counts too. Stays, money, expenses, statements, to-dos, photos, flags, routine plans,
+  guest messages and other work items all count.
+  - The only references allowed are the ones the enquiry itself made: the journey, its questions, the
+    onboarding item, the onboarding team's staff access, activity and notices, and the item's updates and
+    upload intents.
+  - Otherwise: "This enquiry has moved on. Close it instead."
+- **What it deletes:**
+  - the enquiry and its answers;
+  - the property made on submit;
+  - its journey and journey questions;
+  - the onboarding work item, with its updates, details and upload intents;
+  - the staff access to the property;
+  - the property's and the item's activity and notices.
+
+  Another enquiry marked as a duplicate of the property is kept, with the link cleared.
+- **Files:** no removal queue existed before. The privacy erase and deleting a course both remove stored
+  copies straight from the server. So I added `private.workspace_storage_removals` (bucket, path, reason,
+  queued by, queued and removed times), with RLS on and no direct access.
+  - The delete queues every photo and video path and returns the paths.
+  - The server (`deleteEnquiry` in `lib/client-enquiry-server.ts`, routed in
+    `lib/workspace-finance-server.ts`) removes the stored copies straight away. It then marks them removed
+    with `workspace_storage_removed`, which only marks rows the caller queued.
+  - If storage is down, the rows stay queued, on record.
+- **History:** the access history gets a `client_enquiry.deleted` event with who and when (`actor_id`,
+  `occurred_at`). It holds the enquiry id, name and company, status, stage, and whether a property was
+  deleted. It holds no email, phone or address.
+- **Run twice:** the table uses "if not exists", the functions are replaced, and the route patch has a
+  sentinel and a single-line anchor.
+
+## Tests
+
+- **New, `tests/enquiry-delete-database.test.mjs`:** 9 of 9 pass. It covers:
+  - the button rule and the wording;
+  - deleting at each allowed stage: sent, opened, answered, valuing and closed, with nothing left behind
+    (enquiry, property, journey, work, access, activity, notices);
+  - the files queued and marked, only by whoever queued them;
+  - the access history entry, without contact details;
+  - refusal once moved on, with nothing deleted and nothing queued: an estimate, a linked owner, a
+    signature, another to-do on the property, or an invoice;
+  - every other role refused, a stale version, unknown keys and a repeated request;
+  - a duplicate link cleared;
+  - the screen and server wiring;
+  - running the migration twice.
+- **Existing tests still pass:** client-enquiries-database, enquiry-property-database, enquiry-property,
+  enquiry-and-preview, hub-database, todo-updates-database, view-as-http, business-workspace and
+  role-authorization-matrix (72 of 72, with the new file).
+
+## For Lee
+
+Once Lee or the Lead applies the migration, an admin can delete the test entry from the app.
+
+# Round 6, merge with Session D's forms (Lead)
+
+- **Merged:** `origin/claude/round6-forms-session-d`. The only conflict was `mobile/src/HubItemSheet.tsx`.
+- **How it was resolved:** my form is kept: the Who-is-it-for dropdown pair, the `DateField` for "Due" and
+  "Send by", and the search-only `PropertySelect`.
+  - D's `ChoiceField` (department) is not used there, so its import is gone, along with `SearchPicker` and
+    `Chip`.
+  - There are no typed dates left: the old "Enter the date as YYYY-MM-DD." message now reads "Choose a valid
+    date."
+- **A test outside my area that I changed:** in `tests/choice-control.test.mjs`, the HubItemSheet row now
+  expects my "Which department?" `Dropdown` in place of `ChoiceField`. It still checks there is no row of
+  chips.
+- **Left for D:** `tests/wiring-v2.test.mjs`, "the phone bar, management and the routine card use the new
+  names", fails on D's branch as well. Its regex `<DailyTaskSettings p={p} account={account}[^>]*\/>` cannot
+  get past the `=>` in D's `onShowAll={() => setDailyOnly(null)}`. Allowing `>` there (for example
+  `[^]*?\/>`) would fix it.
+- **Line endings:** `git add --renormalize .` staged nothing. The repository copy was already right; only
+  the files on disk were LF. I converted them to CRLF in the working copy (no content change; `git status`
+  is clean) and did not commit that. The 6 line-ending failures are gone.
+- **For D:** `todoHubSchema` and `moveHubItem` are compatible with D's checklist.
+  - The hub items gain `updateCount` and `updates`. Both have defaults.
+  - `moveHubItem` takes the same input. A tick from the checklist now also logs "Marked done" (or
+    "Reopened") in that to-do's update history.
+
+# Round 6, Session E's design review: the items routed to Session B
+
+- **Merged first:** `origin/claude/round6-uiux-session-e` (merge `edb7c13`), for E's tokens (`selected`,
+  `onSelected`, `selectedBorder`, `washBorder`, `disabled`, `onSuccess`). Neither theme file was edited.
+- **Not taken from D's branch:** D's `wiring-v2` regex fix. D force-pushed their branch, and the Lead keeps
+  D's fix on the lead branch. Here that test still fails until the branches meet.
+
+| # | What | Change |
+| --- | --- | --- |
+| 5 | The floating Favorites star covered content on phones ("Checklists" on Cleans). | Removed from `LiveWorkspace.tsx`, along with its 184 px bottom padding and its scroll-tuck timer. Favorites is in every role's first section, so on a phone it is on the bar or first in the Menu. |
+| 6 | At 390 px the header buttons covered the logo ("R…ARGE"). | New `phoneHeader(width, has)` in `lib/header-actions.ts`, from the real sizes (46 px buttons, 44 px avatar, 8 px gaps, 40 px padding, 12 px before the buttons). Menu, the bell, Messages and the avatar always show. Search, View as, Refresh and the dark-mode switch show only while the logo keeps 88 px; otherwise they move to the top of the Menu sheet. Under 346 px the logo shrinks to the room left, so nothing ever sits on it. The old count left out Menu and Messages. |
+| 7 | To-do as tall cards. | Already covered: E's screenshot came from `main`, before my thin rows (`cb4d767`). The after shot shows the rows. |
+| 8 | "New property enquiry" was a full-width mint block in dark mode (`EnquiryCard` in `HomeOverview.tsx`). | Now a surface card with a hairline, a wash icon tile edged with `washBorder`, text and muted lines, and one primary "Add" pill. Owners see the same card ("Have another property?"). |
+| 10 | The department strip and Work tabs on phones showed the chosen tab as a mint block. | The shared `FilterBar` now uses `selected`, `selectedBorder` and `onSelected` (deep green with a mint edge in dark, forest in light). It also serves LiveHub, WorkspaceScreens and AccessHelp. |
+| 12 | Hard-coded white and white-alpha in `RoleNavigation`, `LiveProductivity` and `LiveEnquiries`. | Changed to tokens: text is `heroText`; secondary lines are `heroMuted` with an opacity; icons are `heroLine` or `heroGlow`; the white pill is `heroText` with `hero` text. See-through tiles and edges use a new `HeroWash.tsx`, which layers `heroText` at a low opacity, because on the web a token is a CSS variable and can't take an alpha suffix. The web-only inset highlight in the role panel is `p.surface`. |
+
+**Side fix:** with the star's timer gone, the React Compiler analysed further into `LiveWorkspace` and ESLint
+reported an older issue in `loadReport`, whose `useCallback` was missing `setSnapshot`. I added it; a state
+setter never changes, so behaviour is the same. The unused `web` import in `LiveEnquiries.tsx` is removed.
+
+## Tests
+
+- **New, `tests/e-review-fixes.test.mjs`:** 7 of 7 pass. It covers:
+  - the 390 px header for a super admin and for an owner;
+  - every width from 320 to 1,022 px: the row fits beside the logo, the logo keeps 88 px from 346 px up,
+    wider phones never get fewer buttons, and each button is either in the header or in the Menu;
+  - the workspace wiring and the Menu list;
+  - no star;
+  - the enquiry card, the strip's tokens, and no hard-coded white or brand colour in the three files.
+- **Changed:** `tests/favorites-overview.test.mjs` now checks the star is gone.
+
+## Screenshots
+
+- **Where:** `docs/screenshots/session-b/e-review/`, phone (390×844) in dark mode, before and after.
+- **How they were taken:**
+  - **App and data:** the local review server (`scripts/demo/server.mjs`) with its seeded sample business,
+    signed in as each role through `/dev/as/<role>`.
+  - **Builds:** before is `edb7c13` (`main` plus round 6, before these fixes); after is this commit.
+  - **Shots:** home header (super admin, Guest relations, owner), cleaner home and Work, the Work strip,
+    Properties, To-do, Client enquiries, and the Menu after (where the moved header buttons are).
+- **Missing before shot:** there is no before shot of the Menu; its server had been stopped.
+
+# Round 6, must-fix before the client demo: no thin table wider than its card (E's review)
+
+- **What was wrong:** at 1440 px with the sidebar open, the To-do table was wider than its card, so Status
+  was cut off ("Stat", "● T"). The Management approvals and Client relations trackers lost their last
+  column ("Progre…") the same way.
+- **The fix, in `lib/thin-table.ts` (new):**
+  - `thinWidths(columns, available)` sizes the columns from the card's real width. It never adds up to more
+    than the card.
+  - Fixed columns keep their width.
+  - Text columns share what is left: they grow (the task, or the tracker's property, takes the spare room)
+    or shrink in proportion, never below their minimum while there is room. Their text ends in "…".
+- **`ThinTable` (in `Tracker.tsx`):**
+  - It measures its own card with `onLayout` and uses those widths.
+  - Until the card is measured, the columns flex, so the first paint already fits.
+  - There is no sideways scroll any more.
+- **Columns:**
+  - **To-do:** the tick, When, Due and Status (116 px) are fixed. Property, Task, Latest update and Updated
+    by shrink. All of Alex's columns stay, even when a cell reads "–".
+  - **Trackers:** Status (170 px) and Progress (150 px, or 200 px with the percent badge) are fixed.
+    Property, Next step, Next action and Last update shrink.
+- **Tests:**
+  - **New, `tests/thin-table.test.mjs`:** 6 of 6 pass. It checks:
+    - which columns are fixed;
+    - the To-do and tracker tables, from 200 to 2,400 px: never wider than the card, every column there;
+    - at the widths the tables show: the fixed widths are kept and the text columns stay at or above their
+      minimums;
+    - spare room fills the card;
+    - the 1440 px case, about 1,080 px of card, with Status and Progress shown in full;
+    - the wiring: no ScrollView.
+  - **Updated:** `tests/todo-rows.test.mjs`, for the new column definition.
+  - **Related suites:** management-checklist, thin-table, todo-rows, todo-updates-database, todo,
+    tracker-onboarding and wiring-v2 all pass (82 of 82).
+- **Screenshots:** `docs/screenshots/session-b/wide/`, 1440×900 with the sidebar open, light and dark: To-do,
+  Management approvals and Client relations.
+  - The review server signed in as the super admin.
+  - A check in the browser found no box with hidden overflow inside these pages.

@@ -1,4 +1,4 @@
-import { noticeCopy } from './notice-copy';
+import { noticeCopyFor } from './notice-details';
 import type { IntegrationSettings } from './integration-policy';
 
 // Web push (RFC 8030), sent straight from the backend with no outside account: the request is
@@ -59,11 +59,11 @@ export async function encryptPush(payload: Uint8Array, p256dh: string, authSecre
 // Only the browsers' own push services: Chrome, Edge and Android (Google), Firefox, Windows and Safari.
 // Any other address would make the backend post to a server of someone's choosing.
 export const PUSH_SERVICE = /^https:\/\/(fcm\.googleapis\.com|android\.googleapis\.com|[a-z0-9-]+(\.[a-z0-9-]+)*\.push\.services\.mozilla\.com|[a-z0-9-]+(\.[a-z0-9-]+)*\.notify\.windows\.com|web\.push\.apple\.com)\//;
-export type WebPushJob = { endpoint: string; p256dh: string; auth: string; eventType?: string | null };
+export type WebPushJob = { endpoint: string; p256dh: string; auth: string; eventType?: string | null; workKind?: string | null };
 // Sends one notice. 'gone' means the browser no longer accepts notifications.
 export async function sendWebPush(job: WebPushJob, keys: WebPushKeys): Promise<'sent' | 'gone' | 'failed'> {
   if (!PUSH_SERVICE.test(job.endpoint)) return 'gone';
-  const { title, message } = noticeCopy(job.eventType);
+  const { title, message } = noticeCopyFor(job.eventType, job.workKind);
   const body = await encryptPush(encoder.encode(JSON.stringify({ title, body: message, url: '/workspace/live' })), job.p256dh, job.auth);
   try {
     const response = await fetch(job.endpoint, {

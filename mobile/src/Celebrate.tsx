@@ -45,7 +45,7 @@ export function CelebrateProvider({ palette: p, bottom = 112, children }: { pale
           ...(Platform.OS === "web" ? { boxShadow: "0 18px 40px -18px rgba(8, 22, 18, 0.65)" } : { elevation: 8 }),
           opacity: rise, transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }, { scale: rise.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }] }}>
           <Animated.View style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: p.success, transform: [{ scale: tick }, { rotate: tick.interpolate({ inputRange: [0, 1], outputRange: ["-40deg", "0deg"] }) }] }}>
-            <Feather name="check" size={18} color="#FFFFFF" />
+            <Feather name="check" size={18} color={p.onSuccess} />
           </Animated.View>
           <Text style={{ color: p.headerText, fontSize: 14, fontWeight: "700" }}>{shown.text}</Text>
         </Animated.View>

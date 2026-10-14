@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Text } from "./Typography";
 import { Sheet } from "./TeamFlows";
 import { MotionPress } from "./motion";
+import { DateField } from "./CalendarPicker";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, useRequestId } from "./LiveKit";
 import { readControls, writeControls } from "./backend/client";
@@ -44,7 +45,7 @@ function EventSheet({ p, propertyId, event, onClose, onSaved }: { p: Palette; pr
   useEffect(() => { queueMicrotask(() => { if (event) { setName(event.name); setEventOn(event.event_on.slice(0, 10)); setSourceUrl(event.source_url); setOpportunity(event.opportunity); setError(""); } }); }, [event]);
   async function run(archive: boolean) {
     if (!event || busy) return;
-    if (!archive && (name.trim().length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(eventOn) || !sourceUrl.startsWith("https://") || opportunity.trim().length < 5)) { setError("Add the event, its date (YYYY-MM-DD), an https:// link and why it matters."); return; }
+    if (!archive && (name.trim().length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(eventOn) || !sourceUrl.startsWith("https://") || opportunity.trim().length < 5)) { setError("Add the event, its date, an https:// link and why it matters."); return; }
     const request = archive ? archiveRequest : saveRequest, base = { requestId: request.get(), propertyId, eventId: event.id, version: event.version };
     setBusy(true); setError("");
     try {
@@ -55,7 +56,7 @@ function EventSheet({ p, propertyId, event, onClose, onSaved }: { p: Palette; pr
   return (
     <Sheet palette={p} visible={!!event} onClose={onClose} title="Local event" subtitle="Shown in the owner's weekly report" icon="calendar">
       <Field label="Event" value={name} onChange={setName} p={p} />
-      <Field label="Date (YYYY-MM-DD)" value={eventOn} onChange={setEventOn} p={p} />
+      <DateField p={p} label="Date" mode="single" wholeMonthLink={false} empty="Choose a date" value={{ from: eventOn, to: eventOn }} onChange={next => setEventOn(next.from)} />
       <Field label="Link to the event (https://…)" value={sourceUrl} onChange={setSourceUrl} p={p} />
       <Field label="Why it matters for this property" value={opportunity} onChange={setOpportunity} p={p} multiline />
       {!!error && <Notice text={error} p={p} tone="bad" />}

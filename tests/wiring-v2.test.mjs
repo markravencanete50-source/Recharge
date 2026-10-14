@@ -68,7 +68,8 @@ test('the workspace mounts every page and builds the section props once', () => 
 });
 
 test('Messages gets the Updates tab and the old Updates page opens it', () => {
-  assert.match(workspace, /<LiveChat [^]*?updates=\{team \? <LiveActivity palette=\{p\} notices=\{notices\} loading=\{loading\} onRead=\{markRead\} \/> : undefined\}/);
+  // Round 6: the feed also gets the work list and where a row opens (the work item, or Messages).
+  assert.match(workspace, /<LiveChat [^]*?updates=\{team \? <LiveActivity palette=\{p\} notices=\{notices\} loading=\{loading\} onRead=\{markRead\} work=\{work\} onOpenWork=\{setOpenWork\} onOpenMessages=\{\(\) => openMessages\(""\)\} \/> : undefined\}/);
   assert.match(workspace, /initialTab=\{team && \(chatUpdates !== null \|\| updatesLink\) \? "updates" : undefined\}/);
   assert.match(workspace, /const updatesLink = requested === "activity" && team;/);
   assert.match(workspace, /const tab: WorkspaceSection = updatesLink \? "inbox"/);
@@ -148,7 +149,7 @@ test('the phone bar, management and the routine card use the new names', () => {
   const management = mobile('LiveManagement.tsx');
   assert.match(management, /"reflections", "dailytasks"/);
   assert.match(management, /view === "reflections" && <ReflectionReview palette=\{p\} \/>/);
-  assert.match(management, /view === "dailytasks" && <DailyTaskSettings p=\{p\} account=\{account\} \/>/);
+  assert.match(management, /view === "dailytasks" && <DailyTaskSettings p=\{p\} account=\{account\}.*?\/>/);
   assert.match(management, /<ManagementApprovals palette=\{p\} account=\{account\} properties=\{properties\} work=\{work\} onOpenWork=\{onOpenWork\} \/>/, 'the approvals list is intact');
   assert.match(management, /view === "productivity" && <LiveProductivity /, 'rota and timesheets stay reachable');
   assert.match(management, /view === "performance" && <LiveTeamPerformance /);

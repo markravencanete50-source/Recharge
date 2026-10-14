@@ -81,7 +81,7 @@ const reflectionNote = z.string().trim().max(2000);
 export const reflectionItemSchema = z.object({ kind: z.string().trim().min(1).max(40), ref: z.string().trim().max(80).nullable().optional(), label: text(1, 200) }).strict();
 export const visitAnswerSchema = z.object({ item: text(1, 200), done: z.boolean(), note: z.string().trim().max(500).optional() }).strict();
 // The KPI measure keys (private.workspace_kpi_measures() holds their labels, directions and areas).
-export const KPI_MEASURES = ['guest_reply_within', 'guest_reply_over', 'daily_work_done', 'performance_score', 'clean_forms_on_time'] as const;
+export const KPI_MEASURES = ['guest_reply_within', 'guest_reply_over', 'daily_work_done', 'performance_score', 'clean_forms_on_time', 'teams_combined'] as const;
 const kpiPercent = z.number().int().min(0).max(100);
 export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('decideComplaint'), requestId: id, workId: id, version, outcome: z.enum(['upheld', 'overturned']), note }).strict(),
@@ -170,7 +170,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   // KPIs (admins and super admins only): add or edit one, switch it off or on, move it up or down within its area.
   // The direction (higher or lower is better) comes from the measure; tiers sit beyond the target in that direction.
   z.object({ action: z.literal('saveKpi'), requestId: id, kpiId: id.optional(), version: version.optional(), name: text(2, 120), area: z.enum(DEPARTMENTS), measure: z.enum(KPI_MEASURES),
-    minutes: z.number().int().min(1).max(1440).nullable().optional(), targetPercent: kpiPercent.nullable(), bonusTiers: z.array(kpiPercent).max(5), countsForBonus: z.boolean(), placeholder: z.boolean() }).strict(),
+    minutes: z.number().int().min(1).max(1440).nullable().optional(), targetPercent: kpiPercent.nullable(), bonusTiers: z.array(kpiPercent).max(5), countsForBonus: z.boolean(), placeholder: z.boolean(),
+    // The combined management measure only: Guest relations' share, Client relations gets the rest (migration 20261018300000).
+    guestShare: kpiPercent.nullable().optional() }).strict(),
   z.object({ action: z.literal('setKpiActive'), requestId: id, kpiId: id, version, active: z.boolean() }).strict(),
   z.object({ action: z.literal('moveKpi'), requestId: id, kpiId: id, version, direction: z.enum(['up', 'down']) }).strict(),
   z.object({ action: z.literal('signContract'), requestId: id, contractId: id, version, signedName: text(2, 200), agree: z.literal(true, { errorMap: () => ({ message: 'Tick the box to agree to the contract' }) }) }).strict(),
@@ -202,6 +204,10 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   // Menu order per role (super admins only). Version 0 is a role nobody has reordered yet.
   z.object({ action: z.literal('saveMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0), ...menuLayoutSchema.shape }).strict(),
   z.object({ action: z.literal('resetMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0) }).strict(),
+  // Round 6: an update on a to-do (anyone who can see the to-do; never owners).
+  z.object({ action: z.literal('addTodoUpdate'), requestId: id, id, text: text(1, 2000) }).strict(),
+  // Round 6: delete a client enquiry that has not moved on (admins and super admins).
+  z.object({ action: z.literal('deleteEnquiry'), requestId: id, enquiryId: id, version }).strict(),
 ]).superRefine((value, context) => {
   if (value.action === 'flagForManagement') {
     if (value.source === 'work' && (!value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'Flag work with its work id only' });

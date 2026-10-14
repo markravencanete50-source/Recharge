@@ -17,9 +17,9 @@ import { RoleNavigation } from "./RoleNavigation";
 import { rolePanel, type PanelLink } from "../../lib/role-panel";
 import { orderPhoneBar, orderWorkViews, parseMenuLayout, phoneMoreGroups, storedMenuLayoutSchema, type MenuLayout } from "../../lib/menu-layout";
 import { onMenuLayoutSaved } from "./MenuLayoutStore";
-import { updatesBell } from "../../lib/header-actions";
+import { HEADER_EXTRA_LABEL, phoneHeader, updatesBell, type HeaderExtra } from "../../lib/header-actions";
 import { NavigationBar, liveNavigationFor } from "./NavigationBar";
-import { FaqShortcut, useFaqShortcut } from "./FaqShortcut";
+import { useFaqShortcut } from "./FaqShortcut";
 import { FilterBar } from "./FilterBar";
 import { RechargeSplash } from "./RechargeSplash";
 import { GreetingCard } from "./WelcomeMoment";
@@ -79,7 +79,7 @@ import { LiveEnquiries } from "./LiveEnquiries";
 import { LiveFeedback } from "./LiveFeedback";
 import { LiveModeration } from "./LiveModeration";
 import { BlockedPeopleSheet } from "./BlockedPeople";
-import { FavoritesPage, FavoritesShortcut, HeaderSearch, SearchPanel } from "./WorkspaceSearch";
+import { FavoritesPage, HeaderSearch, SearchPanel } from "./WorkspaceSearch";
 import { FavoriteButton, FavoritesContext, useFavoritesStore } from "./Favorites";
 import { TrackerSheet } from "./LiveTools";
 import { TrackerDetail } from "./Tracker";
@@ -102,7 +102,7 @@ type IconName = ComponentProps<typeof Feather>["name"];
 const SECTIONS: readonly WorkspaceSection[] = PAGE_SECTIONS;
 const TEAM_ROLES: Role[] = ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"];
 // Pages only some roles have.
-const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES, favorites: ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"] };
+const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES };
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
 type BookingPolicy = z.infer<typeof bookingPolicySchema>;
 // Direct-booking offers use this discount policy; only a super admin can set and confirm it.
@@ -135,7 +135,7 @@ const welcomeDay = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lo
 
 function IconButton({ label, icon, onPress, palette: p }: { label: string; icon: IconName; onPress: () => void; palette: Palette }) {
   return (
-    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [ui.iconButton, { width: 46, height: 46, borderRadius: 15, borderColor: p.border, backgroundColor: p.surface, opacity: pressed ? 0.7 : 1 }]}>
+    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [ui.iconButton, { width: 46, height: 46, borderColor: p.border, backgroundColor: p.surface, opacity: pressed ? 0.7 : 1 }]}>
       <Feather name={icon} size={19} color={p.text} />
     </MotionPress>
   );
@@ -147,10 +147,11 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // On narrow phones Refresh moves into Profile to make room: under 360px wide, and under 400px for a super admin, whose
   // header has the View as button too (under 360px that one is in Profile only). The logo takes the room the buttons
   // leave: 48px each and 8px apart, the profile picture 44px, inside 20px sides and a 12px gap.
-  const narrowHeader = !desktop && (width < 360 || (width < 400 && canViewAs(realAccount)));
-  const headerEye = canViewAs(realAccount) && (desktop || width >= 360);
-  const headerButtons = [account.role !== "client", headerEye, true, !narrowHeader, width >= 440].filter(Boolean).length;
-  const logoWidth = Math.max(88, Math.min(144, width - 52 - headerButtons * 56 - 44));
+  // The phone header never covers the logo: Menu, the bell, Messages and the avatar always show; Search, View as,
+  // Refresh and the dark-mode switch only while there is room, otherwise at the top of the Menu (lib/header-actions.ts).
+  const phoneBar = phoneHeader(width, { search: account.role !== "client", viewAs: canViewAs(realAccount) });
+  const inHeader = (extra: HeaderExtra) => desktop || phoneBar.inHeader.includes(extra);
+  const logoWidth = phoneBar.logoWidth;
   const reduced = useReducedMotion(), motionPreference = useMotionPreference(), faqShortcut = useFaqShortcut();
   const { section } = useLocalSearchParams<{ section?: string }>();
   const team = account.role !== "client";
@@ -200,15 +201,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [fade] = useState(() => new Animated.Value(1));
   const scroll = useRef<ScrollView>(null), content = useRef<View>(null);
   const [anchors] = useState(() => new Map<string, View>());
-  // The Help button slides out of the way while the page scrolls, and back once it settles.
-  const [tucked, setTucked] = useState(false), untuck = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const onScrolling = (y: number) => {
-    setScrolled(y > 12);
-    if (!tucked) setTucked(true);
-    if (untuck.current) clearTimeout(untuck.current);
-    untuck.current = setTimeout(() => setTucked(false), 900);
-  };
-  useEffect(() => () => { if (untuck.current) clearTimeout(untuck.current); }, []);
+  const onScrolling = (y: number) => setScrolled(y > 12);
   const profile: Profile = { displayName: account.fullName || account.email || "Your profile", avatar: account.avatar };
   // Who is online in Messages: this app checks in every minute while it is open (not in the demo or while viewing as someone).
   usePresenceHeartbeat(!demo && !viewAs);
@@ -336,7 +329,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     setReportError("");
     try { setSnapshot(reportViewSchema.parse((await liveApi("/reports?" + new URLSearchParams(range))).data) as AnalyticsSnapshot); }
     catch (e) { setSnapshot(null); setReportError(message(e)); }
-  }, []);
+  }, [setSnapshot]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void refresh(); }); return () => { active = false; }; }, [refresh]);
   // Stay up to date without tapping refresh: every minute while the app is open and in view, and
   // straight away when someone comes back to it. Paused while a form or sheet is open.
@@ -376,7 +369,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const openView = (view: WorkView, sub?: string) => { setFocus(sub ? { sub, nonce: Date.now() } : null); setWorkView(view); setTab("work"); };
   // Search and Favorites: one list of everything this person can open, from what is already loaded.
   // A role preview has nobody's favorites (not the super admin's own); a person view shows theirs.
-  const favorites = useFavoritesStore(team && !(viewAs && !viewAs.person), demo && !demoInteractive() ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
+  // Every role keeps Favorites, owners too (round 6).
+  const favorites = useFavoritesStore(!(viewAs && !viewAs.person), demo && !demoInteractive() ? DEMO_SAVE_MESSAGE : viewAs ? viewOnlyMessage(viewAs) : "", !!viewAs && !viewAs.person);
   // Viewing as a team member who hasn't finished their start-up checklist: say why their tools are empty.
   const [viewNote, setViewNote] = useState("");
   useEffect(() => {
@@ -582,23 +576,24 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "enquiries" ? <LiveEnquiries palette={p} account={account} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} />
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
     : tab === "moderation" ? <LiveModeration palette={p} />
-    : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} />
+    : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} openConversation={chatTarget?.id}
-        updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} />
+        updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view, sub) => { setTab(next); if (view) setWorkView(view); setFocus(sub ? { sub, nonce: Date.now() } : null); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;
   const header = headerPalette(p);
   const ownerActions = { unread: chatUnread, openForm: setForm };
   const title = tab === "work" && currentView ? WORK_VIEW_LABEL[currentView] : panel.groups.flatMap(g => g.links).find(l => l.kind === "page" && l.section === tab)?.label ?? nav.find(item => item.value === tab)?.label ?? (tab === "help" ? "Help" : tab === "activity" ? "Activity" : tab === "inbox" ? "Messages" : tab === "todo" ? "To-do list" : tab === "calendar" ? "Calendar" : tab === "decisions" ? (isWorkspaceAdmin(account.role) ? "Management approvals" : "Your requests") : "Home");
-  // The floating Help button; the page leaves room under its last item while it shows.
-  // Not in Messages, where it would sit over the send button.
-  const showFaq = !faqShortcut.hidden && tab !== "help" && tab !== "inbox" && (desktop || (tab !== "home" && !nav.some(item => item.value === "help")));
-  // On phones the team's Favorites button floats just above Help (or where Help would be).
-  const showFavorites = !desktop && team && tab !== "favorites";
+  // Help sits in the header on wide screens and in the Menu on phones, never floating over the page, where it
+  // used to cover the Approve button at the end of a row. It can be turned off in Profile and preferences.
+  const showFaq = desktop && !faqShortcut.hidden && tab !== "help";
+  const menuHelp = !nav.some(item => item.value === "help");
+  // Favorites no longer floats on phones (it covered the page): it is in every role's first section, so it is on
+  // the bar or first in the Menu.
   return (
     <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}>
-      <FavoritesContext.Provider value={team ? favorites : null}><FlagRoleContext.Provider value={account.role}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
+      <FavoritesContext.Provider value={favorites}><FlagRoleContext.Provider value={account.role}><CelebrateProvider palette={p} bottom={desktop ? 40 : 112}><OpenMessagesContext.Provider value={openMessages}>
       <StatusBar style={theme === "dark" ? "light" : "dark"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[ui.fill, { flexDirection: "row" }]}>
         {desktop && !sidebarHidden && <RoleNavigation panel={panel} selected={panelSelected} palette={p} onOpen={openPanel} badges={{ "page:inbox": messagesBadge }} viewing={panelViewing} onBack={demo ? () => (viewAs ? void onViewAs(null) : onDemo(false)) : viewAs ? () => void onViewAs(null) : undefined} backLabel={demo && !viewAs ? "Switch to Live" : undefined} onProfile={() => setSettings(true)} onCollapse={() => setSidebarHidden(true)} me={{ name: profile.displayName, userId: account.userId, photo: account.photo }} />}
@@ -615,9 +610,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
               </View>
               <View style={[ui.row, { gap: 8 }]}>
                 {!desktop && <IconButton label="Menu" icon="menu" palette={header} onPress={() => setPhoneMenu(true)} />}
-                {!desktop && team && <IconButton label="Search" icon="search" palette={header} onPress={() => setSearchOpen(true)} />}
+                {!desktop && team && inHeader("search") && <IconButton label="Search" icon="search" palette={header} onPress={() => setSearchOpen(true)} />}
                 {canViewAs(realAccount) && width >= 900 && <ModeSwitch palette={p} demo={demo} busy={demoBusy} onChange={onDemo} />}
-                {headerEye && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
+                {canViewAs(realAccount) && inHeader("viewAs") && <IconButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}. Change view` : "View as someone else"} icon="eye" palette={header} onPress={() => setViewAsOpen(true)} />}
                 <View>
                   <IconButton label={bell.label} icon="bell" palette={header} onPress={() => navigate(bell.section)} />
                   {bell.count > 0 && <Bump value={bell.count} pointerEvents="none" style={{ position: "absolute", top: -4, right: -4 }}><View pointerEvents="none" style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{bell.badge}</Text></View></Bump>}
@@ -626,8 +621,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
                   <IconButton label={messagesBadge ? `Messages, ${[chatUnread ? `${chatUnread} unread` : "", guestWaiting ? `${guestWaiting} ${guestWaiting === 1 ? "guest" : "guests"} waiting` : ""].filter(Boolean).join(", ")}` : "Messages"} icon="message-circle" palette={header} onPress={() => { setChatTarget(null); navigate("inbox"); }} />
                   {messagesBadge > 0 && <Bump value={messagesBadge} pointerEvents="none" style={{ position: "absolute", top: -4, right: -4 }}><View pointerEvents="none" style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View></Bump>}
                 </View>
-                {!narrowHeader && <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={refreshAll} />}
-                {(desktop || width >= 440) && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
+                {inHeader("refresh") && <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={refreshAll} />}
+                {showFaq && <IconButton label="Help and FAQs" icon="help-circle" palette={header} onPress={() => navigate("help")} />}
+                {inHeader("theme") && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
                 <MotionPress accessibilityRole="button" accessibilityLabel={`Open profile and preferences, ${roleLabel}`} onPress={() => setSettings(true)} style={{ minHeight: 48, minWidth: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: desktop ? 14 : 0, borderRadius: 999, backgroundColor: desktop ? p.headerControl : "transparent", borderWidth: desktop ? 1 : 0, borderColor: p.headerBorder }}>
                   {desktop && <View style={{ maxWidth: 180 }}><Text numberOfLines={1} style={{ color: p.headerText, fontSize: 14, fontWeight: "600" }}>{profile.displayName}</Text><Text numberOfLines={1} style={{ color: p.headerMuted, fontSize: 11 }}>{roleLabel}</Text></View>}
                   {account.photo ? <PersonAvatar p={p} name={profile.displayName} userId={account.userId} photo={account.photo} /> : <Avatar profile={profile} backgroundColor={desktop ? undefined : p.headerControl} textColor={desktop ? "#FFFFFF" : p.headerControlText} />}
@@ -635,23 +631,31 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
               </View>
             </View>
           </View>
-          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} refreshControl={desktop ? undefined : <RefreshControl refreshing={pulling} onRefresh={() => void pullToRefresh()} tintColor={p.primary} colors={[p.primary]} />} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }, (showFaq || showFavorites) && !desktop && { paddingBottom: 184 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
+          <ScrollView ref={scroll} testID="workspace-scroll" style={ui.fill} refreshControl={desktop ? undefined : <RefreshControl refreshing={pulling} onRefresh={() => void pullToRefresh()} tintColor={p.primary} colors={[p.primary]} />} contentContainerStyle={[ui.page, { maxWidth: desktop ? 1400 : 760 }]} onScroll={event => onScrolling(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={Platform.OS === "web"}>
             <View ref={content} collapsable={false}><Animated.View style={{ opacity: fade, gap: 24, transform: desktop ? [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] : [{ translateX: fade.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }}>
               {demo ? <DemoBanner palette={p} viewing={viewAs?.person ? `${viewAs.person.fullName} (${viewAsLabel(viewAs.role)})` : null} onViewAs={() => setViewAsOpen(true)} onLive={() => onDemo(false)} />
                 : !!viewAs && <ViewAsBanner palette={p} view={viewAs} note={viewNote} onChange={() => setViewAsOpen(true)} onBack={() => void onViewAs(null)} />}
-              {!!accessNote && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.wash }]}><Feather name="shield" size={16} color={p.primary} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{accessNote}</Text><MotionPress accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setAccessNote("")} style={{ minHeight: 36, minWidth: 36, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={p.muted} /></MotionPress></View>}
+              {!!accessNote && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderLeftWidth: 3, borderLeftColor: p.primary }]}><Feather name="shield" size={16} color={p.primary} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{accessNote}</Text><MotionPress accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setAccessNote("")} style={{ minHeight: 36, minWidth: 36, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={p.muted} /></MotionPress></View>}
               <AnchorRegistry.Provider value={anchors}><WorkFocusContext.Provider value={focus}><WorkJumpContext.Provider value={jump}><OwnerActions.Provider value={ownerActions}>{animatedPage}</OwnerActions.Provider></WorkJumpContext.Provider></WorkFocusContext.Provider></AnchorRegistry.Provider>
               {!!error && <View accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }]}><Feather name="alert-circle" size={16} color={p.waiting} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{error}</Text><MotionPress accessibilityRole="button" onPress={() => void refresh()} style={{ minHeight: 36, justifyContent: "center" }}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Try again</Text></MotionPress></View>}
             </Animated.View></View>
           </ScrollView>
-          {/* On phones Home has its own help links and some bottom bars include Help, so the floating button stays out of the way there. */}
-          {showFaq && <FaqShortcut palette={p} tucked={tucked} onOpen={() => navigate("help")} onHide={() => faqShortcut.setHidden(true)} />}
-          {showFavorites && <FavoritesShortcut palette={p} tucked={tucked} lifted={showFaq} count={favorites.items.length} onOpen={() => navigate("favorites")} />}
           {!desktop && <NavigationBar role={account.role} items={nav} section={tab} onNavigate={navigate} palette={p} />}
         </View>
       </KeyboardAvoidingView>
       {/* The phone's menu: the panel's sections and links in the saved order, without what the bottom bar already shows. */}
       {!desktop && <Sheet palette={p} visible={phoneMenu} onClose={() => setPhoneMenu(false)} title="Menu" subtitle={panel.title} icon="compass">
+        {/* The header buttons that did not fit beside the logo. */}
+        {phoneBar.inMenu.length > 0 && <View style={{ gap: 4 }}>
+          {phoneBar.inMenu.map(extra => (
+            <MotionPress key={extra} accessibilityRole="button" accessibilityLabel={extra === "theme" ? `Switch to ${theme === "dark" ? "light" : "dark"} mode` : HEADER_EXTRA_LABEL[extra]}
+              onPress={() => { setPhoneMenu(false); if (extra === "search") setSearchOpen(true); else if (extra === "viewAs") setViewAsOpen(true); else if (extra === "refresh") refreshAll(); else setTheme(theme === "dark" ? "light" : "dark", reduced); }}
+              style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 4, borderBottomWidth: 1, borderColor: p.border }]}>
+              <Feather name={extra === "search" ? "search" : extra === "viewAs" ? "eye" : extra === "refresh" ? "refresh-cw" : theme === "dark" ? "sun" : "moon"} size={17} color={p.muted} />
+              <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 15 }}>{extra === "theme" ? (theme === "dark" ? "Light mode" : "Dark mode") : extra === "viewAs" && viewAs ? `Viewing as ${viewAsName(viewAs)}` : extra === "refresh" && loading ? "Refreshing…" : HEADER_EXTRA_LABEL[extra]}</Text>
+            </MotionPress>
+          ))}
+        </View>}
         {phoneMoreGroups(panel, nav).map(group => (
           <View key={group.key} style={{ gap: 4 }}>
             <Text accessibilityRole="header" style={[ui.label, { color: p.muted }]}>{group.title}</Text>
@@ -665,6 +669,12 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
             ))}
           </View>
         ))}
+        {menuHelp && <MotionPress accessibilityRole="button" accessibilityLabel="Help and FAQs" onPress={() => { setPhoneMenu(false); navigate("help"); }}
+          style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 4, borderBottomWidth: 1, borderColor: p.border }]}>
+          <Feather name="help-circle" size={17} color={p.muted} />
+          <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 15 }}>Help and FAQs</Text>
+          <Feather name="chevron-right" size={16} color={p.muted} />
+        </MotionPress>}
       </Sheet>}
       <Sheet palette={p} visible={settings} onClose={() => { setSettings(false); setConfirmOut(false); }} title="Profile & preferences" subtitle="Your account and comfort settings" icon="people">
         <View style={{ borderRadius: 22, padding: 18, gap: 6, backgroundColor: p.header, overflow: "hidden" }}>
@@ -701,14 +711,14 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
             <View style={{ height: 1, backgroundColor: p.border, marginLeft: 68 }} />
             <View style={[ui.between, { gap: 16, minHeight: 64, paddingHorizontal: 16, paddingVertical: 12 }]}>
               <FeatureTile icon="help-circle" size={36} palette={p} />
-              <View style={{ flex: 1, gap: 2 }}><Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Show FAQ shortcut</Text><Text style={[ui.small, { color: p.muted }]}>A Help button in the corner of every page.</Text></View>
+              <View style={{ flex: 1, gap: 2 }}><Text style={[ui.body, { color: p.text, fontWeight: "600" }]}>Show FAQ shortcut</Text><Text style={[ui.small, { color: p.muted }]}>A Help button at the top of every page on wide screens. On phones Help is in the Menu.</Text></View>
               <Switch accessibilityLabel="Show FAQ shortcut" value={!faqShortcut.hidden} onValueChange={value => faqShortcut.setHidden(!value)} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
             </View>
           </View>
         </View>
         {canViewAs(realAccount) && <DemoSwitchRow palette={p} demo={demo} busy={demoBusy} note={demoNote} onChange={on => { setSettings(false); onDemo(on); }} />}
         {canViewAs(realAccount) && <SoftButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}: change` : "View the app as someone else"} icon="arrow-right" palette={p} onPress={() => { setSettings(false); setViewAsOpen(true); }} />}
-        {narrowHeader && <SoftButton label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" palette={p} onPress={() => { setSettings(false); refreshAll(); }} />}
+        {!inHeader("refresh") && <SoftButton label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" palette={p} onPress={() => { setSettings(false); refreshAll(); }} />}
         <SoftButton label="Blocked people" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setBlockedOpen(true); }} />
         <PrivacySection p={p} onDelete={() => { setSettings(false); setDeleting(true); }} />
         {(account.role === "super_admin" || account.role === "admin") && <SoftButton label="Reported messages" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("moderation"); }} />}
@@ -724,7 +734,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           <TrackerDetail p={p} item={openTracker} owner={account.role === "client"} forms={formsFor(openWork)} onForm={f => { setOpenWork(null); setForm(f); }}>
             {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
             {openWork.kind === "direct_booking" && openWork.data.phase === "follow_up" && policy?.confirmed && <Text style={[ui.small, { color: p.muted }]}>Offer the guest {formatBps(policy.discount_bps).replace(".0%", "%")} off, up to {formatMoney(policy.discount_cap_minor)} off. The offer price is worked out when you prepare it.</Text>}
-            {team && <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />}
+            <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />
             <FlagButton p={p} role={account.role} target={flagTarget(openWork)} onDone={() => void refresh()} />
             <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
             {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}
@@ -736,7 +746,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           {openWork.kind === "direct_booking" && openWork.data.phase === "follow_up" && policy?.confirmed && <Text style={[ui.small, { color: p.muted }]}>Offer the guest {formatBps(policy.discount_bps).replace(".0%", "%")} off, up to {formatMoney(policy.discount_cap_minor)} off. The offer price is worked out when you prepare it.</Text>}
           {!!workDate(openWork) && <Text style={[ui.body, { color: p.text }]}>Due {new Date(workDate(openWork) + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</Text>}
           {openWork.data.estimatedCostMinor !== undefined && <Text style={[ui.body, { color: p.text }]}>Estimated cost: {formatMoney(Number(openWork.data.estimatedCostMinor))}</Text>}
-          {team && <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />}
+          <FavoriteButton entryKey={"work:" + openWork.workId} label={openWork.title} palette={p} />
           <FlagButton p={p} role={account.role} target={flagTarget(openWork)} onDone={() => void refresh()} />
           <WorkPhotos key={openWork.workId + openWork.version} p={p} workId={openWork.workId} />
           {account.role === "ready" && <PropertyAccess key={openWork.propertyId} palette={p} account={account} propertyId={openWork.propertyId} />}

@@ -40,9 +40,13 @@ test('Updates stays reachable: a link to it opens the feed in place, with a way 
   assert.match(live, /<ThreadHeader p=\{p\} onBack=\{\(\) => setShowUpdates\(false\)\}>/);
 });
 
-test('three statuses and their counts: Needs a reply, Waiting for reply (green), Closed', () => {
+test('three statuses and their counts: Needs a reply, Engaged (green), Closed', () => {
   assert.deepEqual([...filters.MESSAGE_STATUSES], ['reply', 'waiting', 'closed']);
-  assert.deepEqual(filters.MESSAGE_STATUS_LABEL, { reply: 'Needs a reply', waiting: 'Waiting for reply', closed: 'Closed' });
+  assert.deepEqual(filters.MESSAGE_STATUS_LABEL, { reply: 'Needs a reply', waiting: 'Engaged', closed: 'Closed' });
+  // Lee renamed "Waiting for reply" to Engaged: the tags read the label from the map, never a literal of their own.
+  assert.doesNotMatch(live + guests + layout, /Waiting for reply/);
+  assert.match(guests, /<Tag label=\{MESSAGE_STATUS_LABEL\.waiting\} tone="good" p=\{p\} \/>/);
+  assert.match(guests, /<Tag label=\{MESSAGE_STATUS_LABEL\[t\.status === "done" \? "closed" : "waiting"\]\}/);
   const threads = [
     { status: 'open', waitingSince: '2026-10-15T09:00:00Z' }, { status: 'open', waitingSince: '2026-10-15T09:05:00Z' },
     { status: 'open', waitingSince: null }, { status: 'done', waitingSince: null }, { status: 'done', waitingSince: '2026-10-14T09:00:00Z' },
@@ -55,7 +59,7 @@ test('three statuses and their counts: Needs a reply, Waiting for reply (green),
   ];
   assert.deepEqual(owners.map(filters.clientStatus), ['reply', 'waiting', 'waiting', 'closed']);
   assert.deepEqual(filters.statusCounts(owners, filters.clientStatus), { reply: 1, waiting: 2, closed: 1 });
-  // The colours: attention for Needs a reply, green for Waiting for reply.
+  // The colours: attention for Needs a reply, green for Engaged.
   assert.match(layout, /reply: p\.waiting, waiting: p\.success, closed: p\.muted/);
   assert.match(guests, /<StatusFilter p=\{p\} value=\{status\} counts=\{statusCounts\(found, guestStatus\)\}/);
   assert.match(live, /clients && !!list && <StatusFilter p=\{p\} value=\{status\} counts=\{statusCounts\(found, clientStatus\)\}/);
@@ -100,6 +104,10 @@ test('fewer buttons: no channel chips, no Refresh, a small + to log a guest mess
   assert.doesNotMatch(live + guests, /RefreshButton|label="Log a guest message"/);
   assert.match(guests, /action=\{\{ icon: "plus", label: "Log a guest message", onPress: \(\) => setLogging\(true\) \}\}/);
   assert.match(guests, /<QuietLine p=\{p\} tone="bad" text=\{`\$\{red\} guest/);
+  // Helper lines wrap on a phone rather than being cut short with an ellipsis (Session E, item 19).
+  const quiet = layout.slice(layout.indexOf('export function QuietLine'), layout.indexOf('export function MessagesSplit'));
+  assert.doesNotMatch(quiet, /numberOfLines/);
+  assert.match(quiet, /<Text style=\{\[ui\.small, \{ color: ink, flex: 1 \}\]\}>\{text\}<\/Text>/);
   assert.match(live, /icon: "edit-3", label: clients \? "New message to an owner" : "New message"/);
 });
 

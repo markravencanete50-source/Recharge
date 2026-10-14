@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
+import { ChoicePills } from "./ChoiceField";
+import { PropertySelect } from "./SearchPicker";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Pills } from "./Pills";
 import { SoftButton } from "./LivePages";
 import { writeOwner } from "./backend/client";
 import { formatMoney } from "../../lib/format";
@@ -48,8 +50,8 @@ export function OwnerExpenses({ palette: p, properties, cells, months, onChanged
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "600" }}>Your expenses</Text>
         <Text style={[ui.small, { color: p.muted }]}>Costs you pay yourself for a property. They only change the net figure under your payout. They never change what Recharge pays you.</Text>
       </View>
-      {properties.length > 1 && <Pills p={p} values={properties.map(x => x.propertyId)} value={property.propertyId} onChange={setProperty} label={id => properties.find(x => x.propertyId === id)?.propertyName ?? ""} />}
-      {months.length > 1 && <Pills p={p} values={months} value={month} onChange={setMonth} label={m => monthName(m, months.length <= 3)} />}
+      {properties.length > 1 && <PropertySelect p={p} properties={properties.map(x => ({ id: x.propertyId, name: x.propertyName }))} value={property.propertyId} onChange={id => { if (id) setProperty(id); }} />}
+      {months.length > 1 && <ChoicePills p={p} name="Month" values={months} value={month} onChange={setMonth} label={m => monthName(m, months.length <= 3)} />}
       <View style={{ gap: 2 }}>
         {!expenses.length && <Text style={[ui.small, { color: p.muted }]}>{`Nothing added for ${property.propertyName} in ${monthName(month)}.`}</Text>}
         {expenses.map((e, i) => (

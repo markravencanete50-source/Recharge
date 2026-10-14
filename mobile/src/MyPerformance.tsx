@@ -7,7 +7,7 @@ import { readTeams } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import { teamPerformanceSchema, hoursLabel, type TeamPerformance } from "../../lib/management-live";
 import { Tag } from "./LiveKit";
-import { PERFORMANCE_RANGES, RANGE_LABEL, myKpis, performanceWindow, shapeOwnNumbers, type BonusProgress, type MyKpis, type OwnNumbers, type PerformanceRange } from "../../lib/my-performance";
+import { PERFORMANCE_RANGES, RANGE_LABEL, bonusPartsLine, myKpis, performanceWindow, shapeOwnNumbers, type BonusProgress, type MyKpis, type OwnNumbers, type PerformanceRange } from "../../lib/my-performance";
 import { kpiReadSchema, type KpiRead } from "../../lib/kpis";
 import { formatCount } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -31,6 +31,7 @@ function Stat({ p, label, value, hint }: { p: Palette; label: string; value: str
 function BonusBar({ p, b }: { p: Palette; b: BonusProgress }) {
   const fill = b.value ?? 0;
   const marks = b.marks.map(m => `${m.label} ${m.at}%${m.reached ? ", reached" : ""}`).join(", ");
+  const parts = bonusPartsLine(b.parts);
   return (
     <View style={{ gap: 10, paddingTop: 10, borderTopWidth: 1, borderColor: p.border }}>
       <View style={[ui.row, { gap: 10, alignItems: "flex-start" }]}>
@@ -47,6 +48,7 @@ function BonusBar({ p, b }: { p: Palette; b: BonusProgress }) {
         <View style={{ width: `${fill}%`, height: "100%", borderRadius: 6, backgroundColor: b.reached ? p.success : p.primary }} />
         {b.marks.map(m => <View key={m.label} style={{ position: "absolute", left: `${m.at}%`, top: 0, bottom: 0, width: 2, marginLeft: -1, backgroundColor: p.text, opacity: 0.45 }} />)}
       </View>
+      {!!parts && <Text style={[ui.small, { color: p.text, fontVariant: ["tabular-nums"] }]}>{parts}</Text>}
       <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 12, rowGap: 4 }}>
         {b.marks.map(m => (
           <View key={m.label} style={[ui.row, { gap: 4 }]}>

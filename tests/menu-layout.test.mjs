@@ -48,7 +48,8 @@ test('the merge only arranges: never a tool the role lacks, never one lost, each
 test('a link moved to another section is there on desktop and on the phone', () => {
   // Messages moved from "Calendar & messages" to the top of "Overview", for admins.
   const moved = panelOf('admin', { sections: [], items: { overview: ['page:inbox', 'page:home', 'page:todo'] } });
-  assert.deepEqual(moved.groups.find(g => g.key === 'overview').links.map(l => l.key), ['page:inbox', 'page:home', 'page:todo']);
+  // Favorites (locked to Overview, round 6) is not listed, so it follows the listed ones.
+  assert.deepEqual(moved.groups.find(g => g.key === 'overview').links.map(l => l.key), ['page:inbox', 'page:home', 'page:todo', 'page:favorites']);
   assert.ok(!moved.groups.find(g => g.key === 'calendar-messages').links.some(l => l.key === 'page:inbox'));
   const phone = orderPhoneBar(bar('admin'), moved);
   assert.equal(phone[0].value, 'inbox', 'first on the phone bar too');
@@ -75,11 +76,12 @@ test('a link listed under two sections stays in the first', () => {
 });
 
 test('a section emptied by moves is hidden in the app and kept in the editor', () => {
-  const layout = { sections: [], items: { more: ['page:home', 'page:todo'] } };
+  // (Today keeps Favorites, which is locked there since round 6, so Calendar & messages is emptied here.)
+  const layout = { sections: [], items: { more: ['page:calendar', 'page:inbox'] } };
   const app = panelOf('stays', layout), editor = panelOf('stays', layout, undefined, true);
-  assert.ok(!sectionKeys(app).includes('today'), 'hidden');
-  assert.deepEqual(editor.groups.find(g => g.key === 'today').links, [], 'kept, empty, in the editor');
-  assert.ok(!phoneMoreGroups(app, orderPhoneBar(bar('stays'), app)).some(g => g.key === 'today'));
+  assert.ok(!sectionKeys(app).includes('calendar-messages'), 'hidden');
+  assert.deepEqual(editor.groups.find(g => g.key === 'calendar-messages').links, [], 'kept, empty, in the editor');
+  assert.ok(!phoneMoreGroups(app, orderPhoneBar(bar('stays'), app)).some(g => g.key === 'calendar-messages'));
   // Saving the editor's draft and reading it back gives the same arrangement.
   assert.deepEqual(panelOf('stays', layoutOfPanel(editor), undefined, true), editor);
 });
@@ -110,7 +112,7 @@ test('unknown and duplicate keys are ignored; an empty layout is the default ord
   const merged = panelOf('stays', { sections: ['nope', 'more', 'more', 'today'], items: { today: ['page:todo', 'page:todo', 'page:nope'], ghost: ['page:home'] } });
   assert.deepEqual(sectionKeys(merged).slice(0, 2), ['more', 'today']);
   assert.deepEqual(sectionKeys(merged).slice(2), sectionKeys(plain).filter(k => k !== 'more' && k !== 'today'), 'the rest in default order');
-  assert.deepEqual(merged.groups.find(g => g.key === 'today').links.map(l => l.key), ['page:todo', 'page:home']);
+  assert.deepEqual(merged.groups.find(g => g.key === 'today').links.map(l => l.key), ['page:todo', 'page:home', 'page:favorites']);
   assert.deepEqual(panelOf('stays', { sections: [], items: {} }), plain);
   assert.deepEqual(panelOf('stays', null), plain);
 });
@@ -161,9 +163,9 @@ test('the editor moves one step at a time, and its preview is exactly what the r
   draft = moveSection(draft, 'money', -1);
   draft = moveItem(draft, 'overview', 'page:todo', -1);
   assert.equal(sectionKeys(draft).indexOf('money'), sectionKeys(panelOf('accounts')).indexOf('money') - 1);
-  assert.deepEqual(draft.groups.find(g => g.key === 'overview').links.map(l => l.key), ['page:todo', 'page:home']);
+  assert.deepEqual(draft.groups.find(g => g.key === 'overview').links.map(l => l.key), ['page:home', 'page:todo', 'page:favorites']);
   assert.deepEqual(moveSection(draft, sectionKeys(draft)[0], -1), draft, 'the first cannot go higher');
-  assert.deepEqual(moveItem(draft, 'overview', 'page:home', 1), draft, 'the last cannot go lower');
+  assert.deepEqual(moveItem(draft, 'overview', 'page:favorites', 1), draft, 'the last cannot go lower');
   assert.deepEqual(moveSection(draft, 'nope', 1), draft);
   // What is saved, applied by the app to the role, gives back the draft.
   const saved = layoutOfPanel(draft);

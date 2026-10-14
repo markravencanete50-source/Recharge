@@ -91,7 +91,7 @@ test('the seed: Alex\'s guest relations scheme from the old targets, one placeho
     assert.deepEqual([r.minutes, r.direction, r.target_percent, r.bonus_tiers, r.counts_for_bonus], [minutes, direction, null, [], false], key);
   }
   const others = rows.filter(r => r.area !== 'guest_relations');
-  assert.deepEqual(others.map(r => [r.area, r.measure]), [['accounts', 'performance_score'], ['cleaning', 'clean_forms_on_time'], ['client_relations', 'daily_work_done'], ['management', 'performance_score'], ['ready', 'performance_score']]);
+  assert.deepEqual(others.map(r => [r.area, r.measure]), [['accounts', 'performance_score'], ['cleaning', 'clean_forms_on_time'], ['client_relations', 'daily_work_done'], ['management', 'teams_combined'], ['ready', 'performance_score']]);
   assert.ok(others.every(r => r.target_percent === 80 && r.bonus_tiers.join() === '90,95' && r.counts_for_bonus && r.placeholder && r.active));
   assert.equal((await owner("select count(*)::int n from private.workspace_kpi_changes where change='seeded' and changed_by is null"))[0].n, 10, 'each seeded row is in the change log');
   // On the live database (pass 80, tiers 90 and 95) the same rule gives Alex's 80, 90 and 95.

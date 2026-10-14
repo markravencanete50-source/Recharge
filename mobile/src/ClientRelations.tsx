@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
 import { useWorkFocus } from "./LiveKit";
-import { Pills } from "./AccountsPayable";
+import { Pills } from "./Pills";
 import { LicensingList } from "./LicensingList";
 import { ListingHealthList, PricingList, RelistingList, ReviewsList } from "./ListingsTabs";
 import { LiveEnquiries } from "./LiveEnquiries";
@@ -38,7 +38,7 @@ export function ClientRelations(props: SectionProps & { onOpenProperty: (propert
         <Text style={[ui.body, { color: p.muted }]}>Onboarding, enquiries, licensing, listings, pricing, reviews and purchases for your clients’ properties.</Text>
       </View>
       <StaysRoutineCard palette={p} account={account} properties={props.properties} work={props.work} part="clients" />
-      {subs.length > 1 && <Pills p={p} values={subs} value={sub} onChange={setSub} label={v => CLIENT_SUB_LABEL[v]} wrap={false} />}
+      {subs.length > 1 && <Pills p={p} title="Client relations section" values={subs} value={sub} onChange={setSub} label={v => CLIENT_SUB_LABEL[v]} />}
       {sub === "onboarding" && <OnboardingTracker {...props} />}
       {sub === "enquiries" && <LiveEnquiries palette={p} account={account} onOpenProperty={onOpenProperty} />}
       {sub === "licensing" && <LicensingList {...props} />}

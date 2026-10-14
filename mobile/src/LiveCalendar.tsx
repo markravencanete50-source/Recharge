@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps 
 import { ActivityIndicator, Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { Dropdown } from "./Dropdown";
 import { SearchPicker } from "./SearchPicker";
 import { MotionPress, SwapIn } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, london, message, Notice, Tag, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Segmented } from "./Segmented";
 import { PageHeading } from "./LivePages";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { EventRow, TeamEventSheet, WhoIsWhere } from "./TeamEvents";
 import { readTeams, writeTeams } from "./backend/client";
-import { ui, type Palette } from "./theme";
+import { DateField } from "./CalendarPicker";
+import { radius, icon, ui, type Palette } from "./theme";
 import type { DimensionalName } from "./DimensionalIcon";
 import {
   calendarEntries, calendarPeople, calendarProperties, calendarScheduleSchema, calendarTeamsFor, changeoversBetween, CLEAN_STATE_LABEL, CLEAN_STATE_TONE, ENTRY_KINDS, entryTitle,
@@ -78,7 +80,7 @@ function DayCell({ p, date, inMonth, isToday, isSelected, counts, roomy, first, 
 function Fact({ p, icon, label, value }: { p: Palette; icon: IconName; label: string; value: string }) {
   return (
     <View style={[ui.row, { gap: 12, paddingVertical: 2 }]}>
-      <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name={icon} size={16} color={p.text} /></View>
+      <View style={{ width: 36, height: 36, borderRadius: radius.control, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><Feather name={icon} size={16} color={p.text} /></View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[ui.small, { color: p.muted }]}>{label}</Text>
         <Text selectable style={{ color: p.text, fontSize: 15, fontWeight: "500" }}>{value}</Text>
@@ -108,7 +110,7 @@ function WorkTimeEditor({ p, entry, onSaved }: { p: Palette; entry: CalendarEntr
   const request = useRequestId(editing ? [w.workId, w.version, day, start, end].join(":") : null);
   async function save() {
     if (busy) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) { setError("Enter the date as YYYY-MM-DD."); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) { setError("Choose the date."); return; }
     if ((start && !validClock(start)) || (end && !validClock(end))) { setError("Enter times as HH:MM, for example 10:30."); return; }
     if (end && !start) { setError("Add a start time as well as an end time."); return; }
     if (start && end && end <= start) { setError("The end time must be after the start time."); return; }
@@ -121,7 +123,7 @@ function WorkTimeEditor({ p, entry, onSaved }: { p: Palette; entry: CalendarEntr
   if (!editing) return <Button label={entry.time ? "Change the day or time" : "Set the day and time"} icon="clock" p={p} onPress={() => setEditing(true)} />;
   return (
     <View style={{ gap: 10, padding: 14, borderRadius: 18, borderWidth: 1, borderColor: p.border }}>
-      <Field label="Date (YYYY-MM-DD)" value={day} onChange={setDay} p={p} placeholder={entry.date} />
+      <DateField p={p} label="Date" mode="single" wholeMonthLink={false} empty="Choose a date" value={{ from: day, to: day }} onChange={next => setDay(next.from)} />
       <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
         <View style={{ flex: 1, minWidth: 120 }}><Field label="Starts (HH:MM)" value={start} onChange={setStart} p={p} placeholder="10:00" /></View>
         <View style={{ flex: 1, minWidth: 120 }}><Field label="Ends (optional)" value={end} onChange={setEnd} p={p} placeholder="14:00" /></View>
@@ -301,7 +303,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
         {loading && <ActivityIndicator accessibilityLabel="Loading the calendar" color={p.primary} />}
         {staff && (
           <MotionPress accessibilityRole="button" accessibilityLabel="Add an absence, meeting or time away" onPress={() => openEvent(null)} style={[ui.row, { gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
-            <Feather name="plus" size={15} color={p.text} /><Text style={{ color: p.text, fontSize: 13, fontWeight: "500" }}>Add</Text>
+            <Feather name="plus" size={icon.row} color={p.text} /><Text style={{ color: p.text, fontSize: 13, fontWeight: "500" }}>Add</Text>
           </MotionPress>
         )}
         <MotionPress accessibilityRole="button" accessibilityLabel="Refresh the calendar" disabled={loading} onPress={() => void load()} style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}><Feather name="refresh-cw" size={16} color={p.text} /></MotionPress>
@@ -322,13 +324,13 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
           <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{detailOf(e)}</Text>
         </View>
         {done ? <Tag label="Done" tone="good" p={p} /> : unassigned ? <Tag label="Unassigned" tone="wait" p={p} /> : null}
-        <Feather name="chevron-right" size={17} color={p.muted} />
+        <Feather name="chevron-right" size={icon.row} color={p.muted} />
       </MotionPress>
     );
   };
   // A day's entries and team events together, in one card.
   const dayCard = (entriesOfDay: CalendarEntry[], eventsOfDay: TeamEvent[], day: string) => (
-    <View style={{ borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
+    <View style={{ borderRadius: radius.card, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, paddingVertical: 4 }}>
       {entriesOfDay.map((e, i) => entryRow(e, i))}
       {eventsOfDay.map((e, i) => <EventRow key={e.id} p={p} event={e} day={day} first={!entriesOfDay.length && !i} onPress={() => openEvent(e, day)} />)}
     </View>
@@ -411,7 +413,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
     return (
       <MotionPress key={c.out.reservationId} {...(Platform.OS === "web" ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" disabled={!target} onPress={() => target && setOpen(target)}
         accessibilityLabel={`Changeover at ${c.propertyName}: ${stayLabel(c.out)} out, ${c.next ? `${nextGuests} in ${c.sameDay ? "the same day" : "on " + shortDay(c.next.checkIn)}` : "no arrival booked"}, ${CLEAN_STATE_LABEL[c.cleanState]}`}
-        style={{ gap: 12, padding: 14, borderRadius: 22, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
+        style={{ gap: 12, padding: 14, borderRadius: radius.card, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
         <View style={[ui.between, { gap: 10, alignItems: "flex-start" }]}>
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Text numberOfLines={2} style={{ color: p.text, fontSize: 15, fontWeight: "600" }}>{c.propertyName}</Text>
@@ -467,8 +469,9 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   return (
     <View style={{ gap: 16 }}>
       <PageHeading palette={p} title="Calendar" subtitle={staff ? "Bookings with guest names, changeovers, cleans, maintenance and where the team is. Tap a day or a booking for its details." : "Tap a day to see what is happening, then an entry for its details."} />
-      {staff && <Pills p={p} values={MODES} value={mode} onChange={setMode} label={v => MODE_LABEL[v]} />}
-      {(mode === "month" || mode === "week") && teams.length > 1 && <Pills p={p} values={["all", ...teams] as (Team | "all")[]} value={team} onChange={setTeam} label={v => v === "all" ? "All teams" : TEAM_LABEL[v]} />}
+      {staff && <Segmented p={p} label="Calendar view" items={MODES.map(m => ({ key: m, label: MODE_LABEL[m] }))} value={mode} onChange={setMode} />}
+      {(mode === "month" || mode === "week") && teams.length > 1 && <Dropdown p={p} label="Team" hideLabel value={team} onChange={setTeam}
+        options={(["all", ...teams] as (Team | "all")[]).map(v => ({ value: v, label: v === "all" ? "All teams" : TEAM_LABEL[v] }))} />}
       {filters && (
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>

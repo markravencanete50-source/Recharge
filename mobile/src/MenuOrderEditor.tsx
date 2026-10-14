@@ -3,17 +3,17 @@ import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
+import { ChoicePills } from "./ChoiceField";
 import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
 import { Button, Loading, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
 import { liveNavigationFor } from "./NavigationBar";
 import { readTeams, writeTeams } from "./backend/client";
 import { publishMenuLayout } from "./MenuLayoutStore";
 import { DEFAULT_ROLE_MODULES } from "../../lib/modules";
 import { rolePanel, type RolePanel } from "../../lib/role-panel";
 import {
-  MENU_ROLES, MENU_ROLE_LABEL, layoutOfPanel, moveItem, moveItemTo, moveSection, orderPhoneBar, parseMenuLayout, phoneMoreGroups, storedMenuLayoutSchema,
+  MENU_ROLES, MENU_ROLE_LABEL, isLocked, layoutOfPanel, moveItem, moveItemTo, moveSection, orderPhoneBar, parseMenuLayout, phoneMoreGroups, storedMenuLayoutSchema,
   type MenuRole, type StoredMenuLayout,
 } from "../../lib/menu-layout";
 
@@ -88,7 +88,7 @@ export function MenuOrderEditor({ palette: p }: { palette: Palette }) {
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Menu order</Text>
         <Text style={[ui.small, { color: p.muted }]}>The order of the left panel and the phone menu for each role. Move the sections, the links inside a section, or a link to another section. This only arranges the menu: what each person can open still comes from their role and tools.</Text>
       </View>
-      <Pills p={p} values={MENU_ROLES} value={role} onChange={value => { setRole(value); setMoving(null); setNote(""); setError(""); }} label={v => MENU_ROLE_LABEL[v]} />
+      <ChoicePills p={p} name="Role" values={MENU_ROLES} value={role} onChange={value => { setRole(value); setMoving(null); setNote(""); setError(""); }} label={v => MENU_ROLE_LABEL[v]} />
       <Text style={[ui.small, { color: p.muted }]}>{current?.updatedAt ? `Last changed by ${current.updatedByName ?? "a super admin"} on ${when(current.updatedAt)}.` : "Default order. Nobody has changed it yet."}</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!!note && <Notice text={note} p={p} />}
@@ -108,12 +108,13 @@ export function MenuOrderEditor({ palette: p }: { palette: Palette }) {
                   <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 14 }}>{link.label}</Text>
                   <Move p={p} icon="chevron-up" label={`Move ${link.label} up in ${group.title}`} disabled={li === 0 || busy} onPress={() => setDraft(d => moveItem(d, group.key, link.key, -1))} />
                   <Move p={p} icon="chevron-down" label={`Move ${link.label} down in ${group.title}`} disabled={li === group.links.length - 1 || busy} onPress={() => setDraft(d => moveItem(d, group.key, link.key, 1))} />
-                  <MotionPress accessibilityRole="button" accessibilityLabel={`Move ${link.label} to another section`} accessibilityState={{ expanded: moving === link.key, disabled: busy }} disabled={busy}
+                  {isLocked(link.key) ? <Feather name="lock" size={15} color={p.muted} accessibilityLabel={`${link.label} stays in ${group.title}`} /> : <MotionPress accessibilityRole="button" accessibilityLabel={`Move ${link.label} to another section`} accessibilityState={{ expanded: moving === link.key, disabled: busy }} disabled={busy}
                     onPress={() => setMoving(moving === link.key ? null : link.key)}
                     style={{ minHeight: 44, paddingHorizontal: 10, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: p.border, backgroundColor: moving === link.key ? p.wash : p.surface }}>
                     <Text style={{ color: p.text, fontSize: 13 }}>Move to…</Text>
-                  </MotionPress>
+                  </MotionPress>}
                 </View>
+                {isLocked(link.key) && <Text style={[ui.small, { color: p.muted }]}>Favorites stays in {group.title} for every role, so it is always easy to reach. It can move up or down here.</Text>}
                 {moving === link.key && (
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingBottom: 6 }}>
                     {draft.groups.filter(g => g.key !== group.key).map(g => (

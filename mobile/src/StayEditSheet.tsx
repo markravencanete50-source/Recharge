@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
 import { Sheet } from "./TeamFlows";
+import { DateField } from "./CalendarPicker";
 import { ui, type Palette } from "./theme";
-import { Button, Field, message, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
+import { Button, message, Notice, useRequestId } from "./LiveKit";
+import { Pills } from "./Pills";
 import { writeControls } from "./backend/client";
 import type { StayLine } from "../../lib/property-profile";
 
@@ -30,7 +31,7 @@ export function StayEditSheet({ p, propertyId, stay, onClose, onSaved }: { p: Pa
   const version = stay.version;
   async function save(next: Status) {
     if (busy || !stay) return;
-    if (!isDate(checkIn) || !isDate(checkOut) || checkOut <= checkIn) { setError("Enter dates as YYYY-MM-DD, with check-out after check-in."); return; }
+    if (!isDate(checkIn) || !isDate(checkOut) || checkOut <= checkIn) { setError("Choose the dates, with check-out after check-in."); return; }
     const request = next === "cancelled" ? cancelRequest : saveRequest;
     setBusy(true); setError("");
     try {
@@ -40,10 +41,7 @@ export function StayEditSheet({ p, propertyId, stay, onClose, onSaved }: { p: Pa
   }
   return (
     <Sheet palette={p} visible onClose={onClose} title="Edit this stay" subtitle={stay.reference} icon="calendar">
-      <View style={[ui.row, { gap: 10 }]}>
-        <View style={{ flex: 1 }}><Field label="Check-in (YYYY-MM-DD)" value={checkIn} onChange={setCheckIn} p={p} /></View>
-        <View style={{ flex: 1 }}><Field label="Check-out" value={checkOut} onChange={setCheckOut} p={p} /></View>
-      </View>
+      <DateField p={p} label="Check-in to check-out" wholeMonthLink={false} value={{ from: checkIn, to: checkOut }} onChange={next => { setCheckIn(next.from); setCheckOut(next.to); }} />
       <Pills p={p} values={["confirmed", "enquiry"] as const} value={status} onChange={setStatus} label={v => v === "confirmed" ? "Confirmed" : "Enquiry"} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy && !cancelling ? "Saving…" : "Save changes"} primary p={p} disabled={busy} onPress={() => void save(status)} />

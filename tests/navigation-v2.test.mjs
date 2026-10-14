@@ -75,7 +75,8 @@ test('the new pages and areas exist for the right roles and nobody else', () => 
     for (const key of ['page:home', 'page:todo', 'page:calendar', 'page:inbox', 'page:decisions', 'page:analytics']) assert.ok(has(role, key), `${role} has ${key}`);
   }
   // Owners never see the team's pages or areas.
-  for (const key of ['page:todo', 'page:calendar', 'page:decisions', 'page:favorites', 'area:stays', 'area:clients', 'area:management', 'area:accounts', 'area:cleans', 'area:calendar']) assert.ok(!has('client', key), 'owner has ' + key);
+  // Favorites is for every role since round 6, owners included.
+  for (const key of ['page:todo', 'page:calendar', 'page:decisions', 'area:stays', 'area:clients', 'area:management', 'area:accounts', 'area:cleans', 'area:calendar']) assert.ok(!has('client', key), 'owner has ' + key);
   assert.ok(has('client', 'page:approvals') && has('client', 'page:inbox'));
   // Guest relations and Client relations: admin and Guest relations staff only.
   for (const role of TEAM) {

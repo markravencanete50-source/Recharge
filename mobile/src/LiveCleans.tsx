@@ -19,7 +19,8 @@ import { CleanChecklist, ChecklistReview, type ChecklistState } from "./CleanChe
 import { ChecklistTemplatesSheet, useChecklistTemplates } from "./ChecklistTemplates";
 import { DefaultCleanersSheet, FormStateTag, WhoIsCleaning } from "./DefaultCleaners";
 import { CleanCheckForm, CleanCheckSummary, conditionOf, unanswered, type ItemRow } from "./CleanReport";
-import { ui, type Palette } from "./theme";
+import { DateField } from "./CalendarPicker";
+import { radius, ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
 import { candidatesSchema, disputeFor, guestLine, monthPay, performanceSchema, problemsOf, scheduleSchema, type CleanerMonth } from "../../lib/cleans-live";
@@ -220,7 +221,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
           {days.map(d => {
             const on = d === day, count = cleans.filter(w => w.dueOn === d).length, due = manager ? byDay[d]?.missing ?? 0 : 0;
             return (
-              <MotionPress key={d} accessibilityRole="button" accessibilityLabel={`${dayLabel(d)}, ${count} cleans${due ? `, ${due} ${due === 1 ? "form" : "forms"} unsubmitted` : ""}`} accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ width: 58, paddingVertical: 10, borderRadius: 16, alignItems: "center", gap: 4, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
+              <MotionPress key={d} accessibilityRole="button" accessibilityLabel={`${dayLabel(d)}, ${count} cleans${due ? `, ${due} ${due === 1 ? "form" : "forms"} unsubmitted` : ""}`} accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ width: 58, paddingVertical: 10, borderRadius: radius.control, alignItems: "center", gap: 4, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
                 <Text style={{ fontSize: 11, color: on ? p.onPrimary : p.muted }}>{dayLabel(d).split(" ")[0]}</Text>
                 <Text style={{ fontSize: 17, fontWeight: "700", color: on ? p.onPrimary : p.text }}>{dayLabel(d).split(" ")[1]}</Text>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: count ? (on ? p.onPrimary : due ? p.danger : p.primary) : "transparent" }} />
@@ -545,7 +546,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
           </MotionPress>
           {!formChecked && <Text style={[ui.small, { color: p.muted }]}>Tick the box to accept this clean. You can reject it without ticking.</Text>}
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true, disabled: !formChecked }} disabled={!formChecked} onPress={() => { if (formChecked) setAccepted(true); }} style={[ui.button, { flex: 1, opacity: formChecked ? 1 : 0.5, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? "#FFFFFF" : p.primary }]}>Accept</Text></MotionPress>
+            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true, disabled: !formChecked }} disabled={!formChecked} onPress={() => { if (formChecked) setAccepted(true); }} style={[ui.button, { flex: 1, opacity: formChecked ? 1 : 0.5, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? p.onSuccess : p.primary }]}>Accept</Text></MotionPress>
             <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === false }} onPress={() => setAccepted(false)} style={[ui.button, { flex: 1, backgroundColor: accepted === false ? p.danger : p.wash }]}><Text style={[ui.buttonText, { color: accepted === false ? p.onPrimary : p.primary }]}>Reject</Text></MotionPress>
           </View>
           <Field label="Guest feedback" value={guestFeedback} onChange={setGuestFeedback} p={p} multiline placeholder="What guests said, or 'No comments'" />
@@ -595,11 +596,7 @@ function CreateSheet({ p, visible, properties, templates, onClose, onDone, today
     <Sheet palette={p} visible={visible} onClose={onClose} title="New clean" subtitle="The cleaner sees it as soon as you assign them" icon="calendar">
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Property</Text>
       <PropertySelect p={p} properties={properties} value={propertyId} onChange={id => { setPropertyId(id); const t = templateFor(templates, id); if (t) setChecks(t.items.map(i => i.label).join("\n")); }} />
-      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-        <Button label="Today" p={p} onPress={() => setDate(today)} />
-        <Button label="Tomorrow" p={p} onPress={() => setDate(addDays(today, 1))} />
-      </View>
-      <Field label="Date (YYYY-MM-DD)" value={date} onChange={setDate} p={p} />
+      <DateField p={p} label="Date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today} value={{ from: date, to: date }} onChange={next => setDate(next.from)} />
       <Field label="Checks, one per line" value={checks} onChange={setChecks} p={p} multiline />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <Button label={busy ? "Creating…" : "Create clean"} icon="plus" primary p={p} disabled={!valid || busy} onPress={() => void save()} />

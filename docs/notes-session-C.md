@@ -267,7 +267,7 @@ properties", one chip per property, "Showing 12 of 63"). A guest conversation op
   an owner conversation, Team for everyone on the team; owners have no tabs, just their conversation with Recharge).
 - **No channel chips.** Department channels are ordinary conversations in the Team list, by latest message, with the group
   avatar and no `#`.
-- **Status** (Guests and Clients only): Needs a reply (the other side spoke last; attention colour), Waiting for reply (we
+- **Status** (Guests and Clients only): Needs a reply (the other side spoke last; attention colour), Engaged (renamed in round 6; was "Waiting for reply"; we
   answered last and it is open; green), Closed (done). Each shows its count. Team has no status filter. Guests use the existing wait
   and Done; Clients use who spoke last (`last.fromOwner`, already in the list) and a new Closed state (below).
 - **One search box**, filtering as you type: "Search guest or property" (guest's name, property name, property address, booking
@@ -307,6 +307,229 @@ properties", one chip per property, "Showing 12 of 63"). A guest conversation op
 
 **Not checked visually:** the screens need a real login, so they were not screenshotted; check desktop and phone with a Stays
 account and an admin after deploy.
+
+## 8. Round 6 (16 October): the Updates feed says what each update is
+
+Lee: "instead of saying new task for your team it should be specific what type of task." Before, almost every row in the feed
+behind the header bell read "New task for your team · 13 Oct, 13:39": `lib/notice-copy.ts` titles by event type only, and the read
+returned only the event type and time.
+
+**After** (screenshots, sample data: `docs/screenshots/round6-updates-desktop.png`, `docs/screenshots/round6-updates-phone.png`):
+- **Title**: "<type of work>: <the work item's title>", e.g. "Pricing: 3 empty nights to price", "Direct booking follow-up: Smith,
+  8 nights", "Repair: Boiler not working", "Licensing: …". The type comes from the work item's kind (`workspace_domain_details`),
+  mapped in `WORK_KIND_LABEL` (`lib/notice-details.ts`), else the tool's name, else the kind made readable. Chat notices name the
+  writer ("Message from Holly Holder"), guest notices the property ("Guest message · 10 Barnet Cres"). Anything without a work item
+  keeps today's wording from `lib/notice-copy.ts`.
+- **Second line**: the property (its address when the address already starts with the name, else "name, address"), then who did
+  it ("Automatic" for sweeps, crons and feeds; nothing for chat, whose title already names the writer). The time sits on the right
+  of the title row (just the time, as the list is grouped under Today, Yesterday and dates), so a narrow phone cuts the place short
+  but never the time.
+- **Tapping a row** opens its work item (the tracker detail sheet, `setOpenWork`) when the item is in the work list already loaded;
+  chat and guest notices open Messages. A row with nowhere to go has no chevron.
+- **Bursts**: two or more of the same automatic event for the same kind of work within a minute of the newest are one row,
+  "Pricing: 12 new tasks · Automatic", which opens its list in place; each item in the list opens as above.
+- **Owners**: the read never gives them a staff name: "You" for their own action, otherwise "Recharge", and never "Automatic". Which
+  notices anyone gets is unchanged.
+- **Email and push**: the subject names the type of work ("Pricing: New task for your team"); still no property, title or names,
+  as `lib/notice-copy.ts` requires for anything that leaves the app (`noticeCopyFor` in `lib/web-push.ts` and
+  `lib/integration-providers.ts`).
+- Icons follow the kind of work (pricing and listings a tag, cleans a spray, repairs a hard hat; guest messages the chat icon).
+  `kindLook` in `LiveRows.tsx` gained the tag for pricing and listing kinds, so work rows elsewhere show it too.
+
+**Migration `20261016300000_notice_details.sql`** (not applied): anchor-and-append patches to `workspace_controls_read`
+(the notifications branch gains `work_title`, `work_kind`, `work_module`, `property_name`, `property_address`, `automatic`,
+`actor_name` from left joins in the same single query, no per-row lookups) and to the two delivery claims
+(`integration_claim_notifications`, `integration_claim_web_push` return `workKind`). The app's `noticeViewSchema` accepts the new
+fields as optional, so an older database still reads.
+
+**Files:** `lib/notice-details.ts` (new), `lib/workspace-view.ts` (schema), `mobile/src/LivePages.tsx` (`LiveActivity`),
+`mobile/src/LiveRows.tsx` (`LiveNoticeRow`, `NoticeRowView`, `noticeIcon`), `lib/web-push.ts`, `lib/integration-providers.ts`,
+`lib/integration-policy.ts` (job type), and **two props on each `LiveActivity` mount in `mobile/src/LiveWorkspace.tsx`**
+(`work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")}`; no navigation changed, flagged for Session B).
+Tests: `tests/notice-details.test.mjs` and `tests/notice-details-database.test.mjs` (new); `tests/wiring-v2.test.mjs` updated for
+the new props.
+
+**Open points:**
+- The read still returns the newest 50 notices (`limit 50` cannot be changed by an append patch). A burst of 180 pricing tasks fills
+  them and shows as "Pricing: 50 new tasks". Raising the limit means replacing the notifications branch whole.
+- A work item not in the loaded work list (older or closed) has no tap target yet; opening by id would need a single-item read.
+
+## Round 6: management bonus
+
+Alex: "Managers bonus will be based off of how guest relations and client relations perform." Since round 5 the bonus bar comes
+from the KPI tracker (Session A, `20261015100000_kpi_tracker.sql`, `lib/kpis.ts`): `BONUS_SCHEMES` in `lib/feedback-defaults.ts`
+is gone, and each area's bonus is its bonus KPI. So this is a new KPI measure, not a new scheme.
+
+- **The measure, `teams_combined`** (management area only, higher is better, no minutes):
+  - Guest relations: every guest message in the period answered within the green minutes of the performance targets (5 on the live
+    database), out of the waits settled for those minutes. It is the same sum as the guest reply KPIs, team-wide, whoever was on shift.
+  - Client relations: the average daily-work percentage of the people whose KPI area is client relations (their rota department).
+    It is worked out the same way as the team value of "Daily work done".
+  - Combined: the average of the two, equal weight, rounded down. If one team has nothing to measure, the other is used alone. If
+    neither has, there is no value, and the bar reads "Nothing to measure yet".
+- **The bonus KPI**: the seeded management KPI ("Performance score") moves to the new measure and is named "Guest relations and
+  Client relations, combined". It is still a placeholder at 80, with tiers at 90 and 95. If an admin has already changed its
+  target, tiers or placeholder flag on the live database, those are kept. The move is in the KPI change log (an edit by nobody,
+  like the seed). It only happens while the KPI is still on the performance score, so a second run does nothing. Admins can also
+  add the measure to other management KPIs in the KPI screen; the database refuses it for any other area.
+- **On the bar** (My performance): "Management · Guest relations and Client relations, combined" above the bar. Under it, each
+  team's figure, e.g. "Guest relations 86% · Client relations 74%", or "nothing to measure yet" for a team with nothing.
+- **Who gets it**: admins and super admins (Team performance shows every manager's bar and the management team row), and anyone
+  whose rota department is management (only their own bar). The KPI read already gives a KPI's values only to people in its area,
+  and to admins. The measure also checks the caller itself, so nobody else gets a team figure through it, even if the read
+  changes. That covers owners (who are refused the read anyway), cleaners, Ready, and guest and client relations staff. The parts
+  are team totals: an area, a percentage and a count, never a name or a per-person figure.
+- **Cost**: each management bonus value reads the guest replies of the period and the daily work of each client relations person.
+  An admin's read does this once per manager plus once for the team row. That is a handful of people today; if it grows, work it
+  out once per read.
+
+**Migration `20261016310000_management_bonus_combined.sql`** (not applied):
+- `workspace_kpi_measures()` is replaced whole, with the new entry at the end. Only `20261015100000` defines it.
+- New `workspace_kpi_teams_combined(start_on, end_on)`, revoked from the app roles.
+- Anchor-and-append patches:
+  - a `teams_combined` branch in `workspace_kpi_person_value` and in `workspace_kpi_team_value`;
+  - `workspace_kpi_result` passes `parts` through.
+- The seed move.
+- Safe to run twice (tested).
+
+**Files:**
+- `lib/kpis.ts` (Session A's): the label, an optional `parts` on the result, and `parts` on `KpiProgress`.
+- `lib/workspace-teams-policy.ts`: `teams_combined` added at the end of `KPI_MEASURES`.
+- `lib/my-performance.ts`: `bonusPartsLine`.
+- `mobile/src/MyPerformance.tsx`: the line under the bar.
+- Tests: `tests/management-bonus.test.mjs` and `tests/management-bonus-database.test.mjs` are new.
+  `tests/kpi-tracker-database.test.mjs` now expects the management seed on `teams_combined`.
+
+Screenshot (sample data, phone width): `docs/screenshots/round6-bonus-messages-phone.png`. It shows the bar with both teams,
+with one team only, and with nothing to measure, and below it the Messages helper lines.
+
+**Messages helper lines wrap on phones** (Session E's review, item 19). "Hostaway isn't connected yet: log each guest message by
+hand." and "5 guests have waited longer than 30 minutes." were cut short with "…" on a phone. `QuietLine` in
+`mobile/src/MessagesLayout.tsx` no longer limits the text to one line, and its icon stays beside the first line.
+`tests/messages-redesign.test.mjs` checks it.
+
+**"Waiting for reply" is now "Engaged"** (Lee, round 6). It is the status of a conversation where we wrote last and it is still
+open, so nobody is waiting on us. This is a label change only: the key stays `waiting`, the logic and the green colour are the same.
+`MESSAGE_STATUS_LABEL` in `lib/inbox-filters.ts` is the one place it is written. The chips on Guests and Clients, the row tag and
+the tag at the top of an open guest conversation (`LiveGuestInbox.tsx`, which had the words typed in twice) all read it from there.
+Other places that say "waiting for a reply" mean guests or owners waiting on us (Needs a reply, the to-do, Oversight, the reply
+times), so they stay. The comment in `20261015320000_owner_chat_closed.sql` still says "Waiting for reply"; that migration is live
+and is left as it is.
+
+**Answered (Lee, 13 October):** the guest part is the 5-minute reply rate. Alex sets the targets and tiers himself in the KPI
+screens, and the bar follows them. Two things to know:
+- The guest part reads the green minutes of the performance targets, which are 5 on the live database. If an admin changes the
+  green minutes, the guest part follows them, not 5.
+- The 50/50 weighting is in the migration. The KPI screens have no field for it, so changing it means a small migration.
+
+## Round 7 (17 October): open any update, older updates, and help for round 6
+
+**1. Open any update.** In round 6, tapping an update whose work item was not in the loaded work list did nothing. Now the app
+reads that one item and opens the tracker detail sheet.
+- Read: `GET /api/mobile/operations?workId=<id>` calls `workspace_operation_read(target)`.
+- Rules: the same as the work list (`workspace_operation_access` and `workspace_operation_view`). Owners get only their own
+  client-visible items, in the owner view, with no staff names or staff fields.
+- Refusals: an item someone may not see gives the same "Work item not found" (404) as an id that does not exist. The app says
+  "That item is no longer available to you." Nothing about the item is sent.
+- Tests: an owner tapping a staff-only item at their own property, an item at someone else's property and a made-up id get the
+  same refusal. A cleaner is refused items not assigned to them. Signed-out callers are refused.
+
+**2. Older updates.** The feed still opens on the newest 50. At the end, "Show older updates" loads the 50 before the oldest one
+shown, again and again, until a page comes back short.
+- Read: `GET /api/mobile/portfolio?section=notifications&before=<update id>` calls `workspace_notifications_read(before_id)`.
+- Order: newest first, by time then id, so updates that share a time are never skipped or repeated across pages (tested with
+  130 updates, ten at the same moment).
+- Cursor: it must be one of your own updates.
+- Owners: pages hold only their own updates, with "Recharge" for who did it, as in round 6.
+- Older pages are marked read like the first.
+- The query moved: the notifications branch of `workspace_controls_read` is replaced whole by a call to the new function (no
+  cursor), so there is one copy of the query. Later patches to the feed must anchor in `workspace_notifications_read`.
+
+**Migration `20261017300000_updates_open_and_older.sql`** (not applied):
+- `workspace_operation_read` and `workspace_notifications_read`, each private with a public wrapper. They are granted to signed-in
+  users like the work list and feed reads; each checks who is asking.
+- The branch replacement. It runs only while the branch still holds the round 6 query, and raises if the branch is not found once
+  or does not look as expected.
+- Safe to run twice (tested).
+- `tests/notice-details-database.test.mjs` now checks the round 6 migration's second run before the later ones, because
+  20261017300000 moves the query it patched.
+
+**3. Help for round 6.** Seven answers in `lib/access-faq.ts`, which both the Help page and the help sheet read:
+- "What do the updates under the bell say?" (titles, Automatic and Recharge, bursts, tapping, Show older)
+- "Where are my Favorites?" (always first in the menu, straight after Home)
+- "Why are some choices in a dropdown?"
+- "What do Needs a reply, Engaged and Closed mean in Messages?" (admins, super admins, Stays)
+- "What is Today's checklist?" (admins)
+- "Can I delete a client enquiry?" (admins)
+- "How is the management bonus measured?" (team roles)
+
+Owners see none of the team-only answers. `tests/help-round6.test.mjs` checks who sees which answer, the wording against what was
+built, no dashes, and sentences of 40 words or fewer. The older "What appears in Recent activity?" answer describes this device's
+own history (tool and record views), while the Updates page is also titled Recent activity. I left it as it is; it is worth
+renaming one of the two.
+
+**Screenshots** (sample data, phone width, light and dark):
+- `docs/screenshots/round7-updates-top-*.png`: the note after tapping an item that is not loaded. With no backend in the sample,
+  it shows the "could not be opened just now" wording.
+- `docs/screenshots/round7-updates-end-*.png`: "Show older updates".
+- `docs/screenshots/round7-help-*.png`: the Engaged answer.
+
+**Files:**
+- `supabase/migrations/20261017300000_updates_open_and_older.sql`
+- `lib/journey-policy.ts`, `lib/journey-server.ts` (operations read by `workId`)
+- `lib/portfolio-policy.ts`, `lib/portfolio-server.ts` (the `before` cursor)
+- `lib/notice-details.ts` (`mergeNotices`, `oldestNoticeId`, `mayHaveOlder`, `workItemFrom`)
+- `mobile/src/backend/client.ts` (`readWorkItem`, `readOlderNotices`)
+- `mobile/src/LivePages.tsx` (`LiveActivity`)
+- `lib/access-faq.ts`
+- Tests:
+  - New: `updates-open-older.test.mjs`, `updates-open-older-database.test.mjs`, `help-round6.test.mjs`
+  - Updated: `notice-details.test.mjs`, `notice-details-database.test.mjs`
+
+## Round 8 (18 October): the management bonus split, the help rename, the go-live note
+
+**1. Help rename** (`9a74589`). "What appears in Recent activity?" is now "What is in this device's history?", because the Updates
+page is also called Recent activity.
+
+**2. Admins set the management bonus split** (Lee: Alex sets the KPIs and numbers in the app, and the system follows).
+- `private.workspace_kpis.guest_share`: Guest relations' share of the combined measure, a whole percentage from 0 to 100.
+  Client relations gets the rest. It is nullable, null reads as 50, and it is used only by `teams_combined`.
+- The value:
+  - both teams measured: floor((guest × share + client × (100 − share)) / 100);
+  - one team with nothing to measure: the other counts alone, whatever the split;
+  - neither team measured: no value.
+- Each part carries its share. The bar reads "Guest relations 86% (60%) · Client relations 74% (40%)". When one team has nothing
+  to measure no share is shown, because the other counts alone.
+- Saving (`saveKpi` takes `guestShare`):
+  - a whole number from 0 to 100, or null, on the combined measure only; anything else is refused;
+  - an edit that leaves the share out keeps the stored one, so an older app cannot reset it;
+  - moving the KPI to another measure clears it;
+  - admins only, like every KPI change. The change history row has the share before and after.
+- The KPI sheet (`mobile/src/KpiAdmin.tsx`) shows "Guest relations share % (Client relations gets the rest)" only for the
+  combined measure. It is a plain number field like Target and Minutes, filled with 50 when unset.
+- The Help answer on the management bonus now says admins choose the split.
+- **Migration `20261018300000_management_bonus_weighting.sql`** (not applied):
+  - the column;
+  - `workspace_kpi_weighted`, which computes the value at a share;
+  - `workspace_kpi_result`, replaced whole (it carries over the round 6 parts patch);
+  - anchor-and-append patches to `workspace_kpi_action` (five) and `workspace_kpi_view` (one);
+  - safe to run twice (tested).
+  `tests/management-bonus-database.test.mjs` now checks the round 6 migration's second run before the later ones, and its
+  no-names check allows the new `share` key.
+- Tests:
+  - `management-bonus-weighting-database` (6): the default 50, 70/30 maths (65), 0 and 100, one team missing, validation
+    (101, −1, 50.5, "50", true), a share on another measure refused, moving off the measure clears it, admins only, the
+    history row, an edit that leaves it out, and running twice;
+  - `management-bonus-weighting` (3): the parts line, the form, and the sheet field.
+- Screenshots: `docs/screenshots/round8-bonus-bar-*.png` (the bar at 60/40) and `round8-kpi-sheet-*.png` (the field), light and
+  dark, with sample data.
+
+**3. The go-live note for rounds 6 and 7**: `docs/GO-LIVE-ROUND-6-7.md` (renamed `docs/GO-LIVE-ROUND-6-8.md` when the lead
+shipped rounds 6 to 8 together; it then gained the admin split and Session F's email), with only "Tell the team" and "Check as each role
+after go-live". It covers A, B, C, D and E's round 6 work and my round 7, from each session's notes and the merged lead branch.
+Work that was never pushed is left out: B's and D's later design-review items (the floating Favorites star, the phone header
+logo, the Maintenance filter, typed dates in Cleans and the calendar). The round 8 split is not in it; add one line for admins if
+it ships with rounds 6 and 7.
 
 ## Not done yet (waiting for the client)
 
@@ -357,6 +580,21 @@ Apply in filename order after the round 3 migrations: `20261014300000_team_calen
 `20261014310000_guest_messaging_roles.sql`, `20261014320000_chat_notices.sql`, `20261014330000_stay_guest_name_dates.sql`, then
 redeploy. The app works before and after each of them. Warn the team before `…320000`: people with unread conversations get one
 notice per conversation the next time someone writes there.
+
+Round 6: apply `20261016300000_notice_details.sql`, then redeploy the backend and the app (the app reads the new fields as
+optional, so either order works).
+
+Round 6, management bonus: apply `20261016310000_management_bonus_combined.sql` after `20261016300000` (it needs the KPI tracker,
+`20261015100000`), then redeploy the app soon after. Until the app is redeployed, the bar shows the new name without the two parts,
+and the old app cannot save an edit to that KPI (it does not know the measure). Before the migration, the new app shows the bar
+as today.
+
+Round 7: apply `20261017300000_updates_open_and_older.sql` after the round 6 migrations (it needs `20261016300000`), then redeploy
+the backend and the app. The app before it keeps working; the new app needs it for opening an item that is not loaded and for
+Show older updates (until then, those say the item could not be opened, or that older updates could not be loaded).
+
+Round 8: apply `20261018300000_management_bonus_weighting.sql` after `20261016310000` (it needs the combined measure), then
+redeploy the app. Before the app, the split works with its default of 50 and the KPI sheet has no field for it.
 
 Round 5: apply `20261015300000_chat_notice_every_message.sql`, `20261015310000_guest_message_notices.sql`,
 `20261015320000_owner_chat_closed.sql` and `20261015330000_guest_message_notices_onboarded.sql` in that order, then redeploy the backend and the app (the app's Close button and the

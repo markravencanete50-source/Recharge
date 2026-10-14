@@ -9,6 +9,7 @@ import { Sheet } from "./TeamFlows";
 import { Chip, SheetTable, cellText } from "./SheetTable";
 import { useCelebrate, useSaved } from "./Celebrate";
 import { exportReport } from "./exportReport";
+import { DateField } from "./CalendarPicker";
 import { ui, type Palette } from "./theme";
 import { readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL } from "../../lib/hub";
@@ -338,7 +339,7 @@ export function ShiftSheet({ p, target, today, direct, people = [], pending = []
   async function save() {
     if (!target || busy) return;
     if (!person) { setError("Choose who the shift is for."); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) { setError("Enter the date as YYYY-MM-DD."); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) { setError("Choose the date."); return; }
     if (!validClock(from) || (to && !validClock(to))) { setError("Enter times as HH:MM, for example 08:00."); return; }
     if (!to && !(shift && !shift.clockedOutAt)) { setError("Add when the shift ended."); return; }
     if (why.trim().length < 3) { setError("Say why it changed, for example “Forgot to clock out”."); return; }
@@ -364,7 +365,7 @@ export function ShiftSheet({ p, target, today, direct, people = [], pending = []
           <SearchPicker p={p} options={people.map(x => ({ id: x.userId, label: x.fullName || "Team member", keywords: x.department ? DEPARTMENT_LABEL[x.department] : undefined }))} value={who} onChange={setWho} placeholder="Search the team" nouns="people" />
         </>}
         {!!shift?.editNote && <Notice text={`Changed before: ${shift.editNote}`} p={p} />}
-        <Field label="Date (YYYY-MM-DD)" value={day} onChange={setDay} p={p} placeholder={today} />
+        <DateField p={p} label="Date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today} value={{ from: day, to: day }} onChange={next => setDay(next.from)} />
         <Field label="Clocked in (HH:MM)" value={from} onChange={setFrom} p={p} placeholder="08:00" />
         <Field label={shift && !shift.clockedOutAt ? "Clocked out (HH:MM, leave empty if still on shift)" : "Clocked out (HH:MM)"} value={to} onChange={setTo} p={p} placeholder="16:00" />
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Department</Text>

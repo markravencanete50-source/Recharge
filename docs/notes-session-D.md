@@ -186,3 +186,171 @@ too: add `gz|tgz` to the extensions in `hashedWorkspaceFile`. Not required (the 
 - **Rate limits** are off in the demo (as on the devstack).
 - **Time of day** isn't moved, only the date: a shift seeded at 08:52 shows "since 08:52".
 - Headless Chromium reported times in UTC in the screenshots; real browsers use the viewer's clock.
+
+---
+
+# Round 6: long option lists become a dropdown or a search (13 October 2026)
+
+Branch `claude/round6-forms-session-d`, from `main` at `8329f37`. No migration. Lee: "the property should be
+dropdown or searchable" (Area in "Add a new property enquiry" showed 23 full-width radio cards).
+
+## The rule (`lib/choice-control.ts`)
+
+| Options | Drawn as |
+|---|---|
+| 5 or fewer | the compact radio choices (or pills) as before |
+| 6 to 10 | one closed dropdown (`Dropdown`; the browser's own select on the web) |
+| more than 10 | a dropdown that opens with a search box at the top (every word typed must appear; case and accents ignored) |
+| properties, people, stays | the search-only picker (`SearchPicker` / `PropertySelect`), never radio cards |
+
+- `mobile/src/ChoiceField.tsx` (new): `ChoiceField` applies the rule to `{ value, label }` options; `ChoicePills` is a
+  drop-in for a row of `Pills` (5 or fewer stay pills).
+- `mobile/src/Dropdown.tsx` (Session A's, extended, backward compatible): `searchable` (search box, scrolling list,
+  on every platform), `hideLabel` (for forms that print their own label) and `disabled`.
+- **The shared workflow form renderer** (`Field` in `mobile/src/LivePages.tsx`) draws every `select` field with
+  `ChoiceField`, and the quick picks under a text field (`Suggestions`: property type 8, bedrooms 7) become one
+  dropdown past 5 while the field stays free to type in.
+- **Area** (`lib/workflow-forms.ts`): `defaultValue: ''`, so the dropdown starts on "Work it out from the address";
+  23 options, so it is the searchable dropdown. The postcode lookup still fills it in when nobody chose one.
+
+## Every screen audited
+
+Converted:
+
+| Screen | List | Now |
+|---|---|---|
+| Any workflow form (`LivePages` `Field`) | every select field: Area (23), type of repair (11), the owner's estimate decision (3), review sentiment (3)… | `ChoiceField` by count |
+| Workflow form quick picks (`LivePages` `Suggestions`) | property type (8), bedrooms (7) | dropdown; parking, garden, WCs, bathrooms (≤5) stay chips |
+| Client enquiries → Start valuing (`LiveEnquiries`) | Area (23 chips), property type (8 chips) | searchable dropdown; dropdown |
+| Report a repair (`LiveRepairs`) | type of repair (11 chips); which stay (chips) | searchable dropdown; stays in the search picker |
+| Clean problem (`CleanProblem`) | kind of problem (11 chips) | searchable dropdown |
+| Access control → change role, add a person (`LiveAccessControl`) | role (8 radio cards, twice); people filter (6 pills) | dropdown with the chosen role's summary under it; dropdown |
+| KPIs (`KpiAdmin`) | area (6 pills, list and sheet); what it measures (radio list) | dropdown; `ChoiceField` by count |
+| Usual cleaners (`DefaultCleaners`) | cleaners per property (people chips) | search picker |
+| Listing links (`LivePropertyProfile`) | platform per listing (6 chips) | dropdown |
+| Log a guest review (`ListingSheets`) | rating out of 10 (10 buttons); the night to price (pills) | dropdown when out of 10 (out of 5 keeps its 5 round buttons); `ChoicePills` |
+| New to-do (`HubItemSheet`) | department (6 chips) | dropdown |
+| View as (`ViewAs`) | every person as a radio card, grouped by role, plus a card per role | people in the search picker ("Name · Role"), role previews in one dropdown |
+| Usual shift (`LiveShifts`) | department (6 pills) | dropdown |
+| People (`LivePeople`) | role (up to 8 pills), OTA platform (8 pills) | dropdowns |
+| Menu order (`MenuOrderEditor`) | role (8 pills) | dropdown |
+| Owner expenses (`OwnerExpenses`) | property (pills); month (pills) | property search picker; `ChoicePills` |
+| Log a guest message (`LiveGuestInbox`) | channel (pills) | `ChoicePills` |
+| Calendar (`LiveCalendar`) | team filter (pills) | `ChoicePills` |
+
+Left as they are (5 or fewer, or not a list of text choices): accept/reject a clean (2), the clean form's property
+check answers (2–3 each), routine type (3) and frequency (2) in Ready, email or phone in sign-up (2), feedback
+category (4), who a to-do is for (3), review platform (4) and sentiment (3), owner expense category (5), owner
+periods (4), saved-reply audience (3), stay status (2) and channel (5), people and property filters in People (5 and
+4), guest inbox "waiting more than" (5), and the profile colour (6 colour swatches in one row: a dropdown of colour
+names would hide the colour, so they stay swatches; say if you want them changed).
+
+For the Lead to route (not mine this round):
+- **Session B / navigation:** Management's view row (`LiveManagement`, about 14 tab pills: Waiting on you, People,
+  Properties, Productivity…) is the longest pill row left. Guest and Client relations sub-tabs and the calendar's
+  mode row (4) are tabs and short.
+- **Session A / Accounts:** `PayoutStays` platform chips (All + up to 5 platforms) and status chips (3).
+- **Session C:** the team calendar's day strip (`TeamEvents`, 7 days) and Messages' status chips (3) are short.
+- **Dates:** "Due (optional, YYYY-MM-DD)" and "Send by" in the new to-do sheet (`HubItemSheet`) are typed dates,
+  not the one calendar field (`DateField`) the house rule asks for.
+
+## Tests
+
+- `tests/choice-control.test.mjs` (new, 20 tests): the threshold (5 radio, 6–10 dropdown, 11+ searchable), the search
+  filter, the Area default and searchable, the renderer and the quick picks using the rule, and one check per
+  converted screen (16 screens).
+- Every existing test that reads the changed files passes (305). `tsc -p mobile` and ESLint are clean.
+
+Screenshots: `docs/session-D-screenshots/round6-*`.
+
+## Round 6, first fix: sheets whose body is a fragment had no space between blocks
+
+Lee: the "Rejected clean" sheet (`CleanDisputes`) "has so much overlapping". `Sheet` (`mobile/src/TeamFlows.tsx`)
+spaces its children 16px apart, one `Stagger` each, but it took them with `Children.toArray`, which does not open
+fragments: a body like `{target && <>…</>}` was one child, so the gap never applied inside it.
+
+- `lib/sheet-children.ts` (new): `flattenSheetChildren` opens fragments and arrays recursively, drops empty slots and
+  keeps stable keys (the element's own key, else its position, prefixed by the fragment it sat in). `Sheet` maps
+  that instead. The 16px gap and 20px padding are unchanged. `CleanDisputes.tsx` needed no change.
+- Every sheet whose body is (or contains) a fragment now spaces its blocks like the rest: Accounts flows (3 sheets),
+  expense sheet, calendar picker sheets, chat safety menu, checklist templates, Rejected clean, day reflection, hub
+  item, access control (link made), team calendar work, clean sheet, client enquiries (2), onboarding (4), oversight
+  decision, property page selection, privacy copy, productivity person, repairs (2), team time (2), training course,
+  team events, visit form. None relied on the old tight grouping: their tight groups are already inside their own
+  `View`s (e.g. the decision buttons in `<View style={{ gap: 8 }}>`).
+- Test: `tests/sheet-children.test.mjs` (a fragment's children are spaced like direct children; nested fragments,
+  arrays and empty slots; stable unique keys; Sheet uses it with the gap and padding unchanged).
+- Screenshots: `round6-sheet-1/2` (Rejected clean before and after), `round6-sheet-3/4` (the oversight decision
+  sheet, same bug).
+
+## Round 6, second fix: the public New Property Enquiry Form (app/enquiry)
+
+1. **Invisible options.** A select's open list is drawn by the browser. In the dark theme the page's light text was
+   inherited by `<option>` on the browser's own white list (only the highlighted row showed). The options and
+   optgroups now get the page's colours explicitly (`--rc-surface` behind `--rc-text`), and in the dark theme the
+   selects take `color-scheme: dark`. The closed select is unchanged.
+2. **The second box on the address fields.** The app-wide focus outline (`input:focus-visible, textarea:focus-visible
+   { outline … !important }` in `lib/design-tokens.ts`) drew a light-green rectangle inside the field's own frame.
+   Each field's frame now carries `data-bare-input` (the existing switch for fields that show focus themselves), and
+   the form's inputs, textareas and selects lose any focus outline or shadow, so the frame's border is the one focus
+   style. Autofill paints no box: the `:-webkit-autofill` / `:autofill` inset box-shadow in the field's own background
+   with its own text colour, and a 600000s transition delay. The field frame no longer animates (no transition).
+   Same for every field on the page.
+- The form's choices already follow the rule: the long lists are styled native selects (property type 9, rooms 16,
+  start, enquiry type), the yes/no questions are pills.
+- Test: `tests/enquiry-form-fields.test.mjs` (option colours, dark color-scheme, the autofill rule, one focus
+  style and no motion, the selects).
+- Screenshots (`round6-enquiry-*`, Chromium): before and after, dark and light, with the address focused and typed
+  in and the Property type select shown open as a list (a headless screenshot can't draw the native pop-up list, so
+  the select is given `size=9` for the picture; the option colours are the same ones the pop-up uses). Autofill can't
+  be triggered in a headless browser; the test checks its rule. Checked in Chromium only here; Edge is Chromium,
+  Firefox honours option colours and `:autofill`, Safari draws its own pop-up list and ignores option colours (it
+  was already readable there).
+
+## Round 6: management checklist
+
+Alex: "Can we add a daily checklist for management centre, which shows up in to-do list as well?" The data side
+already existed (Management → Daily tasks: the database adds each task to its department's to-do every day it is
+due). This adds the checklist inside the Management centre. No migration.
+
+- **"Today's checklist"** (`mobile/src/ManagementChecklist.tsx`), at the top of Management above the view picker:
+  today's to-dos made from the Management daily tasks, in the order they were made, each with a tick box. "3 of 5
+  done" in the corner. A ticked item stays, struck through, with one thin line under it: "Ticked by Morag Campbell
+  at 09:14" (UK time, from the to-do's own `decidedBy` / `decidedAt`).
+- **The same to-dos as the To-do list**: it reads the same hub (`readTeams({ section: "hub" })`) and ticks with the
+  To-do list's own action (`moveHubItem`, status done or open, with a request id kept for retries), so the two
+  always agree. Unticking reopens it. Opening Management asks the database to make today's daily to-dos
+  (`ensureDailyTodos`, idempotent, as the To-do list does), so a task set up a minute ago shows today.
+- **Which rows** (`lib/management-checklist.ts`, `managementChecklist`): kind to-do, department management, made
+  from a daily task (has a template), due today, open or done. Hand-made to-dos, other departments' and other days'
+  are left out.
+- **Who sees it**: admins, super admins, and anyone whose department (on the rota) is management, which the hub read
+  already returns. Nobody else: the card renders nothing.
+- **Empty state**: "No daily checklist yet." Admins also get "Set up the checklist", which opens Daily tasks showing
+  Management only ("Showing Management only… Show every department"), with new tasks preset to Management
+  (`DailyTaskSettings` gains `only` and `onShowAll`).
+- Theme tokens only (surface, border, text, muted, success, primary); checked in light and dark.
+- Not touched: `lib/todo.ts`, `HubItemSheet.tsx`, the To-do list, the view picker row.
+- Tests: `tests/management-checklist.test.mjs` (which rows count; who sees it and who may set it up; ticking is the
+  To-do list's `moveHubItem`, valid for the server's schema, and the same call the To-do list makes; the card's place
+  and the set-up link; no hard-coded colours).
+- Tried in the interactive demo (Playwright): empty state, Set up the checklist → three Management tasks added →
+  back in Management the three appear, one ticked ("1 of 3 done", "Ticked by Sam Taylor at 14:54"), dark mode, and
+  the open ones are on the To-do list with the ticked one under Done. Screenshots `round6-checklist-*`.
+
+## Round 6: E's sweep items 13, 16, 17 and 21
+
+- **17, typed dates:** every "(YYYY-MM-DD)" field outside Session A's Accounts screens is now the shared calendar
+  field (`DateField`): New clean, Book a repair, Work time (Calendar), Local event and Team time take one day, and
+  Record a stay, Edit a stay and Team event take a range. DateField was extended (`empty`, `clearable`, and empty
+  strings open on this month) rather than adding a second date component. The extra Today/Tomorrow buttons went,
+  because the calendar has its own Today link. The Hub item due date is the lead branch's version, kept as it was.
+  Still typed, and left for Session A: AccountsPayable (3), AccountsReceivable (1), AccountsStatements (1).
+- **13, Maintenance:** the stage filter is one dropdown ("Show"), each repair is one thin row (property and
+  problem; status, cost and last update; "Next for you" when it is yours), and the Refresh button is gone.
+- **16, Calendar:** the four views are one Segmented control; the team filter is a dropdown.
+- **21:** the files touched here use `radius` and `icon` from theme.ts (round 44px buttons left as circles).
+- **Tests:** `tests/date-fields.test.mjs` checks that no YYYY-MM-DD is left outside the Accounts screens and that the
+  forms use DateField; `choice-control` and `team-calendar` were updated for the new controls.
+- **Screenshots (phone, dark, Demo):** `round6-sweep-1` Maintenance, `-2` the thin rows, `-3` the calendar views and
+  team dropdown, `-4` the team event dates on the calendar field.

@@ -11,6 +11,7 @@ import { depth, primaryFill, ui, type Palette } from "./theme";
 import { readChat, readInbox, viewMode, writeChat } from "./backend/client";
 import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
+import { EmailUnknownSenders } from "./EmailUnknownSenders";
 import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, messageTabs, presenceLabel, presenceOf, threadSchema, type ChatMessage, type ChatReaction, type Conversation, type MessagesTab } from "../../lib/workspace-chat-policy";
 import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
 import { MessageSafety } from "./ChatSafety";
@@ -26,7 +27,7 @@ import { z } from "zod";
 
 // Messages, laid out like a messenger (Lee, round 5): at most three tabs, Guests (the guest inbox, for people with the
 // guest communication tool), Clients (each owner's conversation with Recharge) and Team (one-to-one, group and
-// department conversations). One search box per tab; Guests and Clients filter by Needs a reply, Waiting for reply
+// department conversations). One search box per tab; Guests and Clients filter by Needs a reply, Engaged
 // and Closed. A conversation opens in place: beside the list on a wide screen, full screen with a back arrow on a phone.
 // Owners only see their conversation with Recharge. While a conversation is open it checks for new messages every few
 // seconds; the list refreshes by itself. Nothing here animates by itself.
@@ -337,7 +338,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
     picked.current = true;
     if (attention) queueMicrotask(() => setTab(attention));
   }, [attention]);
-  // Clients: Needs a reply, Waiting for reply, Closed. Team: no status. Both: one search box.
+  // Clients: Needs a reply, Engaged, Closed. Team: no status. Both: one search box.
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const choose = (t: Tab) => { picked.current = true; setTab(t); setOpen(null); setQuery(""); setStatus("reply"); };
   const inTab = (list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab);
@@ -353,6 +354,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       <SearchBar p={p} value={query} onChange={setQuery} placeholder={clients ? "Search owner or property" : "Search conversations or people"}
         action={mode.readOnly ? undefined : { icon: "edit-3", label: clients ? "New message to an owner" : "New message", onPress: () => setCreating(true) }} />
       {clients && !!list && <StatusFilter p={p} value={status} counts={statusCounts(found, clientStatus)} onChange={setStatus} />}
+      {clients && !mode.readOnly && ["admin", "super_admin", "stays"].includes(account.role) && <EmailUnknownSenders p={p} onChanged={changed} />}
       {!list ? <Loading p={p} /> : shown.length ? <View style={{ gap: 2 }}>{shown.map(c => <ConversationRow key={c.id} p={p} c={c} active={c.id === open} onPress={() => setOpen(c.id)} />)}</View>
         : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyStatusMessage(clients ? "clients" : "team", clients ? status : null, !!query.trim())}</Text>}
     </View>

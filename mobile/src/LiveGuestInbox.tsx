@@ -1,25 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, Platform, ScrollView, TextInput, View } from "react-native";
+import { Image, Linking, Platform, ScrollView, TextInput, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
+import { ChoicePills } from "./ChoiceField";
 import { PropertySelect } from "./SearchPicker";
 import { useCelebrate } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Tag, Loading } from "./LiveKit";
-import { Pills } from "./LiveAccounts";
-import { readInbox, writeInbox } from "./backend/client";
+import { Pills } from "./Pills";
+import { emailFileLink, readInbox, writeInbox } from "./backend/client";
 import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
-import { emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
+import { MESSAGE_STATUS_LABEL, emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, QuietLine, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { chatTime } from "../../lib/workspace-chat-policy";
 import { SavedReplies } from "./SavedReplies";
 import type { PropertyView } from "../../lib/workspace-view";
 
 // The guest inbox (the Guests tab of Messages): every conversation with guests, the longest wait first, filtered
-// by Needs a reply, Waiting for reply or Closed and by one search box. A conversation opens in place: beside the
+// by Needs a reply, Engaged or Closed and by one search box. A conversation opens in place: beside the
 // list on a wide screen, instead of it on a phone.
 // Hostaway fills it by itself (guest messages and the team's replies there, within about a minute).
 // When sending is switched on (canSend), a reply to a Hostaway conversation is sent to the guest through
@@ -71,7 +73,7 @@ function ThreadRow({ p, t, targets, first, unread = false, active = false, onPre
         <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
           {wait && <Tag label={`Waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} />}
           {t.status === "done" && <Tag label="Done" tone="plain" p={p} />}
-          {t.status === "open" && !wait && <Tag label="Waiting for reply" tone="good" p={p} />}
+          {t.status === "open" && !wait && <Tag label={MESSAGE_STATUS_LABEL.waiting} tone="good" p={p} />}
         </View>
       </View>
     </MotionPress>
@@ -113,7 +115,7 @@ function LogMessageSheet({ p, properties, onClose, onDone }: { p: Palette; prope
   return (
     <Sheet palette={p} visible onClose={onClose} title="Log a guest message" subtitle="A message that arrived on Airbnb, Booking.com or elsewhere" icon="chat">
       <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Where it came from</Text>
-      <Pills p={p} values={OFFERED_CHANNELS} value={channel} onChange={setChannel} label={c => CHANNEL_LABEL[c]} />
+      <ChoicePills p={p} name="Channel" values={OFFERED_CHANNELS} value={channel} onChange={setChannel} label={c => CHANNEL_LABEL[c]} />
       <Field label="Guest’s name" value={guest} onChange={setGuest} p={p} placeholder="As shown on the booking" />
       <PropertyPicker p={p} properties={properties} value={property} onChange={setProperty} />
       <Field label="Booking reference (optional)" value={booking} onChange={setBooking} p={p} />
@@ -146,8 +148,16 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
     return () => { active = false; clearInterval(timer); };
   }, [load]);
   const t = data?.thread;
-  // Sending is on and this is a Hostaway conversation: Send delivers the reply to the guest.
-  const viaHostaway = !!data?.canSend && t?.source === "hostaway";
+  // Sending is on and this is a Hostaway conversation: Send delivers the reply to the guest. An email conversation is answered by
+  // email from guestrelations@rechargegroup.co.uk (canSendEmail); the rest is as before.
+  const viaEmail = !!data?.canSendEmail && t?.source === "email";
+  const viaHostaway = (!!data?.canSend && t?.source === "hostaway") || viaEmail;
+  const [fileError, setFileError] = useState("");
+  // An attachment opens through a fresh short link each time; nothing about it is kept in the page.
+  async function openFile(id: string) {
+    setFileError("");
+    try { await Linking.openURL((await emailFileLink(id)).url); } catch (e) { setFileError(message(e)); }
+  }
   // Returns whether the write was saved, so nothing after it claims success when it failed.
   async function run(body: Parameters<typeof writeInbox>[0], done: string, after?: () => void): Promise<boolean> {
     if (busy) return false;
@@ -176,7 +186,7 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
     if (!text || !t || busy) return;
     if (sendId.current?.text !== text) sendId.current = { text, id: Crypto.randomUUID() };
     // On a failure the text stays in the box and the error shows, so Send can be pressed again.
-    const sent = await run({ action: "sendReply", requestId: sendId.current.id, threadId, body: text }, "Reply sent", () => { setReply(""); setNote(`Sent to the guest through Hostaway on ${CHANNEL_LABEL[t.channel]}.`); });
+    const sent = await run({ action: "sendReply", requestId: sendId.current.id, threadId, body: text }, "Reply sent", () => { setReply(""); setNote(viaEmail ? "Emailed to the guest from guestrelations@rechargegroup.co.uk." : `Sent to the guest through Hostaway on ${CHANNEL_LABEL[t.channel]}.`); });
     if (sent) sendId.current = null;
   }
   const wait = t && t.status === "open" && data ? waitGrade(t.waitingSince, data.targets) : null;
@@ -192,7 +202,7 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
       {!data && !error && <Loading p={p} />}
       {t && data && <>
         <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-          {wait ? <Tag label={`Needs a reply · waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} /> : <Tag label={t.status === "done" ? "Closed" : "Waiting for reply"} tone={t.status === "done" ? "plain" : "good"} p={p} />}
+          {wait ? <Tag label={`Needs a reply · waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} /> : <Tag label={MESSAGE_STATUS_LABEL[t.status === "done" ? "closed" : "waiting"]} tone={t.status === "done" ? "plain" : "good"} p={p} />}
           {t.source === "manual" && <Tag label="Logged by hand" tone="plain" p={p} />}
         </View>
         <ScrollView ref={scroller} style={{ maxHeight: Platform.OS === "web" ? 460 : 380 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })}>
@@ -203,6 +213,14 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
                 <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomRightRadius: team ? 6 : 18, borderBottomLeftRadius: team ? 18 : 6, backgroundColor: team ? p.primary : p.surface, borderWidth: team ? 0 : 1, borderColor: p.border }}>
                   <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20, fontStyle: m.body ? "normal" : "italic" }}>{m.body ?? "Replied on the platform"}</Text>
                 </View>
+                {m.files.map(file => (
+                  <MotionPress key={file.id} accessibilityRole="link" accessibilityLabel={`Open ${file.filename}`} onPress={() => void openFile(file.id)}
+                    style={[ui.row, { gap: 6, alignSelf: team ? "flex-end" : "flex-start", maxWidth: "100%", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
+                    <Feather name="paperclip" size={14} color={p.muted} />
+                    <Text numberOfLines={1} style={[ui.small, { color: p.primary, fontWeight: "600", flexShrink: 1 }]}>{file.filename}</Text>
+                    <Text style={[ui.small, { color: p.muted, flexShrink: 0 }]}>{file.bytes < 1024 * 1024 ? `${Math.max(1, Math.round(file.bytes / 1024))} KB` : `${(file.bytes / 1024 / 1024).toFixed(1)} MB`}</Text>
+                  </MotionPress>
+                ))}
                 <Text style={[ui.small, { color: p.muted, fontSize: 11, textAlign: team ? "right" : "left" }]}>{team ? `${m.author ? (m.delivery === "sent" ? `Sent by ${m.author}` : m.author) : "Team"} · ` : ""}{chatTime(m.sentAt)}</Text>
               </View>
             );
@@ -221,10 +239,13 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
             {!!wait && !viaHostaway && <Button label="I replied on the platform" icon="check" p={p} disabled={busy} onPress={() => void sendReply(true)} />}
           </View>
           {t.source === "manual" && <Text style={[ui.small, { color: p.muted }]}>Replies aren’t sent to {CHANNEL_LABEL[t.channel]} from here. Saving one records when you replied, for reply times.</Text>}
-          {viaHostaway && <Text style={[ui.small, { color: p.muted }]}>Send delivers your reply to the guest through Hostaway on {CHANNEL_LABEL[t.channel]}. Their replies show up here by themselves.</Text>}
+          {viaEmail && <Text style={[ui.small, { color: p.muted }]}>Send emails your reply to {t.guestName ?? "the guest"} from guestrelations@rechargegroup.co.uk. Their reply comes back here by itself.</Text>}
+          {viaHostaway && !viaEmail && <Text style={[ui.small, { color: p.muted }]}>Send delivers your reply to the guest through Hostaway on {CHANNEL_LABEL[t.channel]}. Their replies show up here by themselves.</Text>}
+          {t.source === "email" && !viaEmail && <Text style={[ui.small, { color: p.muted }]}>Emailing from here is switched off. Reply from your mail app (guestrelations@rechargegroup.co.uk); saving one here only records it for reply times.</Text>}
           {t.source === "hostaway" && !viaHostaway && <Text style={[ui.small, { color: p.muted }]}>Send your reply in Hostaway (or on {CHANNEL_LABEL[t.channel]}): it shows up here by itself within a minute and the wait ends. Saving one here only records it; nothing is sent to the guest.</Text>}
         </> : null}
         {!!note && <Notice text={note} p={p} />}
+        {!!fileError && <Notice text={fileError} p={p} tone="bad" />}
         {t.source === "manual" && t.status === "open" && <View style={{ gap: 6 }}>
           <Field label="The guest wrote again" value={guestText} onChange={setGuestText} p={p} multiline placeholder="Paste their new message" />
           {!!guestText.trim() && <Button label="Log their message" icon="inbox" p={p} disabled={busy} onPress={() => void run({ action: "logMessage", requestId: Crypto.randomUUID(), threadId, body: guestText.trim() }, "Message logged", () => setGuestText(""))} />}

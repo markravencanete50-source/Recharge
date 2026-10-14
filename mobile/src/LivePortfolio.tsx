@@ -5,6 +5,7 @@ import { Text } from "./Typography";
 import Feather from "@expo/vector-icons/Feather";
 import { GrowBar, MotionPress, Pop, Stagger } from "./motion";
 import { ui, type Palette } from "./theme";
+import { pillBox, pillInk } from "./Pills";
 import { ChartTip, useChartFocus } from "./ChartTip";
 import { workspaceRequest } from "./backend/client";
 import { formatCount, plural } from "../../lib/format";
@@ -30,9 +31,9 @@ export function stageOf(property: PropertyView, journey?: JourneyView) {
 export function Chip({ p, label, count, on, onPress }: { p: Palette; label: string; count: number; on: boolean; onPress: () => void }) {
   return (
     <Pop active={on}><MotionPress accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress}
-      style={[ui.row, { gap: 8, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, backgroundColor: on ? p.primary : p.background, borderWidth: 1, borderColor: on ? p.primary : p.border }]}>
-      <Text style={{ color: on ? p.onPrimary : p.text, fontWeight: "600", fontSize: 13 }}>{label}</Text>
-      <Text style={{ color: on ? p.onPrimary : p.muted, fontWeight: "700", fontSize: 13, fontVariant: ["tabular-nums"] }}>{formatCount(count)}</Text>
+      style={[ui.row, { gap: 8, minHeight: 40, paddingHorizontal: 12, borderRadius: 999 }, pillBox(p, on)]}>
+      <Text style={{ color: pillInk(p, on), fontWeight: "600", fontSize: 13 }}>{label}</Text>
+      <Text style={{ color: pillInk(p, on, true), fontWeight: "700", fontSize: 13, fontVariant: ["tabular-nums"] }}>{formatCount(count)}</Text>
     </MotionPress></Pop>
   );
 }

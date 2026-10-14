@@ -60,7 +60,7 @@ test('the picker uses the view, keeps fixed options and says when nothing is cho
   assert.match(src, /view\.chips\.map\(o => <OptionChip/);
   assert.match(src, /Keep typing to narrow it down/);
   assert.match(src, /Nothing chosen yet\. Type to find one of the/);
-  assert.match(src, /Search for a property by name, street or postcode/);
+  assert.match(src, /Search property, street or postcode/, "short enough to show whole in a 390px phone field");
   assert.doesNotMatch(src, /Type to find the rest/);
   assert.match(src, /onChange\(clearable && id === value \? "" : id\)/, 'tapping the chosen chip clears it when clearable');
 });

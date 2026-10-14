@@ -4,6 +4,7 @@ import * as Crypto from "expo-crypto";
 import Feather from "@expo/vector-icons/Feather";
 import * as Linking from "expo-linking";
 import { Text } from "./Typography";
+import { ChoiceField } from "./ChoiceField";
 import { MotionPress, Stagger } from "./motion";
 import { ui, type Palette } from "./theme";
 import { Button, IconChip, Loading, Notice, Tag, london, message, type IconName, type Tone } from "./LiveKit";
@@ -119,11 +120,7 @@ function ListingEditor({ p, propertyId, links, onClose, onSaved }: { p: Palette;
     <View style={{ gap: 12, paddingTop: 6 }}>
       {rows.map((r, i) => (
         <View key={i} style={{ gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.border }}>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-            {LISTING_PLATFORMS.map(x => <MotionPress key={x} accessibilityRole="radio" accessibilityState={{ selected: r.platform === x }} onPress={() => update(i, { platform: x })}
-              style={{ paddingHorizontal: 10, minHeight: 32, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: r.platform === x ? p.primary : p.border, backgroundColor: r.platform === x ? p.wash : p.surface }}>
-              <Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>{x}</Text></MotionPress>)}
-          </View>
+          <ChoiceField p={p} label="Platform" value={r.platform} options={LISTING_PLATFORMS.map(x => ({ value: x as string, label: x as string }))} onChange={x => update(i, { platform: x })} />
           <TextInput value={r.url} onChangeText={v => update(i, { url: v })} placeholder="Link, https://…" placeholderTextColor={p.muted} autoCapitalize="none" autoCorrect={false} keyboardType="url" accessibilityLabel={`${r.platform} link`} style={input} />
           <TextInput value={r.listingId} onChangeText={v => update(i, { listingId: v })} placeholder="Listing ID (from the platform or channel manager)" placeholderTextColor={p.muted} autoCapitalize="none" autoCorrect={false} accessibilityLabel={`${r.platform} listing ID`} style={input} />
           <MotionPress accessibilityRole="button" onPress={() => setRows(rows.filter((_, j) => j !== i))} style={{ alignSelf: "flex-start", minHeight: 36, justifyContent: "center" }}><Text style={{ color: p.danger, fontWeight: "600" }}>Remove</Text></MotionPress>

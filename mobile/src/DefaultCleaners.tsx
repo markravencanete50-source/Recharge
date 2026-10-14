@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
-import { SearchBox } from "./SearchPicker";
+import { SearchBox, SearchPicker } from "./SearchPicker";
 import { normalise } from "../../lib/search-options";
 import { ExpandChevron, MotionPress } from "./motion";
 import * as Crypto from "expo-crypto";
@@ -68,15 +68,9 @@ export function DefaultCleanersSheet({ p, visible, admin, onClose, onChanged }: 
               {row.canEdit ? <ExpandChevron open={expanded} size={18} color={p.muted} /> : <Tag label={row.cleanerName ? "Set" : "Not set"} tone={row.cleanerName ? "good" : "wait"} p={p} />}
             </MotionPress>
             {expanded && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {choices.map(c => {
-                const on = c.userId === row.cleanerId;
-                return (
-                  <MotionPress key={c.userId} accessibilityRole="radio" accessibilityState={{ selected: on }} disabled={!!busy || on} onPress={() => void choose(row.propertyId, c.userId)}
-                    style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.background, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-                    <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{c.fullName}</Text>
-                  </MotionPress>
-                );
-              })}
+              {/* People are picked with the search-only picker (a short list shows them all). */}
+              {!!choices.length && <View style={{ width: "100%" }}><SearchPicker p={p} options={choices.map(c => ({ id: c.userId, label: c.fullName }))} value={row.cleanerId ?? ""}
+                onChange={id => { if (id && id !== row.cleanerId && !busy) void choose(row.propertyId, id); }} placeholder="Search the cleaners" nouns="cleaners" /></View>}
               {!!row.cleanerId && <MotionPress accessibilityRole="button" disabled={!!busy} onPress={() => void choose(row.propertyId, null)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: p.wash }}>
                 <Text style={{ color: p.primary, fontSize: 13, fontWeight: "600" }}>No usual cleaner</Text>
               </MotionPress>}

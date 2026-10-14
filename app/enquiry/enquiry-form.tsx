@@ -14,7 +14,8 @@ function Field({ id, label, help, required, error, icon, children }: { id: strin
   return <div className="auth-field enquiry-field" data-invalid={error ? "true" : undefined}>
     <label htmlFor={id}>{label}{required && <span className="enquiry-required" aria-hidden> *</span>}</label>
     {help && <p className="enquiry-help" id={id + "-help"}>{help}</p>}
-    <div className="auth-control">{icon}{children}</div>
+    {/* The frame shows focus itself: no second box inside it (data-bare-input, lib/design-tokens.ts). */}
+    <div className="auth-control" data-bare-input="true">{icon}{children}</div>
     {error && <p className="enquiry-error" role="alert">{error}</p>}
   </div>;
 }
