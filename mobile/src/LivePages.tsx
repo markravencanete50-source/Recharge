@@ -250,7 +250,7 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
     <>
       <View style={{ gap: space.section }}>
       {shown.map((f, n) => <View key={f.name} style={{ gap: space.row }}>
-        {!!f.section && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "600", marginTop: n ? space.tight : 0 }}>{f.section}</Text>}
+        {!!f.section && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "600", paddingTop: n ? space.field : 0, borderTopWidth: n ? 1 : 0, borderColor: p.border }}>{f.section}</Text>}
         {f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues(current => ({ ...current, [f.name]: v }))} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} /></Stagger>}
       </View>)}
       </View>
