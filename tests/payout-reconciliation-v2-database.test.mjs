@@ -8,6 +8,8 @@ import { PGlite } from '@electric-sql/pglite';
 // reason, and old-shape uploads (reference and amount only) keep today's rules. Requests are sent
 // straight to the database in the shape the upload screen sends: { channel, fileName, lines }.
 const MIGRATION = 'supabase/migrations/20261012080000_reconciliation_vrbo.sql';
+// Later migrations that patch private.workspace_payout_row by anchor (the run-twice test re-applies them).
+const LATER_PAYOUT_ROW_PATCHES = ['supabase/migrations/20261020820000_hostaway_payout_fees.sql'];
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
 create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz);
@@ -326,6 +328,9 @@ test('the migration runs twice cleanly, with the same grants and the same functi
   const before = await snapshot();
   await asDb();
   await db.exec(await fs.readFile(MIGRATION, 'utf8'));
+  // This migration replaces workspace_payout_row whole, so running it again after the later migrations drops their
+  // anchor patches to it; they put them back, as a fresh install in order does.
+  for (const later of LATER_PAYOUT_ROW_PATCHES) await db.exec(await fs.readFile(later, 'utf8'));
   const afterRun = await snapshot();
   assert.deepEqual(afterRun.functions, before.functions);
   assert.deepEqual(afterRun.tables, before.tables);

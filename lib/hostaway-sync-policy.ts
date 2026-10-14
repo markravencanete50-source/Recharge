@@ -18,6 +18,8 @@ export type SyncChannel = 'airbnb' | 'booking_com' | 'vrbo' | 'direct' | 'other'
 export type SyncReservation = {
   id: string; listingId: string; checkIn: string; checkOut: string; status: 'confirmed' | 'enquiry' | 'cancelled';
   channel: SyncChannel; channelReference: string | null; guests: number | null; payoutMinor: number | null;
+  // What the expected payout was worked out from (null when the stay is not in pounds, or is an owner stay).
+  payoutBreakdown: PayoutBreakdown | null;
 };
 
 export function syncListing(raw: unknown): SyncListing | null {
@@ -51,20 +53,98 @@ const CONFIRMED = ['new', 'modified', 'confirmed', 'ownerstay'];
 const CANCELLED = ['cancelled', 'canceled', 'declined', 'expired', 'inquirydenied', 'inquirytimedout', 'inquirynotpossible'];
 const ENQUIRY = ['inquiry', 'enquiry', 'inquirypreapproved', 'pending', 'awaitingpayment', 'unconfirmed'];
 
-// What the platform pays out (the client's choice): Airbnb's own expected payout when Hostaway
-// has it, otherwise the guest total less the platform's commission and host fee. Only in pounds;
-// anything else is left for Accounts to fill in.
-export function syncPayoutMinor(r: Raw, channel: SyncChannel): number | null {
-  const currency = text(r.currency).toUpperCase();
-  if (currency && currency !== 'GBP') return null;
-  const airbnb = number(r.airbnbExpectedPayoutAmount);
-  if (channel === 'airbnb' && airbnb !== null && airbnb > 0) return Math.round(airbnb * 100);
-  const total = number(r.totalPrice);
-  if (total === null || total <= 0) return null;
-  const fees = (number(r.channelCommissionAmount) ?? 0) + (number(r.hostChannelFee) ?? 0);
-  const payout = total - Math.max(0, fees);
-  return payout >= 0 ? Math.round(payout * 100) : null;
+// --- The expected payout and its fees --------------------------------------------------------------------
+// Every Hostaway field name the payout is worked out from. All but two are in Hostaway's public API reference
+// (github.com/Hostaway/api: the reservation object, the finance field object and the finance standard fields):
+// - On the reservation: currency, totalPrice, airbnbExpectedPayoutAmount, channelCommissionAmount and financeField
+//   (the itemised lines). hostChannelFee is read on the reservation as before, though the reference lists it only as a
+//   finance field.
+// - On each financeField line: name, title, total (value when total is missing), isIncludedInTotalPrice, isDeleted.
+// - Line names: hostChannelFee (the channel's commission, not in the total), guestChannelFee (the guest's fee to the
+//   channel, which the channel keeps when it is in the total), otaPaymentProcessingFee and
+//   paymentServiceProcessingFee(s) (payment charges), cleaningFee or cleaningFeeValue, and cityTax.
+// - VAT on the commission has no standard name. It is taken from a line whose name or title says both "VAT" and
+//   "commission" (an assumption: check a real Booking.com response).
+// The list fetch asks for includeResources=1 so the lines come with each reservation.
+export const HOSTAWAY_PAYOUT_FIELDS = {
+  currency: 'currency', total: 'totalPrice', airbnbPayout: 'airbnbExpectedPayoutAmount',
+  commission: 'channelCommissionAmount', hostFee: 'hostChannelFee', lines: 'financeField',
+} as const;
+export const HOSTAWAY_LINE_FIELDS = { name: 'name', title: 'title', total: 'total', value: 'value', included: 'isIncludedInTotalPrice', deleted: 'isDeleted' } as const;
+export const HOSTAWAY_LINE_NAMES = {
+  commission: ['hostChannelFee'],
+  guestFee: ['guestChannelFee'],
+  paymentCharge: ['otaPaymentProcessingFee', 'paymentServiceProcessingFee', 'paymentServiceProcessingFees'],
+  cleaningFee: ['cleaningFee', 'cleaningFeeValue'],
+  cityTax: ['cityTax'],
+} as const;
+
+// Pence, each a positive amount; null when Hostaway did not say. `source`: Airbnb's own expected payout, the itemised
+// lines, or the totals alone (today's sum: the total less channelCommissionAmount and hostChannelFee).
+export type PayoutBreakdown = {
+  source: 'airbnb' | 'itemised' | 'totals';
+  grossMinor: number | null; commissionMinor: number | null; guestFeeMinor: number | null; paymentChargeMinor: number | null;
+  commissionVatMinor: number | null; cleaningFeeMinor: number | null; cityTaxMinor: number | null;
+};
+const pence = (pounds: number) => Math.round(pounds * 100);
+type Line = { name: string; title: string; minor: number; included: boolean };
+function financeLines(r: Raw): Line[] {
+  const raw = r[HOSTAWAY_PAYOUT_FIELDS.lines];
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap(item => {
+    const l = object(item);
+    if (number(l[HOSTAWAY_LINE_FIELDS.deleted]) === 1 || l[HOSTAWAY_LINE_FIELDS.deleted] === true) return [];
+    const amount = number(l[HOSTAWAY_LINE_FIELDS.total]) ?? number(l[HOSTAWAY_LINE_FIELDS.value]);
+    const name = text(l[HOSTAWAY_LINE_FIELDS.name]);
+    if (amount === null || !name) return [];
+    const included = l[HOSTAWAY_LINE_FIELDS.included];
+    return [{ name: name.toLowerCase(), title: text(l[HOSTAWAY_LINE_FIELDS.title]).toLowerCase(), minor: Math.abs(pence(amount)), included: included === 1 || included === true || included === '1' }];
+  });
 }
+// The sum of the lines with one of these names, or null when there is none.
+function sumOf(lines: Line[], names: readonly string[], test?: (l: Line) => boolean): number | null {
+  const wanted = names.map(n => n.toLowerCase());
+  const found = lines.filter(l => test ? test(l) : wanted.includes(l.name));
+  return found.length ? found.reduce((sum, l) => sum + l.minor, 0) : null;
+}
+// "VAT on commission", "vatOnCommission", "commissionVat": both words, VAT as a word or joined to "commission".
+const isCommissionVat = (l: Line) => {
+  const s = l.name + ' ' + l.title;
+  return s.includes('commission') && /(^|[^a-z])vat([^a-z]|on|of|$)|commissionvat/.test(s);
+};
+
+// What the platform pays out (the client's choice). Airbnb: Airbnb's own expected payout when Hostaway has it. Otherwise
+// the guest total less what the channel keeps: its commission, a guest fee it keeps, payment charges and VAT on the
+// commission, from the itemised lines where Hostaway gives them. With no lines it is today's sum exactly, so nothing gets
+// worse when a field is missing. Only in pounds; anything else is left for Accounts to fill in.
+export function syncPayout(r: Raw, channel: SyncChannel): { payoutMinor: number | null; breakdown: PayoutBreakdown | null } {
+  const currency = text(r[HOSTAWAY_PAYOUT_FIELDS.currency]).toUpperCase();
+  if (currency && currency !== 'GBP') return { payoutMinor: null, breakdown: null };
+  const lines = financeLines(r);
+  const total = number(r[HOSTAWAY_PAYOUT_FIELDS.total]);
+  const itemisedCommission = sumOf(lines, HOSTAWAY_LINE_NAMES.commission);
+  const guestFeeLines = lines.filter(l => (HOSTAWAY_LINE_NAMES.guestFee as readonly string[]).map(n => n.toLowerCase()).includes(l.name) && l.included);
+  const guestFee = guestFeeLines.length ? guestFeeLines.reduce((sum, l) => sum + l.minor, 0) : null;
+  const paymentCharge = sumOf(lines, HOSTAWAY_LINE_NAMES.paymentCharge);
+  const commissionVat = sumOf(lines, [], isCommissionVat);
+  const topCommission = number(r[HOSTAWAY_PAYOUT_FIELDS.commission]), topHostFee = number(r[HOSTAWAY_PAYOUT_FIELDS.hostFee]);
+  const totalsCommission = topCommission === null && topHostFee === null ? null : Math.max(0, pence((topCommission ?? 0) + (topHostFee ?? 0)));
+  const itemised = [itemisedCommission, guestFee, paymentCharge, commissionVat].some(v => v !== null);
+  const commission = itemisedCommission ?? totalsCommission;
+  const airbnb = number(r[HOSTAWAY_PAYOUT_FIELDS.airbnbPayout]);
+  const useAirbnb = channel === 'airbnb' && airbnb !== null && airbnb > 0;
+  const breakdown: PayoutBreakdown = {
+    source: useAirbnb ? 'airbnb' : itemised ? 'itemised' : 'totals',
+    grossMinor: total !== null && total > 0 ? pence(total) : null,
+    commissionMinor: commission, guestFeeMinor: guestFee, paymentChargeMinor: paymentCharge, commissionVatMinor: commissionVat,
+    cleaningFeeMinor: sumOf(lines, HOSTAWAY_LINE_NAMES.cleaningFee), cityTaxMinor: sumOf(lines, HOSTAWAY_LINE_NAMES.cityTax),
+  };
+  if (useAirbnb) return { payoutMinor: pence(airbnb), breakdown };
+  if (total === null || total <= 0) return { payoutMinor: null, breakdown };
+  const payout = pence(total) - (commission ?? 0) - (guestFee ?? 0) - (paymentCharge ?? 0) - (commissionVat ?? 0);
+  return { payoutMinor: payout >= 0 ? payout : null, breakdown };
+}
+export const syncPayoutMinor = (r: Raw, channel: SyncChannel): number | null => syncPayout(r, channel).payoutMinor;
 
 export function syncReservation(raw: unknown): SyncReservation | null {
   const r = object(raw);
@@ -78,11 +158,12 @@ export function syncReservation(raw: unknown): SyncReservation | null {
   const owner = state === 'ownerstay';
   const channel = owner ? 'other' : syncChannel(first(r.channelName, r.source));
   const guests = number(r.numberOfGuests) ?? ((number(r.adults) ?? 0) + (number(r.children) ?? 0) || null);
+  const payout = owner ? { payoutMinor: 0, breakdown: null } : syncPayout(r, channel);
   return {
     id, listingId, checkIn, checkOut, status, channel,
     channelReference: owner ? 'Owner stay' : first(r.channelReservationId, r.confirmationCode, r.reservationId).slice(0, 120) || null,
     guests: guests !== null && guests >= 1 && guests <= 50 ? Math.round(guests) : null,
-    payoutMinor: owner ? 0 : syncPayoutMinor(r, channel),
+    payoutMinor: payout.payoutMinor, payoutBreakdown: payout.breakdown,
   };
 }
 

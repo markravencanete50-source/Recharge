@@ -23,6 +23,20 @@ export type PayoutSummary = { groups: SummaryGroup[]; lines: { when: string; ref
 const day = (iso: string) => new Date(iso.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).replace(',', '');
 const nightsBetween = (a: string, b: string) => Math.max(0, Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / 86400000));
 const signed = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + pounds(Math.abs(v));
+// What Hostaway's expected payout was worked out from, line by line (only what Hostaway gave).
+const BREAKDOWN_SOURCE = { airbnb: 'Airbnb’s expected payout', itemised: 'Hostaway’s itemised fees', totals: 'Hostaway’s total less commission' } as const;
+const BREAKDOWN_LINES = [
+  ['commissionMinor', 'Commission (expected)'], ['guestFeeMinor', 'Guest fee kept by the platform'], ['paymentChargeMinor', 'Payments charge (expected)'],
+  ['commissionVatMinor', 'VAT on commission (expected)'], ['cleaningFeeMinor', 'Cleaning fee in the total'], ['cityTaxMinor', 'City tax in the total'],
+] as const;
+export function expectedItems(row: Pick<PayoutRow, 'expectedBreakdown'>): SummaryItem[] {
+  const b = row.expectedBreakdown;
+  if (!b) return [];
+  return [
+    { label: 'Expected from', value: BREAKDOWN_SOURCE[b.source], tone: 'muted' },
+    ...BREAKDOWN_LINES.flatMap(([key, label]) => typeof b[key] === 'number' ? [{ label, value: pounds(b[key] as number) }] : []),
+  ];
+}
 
 // Everything the sheet lists, in order. `stay` may still be loading (or the database not updated yet): the row alone fills
 // what it can and the rest reads "Loading…" or "Not known".
@@ -52,6 +66,7 @@ export function payoutSummary(row: PayoutRow, stay: PayoutStay | null, fallback:
   ];
   const money: SummaryItem[] = [
     { label: 'Expected', value: row.expectedMinor === null ? 'Not known' : pounds(row.expectedMinor), tone: row.expectedMinor === null ? 'muted' : undefined },
+    ...expectedItems(row),
     { label: 'Received', value: row.receivedMinor === null ? 'Not received yet' : pounds(row.receivedMinor), tone: row.receivedMinor === null ? 'muted' : undefined },
     ...(diff !== null ? [{ label: 'Difference', value: diff === 0 ? 'None' : signed(diff), tone: diff === 0 ? undefined : 'bad' as const }] : []),
     ...(row.grossMinor != null ? [{ label: 'Gross', value: pounds(row.grossMinor) }] : []),
