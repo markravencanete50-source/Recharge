@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
-import { Button, Loading, london, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
+import { Anchor, Button, Loading, london, message, Notice, Section, StatGrid, StatTile, useWorkFocus } from "./LiveKit";
 import { List, Row } from "./AccountsPayable";
 import { Pills } from "./Pills";
 import { DateField } from "./CalendarPicker";
@@ -11,7 +11,7 @@ import { exportReport } from "./exportReport";
 import { formatDuration, formatMoney, plural } from "../../lib/format";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import {
-  channelName, channelOrder, defaultReportRange, departmentName, funnelSteps, monthName, PRIORITY_LABEL, receivedByMonth, repairStageName, REPORT_CSV,
+  channelName, channelOrder, defaultReportRange, departmentName, funnelSteps, monthName, monthSoFar, PRIORITY_LABEL, receivedByMonth, repairStageName, REPORT_CSV, reportAnchor, reportFromAnchor,
   REPORT_INTRO, REPORT_KINDS, REPORT_LABEL, REPORT_NOTES, REPORT_SCHEMA, REPORT_SECTION, reportFilename, reportRangeError, SOURCE_LABEL, startWhenName,
   waitLabel, weekName, weekTotals,
   type AnyReport, type EnquiriesReport, type MessagesReport, type RepairsReport, type ReportKind, type TimeReport, type TodosReport,
@@ -36,8 +36,12 @@ function csvOf(loaded: Loaded) {
 export function BusinessReports({ p, account }: { p: Palette; account: WorkspaceAccount }) {
   const allowed = isWorkspaceAdmin(account.role);
   const today = london(new Date());
-  const [kind, setKind] = useState<ReportKind>("enquiries");
-  const [range, setRange] = useState(() => defaultReportRange(today));
+  // Opened from Home ("Guest replies on time"): that report, for this month so far, as the figure counts it.
+  const focus = useWorkFocus(), asked = reportFromAnchor(focus?.anchor);
+  const [kind, setKind] = useState<ReportKind>(() => asked ?? "enquiries");
+  const [range, setRange] = useState(() => (asked ? monthSoFar(today) : defaultReportRange(today)));
+  const [seen, setSeen] = useState(focus?.nonce);
+  if (asked && focus?.nonce !== seen) { setSeen(focus?.nonce); setKind(asked); setRange(monthSoFar(today)); }
   const [dateError, setDateError] = useState("");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loading, setLoading] = useState(false);
@@ -74,7 +78,8 @@ export function BusinessReports({ p, account }: { p: Palette; account: Workspace
 
   if (!allowed) return null;
   return (
-    <View style={{ gap: 20 }}>
+    // Named for its report once that has loaded, so a link from Home scrolls here after the page above has settled.
+    <Anchor id={shown ? reportAnchor(kind) : "section-business-reports"}><View style={{ gap: 20 }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Business reports</Text>
         <Text style={[ui.small, { color: p.muted }]}>For management only. Choose a report and the dates, then download it as a spreadsheet (CSV).</Text>
@@ -98,7 +103,7 @@ export function BusinessReports({ p, account }: { p: Palette; account: Workspace
         <Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>What this report cannot show</Text>
         {REPORT_NOTES[shown.kind].map(note => <Text key={note} style={[ui.small, { color: p.muted }]}>{note}</Text>)}
       </View>}
-    </View>
+    </View></Anchor>
   );
 }
 

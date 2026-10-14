@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 
 // The admins' Home is the business at a glance (Lee: "Alex knows numbers and what are the things that needs his
-// attention"): "This month" (eight figures from reads the app already makes, each opening its detail), then "Needs
+// attention"): "This month" (eight figures, each opening its detail), then "Needs
 // your attention" (six lines and See all), then the departments. A figure that can't load shows a quiet "–".
 // The phone menu lists Management centre with the other departments.
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -28,9 +28,13 @@ const figures = (o = {}) => ({
 });
 const enquiries = received => ({ from: '', to: '', received, priority: 0, bySource: { form: 0, app: 0 }, byStart: [], funnel: { received, estimate: 0, agreement: 0, live: 0, declined: 0 },
   reply: { replied: 0, waiting: 0, medianMinutes: null, slowestMinutes: null, estimateSent: 0, estimateMedianMinutes: null, estimateSlowestMinutes: null }, rows: [] });
+// Guest replies as workspace_guest_reply_glance returns them (20261020910000).
+const replyWindow = (replies, onTime) => ({ from: '', to: '', replies, onTime, onTimeBps: replies ? Math.round(onTime * 10000 / replies) : null, medianMinutes: replies ? 6 : null });
 const full = {
   month: figures({ grossRevenueMinor: 1_254_000, occupancyBps: 6420, nightsBooked: 321, nightsAvailable: 500, averageNightlyRateMinor: 10277 }),
   lastMonth: figures({ grossRevenueMinor: 1_120_000, occupancyBps: 6000, nightsBooked: 300, nightsAvailable: 510, averageNightlyRateMinor: 10277, managementFeeMinor: 375_000, statementCount: 12 }),
+  booked: 1_480_000, bookedBefore: 1_200_000,
+  replies: { greenMinutes: 15, amberMinutes: 60, thisMonth: replyWindow(50, 46), lastMonth: replyWindow(40, 35) },
   enquiries: enquiries(6), enquiriesBefore: enquiries(4), payoutsOverdue: 3,
   portfolio: { live: 14, onboarding: 3 },
 };
@@ -48,15 +52,20 @@ test('admins and super admins see the business figures; nobody else does', () =>
 
 test('eight figures with their values and changes against last month', () => {
   const list = ov.businessFigures(full, TODAY);
-  assert.deepEqual(list.map(f => f.key), ['bookings', 'occupancy', 'rate', 'nights', 'fees', 'properties', 'enquiries', 'payouts']);
+  assert.deepEqual(list.map(f => f.key), ['bookings', 'occupancy', 'rate', 'replies', 'fees', 'properties', 'enquiries', 'payouts']);
   const f = byKey(list);
-  assert.deepEqual([f.bookings.value, f.occupancy.value, f.rate.value, f.nights.value, f.fees.value, f.properties.value, f.enquiries.value, f.payouts.value],
-    ['£12.5k', '64.2%', '£102.77', '321', '£3,750', '14', '6', '3']);
-  assert.equal(f.bookings.change, null, 'a month in progress only counts settled payouts, so no arrow against a finished month');
-  assert.equal(f.bookings.detail, 'Settled so far');
+  assert.deepEqual([f.bookings.value, f.occupancy.value, f.rate.value, f.replies.value, f.fees.value, f.properties.value, f.enquiries.value, f.payouts.value],
+    ['£14.8k', '64.2%', '£102.77', '92%', '£3,750', '14', '6', '3']);
+  // Bookings value is the value as booked, settled or not, so this month and last are counted alike.
+  assert.equal(f.bookings.detail, 'Booked this month');
+  assert.equal(f.bookings.change.text, '▲ 23% vs Sept');
+  // Guest replies on time: 46 of 50 (92%) against 35 of 40 (87.5%), in points, within the green target.
+  assert.equal(f.replies.label, 'Guest replies on time');
+  assert.equal(f.replies.detail, 'within 15 min');
+  assert.equal(f.replies.change.text, '▲ 4.5 pts vs Sept');
+  assert.equal(ov.figureText(f.replies), 'Guest replies on time: 92%, up 4.5 points on the same days of Sept');
   assert.equal(f.occupancy.change.text, '▲ 4.2 pts vs Sept');
   assert.equal(f.rate.change.text, 'Same as Sept');
-  assert.equal(f.nights.change.text, '▲ 7% vs Sept');
   assert.equal(f.enquiries.change.text, '▲ 50% vs Sept');
   assert.equal(f.payouts.change, null, 'an overdue count has nothing to compare with');
   assert.equal(f.payouts.label, 'Payouts overdue');
@@ -79,15 +88,21 @@ test('a figure that cannot load shows a quiet "–", never an error; zeros are m
   assert.equal(ov.MISSING, '–');
   assert.equal(ov.figureText(none[0]), 'Bookings value: not available');
   // One read failing leaves the others alone.
-  const some = byKey(ov.businessFigures({ ...full, enquiries: null, month: null }, TODAY));
+  const some = byKey(ov.businessFigures({ ...full, enquiries: null, month: null, booked: null, replies: null }, TODAY));
   assert.equal(some.enquiries.value, '–');
   assert.equal(some.bookings.value, '–');
+  assert.equal(some.replies.value, '–');
+  assert.equal(some.replies.detail, 'Within the target');
   assert.equal(some.fees.value, '£3,750', 'last month still loaded');
   assert.equal(some.payouts.value, '3');
   assert.equal(byKey(ov.businessFigures({ ...full, payoutsOverdue: null }, TODAY)).payouts.value, '–', 'the overview failed: payouts overdue reads "–"');
   // Nothing to compare with (last month empty or missing): no change line, and a zero is flagged as a zero.
-  const quiet = byKey(ov.businessFigures({ ...full, lastMonth: figures(), payoutsOverdue: 0 }, TODAY));
-  assert.equal(quiet.nights.change, null);
+  const quiet = byKey(ov.businessFigures({ ...full, lastMonth: figures(), bookedBefore: 0, payoutsOverdue: 0,
+    replies: { ...full.replies, thisMonth: replyWindow(0, 0), lastMonth: replyWindow(0, 0) } }, TODAY));
+  assert.equal(quiet.bookings.change, null);
+  assert.equal(quiet.replies.value, '–');
+  assert.equal(quiet.replies.detail, 'No replies yet');
+  assert.equal(quiet.replies.change, null);
   assert.equal(quiet.payouts.value, '0');
   assert.ok(quiet.payouts.zero && !quiet.payouts.missing);
   assert.equal(quiet.payouts.detail, 'All in on time');
@@ -97,7 +112,8 @@ test('a figure that cannot load shows a quiet "–", never an error; zeros are m
 
 test('each figure opens the page where its detail lives', () => {
   const f = byKey(ov.businessFigures(full, TODAY));
-  for (const key of ['bookings', 'occupancy', 'rate', 'nights', 'fees']) assert.deepEqual(f[key].open, { kind: 'work', view: 'accounts', sub: 'performance' }, key);
+  for (const key of ['bookings', 'occupancy', 'rate', 'fees']) assert.deepEqual(f[key].open, { kind: 'work', view: 'accounts', sub: 'performance' }, key);
+  assert.deepEqual(f.replies.open, { kind: 'tab', tab: 'analytics', anchor: 'section-business-reports-messages' }, 'Reports → Messages');
   assert.deepEqual(f.properties.open, { kind: 'page', section: 'properties' });
   assert.deepEqual(f.enquiries.open, { kind: 'tab', tab: 'enquiries' });
   assert.deepEqual(f.payouts.open, { kind: 'work', view: 'accounts', sub: 'payouts' }, 'Accounts → Reconciliation, as the Needs line');
@@ -147,8 +163,11 @@ test('Home order for admins: greeting and search, This month, Needs your attenti
   assert.match(grid, /color: f\.missing \|\| f\.zero \? p\.muted : p\.text/);
   assert.doesNotMatch(grid, /p\.(danger|success|badge|cautionWash)/);
   assert.match(grid, /This month/);
-  // Only reads that already exist: the Performance report, the enquiries Business report and management's overview.
+  // The reads: the Performance report (with the value as booked), guest replies on time, the enquiries Business report
+  // and management's overview.
   assert.match(oversight, /readFinance\(performanceRangeQuery\(range\)\)/);
+  assert.match(oversight, /booked: m\?\.bookedValueMinor \?\? null, bookedBefore: l\?\.bookedValueMinor \?\? null/);
+  assert.match(oversight, /readTeams\(\{ section: "guestReplies" \}\)\.then\(x => guestReplyGlanceSchema\.parse\(x\.data\)\)/);
   assert.match(oversight, /"reportEnquiries"/);
   assert.doesNotMatch(oversight, /"reportRepairs"/, 'repair spend left Home for payouts overdue');
   assert.match(oversight, /payoutsOverdue: overview\?\.accounts\.payoutsToReconcile \?\? null/);

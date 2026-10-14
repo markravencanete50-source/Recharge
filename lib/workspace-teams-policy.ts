@@ -30,6 +30,8 @@ export const teamsReadSchema = z.object({
     'menuLayout', 'menuLayouts',
     // Round 5: the KPI tracker (20261015100000).
     'kpis',
+    // Management's Home: guest replies on time this month and the same days of last month (20261020910000).
+    'guestReplies',
     // Business reports for admins (20261020860000): enquiries, repairs and spend, to-dos, messages, time worked.
     ...BUSINESS_REPORT_SECTIONS]),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
