@@ -7,7 +7,9 @@
 .recharge-workspace,.recharge-workspace :is(button,input,select,textarea),[data-slot="dialog-content"],[data-slot="popover-content"] {font-family:var(--font-inter)}
 .recharge-workspace .sidebar-brand span span,.recharge-workspace .sidebar-navigation > div > p {font-size:11px}
 .phase-two-reports .eyebrow {color:var(--rc-muted);opacity:1}
-:root:not(.dark) {
+/* A page pinned light (the enquiry form: data-recharge-theme="light" on its frame) takes these too, and so does the page
+   behind it, so its background is light in the dark theme as well. */
+:root:not(.dark), [data-recharge-theme="light"], html:root:has(.auth-page[data-recharge-theme="light"]) {
   /* Same bone & forest palette as the app (lib/design-tokens.ts). */
   --background: #EFE9DB; --foreground: #152D28; --card: #FAF7F0; --card-foreground: #152D28;
   --popover: #FAF7F0; --popover-foreground: #152D28; --muted: #E7E0D0; --muted-foreground: #4E6259;

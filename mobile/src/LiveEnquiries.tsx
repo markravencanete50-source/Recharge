@@ -14,7 +14,8 @@ import { depth, ui, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
-  DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, deleteEnquiryWarning, duplicateNote, enquiryStep, valuationDraft, valueButtonLabel,
+  DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PRIORITY_LABEL, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, deleteEnquiryWarning, duplicateNote, enquiryStep,
+  isPriority, priorityFirst, valuationDraft, valueButtonLabel,
   type ClientEnquiries, type ClientEnquiry, type EnquiryStep,
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -43,7 +44,8 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
   const count = (f: Exclude<Filter, "all">) => (data?.items ?? []).filter(e => FILTER_STEPS[f].includes(steps.get(e.id)!)).length;
   // Opens on what needs doing: answers to value, or everything when there are none.
   const shown: Filter = filter ?? (count("value") ? "value" : "all");
-  const items = (data?.items ?? []).filter(e => shown === "all" || FILTER_STEPS[shown].includes(steps.get(e.id)!));
+  // "As soon as possible" comes first within its step (Alex).
+  const items = priorityFirst((data?.items ?? []).filter(e => shown === "all" || FILTER_STEPS[shown].includes(steps.get(e.id)!)), e => steps.get(e.id)!);
   const open = data?.items.find(e => e.id === openId) ?? null;
   return (
     <View style={{ gap: 18 }}>
@@ -77,15 +79,17 @@ function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: Cli
   const a = e.answers;
   // On a phone the tags go under the details, so the name and address keep the row's width (round 6).
   const narrow = useWindowDimensions().width < 600;
+  const priority = isPriority(e, step);
   const when = e.submittedAt ? `Answered ${ago(e.submittedAt)}` : e.openedAt ? `Opened ${ago(e.openedAt)}` : `Sent ${ago(e.sentAt)}${e.emailStatus === "failed" ? " · email failed" : e.delivery === "link" ? " · link copied" : ""}`;
   const tags = <>
     <Tag label={STEP_LABEL[step]} tone={STEP_TONE[step]} p={p} />
+    {priority && <Tag label={PRIORITY_LABEL} tone="wait" p={p} />}
     {e.delivery === "email" && ["sent", "opened", "expired"].includes(step) && e.emailStatus !== "sent" && <Tag label={e.emailStatus === "failed" ? "Email failed" : "Sending…"} tone={e.emailStatus === "failed" ? "bad" : "plain"} p={p} />}
     {!!e.duplicateReason && step !== "closed" && <Tag label={DUPLICATE_LABEL} tone="bad" p={p} />}
     {e.files.length > 0 && <View style={[ui.row, { gap: 4 }]}><Feather name="image" size={12} color={p.muted} /><Text style={{ color: p.muted, fontSize: 11 }}>{e.files.length}</Text></View>}
   </>;
   return (
-    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={`${a?.fullName ?? e.recipientName}, ${STEP_LABEL[step]}${e.duplicateReason ? ", " + DUPLICATE_LABEL : ""}`} onPress={onPress}
+    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={`${a?.fullName ?? e.recipientName}, ${STEP_LABEL[step]}${priority ? ", " + PRIORITY_LABEL : ""}${e.duplicateReason ? ", " + DUPLICATE_LABEL : ""}`} onPress={onPress}
       style={[ui.row, { gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: step === "received" ? p.waiting : p.border, backgroundColor: p.surface, ...depth.card }]}>
       <Initials p={p} name={a?.fullName ?? e.recipientName} tone="clients" size={44} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
@@ -251,6 +255,7 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
             <Line p={p} label="Company" value={a.companyName} />
             <Line p={p} label="Email" value={a.email} onPress={() => void Linking.openURL("mailto:" + a.email)} />
             <Line p={p} label="Contact number" value={a.phone} onPress={() => void Linking.openURL("tel:" + a.phone.replace(/[^\d+]/g, ""))} />
+            {/* Only on forms answered before these two questions were removed. */}
             <Line p={p} label="Correspondence address" value={a.correspondenceAddress} />
             <Line p={p} label="Existing client" value={yes(a.existingClient)} />
           </Group>

@@ -34,7 +34,7 @@ function Choice({ id, label, help, value, onChange, error, options = [["yes", "Y
 }
 
 export function EnquiryForm({ token, name, email, files }: { token: string; name: string; email: string; files: { id: string; name: string; mime: string; bytes: number }[] }) {
-  const [values, setValues] = useState<Values>({ fullName: name, email, existingClient: "", shortLet: "", furnishQuote: "", compliance: "", bedrooms: "", wcs: "", bathrooms: "", propertyType: "", startWhen: "", enquiryType: "" });
+  const [values, setValues] = useState<Values>({ fullName: name, email, shortLet: "", furnishQuote: "", compliance: "", bedrooms: "", wcs: "", bathrooms: "", propertyType: "", startWhen: "", enquiryType: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploads, setUploads] = useState<Upload[]>(() => files.map(f => ({ key: f.id, ...f, progress: 1 })));
   const [error, setError] = useState(""), [sending, setSending] = useState(false), [done, setDone] = useState(false);
@@ -114,9 +114,6 @@ export function EnquiryForm({ token, name, email, files }: { token: string; name
       <Field id="enquiry-companyName" label="Company name" help="If the property is owned in a company." error={errors.companyName} icon={<Building2 aria-hidden size={17} className="auth-control-icon" />}>
         <input {...input("companyName")} autoComplete="organization" maxLength={200} />
       </Field>
-      <Field id="enquiry-correspondenceAddress" label="Correspondence address" help="Where letters, bills, or official documents are sent." required error={errors.correspondenceAddress} icon={<MapPin aria-hidden size={17} className="auth-control-icon" />}>
-        <textarea {...input("correspondenceAddress")} autoComplete="street-address" rows={3} maxLength={1000} />
-      </Field>
       <div className="enquiry-pair">
         <Field id="enquiry-email" label="Email" required error={errors.email} icon={<Mail aria-hidden size={17} className="auth-control-icon" />}>
           <input {...input("email")} type="email" autoComplete="email" maxLength={320} spellCheck={false} autoCapitalize="none" />
@@ -125,7 +122,6 @@ export function EnquiryForm({ token, name, email, files }: { token: string; name
           <input {...input("phone")} type="tel" autoComplete="tel" maxLength={30} placeholder="07700 900123" />
         </Field>
       </div>
-      <Choice id="existingClient" label="Existing client" help="Are you an existing client?" value={values.existingClient} onChange={set("existingClient")} error={errors.existingClient} />
     </section>
 
     <section className="enquiry-section">
