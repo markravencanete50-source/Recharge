@@ -208,38 +208,38 @@ test('spam and failed authentication are recorded as dropped, without content, a
   await assert.rejects(guestIn({ ...mail(), unexpected: true }), /Invalid email/);
 });
 
-test('owner email goes into that owner\'s conversation; an unknown sender waits for Client relations', async () => {
+test('owner email is a client email conversation linked to that owner (email tabs); an unknown sender is one too', async () => {
   const sent = await ownerIn(mail({ from: 'MAIL6@example.com', fromName: 'Owner Person', subject: 'Boiler', text: 'The boiler is making a noise.' }));
-  assert.deepEqual(sent, { stored: true, matched: 'owner' });
-  const [conv] = await sql("select id,owner_id from private.chat_conversations where kind='owner'");
-  assert.equal(conv.owner_id, users[OWNER]);
-  const [msg] = await sql('select author_id,body from private.chat_messages where conversation_id=$1', [conv.id]);
-  assert.equal(msg.author_id, users[OWNER]);
+  assert.equal(sent.matched, 'owner');
+  assert.equal((await sql("select count(*)::int n from private.chat_messages"))[0].n, 0, 'never in the owner\'s app conversation');
+  const [th] = await sql('select owner_id,address,subject from private.workspace_client_email_threads where id=$1', [sent.threadId]);
+  assert.deepEqual([th.owner_id, th.address, th.subject], [users[OWNER], 'mail6@example.com', 'Boiler']);
+  const [msg] = await sql('select body from private.workspace_client_email_messages where thread_id=$1', [sent.threadId]);
   assert.match(msg.body, /Boiler\n\nThe boiler is making a noise\./);
-  // Admins and the client relations rota are told; the owner is not.
-  const told = (await sql(`select distinct o.user_id from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id where a.event_type='chat.owner_message'`)).map(r => users.indexOf(r.user_id));
+  // Admins and the client relations rota are told; the owners are not.
+  const told = (await sql(`select distinct o.user_id from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id where a.event_type='client.email'`)).map(r => users.indexOf(r.user_id));
   assert.ok(told.includes(ADMIN) && told.includes(CLIENT_REL));
   assert.ok(!told.includes(OWNER) && !told.includes(OTHER_OWNER));
   // The same email again adds nothing.
   const again = mail({ from: 'mail6@example.com' });
   await ownerIn(again);
   assert.deepEqual(await ownerIn(again), { duplicate: true });
-  // An unknown address is held, not matched by name even when the name is the owner's.
+  // An unknown address is not matched by name even when the name is the owner's: its own conversation, with no owner.
   const unknown = await ownerIn(mail({ from: 'someone@elsewhere.org', fromName: 'Person 6', subject: 'Hello', text: 'I own a flat.' }));
   assert.equal(unknown.matched, 'unknown');
-  assert.equal((await sql("select count(*)::int n from private.chat_messages"))[0].n, 2, 'the unknown sender is not in any owner conversation');
-  // Since 20261019500000 it is a client email conversation (tested in full in client-email-threads-database); assigning moves it.
   await as(CLIENT_REL);
   const { threads } = await rpc('workspace_client_email_read', ['list', null]);
-  assert.equal(threads.length, 1);
-  assert.equal(threads[0].address, 'someone@elsewhere.org');
-  await rpc('workspace_client_email_action', [{ action: 'assign', threadId: threads[0].id, ownerId: users[OWNER] }]);
-  assert.equal((await sql("select count(*)::int n from private.chat_messages"))[0].n, 3);
-  assert.deepEqual(await ownerIn(mail({ from: 'someone@elsewhere.org' })), { stored: true, matched: 'owner' });
+  const stranger = threads.find(x => x.address === 'someone@elsewhere.org');
+  assert.equal(stranger.ownerId, null);
+  // Linking it to the owner keeps it here and names them; their next email joins it.
+  await rpc('workspace_client_email_action', [{ action: 'assign', threadId: stranger.id, ownerId: users[OWNER] }]);
+  const next = await ownerIn(mail({ from: 'someone@elsewhere.org' }));
+  assert.deepEqual([next.matched, next.threadId], ['owner', stranger.id]);
+  assert.equal((await sql("select count(*)::int n from private.chat_messages"))[0].n, 0);
 });
-
-test('a team reply to an owner who wrote by email is queued once and sent through the outbox once', async () => {
-  await ownerIn(mail({ from: 'mail6@example.com', subject: 'Boiler', messageId: '<owner-1@mail.example.com>' }));
+test('(before the email tabs) a team reply to an owner who wrote by email is queued once and sent through the outbox once', async () => {
+  // Owner conversations that took email before the email tabs (20261020600000) still answer by email: set one up the old way.
+  await sql("select private.workspace_email_owner_post($1,'legacy_1','Subject: Boiler\n\nIt is noisy.',now(),'{}'::jsonb,'mail6@example.com','Boiler','owner-1@mail.example.com',null,'{}')", [users[OWNER]]);
   const [conv] = await sql("select id from private.chat_conversations where kind='owner'");
   await as(CLIENT_REL);
   await rpc('workspace_chat_action', [{ action: 'send', requestId: crypto.randomUUID(), conversationId: conv.id, body: 'We will send an engineer.' }]);

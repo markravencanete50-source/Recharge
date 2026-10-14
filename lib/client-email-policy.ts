@@ -17,6 +17,8 @@ export type ClientEmailAction = z.infer<typeof clientEmailActionSchema>;
 export const clientEmailThreadSchema = z.object({
   id: uuid, address: z.string(), name: z.string().nullable(), subject: z.string().nullable(), status: z.enum(['open', 'closed']),
   lastMessageAt: z.string().nullable(), preview: z.string().nullable(), lastFrom: z.enum(['in', 'out']).nullable(), waitingSince: z.string().nullable(), messages: z.number(),
+  // The owner the conversation is linked to (email tabs, 20261020600000): an email from their address, or "Link to owner".
+  ownerId: uuid.nullable().default(null), ownerName: z.string().nullable().default(null),
 });
 export type ClientEmailThread = z.infer<typeof clientEmailThreadSchema>;
 const fileSchema = z.object({ id: uuid, filename: z.string(), mime: z.string(), bytes: z.number() });

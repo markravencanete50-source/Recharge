@@ -17,7 +17,7 @@ import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, messageT
 import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
 import { MessageSafety } from "./ChatSafety";
 import { BLOCKED_LABEL, REMOVED_LABEL } from "../../lib/chat-moderation";
-import { inboxListSchema } from "../../lib/guest-inbox-policy";
+import { inboxListSchema, isGuestEmail } from "../../lib/guest-inbox-policy";
 import { byLatest, clientStatus, emptyStatusMessage, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { ROLE_LABEL } from "../../lib/admin-live";
@@ -26,15 +26,15 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
 import { z } from "zod";
 
-// Messages, laid out like a messenger (Lee, round 5): at most three tabs, Guests (the guest inbox, for people with the
-// guest communication tool), Clients (each owner's conversation with Recharge) and Team (one-to-one, group and
-// department conversations). One search box per tab; Guests and Clients filter by Needs a reply, Engaged
+// Messages, laid out like a messenger (Lee, round 5): Guests (the guest inbox, for people with the guest communication tool),
+// Clients (each owner's conversation with Recharge), Guest emails and Client emails (every email, Lee 14 October) and Team
+// (one-to-one, group and department conversations). One search box per tab; Guests and Clients filter by Needs a reply, Engaged
 // and Closed. A conversation opens in place: beside the list on a wide screen, full screen with a back arrow on a phone.
 // Owners only see their conversation with Recharge. While a conversation is open it checks for new messages every few
 // seconds; the list refreshes by itself. Nothing here animates by itself.
 const LIST_EVERY = 15000, THREAD_EVERY = 3000, GUESTS_EVERY = 60000;
 type Tab = MessagesTab;
-const TAB_LABEL: Record<Tab, string> = { guests: "Guests", clients: "Clients", team: "Team" };
+const TAB_LABEL: Record<Tab, string> = { guests: "Guests", clients: "Clients", guestEmails: "Guest emails", clientEmails: "Client emails", team: "Team" };
 const tabOf = (c: Conversation): Tab => c.kind === "owner" ? "clients" : "team";
 const roleName = (role: string) => ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role;
 
@@ -49,18 +49,21 @@ function useVisiblePoll(run: () => void, every: number, active: boolean) {
   }, [every, active]);
 }
 
-// Guests waiting for a reply, for the Messages badge and the Guests tab. Read once a minute, and
-// only for people with the guest inbox. Null until the first read.
+// Guests waiting for a reply, for the Messages badge and the Guests and Guest emails tabs (emailWaiting: those by email). Read
+// once a minute, and only for people with the guest inbox. Null until the first read.
 export function useGuestWaiting(account: WorkspaceAccount) {
   const enabled = hasGuestInbox(account);
-  const [waiting, setWaiting] = useState<number | null>(null);
+  const [waiting, setWaiting] = useState<number | null>(null), [emailWaiting, setEmailWaiting] = useState(0);
   const load = useCallback(async () => {
     if (!enabled) return;
-    try { setWaiting(inboxListSchema.parse((await readInbox({ section: "list", status: "waiting" })).data).waiting); } catch { /* the count stays as it was */ }
+    try {
+      const data = inboxListSchema.parse((await readInbox({ section: "list", status: "waiting" })).data);
+      setWaiting(data.waiting); setEmailWaiting(Math.min(data.waiting, data.threads.filter(isGuestEmail).length));
+    } catch { /* the count stays as it was */ }
   }, [enabled]);
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
   useVisiblePoll(() => void load(), GUESTS_EVERY, enabled);
-  return { waiting: enabled ? waiting : 0, reload: load };
+  return { waiting: enabled ? waiting : 0, emailWaiting: enabled ? emailWaiting : 0, reload: load };
 }
 
 function ConversationRow({ p, c, active, onPress }: { p: Palette; c: Conversation; active: boolean; onPress: () => void }) {
@@ -297,17 +300,17 @@ function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette;
   );
 }
 
-// A row in a Messages list: a chat conversation, or (Clients only) an email conversation with someone who is not an owner yet.
+// A row in a Messages list: a chat conversation, or (Client emails) an email conversation.
 type Row = { kind: "chat"; id: string; at: string | null; c: Conversation } | { kind: "email"; id: string; at: string | null; t: ClientEmailThread };
 const chatRow = (c: Conversation): Row => ({ kind: "chat", id: c.id, at: c.lastMessageAt, c });
 const emailRow = (t: ClientEmailThread): Row => ({ kind: "email", id: "email:" + t.id, at: t.lastMessageAt, t });
 
-export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, openConversation, updates, initialTab }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; openConversation?: string; updates?: ReactNode; initialTab?: "updates" }) {
+export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, guestEmailWaiting = 0, openConversation, updates, initialTab }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; guestEmailWaiting?: number; openConversation?: string; updates?: ReactNode; initialTab?: "updates" }) {
   const owner = account.role === "client", guests = hasGuestInbox(account);
   // While a super admin views as someone nothing can be started or saved. A role preview (no person) reads the super admin's
   // own Messages, so it keeps only what that role could have (lib/view-as.ts). The workspace remounts when the view changes.
   const [mode] = useState(viewMode), preview = mode.readOnly && !mode.person ? account.role : null;
-  // A link can open a guest conversation ("guest:<id>", from Reported messages) in Guests, or a client email ("email:<id>") in Clients.
+  // A link can open a guest conversation ("guest:<id>", from Reported messages) in Guests, or a client email ("email:<id>") in Client emails.
   const guestLink = openConversation?.startsWith("guest:") ? openConversation.slice(6) : undefined;
   const [list, setList] = useState<Conversation[] | null>(null), [open, setOpen] = useState<string | null>(guestLink ? null : openConversation ?? null), [creating, setCreating] = useState(false), [error, setError] = useState("");
   const loadList = useCallback(async () => {
@@ -327,7 +330,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   // Viewing as an owner: open the conversation they already have with Recharge, if any (starting one would be a change).
   const ownerThread = owner && mode.person ? list?.find(c => c.kind === "owner")?.id ?? null : null;
   useEffect(() => { if (ownerThread && !open) queueMicrotask(() => setOpen(ownerThread)); }, [ownerThread, open]);
-  // Email to ownerrelations@ from someone who is not an owner yet: its own conversations in Clients, for admins and client relations.
+  // Every email to ownerrelations@: Client emails, for admins and client relations.
   const emailTeam = !owner && !mode.readOnly && ["admin", "super_admin", "stays"].includes(account.role);
   const [emails, setEmails] = useState<ClientEmailThread[]>([]);
   const loadEmails = useCallback(async () => {
@@ -343,10 +346,11 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const tabs: Tab[] = messageTabs(account, !!list?.some(c => c.kind === "owner"));
   const openUpdates = initialTab === "updates" && !openConversation && !!updates;
   const [showUpdates, setShowUpdates] = useState(openUpdates);
-  const [chosenTab, setTab] = useState<Tab>(guestLink ? "guests" : openConversation?.startsWith("email:") ? "clients" : openConversation ? "team" : guests ? "guests" : "team");
+  const [chosenTab, setTab] = useState<Tab>(guestLink ? "guests" : openConversation?.startsWith("email:") ? "clientEmails" : openConversation ? "team" : guests ? "guests" : "team");
   const tab: Tab = tabs.includes(chosenTab) ? chosenTab : "team";
-  const count = (t: Tab) => t === "guests" ? guestWaiting ?? 0 : (list ?? []).filter(c => tabOf(c) === t).reduce((sum, c) => sum + c.unread, 0)
-    + (t === "clients" ? emails.filter(e => clientEmailStatus(e) === "reply").length : 0);
+  const count = (t: Tab) => t === "guests" ? Math.max(0, (guestWaiting ?? 0) - guestEmailWaiting) : t === "guestEmails" ? guestEmailWaiting
+    : t === "clientEmails" ? emails.filter(e => clientEmailStatus(e) === "reply").length
+    : (list ?? []).filter(c => tabOf(c) === t).reduce((sum, c) => sum + c.unread, 0);
   // The first time the list arrives, open the first tab that needs attention, unless one was chosen.
   const picked = useRef(!!openConversation || openUpdates);
   const attention = list && !owner ? tabs.find(t => count(t) > 0) ?? null : undefined;
@@ -359,22 +363,22 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const choose = (t: Tab) => { picked.current = true; setTab(t); setOpen(null); setQuery(""); setStatus("reply"); };
   // Newest message first in every tab (byLatest); the status buttons only filter.
-  // In Clients, email conversations (id "email:<uuid>") interleave with owner conversations by time, through the same byLatest.
-  const inTab = byLatest<Row>([...(list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab).map(chatRow), ...(tab === "clients" ? emails.map(emailRow) : [])], r => r.at, r => r.id);
+  // Client emails lists the email conversations (id "email:<uuid>"); every other tab its chat conversations.
+  const inTab = byLatest<Row>(tab === "clientEmails" ? emails.map(emailRow) : (list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab).map(chatRow), r => r.at, r => r.id);
   const placeText = new Map(properties.map(x => [x.id, [x.name, x.address].filter(Boolean).join(" ")] as const));
   const searchable = (r: Row) => r.kind === "email" ? [r.t.name, r.t.address, r.t.subject] : [r.c.title, r.c.subtitle, r.c.propertyName, r.c.last?.authorName, ...r.c.propertyIds.map(id => placeText.get(id))];
   const found = inTab.filter(r => matchesSearch(query, searchable(r)));
-  const clients = tab === "clients" && tabs.length > 1;
+  const clients = (tab === "clients" || tab === "clientEmails") && tabs.length > 1;
   const statusOf = (r: Row) => r.kind === "email" ? clientEmailStatus(r.t) : clientStatus(r.c);
   // The conversation open beside the list stays listed while it is read, so it does not jump away.
   const shown = clients ? found.filter(r => statusOf(r) === status || (desktop && r.id === open)) : found;
   const thread = (id: string, back?: () => void) => id.startsWith("email:")
-    ? <ClientEmailThreadPane key={id} p={p} threadId={id.slice(6)} onBack={back} onChanged={changed} onAssigned={c => { setOpen(c); void loadList(); void loadEmails(); }} />
+    ? <ClientEmailThreadPane key={id} p={p} threadId={id.slice(6)} onBack={back} onChanged={changed} />
     : <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} onOpen={c => { setOpen(c.id); void loadList(); }} onLeft={() => { setOpen(null); void loadList(); }} />;
   const listView = (
     <View style={{ gap: 10 }}>
       <SearchBar p={p} value={query} onChange={setQuery} placeholder={clients ? "Search owner or property" : "Search conversations or people"}
-        action={mode.readOnly ? undefined : { icon: "edit-3", label: clients ? "New message to an owner" : "New message", onPress: () => setCreating(true) }} />
+        action={mode.readOnly || tab === "clientEmails" ? undefined : { icon: "edit-3", label: clients ? "New message to an owner" : "New message", onPress: () => setCreating(true) }} />
       {clients && !!list && <StatusFilter p={p} value={status} counts={statusCounts(found, statusOf)} onChange={setStatus} />}
       {!list ? <Loading p={p} /> : shown.length ? <View style={{ gap: 2 }}>{shown.map(r => r.kind === "email"
         ? <ClientEmailRow key={r.id} p={p} t={r.t} active={r.id === open} onPress={() => setOpen(r.id)} />
@@ -382,13 +386,15 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
         : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyStatusMessage(clients ? "clients" : "team", clients ? status : null, !!query.trim())}</Text>}
     </View>
   );
-  const tabBar = tabs.length > 1 && (
-    <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 4, padding: 4, borderRadius: 999, backgroundColor: p.wash, alignSelf: desktop ? "flex-start" : "stretch" }}>
+  // Five tabs do not fit a phone's width: there the row scrolls sideways instead of squeezing the names.
+  const scrollTabs = !desktop && tabs.length > 3;
+  const bar = tabs.length > 1 && (
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 4, padding: 4, borderRadius: 999, backgroundColor: p.wash, alignSelf: desktop || scrollTabs ? "flex-start" : "stretch" }}>
       {tabs.map(t => {
         const on = t === tab, n = count(t);
         return (
-          <MotionPress key={t} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={`${TAB_LABEL[t]}${n ? `, ${n} ${t === "guests" ? "waiting" : "unread"}` : ""}`} onPress={() => choose(t)}
-            style={[ui.row, { flex: desktop ? undefined : 1, justifyContent: "center", gap: 6, minHeight: 38, paddingHorizontal: 18, borderRadius: 999, backgroundColor: on ? p.surface : "transparent" }]}>
+          <MotionPress key={t} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={`${TAB_LABEL[t]}${n ? `, ${n} ${t === "guests" || t === "guestEmails" ? "waiting" : t === "clientEmails" ? "need a reply" : "unread"}` : ""}`} onPress={() => choose(t)}
+            style={[ui.row, { flex: desktop || scrollTabs ? undefined : 1, justifyContent: "center", gap: 6, minHeight: 38, paddingHorizontal: scrollTabs ? 14 : 18, borderRadius: 999, backgroundColor: on ? p.surface : "transparent" }]}>
             <Text style={{ color: on ? p.text : p.muted, fontWeight: on ? "600" : "400", fontSize: 14 }}>{TAB_LABEL[t]}</Text>
             {n > 0 && <View style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, alignItems: "center", justifyContent: "center", backgroundColor: p.primary }}><Text style={{ color: p.onPrimary, fontSize: 11, fontWeight: "600" }}>{n > 99 ? "99+" : n}</Text></View>}
           </MotionPress>
@@ -396,6 +402,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       })}
     </View>
   );
+  const tabBar = bar && scrollTabs ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, borderRadius: 999 }}>{bar}</ScrollView> : bar;
   if (showUpdates && updates && !owner) return (
     <View style={{ gap: 12 }}>
       <ThreadHeader p={p} onBack={() => setShowUpdates(false)}>
@@ -405,7 +412,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
     </View>
   );
   // On a phone an open conversation takes the whole screen, with a back arrow; the tabs come back with the list.
-  const phoneThread = !desktop && !owner && tab !== "guests" && !!open;
+  const phoneThread = !desktop && !owner && tab !== "guests" && tab !== "guestEmails" && !!open;
   return (
     <View style={{ gap: 12 }}>
       {!phoneThread && tabBar}
@@ -413,7 +420,8 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       {owner ? (open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View>
         : mode.readOnly && (list || preview) ? <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{preview ? "An owner's Messages is their conversation with Recharge. Choose an owner under View as to see theirs." : "This owner has not messaged Recharge yet."}</Text>
         : <Loading p={p} />)
-        : tab === "guests" ? <GuestInbox palette={p} properties={properties} desktop={desktop} onChanged={onUnread} openThread={guestLink} />
+        : tab === "guests" ? <GuestInbox key="guests" palette={p} properties={properties} desktop={desktop} onChanged={onUnread} openThread={guestLink} />
+        : tab === "guestEmails" ? <GuestInbox key="guest-emails" emails palette={p} properties={properties} desktop={desktop} onChanged={onUnread} />
         : <MessagesSplit p={p} desktop={desktop} list={listView} detail={open ? thread(open, desktop ? undefined : () => { setOpen(null); void loadList(); }) : null} />}
       {creating && <NewConversation p={p} properties={properties} only={tabs.length < 2 ? undefined : tab === "clients" ? "owners" : "team"} onClose={() => setCreating(false)} onOpen={c => { setCreating(false); setOpen(c.id); void loadList(); }} />}
     </View>

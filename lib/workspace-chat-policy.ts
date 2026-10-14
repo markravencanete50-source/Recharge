@@ -177,11 +177,14 @@ export const hasGuestInbox = (account: { role: string; modules: readonly string[
 // The tabs of Messages (round 5): Guests for the guest inbox, Clients for the people who answer owners (or anyone who
 // already has an owner conversation), and Team for everyone on the team. Never an Updates tab. Owners get no tabs:
 // their Messages is their one conversation with Recharge.
-export type MessagesTab = 'guests' | 'clients' | 'team';
+// Lee, 14 October: every email has its own tab, so the order is Guests, Clients, Guest emails, Client emails, Team. Guests and
+// Clients keep the platform (Airbnb, Booking.com, Vrbo, direct) and app conversations; Guest emails is guestrelations@ and Client
+// emails is ownerrelations@ (for admins, super admins and Stays; the database lets in the client relations and management rota).
+export type MessagesTab = 'guests' | 'clients' | 'guestEmails' | 'clientEmails' | 'team';
 export function messageTabs(account: { role: string; modules: readonly string[] }, hasOwnerConversation = false): MessagesTab[] {
   if (account.role === 'client') return [];
-  const clients = ['admin', 'super_admin', 'stays'].includes(account.role) || hasOwnerConversation;
-  return [...(hasGuestInbox(account) ? ['guests' as const] : []), ...(clients ? ['clients' as const] : []), 'team'];
+  const answersOwners = ['admin', 'super_admin', 'stays'].includes(account.role), clients = answersOwners || hasOwnerConversation, guests = hasGuestInbox(account);
+  return [...(guests ? ['guests' as const] : []), ...(clients ? ['clients' as const] : []), ...(guests ? ['guestEmails' as const] : []), ...(answersOwners ? ['clientEmails' as const] : []), 'team'];
 }
 
 // Saved replies: short answers the team inserts into a reply to guests or owners, then edits.

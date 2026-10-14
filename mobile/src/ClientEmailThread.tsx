@@ -15,9 +15,9 @@ import { MESSAGE_STATUS_LABEL } from "../../lib/inbox-filters";
 import { chatPeopleSchema, chatTime } from "../../lib/workspace-chat-policy";
 import { ui, type Palette } from "./theme";
 
-// Email to ownerrelations@ from someone who is not an owner yet, as a conversation in Messages > Clients (round 7, Session F).
-// Replies go out from ownerrelations@rechargegroup.co.uk; their answer comes back here. Close and reopen; "Assign to owner" moves the
-// conversation into that owner's own conversation once they have an account.
+// Every email to ownerrelations@, as a conversation in Messages > Client emails (round 7, Session F; its own tab since Lee's email
+// tabs, 14 October). Replies go out from ownerrelations@rechargegroup.co.uk; their answer comes back here. Close and reopen;
+// "Link to owner" names the owner it belongs to and remembers the address. It stays here: emails never move into the app chat.
 
 // The row in the Clients list.
 export function ClientEmailRow({ p, t, active, onPress }: { p: Palette; t: Thread; active: boolean; onPress: () => void }) {
@@ -33,7 +33,7 @@ export function ClientEmailRow({ p, t, active, onPress }: { p: Palette; t: Threa
           <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: status === "reply" ? "600" : "500", flex: 1 }}>{t.name ?? t.address}</Text>
           {!!t.lastMessageAt && <Text style={[ui.small, { color: p.muted }]}>{chatTime(t.lastMessageAt)}</Text>}
         </View>
-        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{["Email", t.subject].filter(Boolean).join(" · ")}</Text>
+        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{[t.ownerName ? `Owner: ${t.ownerName}` : "Email", t.subject].filter(Boolean).join(" · ")}</Text>
         {!!t.preview && <Text numberOfLines={2} style={[ui.small, { color: p.text }]}>{t.lastFrom === "out" ? "You: " : ""}{t.preview}</Text>}
         <View style={[ui.row, { gap: 6 }]}><Tag label={MESSAGE_STATUS_LABEL[status]} tone={status === "reply" ? "wait" : status === "waiting" ? "good" : "plain"} p={p} /></View>
       </View>
@@ -41,7 +41,7 @@ export function ClientEmailRow({ p, t, active, onPress }: { p: Palette; t: Threa
   );
 }
 
-export function ClientEmailThreadPane({ p, threadId, onBack, onChanged, onAssigned }: { p: Palette; threadId: string; onBack?: () => void; onChanged: () => void; onAssigned: (conversationId: string) => void }) {
+export function ClientEmailThreadPane({ p, threadId, onBack, onChanged }: { p: Palette; threadId: string; onBack?: () => void; onChanged: () => void }) {
   const celebrate = useCelebrate();
   const [data, setData] = useState<ReturnType<typeof clientEmailDetailSchema.parse> | null>(null);
   const [reply, setReply] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(""), [note, setNote] = useState("");
@@ -90,7 +90,7 @@ export function ClientEmailThreadPane({ p, threadId, onBack, onChanged, onAssign
         <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}><Feather name="mail" size={16} color={p.muted} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text accessibilityRole="header" numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 16 }}>{t?.name ?? t?.address ?? "Email"}</Text>
-          {!!t && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{["Email", t.name ? t.address : null].filter(Boolean).join(" · ")}</Text>}
+          {!!t && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{["Email", t.name ? t.address : null, t.ownerName ? `Owner: ${t.ownerName}` : null].filter(Boolean).join(" · ")}</Text>}
           {!!t?.subject && <Text numberOfLines={2} style={[ui.small, { color: p.text }]}>{t.subject}</Text>}
         </View>
       </ThreadHeader>
@@ -135,12 +135,12 @@ export function ClientEmailThreadPane({ p, threadId, onBack, onChanged, onAssign
         <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
           {t.status === "open" ? <Button label="Close" icon="archive" p={p} disabled={busy} onPress={() => void run({ action: "close", threadId }, "Conversation closed")} />
             : <Button label="Reopen" icon="rotate-ccw" p={p} disabled={busy} onPress={() => void run({ action: "reopen", threadId }, "Reopened")} />}
-          <Button label="Assign to owner" icon="user" p={p} disabled={busy} onPress={() => { setAssigning(!assigning); setOwnerId(""); }} />
+          <Button label={t.ownerId ? "Change owner" : "Link to owner"} icon="user" p={p} disabled={busy} onPress={() => { setAssigning(!assigning); setOwnerId(""); }} />
         </View>
         {assigning && <View style={{ gap: 8, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
-          <Text style={[ui.small, { color: p.muted }]}>Moves this conversation into the owner’s own conversation, and their next emails go there.</Text>
-          {!owners ? <Loading p={p} /> : <SearchPicker p={p} options={ownerOptions} value={ownerId} onChange={setOwnerId} placeholder="Search owner" nouns="owners" empty="No owner accounts yet. Keep replying here; assign once they have an account." />}
-          <Button label={busy ? "Moving…" : "Assign"} icon="check" primary p={p} disabled={busy || !ownerId} onPress={() => void run({ action: "assign", threadId, ownerId }, "Assigned", d => { const id = (d as { conversationId?: string } | null)?.conversationId; if (id) onAssigned(id); })} />
+          <Text style={[ui.small, { color: p.muted }]}>Shows which owner this is. The conversation stays in Client emails, and their next emails join it.</Text>
+          {!owners ? <Loading p={p} /> : <SearchPicker p={p} options={ownerOptions} value={ownerId} onChange={setOwnerId} placeholder="Search owner" nouns="owners" empty="No owner accounts yet. Keep replying here; link it once they have an account." />}
+          <Button label={busy ? "Linking…" : "Link"} icon="check" primary p={p} disabled={busy || !ownerId} onPress={() => void run({ action: "assign", threadId, ownerId }, "Linked to the owner", () => setAssigning(false))} />
         </View>}
       </>}
       {!!error && <Notice text={error} p={p} tone="bad" />}

@@ -44,6 +44,8 @@ export const guestThreadSchema = z.object({
 export type GuestThread = z.infer<typeof guestThreadSchema>;
 const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() });
 // canSend: replies written here are delivered to the guest through Hostaway; canSendEmail: through Resend, for email conversations (decided by the server, not the database).
+// An email conversation (guestrelations@, or a guest email logged by hand): Messages > Guest emails, never Guests.
+export const isGuestEmail = (t: { source: string; channel: string }) => t.source === 'email' || t.channel === 'email';
 export const inboxListSchema = z.object({ threads: z.array(guestThreadSchema), waiting: z.number(), targets, connected: z.boolean(), canSend: z.boolean().default(false), canSendEmail: z.boolean().default(false) });
 // files: attachments kept from an email (open them through /api/workspace/email-files).
 export const guestFileSchema = z.object({ id: uuid, filename: z.string(), mime: z.string(), bytes: z.number() });
