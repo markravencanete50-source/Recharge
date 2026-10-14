@@ -12,6 +12,7 @@ import { clientEnquiriesSchema, type ClientEnquiry } from "../../lib/client-enqu
 import { parseFlags, withFlags, type Flag } from "../../lib/management-flags";
 import { onboardingSection, onboardingTrackerItems } from "../../lib/tracker-onboarding";
 import { journeyForms, newEnquiryForm, workItemForms, type JourneyView, type OperationView } from "../../lib/workflow-forms";
+import { agreementTemplateForms } from "../../lib/agreement-template";
 
 // Property onboarding as a staged list (client ask C3): new enquiries first, then each stage, every
 // property with the address, the next step, who must act, the last update and a percentage complete.
@@ -43,7 +44,7 @@ export function OnboardingTracker({ palette: p, account, properties, journeys, w
   const open = items.find(i => i.id === openId) ?? null;
   const journey = open && !open.id.startsWith("enquiry:") ? open.source as JourneyView : null;
   const root = journey ? work.find(w => w.workId === journey.workId) : undefined;
-  const forms = journey ? (root ? workItemForms(account, root, journeys, work) : journeyForms(account, journey)) : [];
+  const forms = journey ? (root ? workItemForms(account, root, journeys, work) : [...agreementTemplateForms(account, journey), ...journeyForms(account, journey)]) : [];
   // The client enquiry this onboarding came from (or the enquiry row itself), for Delete at the bottom.
   const enquiry = open ? (open.id.startsWith("enquiry:") ? open.source as ClientEnquiry : enquiries.find(e => !!journey && e.propertyId === journey.propertyId)) : undefined;
   const canAdd = (owner || team) && account.modules.includes("property-onboarding");

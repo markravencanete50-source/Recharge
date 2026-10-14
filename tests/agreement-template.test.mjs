@@ -93,6 +93,34 @@ test('a Word contract becomes headings, paragraphs and lists; placeholders split
   ].join('\n\n'), 'deleted text, text boxes and pictures are left out; a paragraph starting "#" is not a heading');
 });
 
+// Contracts often put the fees in a table (Lee: "make sure the contract reads pdf and word document"): a table is one
+// block, a line per row with its cells joined by " | ", so the owner reads the fee schedule as rows.
+test('a Word table becomes a line per row, "cell | cell", with placeholders, merged cells and a table in a cell', async () => {
+  const cell = (...paras) => `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr>${paras.join('')}</w:tc>`;
+  const row = (...cells) => `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cells.join('')}</w:tr>`;
+  const table = (...rows) => `<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/></w:tblPr><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>${rows.join('')}</w:tbl>`;
+  const text = await docxOutline(await docx([
+    p(r('Fees'), '<w:pStyle w:val="Heading1"/>'),
+    p(r('Fee schedule:')),
+    table(
+      row(cell(p(r('Service'))), cell(p(r('Fee'))), cell(p(r('When')))),
+      row(cell(p(r('Management'))), cell(p(r('{{Management') + r(' fee}}'))), cell(p(r('Monthly')))),
+      row(cell(p(r('Linen'))), cell(p(r('£35')), p(r('per stay'))), cell('<w:p/>')),
+      row(cell('<w:p/>'), cell('<w:p/>'), cell('<w:p/>')),
+      row(cell(p(r('Repairs'))), cell(table(row(cell(p(r('Up to £250'))), cell(p(r('cost')))), row(cell(p(r('Over £250'))), cell(p(r('cost plus 10%')))))), cell(p(r('As incurred')))),
+      row(cell(p(r('- 1. looks like a list')))),
+    ),
+    p(r('After the table'), list(2)),
+  ].join('')));
+  assert.equal(text, [
+    '# Fees',
+    'Fee schedule:',
+    'Service | Fee | When\nManagement | {{Management fee}} | Monthly\nLinen | £35 per stay\nRepairs | Up to £250 | cost; Over £250 | cost plus 10% | As incurred\n\\- 1. looks like a list',
+    '1. After the table',
+  ].join('\n\n'), 'rows stay rows, empty rows and cells are left out, and a row that looks like a list item is not one');
+  assert.deepEqual(copy.outlineBlocks(text)[2], { kind: 'p', lines: ['Service | Fee | When', 'Management | {{Management fee}} | Monthly', 'Linen | £35 per stay', 'Repairs | Up to £250 | cost; Over £250 | cost plus 10% | As incurred', '- 1. looks like a list'] });
+});
+
 test('refused: not a zip, no document, macros, a password; nothing in the file is run', async () => {
   await assert.rejects(docxOutline(new TextEncoder().encode('%PDF-1.7 not a zip')), DocxError);
   await assert.rejects(docxOutline(await zip({ 'other.xml': '<x/>' })), /not a Word document/);
@@ -153,6 +181,24 @@ test('upload: a Word contract is read, stored privately under the request id, an
   assert.deepEqual(state.removed, ['agreements/5b0a8c62-56f4-4a62-9a39-6b0e4b8b2a01.docx']);
 });
 
+// Word saves a password-protected document and an old .doc as an OLE compound file, not a zip: each says what it is.
+test('upload: an old .doc and a password-protected Word document say so, and a file over 5 MB says how big it can be', async () => {
+  reset('admin');
+  const ole = (...streams) => { const b = new Uint8Array(4096); b.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]); let at = 1024; for (const s of streams) { b.set([...s].flatMap(c => [c.charCodeAt(0), 0]), at); at += 128; } return b; };
+  let response = await upload(ole('Root Entry', 'EncryptionInfo', 'EncryptedPackage'), 'Locked.docx');
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, 'This document is password protected. Remove the password and upload it again.');
+  response = await upload(ole('Root Entry', 'WordDocument', '1Table'), 'Agreement.doc');
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /older Word document \(\.doc\)\. Open it in Word, save it as a Word Document \(\.docx\) or a PDF/);
+  response = await upload(new Uint8Array(T.MAX_AGREEMENT_BYTES + 70000).fill(0x25), 'Scan.pdf');
+  assert.equal(response.status, 413);
+  assert.match((await response.json()).error, /larger than 5 MB\. Contracts can be up to 5 MB/);
+  response = await upload(new TextEncoder().encode('MANAGEMENT AGREEMENT\nplain text renamed'), 'Renamed.docx');
+  assert.match((await response.json()).error, /^Upload the contract as a Word document \(\.docx\) or a PDF, up to 5 MB$/);
+  assert.equal(state.uploads.length, 0, 'nothing refused is stored');
+});
+
 test('upload: a PDF is kept as it is; other files, macros, 5 MB and non-admins are refused', async () => {
   reset('admin');
   assert.equal((await upload(new TextEncoder().encode('%PDF-1.7\n1 0 obj'), 'Signed.pdf')).status, 200);
@@ -182,6 +228,26 @@ test('opening a contract: a 10-minute download link for the file the database al
   reset('admin');
   assert.equal((await server.onboardingSettingsRoute(new Request('https://app.test/api/workspace/onboarding-settings?templateId=nope'))).status, 400);
   assert.equal((await server.onboardingSettingsRoute(new Request('https://app.test/api/workspace/onboarding-settings?section=x'))).status, 400);
+});
+
+// Found on the devstack: the onboarding tracker and the onboarding ticket (All work, Home) offered only the typed
+// "Publish the management agreement", so an admin there never saw the contract in use. The ticket's forms now lead
+// with the contract's, as the property page's do.
+test('the onboarding ticket offers "Publish the agreement from the contract" wherever it opens', async () => {
+  const wf = await vite.ssrLoadModule('/lib/workflow-forms.ts');
+  const draft = { templateId: '855ba556-338b-42a7-9c38-1700f6a6f8cc', version: 6, kind: 'docx', fileName: 'Agreement.docx', text: '# Agreement\n\nService | Fee\nManagement | 20%', missing: [] };
+  const journey = { propertyId: 'b17c38b7-db8f-4b01-bd57-1f3961f51283', workId: 'f9f072d8-706d-4d10-8826-710a3c6eeb27', version: 3, stage: 'agreement', signedName: null, agreementDraft: draft, data: {} };
+  const ticket = { workId: journey.workId, propertyId: journey.propertyId, kind: 'onboarding', status: 'open', data: {}, assigneeId: null };
+  const admin = { role: 'admin', modules: ['property-onboarding'], userId: 'u1' };
+  const keys = wf.workItemForms(admin, ticket, [journey], [ticket]).map(f => f.key);
+  assert.equal(keys[0], 'publishAgreementTemplate');
+  assert.ok(keys.includes('publishAgreement'), 'typing an agreement in stays possible');
+  const form = wf.workItemForms(admin, ticket, [journey], [ticket])[0];
+  assert.match(form.description, /Management \| 20%/, 'the fee table reads as rows before publishing');
+  assert.deepEqual(form.build({ checked: true }), { action: 'publishAgreement', propertyId: journey.propertyId, version: 3, templateId: draft.templateId });
+  assert.ok(!wf.workItemForms({ ...admin, role: 'client' }, ticket, [journey], [ticket]).some(f => f.key === 'publishAgreementTemplate'), 'never for the owner');
+  assert.ok(!wf.workItemForms(admin, ticket, [{ ...journey, agreementDraft: null }], [ticket]).some(f => f.key === 'publishAgreementTemplate'), 'only with a contract in use');
+  assert.match(await fs.readFile('mobile/src/OnboardingTracker.tsx', 'utf8'), /\[\.\.\.agreementTemplateForms\(account, journey\), \.\.\.journeyForms\(account, journey\)\]/);
 });
 
 test('wiring: the routes, the Management centre view for admins, and the journey page', async () => {
