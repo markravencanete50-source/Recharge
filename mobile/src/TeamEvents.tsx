@@ -148,7 +148,7 @@ export function TeamEventSheet({ palette: p, visible, event, day, canEditAll, my
           </View>
         </View>
         <Field label="Title" value={title} onChange={setTitle} p={p} placeholder={PLACEHOLDER[kind]} />
-        <DateField p={p} label="Dates (one day: choose it twice)" wholeMonthLink={false} value={{ from: startsOn, to: endsOn }} onChange={next => { setStartsOn(next.from); setEndsOn(next.to); }} />
+        <DateField p={p} label="Dates" hint="Choose the first day, then the last. For one day, choose it twice." wholeMonthLink={false} value={{ from: startsOn, to: endsOn }} onChange={next => { setStartsOn(next.from); setEndsOn(next.to); }} />
         <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
           <View style={{ flex: 1, minWidth: 140 }}><Field label="Starts (HH:MM, optional)" value={startTime} onChange={setStartTime} p={p} placeholder="10:00" /></View>
           <View style={{ flex: 1, minWidth: 140 }}><Field label="Ends (optional)" value={endTime} onChange={setEndTime} p={p} placeholder="11:30" /></View>
