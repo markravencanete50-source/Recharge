@@ -6,7 +6,10 @@ import { workspaceDateKey } from './analytics';
 import { BATHROOM_CHOICES, BEDROOM_CHOICES, GARDEN_CHOICES, PARKING_CHOICES, PROPERTY_TYPES, WC_CHOICES, type Suggestion } from './property-listing';
 export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense';
  // Quick picks under a text field (tapping one fills it, and any fields in `also`), and a postcode lookup on an address.
- suggestions?:Suggestion[];lookup?:'postcode'};
+ suggestions?:Suggestion[];lookup?:'postcode';
+ // `section` puts a small heading above this field, starting a group ("Comparable 1 (optional)"); `after` keeps the
+ // field hidden until the named field has a value, so a second group appears once the first is started.
+ section?:string;after?:string};
 export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls'|'finance';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string;workId?:string};
 export type JourneyView={propertyId:string;clientId:string|null;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionOn?:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string};propertyType?:string|null;bathrooms?:number|null;enquiry?:EnquiryDetails;ownerAccount?:boolean;invoiceOutsideAt?:string|null;invoiceOutsideNote?:string};
 export type EnquiryDetails={contactName?:string;companyName?:string;email?:string;phone?:string;existingClient?:boolean;wcs?:number;parking?:string;garden?:string;photoLink?:string;notes?:string};

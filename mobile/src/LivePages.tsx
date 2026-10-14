@@ -41,7 +41,7 @@ import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
 import { DrawLine, Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
-import { departmentColor, primaryFill, ui, web, type Palette } from "./theme";
+import { departmentColor, primaryFill, space, ui, web, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
 import { WorkspaceApiError, readOlderNotices, readWorkItem, workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
@@ -189,7 +189,7 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
     const text = value ? String(value) : "";
     const parsed = text ? new Date(text + "T12:00:00") : new Date(), selected = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
     return (
-      <View style={{ gap: 8 }}>
+      <View style={{ gap: space.tight }}>
         {label}
         <MotionPress accessibilityRole="button" accessibilityLabel={f.label + ", " + (text || "choose a date")} disabled={disabled} onPress={() => setCalendar(!calendar)} style={[ui.between, { minHeight: 50, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: calendar ? p.primary : p.controlBorder, backgroundColor: p.background }]}>
           <Text style={{ color: text ? p.text : p.muted, fontSize: 15 }}>{text ? new Date(text + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "Choose a date"}</Text>
@@ -204,7 +204,7 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
     );
   }
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: space.tight }}>
       {label}
       {f.type === "select" ? (
         // Few options as radio choices, more as a dropdown, a long list with a search box (ChoiceField).
@@ -248,9 +248,17 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
     } catch (e) { setError(message(e)); } finally { inFlight.current = false; setBusy(false); }
   }
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;
+  // Each label belongs to the field under it: a field and its label sit close (space.tight), and the next label starts
+  // a clear step further down (space.section), so a label never reads as a caption of the field above.
+  const shown = spec.fields.filter(f => !f.after || (values[f.after] !== undefined && values[f.after] !== "" && values[f.after] !== null));
   return (
     <>
-      {spec.fields.map((f, n) => f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues(current => ({ ...current, [f.name]: v }))} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} /></Stagger>)}
+      <View style={{ gap: space.section }}>
+      {shown.map((f, n) => <View key={f.name} style={{ gap: space.row }}>
+        {!!f.section && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "600", marginTop: n ? space.tight : 0 }}>{f.section}</Text>}
+        {f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues(current => ({ ...current, [f.name]: v }))} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} /></Stagger>}
+      </View>)}
+      </View>
       {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}><Text style={[ui.small, { color: p.text }]}>{error}</Text></View>}
       <SoftButton label={busy ? "Saving…" : uploading ? "Saving photos…" : "Save and continue"} icon="check" primary disabled={busy || uploading} onPress={() => void save()} palette={p} />
     </>
