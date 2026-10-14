@@ -4,7 +4,6 @@ import { isNativeRequest } from './native-request-policy';
 import { businessContext,businessResponse,databaseFailure,viewAsFailure } from './business-server';
 import { journeyReadSchema,journeyActionSchema,operationsReadSchema } from './journey-policy';
 import { operationsActionSchema, validationReason } from './operations-policy';
-import { emailPublishedEstimate } from './estimate-link-server';
 export const journeyRoute=(request:Request,native=false)=>workflowRoute(request,native,'journey');
 export const operationsRoute=(request:Request,native=false)=>workflowRoute(request,native,'operations');
 async function workflowRoute(request:Request,native:boolean,kind:'journey'|'operations'){
@@ -29,7 +28,8 @@ async function workflowRoute(request:Request,native:boolean,kind:'journey'|'oper
   const result=await session.client.rpc(kind==='journey'?'workspace_journey_action':'workspace_operations_action',{input:parsed.data});
   if(result.error)return databaseFailure(result.error);
   // A published estimate without an owner account is emailed to the enquiry with a private link (migration 20261019520000).
-  if(kind==='journey'&&parsed.data.action==='publishEstimate')return businessResponse({data:await emailPublishedEstimate(session,parsed.data.requestId,result.data),ok:true});
+  // Loaded only here, so other journey requests never load the email sender.
+  if(kind==='journey'&&parsed.data.action==='publishEstimate'){const {emailPublishedEstimate}=await import('./estimate-link-server');return businessResponse({data:await emailPublishedEstimate(session,parsed.data.requestId,result.data),ok:true});}
   return businessResponse({data:result.data,ok:true});
  }catch(error){return viewAsFailure(error)??businessResponse({error:'The property journey is temporarily unavailable'},503);}
 }
