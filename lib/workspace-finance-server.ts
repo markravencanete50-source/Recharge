@@ -1,6 +1,6 @@
 import { rpcRoute } from './workspace-rpc-route';
 import { ACCOUNTS_ACTIONS, ACCOUNTS_SECTIONS, PAYABLES_ACTIONS, REPORT_SECTIONS, financeActionSchema, financeBodyLimit, financeReadSchema, prepareFinanceAction } from './workspace-finance-policy';
-import { teamsActionSchema, teamsReadSchema } from './workspace-teams-policy';
+import { BUSINESS_REPORT_KIND, teamsActionSchema, teamsReadSchema } from './workspace-teams-policy';
 import { adminActionSchema, adminReadSchema } from './workspace-admin-policy';
 import { enquiryEmailReady } from './integration-policy';
 
@@ -26,6 +26,8 @@ export const workspaceTeams = rpcRoute({
   read: (client, input) => input.section === 'readyHome' ? client.rpc('workspace_ready_home')
     : input.section === 'favorites' ? client.rpc('workspace_favorites')
     : input.section === 'viewAsPeople' ? client.rpc('workspace_view_as_people')
+    // The business reports (admins only, checked by the database) have their own read.
+    : input.section in BUSINESS_REPORT_KIND ? client.rpc('workspace_business_report', { section: BUSINESS_REPORT_KIND[input.section as keyof typeof BUSINESS_REPORT_KIND], start_on: input.from, end_on: input.to })
     // Client enquiries also say whether the email service is set up (or the team copies the link).
     : input.section === 'clientEnquiries' ? Promise.all([client.rpc('workspace_teams_read', { section: input.section }),
       import('./integration-server').then(m => enquiryEmailReady(m.integrationSettings()), () => false)]).then(([r, email]) => r.error ? r : { ...r, data: { ...(r.data as object), emailReady: email } })
