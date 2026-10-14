@@ -12,6 +12,7 @@ import { EmptyState, PageHeading, SoftButton } from "./LivePages";
 import { WorkPhotos } from "./Photos";
 import { writeOperation } from "./backend/client";
 import { formatMoney } from "../../lib/format";
+import { managementReason } from "../../lib/repair-approvals";
 import { repairTypeLabel } from "../../lib/repair-guides";
 import { ownerApprovals, type RepairApproval } from "../../lib/owner-approvals";
 import type { RepairApproval as ManagementRepair } from "../../lib/management-live";
@@ -19,8 +20,8 @@ import type { JourneyView, OperationView, WorkflowForm } from "../../lib/workflo
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
 
-// A repair cost someone has to say yes or no to: the owner (above their own limit), or management
-// (above the company-wide limit). Declining needs a reason, which Stays see on the repair.
+// A repair cost someone has to say yes or no to: management (at or over the company repair limit, or a
+// contractor estimate), then the owner. Declining needs a reason, which Stays see on the repair.
 export type CostDecision = {
   who: "owner" | "management"; workId: string; version: number; propertyName: string; issue: string;
   repairType: string | null; urgent: boolean; hazard: boolean;
@@ -28,18 +29,19 @@ export type CostDecision = {
 };
 type Choice = "approve" | "decline";
 
-// A repair above the company-wide limit, as Management decides it (Management and admins' Home).
+// A repair waiting for management, as Management decides it (Management and admins' Home).
 export function managementCostDecision(r: ManagementRepair): CostDecision {
   return {
     who: "management", workId: r.workId, version: r.version, propertyName: r.propertyName, issue: r.issue ?? r.title, repairType: r.repairType, urgent: r.urgent, hazard: r.hazard,
     estimateMinor: r.estimatedCostMinor, previousEstimateMinor: r.previousEstimateMinor, quoteReason: r.quoteReason,
-    limitText: `Above the management limit${r.limitMinor !== null ? " of " + formatMoney(r.limitMinor) : ""}. ${r.ownerApprovedAt ? "The owner has approved it." : "It is within the owner’s own limit."} Once approved, it carries on with Stays and Ready.`,
+    limitText: managementReason(r),
   };
 }
 
 export function ownerLimitText(r: Pick<RepairApproval, "limitMinor" | "anyAmount">) {
   if (r.anyAmount) return "You authorised repairs of any amount, but this one was sent to you to check.";
-  return r.limitMinor === null ? "No automatic repair budget is set, so every repair cost comes to you." : `Repairs up to ${formatMoney(r.limitMinor)} go ahead without asking you. This one is above that.`;
+  const checked = "Recharge have checked this quote. Repairs at or over our repair limit need your approval too.";
+  return r.limitMinor ? `${checked} You pre-authorised repairs up to ${formatMoney(r.limitMinor)}, and this one is above that.` : checked;
 }
 
 // One flow, top to bottom: what is wrong (with any photos), the amount (and the earlier quote if it
@@ -77,7 +79,7 @@ export function CostDecisionSheet({ p, decision, start = "approve", onClose, onD
   ].filter(Boolean) : [];
   // One block, so every part keeps the same 14px gap (the sheet staggers its direct children).
   return (
-    <Sheet palette={p} visible={!!decision} onClose={onClose} title={decision?.propertyName ?? ""} subtitle={owner ? "A repair cost waiting for your approval" : "Above the management limit for repairs"} icon="hardhat">
+    <Sheet palette={p} visible={!!decision} onClose={onClose} title={decision?.propertyName ?? ""} subtitle={owner ? "A repair cost waiting for your approval" : "A repair cost for management to approve"} icon="hardhat">
       {decision && <View style={{ gap: 14 }}>
         {/* What is wrong, and where. */}
         <View style={{ gap: 8 }}>
@@ -99,11 +101,11 @@ export function CostDecisionSheet({ p, decision, start = "approve", onClose, onD
           {!!decision.limitText && <Text style={[ui.small, { color: p.muted }]}>{decision.limitText}</Text>}
         </View>
         {choice === "approve" ? <>
-          {!owner && <Field label="Note for the team (optional)" value={text} onChange={setText} p={p} multiline placeholder="For example: agreed with the owner by phone" />}
+          {!owner && <Field label="Note for the team (optional)" value={text} onChange={setText} p={p} multiline placeholder="For example: checked against the last invoice. The owner does not see this." />}
           <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: consent }} onPress={() => { setConsent(c => !c); setError(""); }}
             style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, backgroundColor: consent ? p.successWash : p.elevated }]}>
             <Feather name={consent ? "check-square" : "square"} size={20} color={consent ? p.success : p.muted} />
-            <Text style={{ color: p.text, flex: 1 }}>{owner ? `I approve spending up to ${amount} on this repair` : `I approve ${amount} above the management limit`}</Text>
+            <Text style={{ color: p.text, flex: 1 }}>{owner ? `I approve spending up to ${amount} on this repair` : `I approve ${amount} for this repair`}</Text>
           </MotionPress>
           {!!error && <Notice text={error} p={p} tone="bad" />}
           <Button label={busy ? "Saving…" : `Approve ${amount}`} icon="check" primary p={p} disabled={busy || !consent} onPress={() => void save()} />

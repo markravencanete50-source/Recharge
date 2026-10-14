@@ -59,6 +59,7 @@ after(()=>db.close());
 async function completedRepair(cost=18000){
  await as(STAYS);
  let repair=await operation({action:'createOperation',propertyId:property,kind:'maintenance',data:{issue:'Kitchen tap leaking under the sink',estimatedCostMinor:20000,hazard:false,repairType:'leak'}});
+ if(repair.data.phase==='management_approval'){await as(ADMIN);repair=await update(repair,'approveManagement',{});await as(STAYS);}
  if(repair.data.phase==='owner_approval'){await as(OWNER);repair=await update(repair,'approveBudget',{consent:true});await as(STAYS);}
  repair=await update(repair,'referReady',{troubleshooting:'Isolated the water under the sink',guestUpdate:'A plumber is on the way'});
  await as(READY);repair=await update(repair,'bookRepair',{repairOn:today,contractor:'Leith Plumbing',guestUpdate:'Plumber booked for today'});

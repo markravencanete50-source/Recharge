@@ -156,15 +156,15 @@ test('the owner reports a repair and is told when it is resolved; management can
   assert.equal(await notified(ADMIN, repair.workId, 'operations.updateOperation.resolveRepair'), 0, 'not the person who resolved it');
 });
 
-test('only a repair in triage can be resolved: referred, booked, completed and owner-approval repairs are refused', async () => {
+test('only a repair in triage can be resolved: referred, booked, completed and waiting-for-approval repairs are refused', async () => {
   await as(STAYS);
   const high = await create(HOME, 'maintenance', { issue: 'Roof slates slipped at the back', estimatedCostMinor: 90000, hazard: false, repairType: 'damage' });
-  assert.equal(high.data.phase, 'owner_approval');
+  assert.equal(high.data.phase, 'management_approval');
   await assert.rejects(step(high, 'resolveRepair', { resolution: 'Looked at it, it is fine now' }), /still in triage/);
   const repair = await create(HOME, 'maintenance', { issue: 'Boiler pressure keeps dropping', estimatedCostMinor: 0, hazard: false, repairType: 'heating' });
-  // A higher quote after the first look sends it to the owner, so it is no longer in triage either.
+  // A higher quote after the first look sends it for approval, so it is no longer in triage either.
   const requoted = await step(repair, 'reviseQuote', { quoteMinor: 45000, reason: 'The pump has failed and needs replacing' });
-  assert.equal(requoted.data.phase, 'owner_approval');
+  assert.equal(requoted.data.phase, 'management_approval');
   await assert.rejects(step(requoted, 'resolveRepair', { resolution: 'Looked at it, it is fine now' }), /still in triage/);
   // The normal path still works, and a referred, booked or finished repair cannot be resolved this way.
   const second = await create(HOME, 'maintenance', { issue: 'Front door sticks in the damp', estimatedCostMinor: 0, hazard: false, repairType: 'locks_access' });

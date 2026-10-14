@@ -18,6 +18,9 @@ const https = z.string().url().max(1000).refine(value => {
   return url.protocol === 'https:' && !url.username && !url.password;
 }, 'Use a public HTTPS link');
 
+// The business reports, read through workspace_business_report (lib/workspace-finance-server.ts).
+export const BUSINESS_REPORT_SECTIONS = ['reportEnquiries', 'reportRepairs', 'reportTodos', 'reportMessages', 'reportTime'] as const;
+export const BUSINESS_REPORT_KIND = { reportEnquiries: 'enquiries', reportRepairs: 'repairs', reportTodos: 'todos', reportMessages: 'messages', reportTime: 'time' } as const satisfies Record<(typeof BUSINESS_REPORT_SECTIONS)[number], string>;
 export const teamsReadSchema = z.object({
   section: z.enum(['schedule', 'performance', 'management', 'routines', 'training', 'onboarding', 'contracts', 'myContracts', 'shift', 'teamPerformance', 'mailbox', 'signoff', 'budgetChart', 'rota',
     'cleanerRates', 'readyHome', 'defaultCleaners', 'hub', 'responsibilities', 'rotaPlan', 'timesheet', 'favorites', 'viewAsPeople', 'productivity', 'shiftChanges', 'clientEnquiries', 'feedback', 'chatReports',
@@ -26,7 +29,9 @@ export const teamsReadSchema = z.object({
     // Menu order (Access control → Menu order): your own role's, and every role's for super admins.
     'menuLayout', 'menuLayouts',
     // Round 5: the KPI tracker (20261015100000).
-    'kpis']),
+    'kpis',
+    // Business reports for admins (20261020860000): enquiries, repairs and spend, to-dos, messages, time worked.
+    ...BUSINESS_REPORT_SECTIONS]),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
@@ -48,6 +53,10 @@ export const teamsReadSchema = z.object({
   if (value.section === 'teamEvents') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
+  }
+  if ((BUSINESS_REPORT_SECTIONS as readonly string[]).includes(value.section)) {
+    if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
+    else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 365 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 366 days' });
   }
   if (value.section === 'teamPerformance' || value.section === 'kpis') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });

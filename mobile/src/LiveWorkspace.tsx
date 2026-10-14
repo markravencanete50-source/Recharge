@@ -24,6 +24,7 @@ import { FilterBar } from "./FilterBar";
 import { RechargeSplash } from "./RechargeSplash";
 import { GreetingCard } from "./WelcomeMoment";
 import { Reports } from "./Reports";
+import { BusinessReports } from "./BusinessReports";
 import { Sheet } from "./TeamFlows";
 import { Bump, MotionPress, MotionProvider, Stagger, SwapIn, useMotionPreference, useReducedMotion } from "./motion";
 import { headerPalette, themes, ui, web, type Palette } from "./theme";
@@ -585,6 +586,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
         <><PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." />{reportError ? <View style={{ gap: 12 }}><EmptyState palette={p} icon="activity" title="Reports could not be loaded" detail={reportError} /><SoftButton label="Try again" icon="refresh-cw" palette={p} onPress={() => void loadReport(period)} /></View> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View>}</>
       )}
       {(isWorkspaceAdmin(account.role) || account.role === "accounts") && !!invoices.length && invoiceList}
+      {/* Business reports (enquiries, repairs, to-dos, messages, time): admins only, never owners or clients. */}
+      {isWorkspaceAdmin(account.role) && <BusinessReports p={p} account={account} />}
     </>
   );
   const page = tab === "home"

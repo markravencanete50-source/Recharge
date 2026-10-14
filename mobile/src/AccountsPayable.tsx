@@ -23,6 +23,7 @@ import { awaitingCleans, cleansFreedByRejection, cleansOnLiveInvoices, cleansWit
 import { cleanerRatesSchema } from "../../lib/cleans-live";
 import { formatDay, formatMoney, plural } from "../../lib/format";
 import { poundsToMinor } from "../../lib/repairs-live";
+import { repairLimit, repairLimitSummary } from "../../lib/repair-approvals";
 import { canStart } from "../../lib/home-tools";
 import { cleanerInvoiceTrackerItems, type PayableInvoice } from "../../lib/tracker-payables";
 import { addressOf } from "../../lib/tracker";
@@ -668,11 +669,11 @@ export function AccountsPayable({ p, account, role, management, overview, status
         <Text style={[ui.small, { color: p.muted }]}>{limit?.minor == null ? "No limit set. Accounts can approve any evidenced expense." : `Accounts approves up to ${pounds(limit.minor)}. Larger costs need management.`}</Text>
         {role === "super_admin" && limit && <Button label="Change the limit" p={p} onPress={() => setAsk({ title: "Approval limit", subtitle: "Accounts can approve evidenced costs up to this amount", min: 0, confirm: "Save limit", amount: { label: "Limit (leave 0 for no limit)", initial: limit.minor == null ? "0" : (limit.minor / 100).toFixed(2) }, build: (_note, minor) => ({ action: "setFinancePolicy", requestId: "", version: limit.version, expenseApprovalLimitMinor: minor ? minor : null }) })} />}
       </View>
-      {/* The second spend limit: repairs above it also need an admin's approval, after the owner's. */}
+      {/* The second spend limit: repairs under it are approved automatically; at or over it management approve first, then the owner. */}
       <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 10 }]}>
-        <Text style={{ color: p.text, fontWeight: "700" }}>Management approval for repairs</Text>
-        <Text style={[ui.small, { color: p.muted }]}>{limit?.repairMinor == null ? "Off. Repairs need only the owner’s approval, above their own limit." : `Repairs above ${pounds(limit.repairMinor)} also need an admin’s approval, after the owner’s.`}</Text>
-        {management && limit && <Button label="Change the repair limit" p={p} onPress={() => setAsk({ title: "Management approval for repairs", subtitle: "Repairs costing more than this also need an admin’s approval", min: 0, confirm: "Save limit", amount: { label: "Limit (leave 0 to switch it off)", initial: limit.repairMinor == null ? "0" : (limit.repairMinor / 100).toFixed(2) }, build: (_note, minor) => ({ action: "setRepairApprovalLimit", requestId: "", version: limit.version, managementRepairLimitMinor: minor ? minor : null }) })} />}
+        <Text style={{ color: p.text, fontWeight: "700" }}>Repair approval limit</Text>
+        <Text style={[ui.small, { color: p.muted }]}>{repairLimitSummary(limit?.repairMinor)}</Text>
+        {management && limit && <Button label="Change the repair limit" p={p} onPress={() => setAsk({ title: "Repair approval limit", subtitle: "Repairs under this amount are approved automatically. At or over it, management approve first, then the owner.", min: 0, confirm: "Save limit", amount: { label: "Limit", initial: (repairLimit(limit.repairMinor) / 100).toFixed(2) }, build: (_note, minor) => ({ action: "setRepairApprovalLimit", requestId: "", version: limit.version, managementRepairLimitMinor: minor ?? null }) })} />}
       </View>
       <Notice text="Xero is not connected yet. Approved costs are queued and will post as bills, tracked to each property, once it is." p={p} />
     </>

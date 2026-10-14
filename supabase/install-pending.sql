@@ -1,4 +1,3 @@
 -- Nothing pending. Every migration in supabase/migrations is installed in the Supabase project.
--- 20261020700000_direct_push, 20261020800000_enquiry_duplicates and 20261020850000_no_lunch_pauses were installed on
--- 14 October 2026: the lunch part and most of the pop-up parts by the lead, the rest by Lee from the install file (the
--- database tool here cannot run statements that delete or drop). They went live with pull request #14.
+-- 20261020810000_repair_approvals and 20261020860000_business_reports were installed by the lead on 14 October 2026
+-- (neither deletes nor drops anything) and went live with the Rounds 2 and 3 pull request.

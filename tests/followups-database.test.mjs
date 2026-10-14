@@ -31,7 +31,7 @@ await as(0);property=(await db.query('select public.workspace_save_property($1::
 for(const [i,assignment] of [[1,'client'],[2,'staff'],[3,'staff']])await db.query('select public.workspace_assign_property($1,$2,$3)',[property,users[i],assignment]);
 await db.exec('reset role');
 
-test('a higher quote goes back to the owner, and the repair carries on once approved',async()=>{
+test('a higher quote at or over the limit goes to management, then the owner, and the repair carries on once approved',async()=>{
  await as(2);
  let repair=await action({action:'createOperation',propertyId:property,kind:'maintenance',data:{issue:'Dripping kitchen tap',estimatedCostMinor:0,hazard:false,repairType:'leak'}});
  assert.equal(repair.data.phase,'triage');
@@ -40,6 +40,8 @@ test('a higher quote goes back to the owner, and the repair carries on once appr
  assert.equal(repair.data.phase,'booked');
  await assert.rejects(update(repair,'reviseQuote',{quoteMinor:15000,reason:'x'}),/reason/i);
  repair=await update(repair,'reviseQuote',{quoteMinor:15000,reason:'The tap body is cracked and needs replacing'});
+ assert.equal(repair.data.phase,'management_approval');assert.equal(repair.data.resumePhase,'booked');
+ await as(0);repair=await update(repair,'approveManagement',{});
  assert.equal(repair.data.phase,'owner_approval');assert.equal(repair.data.resumePhase,'booked');
  assert.equal(repair.data.estimatedCostMinor,15000);assert.equal(repair.data.previousEstimateMinor,0);
  await db.exec('reset role');

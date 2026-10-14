@@ -44,6 +44,14 @@ async function asBackend() { await system(); await db.exec('set role service_rol
 beforeEach(async () => { await db.exec('reset role'); await db.exec('delete from private.workspace_write_limits'); });
 const rpc = async (name, args = []) => (await db.query(`select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) result`, args)).rows[0].result;
 const ops = input => rpc('workspace_operations_action', [JSON.stringify({ requestId: crypto.randomUUID(), ...input })]);
+// At or over the £100 repair limit, management approve before the owner is asked: approve it here (as an admin), then carry on as Anna.
+const ownerWait = async repair => {
+  if (repair.data.phase !== 'management_approval') return repair;
+  await as(ADMIN);
+  const approved = await ops({ action: 'updateOperation', workId: repair.workId, version: repair.version, step: 'approveManagement', data: {} });
+  await as(ANNA);
+  return approved;
+};
 const journey = input => rpc('workspace_journey_action', [JSON.stringify({ requestId: crypto.randomUUID(), ...input })]);
 const act = input => rpc('workspace_oversight_action', [oversightActionSchema.parse({ requestId: crypto.randomUUID(), ...input })]);
 const read = (section, target = null) => rpc('workspace_oversight_read', [section, target]);
@@ -69,7 +77,7 @@ await db.query("insert into private.workspace_staff_rota(user_id,department,usua
 let boiler, journeyWork;
 test('an owner is reminded once after 48 hours, then client relations once after 96', async () => {
   await as(ANNA);
-  boiler = await ops({ action: 'createOperation', propertyId: HARBOUR, kind: 'maintenance', data: { issue: 'Boiler not firing, no heating', estimatedCostMinor: 45000, hazard: false, repairType: 'heating' } });
+  boiler = await ownerWait(await ops({ action: 'createOperation', propertyId: HARBOUR, kind: 'maintenance', data: { issue: 'Boiler not firing, no heating', estimatedCostMinor: 45000, hazard: false, repairType: 'heating' } }));
   assert.equal(boiler.data.phase, 'owner_approval');
   assert.ok(boiler.data.ownerApprovalSince, 'the wait is stamped when it starts');
 
@@ -93,12 +101,12 @@ test('an owner is reminded once after 48 hours, then client relations once after
 
 test('with nobody in client relations on the property, the escalation goes to client relations, then admins', async () => {
   await as(ANNA);
-  const leak = await ops({ action: 'createOperation', propertyId: CASTLE, kind: 'maintenance', data: { issue: 'Leak under the kitchen sink', estimatedCostMinor: 30000, hazard: false, repairType: 'leak' } });
+  const leak = await ownerWait(await ops({ action: 'createOperation', propertyId: CASTLE, kind: 'maintenance', data: { issue: 'Leak under the kitchen sink', estimatedCostMinor: 30000, hazard: false, repairType: 'leak' } }));
   assert.deepEqual(await chase("now()+interval '97 hours'"), { reminded: 1, escalated: 1 });
   assert.equal(await notices(CARA, 'repairs.owner_escalated'), 2, 'Cara is the only one in client relations');
   await system(); await db.query("update private.workspace_staff_rota set department='guest_relations' where user_id=$1", [users[CARA]]);
   await as(ANNA);
-  const lock = await ops({ action: 'createOperation', propertyId: CASTLE, kind: 'maintenance', data: { issue: 'Front door lock sticking', estimatedCostMinor: 20000, hazard: false, repairType: 'locks_access' } });
+  const lock = await ownerWait(await ops({ action: 'createOperation', propertyId: CASTLE, kind: 'maintenance', data: { issue: 'Front door lock sticking', estimatedCostMinor: 20000, hazard: false, repairType: 'locks_access' } }));
   assert.deepEqual(await chase("now()+interval '98 hours'"), { reminded: 1, escalated: 1 });
   assert.equal(await notices(ADMIN, 'repairs.owner_escalated'), 1, 'admins when nobody is in client relations');
   await system(); await db.query("update private.workspace_staff_rota set department='client_relations' where user_id=$1", [users[CARA]]);
@@ -108,7 +116,7 @@ test('with nobody in client relations on the property, the escalation goes to cl
 
 test('management sees how long an owner has waited and can remind them now, once a day', async () => {
   await as(ANNA);
-  const fence = await ops({ action: 'createOperation', propertyId: HARBOUR, kind: 'maintenance', data: { issue: 'Garden fence blown down', estimatedCostMinor: 60000, hazard: false, repairType: 'damage' } });
+  const fence = await ownerWait(await ops({ action: 'createOperation', propertyId: HARBOUR, kind: 'maintenance', data: { issue: 'Garden fence blown down', estimatedCostMinor: 60000, hazard: false, repairType: 'damage' } }));
   await system();
   await db.query("update private.workspace_domain_details set data=data||jsonb_build_object('ownerApprovalSince',now()-interval '50 hours') where work_id=$1", [fence.workId]);
   await as(ADMIN);
