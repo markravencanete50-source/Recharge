@@ -6,6 +6,11 @@
 --    stay (private.workspace_reservations.payout_breakdown, pence) along with the cleaning fee and city tax. Airbnb
 --    keeps Airbnb's own expected payout. With no lines the sum is exactly as before.
 --    private.workspace_payout_breakdown(jsonb) keeps only the known keys and whole, non-negative pence.
+--    Settled money is never recalculated: a sync leaves the expected payout (the amount and the breakdown) of a stay
+--    alone once its payout is matched or agreed, or while an issued or paid owner statement covers it
+--    (private.workspace_payout_stay_locked: a statement for the stay's property whose period overlaps its nights, the
+--    rule statements already use to lock a stay). See private.workspace_payout_kept. Only stays still missing,
+--    different or not yet reconciled get the new sum.
 -- 2. A stay's payout row (private.workspace_payout_row) also returns expectedBreakdown, for the Approve the payout sheet.
 --    Staff only, as before: owners never read payout rows.
 -- 3. Management's Home: "Payouts to reconcile this month" counted every Airbnb, Booking.com and Vrbo stay checking in
@@ -19,7 +24,8 @@
 -- Patched by anchor (each anchor must occur exactly once; each patch is skipped once its sentinel is present):
 --   private.workspace_hostaway_sync(jsonb), private.workspace_payout_row(private.workspace_reservations),
 --   private.workspace_management_overview().
--- New: private.workspace_payout_breakdown(jsonb), private.workspace_payout_due_on(text,date,date).
+-- New: private.workspace_payout_breakdown(jsonb), private.workspace_payout_due_on(text,date,date),
+--   private.workspace_payout_kept(private.workspace_reservations).
 -- Safe to run twice.
 
 alter table private.workspace_reservations add column if not exists payout_breakdown jsonb;
@@ -39,6 +45,14 @@ create or replace function private.workspace_payout_breakdown(input jsonb) retur
  end;
 $$;
 
+-- A stay whose expected payout the sync must leave alone: its payout is matched or agreed, or an issued or paid
+-- owner statement covers it.
+create or replace function private.workspace_payout_kept(target private.workspace_reservations) returns boolean language plpgsql stable security definer set search_path='' as $$
+begin
+ if target.id is null then return false;end if;
+ return private.workspace_payout_stay_locked(target) or coalesce(private.workspace_payout_row(target)->>'state','') in ('matched','agreed');
+end $$;
+
 -- When a platform's payout for a stay is expected (null for direct and other stays, which have no platform payout).
 create or replace function private.workspace_payout_due_on(channel text, check_in date, check_out date) returns date language sql immutable set search_path='' as $$
  select case channel when 'airbnb' then check_in+2 when 'vrbo' then check_in+2 when 'booking_com' then check_out+5 end;
@@ -47,17 +61,22 @@ $$;
 do $patch$
 declare
  fixes constant text[][] := array[
-  -- 1. The sync keeps the breakdown it was sent (a breakdown alone never changes the stay's version).
+  -- 1. The sync never changes the expected payout of a stay that is settled or on an issued statement.
+  ['private.workspace_hostaway_sync(jsonb)',
+   $a$found_prev:=found;$a$,
+   $r$found_prev:=found;if found_prev and v_payout is distinct from prev.payout_minor and private.workspace_payout_kept(prev) then v_payout:=prev.payout_minor;end if;$r$,
+   $s$private.workspace_payout_kept(prev) then v_payout:=prev.payout_minor$s$],
+  -- 2. The sync keeps the breakdown it was sent, on the same terms (a breakdown alone never changes the stay's version).
   ['private.workspace_hostaway_sync(jsonb)',
    $a$touched:=touched||res.property_id;$a$,
-   $r$if r ? 'payoutBreakdown' then update private.workspace_reservations set payout_breakdown=private.workspace_payout_breakdown(r->'payoutBreakdown') where id=res.id and payout_breakdown is distinct from private.workspace_payout_breakdown(r->'payoutBreakdown');end if;touched:=touched||res.property_id;$r$,
+   $r$if r ? 'payoutBreakdown' and res.payout_breakdown is distinct from private.workspace_payout_breakdown(r->'payoutBreakdown') and not (found_prev and private.workspace_payout_kept(prev)) then update private.workspace_reservations set payout_breakdown=private.workspace_payout_breakdown(r->'payoutBreakdown') where id=res.id;end if;touched:=touched||res.property_id;$r$,
    $s$set payout_breakdown=private.workspace_payout_breakdown(r->'payoutBreakdown')$s$],
-  -- 2. The payout row shows it.
+  -- 3. The payout row shows it.
   ['private.workspace_payout_row(private.workspace_reservations)',
    $a$'repeatedAmount',repeated,'otaFeesMinor',fees,$a$,
    $r$'repeatedAmount',repeated,'otaFeesMinor',fees,'expectedBreakdown',target.payout_breakdown,$r$,
    $s$'expectedBreakdown',target.payout_breakdown$s$],
-  -- 3. Home counts overdue payouts only (the line after the anchor, "and settledMinor is null", still applies).
+  -- 4. Home counts overdue payouts only (the line after the anchor, "and settledMinor is null", still applies).
   ['private.workspace_management_overview()',
    $a$'payoutsToReconcile',(select count(*) from private.workspace_reservations r where r.status='confirmed' and r.channel in ('airbnb','booking_com','vrbo') and r.check_in>=month_start and r.check_in<month_end$a$,
    $r$'payoutsToReconcile',(select count(*) from private.workspace_reservations r where r.status='confirmed' and r.channel in ('airbnb','booking_com','vrbo') and private.workspace_payout_due_on(r.channel,r.check_in,r.check_out)<today and private.workspace_payout_due_on(r.channel,r.check_in,r.check_out)>=(month_start-interval '1 month')::date and private.workspace_payout_row(r)->>'state' in ('missing','different')$r$,
@@ -76,4 +95,4 @@ begin
  end loop;
 end $patch$;
 
-revoke all on function private.workspace_payout_breakdown(jsonb),private.workspace_payout_due_on(text,date,date) from public,anon,authenticated;
+revoke all on function private.workspace_payout_breakdown(jsonb),private.workspace_payout_due_on(text,date,date),private.workspace_payout_kept(private.workspace_reservations) from public,anon,authenticated;

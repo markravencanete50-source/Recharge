@@ -75,6 +75,60 @@ test('the sync keeps the breakdown it was sent, only what is known, without chan
   await assert.rejects(sql("update private.workspace_reservations set payout_breakdown='[1]' where reference='HA:7101'"), /payout_breakdown_object/);
 });
 
+// Money paid in for a stay, as a payout report line; an agreement on it.
+async function receive(channel, reference, amount) {
+  const [rep] = await sql(`insert into private.workspace_payout_reports(channel,file_name,content_hash,line_count,total_minor,new_line_count,new_minor,uploaded_by,request_id)
+    values($1,'fees.csv',md5(random()::text),1,$2,1,$2,$3,gen_random_uuid()) returning id`, [channel, amount, users[ACCOUNTS]]);
+  await sql('insert into private.workspace_payout_lines(report_id,channel,reference,amount_minor) values($1,$2,$3,$4)', [rep.id, channel, reference, amount]);
+}
+const agree = async (id, received, agreed) => sql(`insert into private.workspace_payout_agreements(reservation_id,received_snapshot_minor,agreed_minor,note,agreed_by)
+  select id,$2,$3,'Agreed in a test',$4 from private.workspace_reservations where reference=$1`, ['HA:' + id, received, agreed, users[ACCOUNTS]]);
+const stateOf = async id => (await sql("select private.workspace_payout_row(r)->>'state' s from private.workspace_reservations r where reference=$1", ['HA:' + id]))[0].s;
+const oldBreakdown = { source: 'totals', grossMinor: 60000, commissionMinor: 9000 };
+const newBreakdown = { source: 'itemised', grossMinor: 60000, commissionMinor: 9000, paymentChargeMinor: 840, commissionVatMinor: 1800 };
+
+test('a sync never recalculates a settled payout or one on an issued statement; the rest get the new sum', async () => {
+  const [checkIn, checkOut] = await Promise.all([day(-12), day(-9)]);
+  const stays = ['7201', '7202', '7203', '7204'].map(id => stay(id, checkIn, checkOut, { payoutMinor: 51000, payoutBreakdown: oldBreakdown }));
+  await sync({ listings, reservations: stays });
+  await receive('booking_com', 'BK7201', 51000); // matched
+  await receive('booking_com', 'BK7202', 50000); await agree('7202', 50000, 50000); // agreed
+  await receive('booking_com', 'BK7203', 48360); // different today; the new sum matches it
+  assert.deepEqual(await Promise.all(['7201', '7202', '7203', '7204'].map(stateOf)), ['matched', 'agreed', 'different', 'missing']);
+  const versions = await Promise.all(['7201', '7202', '7203', '7204'].map(id => stored(id).then(s => s.v)));
+
+  await sync({ listings, reservations: stays.map(s => ({ ...s, payoutMinor: 48360, payoutBreakdown: newBreakdown })) });
+  const after = await Promise.all(['7201', '7202', '7203', '7204'].map(stored));
+  assert.deepEqual(after.map(s => s.p), [51000, 51000, 48360, 48360], 'matched and agreed keep today’s amount; different and missing get the new one');
+  assert.deepEqual(after.map(s => s.b), [oldBreakdown, oldBreakdown, newBreakdown, newBreakdown]);
+  assert.deepEqual(after.map(s => s.v), versions, 'an amount alone never changes the stay’s version');
+  assert.deepEqual(await Promise.all(['7201', '7202', '7203', '7204'].map(stateOf)), ['matched', 'agreed', 'matched', 'missing']);
+  // Dates still follow Hostaway for a settled stay; only the money stays put.
+  const later = await day(-8);
+  await sync({ listings, reservations: [{ ...stays[0], checkOut: later, payoutMinor: 48360, payoutBreakdown: newBreakdown }] });
+  assert.equal((await sql("select check_out::text d from private.workspace_reservations where reference='HA:7201'"))[0].d, later);
+  assert.equal((await stored('7201')).p, 51000);
+});
+
+test('a stay on an issued or paid owner statement keeps its expected payout; a void statement frees it', async () => {
+  const flat = { id: '602', name: 'Statement Flat', address: '3 Quay Street, Bristol', bedrooms: 1, accessInfo: '' };
+  const [checkIn, checkOut] = await Promise.all([day(-12), day(-9)]);
+  const s = id => ({ ...stay(id, checkIn, checkOut, { payoutMinor: 51000, payoutBreakdown: oldBreakdown }), listingId: '602' });
+  await sync({ listings: [...listings, flat], reservations: [s('7301')] });
+  const [{ id: property }] = await sql("select id from public.workspace_properties where hostaway_listing_id='602'");
+  const [statement] = await sql(`insert into private.workspace_owner_statements(property_id,period_start,period_end,status,revenue_minor,cleaning_count,cleaning_minor,expenses_minor,fee_bps,fee_minor,payout_minor,detail,prepared_by,issued_at)
+    values($1,date_trunc('month',$2::date)::date,($3::date+1),'issued',51000,0,0,0,0,0,51000,'{}',$4,now()) returning id`, [property, checkIn, checkOut, users[ACCOUNTS]]);
+  assert.equal(await stateOf('7301'), 'missing');
+  await sync({ listings: [...listings, flat], reservations: [{ ...s('7301'), payoutMinor: 48360, payoutBreakdown: newBreakdown }] });
+  assert.deepEqual([(await stored('7301')).p, (await stored('7301')).b], [51000, oldBreakdown], 'issued: today’s amount stays');
+  await sql("update private.workspace_owner_statements set status='paid' where id=$1", [statement.id]);
+  await sync({ listings: [...listings, flat], reservations: [{ ...s('7301'), payoutMinor: 48360, payoutBreakdown: newBreakdown }] });
+  assert.equal((await stored('7301')).p, 51000, 'paid: the same');
+  await sql("update private.workspace_owner_statements set status='void' where id=$1", [statement.id]);
+  await sync({ listings: [...listings, flat], reservations: [{ ...s('7301'), payoutMinor: 48360, payoutBreakdown: newBreakdown }] });
+  assert.deepEqual([(await stored('7301')).p, (await stored('7301')).b], [48360, newBreakdown], 'void: the stay is free again');
+});
+
 test('the payout row shows the breakdown to Accounts', async () => {
   const [checkIn, checkOut] = await Promise.all([day(40), day(42)]);
   await sync({ listings, reservations: [stay('7102', checkIn, checkOut, { payoutBreakdown: { source: 'totals', grossMinor: 30000, commissionMinor: 4500 } })] });
@@ -137,13 +191,14 @@ test('the due dates are the named constants', async () => {
 
 test('safe to run twice; the anchors are patched once and the new functions are for the database only', async () => {
   const names = ['private.workspace_hostaway_sync(jsonb)', 'private.workspace_payout_row(private.workspace_reservations)', 'private.workspace_management_overview()',
-    'private.workspace_payout_breakdown(jsonb)', 'private.workspace_payout_due_on(text,date,date)'];
+    'private.workspace_payout_breakdown(jsonb)', 'private.workspace_payout_due_on(text,date,date)', 'private.workspace_payout_kept(private.workspace_reservations)'];
   const defs = async () => (await sql('select pg_get_functiondef(n::regprocedure) d from unnest($1::text[]) n', [names])).map(r => r.d);
   const before = await defs();
   await db.exec(await fs.readFile(MIGRATION, 'utf8'));
   assert.deepEqual(await defs(), before);
-  const sentinels = ["set payout_breakdown=private.workspace_payout_breakdown(r->'payoutBreakdown')", "'expectedBreakdown',target.payout_breakdown", 'private.workspace_payout_due_on(r.channel,r.check_in,r.check_out)<today'];
-  sentinels.forEach((s, i) => assert.equal(before[i].split(s).length - 1, 1, names[i]));
+  const sentinels = [["set payout_breakdown=private.workspace_payout_breakdown(r->'payoutBreakdown')", 'private.workspace_payout_kept(prev) then v_payout:=prev.payout_minor'],
+    ["'expectedBreakdown',target.payout_breakdown"], ['private.workspace_payout_due_on(r.channel,r.check_in,r.check_out)<today']];
+  sentinels.forEach((list, i) => list.forEach(s => assert.equal(before[i].split(s).length - 1, 1, `${names[i]}: ${s}`)));
   assert.ok(before[2].includes("'booking_com','vrbo')"), 'Vrbo is still counted');
   assert.equal((await sql("select count(*)::int n from pg_constraint where conname='workspace_reservations_payout_breakdown_object'"))[0].n, 1);
   for (const fn of names.slice(3)) {
