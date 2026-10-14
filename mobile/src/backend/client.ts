@@ -210,7 +210,7 @@ export const readChat = async (query: Record<string, string>) => (await workspac
 export const writeChat = async (action: ChatAction) => (await workspaceRequest('/api/mobile/chat', action)).json();
 // Photos and videos in Messages: links to open them (for an hour, kept here so pictures don't
 // reload), and sending a file straight to storage with its one-off upload link.
-const fileLinks = new Map<string, { url: string; mime: string; name: string; kind: 'image' | 'video'; until: number }>();
+const fileLinks = new Map<string, { url: string; mime: string; name: string; kind: 'image' | 'video' | 'audio'; until: number }>();
 export async function chatFileLinks(ids: string[]) {
   const now = Date.now(), wanted = [...new Set(ids)].filter(id => !((fileLinks.get(id)?.until ?? 0) > now));
   for (let i = 0; i < wanted.length; i += 60) {

@@ -23,6 +23,18 @@ test('team chat, owner chat and client email say who and what', () => {
   assert.equal(pushCopy('client.email', null, { recipient: 'Mark', who: 'Sarah', replied: true }).title, 'Mark, Sarah replied by email');
 });
 
+// Voice notes (Alex: "like WhatsApp"): the preview is the note's label, so the pop-up says who sent one and how long it is.
+test('a voice note reads "Alex sent a voice note (0:42)"', () => {
+  assert.deepEqual(pushCopy('chat.message', null, { recipient: 'Mark Raven', who: 'Alex Coghill', preview: '🎤 Voice note (0:42)' }),
+    { title: 'Mark, Alex Coghill sent a voice note (0:42)', message: 'Tap to listen' });
+  assert.deepEqual(pushCopy('chat.message', null, { recipient: 'Mark', who: 'Alex', preview: '🎤 Voice note (4:59)', context: 'Deep clean Friday' }),
+    { title: 'Mark, Alex sent a voice note (4:59)', message: 'In Deep clean Friday' });
+  assert.deepEqual(pushCopy('chat.owner_message', null, { recipient: 'Mark', who: 'Sarah Jones', preview: '🎤 Voice note (1:05)', propertyName: 'Rose Cottage' }),
+    { title: 'Mark, Sarah Jones (owner) sent a voice note (1:05)', message: 'Rose Cottage' });
+  assert.equal(pushCopy('chat.message', null, { recipient: 'Mark', who: 'Alex', preview: 'I left a Voice note (0:42) for you' }).title, 'Mark, Alex sent you a message', 'only the label itself');
+  assert.equal(pushCopy('chat.message', null, { recipient: 'Mark', who: 'Alex', preview: '📷 Photo' }).message, '📷 Photo');
+});
+
 test('work notices keep their wording, with the name in front and who, what and where below', () => {
   const todo = pushCopy('hub.todo_added', null, { recipient: 'Mark', actorName: 'Alex', workTitle: 'Call the plumber', propertyName: 'Rose Cottage' });
   assert.equal(todo.title, 'Mark, new to-do for you');

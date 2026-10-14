@@ -9,7 +9,7 @@ import type { ChatAction } from './workspace-chat-policy';
 import type { TeamsAction } from './workspace-teams-policy';
 import { profileActionSchema } from './workspace-account-policy';
 
-// Photos and videos in Messages, and profile photos. Chat files go straight from the device to
+// Photos, videos and voice notes in Messages, and profile photos. Chat files go straight from the device to
 // private storage with one-off upload links (so a 50 MB video never passes through the site);
 // the database checks each stored file before a message claims it. Profile photos are small, so
 // they come through here and are checked from their bytes. Everything is opened by short-lived
@@ -79,7 +79,7 @@ export async function chatFilesRoute(request: Request, native = false) {
     if (!parsed.success) return businessResponse({ error: 'Choose files' }, 400);
     const found = await session.client.rpc('workspace_chat_files', { ids: [...new Set(parsed.data.ids)] });
     if (found.error) return databaseFailure(found.error);
-    const files = z.array(z.object({ id: z.string(), path: z.string(), mime: z.string(), name: z.string(), kind: z.enum(['image', 'video']) })).parse(found.data);
+    const files = z.array(z.object({ id: z.string(), path: z.string(), mime: z.string(), name: z.string(), kind: z.enum(['image', 'video', 'audio']) })).parse(found.data);
     if (!files.length) return businessResponse({ data: {} });
     const storage = secretClient()?.storage.from(CHAT_BUCKET);
     if (!storage) return unavailable();
