@@ -9,7 +9,8 @@ export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const security = authSecurityConfiguration();
     // Hostaway's servers call the webhook with Basic auth and no Origin header; the route checks the credentials itself.
-    const serverToServer = request.nextUrl.pathname === "/api/hostaway/webhook";
+    // Resend's servers call theirs with a signed body and no Origin header; that route verifies the signature before reading anything.
+    const serverToServer = request.nextUrl.pathname === "/api/hostaway/webhook" || request.nextUrl.pathname === "/api/resend/webhook";
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && !serverToServer && !isSameOrigin(request, security?.origin) && !isNativeRequest(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403, headers: securityHeaders });
     if (!security) return NextResponse.json({ error: "Security connection is awaiting configuration" }, { status: 503, headers: securityHeaders });
     try {

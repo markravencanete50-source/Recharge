@@ -945,3 +945,55 @@ setter never changes, so behaviour is the same. The unused `web` import in `Live
   Management approvals and Client relations.
   - The review server signed in as the super admin.
   - A check in the browser found no box with hidden overflow inside these pages.
+
+# Leftovers after round 6 to 8 went live: phones at 390 px in dark mode (Lead)
+
+- **Starting point:** `main` at `5763aa0` (a fast-forward, which already held my earlier commits and F's
+  LiveEnquiries changes). No migration.
+- **Client enquiries, stat tiles:** the labels wrapped ("READY TO / VALUE", "WAITING FOR / THEM",
+  "ESTIMATES / SENT"). On a phone the four tiles sit two to a row, which leaves about 95 px for a label.
+  - The labels are now "To value", "Waiting", "Valuing" and "Sent".
+  - The meaning moved to the line under each figure, which also feeds the screen-reader label: "Answered
+    forms, ready to value", "Form sent, waiting for them", "Estimates with the landlord".
+  - None of my other screens uses stat tiles.
+- **Client enquiries, rows:** on a phone the status tag beside the name cut the name to "Dougl…" and wrapped
+  the property facts over three lines. Under 600 px the tags now go under the details, so the name and
+  address keep the row's width. Wider screens are unchanged.
+- **Guest relations, title:** on a phone "Record a stay" squeezed the title until it broke mid-word ("Gues /
+  t / relati / ons"). The header now wraps like `PageHeading`: the title keeps at least 220 px and the
+  button goes under it.
+- **Checked at 390 px in dark mode with nothing else to fix:** To-do (the thin two-line cards), and the
+  Guest relations, Client relations and Management approvals tracker cards. Each page was screenshotted
+  three screens deep. A check in the browser found nothing drawn past the screen's right edge.
+- **Still to note:** the "Management approvals" title wraps beside "Ask management", at a word break only.
+  That page isn't mine, so I left it.
+- **Tests:** new `tests/phone-fit.test.mjs`, 3 of 3 pass. It covers the short tile labels and their
+  details, the tags under the details on a phone, and the wrapping Guest relations header.
+- **Screenshots:** `docs/screenshots/session-b/phone-fit/`, before (`main`) and after, 390×844 in dark mode,
+  two screens per page: Client enquiries, To-do, Guest relations, Client relations, Management approvals.
+
+# Round 9: E's sweep, R4 to R6 (Lead)
+
+- **Starting point:** `main`, with E's token commit `331b772` merged in (`d5d1ddd`). No migration.
+- **R4, Productivity month grid (Medium):** in dark mode the day cells drew text on a hand-mixed green
+  (`rgba(143,211,194,…)` at a strength set by the hours).
+  - The grid now uses only tokens.
+  - The busiest days, at two thirds or more of the month's busiest day (`BUSY_SHARE`), are `p.selected` with
+    `p.onSelected` text and a `p.selectedBorder` edge.
+  - Every other day with hours is `p.wash` with `p.text`.
+  - Days outside the month are `p.disabled` text on no fill, instead of a 38% opacity.
+  - The legend now reads "Hours worked" (wash), "Busiest days" (selected), "Change waiting" and "Planned,
+    not clocked".
+- **R5, owner booking calendar (Low):** day numbers outside the month were the muted colour at 55% opacity.
+  They are now `p.disabled` with no opacity (`LiveClientReports.tsx`).
+- **R6, Management → Responsibilities (Low):** the nine filter pills (Everything, Mine and seven
+  departments) are now the shared `Pills`, which shows a Dropdown for more than five values. The labels and
+  the filter are unchanged.
+- **Tests:** new `tests/round9-fixes.test.mjs`, 3 of 3 pass.
+  - Full suite: 1611 of 1620 pass. Seven of the failures are the known build-output tests, which need a
+    built `dist`.
+  - `tests/menu-layout-database.test.mjs` timed out under the parallel run. It passes on its own, 5 of 5.
+  - `tsc` and ESLint are clean on the three files.
+- **Screenshots:** `docs/screenshots/session-b/round9/`, before (`d5d1ddd`) and after, dark mode, on a
+  desktop (1440×900) and a phone (390×844): Productivity "By day", Management → Responsibilities, and the
+  owner's booking calendar.

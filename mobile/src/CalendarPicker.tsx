@@ -10,7 +10,7 @@ import {
 
 // A compact month calendar for choosing one day or a date range (lib/calendar-picker.ts holds the rules). Optional counts on
 // each day, month arrows and a "Today" link, 44pt day cells on the phone, arrow keys on the web. Calm: thin type, the chosen
-// day in solid green, the days between in a light wash, flat colours and nothing that moves on its own.
+// day in the selected colour (forest in light mode; deep green with a mint edge in dark, like a chosen pill), the days between in a light wash, flat colours and nothing that moves on its own.
 const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 
 export type CalendarPickerProps = {
@@ -100,7 +100,7 @@ function Day({ p, c, size, stretch, focused, noun, onPress, id, tabStop, onFocus
   const solid = c.selected;
   // Days outside the month (and days with no data) take the disabled ink rather than a see-through cell, so their
   // numbers and counts keep 3:1 on a dark card.
-  const ink = solid ? p.onPrimary : !c.inMonth ? p.disabled : c.muted ? p.muted : p.text;
+  const ink = solid ? p.onSelected : !c.inMonth ? p.disabled : c.muted ? p.muted : p.text;
   // The wash runs under the half of each end day that faces the range, so first day, days between and last day read as one band.
   const half = c.rangeStart && !c.rangeEnd ? { left: "50%", right: 0 } : c.rangeEnd && !c.rangeStart ? { left: 0, right: "50%" } : null;
   return (
@@ -110,9 +110,9 @@ function Day({ p, c, size, stretch, focused, noun, onPress, id, tabStop, onFocus
         backgroundColor: c.inRange && !solid ? p.wash : "transparent", ...(Platform.OS === "web" ? { outlineStyle: "none" } as object : {}) }}>
       {half && <View pointerEvents="none" style={{ position: "absolute", top: 0, bottom: 0, ...half, backgroundColor: p.wash } as object} />}
       <View style={{ width: size - 6, height: size - 6, borderRadius: (size - 6) / 2, alignItems: "center", justifyContent: "center",
-        backgroundColor: solid ? p.primary : "transparent", borderWidth: c.isToday || focused ? 1 : 0, borderColor: focused ? p.text : p.primary }}>
+        backgroundColor: solid ? p.selected : "transparent", borderWidth: solid || c.isToday || focused ? 1 : 0, borderColor: focused ? p.text : solid ? p.selectedBorder : p.primary }}>
         <Text style={{ color: ink, fontSize: 13, fontWeight: solid ? "600" : "400", fontVariant: ["tabular-nums"], lineHeight: 16 }}>{c.day}</Text>
-        {c.count !== null && <Text style={{ color: solid ? p.onPrimary : c.inMonth ? p.primary : p.disabled, fontSize: 10, lineHeight: 12, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{c.count > 99 ? "99+" : c.count}</Text>}
+        {c.count !== null && <Text style={{ color: solid ? p.onSelected : c.inMonth ? p.primary : p.disabled, fontSize: 10, lineHeight: 12, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{c.count > 99 ? "99+" : c.count}</Text>}
       </View>
     </MotionPress>
   );

@@ -7,6 +7,7 @@ import { MotionPress } from "./motion";
 import { Button, Field, Loading, message, Notice, Tag, london, useRequestId } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { Chip, SheetTable, cellText } from "./SheetTable";
+import { Pills } from "./Pills";
 import { useCelebrate, useSaved } from "./Celebrate";
 import { exportReport } from "./exportReport";
 import { DateField } from "./CalendarPicker";
@@ -66,9 +67,8 @@ export function ResponsibilitiesTab({ p, account }: { p: Palette; account: Works
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!data && !error && <Loading p={p} />}
       {data && <>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {[["all", "Everything"], ["mine", "Mine"], ...departments.map(d => [d, DEPARTMENT_LABEL[d]])].map(([key, label]) => <Chip key={key} p={p} label={label} on={filter === key} onPress={() => setFilter(key)} />)}
-        </View>
+        {/* Everything, Mine and each department: more than five, so the shared Pills shows a dropdown (E's round 9 review). */}
+        <Pills p={p} title="Show" values={["all", "mine", ...departments]} value={filter} onChange={setFilter} label={key => key === "all" ? "Everything" : key === "mine" ? "Mine" : DEPARTMENT_LABEL[key as typeof departments[number]]} />
         {data.canEdit && <Button label="Add a responsibility" icon="plus" primary p={p} onPress={() => setEditing({})} />}
         <SheetTable p={p} rows={rows} keyOf={r => r.id} onRow={r => setEditing({ item: r })} empty={data.canEdit ? "Nothing in the register yet. Add each regular duty and who owns it." : "Nothing here yet. Management keeps this register."}
           columns={[
