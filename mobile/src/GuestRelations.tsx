@@ -37,8 +37,9 @@ export function GuestRelations(props: SectionProps & { onRefresh?: () => void | 
   const [recording, setRecording] = useState(() => focus?.open === "record-stay" && canStart(account, "record-stay"));
   return (
     <View style={{ gap: 16 }}>
-      <View style={[ui.between, { gap: 12, alignItems: "flex-start" }]}>
-        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+      {/* The title keeps its width; on a phone "Record a stay" wraps under it instead of squeezing it. */}
+      <View style={[ui.between, { gap: 12, alignItems: "flex-start", flexWrap: "wrap" }]}>
+        <View style={{ flex: 1, minWidth: 220, gap: 4 }}>
           <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Guest relations</Text>
           <Text style={[ui.body, { color: p.muted }]}>Cleans, direct bookings, AirCover claims and repairs for your guests’ stays.</Text>
         </View>

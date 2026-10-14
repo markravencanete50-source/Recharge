@@ -945,3 +945,29 @@ setter never changes, so behaviour is the same. The unused `web` import in `Live
   Management approvals and Client relations.
   - The review server signed in as the super admin.
   - A check in the browser found no box with hidden overflow inside these pages.
+
+# Leftovers after round 6 to 8 went live: phones at 390 px in dark mode (Lead)
+
+- **Starting point:** `main` at `5763aa0` (a fast-forward, which already held my earlier commits and F's
+  LiveEnquiries changes). No migration.
+- **Client enquiries, stat tiles:** the labels wrapped ("READY TO / VALUE", "WAITING FOR / THEM",
+  "ESTIMATES / SENT"). On a phone the four tiles sit two to a row, which leaves about 95 px for a label.
+  - The labels are now "To value", "Waiting", "Valuing" and "Sent".
+  - The meaning moved to the line under each figure, which also feeds the screen-reader label: "Answered
+    forms, ready to value", "Form sent, waiting for them", "Estimates with the landlord".
+  - None of my other screens uses stat tiles.
+- **Client enquiries, rows:** on a phone the status tag beside the name cut the name to "Dougl…" and wrapped
+  the property facts over three lines. Under 600 px the tags now go under the details, so the name and
+  address keep the row's width. Wider screens are unchanged.
+- **Guest relations, title:** on a phone "Record a stay" squeezed the title until it broke mid-word ("Gues /
+  t / relati / ons"). The header now wraps like `PageHeading`: the title keeps at least 220 px and the
+  button goes under it.
+- **Checked at 390 px in dark mode with nothing else to fix:** To-do (the thin two-line cards), and the
+  Guest relations, Client relations and Management approvals tracker cards. Each page was screenshotted
+  three screens deep. A check in the browser found nothing drawn past the screen's right edge.
+- **Still to note:** the "Management approvals" title wraps beside "Ask management", at a word break only.
+  That page isn't mine, so I left it.
+- **Tests:** new `tests/phone-fit.test.mjs`, 3 of 3 pass. It covers the short tile labels and their
+  details, the tags under the details on a phone, and the wrapping Guest relations header.
+- **Screenshots:** `docs/screenshots/session-b/phone-fit/`, before (`main`) and after, 390×844 in dark mode,
+  two screens per page: Client enquiries, To-do, Guest relations, Client relations, Management approvals.
