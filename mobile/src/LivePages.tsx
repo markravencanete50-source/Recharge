@@ -249,7 +249,8 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
   const filled = (v: unknown) => v !== undefined && v !== null && v !== "";
   const shown = spec.fields.filter(f => !f.after || filled(values[f.after]) || spec.fields.some(g => g.group === f.group && filled(values[g.name])));
   return (
-    <>
+    // The fields, any error and the save button are a section apart too, so the last field never sits against the button.
+    <View style={{ gap: space.section }}>
       <View style={{ gap: space.section }}>
       {shown.map((f, n) => <View key={f.name} style={{ gap: space.row }}>
         {!!f.section && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "600", paddingTop: n ? space.field : 0, borderTopWidth: n ? 1 : 0, borderColor: p.border }}>{f.section}</Text>}
@@ -258,7 +259,7 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
       </View>
       {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}><Text style={[ui.small, { color: p.text }]}>{error}</Text></View>}
       <SoftButton label={busy ? "Saving…" : uploading ? "Saving photos…" : "Save and continue"} icon="check" primary disabled={busy || uploading} onPress={() => void save()} palette={p} />
-    </>
+    </View>
   );
 }
 
