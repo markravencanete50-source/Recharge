@@ -28,11 +28,31 @@ export const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '�
 export const MAX_CHAT_PHOTOS = 5, MAX_CHAT_VIDEOS = 1, MAX_CHAT_PHOTO_BYTES = 15 * 1024 * 1024, MAX_CHAT_VIDEO_BYTES = 50 * 1024 * 1024;
 export const CHAT_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 export const CHAT_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'] as const;
-const chatFileSchema = z.object({ name: z.string().max(200).default(''), mime: z.enum([...CHAT_PHOTO_TYPES, ...CHAT_VIDEO_TYPES]), bytes: z.number().int().min(1).max(MAX_CHAT_VIDEO_BYTES),
-  width: z.number().int().min(1).max(20000).optional(), height: z.number().int().min(1).max(20000).optional() }).strict();
+// Voice notes (Alex, on a phone: "like WhatsApp"; migration 20261021100000): one on its own, up to 5 minutes and 10 MB. Safari
+// (and every iPhone browser) records AAC in MP4; the others record Opus, which an iPhone does not play, so the app turns it
+// into WAV (16 kHz mono, about 1.9 MB a minute) before sending. Every note then plays everywhere, iPhones included.
+export const CHAT_AUDIO_TYPES = ['audio/mp4', 'audio/wav'] as const;
+export const MAX_CHAT_AUDIO_BYTES = 10 * 1024 * 1024, MAX_VOICE_MS = 5 * 60_000;
+const chatFileSchema = z.object({ name: z.string().max(200).default(''), mime: z.enum([...CHAT_PHOTO_TYPES, ...CHAT_VIDEO_TYPES, ...CHAT_AUDIO_TYPES]), bytes: z.number().int().min(1).max(MAX_CHAT_VIDEO_BYTES),
+  width: z.number().int().min(1).max(20000).optional(), height: z.number().int().min(1).max(20000).optional(),
+  // A voice note's length in milliseconds (the database allows a few seconds over the 5 minutes for the recorder to stop).
+  durationMs: z.number().int().min(1).max(MAX_VOICE_MS + 5000).optional() }).strict();
+const isAudio = (mime: string) => (CHAT_AUDIO_TYPES as readonly string[]).includes(mime);
+// "0:42": a voice note's length, rounded to the second (as the database writes it). With floor, the running timer while recording.
+export function voiceLength(ms: number, floor = false) {
+  const s = floor ? Math.max(0, Math.floor(ms / 1000)) : Math.max(1, Math.round(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+// What a voice note reads as in the list, in previews and in pop-ups (private.chat_attachment_label).
+export const voiceLabel = (ms: number) => `🎤 Voice note (${voiceLength(ms)})`;
+// The length in a preview that is a voice note's label ("0:42"), or null.
+export const voicePreviewLength = (preview: string) => /^🎤 Voice note \((\d+:\d{2})\)$/.exec(preview.trim())?.[1] ?? null;
 // What is wrong with a set of files for one message, or null when they can be sent.
 export function chatFilesProblem(files: readonly { mime: string; bytes: number }[]) {
-  const photos = files.filter(f => f.mime.startsWith('image/')), videos = files.filter(f => f.mime.startsWith('video/'));
+  const photos = files.filter(f => f.mime.startsWith('image/')), videos = files.filter(f => f.mime.startsWith('video/')), voice = files.filter(f => isAudio(f.mime));
+  if (voice.length && files.length > 1) return 'Send a voice note on its own.';
+  if (voice.some(f => f.bytes > MAX_CHAT_AUDIO_BYTES)) return 'Voice notes can be up to 10 MB.';
+  if (voice.length) return null;
   if (files.some(f => !(CHAT_PHOTO_TYPES as readonly string[]).includes(f.mime) && !(CHAT_VIDEO_TYPES as readonly string[]).includes(f.mime))) return 'Add photos (JPG, PNG, WebP, GIF) or a video (MP4, MOV, WebM).';
   if (photos.length > MAX_CHAT_PHOTOS) return `Send up to ${MAX_CHAT_PHOTOS} photos at a time.`;
   if (videos.length > MAX_CHAT_VIDEOS) return 'Send 1 video at a time.';
@@ -110,7 +130,9 @@ export function channelsFirst<T extends { department: (typeof CHANNEL_ORDER)[num
   const rank = (c: T) => c.department ? CHANNEL_ORDER.indexOf(c.department) : CHANNEL_ORDER.length;
   return items.map((item, i) => ({ item, i })).sort((a, b) => rank(a.item) - rank(b.item) || a.i - b.i).map(x => x.item);
 }
-export const attachmentSchema = z.object({ id: uuid, kind: z.enum(['image', 'video']), mime: z.string(), name: z.string(), bytes: z.number(), width: z.number().nullable().default(null), height: z.number().nullable().default(null) });
+export const attachmentSchema = z.object({ id: uuid, kind: z.enum(['image', 'video', 'audio']), mime: z.string(), name: z.string(), bytes: z.number(), width: z.number().nullable().default(null), height: z.number().nullable().default(null),
+  // A voice note's length (migration 20261021100000); empty for photos and videos.
+  durationMs: z.number().nullable().default(null) });
 export type ChatAttachment = z.infer<typeof attachmentSchema>;
 export const reactionSchema = z.object({ emoji: z.string(), count: z.number(), mine: z.boolean(), names: z.array(z.string()) });
 export type ChatReaction = z.infer<typeof reactionSchema>;
@@ -135,7 +157,7 @@ export const blockedPeopleSchema = z.array(blockedPersonSchema);
 export const reportedSchema = z.object({ reported: z.literal(true), reportId: uuid, authorId: uuid, blocked: z.boolean() });
 export const inboxReportedSchema = z.object({ reported: z.literal(true), reportId: uuid });
 export const preparedFilesSchema = z.object({ files: z.array(z.object({ id: uuid, path: z.string(), mime: z.string(), uploadUrl: z.string().url() })) });
-export const chatFileLinksSchema = z.record(z.string(), z.object({ url: z.string().url(), mime: z.string(), name: z.string(), kind: z.enum(['image', 'video']) }));
+export const chatFileLinksSchema = z.record(z.string(), z.object({ url: z.string().url(), mime: z.string(), name: z.string(), kind: z.enum(['image', 'video', 'audio']) }));
 
 // Who is online: in the app within the last couple of minutes (the app checks in every minute).
 export const ONLINE_MS = 150_000;
