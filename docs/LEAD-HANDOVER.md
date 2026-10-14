@@ -67,6 +67,9 @@ and five developers.
 - Never push to `main`. Lee merges pull requests. (An automatic classifier blocked a direct push.)
 - Live steps (SQL, deploys, data fixes) need Lee's explicit approval each time. Approval for one step does not cover
   the next.
+- **Tell Lee about every approval he owes as soon as it appears; don't wait for him to ask.** That covers live steps
+  and any developer session waiting on Lee in its own chat. Check every session's status (`list_sessions`) at
+  each step, and name the session and the exact question.
 - Developers never touch the live database. (B was told off once for a live SELECT.)
 - Never paste tokens, keys or passwords into chat. Lee was advised to revoke a Supabase token that was pasted in an
   earlier session.

@@ -60,7 +60,7 @@ export function HostawaySyncCard({ p, onSynced }: { p: Palette; onSynced?: () =>
         <Tag label={tag[0]} tone={tag[1]} p={p} />
       </View>
       {status.paused
-        ? <Text style={[ui.small, { color: p.muted }]}>Channel manager not connected — sync paused. Stays and cleans are added in the app for now.</Text>
+        ? <Text style={[ui.small, { color: p.muted }]}>Channel manager not connected. Sync is paused. Stays and cleans are added in the app for now.</Text>
         : !status.configured
         ? <Text style={[ui.small, { color: p.muted }]}>Not connected yet. Once the Hostaway keys are added to the backend, listings, stays and checkout cleans arrive here by themselves.</Text>
         : <>

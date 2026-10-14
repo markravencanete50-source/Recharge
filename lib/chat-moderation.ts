@@ -15,7 +15,7 @@ export type ReportStatus = (typeof REPORT_STATUSES)[number];
 export const REPORT_STATUS_LABEL: Record<ReportStatus, string> = { open: 'Open', actioned: 'Message removed', dismissed: 'Dismissed' };
 
 // What people read.
-export const REPORT_THANKS = 'Thanks — an admin will review this.';
+export const REPORT_THANKS = 'Thanks. An admin will review this.';
 export const REMOVED_LABEL = 'Removed by an admin';
 export const BLOCKED_LABEL = 'Message from someone you blocked';
 

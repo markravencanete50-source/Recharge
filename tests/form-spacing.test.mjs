@@ -16,8 +16,10 @@ test('the spacing steps: the gap above a label is clearly larger than the one un
 test('workflow sheet forms: fields a section apart, each label close to its own field', () => {
   const pages = source('mobile/src/LivePages.tsx');
   assert.match(pages, /<View style=\{\{ gap: space\.section \}\}>\s*\{shown\.map\(\(f, n\) => <View key=\{f\.name\} style=\{\{ gap: space\.row \}\}>/);
-  // Both field shapes (the date and the rest) keep the label to the field's own tight gap.
-  assert.equal((pages.match(/<View style=\{\{ gap: space\.tight \}\}>\s*\{label\}/g) ?? []).length, 2);
+  // Both field shapes keep the label to the field's own tight gap: the date (the shared DateField, with its help
+  // under it) and the rest.
+  assert.match(pages, /<View style=\{\{ gap: space\.tight \}\} pointerEvents=\{disabled \? "none" : "auto"\}>\s*<DateField /);
+  assert.equal((pages.match(/<View style=\{\{ gap: space\.tight \}\}>\s*\{label\}/g) ?? []).length, 1);
   assert.doesNotMatch(pages, /<View style=\{\{ gap: 8 \}\}>\s*\{label\}/);
 });
 

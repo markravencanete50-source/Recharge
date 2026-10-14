@@ -99,6 +99,8 @@ export function messageText(text: unknown, html: unknown) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (/^\s*(On .{5,200} wrote:|-{2,}\s*Original Message\s*-{2,}|_{10,}|From:\s.+@.+)\s*$/i.test(line) && kept.some(l => l.trim())) break;
+    // Gmail and others wrap a long "On <date>, <name> <address> wrote:" over two or three lines.
+    if (/^\s*On\s/i.test(line) && kept.some(l => l.trim()) && [1, 2].some(n => /^\s*On .{5,300} wrote:\s*$/i.test(lines.slice(i, i + n + 1).join(' ')))) break;
     if (/^\s*>/.test(line)) continue;
     kept.push(line.replace(/[ \t]+$/g, ''));
   }

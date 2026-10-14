@@ -62,7 +62,9 @@ test('three statuses and their counts: Needs a reply, Engaged (green), Closed', 
   // The colours: attention for Needs a reply, green for Engaged.
   assert.match(layout, /reply: p\.waiting, waiting: p\.success, closed: p\.muted/);
   assert.match(guests, /<StatusFilter p=\{p\} value=\{status\} counts=\{statusCounts\(found, guestStatus\)\}/);
-  assert.match(live, /clients && !!list && <StatusFilter p=\{p\} value=\{status\} counts=\{statusCounts\(found, clientStatus\)\}/);
+  // Clients counts owner conversations by clientStatus and email conversations by clientEmailStatus (round 7, Session F).
+  assert.match(live, /clients && !!list && <StatusFilter p=\{p\} value=\{status\} counts=\{statusCounts\(found, statusOf\)\}/);
+  assert.match(live, /const statusOf = \(r: Row\) => r\.kind === "email" \? clientEmailStatus\(r\.t\) : clientStatus\(r\.c\);/);
   assert.doesNotMatch(live + guests, /InboxChips|CHAT_CHIPS|GUEST_CHIPS|propertyChips|All properties/);
 });
 

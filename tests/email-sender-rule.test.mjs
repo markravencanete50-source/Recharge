@@ -27,7 +27,7 @@ const mocks = {
 const vite = await createServer({ configFile: false, root, resolve: { alias: { '@': root } }, server: { middlewareMode: true, hmr: false }, plugins: [{
   name: 'isolated-sender-rule', enforce: 'pre',
   transform(code, id) {
-    if (!/\/(client-enquiry-server|integration-providers|email-inbound-server|guest-reply-server|resend-email)\.ts$/.test(id.replaceAll('\\', '/'))) return;
+    if (!/\/(client-enquiry-server|integration-providers|email-inbound-server|guest-reply-server|resend-email|client-email-server|workspace-rpc-route)\.ts$/.test(id.replaceAll('\\', '/'))) return;
     for (const name of Object.keys(mocks)) code = code.replaceAll(`from '${name === '@supabase/supabase-js' || name === 'cloudflare:workers' ? name : './' + name}'`, `from 'sender-test:${name}'`);
     return { code, map: null };
   },
@@ -39,6 +39,7 @@ const enquiry = await vite.ssrLoadModule('/lib/client-enquiry-server.ts');
 const outbox = await vite.ssrLoadModule('/lib/email-inbound-server.ts');
 const replies = await vite.ssrLoadModule('/lib/guest-reply-server.ts');
 const providers = await vite.ssrLoadModule('/lib/integration-providers.ts');
+const clientEmail = await vite.ssrLoadModule('/lib/client-email-server.ts');
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, init = {}) => {
   if (String(url) === 'https://api.resend.com/emails' && init.method === 'POST') { state.sent.push(JSON.parse(String(init.body))); return Response.json({ id: 'r_' + state.sent.length }); }
@@ -69,6 +70,31 @@ test('the owner outbox, the enquiry form and a resent form all go out from owner
   await enquiry.sendEnquiryForm(context(), { action: 'resendEnquiry', requestId: '44444444-4444-4444-8444-444444444444', enquiryId: '33333333-3333-4333-8333-333333333333', version: 1, subject: 'Again', body: 'Hi\n\n{link}', delivery: 'email' });
   assert.equal(state.sent.length, 3);
   for (const mail of state.sent) assert.deepEqual([address(mail.from), address(mail.reply_to)], [OWNER, OWNER], mail.subject);
+});
+
+test('a reply to a client email conversation goes out from ownerrelations@, threaded, once per request; switched off or refused, nothing is stored', async () => {
+  const REQUEST = '55555555-5555-4555-8555-555555555555', THREAD = '66666666-6666-4666-8666-666666666666';
+  const input = { action: 'reply', requestId: REQUEST, threadId: THREAD, body: 'Yes, we can help.' };
+  const context = { request: new Request('https://app.test'), account: { userId: 'u', role: 'admin' }, client: { rpc: async name => name === 'workspace_client_email_action'
+    ? { data: { send: true, requestId: REQUEST, email: { to: 'new.landlord@example.org', subject: 'Re: Managing my property', inReplyTo: 'ce-1@mail.example.org', references: ['ce-1@mail.example.org'] } }, error: null } : { data: null, error: null } } };
+  reset();
+  assert.equal((await clientEmail.sendClientEmailReply(context, input)).status, 200);
+  assert.equal(state.sent.length, 1);
+  const [mail] = state.sent;
+  assert.deepEqual([address(mail.from), address(mail.reply_to), mail.to, mail.subject], [OWNER, OWNER, ['new.landlord@example.org'], 'Re: Managing my property']);
+  assert.deepEqual(mail.headers, { 'Message-ID': `<${REQUEST}@rechargegroup.co.uk>`, 'In-Reply-To': '<ce-1@mail.example.org>', References: '<ce-1@mail.example.org>' });
+  assert.deepEqual(state.security.at(-1), { name: 'workspace_client_email_result', args: { input: { requestId: REQUEST, ok: true, messageId: `${REQUEST}@rechargegroup.co.uk` } } });
+  // Already sent or still going out: nothing is posted again.
+  reset();
+  const again = { ...context, client: { rpc: async () => ({ data: { send: false, thread: { id: THREAD } }, error: null }) } };
+  assert.equal((await clientEmail.sendClientEmailReply(again, input)).status, 200);
+  assert.deepEqual([state.sent, state.security], [[], []]);
+  // Switched off: refused before anything is recorded.
+  reset({ RESEND_API_KEY: 're_test' });
+  let asked = false;
+  const off = await clientEmail.sendClientEmailReply({ ...context, client: { rpc: async () => { asked = true; return { data: null, error: null }; } } }, input);
+  assert.equal(off.status, 503);
+  assert.equal(asked, false);
 });
 
 test('nothing mixes: the enquiry sender cannot be set to the guest mailbox, the one-off sender refuses it, and no email is sent to our own mailboxes', async () => {
