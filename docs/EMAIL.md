@@ -75,7 +75,7 @@ Migration 20261019520000, `lib/estimate-link.ts`, `lib/estimate-link-server.ts`,
 - **Retries:** the request id is derived from the publish, so a retried publish never sends a second email.
 - **The link:** made from the request. Only its hash is stored. It lasts 30 days and needs no sign-in.
 - **The client's page** (`/estimate?t=…`) shows the rates, the notes, similar properties and a small explorer, using the same sums as the owner app.
-- **The client's answer:** Proceed, Review later (with a follow-up date) or Decline, plus optional feedback. This records the same decision as `decideEstimate`: the journey moves on, the team is notified, and "Owner decides on the estimate" ticks.
+- **The client's answer:** Proceed, "Thank you, I'll be in touch" (review, with a date for the team to check in) or "No, thank you" (decline), plus optional feedback. This records the same decision as `decideEstimate`: the journey moves on, the team is notified, and "Owner decides on the estimate" ticks.
 - **What the team sees:** "Estimate sent" only once the email for the current estimate has gone. Otherwise it shows "Estimate ready": published but not emailed, the email failed, or the enquiry has no email address. The property's Onboarding card has **Email the estimate** (or **Resend the estimate**) and **Copy link**, which gives a link to send by hand and also works when email isn't set up.
 - **Screenshots:** `docs/screenshots/session-f/estimate-*.png`.
 
