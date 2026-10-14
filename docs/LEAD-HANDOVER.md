@@ -306,6 +306,18 @@ Lee asked for Messages tabs in this order: Guests, Clients, Guest emails, Client
   and 0 owner chat messages from email. The old outbox path for owner chats that took email stays for any older ones.
 - On phones the five tabs scroll sideways.
 
+## 5g. Direct pop-ups (14 October 2026, built by the lead at Lee's request, migration `20261020700000`)
+
+Lee wanted pop-ups to say who and what ("Mark, new guest message", "John, guest, replied"). A pop-up now reads, for example,
+"Mark, new guest message from John Smith" with "Rose Cottage: What time is check-in?", "Mark, Alex sent you a message", "Mark,
+new email from Sarah Jones", or for work "Mark, new to-do for you" with who, what and where (`lib/push-copy.ts`).
+- `private.workspace_activity_details` keeps who sent a message notice, the first 300 characters, the group name and whether it is
+  a reply. It is written by the guest message trigger (replaced whole), chat send and client email in (both by anchor), and deleted
+  after 3 days by the pop-up claim.
+- `private.integration_push_details(outbox)` gives the pop-up's details; `integration_claim_web_push` returns them. An owner never
+  sees a staff name ("Recharge").
+- Pop-ups are encrypted for the one device (RFC 8291). Email notices keep the general wording.
+
 ## 6. Waiting on Lee
 
 - Switch A and D to Sonnet (`/model claude-sonnet-5-5` in each session).

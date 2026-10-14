@@ -1,4 +1,4 @@
-import { noticeCopyFor } from './notice-details';
+import { pushCopy, type PushDetails } from './push-copy';
 import type { IntegrationSettings } from './integration-policy';
 
 // Web push (RFC 8030), sent straight from the backend with no outside account: the request is
@@ -59,7 +59,7 @@ export async function encryptPush(payload: Uint8Array, p256dh: string, authSecre
 // Only the browsers' own push services: Chrome, Edge and Android (Google), Firefox, Windows and Safari.
 // Any other address would make the backend post to a server of someone's choosing.
 export const PUSH_SERVICE = /^https:\/\/(fcm\.googleapis\.com|android\.googleapis\.com|[a-z0-9-]+(\.[a-z0-9-]+)*\.push\.services\.mozilla\.com|[a-z0-9-]+(\.[a-z0-9-]+)*\.notify\.windows\.com|web\.push\.apple\.com)\//;
-export type WebPushJob = { endpoint: string; p256dh: string; auth: string; eventType?: string | null; workKind?: string | null; outboxId?: number | string; subscriptionId?: string };
+export type WebPushJob = { endpoint: string; p256dh: string; auth: string; eventType?: string | null; workKind?: string | null; outboxId?: number | string; subscriptionId?: string; details?: PushDetails | null };
 export type WebPushOutcome = 'sent' | 'gone' | 'failed';
 // What the push service answered: its HTTP status, or 0 when it could not be reached at all.
 export type WebPushResult = { outcome: WebPushOutcome; status: number };
@@ -67,7 +67,8 @@ export type WebPushResult = { outcome: WebPushOutcome; status: number };
 // Urgency high: phones deliver it straight away instead of holding it until they wake up.
 export async function sendWebPushResult(job: WebPushJob, keys: WebPushKeys, copy?: { title: string; message: string }): Promise<WebPushResult> {
   if (!PUSH_SERVICE.test(job.endpoint)) return { outcome: 'gone', status: 0 };
-  const { title, message } = copy ?? noticeCopyFor(job.eventType, job.workKind);
+  // Direct (Lee, 14 October): "Mark, new guest message from John" and the start of the message (lib/push-copy.ts).
+  const { title, message } = copy ?? pushCopy(job.eventType, job.workKind, job.details ?? {});
   const body = await encryptPush(encoder.encode(JSON.stringify({ title, body: message, url: '/workspace/live' })), job.p256dh, job.auth);
   try {
     const response = await fetch(job.endpoint, {
