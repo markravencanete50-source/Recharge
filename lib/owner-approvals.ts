@@ -1,6 +1,8 @@
 import { journeyForms, type JourneyView, type OperationView, type WorkflowForm } from './workflow-forms';
 import { onboardingProgress, type PropertyView } from './workspace-view';
 import { formatMoney } from './format';
+import { agreementReadable } from './agreement-copy';
+import { journeyAgreement } from './agreement-template';
 import type { WorkspaceAccount } from './workspace-account-policy';
 
 // Everything waiting for an owner's decision, in one list: repair costs at owner approval and the
@@ -56,7 +58,11 @@ export function ownerApprovals(account: WorkspaceAccount, work: readonly Operati
 
 // The decision forms carry what is being decided, so the owner reads it before choosing.
 function withContext(form: WorkflowForm, j: JourneyView): WorkflowForm {
-  if (form.key === 'signAgreement' && j.agreement) return { ...form, description: 'Management agreement, revision ' + j.agreementRevision + ':\n\n' + j.agreement };
+  if (form.key === 'signAgreement' && j.agreement) {
+    // An agreement made from a contract is shown as readable text; a PDF contract is downloaded from the property's page.
+    const a = journeyAgreement(j), pdf = a.agreementTemplate?.kind === 'pdf' ? `\n\nThe contract itself is ${a.agreementTemplate.fileName}. Download it from the property's onboarding page and read it before you sign.` : '';
+    return { ...form, description: 'Management agreement, revision ' + j.agreementRevision + ':\n\n' + agreementReadable(j.agreement, a.agreementFormat) + pdf };
+  }
   if (form.key === 'decideEstimate' && j.estimate) {
     const rate = (key: string) => typeof j.estimate?.[key] === 'number' ? formatMoney(j.estimate[key] as number) : null;
     const [low, mid, high] = [rate('lowRateMinor'), rate('mediumRateMinor'), rate('highRateMinor')];

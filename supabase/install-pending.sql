@@ -1,3 +1,3 @@
 -- Nothing pending. Every migration in supabase/migrations is installed in the Supabase project.
--- 20261020810000_repair_approvals and 20261020860000_business_reports were installed by the lead on 14 October 2026
--- (neither deletes nor drops anything) and went live with the Rounds 2 and 3 pull request.
+-- 20261020870000_agreement_template, 20261020880000_proceed_owner_account and 20261020890000_estimate_own_costs were
+-- installed by the lead on 14 October 2026 (none deletes or drops anything) and went live with the Round 4 pull request.

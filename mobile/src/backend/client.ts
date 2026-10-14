@@ -226,7 +226,7 @@ async function demoResponse(path: string, body: unknown) {
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
 export const viewMode = () => ({ readOnly: viewOnly !== "" || (demo !== null && !demoEngine), person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|profile|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|onboarding-settings|owner-account|profile|owner|oversight|checklists|privacy)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   if (!demo && demoResume && !options.asSelf) await demoResumed();
   if (demo) return await demoResponse(path, body);
   // While a super admin views the app as someone else nothing is saved (this device's own
@@ -385,6 +385,21 @@ export async function uploadCourseFile(courseId: string, file: { uri: string; na
   else form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/octet-stream' } as unknown as Blob);
   return (await workspaceRequest('/api/mobile/training-files', form)).json();
 }
+// Onboarding settings (admins): the contract used as the agreement template, Recharge's details and the own-cost categories.
+export const readOnboardingSettings = async () => (await workspaceRequest('/api/mobile/onboarding-settings')).json();
+export const saveOnboardingSettings = async (action: Record<string, unknown>) => (await workspaceRequest('/api/mobile/onboarding-settings', action)).json();
+export async function uploadAgreementTemplate(requestId: string, file: { uri: string; name: string; mimeType?: string; file?: File }) {
+  const form = new FormData();
+  form.append('requestId', requestId);
+  if (Platform.OS === 'web') form.append('file', file.file ?? new File([await (await fetch(file.uri)).blob()], file.name, { type: file.mimeType ?? 'application/octet-stream' }));
+  else form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/octet-stream' } as unknown as Blob);
+  return (await workspaceRequest('/api/mobile/onboarding-settings', form)).json();
+}
+// A contract's file by a short link: admins any; an owner the one their own agreement was made from.
+export const agreementFileLink = async (templateId: string, propertyId?: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) })
+  .parse(await (await workspaceRequest('/api/mobile/onboarding-settings?' + new URLSearchParams(propertyId ? { templateId, propertyId } : { templateId }))).json()).data;
+// The owner's app account made when they pressed Proceed: send the sign-in email again (the team).
+export const resendOwnerAccountEmail = async (propertyId: string, requestId: string) => (await workspaceRequest('/api/mobile/owner-account', { action: 'resend', propertyId, requestId })).json();
 export const removeCourseFile = async (fileId: string) => (await workspaceRequest('/api/mobile/training-files', { action: 'remove', fileId })).json();
 export const courseFileLink = async (fileId: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) }).parse(await (await workspaceRequest('/api/mobile/training-files?fileId=' + encodeURIComponent(fileId))).json()).data;
 // Photos and videos landlords sent with the enquiry form, opened by a short link.
