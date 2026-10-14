@@ -16,8 +16,7 @@ import { HIDDEN_LABEL, REPORT_REASONS, REPORT_REASON_LABEL, REPORT_THANKS } from
 // messages from the blocker's view, and the blocked person cannot start a new direct message with them.
 const firstName = (name: string) => name.replace(/^Recharge · /, "").trim().split(/\s+/)[0] || "this person";
 
-// The people you have blocked. Reading can fail (for example in the demo business, which has none);
-// the list is then empty and blocking still reports its own errors.
+// The people you have blocked. If reading fails the list is empty and blocking still reports its own errors.
 export function useBlocks() {
   const [people, setPeople] = useState<BlockedPerson[] | null>(null), [error, setError] = useState("");
   const load = useCallback(async () => {

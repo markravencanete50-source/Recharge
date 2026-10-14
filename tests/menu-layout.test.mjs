@@ -137,9 +137,10 @@ test('desktop and phone follow the same order', () => {
       assert.deepEqual([...phone].map(b => b.value).sort(), bar(role).map(b => b.value).sort(), role + ': the same bar destinations');
       const positions = phone.map(b => order.indexOf(barLinkKey(b.value, panel))).filter(i => i >= 0);
       assert.deepEqual(positions, [...positions].sort((a, b) => a - b), role + ': bar in panel order');
-      // The phone menu lists every other link, in the panel's order, and nothing the bar shows.
+      // The phone menu lists every other link, in the panel's order, and nothing the bar shows, except Management
+      // centre, which stays with the other departments when the bar's Work button opens it.
       const more = phoneMoreGroups(panel, phone);
-      const onBar = new Set(phone.map(b => barLinkKey(b.value, panel)));
+      const onBar = new Set(phone.map(b => barLinkKey(b.value, panel)).filter(k => k !== 'area:management'));
       assert.deepEqual(more.flatMap(g => g.links.map(l => l.key)), order.filter(k => !onBar.has(k)), role);
       assert.deepEqual(more.map(g => g.key), sectionKeys(panel).filter(k => more.some(g => g.key === k)), role);
     }
@@ -201,4 +202,20 @@ test('the screens are wired: the workspace uses the merged menu, Access control 
   for (const file of ['lib/menu-layout.ts', 'mobile/src/MenuOrderEditor.tsx', 'mobile/src/MenuLayoutStore.ts', 'supabase/migrations/20261015210000_menu_layouts.sql'])
     assert.ok(!readFileSync(file, 'utf8').includes(String.fromCharCode(0x2014)), file + ' has an em dash');
   assert.doesNotMatch(editor, /gradient/i);
+});
+
+test('the phone menu lists Management centre for the roles that have it on desktop, in the sidebar\'s order', () => {
+  for (const role of MENU_ROLES) {
+    const panel = panelOf(role), desktop = linkKeys(panel);
+    const menu = phoneMoreGroups(panel, orderPhoneBar(bar(role), panel)).flatMap(g => g.links.map(l => l.key));
+    assert.equal(menu.includes('area:management'), desktop.includes('area:management'), role);
+    // Other roles' menus are unchanged: their first Work area is still the bar's Work button only.
+    if (!desktop.includes('area:management') && bar(role).some(b => b.value === 'work')) assert.ok(!menu.includes(barLinkKey('work', panel)), role);
+  }
+  for (const role of ['super_admin', 'admin']) {
+    const panel = panelOf(role);
+    const departments = phoneMoreGroups(panel, orderPhoneBar(bar(role), panel)).find(g => g.key === 'departments').links;
+    assert.equal(departments[0].key, 'area:management', role + ': first, as on desktop');
+    assert.equal(departments[0].label, 'Management centre', role);
+  }
 });

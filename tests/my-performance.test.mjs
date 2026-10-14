@@ -164,16 +164,20 @@ test('my schedule: own rota and own events, tolerant of a teamEvents read that i
   assert.equal(scheduleDays({ people: [plan.people[0]] }, [], ME, '2026-10-13', 1)[0].shift, null, 'somebody else\'s rota is never shown');
 });
 
-test('Home is the person\'s own area: no action pills, no property count, favourites and the two cards', () => {
-  const tools = source('HomeTools.tsx'), home = source('LiveHome.tsx');
+test('Home is the person\'s own area: no action pills, no property count, their favourites, and the cards one tap away', () => {
+  const tools = source('HomeTools.tsx'), home = source('LiveHome.tsx'), focus = source('HomeFocus.tsx');
   assert.doesNotMatch(tools, /homeActionsFor/, 'the quick-action pills are gone');
-  assert.match(home, /!isClient\s*&&\s*<HomeFavorites/);
-  assert.match(home, /\.\.\.\(isClient \? \[\{ key: "properties"/, 'only owners get a property count in the overview');
-  const overview = home.slice(home.indexOf('const items: OverviewItem[]'), home.indexOf('const hero')).split('\n').filter(line => !line.includes('...(isClient')).join('\n');
-  assert.doesNotMatch(overview, /properties\.length/, 'the team overview has no property count');
-  for (const prop of ['favoriteEntries', 'onOpenEntry', 'tasks']) assert.match(home, new RegExp(prop + '\\?:'), prop + ' is an optional prop');
-  assert.match(home, /tasks\}[\s\S]*<MyPerformance/, 'the to-do summary sits above the performance card');
-  assert.match(home, /<MySchedule/);
+  const team = home.slice(home.indexOf('function TeamHome('), home.indexOf('function OwnerLiveHome('));
+  const owner = home.slice(home.indexOf('function OwnerLiveHome('));
+  assert.match(team, /<HomeFavorites [^\n]*savedOnly \/>/, 'the team Home keeps only the places they starred');
+  assert.match(tools, /saved\.length \|\| savedOnly \? \[\]/, 'the suggestions are left to the Favorites page');
+  assert.match(owner, /\{ key: "properties"/, 'owners keep their property count');
+  assert.doesNotMatch(team, /properties\.length/, 'the team Home has no property count');
+  for (const prop of ['favoriteEntries', 'onOpenEntry']) assert.match(home, new RegExp(prop + '\\?:'), prop + ' is an optional prop');
+  // My performance is the page in the menu (Reports.tsx), the schedule sits with the shift, the to-do list on its tab.
+  assert.doesNotMatch(team, /<MyPerformance|<MySchedule|tasks/, 'the performance and schedule cards and the to-do summary are off Home');
+  assert.match(focus, /<ShiftCard palette=\{p\} account=\{account\} \/>\s*<MySchedule palette=\{p\} account=\{account\} \/>/, 'the shift button opens the shift and the week');
+  assert.match(team, /<ShiftButton palette=\{p\} account=\{account\} \/>/);
   assert.match(source('MyPerformance.tsx'), /section: "teamPerformance"/);
   assert.match(source('MySchedule.tsx'), /section: "rotaPlan"/);
   assert.match(source('MySchedule.tsx'), /section: "teamEvents"/);

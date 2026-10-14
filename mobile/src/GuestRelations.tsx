@@ -12,7 +12,7 @@ import { PreventativeList } from "./PreventativeList";
 import { StaySheet } from "./StaySheet";
 import { StaysRoutineCard } from "./StaysRoutineCard";
 import type { SectionProps } from "./SectionProps";
-import { ui } from "./theme";
+import { space, ui } from "./theme";
 import { canStart } from "../../lib/home-tools";
 import { GUEST_SUB_LABEL, defaultGuestSub, guestSubsFor, pickSub, type GuestSub } from "../../lib/relations-subs";
 
@@ -36,7 +36,7 @@ export function GuestRelations(props: SectionProps & { onRefresh?: () => void | 
   const [sub, setSub] = useState<GuestSub>(() => pickSub(subs, focus?.sub, defaultGuestSub(account.role, subs)));
   const [recording, setRecording] = useState(() => focus?.open === "record-stay" && canStart(account, "record-stay"));
   return (
-    <View style={{ gap: 16 }}>
+    <View style={{ gap: space.section }}>
       {/* The title keeps its width; on a phone "Record a stay" wraps under it instead of squeezing it. */}
       <View style={[ui.between, { gap: 12, alignItems: "flex-start", flexWrap: "wrap" }]}>
         <View style={{ flex: 1, minWidth: 220, gap: 4 }}>

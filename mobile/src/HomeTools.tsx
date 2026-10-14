@@ -80,9 +80,11 @@ type FavoriteRow = { key: string; label: string; detail: string; saved: boolean;
 
 // A team member's Home: their own Favorites as a compact list (not pills or tiles). Until they have
 // saved any, the tools suggested for their role fill the list, with a hint to star the ones they use.
-export function HomeFavorites({ palette: p, account, properties, entries, onOpenEntry, onTool, onSection }: {
+// With `savedOnly` (the calm Home) only the places they starred show; the suggestions stay on the
+// Favorites page in the menu.
+export function HomeFavorites({ palette: p, account, properties, entries, onOpenEntry, onTool, onSection, savedOnly = false }: {
   palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; entries?: SearchEntry[]; onOpenEntry?: (entry: SearchEntry) => void;
-  onTool: (target: HomeToolTarget) => void; onSection: (section: WorkspaceSection) => void;
+  onTool: (target: HomeToolTarget) => void; onSection: (section: WorkspaceSection) => void; savedOnly?: boolean;
 }) {
   const favorites = useFavorites();
   const [tracker, setTracker] = useState<Tool | null>(null);
@@ -101,7 +103,7 @@ export function HomeFavorites({ palette: p, account, properties, entries, onOpen
   const openable = (entry: SearchEntry) => !!onOpenEntry || entry.target.kind === "section" || entry.target.kind === "tool";
   if (favorites && !favorites.loaded) return null;
   const saved: FavoriteRow[] = entries && favorites ? resolveFavorites(favorites.items, entries).flatMap(({ entry }) => entry && openable(entry) ? [{ key: entry.key, label: entry.label, detail: entry.detail, saved: true, open: () => openEntry(entry) }] : []) : [];
-  const suggested: FavoriteRow[] = saved.length ? [] : entries
+  const suggested: FavoriteRow[] = saved.length || savedOnly ? [] : entries
     ? suggestedFavorites(entries, favorites?.items ?? [], FAVORITES_SHOWN).filter(openable).map(entry => ({ key: entry.key, label: entry.label, detail: entry.detail, saved: false, open: () => openEntry(entry) }))
     : homeToolsFor(account.role, account.modules).slice(0, FAVORITES_SHOWN).map(tool => ({ key: tool.key, label: tool.label, detail: tool.detail, saved: false, open: () => openTarget(tool.target) }));
   const rows = (saved.length ? saved : suggested).slice(0, FAVORITES_SHOWN);

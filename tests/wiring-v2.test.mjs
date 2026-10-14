@@ -64,7 +64,8 @@ test('the workspace mounts every page and builds the section props once', () => 
   assert.match(workspace, /tab === "decisions" \? <ManagementApprovals palette=\{p\} account=\{account\} properties=\{properties\} work=\{work\} onOpenWork=\{setOpenWork\} \/>/);
   assert.match(workspace, /tab === "calendar" \? <LiveCalendar [^>]*properties=\{properties\}/);
   assert.match(workspace, /<Reports [^>]*account=\{account\} work=\{work\}/);
-  assert.match(workspace, /<LiveHome [^]*?favoriteEntries=\{entries\} onOpenEntry=\{openEntry\} tasks=\{team \? <TodoSummary \{\.\.\.sectionProps\} onOpenAll=\{\(\) => navigate\("todo"\)\} \/> : undefined\}/);
+  assert.match(workspace, /<LiveHome [^]*?favoriteEntries=\{entries\} onOpenEntry=\{openEntry\} \/>/);
+  assert.doesNotMatch(workspace, /<TodoSummary/, 'the to-do list is its own tab, not a card on Home');
 });
 
 test('Messages gets the Updates tab and the old Updates page opens it', () => {
@@ -164,7 +165,6 @@ test('owners keep their own path: no team pages, no Updates tab, their own bar',
   assert.match(workspace, /const TEAM_ROLES: Role\[\] = \["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"\];/);
   assert.match(workspace, /todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES/);
   assert.ok(!/TEAM_ROLES: Role\[\] = [^;]*"client"/.test(workspace));
-  assert.match(workspace, /tasks=\{team \? <TodoSummary/);
   assert.match(workspace, /updates=\{team \?/);
   assert.match(workspace, /<LiveClientReports palette=\{p\} mailbox=/, 'owners still get their own reports');
   assert.match(workspace, /tab === "approvals" \? <LiveApprovals /);

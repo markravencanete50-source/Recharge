@@ -46,14 +46,14 @@ test('Work-view buttons follow the same tool grants as Home', () => {
     assert.match(source(file), new RegExp(`canStart\\(account, "${form}"\\) && <Button`), file);
 });
 
-test("admins' Home decides repairs above the management limit, with Management's total", () => {
+test("admins' Home counts repairs above the management limit in Management's total, decided in Management", () => {
   const empty = managementSchema.parse({ cleaningDecisions: [], expensesOverLimit: [], stalledOwnerApprovals: [], cleanerWarnings: [], ownerBalancesDue: [] });
   const repair = { workId: '22222222-2222-4222-8222-222222222222', version: 1, title: 'Boiler', propertyId: '33333333-3333-4333-8333-333333333333', propertyName: 'Flat', issue: 'No heat', repairType: 'heating', urgent: false, hazard: false, estimatedCostMinor: 90000, previousEstimateMinor: null, quoteReason: null, ownerApprovedAt: null, limitMinor: 50000, waitingSince: '2026-10-08T10:00:00Z' };
   assert.equal(queueCount({ ...empty, repairApprovals: [repair] }), 1);
   const home = source('LiveOversight.tsx');
-  assert.match(home, /queue\.repairApprovals\.length/);
   assert.match(home, /queueCount\(queue\)/);
-  assert.match(home, /<CostDecisionSheet/);
+  assert.match(home, /adminNeeds\(overview, waiting, followUps\)/, 'the total is one line of Needs you now');
+  assert.match(source('ManagementApprovals.tsx'), /<CostDecisionSheet/, 'the repair is decided in Management approvals');
 });
 
 test('Stays edit or cancel only the stays recorded in the app', () => {

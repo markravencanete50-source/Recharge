@@ -55,7 +55,7 @@ export function OwnerPeriodSummary({ palette: p, onStatements }: { palette: Pale
       {!current && <Loading p={p} rows={2} />}
       {!!current?.error && <Notice text={current.error} p={p} tone="bad" />}
       {now && before && <>
-        <StatGrid>
+        <StatGrid showZeros>
           <StatTile p={p} icon="credit-card" tone="clients" label="Earnings" value={now.bookingIncomeMinor} format={formatMoneyShort} detail={detail(change(s => s.bookingIncomeMinor))} />
           <StatTile p={p} icon="pie-chart" tone="clients" label="Occupancy" value={percent(now.occupancy)} detail={detail(change(s => s.occupancy))} />
           <StatTile p={p} icon="moon" tone="clients" label="Average nightly rate" value={now.averageNightlyMinor === null ? "–" : formatMoneyShort(now.averageNightlyMinor)} detail={detail(change(s => s.averageNightlyMinor))} />

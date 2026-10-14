@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
 import { AccessControl } from "./LiveAccessControl";
-import { ui, type Palette } from "./theme";
+import { space, ui, type Palette } from "./theme";
 import { Button, Notice, Section, useWorkFocus, Loading } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
 import { Pills } from "./Pills";
@@ -80,7 +80,7 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
 
   return (
-    <View style={{ gap: 20 }}>
+    <View style={{ gap: space.section }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Management</Text>
         <Text style={[ui.body, { color: p.muted }]}>Everything waiting on a management decision, in one place.</Text>

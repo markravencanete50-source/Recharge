@@ -432,7 +432,7 @@ function PortfolioCard({ palette: p, summary, properties, onOpen }: { palette: P
   return (
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 14 }]}>
       <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Portfolio</Text>
-      <StatGrid>
+      <StatGrid showZeros>
         {stats.map(([label, value, icon]) => <StatTile key={label} p={p} icon={icon} tone="stays" label={label} value={value} />)}
       </StatGrid>
       <View style={{ flexDirection: wide ? "row" : "column", gap: 20, alignItems: wide ? "flex-start" : "stretch" }}>
@@ -641,7 +641,7 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
     setOlderState("loading");
     try {
       const page = z.array(noticeViewSchema).parse((await readOlderNotices(before)).data);
-      // A page with nothing new (the demo answers every page alike) ends the paging too.
+      // A page with nothing new ends the paging too.
       const known = new Set(all.map(n => n.id));
       setOlder(list => mergeNotices(list, page)); setMore(mayHaveOlder(page.length) && page.some(n => !known.has(n.id))); setOlderState("idle");
     } catch { setOlderState("failed"); }

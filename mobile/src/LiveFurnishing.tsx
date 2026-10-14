@@ -93,7 +93,7 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
           <Text style={{ color: p.muted, fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>Property</Text>
           <Text style={{ color: p.text, fontSize: 17, fontWeight: "700" }}>{layout.address.trim() || "Address not entered"}</Text>
         </View>
-        <StatGrid>
+        <StatGrid showZeros>
           <StatTile p={p} icon="moon" tone="clients" label="Bedrooms" value={layout.bedrooms} />
           <StatTile p={p} icon="users" tone="clients" label="Guests" value={layout.guests} />
           <StatTile p={p} icon="layers" tone="clients" label="Total beds" value={list.beds} />

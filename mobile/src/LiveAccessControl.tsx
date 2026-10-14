@@ -324,7 +324,7 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
       </View>
       {tabs}
       <View style={{ flexDirection: "row" }}><Button label="Add a person" icon="user-plus" primary p={p} onPress={() => setAdding(true)} /></View>
-      <StatGrid>
+      <StatGrid showZeros>
         <StatTile key="people" p={p} icon="users" label="People" value={summary.people} />
         <StatTile key="online" p={p} icon="monitor" label="Online now" value={summary.online} />
         <StatTile key="blocked" p={p} icon="slash" label="Blocked" value={summary.blocked} attention={summary.blocked > 0} />

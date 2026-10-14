@@ -30,7 +30,7 @@ test('the schedule table is never wider than its card, at any width', () => {
 });
 
 test('the 1440 case: the card with the sidebar open shows all of Last update', () => {
-  // The workspace at 1440 with the sidebar open: the Cleans table measured 1136 px in the demo (1134 inside its border);
+  // The workspace at 1440 with the sidebar open: the Cleans table measured 1136 px (1134 inside its border);
   // a little narrower with a scroll bar.
   for (const card of [1080, 1100, 1134]) {
     const w = thinWidths(COLUMNS, card);
