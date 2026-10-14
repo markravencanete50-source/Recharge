@@ -38,7 +38,8 @@ export function adminNeeds(o: Overview | null, decisions: number | null, followU
     line('followUps', followUps, say(followUps, 'client check-in due', 'client check-ins due'), { kind: 'page', section: 'properties' }),
     ...(o ? [
       line('listings', o.stays.listingsToCheck, say(o.stays.listingsToCheck, 'listing to check today', 'listings to check today'), LISTINGS),
-      line('payouts', o.accounts.payoutsToReconcile, say(o.accounts.payoutsToReconcile, 'payout to reconcile', 'payouts to reconcile'), work('accounts', { sub: 'payouts' })),
+      // Overdue only (20261020900000): past the expected payout date and still missing or different.
+      line('payouts', o.accounts.payoutsToReconcile, say(o.accounts.payoutsToReconcile, 'payout overdue to reconcile', 'payouts overdue to reconcile'), work('accounts', { sub: 'payouts' })),
       line('statements', o.accounts.statementsToIssue, say(o.accounts.statementsToIssue, 'statement to issue', 'statements to issue'), work('accounts', { sub: 'statements' })),
       line('relistings', o.stays.relistingsOpen, say(o.stays.relistingsOpen, 're-listing open', 're-listings open'), { kind: 'work', view: 'clients', sub: 'relisting' }),
       line('emptyNights', o.stays.emptyNights, say(o.stays.emptyNights, 'empty night to price this week', 'empty nights to price this week'), LISTINGS),

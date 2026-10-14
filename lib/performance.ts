@@ -49,6 +49,10 @@ export const performanceReportSchema = z.object({
   section: z.literal('performance'), from: isoDate, to: isoDate, days: count,
   filters: z.object({ propertyId: z.string().uuid().nullable(), region: z.string().nullable(), channel: z.string().nullable() }),
   totals: performanceFiguresSchema,
+  // Bookings value as booked (20261020910000): every stay with nights in the dates, settled or not, shared by nights
+  // like grossRevenueMinor (settled gross where known, else the expected payout plus the channel's fees). Optional so
+  // an older server's report still reads.
+  bookedValueMinor: int.optional(),
   byProperty: z.array(performancePropertySchema),
   byMonth: z.array(performanceMonthSchema),
   byChannel: z.array(performanceChannelSchema),

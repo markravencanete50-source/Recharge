@@ -23,6 +23,10 @@ export const REPORT_INTRO: Record<ReportKind, string> = {
 // The teams read section for each report (lib/workspace-teams-policy.ts).
 export const REPORT_SECTION = { enquiries: 'reportEnquiries', repairs: 'reportRepairs', todos: 'reportTodos', messages: 'reportMessages', time: 'reportTime' } as const satisfies Record<ReportKind, string>;
 export const REPORT_MAX_DAYS = 366;
+// A place on Reports that opens one report: Home's "Guest replies on time" opens Messages, for this month so far.
+export const reportAnchor = (kind: ReportKind) => 'section-business-reports-' + kind;
+export const reportFromAnchor = (anchor: string | null | undefined): ReportKind | null => REPORT_KINDS.find(k => reportAnchor(k) === anchor) ?? null;
+export const monthSoFar = (today: string) => ({ from: today.slice(0, 8) + '01', to: today });
 export const REPORT_DEFAULT_DAYS = 30;
 
 const DAY = 86_400_000;

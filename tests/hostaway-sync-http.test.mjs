@@ -46,7 +46,8 @@ const hook = (body, auth = 'recharge:' + 'a'.repeat(32)) => new Request('https:/
 
 test('reservations map to the platform, confirmation code, guests and platform payout', () => {
   assert.deepEqual(policy.syncReservation(airbnb), { id: '7001', listingId: '501', checkIn: '2026-11-02', checkOut: '2026-11-05', status: 'confirmed',
-    channel: 'airbnb', channelReference: 'HMABC123', guests: 3, payoutMinor: 41250 });
+    channel: 'airbnb', channelReference: 'HMABC123', guests: 3, payoutMinor: 41250,
+    payoutBreakdown: { source: 'airbnb', grossMinor: 48000, commissionMinor: 6750, guestFeeMinor: null, paymentChargeMinor: null, commissionVatMinor: null, cleaningFeeMinor: null, cityTaxMinor: null } });
   // Booking.com: the guest total less the platform's commission.
   const booking = policy.syncReservation({ ...airbnb, channelName: 'bookingcom', channelReservationId: '4455667788', airbnbExpectedPayoutAmount: null, totalPrice: 300, channelCommissionAmount: 45, hostChannelFee: 0 });
   assert.equal(booking.channel, 'booking_com'); assert.equal(booking.payoutMinor, 25500); assert.equal(booking.channelReference, '4455667788');

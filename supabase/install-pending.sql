@@ -1,3 +1,3 @@
 -- Nothing pending. Every migration in supabase/migrations is installed in the Supabase project.
--- 20261020870000_agreement_template, 20261020880000_proceed_owner_account and 20261020890000_estimate_own_costs were
--- installed by the lead on 14 October 2026 (none deletes or drops anything) and went live with the Round 4 pull request.
+-- 20261020900000_hostaway_payout_fees and 20261020910000_home_figures were installed by the lead on 14 October 2026
+-- (neither deletes nor drops anything) and went live with the payouts and Home figures pull request.

@@ -15,9 +15,9 @@ import { AREA_LABEL, decisionsCsv, decisionsSchema, outcomeLabel, overviewSchema
 import { formatMoney } from "../../lib/format";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { adminNeeds, departmentTiles, type NeedLine, type NeedOpen } from "../../lib/home-needs";
-import { ATTENTION_SHOWN, businessFigures, EMPTY_OVERVIEW, overviewRanges, performanceRangeQuery, type OverviewData } from "../../lib/home-overview";
+import { ATTENTION_SHOWN, businessFigures, EMPTY_OVERVIEW, guestReplyGlanceSchema, overviewRanges, performanceRangeQuery, type OverviewData } from "../../lib/home-overview";
 import { performanceReportSchema } from "../../lib/performance";
-import { enquiriesReportSchema, repairsReportSchema } from "../../lib/business-reports-view";
+import { enquiriesReportSchema } from "../../lib/business-reports-view";
 import { BusinessFigures, DepartmentTiles, NeedsList } from "./HomeFocus";
 import type { Expense } from "../../lib/accounts-live";
 import { hubSchema } from "../../lib/workspace-teams-policy";
@@ -124,23 +124,23 @@ export function useQueueActions(load: () => Promise<void>) {
   };
 }
 
-// The reads behind "This month" (lib/home-overview.ts): this and last month's Performance report, and the enquiries and
-// repairs Business reports for this month so far and the same days of last month. Each may fail on its own; its
-// figures then show "–".
+// The reads behind "This month" (lib/home-overview.ts): this and last month's Performance report (with the value as
+// booked), guest replies on time, and the enquiries Business report for this month so far and the same days of last
+// month. Each may fail on its own; its figures then show "–". Payouts overdue comes from the overview AdminHome reads
+// anyway.
 function useBusinessFigures() {
   const [data, setData] = useState<OverviewData>(EMPTY_OVERVIEW);
   const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
     const r = overviewRanges(london(new Date()));
-    const performance = (range: { from: string; to: string }) => readFinance(performanceRangeQuery(range)).then(x => performanceReportSchema.parse(x.data).totals);
-    const report = <T,>(section: "reportEnquiries" | "reportRepairs", range: { from: string; to: string }, parse: (data: unknown) => T) => readTeams({ section, from: range.from, to: range.to }).then(x => parse(x.data));
-    const [month, lastMonth, enquiries, enquiriesBefore, repairs, repairsBefore] = await Promise.allSettled([
-      performance(r.month), performance(r.lastMonth),
-      report("reportEnquiries", r.soFar, d => enquiriesReportSchema.parse(d)), report("reportEnquiries", r.sameDaysBefore, d => enquiriesReportSchema.parse(d)),
-      report("reportRepairs", r.soFar, d => repairsReportSchema.parse(d)), report("reportRepairs", r.sameDaysBefore, d => repairsReportSchema.parse(d)),
-    ]);
+    const performance = (range: { from: string; to: string }) => readFinance(performanceRangeQuery(range)).then(x => performanceReportSchema.parse(x.data));
+    const enquiries = (range: { from: string; to: string }) => readTeams({ section: "reportEnquiries", from: range.from, to: range.to }).then(x => enquiriesReportSchema.parse(x.data));
+    const replies = readTeams({ section: "guestReplies" }).then(x => guestReplyGlanceSchema.parse(x.data));
+    const [month, lastMonth, now, before, glance] = await Promise.allSettled([performance(r.month), performance(r.lastMonth), enquiries(r.soFar), enquiries(r.sameDaysBefore), replies]);
     const ok = <T,>(x: PromiseSettledResult<T>) => (x.status === "fulfilled" ? x.value : null);
-    setData({ month: ok(month), lastMonth: ok(lastMonth), enquiries: ok(enquiries), enquiriesBefore: ok(enquiriesBefore), repairs: ok(repairs), repairsBefore: ok(repairsBefore), portfolio: null });
+    const m = ok(month), l = ok(lastMonth);
+    setData({ month: m?.totals ?? null, lastMonth: l?.totals ?? null, booked: m?.bookedValueMinor ?? null, bookedBefore: l?.bookedValueMinor ?? null, replies: ok(glance),
+      enquiries: ok(now), enquiriesBefore: ok(before), payoutsOverdue: null, portfolio: null });
     setLoading(false);
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
@@ -172,7 +172,8 @@ export function AdminHome({ palette: p, desktop, onTool, onOpen, onPlace, portfo
   const lines = loading ? [] : adminNeeds(overview, waiting, followUps);
   return (
     <>
-      <BusinessFigures palette={p} figures={businessFigures({ ...business.data, portfolio }, london(new Date()))} desktop={desktop} loading={business.loading} onOpen={f => onPlace(f.open)} />
+      <BusinessFigures palette={p} figures={businessFigures({ ...business.data, portfolio, payoutsOverdue: overview?.accounts.payoutsToReconcile ?? null }, london(new Date()))} desktop={desktop}
+        loading={business.loading || (!overview && !overviewError)} onOpen={f => onPlace(f.open)} />
       <NeedsList palette={p} title="Needs your attention" limit={ATTENTION_SHOWN} lines={lines} loading={loading} error={overviewError || error} onOpen={onOpen} />
       {!!overview && <DepartmentTiles palette={p} tiles={departmentTiles(overview)} desktop={desktop} onOpen={onTool} />}
     </>

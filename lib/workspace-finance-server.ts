@@ -26,6 +26,8 @@ export const workspaceTeams = rpcRoute({
   read: (client, input) => input.section === 'readyHome' ? client.rpc('workspace_ready_home')
     : input.section === 'favorites' ? client.rpc('workspace_favorites')
     : input.section === 'viewAsPeople' ? client.rpc('workspace_view_as_people')
+    // Home's "Guest replies on time" (admins only, checked by the database); `from` may name the day, else London's today.
+    : input.section === 'guestReplies' ? client.rpc('workspace_guest_reply_glance', { on_day: input.from || null })
     // The business reports (admins only, checked by the database) have their own read.
     : input.section in BUSINESS_REPORT_KIND ? client.rpc('workspace_business_report', { section: BUSINESS_REPORT_KIND[input.section as keyof typeof BUSINESS_REPORT_KIND], start_on: input.from, end_on: input.to })
     // Client enquiries also say whether the email service is set up (or the team copies the link).
