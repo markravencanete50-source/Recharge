@@ -68,5 +68,5 @@ test('the demo engine refuses every other address, and the app sends nothing liv
   const client = readFileSync('mobile/src/backend/client.ts', 'utf8');
   const request = client.slice(client.indexOf('export async function workspaceRequest'), client.indexOf('export async function signOut'));
   assert.ok(request.indexOf('if (demo) return await demoResponse') < request.indexOf('call('), 'demo is answered before any live call');
-  for (const name of ['readNotificationKey', 'writeNotifications']) assert.match(client, new RegExp(`export const ${name} = async[^\\n]*demo( \\|\\| demoResume)? \\?`), name + ' stays local in demo');
+  for (const name of ['readNotificationStatus', 'readNotificationKey', 'writeNotifications', 'testNotification']) assert.match(client, new RegExp(`export const ${name} = async[^\\n]*demo( \\|\\| demoResume)? \\?`), name + ' stays local in demo');
 });

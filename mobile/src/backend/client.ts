@@ -321,10 +321,10 @@ const pushDeviceSchema = z.object({ endpointHost: z.string().nullable(), since: 
 export type PushDevice = z.infer<typeof pushDeviceSchema>;
 const notificationStatusSchema = z.object({ publicKey: z.string().nullable(), devices: z.array(pushDeviceSchema).nullable().optional() });
 export const readNotificationStatus = async () => demo || demoResume ? { publicKey: null, devices: null } : notificationStatusSchema.parse(await (await call('/api/workspace/notifications')).json());
-export const readNotificationKey = async () => (await readNotificationStatus()).publicKey;
+export const readNotificationKey = async () => demo || demoResume ? null : (await readNotificationStatus()).publicKey;
 type PushAddress = { endpoint: string; p256dh: string; auth: string };
 export const writeNotifications = async (body: ({ action: 'subscribe' } & PushAddress) | { action: 'unsubscribe'; endpoint: string }) => demo || demoResume ? { ok: true } : (await call('/api/workspace/notifications', body)).json();
-export const testNotification = async (address: PushAddress) => z.object({ data: z.object({ outcome: z.enum(['sent', 'gone', 'failed']), status: z.number() }) })
+export const testNotification = async (address: PushAddress) => demo || demoResume ? { outcome: 'failed' as const, status: 0 } : z.object({ data: z.object({ outcome: z.enum(['sent', 'gone', 'failed']), status: z.number() }) })
   .parse(await (await call('/api/workspace/notifications', { action: 'test', ...address })).json()).data;
 
 // Messages: conversations, a conversation's messages, people to message, and sending.
