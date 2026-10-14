@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Image, Linking, Platform, View } from "react-native";
+import { Image, Linking, Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { ChoiceField } from "./ChoiceField";
@@ -50,10 +50,10 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette
       <PageHeading palette={p} title="Client enquiries" subtitle="Send landlords the New Property Enquiry Form, see their answers here, and value the property."
         action={<SoftButton palette={p} primary icon="plus" label="Send the form to a landlord" onPress={() => setSending(true)} />} />
       <StatGrid>
-        <StatTile p={p} icon="inbox" tone="clients" label="Ready to value" value={count("value")} attention={count("value") > 0} detail="Answered forms" />
-        <StatTile p={p} icon="clock" tone="stays" label="Waiting for them" value={count("waiting")} detail="Form sent, not answered" />
+        <StatTile p={p} icon="inbox" tone="clients" label="To value" value={count("value")} attention={count("value") > 0} detail="Answered forms, ready to value" />
+        <StatTile p={p} icon="clock" tone="stays" label="Waiting" value={count("waiting")} detail="Form sent, waiting for them" />
         <StatTile p={p} icon="trending-up" tone="accounts" label="Valuing" value={(data?.items ?? []).filter(e => steps.get(e.id) === "valuing").length} detail="Estimate being prepared" />
-        <StatTile p={p} icon="award" tone="cleans" label="Estimates sent" value={(data?.items ?? []).filter(e => ["estimate", "won"].includes(steps.get(e.id)!)).length} detail="With the landlord" />
+        <StatTile p={p} icon="award" tone="cleans" label="Sent" value={(data?.items ?? []).filter(e => ["estimate", "won"].includes(steps.get(e.id)!)).length} detail="Estimates with the landlord" />
       </StatGrid>
       <Segmented p={p} label="Enquiries" value={shown} onChange={setFilter} items={[
         { key: "value", label: "To value", count: count("value"), alert: count("value") > 0 }, { key: "waiting", label: "Waiting", count: count("waiting") },
@@ -75,7 +75,15 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette
 
 function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: ClientEnquiry; step: EnquiryStep; onPress: () => void }) {
   const a = e.answers;
+  // On a phone the tags go under the details, so the name and address keep the row's width (round 6).
+  const narrow = useWindowDimensions().width < 600;
   const when = e.submittedAt ? `Answered ${ago(e.submittedAt)}` : e.openedAt ? `Opened ${ago(e.openedAt)}` : `Sent ${ago(e.sentAt)}${e.emailStatus === "failed" ? " · email failed" : e.delivery === "link" ? " · link copied" : ""}`;
+  const tags = <>
+    <Tag label={STEP_LABEL[step]} tone={STEP_TONE[step]} p={p} />
+    {e.delivery === "email" && ["sent", "opened", "expired"].includes(step) && e.emailStatus !== "sent" && <Tag label={e.emailStatus === "failed" ? "Email failed" : "Sending…"} tone={e.emailStatus === "failed" ? "bad" : "plain"} p={p} />}
+    {!!e.duplicateReason && step !== "closed" && <Tag label={DUPLICATE_LABEL} tone="bad" p={p} />}
+    {e.files.length > 0 && <View style={[ui.row, { gap: 4 }]}><Feather name="image" size={12} color={p.muted} /><Text style={{ color: p.muted, fontSize: 11 }}>{e.files.length}</Text></View>}
+  </>;
   return (
     <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={`${a?.fullName ?? e.recipientName}, ${STEP_LABEL[step]}${e.duplicateReason ? ", " + DUPLICATE_LABEL : ""}`} onPress={onPress}
       style={[ui.row, { gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: step === "received" ? p.waiting : p.border, backgroundColor: p.surface, ...depth.card }]}>
@@ -87,13 +95,9 @@ function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: Cli
           {a && <Text style={{ color: p.text, fontSize: 12, fontWeight: "600" }}>{a.propertyType} · {a.bedrooms} bed · {a.bathrooms} bath</Text>}
           <Text style={{ color: p.muted, fontSize: 12 }}>{when}</Text>
         </View>
+        {narrow && <View style={[ui.row, { gap: 6, flexWrap: "wrap", marginTop: 4 }]}>{tags}</View>}
       </View>
-      <View style={{ alignItems: "flex-end", gap: 6 }}>
-        <Tag label={STEP_LABEL[step]} tone={STEP_TONE[step]} p={p} />
-        {e.delivery === "email" && ["sent", "opened", "expired"].includes(step) && e.emailStatus !== "sent" && <Tag label={e.emailStatus === "failed" ? "Email failed" : "Sending…"} tone={e.emailStatus === "failed" ? "bad" : "plain"} p={p} />}
-        {!!e.duplicateReason && step !== "closed" && <Tag label={DUPLICATE_LABEL} tone="bad" p={p} />}
-        {e.files.length > 0 && <View style={[ui.row, { gap: 4 }]}><Feather name="image" size={12} color={p.muted} /><Text style={{ color: p.muted, fontSize: 11 }}>{e.files.length}</Text></View>}
-      </View>
+      {!narrow && <View style={{ alignItems: "flex-end", gap: 6 }}>{tags}</View>}
       <Feather name="chevron-right" size={18} color={p.muted} />
     </MotionPress>
   );
