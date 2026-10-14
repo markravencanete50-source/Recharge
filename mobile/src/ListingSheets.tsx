@@ -7,7 +7,7 @@ import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { Button, dayLabel, Field, london, message, Notice, useRequestId } from "./LiveKit";
-import { Pills } from "./Pills";
+import { Pills, pillBox, pillInk } from "./Pills";
 import { writeOperation } from "./backend/client";
 import { poundsToMinor } from "../../lib/repairs-live";
 import { type PropertyView } from "../../lib/workspace-view";
@@ -132,8 +132,8 @@ export function ReviewSheet({ p, property, onClose, onDone }: { p: Palette; prop
       : <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {Array.from({ length: outOf }, (_, i) => i + 1).map(n => (
           <MotionPress key={n} accessibilityRole="radio" accessibilityLabel={`${n} out of ${outOf}`} accessibilityState={{ selected: rating === n }} onPress={() => rate(n)}
-            style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: rating === n ? p.primary : p.surface, borderWidth: 1, borderColor: rating === n ? p.primary : p.border }}>
-            <Text style={{ color: rating === n ? p.onPrimary : p.text, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{n}</Text>
+            style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", ...pillBox(p, rating === n) }}>
+            <Text style={{ color: pillInk(p, rating === n), fontWeight: "700", fontVariant: ["tabular-nums"] }}>{n}</Text>
           </MotionPress>
         ))}
       </View>}

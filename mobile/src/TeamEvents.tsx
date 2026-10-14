@@ -15,6 +15,7 @@ import {
 } from "../../lib/calendar-live";
 import { TEAM_EVENT_KINDS, type RotaPlan } from "../../lib/workspace-teams-policy";
 import { validClock } from "../../lib/team-time";
+import { pillBox, pillInk } from "./Pills";
 
 // Team calendar: absences, meetings, time away, training and anything else that takes a person away from
 // their usual work, and where everyone is on a given day. Anyone on the team (cleaners too) adds, changes
@@ -195,9 +196,9 @@ export function WhoIsWhere({ p, rota, events, days, day, today, myId, loading, p
           const on = d === day;
           return (
             <MotionPress key={d} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={longDay(d) + (d === today ? ", today" : "")} onPress={() => onDay(d)}
-              style={{ flex: 1, minWidth: 0, minHeight: 56, borderRadius: 14, alignItems: "center", justifyContent: "center", gap: 2, borderWidth: 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.primary : p.surface }}>
-              <Text style={{ color: on ? p.onPrimary : p.muted, fontSize: 11, fontWeight: "500" }}>{weekdayName(d)}</Text>
-              <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 15, fontWeight: d === today ? "600" : "500", fontVariant: ["tabular-nums"] }}>{dayNumber(d)}</Text>
+              style={{ flex: 1, minWidth: 0, minHeight: 56, borderRadius: 14, alignItems: "center", justifyContent: "center", gap: 2, ...pillBox(p, on) }}>
+              <Text style={{ color: pillInk(p, on, true), fontSize: 11, fontWeight: "500" }}>{weekdayName(d)}</Text>
+              <Text style={{ color: pillInk(p, on), fontSize: 15, fontWeight: d === today ? "600" : "500", fontVariant: ["tabular-nums"] }}>{dayNumber(d)}</Text>
             </MotionPress>
           );
         })}

@@ -13,6 +13,7 @@ import { ui, type Palette } from "./theme";
 import { readChecklists, writeChecklists } from "./backend/client";
 import { MAX_ITEM_PHOTOS, templateFor, templatesSchema, type TemplateItem } from "../../lib/clean-checklist-policy";
 import type { PropertyView } from "../../lib/workspace-view";
+import { pillBox, pillInk } from "./Pills";
 
 // Clean checklists: one for every property, and one for a property that needs its own. Admins and
 // cleaning managers choose which checks need photos, and how many. New cleans get these checks; the
@@ -98,9 +99,9 @@ export function ChecklistTemplatesSheet({ p, visible, properties, state, onClose
             </View>
             <View style={[ui.row, { gap: 8, flexWrap: "wrap", paddingLeft: 30 }]}>
               <MotionPress accessibilityRole="switch" accessibilityState={{ checked: x.photoRequired }} accessibilityLabel={`Photo required for ${x.label || `check ${i + 1}`}`} onPress={() => update(x.key, { photoRequired: !x.photoRequired })}
-                style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, backgroundColor: x.photoRequired ? p.primary : p.wash }]}>
-                <Feather name="camera" size={14} color={x.photoRequired ? p.onPrimary : p.primary} />
-                <Text style={{ color: x.photoRequired ? p.onPrimary : p.primary, fontSize: 13, fontWeight: "600" }}>{x.photoRequired ? "Photo required" : "No photo needed"}</Text>
+                style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, ...pillBox(p, x.photoRequired) }]}>
+                <Feather name="camera" size={14} color={pillInk(p, x.photoRequired)} />
+                <Text style={{ color: pillInk(p, x.photoRequired), fontSize: 13, fontWeight: "600" }}>{x.photoRequired ? "Photo required" : "No photo needed"}</Text>
               </MotionPress>
               {x.photoRequired && <View style={[ui.row, { gap: 4 }]}>
                 <MotionPress accessibilityRole="button" accessibilityLabel="Fewer photos" disabled={x.minPhotos <= 1} onPress={() => update(x.key, { minPhotos: Math.max(1, x.minPhotos - 1) })} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: p.wash, opacity: x.minPhotos <= 1 ? 0.5 : 1 }}><Feather name="minus" size={16} color={p.primary} /></MotionPress>

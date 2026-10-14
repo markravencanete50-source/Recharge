@@ -5,6 +5,7 @@ import { MotionPress } from "./motion";
 import { Button, Field, Tag } from "./LiveKit";
 import { ui, type Palette } from "./theme";
 import { CLEAN_QUESTIONS, cleanAnswers, purchaseFromClean, repairFromClean, type CleanCondition } from "../../lib/clean-report";
+import { pillBox, pillInk } from "./Pills";
 
 // The cleaners' post-clean form: the property check the cleaner answers after each clean
 // (broadband, heating, bins, garden, meter, cutlery, letters), repairs, items to order and
@@ -36,8 +37,8 @@ export function CleanCheckForm({ p, answers, items, onAnswers, onItems }: { p: P
               const on = answers[q.key] === value;
               return (
                 <MotionPress key={value} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onAnswers({ ...answers, [q.key]: on ? undefined : value })}
-                  style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-                  <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{label}</Text>
+                  style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", ...pillBox(p, on) }}>
+                  <Text style={{ color: pillInk(p, on), fontSize: 13, fontWeight: "600" }}>{label}</Text>
                 </MotionPress>
               );
             })}

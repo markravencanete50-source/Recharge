@@ -60,6 +60,7 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { PhotoPicker, WorkPhotos } from "./Photos";
 import { LegalLinks } from "./LivePrivacy";
 import { readableError } from "../../lib/error-copy";
+import { pillBox, pillInk } from "./Pills";
 
 export const message = (error: unknown) => readableError(error);
 const money = (n: unknown) => formatMoney(Number(n));
@@ -117,8 +118,8 @@ function Suggestions({ p, label, items, value, disabled, onPick }: { p: Palette;
         const on = current === s.value.toLowerCase();
         return (
           <MotionPress key={s.value} disabled={disabled} accessibilityRole="radio" accessibilityLabel={`${label}: ${s.label}`} accessibilityState={{ selected: on, disabled }} onPress={() => onPick(s)}
-            style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", borderWidth: 1, borderColor: on ? p.primary : p.border, backgroundColor: on ? p.primary : p.surface }}>
-            <Text style={{ color: on ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{s.label}</Text>
+            style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", ...pillBox(p, on) }}>
+            <Text style={{ color: pillInk(p, on), fontSize: 13, fontWeight: "600" }}>{s.label}</Text>
           </MotionPress>
         );
       })}
@@ -708,10 +709,10 @@ export function DateRangeSheet({ palette: p, visible, period, onClose, onApply }
   const error = periodError(draft);
   return (
     <Sheet palette={p} visible={visible} onClose={() => { setEditing(null); onClose(); }} title="Date range" subtitle="All charts update together. Up to 366 days." icon="calendar">
-      <View style={{ flexDirection: "row", gap: 6, padding: 4, borderRadius: 999, backgroundColor: p.elevated }}>
+      <View style={{ flexDirection: "row", gap: 6, padding: 4, borderRadius: 999, backgroundColor: p.wash }}>
         {[7, 30, 90].map(days => {
           const preset = presetPeriod(days), active = draft.from === preset.from && draft.to === preset.to;
-          return <MotionPress key={days} accessibilityRole="button" accessibilityState={{ selected: active }} onPress={() => { setDraft(preset); setEditing(null); }} style={{ flex: 1, minHeight: 40, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: active ? p.primary : "transparent" }}><Text style={{ fontSize: 13, fontWeight: "600", color: active ? p.onPrimary : p.muted }}>Last {days} days</Text></MotionPress>;
+          return <MotionPress key={days} accessibilityRole="button" accessibilityState={{ selected: active }} onPress={() => { setDraft(preset); setEditing(null); }} style={{ flex: 1, minHeight: 40, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: active ? p.selected : "transparent" }}><Text style={{ fontSize: 13, fontWeight: "600", color: pillInk(p, active, true) }}>Last {days} days</Text></MotionPress>;
         })}
       </View>
       <View style={{ flexDirection: "row", gap: 10 }}>
