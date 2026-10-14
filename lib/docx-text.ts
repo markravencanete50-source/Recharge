@@ -1,6 +1,7 @@
-// The text of a Word document (.docx), for a contract uploaded as the agreement template: headings, paragraphs and lists,
-// in the outline format lib/agreement-copy.ts shows ("# " a heading, "## " a smaller one, "- " and "1. " list items, a
-// blank line between blocks). A .docx is a zip of XML files. Only word/document.xml and word/numbering.xml are read, as
+// The text of a Word document (.docx), for a contract uploaded as the agreement template: headings, paragraphs, lists and
+// tables, in the outline format lib/agreement-copy.ts shows ("# " a heading, "## " a smaller one, "- " and "1. " list
+// items, a blank line between blocks). A table is one block with a line per row, its cells joined by " | ", so a fee
+// schedule reads "Management | 18% | Monthly". A .docx is a zip of XML files. Only word/document.xml and word/numbering.xml are read, as
 // text: nothing in the file is ever run, and macros, pictures, embedded objects, text boxes, fields and deleted text are
 // left out. A document with macros (.docm saved as .docx) is refused. Runs in the Worker with the built-in
 // DecompressionStream, so no library is needed.
@@ -83,6 +84,41 @@ function listFormats(numbering: string) {
 // A paragraph that would read as a heading or a list item but is not one keeps its first character with a backslash.
 const escapeLine = (text: string) => (/^(#|-\s|\d+\.\s|\\)/.test(text) ? '\\' + text : text);
 
+// The elements named `tag` at the top level of `xml` (a table inside a table cell stays inside its cell), in order.
+function topLevel(xml: string, tag: string) {
+  const out: { start: number; end: number; inner: string }[] = [];
+  let depth = 0, open = 0, from = 0;
+  for (const m of xml.matchAll(new RegExp(`<(/?)${tag}(?=[\\s>/])[^>]*?(/?)>`, 'g'))) {
+    if (m[2]) { if (!depth) out.push({ start: m.index, end: m.index + m[0].length, inner: '' }); continue; }
+    if (!m[1]) { if (depth++ === 0) { open = m.index; from = m.index + m[0].length; } }
+    else if (depth && --depth === 0) out.push({ start: open, end: m.index + m[0].length, inner: xml.slice(from, m.index) });
+  }
+  return out;
+}
+// The words of one paragraph: its runs joined (a placeholder split across runs comes back whole), tabs as spaces.
+function words(xml: string) {
+  let text = '';
+  for (const r of xml.replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/, '').matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:(tab|br|cr|noBreakHyphen)\b[^>]*\/>/g))
+    text += r[1] !== undefined ? decode(r[1]) : r[2] === 'tab' ? ' ' : r[2] === 'noBreakHyphen' ? '-' : '\n';
+  return text.replace(/[\u00a0 ]+/g, ' ').split('\n').map(l => l.trim()).join('\n').replace(/\n{2,}/g, '\n').trim();
+}
+const paragraphs = (xml: string) => [...xml.matchAll(/<w:p\b[^>]*?(?:\/>|>([\s\S]*?)<\/w:p>)/g)].map(p => p[1] ?? '');
+// A table's rows, each "cell | cell" (empty and merged-away cells left out); a cell's paragraphs are joined by spaces, and a
+// table inside a cell by "; ".
+function tableRows(xml: string): string[] {
+  const cell = (inner: string) => flow(inner).map(part => typeof part === 'string' ? paragraphs(part).map(words).filter(Boolean).join(' ') : tableRows(part.table).join('; '))
+    .filter(Boolean).join(' ').replace(/\s*\n\s*/g, ' ');
+  return topLevel(xml, 'w:tr').map(row => topLevel(row.inner, 'w:tc').map(c => cell(c.inner))).filter(cells => cells.some(Boolean)).map(cells => cells.filter(Boolean).join(' | ').trim());
+}
+// The body in order: runs of paragraphs (strings) and tables.
+function flow(xml: string): (string | { table: string })[] {
+  const parts: (string | { table: string })[] = [];
+  let at = 0;
+  for (const t of topLevel(xml, 'w:tbl')) { parts.push(xml.slice(at, t.start), { table: t.inner }); at = t.end; }
+  parts.push(xml.slice(at));
+  return parts;
+}
+
 export async function docxOutline(bytes: Uint8Array): Promise<string> {
   if (!isZip(bytes)) throw new DocxError('This file is not a Word document');
   const files = directory(bytes);
@@ -95,26 +131,29 @@ export async function docxOutline(bytes: Uint8Array): Promise<string> {
   const format = listFormats(numbering ? await part(bytes, numbering) : '');
   const body = strip((await part(bytes, main)).replace(/^[\s\S]*?<w:body\b[^>]*>/, ''));
   const blocks: { text: string; list: '' | 'bullet' | 'number' }[] = [], counters = new Map<string, number>();
-  for (const p of body.matchAll(/<w:p\b[^>]*?(?:\/>|>([\s\S]*?)<\/w:p>)/g)) {
-    const xml = p[1] ?? '', props = xml.match(/<w:pPr\b[\s\S]*?<\/w:pPr>/)?.[0] ?? '';
-    let text = '';
-    for (const r of xml.replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/, '').matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:(tab|br|cr|noBreakHyphen)\b[^>]*\/>/g))
-      text += r[1] !== undefined ? decode(r[1]) : r[2] === 'tab' ? ' ' : r[2] === 'noBreakHyphen' ? '-' : '\n';
-    text = text.replace(/[  ]+/g, ' ').split('\n').map(l => l.trim()).join('\n').replace(/\n{2,}/g, '\n').trim();
-    if (!text) continue;
-    const style = attr(props, 'pStyle') ?? '', heading = style.match(/^(?:heading|Heading)\s*(\d)$/)?.[1] ?? (/^Title$/i.test(style) ? '1' : '');
-    const numId = attr(props, 'numId'), level = attr(props, 'ilvl') ?? '0';
-    if (heading) { blocks.push({ text: (heading === '1' ? '# ' : '## ') + text.replace(/\n/g, ' '), list: '' }); continue; }
-    const listStyle = /^List ?Bullet/i.test(style) ? 'bullet' : /^List ?Number/i.test(style) ? 'number' : '';
-    if ((numId && numId !== '0') || listStyle) {
-      const kind = numId && numId !== '0' ? format(numId, level) : listStyle, key = `${numId ?? style}:${level}`;
-      for (const k of [...counters.keys()]) if (k.startsWith(`${numId ?? style}:`) && Number(k.split(':')[1]) > Number(level)) counters.delete(k);
-      const n = (counters.get(key) ?? 0) + 1;
-      counters.set(key, n);
-      blocks.push({ text: (kind === 'bullet' ? '- ' : `${n}. `) + text.replace(/\n/g, ' '), list: kind === 'bullet' ? 'bullet' : 'number' });
+  for (const part of flow(body)) {
+    if (typeof part !== 'string') {
+      const rows = tableRows(part.table);
+      if (rows.length) blocks.push({ text: rows.map(escapeLine).join('\n'), list: '' });
       continue;
     }
-    blocks.push({ text: text.split('\n').map(escapeLine).join('\n'), list: '' });
+    for (const xml of paragraphs(part)) {
+      const props = xml.match(/<w:pPr\b[\s\S]*?<\/w:pPr>/)?.[0] ?? '', text = words(xml);
+      if (!text) continue;
+      const style = attr(props, 'pStyle') ?? '', heading = style.match(/^(?:heading|Heading)\s*(\d)$/)?.[1] ?? (/^Title$/i.test(style) ? '1' : '');
+      const numId = attr(props, 'numId'), level = attr(props, 'ilvl') ?? '0';
+      if (heading) { blocks.push({ text: (heading === '1' ? '# ' : '## ') + text.replace(/\n/g, ' '), list: '' }); continue; }
+      const listStyle = /^List ?Bullet/i.test(style) ? 'bullet' : /^List ?Number/i.test(style) ? 'number' : '';
+      if ((numId && numId !== '0') || listStyle) {
+        const kind = numId && numId !== '0' ? format(numId, level) : listStyle, key = `${numId ?? style}:${level}`;
+        for (const k of [...counters.keys()]) if (k.startsWith(`${numId ?? style}:`) && Number(k.split(':')[1]) > Number(level)) counters.delete(k);
+        const n = (counters.get(key) ?? 0) + 1;
+        counters.set(key, n);
+        blocks.push({ text: (kind === 'bullet' ? '- ' : `${n}. `) + text.replace(/\n/g, ' '), list: kind === 'bullet' ? 'bullet' : 'number' });
+        continue;
+      }
+      blocks.push({ text: text.split('\n').map(escapeLine).join('\n'), list: '' });
+    }
   }
   // Items of the same list stay together; anything else is its own block.
   return blocks.map((b, i) => (i === 0 ? '' : b.list && b.list === blocks[i - 1].list ? '\n' : '\n\n') + b.text).join('');
