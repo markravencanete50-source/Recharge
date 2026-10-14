@@ -29,7 +29,7 @@ const ago = (iso: string) => {
 };
 const fileSize = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
-export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette: Palette; account: WorkspaceAccount; onOpenProperty: (id: string) => void }) {
+export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }: { palette: Palette; account: WorkspaceAccount; onOpenProperty: (id: string) => void; onRefresh?: () => Promise<void> | void }) {
   const [data, setData] = useState<ClientEnquiries | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter | null>(null);
@@ -67,7 +67,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty }: { palette
       </View>
       <SendSheet p={p} visible={sending} emailReady={!!data?.emailReady} onClose={() => setSending(false)} onSent={load} />
       <EnquirySheet key={open?.id ?? "none"} p={p} enquiry={open} step={open ? steps.get(open.id)! : "sent"} emailReady={!!data?.emailReady} onClose={() => setOpenId(null)} onChanged={load}
-        canDelete={!!open && canDeleteEnquiry(account.role, open)} onDeleted={async () => { setOpenId(null); await load(); }}
+        canDelete={!!open && canDeleteEnquiry(account.role, open)} onDeleted={async () => { setOpenId(null); await Promise.all([load(), onRefresh?.()]); }}
         onOpenProperty={id => { setOpenId(null); onOpenProperty(id); }} />
     </View>
   );
@@ -343,7 +343,21 @@ function ValueSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: C
   );
 }
 
-// Delete (admins and super admins): asks first, in a sheet. The database refuses one that has moved on.
+// Delete from elsewhere (the property's Onboarding sheet): a quiet danger link at the bottom, then the same sheet.
+// Admins and super admins only, at the stages canDeleteEnquiry allows.
+export function DeleteEnquiryAction({ p, role, enquiry, onDeleted }: { p: Palette; role: string; enquiry: ClientEnquiry; onDeleted: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  if (!canDeleteEnquiry(role, enquiry)) return null;
+  return <>
+    <MotionPress accessibilityRole="button" accessibilityLabel="Delete this enquiry" onPress={() => setOpen(true)} style={[ui.row, { gap: 8, minHeight: 44, alignSelf: "flex-start", paddingHorizontal: 4 }]}>
+      <Feather name="trash-2" size={15} color={p.danger} />
+      <Text style={{ color: p.danger, fontSize: 14, fontWeight: "600" }}>Delete this enquiry</Text>
+    </MotionPress>
+    {open && <DeleteSheet p={p} enquiry={enquiry} onClose={() => setOpen(false)} onDone={async () => { setOpen(false); await onDeleted(); }} />}
+  </>;
+}
+
+// Delete (admins and super admins): asks first, in a sheet. The database refuses one past the agreement, or with money or bookings.
 function DeleteSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: ClientEnquiry; onClose: () => void; onDone: () => Promise<void> }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const request = useRequestId(["delete", e.id, e.version].join(":"));
