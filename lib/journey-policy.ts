@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
 const id=z.string().uuid(), text=(max:number)=>z.string().trim().max(max), money=z.number().int().min(0).max(10000000);
 const date=z.string().refine(v=>Boolean(parseAnalyticsDate(v)),'Choose a valid date');
-const https=z.string().url().max(1000).refine(v=>new URL(v).protocol==='https:','Use HTTPS');
+// A link that does not parse ("Test") must fail validation, never throw: new URL throws, which used to surface as a 503.
+const https=z.string().max(1000).refine(v=>{try{return new URL(v).protocol==='https:';}catch{return false;}},'The link must start with https://');
 const base={requestId:id,propertyId:id,version:z.number().int().positive()};
 export const onboardingFormSchema=z.object({
  businessName:text(200).min(2),bankAccountName:text(200).min(2),bankAccountNumber:z.string().regex(/^\d{8}$/),bankSortCode:z.string().regex(/^\d{2}-?\d{2}-?\d{2}$/),
