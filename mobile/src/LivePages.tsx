@@ -37,6 +37,7 @@ import { LiveWorkRow, NoticeRowView, isDone, noticeIcon } from "./LiveRows";
 import { mayHaveOlder, mergeNotices, noticeRow, noticeRows, oldestNoticeId, workItemFrom, type NoticeRow } from "../../lib/notice-details";
 import { ListSearchBox, SearchBox, useListSearch } from "./SearchPicker";
 import { Calendar } from "./WorkspaceScreens";
+import { DateField } from "./CalendarPicker";
 import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
@@ -176,7 +177,6 @@ function PostcodeLookup({ p, text, disabled, onComplete, onFound }: { p: Palette
 }
 
 function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: WorkflowField; value: unknown; onChange: (value: unknown) => void; onAlso?: (values: Record<string, string>, onlyIfEmpty?: boolean) => void; p: Palette; disabled?: boolean }) {
-  const [calendar, setCalendar] = useState(false);
   if (f.type === "checkbox") return (
     <MotionPress disabled={disabled} accessibilityRole="checkbox" accessibilityState={{ checked: value === true, disabled }} onPress={() => onChange(value !== true)} style={[ui.row, { gap: 12, minHeight: 48, paddingVertical: 10, alignItems: "flex-start" }]}>
       <View style={{ width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: value === true ? p.primary : p.controlBorder, backgroundColor: value === true ? p.primary : "transparent", alignItems: "center", justifyContent: "center" }}>{value === true && <Feather name="check" size={15} color={p.onPrimary} />}</View>
@@ -184,20 +184,12 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
     </MotionPress>
   );
   const label = <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{f.label}{!f.required ? " (optional)" : ""}</Text>;
+  // A date in a workflow form (only "Add a local event" has one) uses the shared calendar field (D's round 8 review).
   if (f.type === "date") {
     const text = value ? String(value) : "";
-    const parsed = text ? new Date(text + "T12:00:00") : new Date(), selected = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
     return (
-      <View style={{ gap: 8 }}>
-        {label}
-        <MotionPress accessibilityRole="button" accessibilityLabel={f.label + ", " + (text || "choose a date")} disabled={disabled} onPress={() => setCalendar(!calendar)} style={[ui.between, { minHeight: 50, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: calendar ? p.primary : p.controlBorder, backgroundColor: p.background }]}>
-          <Text style={{ color: text ? p.text : p.muted, fontSize: 15 }}>{text ? new Date(text + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "Choose a date"}</Text>
-          <Feather name="calendar" size={17} color={p.primary} />
-        </MotionPress>
-        {calendar && (Platform.OS === "web"
-          ? <Calendar selected={text || dateKey(new Date())} palette={p} onSelect={date => { onChange(date); setCalendar(false); }} />
-          : <DateTimePicker value={selected} mode="date" display={Platform.OS === "ios" ? "inline" : "default"} themeVariant={p.isDark ? "dark" : "light"} onDismiss={() => setCalendar(false)} onValueChange={(_event, date) => { if (Platform.OS === "android") setCalendar(false); onChange(dateKey(date)); }} />)}
-        {!f.required && !!text && <MotionPress accessibilityRole="button" onPress={() => { onChange(""); setCalendar(false); }} style={{ minHeight: 40, justifyContent: "center", alignSelf: "flex-start" }}><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Clear date</Text></MotionPress>}
+      <View style={{ gap: 6 }} pointerEvents={disabled ? "none" : "auto"}>
+        <DateField p={p} label={f.label + (!f.required ? " (optional)" : "")} mode="single" wholeMonthLink={false} empty="Choose a date" clearable={!f.required} value={{ from: text, to: text }} onChange={next => onChange(next.from)} />
         {f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}
       </View>
     );
@@ -500,7 +492,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
         <SoftButton label="Spreadsheet (CSV)" icon="download" palette={p} disabled={exporting} onPress={() => void downloadProperty("csv")} />
         <Text style={[ui.small, { color: p.muted }]}>Pricing, listing checks and local events for {periodLabel(period)}. Choose up to 31 days in Reports.</Text>
         {account.role !== "client" && <LocalEvents p={p} propertyId={property.id} refreshKey={work} />}
-        {account.role !== "client" && <SoftButton label="Add a local event" icon="calendar" palette={p} onPress={() => onForm(localEventForm(property.id))} />}
+        {account.role !== "client" && <SoftButton label="Add a local event" icon="calendar" palette={p} onPress={() => openForm(localEventForm(property.id))} />}
         {!!exportMessage && <Text style={[ui.small, { color: p.text }]}>{exportMessage}</Text>}
       </View>}
       {invoices.some(invoice => invoice.property_id === property.id) && <View style={{ gap: 8 }}>

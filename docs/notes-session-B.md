@@ -997,3 +997,31 @@ setter never changes, so behaviour is the same. The unused `web` import in `Live
 - **Screenshots:** `docs/screenshots/session-b/round9/`, before (`d5d1ddd`) and after, dark mode, on a
   desktop (1440×900) and a phone (390×844): Productivity "By day", Management → Responsibilities, and the
   owner's booking calendar.
+
+# "Add a local event" opened behind the property sheet (Lead, from D's round 8 review)
+
+- **Starting point:** the lead branch `claude/fervent-brahmagupta-8qd03b` at `096d5e5` (a fast-forward; it already held
+  Round 9). No migration.
+- **The bug:** on a property sheet (D opened it from Favorites, but it was the same from Properties), "Add a local
+  event" called the page's `onForm` directly. The workspace form opened behind the property sheet, so nothing seemed
+  to happen until the sheet was closed.
+  - Every other form started from that sheet goes through `openForm`, which closes the sheet first: new work, the
+    onboarding steps, and work items without their own viewer. Opening a work item closes the sheet too.
+  - "Add a local event" now uses `openForm` as well. This is the sheet-to-form pattern in `LivePages`.
+- **The date:** the workflow form's date input (an inline calendar on the web and the native picker on phones) is now
+  the shared `DateField`, in single-day mode, with "Clear date" when the date is optional.
+  - Only "Add a local event" has a date among the workflow forms, so nothing else changes.
+  - The edit sheet for a saved event already used `DateField`.
+- **Checked the rest of the property sheet:**
+  - "Access and logins" opens inline, and the profile edits inline.
+  - The weekly report and CSV downloads open no sheet, and Save to Favorites is a toggle.
+  - Tapping a saved local event opens its edit sheet nested inside the property sheet. It shows on top (screenshot 6).
+- **Tests:** new `tests/local-event-sheet.test.mjs`, 2 of 2 pass. Full suite: 1633 of 1641 pass, and the 7 failures are
+  the known build-output tests. `tsc` is clean, and ESLint is clean on `LivePages.tsx`.
+- **Screenshots:** `docs/screenshots/session-b/local-event/`, phone (390×844), dark mode:
+  1. The property opened from Favorites.
+  2. The button.
+  3. The form on top.
+  4. The DateField open.
+  5. The saved event listed.
+  6. Its edit sheet on top.
