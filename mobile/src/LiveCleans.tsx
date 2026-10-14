@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ScrollView, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
@@ -8,7 +8,9 @@ import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { addDays, Button, dayLabel, Field, london, message, Notice, Section, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
+import { pillBox, pillInk } from "./Pills";
 import { Chip, SheetTable, cellText, type Column } from "./SheetTable";
+import { CLEAN_SCHEDULE_COLUMNS, type CleanColumnKey } from "../../lib/clean-schedule-table";
 import { FlagButton } from "./ManagementFlag";
 import { PhotoPicker } from "./Photos";
 import { DisputeSheet, type DisputeTarget } from "./CleanDisputes";
@@ -205,8 +207,8 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
         {manager && cleaners.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {[["everyone", "All cleaners"] as const, ...cleaners].map(([id, name]) => (
-              <MotionPress key={id} accessibilityRole="button" accessibilityState={{ selected: cleaner === id }} onPress={() => setCleaner(id)} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: cleaner === id ? p.primary : p.surface, borderWidth: 1, borderColor: cleaner === id ? p.primary : p.border }}>
-                <Text style={{ color: cleaner === id ? p.onPrimary : p.text, fontSize: 13, fontWeight: "600" }}>{name}</Text>
+              <MotionPress key={id} accessibilityRole="button" accessibilityState={{ selected: cleaner === id }} onPress={() => setCleaner(id)} style={[{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center" }, pillBox(p, cleaner === id)]}>
+                <Text style={{ color: pillInk(p, cleaner === id), fontSize: 13, fontWeight: "600" }}>{name}</Text>
               </MotionPress>
             ))}
           </ScrollView>
@@ -221,10 +223,10 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
           {days.map(d => {
             const on = d === day, count = cleans.filter(w => w.dueOn === d).length, due = manager ? byDay[d]?.missing ?? 0 : 0;
             return (
-              <MotionPress key={d} accessibilityRole="button" accessibilityLabel={`${dayLabel(d)}, ${count} cleans${due ? `, ${due} ${due === 1 ? "form" : "forms"} unsubmitted` : ""}`} accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ width: 58, paddingVertical: 10, borderRadius: radius.control, alignItems: "center", gap: 4, backgroundColor: on ? p.primary : p.surface, borderWidth: 1, borderColor: on ? p.primary : p.border }}>
-                <Text style={{ fontSize: 11, color: on ? p.onPrimary : p.muted }}>{dayLabel(d).split(" ")[0]}</Text>
-                <Text style={{ fontSize: 17, fontWeight: "700", color: on ? p.onPrimary : p.text }}>{dayLabel(d).split(" ")[1]}</Text>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: count ? (on ? p.onPrimary : due ? p.danger : p.primary) : "transparent" }} />
+              <MotionPress key={d} accessibilityRole="button" accessibilityLabel={`${dayLabel(d)}, ${count} cleans${due ? `, ${due} ${due === 1 ? "form" : "forms"} unsubmitted` : ""}`} accessibilityState={{ selected: on }} onPress={() => setDay(d)} style={{ width: 58, paddingVertical: 10, borderRadius: radius.control, alignItems: "center", gap: 4, backgroundColor: on ? p.selected : p.surface, borderWidth: 1, borderColor: on ? p.selectedBorder : p.border }}>
+                <Text style={{ fontSize: 11, color: on ? p.onSelected : p.muted }}>{dayLabel(d).split(" ")[0]}</Text>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: on ? p.onSelected : p.text }}>{dayLabel(d).split(" ")[1]}</Text>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: count ? (on ? p.onSelected : due ? p.danger : p.primary) : "transparent" }} />
               </MotionPress>
             );
           })}
@@ -237,7 +239,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
           </View>
         ))}
         {scheduleRows.length ? (asTable
-          ? <SheetTable p={p} columns={cleanColumns(p, onlyOutstanding)} rows={scheduleRows} keyOf={r => r.w.workId} onRow={r => setOpenJob(r.w.workId)} labelOf={cleanLabel} empty="No cleans." search={false} />
+          ? <SheetTable p={p} columns={cleanColumns(p, onlyOutstanding)} rows={scheduleRows} keyOf={r => r.w.workId} onRow={r => setOpenJob(r.w.workId)} labelOf={cleanLabel} empty="No cleans." search={false} fit />
           : scheduleRows.map(r => <CleanCard key={r.w.workId} p={p} row={r} manager={manager} showDate={manager && onlyOutstanding} onOpen={setOpenJob} />))
           : !loading && <Notice text={manager && onlyOutstanding ? "No forms are unsubmitted." : manager ? "No cleans scheduled for this day." : "Nothing booked for you on this day."} p={p} />}
       </Section>
@@ -347,15 +349,17 @@ function FormsCell({ p, row }: { p: Palette; row: CleanRow }) {
     </View>
   );
 }
+// The sizes are in lib/clean-schedule-table.ts: Status and Submitted forms are fixed, the rest shrink to fit the card.
 function cleanColumns(p: Palette, showDate: boolean): Column<CleanRow>[] {
-  return [
-    { label: "Property", width: 260, cell: r => <View style={{ gap: 2 }}><Text numberOfLines={2} style={{ color: p.text, fontWeight: "600" }}>{r.address}</Text>{(showDate && !!r.w.dueOn) && <Text style={[ui.small, { color: p.muted }]}>{dayLabel(r.w.dueOn!)}</Text>}</View> },
-    { label: "Cleaner", width: 150, cell: r => r.w.assigneeName ? cellText(p, r.w.assigneeName) : <Tag label="Unassigned" tone="bad" p={p} /> },
-    { label: "Status", width: 190, cell: r => <StatusTags p={p} row={r} /> },
-    { label: "Submitted forms", width: 240, cell: r => <FormsCell p={p} row={r} /> },
-    { label: "Next action", width: 210, cell: r => r.next ? <Text numberOfLines={2} style={[ui.small, { color: r.next.mine ? p.primary : p.muted, fontWeight: "600" }]}>{r.next.label}</Text> : cellText(p, "") },
-    { label: "Last update", width: 200, cell: r => cellText(p, r.stamp) },
-  ];
+  const cells: Record<CleanColumnKey, (r: CleanRow) => ReactNode> = {
+    property: r => <View style={{ gap: 2 }}><Text numberOfLines={2} style={{ color: p.text, fontWeight: "600" }}>{r.address}</Text>{(showDate && !!r.w.dueOn) && <Text style={[ui.small, { color: p.muted }]}>{dayLabel(r.w.dueOn!)}</Text>}</View>,
+    cleaner: r => r.w.assigneeName ? cellText(p, r.w.assigneeName) : <Tag label="Unassigned" tone="bad" p={p} />,
+    status: r => <StatusTags p={p} row={r} />,
+    forms: r => <FormsCell p={p} row={r} />,
+    next: r => r.next ? <Text numberOfLines={2} style={[ui.small, { color: r.next.mine ? p.primary : p.muted, fontWeight: "600" }]}>{r.next.label}</Text> : cellText(p, ""),
+    update: r => cellText(p, r.stamp),
+  };
+  return CLEAN_SCHEDULE_COLUMNS.map(c => ({ ...c, cell: cells[c.key] }));
 }
 
 // The same clean as a phone card.
