@@ -51,6 +51,28 @@ export function project(e: PublishedEstimate, c: Choices): Projection {
   };
 }
 
+// The owner's own monthly costs (mortgage, insurance and so on, migration 20261020890000), entered by the team with the
+// estimate. With the fees published, the estimate shows what is left: income after Recharge's and the platforms' fees,
+// minus these costs. An estimate without them shows exactly as before.
+export const MAX_OWN_COSTS = 12;
+export const MAX_OWN_COST_MINOR = 10_000_000;
+export const ownCostSchema = z.object({ category: z.string().trim().min(1, 'Name each cost').max(60, 'Up to 60 characters'), monthlyMinor: z.number().int().min(0).max(MAX_OWN_COST_MINOR, 'Up to £100,000 a month') }).strict();
+export const ownCostsSchema = z.array(ownCostSchema).max(MAX_OWN_COSTS, `Up to ${MAX_OWN_COSTS} costs`)
+  .refine(list => new Set(list.map(c => c.category.trim().toLowerCase())).size === list.length, 'Each cost category once');
+export type OwnCost = z.infer<typeof ownCostSchema>;
+export function ownCostsOf(estimate: Record<string, unknown> | null | undefined): OwnCost[] {
+  const parsed = ownCostsSchema.safeParse(estimate?.ownCosts);
+  return parsed.success ? parsed.data.filter(c => c.monthlyMinor > 0) : [];
+}
+export type NetProfit = { costs: OwnCost[]; monthlyCostsMinor: number; yearlyNetMinor: number; monthlyNetMinor: number };
+export function netProfit(estimate: Record<string, unknown> | null | undefined, result: Projection): NetProfit | null {
+  const costs = ownCostsOf(estimate);
+  if (!costs.length || result.ownerMinor === null) return null;
+  const monthlyCostsMinor = costs.reduce((total, c) => total + c.monthlyMinor, 0);
+  const yearlyNetMinor = result.ownerMinor - monthlyCostsMinor * 12;
+  return { costs, monthlyCostsMinor, yearlyNetMinor, monthlyNetMinor: Math.round(yearlyNetMinor / 12) };
+}
+
 // How much more the owner keeps when more guests book direct, all else equal.
 export function directBookingGain(e: PublishedEstimate, c: Choices): number | null {
   if (!hasFees(e)) return null;

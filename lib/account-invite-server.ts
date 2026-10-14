@@ -15,7 +15,7 @@ type PasswordLink = Extract<AdminAction, { action: 'passwordLink' }>;
 export const LINK_MINUTES = 60;
 
 const refuse = (error: string, status: number) => businessResponse({ error }, status);
-function signInService() {
+export function signInService() {
   const config = authSecurityConfiguration();
   if (!config) return null;
   return { origin: config.origin, admin: createClient(config.url, config.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }) };
@@ -28,7 +28,7 @@ async function allowed(context: RpcContext, scope: string) {
 }
 // The link opens a page on this site (so a chat app's link preview can't use it up) that sends the
 // one-time code to /auth/recovery, which starts the usual "choose a new password" step.
-async function setPasswordLink(admin: SupabaseClient, origin: string, email: string) {
+export async function setPasswordLink(admin: SupabaseClient, origin: string, email: string) {
   const result = await admin.auth.admin.generateLink({ type: 'recovery', email });
   const hash = result.data?.properties?.hashed_token;
   if (result.error || !hash || !/^[A-Za-z0-9_-]{16,256}$/.test(hash)) return null;
