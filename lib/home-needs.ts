@@ -2,9 +2,10 @@ import { sectionAnchor, type HomeToolTarget } from './home-tools';
 import { formatCount } from './format';
 import type { Overview } from './oversight-policy';
 
-// Home's "Needs you now" and the departments row (mobile/src/HomeFocus.tsx). Home shows at most
-// five lines, only things that need someone to act, most urgent first, and never a zero. Each line
-// opens the place the work is done. The numbers come from the reads Home already makes.
+// Home's "Needs you now" and the departments row (mobile/src/HomeFocus.tsx). The team's Home shows at
+// most five lines; admins' "Needs your attention" shows six and "See all" for the rest (lib/home-overview.ts).
+// Only things that need someone to act, most urgent first, and never a zero. Each line opens the place
+// the work is done. The numbers come from the reads Home already makes.
 export const NEEDS_SHOWN = 5;
 export type NeedOpen = HomeToolTarget | { kind: 'page'; section: 'work' | 'properties' };
 export type NeedLine = { key: string; count: number; label: string; urgent: boolean; open: NeedOpen };
@@ -17,13 +18,15 @@ export const MANAGEMENT_QUEUE = work('management', { sub: 'queue' });
 const LISTINGS = work('clients', { sub: 'listings' });
 const say = (n: number, one: string, many: string) => n === 1 ? one : many;
 const line = (key: string, count: number, label: string, open: NeedOpen, urgent = false): NeedLine => ({ key, count, label, urgent, open });
-const top = (lines: NeedLine[]) => lines.filter(l => Number.isFinite(l.count) && l.count > 0).slice(0, NEEDS_SHOWN);
+const waiting = (lines: NeedLine[]) => lines.filter(l => Number.isFinite(l.count) && l.count > 0);
+const top = (lines: NeedLine[]) => waiting(lines).slice(0, NEEDS_SHOWN);
 
 // Admins: decisions waiting for management first, then guests and today's cleans, then the rest of the business.
+// Every line that has something waiting, in that order (Home shows the first six and "See all" for the rest).
 // `decisions` is the same total as Management → Waiting on you; `followUps` is client check-ins due (onboarding).
 export function adminNeeds(o: Overview | null, decisions: number | null, followUps = 0): NeedLine[] {
   const d = decisions ?? 0;
-  return top([
+  return waiting([
     line('decisions', d, say(d, 'decision waiting for management', 'decisions waiting for management'), MANAGEMENT_QUEUE, true),
     ...(o ? [
       line('guests', o.stays.guestsWaiting ?? 0, say(o.stays.guestsWaiting ?? 0, 'guest waiting for a reply', 'guests waiting for a reply'), work('stays', { sub: 'inbox' }), true),

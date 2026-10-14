@@ -6,7 +6,7 @@ import { JumpBackIn, QuickOverview, WelcomeHeader, type OverviewItem } from "./H
 import { HeroGlow, OpenTasksTrend, TodayRing, TodayTiles } from "./TodayAnalytics";
 import { CountUp, Entrance, MotionPress } from "./motion";
 import { StateGraphic } from "./StateGraphic";
-import { followUpsDue } from "../../lib/portfolio-overview";
+import { followUpsDue, portfolioSummary } from "../../lib/portfolio-overview";
 import { EndOfDayCard } from "./EndOfDayCard";
 import { CleanerMonthCard } from "./CleanerPay";
 import { OwnerHome } from "./LiveOwnerHome";
@@ -17,7 +17,7 @@ import { boardRole } from "../../lib/today-board";
 import { AdminHome } from "./LiveOversight";
 import { AskBox, HomeGreeting, NeedsList, ShiftButton } from "./HomeFocus";
 import { SearchPanel } from "./WorkspaceSearch";
-import { teamNeeds, type NeedLine } from "../../lib/home-needs";
+import { teamNeeds, type NeedLine, type NeedOpen } from "../../lib/home-needs";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import type { SearchEntry } from "../../lib/workspace-search";
 import { ui, type Palette } from "./theme";
@@ -62,7 +62,10 @@ function TeamHome({ palette: p, desktop, account, properties, journeys = [], wor
   const overdue = open.filter(item => { const d = workDate(item); return !!d && d < today; }).length;
   const dueToday = open.filter(item => workDate(item) === today).length;
   const lines = teamNeeds({ overdue, dueToday, otherOpen: open.length - overdue - dueToday, followUps });
-  const openLine = (line: NeedLine) => line.open.kind === "page" ? onNavigate(line.open.section) : onTool(line.open);
+  const openPlace = (place: NeedOpen) => place.kind === "page" ? onNavigate(place.section) : onTool(place);
+  const openLine = (line: NeedLine) => openPlace(line.open);
+  // Properties live and onboarding, for the admins' "This month" (the same count as Properties shows).
+  const portfolio = admin && !loading ? portfolioSummary(properties, journeys) : null;
   const firstName = account.fullName.trim().split(/\s+/)[0] || "there";
   const canSearch = !!favoriteEntries && !!onOpenEntry;
   return (
@@ -71,9 +74,9 @@ function TeamHome({ palette: p, desktop, account, properties, journeys = [], wor
       {canSearch && <AskBox palette={p} desktop={desktop} onPress={() => setSearching(true)} />}
       {/* Stays with nobody clocked in sign the day off here (a reflection needs an open shift). */}
       <EndOfDayCard palette={p} account={account} />
-      {/* Admins: across the business. Cleaners, cleaning managers and Ready: their day (Today, Tomorrow and Overdue).
-          Everyone else: their own open work. */}
-      {admin ? <AdminHome palette={p} desktop={desktop} onTool={onTool} onOpen={openLine} followUps={followUps} />
+      {/* Admins: the business at a glance (This month), then what needs their attention across it. Cleaners, cleaning
+          managers and Ready: their day (Today, Tomorrow and Overdue). Everyone else: their own open work. */}
+      {admin ? <AdminHome palette={p} desktop={desktop} onTool={onTool} onOpen={openLine} onPlace={openPlace} portfolio={portfolio && { live: portfolio.live, onboarding: portfolio.onboarding }} followUps={followUps} />
         : board ? <TodayBoard palette={p} account={account} properties={properties} work={work} desktop={desktop} onTool={onTool} />
         : <NeedsList palette={p} lines={lines} loading={loading} onOpen={openLine} />}
       {account.role === "ready" && <ReadyHome palette={p} desktop={desktop} onTool={onTool} />}

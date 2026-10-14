@@ -9,13 +9,16 @@ import { Button, Field, Loading, Notice, Section, london, message, useRequestId 
 import { List } from "./LiveAccounts";
 import { Pills } from "./Pills";
 import { exportReport } from "./exportReport";
-import { readOversight, readTeams, writeFinance, writeOversight, writeTeams, WorkspaceApiError } from "./backend/client";
+import { readFinance, readOversight, readTeams, writeFinance, writeOversight, writeTeams, WorkspaceApiError } from "./backend/client";
 import { DECISION_OUTCOMES, decisionAction, managementSchema, queueCount, type Decision, type Management } from "../../lib/management-live";
 import { AREA_LABEL, decisionsCsv, decisionsSchema, outcomeLabel, overviewSchema, type DecisionRow, type Overview } from "../../lib/oversight-policy";
 import { formatMoney } from "../../lib/format";
 import type { HomeToolTarget } from "../../lib/home-tools";
-import { adminNeeds, departmentTiles, type NeedLine } from "../../lib/home-needs";
-import { DepartmentTiles, NeedsList } from "./HomeFocus";
+import { adminNeeds, departmentTiles, type NeedLine, type NeedOpen } from "../../lib/home-needs";
+import { ATTENTION_SHOWN, businessFigures, EMPTY_OVERVIEW, overviewRanges, performanceRangeQuery, type OverviewData } from "../../lib/home-overview";
+import { performanceReportSchema } from "../../lib/performance";
+import { enquiriesReportSchema, repairsReportSchema } from "../../lib/business-reports-view";
+import { BusinessFigures, DepartmentTiles, NeedsList } from "./HomeFocus";
 import type { Expense } from "../../lib/accounts-live";
 import { hubSchema } from "../../lib/workspace-teams-policy";
 import { parseApprovalFlags } from "../../lib/tracker-approvals";
@@ -121,9 +124,34 @@ export function useQueueActions(load: () => Promise<void>) {
   };
 }
 
-// Admins' Home: "Needs you now" across the business, with everything waiting on management as one line
-// (decided in Management → Waiting on you), then one number per department (lib/home-needs.ts).
-export function AdminHome({ palette: p, desktop, onTool, onOpen, followUps = 0 }: { palette: Palette; desktop: boolean; onTool: (target: HomeToolTarget) => void; onOpen: (line: NeedLine) => void; followUps?: number }) {
+// The reads behind "This month" (lib/home-overview.ts): this and last month's Performance report, and the enquiries and
+// repairs Business reports for this month so far and the same days of last month. Each may fail on its own; its
+// figures then show "–".
+function useBusinessFigures() {
+  const [data, setData] = useState<OverviewData>(EMPTY_OVERVIEW);
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(async () => {
+    const r = overviewRanges(london(new Date()));
+    const performance = (range: { from: string; to: string }) => readFinance(performanceRangeQuery(range)).then(x => performanceReportSchema.parse(x.data).totals);
+    const report = <T,>(section: "reportEnquiries" | "reportRepairs", range: { from: string; to: string }, parse: (data: unknown) => T) => readTeams({ section, from: range.from, to: range.to }).then(x => parse(x.data));
+    const [month, lastMonth, enquiries, enquiriesBefore, repairs, repairsBefore] = await Promise.allSettled([
+      performance(r.month), performance(r.lastMonth),
+      report("reportEnquiries", r.soFar, d => enquiriesReportSchema.parse(d)), report("reportEnquiries", r.sameDaysBefore, d => enquiriesReportSchema.parse(d)),
+      report("reportRepairs", r.soFar, d => repairsReportSchema.parse(d)), report("reportRepairs", r.sameDaysBefore, d => repairsReportSchema.parse(d)),
+    ]);
+    const ok = <T,>(x: PromiseSettledResult<T>) => (x.status === "fulfilled" ? x.value : null);
+    setData({ month: ok(month), lastMonth: ok(lastMonth), enquiries: ok(enquiries), enquiriesBefore: ok(enquiriesBefore), repairs: ok(repairs), repairsBefore: ok(repairsBefore), portfolio: null });
+    setLoading(false);
+  }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  return { data, loading };
+}
+
+// Admins' Home (Lee: the whole business at a glance for Alex): "This month" (the business figures), then "Needs your
+// attention" across the business, with everything waiting on management as one line (decided in Management → Waiting
+// on you), six lines and "See all" for the rest, then one number per department (lib/home-needs.ts).
+export function AdminHome({ palette: p, desktop, onTool, onOpen, onPlace, portfolio = null, followUps = 0 }: { palette: Palette; desktop: boolean; onTool: (target: HomeToolTarget) => void; onOpen: (line: NeedLine) => void; onPlace: (open: NeedOpen) => void; portfolio?: OverviewData["portfolio"]; followUps?: number }) {
+  const business = useBusinessFigures();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [overviewError, setOverviewError] = useState("");
   const { queue, error, load: loadQueue } = useQueue();
@@ -144,7 +172,8 @@ export function AdminHome({ palette: p, desktop, onTool, onOpen, followUps = 0 }
   const lines = loading ? [] : adminNeeds(overview, waiting, followUps);
   return (
     <>
-      <NeedsList palette={p} lines={lines} loading={loading} error={overviewError || error} onOpen={onOpen} />
+      <BusinessFigures palette={p} figures={businessFigures({ ...business.data, portfolio }, london(new Date()))} desktop={desktop} loading={business.loading} onOpen={f => onPlace(f.open)} />
+      <NeedsList palette={p} title="Needs your attention" limit={ATTENTION_SHOWN} lines={lines} loading={loading} error={overviewError || error} onOpen={onOpen} />
       {!!overview && <DepartmentTiles palette={p} tiles={departmentTiles(overview)} desktop={desktop} onOpen={onTool} />}
     </>
   );

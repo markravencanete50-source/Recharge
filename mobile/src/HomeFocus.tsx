@@ -13,6 +13,7 @@ import { readTeams } from "./backend/client";
 import { myShiftSchema, PAUSE_LABEL } from "../../lib/management-live";
 import { formatCount } from "../../lib/format";
 import { needText, type DepartmentTile, type NeedLine } from "../../lib/home-needs";
+import { figureText, seeAllLabel, shownNeeds, type BusinessFigure } from "../../lib/home-overview";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
@@ -46,14 +47,18 @@ export function AskBox({ palette: p, desktop, onPress }: { palette: Palette; des
 }
 
 // "Needs you now": each line a number and what it is, opening the place to act. One calm line when nothing waits.
-export function NeedsList({ palette: p, lines, loading, error, onOpen, children }: { palette: Palette; lines: NeedLine[]; loading: boolean; error?: string; onOpen: (line: NeedLine) => void; children?: ReactNode }) {
+// With `limit` (the admins' "Needs your attention"), the first lines show and "See all (n)" opens the rest in place.
+export function NeedsList({ palette: p, lines, loading, error, onOpen, title = "Needs you now", limit, children }: { palette: Palette; lines: NeedLine[]; loading: boolean; error?: string; onOpen: (line: NeedLine) => void; title?: string; limit?: number; children?: ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = limit ? shownNeeds(lines, expanded, limit) : lines;
+  const more = limit && !expanded ? seeAllLabel(lines.length, limit) : null;
   return (
     <View testID="home-needs" style={{ gap: 8 }}>
-      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Needs you now</Text>
+      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>{title}</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && !lines.length ? <Loading p={p} rows={2} /> : lines.length ? (
         <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
-          {lines.map((l, i) => (
+          {shown.map((l, i) => (
             <MotionPress key={l.key} accessibilityRole="button" accessibilityLabel={`${needText(l)}. Open`} onPress={() => onOpen(l)}
               style={[ui.row, { gap: 14, minHeight: 52, paddingVertical: 10, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
               <View style={{ minWidth: 40, height: 28, paddingHorizontal: 8, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: l.urgent ? p.cautionWash : p.wash }}>
@@ -63,6 +68,11 @@ export function NeedsList({ palette: p, lines, loading, error, onOpen, children 
               <Feather name="chevron-right" size={18} color={p.muted} />
             </MotionPress>
           ))}
+          {!!more && <MotionPress testID="home-needs-all" accessibilityRole="button" accessibilityLabel={`${more}. Show every line`} onPress={() => setExpanded(true)}
+            style={[ui.row, { gap: 8, minHeight: 48, borderTopWidth: 1, borderColor: p.border }]}>
+            <Text style={{ flex: 1, color: p.primary, fontSize: 14, fontWeight: "600" }}>{more}</Text>
+            <Feather name="chevron-down" size={18} color={p.primary} />
+          </MotionPress>}
         </View>
       ) : !error ? (
         <View style={[ui.row, { gap: 10, minHeight: 52, paddingHorizontal: 16, borderRadius: 16, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }]}>
@@ -71,6 +81,30 @@ export function NeedsList({ palette: p, lines, loading, error, onOpen, children 
         </View>
       ) : null}
       {children}
+    </View>
+  );
+}
+
+// "This month": the business at a glance for admins (lib/home-overview.ts). Each figure a value, a short label and,
+// where it means something, a quiet change against last month; tap one to open where its detail lives. Four to a
+// row on a computer, two on a phone. A figure that can't load shows "–"; a zero is shown quietly.
+export function BusinessFigures({ palette: p, figures, desktop, loading, onOpen }: { palette: Palette; figures: BusinessFigure[]; desktop: boolean; loading: boolean; onOpen: (figure: BusinessFigure) => void }) {
+  return (
+    <View testID="home-business" style={{ gap: 8 }}>
+      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>This month</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+        {figures.map(f => {
+          const waiting = loading && f.missing;
+          return (
+            <MotionPress key={f.key} testID={`home-figure-${f.key}`} accessibilityRole="button" accessibilityLabel={waiting ? `${f.label}: loading` : `${figureText(f)}. ${f.detail}. Open`} onPress={() => onOpen(f)}
+              style={{ flexBasis: desktop ? "22%" : "46%", flexGrow: 1, minWidth: 0, gap: 2, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>
+              <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{f.label}</Text>
+              <Text numberOfLines={1} style={{ color: f.missing || f.zero ? p.muted : p.text, fontSize: 20, lineHeight: 26, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{waiting ? "…" : f.value}</Text>
+              <Text numberOfLines={1} style={{ color: p.muted, fontSize: 12, lineHeight: 17 }}>{f.change ? f.change.text : f.detail}</Text>
+            </MotionPress>
+          );
+        })}
+      </View>
     </View>
   );
 }

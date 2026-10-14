@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 
 // The calm Home (Alex's feedback, approved by Lee): a short greeting, "What do you need?", "Needs you now"
-// (at most five lines, most urgent first, never a zero) and one number per department. Everything that
-// moved off Home is still one tap away.
+// (at most five lines for the team, most urgent first, never a zero; admins see every line, six at first, see
+// tests/home-overview.test.mjs) and one number per department. Everything that moved off Home is still one tap away.
 const root = fileURLToPath(new URL('..', import.meta.url));
 const vite = await createServer({ configFile: false, root, resolve: { alias: { '@': root } }, server: { middlewareMode: true, hmr: false } });
 after(() => vite.close());
@@ -22,11 +22,12 @@ const overview = (o = {}) => ({
   accounts: { expensesToApprove: 4, overLimit: 1, payoutsToReconcile: 307, statementsToIssue: 0, ...o.accounts },
 });
 
-test('admins: decisions first, then guests and today\'s cleans; at most five, never a zero', () => {
+test('admins: decisions first, then guests and today\'s cleans; every waiting line in order, never a zero', () => {
   const lines = adminNeeds(overview(), 3);
-  assert.equal(lines.length, NEEDS_SHOWN);
+  assert.ok(lines.length > NEEDS_SHOWN, 'admins get every line; Home shows six and See all');
   assert.deepEqual(lines.map(needText), [
     '3 decisions waiting for management', '10 guests waiting for a reply', '8 cleans not assigned today', '1 clean waiting for review', '5 repairs to refer to Ready',
+    '4 expenses to approve', '307 payouts to reconcile', '2 re-listings open', '4 empty nights to price this week',
   ]);
   assert.deepEqual(lines[0].open, MANAGEMENT_QUEUE);
   assert.ok(lines.slice(0, 3).every(l => l.urgent));
@@ -74,7 +75,7 @@ test('Home: greeting, search, Needs you now; what moved off Home is still one ta
   for (const kept of ['<WelcomeHeader ', '<HomeTools ', '<OwnerHome ', '<QuickOverview ', 'Needs attention', 'Recent activity', 'Help for your role']) assert.ok(owner.includes(kept), 'owners keep ' + kept);
   assert.match(focus, /All clear\. Nothing needs you right now\./);
   assert.match(focus, /What do you need\?/);
-  assert.match(oversight, /<NeedsList [^\n]*onOpen=\{onOpen\}/);
+  assert.match(oversight, /<NeedsList [^\n]*title="Needs your attention"[^\n]*onOpen=\{onOpen\}/);
   assert.match(oversight, /<DepartmentTiles /);
   assert.doesNotMatch(oversight, /Across the business|Needs a management decision/);
   // Recent activity is under the bell, To-do on its tab, My performance, Favorites and Help in the menu.
