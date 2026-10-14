@@ -98,7 +98,10 @@ test('a conversation opens in place, never as a pop-up: list and thread side by 
   assert.doesNotMatch(guests, /function ThreadSheet|<ThreadSheet/);
   // The only sheet left in the guest inbox is the form for logging a message.
   assert.equal((guests.match(/<Sheet /g) ?? []).length, 1);
-  assert.match(live, /<MessagesSplit p=\{p\} desktop=\{desktop\} list=\{listView\} detail=\{open \? thread\(open, desktop \? undefined : \(\) => \{ setOpen\(null\); void loadList\(\); \}\) : null\} \/>/);
+  // A chat conversation on a phone fills the whole screen over the bars (Alex: "always down the bottom", tests/chat-composer.test.mjs);
+  // on a wide screen it opens beside the list, and an email opens in place on a phone too.
+  assert.match(live, /<MessagesSplit p=\{p\} desktop=\{desktop\} list=\{listView\} detail=\{open && !fullScreen \? thread\(open, desktop \? undefined : back\) : null\} \/>/);
+  assert.match(live, /const back = \(\) => \{ setOpen\(null\); void loadList\(\); \};/);
   // Everything the guest thread could do stays: Send through Hostaway, save a reply, close and reopen, guest details.
   for (const action of ['"sendReply"', '"reply"', 'status: "done"', 'status: "open"', '"editThread"', '"logMessage"']) assert.ok(guests.includes(action), action);
 });

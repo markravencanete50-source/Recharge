@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
+import { AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
@@ -7,7 +8,7 @@ import { PropertySelect, SearchBox } from "./SearchPicker";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
-import { depth, primaryFill, ui, type Palette } from "./theme";
+import { depth, primaryFill, ui, web, type Palette } from "./theme";
 import { readChat, readInbox, viewMode, writeChat, readClientEmail } from "./backend/client";
 import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
@@ -140,7 +141,13 @@ function Bubble({ p, m, showName, readOnly, reacting, onReacting, onReact, onSaf
   );
 }
 
-function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false }: { p: Palette; id: string; onBack?: () => void; onChanged: () => void; onOpen: (c: Conversation) => void; onLeft: () => void; savedReplies?: boolean }) {
+// The box to write in grows to about five lines, then scrolls inside itself. In a browser its text is 16px, the size below
+// which an iPhone zooms the page in when the box is tapped.
+const INPUT_LINE = 22, INPUT_MIN = 48, INPUT_MAX = INPUT_MIN + 4 * INPUT_LINE;
+// Within this distance of the newest message counts as reading the newest.
+const NEAR_END = 64;
+
+function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false, screen = false }: { p: Palette; id: string; onBack?: () => void; onChanged: () => void; onOpen: (c: Conversation) => void; onLeft: () => void; savedReplies?: boolean; screen?: boolean }) {
   const [thread, setThread] = useState<z.infer<typeof threadSchema> | null>(null);
   const [text, setText] = useState(""), [sending, setSending] = useState(false), [error, setError] = useState("");
   const [reacting, setReacting] = useState<string | null>(null), [people, setPeople] = useState(false), [safety, setSafety] = useState<ChatMessage | null>(null);
@@ -148,21 +155,35 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
   const narrow = useWindowDimensions().width < 560;
   const files = useChatUploads(id);
   const { members, reload: reloadMembers } = useMembers(id);
-  const scroll = useRef<ScrollView>(null), lastSeen = useRef("");
+  // As in a phone messenger: it opens at the newest message and stays there as messages arrive, unless you have scrolled up to
+  // read, when a "New messages" pill takes you down instead.
+  const scroll = useRef<ScrollView>(null), lastSeen = useRef(""), atEnd = useRef(true), lastOffset = useRef(0);
+  const [unseen, setUnseen] = useState(false);
+  const toEnd = (animated = false) => scroll.current?.scrollToEnd({ animated });
   const load = useCallback(async () => {
     try {
       const parsed = threadSchema.parse((await readChat({ section: "messages", conversationId: id })).data);
       setThread(parsed); setError("");
-      const newest = parsed.messages.at(-1)?.id ?? "";
-      if (newest !== lastSeen.current) {
-        lastSeen.current = newest;
+      const newest = parsed.messages.at(-1);
+      if ((newest?.id ?? "") !== lastSeen.current) {
+        const first = !lastSeen.current;
+        lastSeen.current = newest?.id ?? "";
         if (parsed.conversation.unread) { await writeChat({ action: "markRead", conversationId: id }).catch(() => undefined); onChanged(); }
-        setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
+        if (first || atEnd.current || newest?.mine) { atEnd.current = true; setTimeout(() => scroll.current?.scrollToEnd({ animated: !first }), 50); }
+        else setUnseen(true);
       }
     } catch (e) { setError(message(e)); }
   }, [id, onChanged]);
   useEffect(() => { queueMicrotask(() => void load()); }, [load]);
   useVisiblePoll(() => void load(), THREAD_EVERY, true);
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    // Only scrolling up leaves the newest: when the list gets shorter (the keyboard, a note above the box) the browser
+    // may report a scroll that is not the reader's, and the list then goes back to the newest.
+    if (contentOffset.y + layoutMeasurement.height >= contentSize.height - NEAR_END) { atEnd.current = true; setUnseen(false); }
+    else if (contentOffset.y < lastOffset.current - 2) atEnd.current = false;
+    lastOffset.current = contentOffset.y;
+  };
   // Reactions show straight away, then the conversation's own copy replaces them.
   async function react(messageId: string, emoji: string) {
     const toggle = (list: ChatReaction[]): ChatReaction[] => {
@@ -175,6 +196,18 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
     try { await writeChat({ action: "react", messageId, emoji: emoji as never }); } catch (e) { setError(message(e)); }
     void load();
   }
+  // The box grows with what is written, up to about five lines (the browser's box does not grow by itself).
+  const input = useRef<TextInput>(null), [inputHeight, setInputHeight] = useState(INPUT_MIN);
+  const fit = () => requestAnimationFrame(() => {
+    const box = input.current as unknown as HTMLTextAreaElement | null;
+    if (Platform.OS !== "web" || !box?.style) return;
+    const before = box.style.height;
+    box.style.height = "0px";
+    const next = Math.min(INPUT_MAX, Math.max(INPUT_MIN, box.scrollHeight + 2));
+    box.style.height = before;
+    setInputHeight(next);
+  });
+  const write = (value: string) => { setText(value); fit(); };
   // A ref (not state) guards against a second tap or Enter in the same instant, and the request id is
   // kept until the message is sent, so a retry after a timeout never posts it twice.
   const inFlight = useRef(false), pending = useRef<{ key: string; requestId: string } | null>(null);
@@ -187,7 +220,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
     if (pending.current?.key !== key) pending.current = { key, requestId: Crypto.randomUUID() };
     try {
       await writeChat({ action: "send", requestId: pending.current.requestId, conversationId: id, body, ...(attachments.length ? { attachments } : {}) });
-      pending.current = null; setText(""); files.clear(); await load(); onChanged();
+      pending.current = null; setText(""); setInputHeight(INPUT_MIN); files.clear(); atEnd.current = true; await load(); onChanged();
     }
     catch (e) { setError(message(e)); } finally { inFlight.current = false; setSending(false); }
   }
@@ -205,10 +238,10 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
   const seen = c?.kind === "direct" ? presenceLabel(c.peer?.seenAt) : "";
   const subtitle = c ? [seen || c.subtitle, c.propertyName ? `About ${c.propertyName}` : null].filter(Boolean).join(" · ") || (c.kind === "owner" ? "Owner conversation" : "Direct message") : "";
   return (
-    <View style={{ flex: 1, minHeight: 420, gap: 10 }}>
-      <View style={[ui.row, { gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderColor: p.border }]}>
+    <View {...(Platform.OS === "web" ? { dataSet: { chatThread: screen ? "screen" : "page" } } : {})} style={screen ? { flex: 1, gap: 8, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 8 } : { flex: 1, minHeight: 420, gap: 10 }}>
+      <View style={[ui.row, { gap: 10, paddingBottom: screen ? 8 : 10, borderBottomWidth: 1, borderColor: p.border }]}>
         {onBack && <MotionPress accessibilityRole="button" accessibilityLabel="Back to messages" onPress={onBack} style={{ minWidth: 40, minHeight: 40, alignItems: "center", justifyContent: "center" }}><Feather name="arrow-left" size={21} color={p.text} /></MotionPress>}
-        {c && <MotionPress accessibilityRole="button" accessibilityLabel="See who is in this conversation" onPress={() => setPeople(true)}><ConversationAvatar p={p} c={c} /></MotionPress>}
+        {c && <MotionPress accessibilityRole="button" accessibilityLabel="See who is in this conversation" onPress={() => setPeople(true)}><ConversationAvatar p={p} c={c} size={screen ? 40 : 44} /></MotionPress>}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 16 }}>{c?.title ?? "…"}</Text>
           {!!c && <Text numberOfLines={1} style={[ui.small, { color: presenceOf(c.peer?.seenAt) === "online" && c.kind === "direct" ? p.success : p.muted }]}>{subtitle}</Text>}
@@ -220,21 +253,32 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
         </MotionPress>}
         {c && c.kind === "direct" && !readOnly && <MotionPress accessibilityRole="button" accessibilityLabel="Add people (starts a group)" onPress={() => setPeople(true)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: p.border }}><Feather name="user-plus" size={17} color={p.text} /></MotionPress>}
       </View>
-      <ScrollView ref={scroll} style={{ flex: 1, maxHeight: Platform.OS === "web" ? 560 : undefined }} contentContainerStyle={{ gap: 10, paddingVertical: 6 }} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
-        {!thread ? <Loading p={p} rows={2} /> : thread.messages.length ? thread.messages.map(m => <Bubble key={m.id} p={p} m={m} showName={c?.kind !== "direct"} readOnly={readOnly} reacting={reacting === m.id} onReacting={on => setReacting(on ? m.id : null)} onReact={e => void react(m.id, e)} onSafety={() => setSafety(m)} />)
-          : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property." : c?.department ? (c.department === "all" ? "Everyone on the team can read and write here." : `Everyone in ${c.title} can read and write here. Admins can read it too.`) : "Say hello."}</Text>}
-      </ScrollView>
+      {/* Only the messages scroll; the box to write in stays at the bottom. */}
+      <View style={{ flex: 1, minHeight: 0, maxHeight: !screen && Platform.OS === "web" ? 560 : undefined }}>
+        <ScrollView ref={scroll} testID="chat-messages" style={[{ flex: 1 }, web({ overscrollBehavior: "contain" })]} contentContainerStyle={{ gap: 10, paddingVertical: 6 }} keyboardShouldPersistTaps="handled"
+          onScroll={onScroll} scrollEventThrottle={48} onContentSizeChange={() => { if (atEnd.current) toEnd(); }} onLayout={() => { if (atEnd.current) toEnd(); }}>
+          {!thread ? <Loading p={p} rows={2} /> : thread.messages.length ? thread.messages.map(m => <Bubble key={m.id} p={p} m={m} showName={c?.kind !== "direct"} readOnly={readOnly} reacting={reacting === m.id} onReacting={on => setReacting(on ? m.id : null)} onReact={e => void react(m.id, e)} onSafety={() => setSafety(m)} />)
+            : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property." : c?.department ? (c.department === "all" ? "Everyone on the team can read and write here." : `Everyone in ${c.title} can read and write here. Admins can read it too.`) : "Say hello."}</Text>}
+        </ScrollView>
+        {unseen && <MotionPress accessibilityRole="button" accessibilityLabel="New messages. Go to the newest" onPress={() => { setUnseen(false); atEnd.current = true; toEnd(true); }}
+          style={[ui.row, { position: "absolute", bottom: 10, alignSelf: "center", gap: 6, minHeight: 36, paddingHorizontal: 14, borderRadius: 999 }, primaryFill(p), depth.card]}>
+          <Feather name="arrow-down" size={15} color={p.onPrimary} /><Text style={{ color: p.onPrimary, fontSize: 13, fontWeight: "600" }}>New messages</Text>
+        </MotionPress>}
+      </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.title, property: c.propertyName }} onInsert={reply => setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply)} />}
+      {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.title, property: c.propertyName }} onInsert={reply => { setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply); fit(); }} />}
       <PendingFiles p={p} items={files.items} onRemove={files.remove} onRetry={files.retry} />
       <View style={[ui.row, { gap: 8, alignItems: "flex-end" }]}>
-        {!readOnly && <MotionPress accessibilityRole="button" accessibilityLabel="Add photos or a video (up to 5 photos and 1 video of 50 MB)" onPress={() => void attach()}
-          style={{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}>
-          <Feather name="image" size={19} color={p.primary} />
-        </MotionPress>}
-        <TextInput value={text} onChangeText={setText} placeholder={files.items.length ? "Add a message (optional)" : "Write a message"} placeholderTextColor={p.muted} multiline maxLength={4000} accessibilityLabel="Message"
-          onKeyPress={e => { const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean }; if (Platform.OS === "web" && key.key === "Enter" && !key.shiftKey) { (e as unknown as { preventDefault: () => void }).preventDefault(); void send(); } }}
-          style={{ flex: 1, minHeight: 46, maxHeight: 140, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 18, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 15 }} />
+        <View style={[ui.row, { flex: 1, gap: 8, alignItems: "flex-end" }]}>
+          {!readOnly && <MotionPress accessibilityRole="button" accessibilityLabel="Add photos or a video (up to 5 photos and 1 video of 50 MB)" onPress={() => void attach()}
+            style={{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}>
+            <Feather name="image" size={19} color={p.primary} />
+          </MotionPress>}
+          <TextInput ref={input} value={text} onChangeText={write} placeholder={files.items.length ? "Add a message (optional)" : "Write a message"} placeholderTextColor={p.muted} multiline maxLength={4000} accessibilityLabel="Message"
+            onKeyPress={e => { const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean }; if (Platform.OS === "web" && key.key === "Enter" && !key.shiftKey) { (e as unknown as { preventDefault: () => void }).preventDefault(); void send(); } }}
+            style={[{ flex: 1, minHeight: 46, maxHeight: INPUT_MAX, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 18, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 15 },
+              Platform.OS === "web" ? { height: inputHeight, lineHeight: INPUT_LINE, fontSize: 16 } : null]} />
+        </View>
         <MotionPress accessibilityRole="button" accessibilityLabel={files.uploading ? "Send (waiting for uploads)" : "Send"} disabled={!canSend} onPress={() => void send()}
           style={[{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" }, canSend ? primaryFill(p) : { backgroundColor: p.wash }]}>
           <Feather name="send" size={19} color={canSend ? p.onPrimary : p.muted} />
@@ -244,6 +288,46 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
       {people && c && <MembersSheet p={p} conversation={c} members={members} onClose={() => setPeople(false)} onChanged={() => { void reloadMembers(); void load(); onChanged(); }}
         onLeft={() => { setPeople(false); onLeft(); }} onOpen={next => { setPeople(false); onOpen(next); }} />}
     </View>
+  );
+}
+
+// What part of the screen is left for the page: in a browser, the visual viewport, which shrinks when the keyboard opens
+// (iPhone Safari, the installed app on an iPhone or Android) and may be scrolled within the page.
+type Viewport = { top: number; height: number };
+const readViewport = (): Viewport => {
+  if (Platform.OS !== "web" || typeof window === "undefined") return { top: 0, height: 0 };
+  const vv = window.visualViewport;
+  return vv ? { top: Math.max(0, vv.offsetTop), height: vv.height } : { top: 0, height: window.innerHeight };
+};
+function useViewport() {
+  const [box, setBox] = useState(readViewport);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const vv = window.visualViewport, update = () => setBox(readViewport());
+    vv?.addEventListener("resize", update); vv?.addEventListener("scroll", update); window.addEventListener("resize", update);
+    // The page behind stays still while the conversation is open.
+    const root = document.documentElement, before = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => { vv?.removeEventListener("resize", update); vv?.removeEventListener("scroll", update); window.removeEventListener("resize", update); root.style.overflow = before; };
+  }, []);
+  return box;
+}
+// On a phone an open conversation fills the screen, as in a phone messenger: over the header and the bottom bar, with a back arrow
+// to leave. Only the messages scroll; the box to write in sits at the bottom of what the keyboard leaves, so it rises with
+// the keyboard and the newest message stays in view.
+function PhoneConversation({ p, onBack, children }: { p: Palette; onBack: () => void; children: ReactNode }) {
+  const box = useViewport();
+  if (Platform.OS !== "web") return (
+    <Modal visible animationType="slide" onRequestClose={onBack}>
+      <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: p.surface }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>{children}</KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
+  );
+  return (
+    <Modal visible transparent animationType="none" onRequestClose={onBack}>
+      <View accessibilityViewIsModal style={{ position: "absolute", left: 0, right: 0, top: box.top, height: box.height || "100%", backgroundColor: p.surface }}>{children}</View>
+    </Modal>
   );
 }
 
@@ -305,7 +389,9 @@ type Row = { kind: "chat"; id: string; at: string | null; c: Conversation } | { 
 const chatRow = (c: Conversation): Row => ({ kind: "chat", id: c.id, at: c.lastMessageAt, c });
 const emailRow = (t: ClientEmailThread): Row => ({ kind: "email", id: "email:" + t.id, at: t.lastMessageAt, t });
 
-export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, guestEmailWaiting = 0, openConversation, updates, initialTab }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; guestEmailWaiting?: number; openConversation?: string; updates?: ReactNode; initialTab?: "updates" }) {
+export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, guestEmailWaiting = 0, openConversation, updates, initialTab, onLeave }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; guestEmailWaiting?: number; openConversation?: string; updates?: ReactNode; initialTab?: "updates";
+  // Leaving an owner's conversation on a phone (it is their whole Messages): back to Home.
+  onLeave?: () => void }) {
   const owner = account.role === "client", guests = hasGuestInbox(account);
   // While a super admin views as someone nothing can be started or saved. A role preview (no person) reads the super admin's
   // own Messages, so it keeps only what that role could have (lib/view-as.ts). The workspace remounts when the view changes.
@@ -366,15 +452,16 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   // Client emails lists the email conversations (id "email:<uuid>"); every other tab its chat conversations.
   const inTab = byLatest<Row>(tab === "clientEmails" ? emails.map(emailRow) : (list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab).map(chatRow), r => r.at, r => r.id);
   const placeText = new Map(properties.map(x => [x.id, [x.name, x.address].filter(Boolean).join(" ")] as const));
-  const searchable = (r: Row) => r.kind === "email" ? [r.t.name, r.t.address, r.t.subject] : [r.c.title, r.c.subtitle, r.c.propertyName, r.c.last?.authorName, ...r.c.propertyIds.map(id => placeText.get(id))];
+  // The newest message's words count too.
+  const searchable = (r: Row) => r.kind === "email" ? [r.t.name, r.t.address, r.t.subject] : [r.c.title, r.c.subtitle, r.c.propertyName, r.c.last?.authorName, r.c.last?.body, ...r.c.propertyIds.map(id => placeText.get(id))];
   const found = inTab.filter(r => matchesSearch(query, searchable(r)));
   const clients = (tab === "clients" || tab === "clientEmails") && tabs.length > 1;
   const statusOf = (r: Row) => r.kind === "email" ? clientEmailStatus(r.t) : clientStatus(r.c);
   // The conversation open beside the list stays listed while it is read, so it does not jump away.
   const shown = clients ? found.filter(r => statusOf(r) === status || (desktop && r.id === open)) : found;
-  const thread = (id: string, back?: () => void) => id.startsWith("email:")
+  const thread = (id: string, back?: () => void, screen = false) => id.startsWith("email:")
     ? <ClientEmailThreadPane key={id} p={p} threadId={id.slice(6)} onBack={back} onChanged={changed} />
-    : <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} onOpen={c => { setOpen(c.id); void loadList(); }} onLeft={() => { setOpen(null); void loadList(); }} />;
+    : <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} screen={screen} onOpen={c => { setOpen(c.id); void loadList(); }} onLeft={() => { setOpen(null); void loadList(); }} />;
   const listView = (
     <View style={{ gap: 10 }}>
       <SearchBar p={p} value={query} onChange={setQuery} placeholder={clients ? "Search owner or property" : "Search conversations or people"}
@@ -411,18 +498,22 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       {updates}
     </View>
   );
-  // On a phone an open conversation takes the whole screen, with a back arrow; the tabs come back with the list.
+  // On a phone an open conversation takes the whole screen, with a back arrow; the tabs come back with the list. A chat
+  // conversation (team or owner) covers the header and the bottom bar too, as in a phone messenger; an email stays in the page.
   const phoneThread = !desktop && !owner && tab !== "guests" && tab !== "guestEmails" && !!open;
+  const back = () => { setOpen(null); void loadList(); };
+  const fullScreen = !desktop && !!open && !open.startsWith("email:") && (owner ? !!onLeave : phoneThread);
   return (
     <View style={{ gap: 12 }}>
-      {!phoneThread && tabBar}
+      {(!phoneThread || fullScreen) && tabBar}
       {!!error && <Notice text={error} p={p} tone="bad" />}
-      {owner ? (open ? <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View>
+      {fullScreen && open && <PhoneConversation p={p} onBack={owner ? onLeave! : back}>{thread(open, owner ? onLeave : back, true)}</PhoneConversation>}
+      {owner ? (open ? fullScreen ? <Loading p={p} /> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View>
         : mode.readOnly && (list || preview) ? <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{preview ? "An owner's Messages is their conversation with Recharge. Choose an owner under View as to see theirs." : "This owner has not messaged Recharge yet."}</Text>
         : <Loading p={p} />)
         : tab === "guests" ? <GuestInbox key="guests" palette={p} properties={properties} desktop={desktop} onChanged={onUnread} openThread={guestLink} />
         : tab === "guestEmails" ? <GuestInbox key="guest-emails" emails palette={p} properties={properties} desktop={desktop} onChanged={onUnread} />
-        : <MessagesSplit p={p} desktop={desktop} list={listView} detail={open ? thread(open, desktop ? undefined : () => { setOpen(null); void loadList(); }) : null} />}
+        : <MessagesSplit p={p} desktop={desktop} list={listView} detail={open && !fullScreen ? thread(open, desktop ? undefined : back) : null} />}
       {creating && <NewConversation p={p} properties={properties} only={tabs.length < 2 ? undefined : tab === "clients" ? "owners" : "team"} onClose={() => setCreating(false)} onOpen={c => { setCreating(false); setOpen(c.id); void loadList(); }} />}
     </View>
   );
