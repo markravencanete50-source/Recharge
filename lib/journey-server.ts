@@ -26,6 +26,10 @@ async function workflowRoute(request:Request,native:boolean,kind:'journey'|'oper
   const parsed=(kind==='journey'?journeyActionSchema:operationsActionSchema).safeParse(await boundedJson(request));
   if(!parsed.success)return businessResponse({error:validationReason(parsed.error)},400);
   const result=await session.client.rpc(kind==='journey'?'workspace_journey_action':'workspace_operations_action',{input:parsed.data});
-  return result.error?databaseFailure(result.error):businessResponse({data:result.data,ok:true});
+  if(result.error)return databaseFailure(result.error);
+  // A published estimate without an owner account is emailed to the enquiry with a private link (migration 20261019520000).
+  // Loaded only here, so other journey requests never load the email sender.
+  if(kind==='journey'&&parsed.data.action==='publishEstimate'){const {emailPublishedEstimate}=await import('./estimate-link-server');return businessResponse({data:await emailPublishedEstimate(session,parsed.data.requestId,result.data),ok:true});}
+  return businessResponse({data:result.data,ok:true});
  }catch(error){return viewAsFailure(error)??businessResponse({error:'The property journey is temporarily unavailable'},503);}
 }

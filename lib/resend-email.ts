@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { MAIL_DOMAIN, type Mailbox } from './email-inbound-policy';
 import { GUEST_ADDRESS, GUEST_FROM, OWNER_ADDRESS, OWNER_FROM, isMailboxAddress } from './integration-policy';
+import { replyHtml } from './email-brand';
 
 // Resend, for the two mailboxes. The key and the webhook signing secret are Worker Secrets (RESEND_API_KEY, RESEND_WEBHOOK_SECRET).
 const settings = () => env as unknown as Record<string, string | undefined>;
@@ -76,7 +77,8 @@ export async function sendMailboxEmail(mailbox: Mailbox, email: { to: string; su
   if (isMailboxAddress(email.to)) throw new ResendError('Not sent: the address is one of our own mailboxes', 400);
   const response = await resend('/emails', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': email.idempotencyKey },
-    body: JSON.stringify({ from, to: [email.to], reply_to: address, subject: email.subject, text: email.text, headers }),
+    // The text goes as written; the HTML part is the same text with a small Recharge signature under it (lib/email-brand.ts).
+    body: JSON.stringify({ from, to: [email.to], reply_to: address, subject: email.subject, text: email.text, html: replyHtml(email.text, address), headers }),
   });
   const result = await response.json() as { id?: string };
   if (typeof result.id !== 'string' || !result.id) throw new ResendError('Resend gave no id', 502);

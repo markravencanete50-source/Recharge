@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { estimateDeliverySchema } from './estimate-link';
 import { normaliseRegion } from './regions';
+import { emailHeader } from './email-brand';
 
 // Client Enquiries: the New Property Enquiry Form landlords fill in from a link the team emails
 // them, and what the team does with each answer (value the property, or close it).
@@ -85,6 +87,8 @@ export const clientEnquirySchema = z.object({
   // same address, or the landlord said they already work with us. Never merged; the team decides.
   duplicateOf: z.string().uuid().nullable().default(null), duplicateOfName: z.string().nullable().default(null),
   duplicateReason: z.enum(['same_address', 'existing_client']).nullable().default(null),
+  // How the estimate reached them (migration 20261019520000); null without an estimate.
+  estimateDelivery: estimateDeliverySchema.nullable().default(null),
 });
 export type ClientEnquiry = z.infer<typeof clientEnquirySchema>;
 export const clientEnquiriesSchema = z.object({ canInvite: z.boolean(), emailReady: z.boolean().default(false), items: z.array(clientEnquirySchema) });
@@ -94,12 +98,14 @@ export type ClientEnquiries = z.infer<typeof clientEnquiriesSchema>;
 // stage says how far it has gone (estimate sent, agreed, live or declined). An answered enquiry already has
 // its property (made when the form came back); if the team moved that property on from its own page, the
 // enquiry follows its stage too.
-export type EnquiryStep = 'sent' | 'opened' | 'received' | 'valuing' | 'estimate' | 'won' | 'declined' | 'closed' | 'expired';
-export function enquiryStep(e: Pick<ClientEnquiry, 'status' | 'stage' | 'expiresAt'>, now = Date.now()): EnquiryStep {
+// "Estimate sent" only once the email for the current estimate has gone (migration 20261019520000); published but not
+// emailed (or the email failed) is "Estimate ready".
+export type EnquiryStep = 'sent' | 'opened' | 'received' | 'valuing' | 'estimate' | 'estimate_ready' | 'won' | 'declined' | 'closed' | 'expired';
+export function enquiryStep(e: Pick<ClientEnquiry, 'status' | 'stage' | 'expiresAt'> & { estimateDelivery?: { status: string } | null }, now = Date.now()): EnquiryStep {
   if (e.status === 'closed') return 'closed';
   if (e.status === 'valuing' || (e.status === 'received' && !!e.stage && e.stage !== 'enquiry')) {
     if (e.stage === 'archived') return 'declined';
-    if (e.stage === 'estimate' || e.stage === 'reviewing') return 'estimate';
+    if (e.stage === 'estimate' || e.stage === 'reviewing') return e.estimateDelivery && e.estimateDelivery.status !== 'sent' ? 'estimate_ready' : 'estimate';
     if (e.stage && e.stage !== 'enquiry') return 'won';
     return 'valuing';
   }
@@ -107,7 +113,7 @@ export function enquiryStep(e: Pick<ClientEnquiry, 'status' | 'stage' | 'expires
   return e.status;
 }
 export const STEP_LABEL: Record<EnquiryStep, string> = {
-  sent: 'Form sent', opened: 'Form opened', received: 'New: ready to value', valuing: 'Valuing', estimate: 'Estimate sent',
+  sent: 'Form sent', opened: 'Form opened', received: 'New: ready to value', valuing: 'Valuing', estimate: 'Estimate sent', estimate_ready: 'Estimate ready',
   won: 'Onboarding', declined: 'Declined', closed: 'Closed', expired: 'Link expired',
 };
 // The badge on a possible duplicate, and a line saying why.
@@ -121,7 +127,7 @@ export function duplicateNote(e: Pick<ClientEnquiry, 'duplicateReason' | 'duplic
 // details and values it. An enquiry answered before properties were made on submit still starts valuing.
 export const valueButtonLabel = (e: Pick<ClientEnquiry, 'propertyId'>) => e.propertyId ? 'Check the details and value' : 'Start valuing';
 export const STEP_TONE: Record<EnquiryStep, 'good' | 'wait' | 'bad' | 'plain'> = {
-  sent: 'plain', opened: 'plain', received: 'wait', valuing: 'wait', estimate: 'good', won: 'good', declined: 'bad', closed: 'plain', expired: 'bad',
+  sent: 'plain', opened: 'plain', received: 'wait', valuing: 'wait', estimate: 'good', estimate_ready: 'wait', won: 'good', declined: 'bad', closed: 'plain', expired: 'bad',
 };
 
 // The property's details for "Start valuing", from the landlord's answers: a short name from the
@@ -155,7 +161,7 @@ export function enquiryEmail(subject: string, body: string, link: string) {
   const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const button = `<p style="margin:28px 0"><a href="${escape(link)}" style="background:#1F3D38;color:#FAF7F0;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">Open the property form</a></p>`;
   const paragraphs = body.split(/\n{2,}/).map(part => part.includes(LINK_PLACEHOLDER) ? button : `<p style="margin:0 0 14px">${escape(part).replace(/\n/g, '<br>')}</p>`).join('');
-  const html = `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.6;color:#152D28;max-width:560px">${paragraphs}${body.includes(LINK_PLACEHOLDER) ? '' : button}<p style="margin:0;color:#4E6259;font-size:13px">If the button doesn't work, copy this link into your browser: ${escape(link)}</p></div>`;
+  const html = `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.6;color:#152D28;max-width:560px">${emailHeader()}${paragraphs}${body.includes(LINK_PLACEHOLDER) ? '' : button}<p style="margin:0;color:#4E6259;font-size:13px;word-break:break-all">If the button doesn't work, copy this link into your browser: ${escape(link)}</p></div>`;
   return { subject, text, html };
 }
 
