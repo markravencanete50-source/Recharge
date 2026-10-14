@@ -264,7 +264,7 @@ certificate) is the option for later if Alex wants the logo in every inbox.
 - Whether to send the team note: "theme tokens only, check dark mode, don't edit theme files, E reviews before merge".
   The developers have since been told the main points one by one.
 - Taste calls:
-  - the Access control people filter (6 choices with live counts) as a dropdown: keep it, or go back to buttons?
+  - the Access control people filter (6 choices with live counts) as a dropdown: **settled 14 October, keep the dropdown.**
   - rows of exactly 5 buttons now scroll sideways on phones instead of wrapping: is that okay?
 - Check the public enquiry form once on an iPhone and on a Mac (D tested Chromium only).
 - Optional data steps from round 4: bonus tiers 90/95 in Team performance targets; the four wrong regions; the open

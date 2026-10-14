@@ -319,7 +319,7 @@ function Chip({ p, label, count, on, onPress, role }: { p: Palette; label: strin
     <MotionPress accessibilityRole={role} accessibilityState={role === "radio" ? { selected: on } : { checked: on }} accessibilityLabel={`${label}, ${count}`} onPress={onPress}
       style={[{ minHeight: 44, paddingHorizontal: 14, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 8 }, pillBox(p, on)]}>
       <Text style={{ color: pillInk(p, on), fontSize: 13, fontWeight: "600" }}>{label}</Text>
-      <Text style={{ color: pillInk(p, on, true), fontSize: 13, fontWeight: "700" }}>{formatCount(count)}</Text>
+      <Text style={{ color: pillInk(p, on, true), fontSize: 13, fontWeight: "600" }}>{formatCount(count)}</Text>
     </MotionPress>
   );
 }
