@@ -6,7 +6,7 @@ import { businessContext, businessResponse, databaseFailure, viewAsFailure } fro
 import { isNativeRequest } from './native-request-policy';
 import { boundedFormData } from './bounded-form';
 import { DocxError, docxOutline } from './docx-text';
-import { MAX_AGREEMENT_BYTES, agreementFileType, onboardingSettingsActionSchema } from './agreement-template';
+import { MAX_AGREEMENT_BYTES, agreementFileProblem, agreementFileType, onboardingSettingsActionSchema } from './agreement-template';
 
 // Onboarding settings (Management centre): the contract uploaded as the agreement template, Recharge's details for the
 // agreement and the "Your own costs" categories (migration 20261020870000). Admins upload a Word document or a PDF; a Word
@@ -22,6 +22,7 @@ const bucket = () => {
 const id = z.string().uuid();
 const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
 const TYPE_MESSAGE = 'Upload the contract as a Word document (.docx) or a PDF, up to 5 MB';
+const SIZE_MESSAGE = 'This file is larger than 5 MB. Contracts can be up to 5 MB: save a smaller copy and upload that.';
 
 export async function onboardingSettingsRoute(request: Request, native = false) {
   if (request.method === 'POST' && (native ? !isNativeRequest(request) : !isSameOrigin(request, authSecurityConfiguration()?.origin))) return businessResponse({ error: 'Invalid request origin' }, 403);
@@ -59,14 +60,16 @@ export async function onboardingSettingsRoute(request: Request, native = false) 
     }
     // Uploading a contract: { requestId, file }. The request id names the file, so a retry never keeps a second copy.
     const form = await boundedFormData(request, MAX_AGREEMENT_BYTES + 65536);
-    if (form === 'too-large') return businessResponse({ error: TYPE_MESSAGE }, 413);
+    if (form === 'too-large') return businessResponse({ error: SIZE_MESSAGE }, 413);
     if (!form) return businessResponse({ error: 'Choose the contract to upload' }, 400);
     if ([...form.keys()].some(k => !['requestId', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return businessResponse({ error: 'Unexpected upload fields' }, 400);
     const requestId = id.safeParse(form.get('requestId')), file = form.get('file');
     if (!requestId.success || !(file instanceof Blob)) return businessResponse({ error: 'Choose the contract to upload' }, 400);
     const bytes = new Uint8Array(await file.arrayBuffer());
     const type = agreementFileType(bytes);
-    if (!type || bytes.length > MAX_AGREEMENT_BYTES) return businessResponse({ error: TYPE_MESSAGE }, 400);
+    if (bytes.length > MAX_AGREEMENT_BYTES) return businessResponse({ error: SIZE_MESSAGE }, 413);
+    // An old .doc or a password-protected Word document says so; anything else gets the general message.
+    if (!type) return businessResponse({ error: agreementFileProblem(bytes) ?? TYPE_MESSAGE }, 400);
     let body = '';
     if (type.kind === 'docx') {
       try { body = await docxOutline(bytes); }

@@ -26,6 +26,21 @@ export function agreementFileType(bytes: Uint8Array): { kind: 'docx' | 'pdf'; mi
   if (bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) return { kind: 'docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
   return null;
 }
+// Why a file that is neither a zip nor a PDF was refused, when that can be told. Word saves a password-protected document
+// and an old Word 97-2003 document (.doc) the same way, as an "OLE" compound file (it starts D0 CF 11 E0); a protected
+// one holds an "EncryptionInfo" stream. Both would otherwise get "upload a Word document", which a protected .docx is.
+export const PASSWORD_MESSAGE = 'This document is password protected. Remove the password and upload it again.';
+export const OLD_WORD_MESSAGE = 'This is an older Word document (.doc). Open it in Word, save it as a Word Document (.docx) or a PDF, and upload that.';
+export function agreementFileProblem(bytes: Uint8Array): string | null {
+  if (!(bytes.length > 8 && bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0)) return null;
+  const marker = new Uint8Array([...'EncryptionInfo'].flatMap(c => [c.charCodeAt(0), 0]));
+  for (let i = 0, end = Math.min(bytes.length, 1024 * 1024) - marker.length; i <= end; i++) {
+    let j = 0;
+    while (j < marker.length && bytes[i + j] === marker[j]) j++;
+    if (j === marker.length) return PASSWORD_MESSAGE;
+  }
+  return OLD_WORD_MESSAGE;
+}
 export const fileSizeLabel = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
 const templateSchema = z.object({

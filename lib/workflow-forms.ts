@@ -5,6 +5,7 @@ import { SCOTTISH_REGIONS } from './regions';
 import { workspaceDateKey } from './analytics';
 import { HTTPS_LINK_MESSAGE, MAX_COMPARABLES, isHttpsLink } from './journey-policy';
 import { ownCostFields, ownCostsFrom } from './own-costs';
+import { agreementTemplateForms } from './agreement-template';
 import { BATHROOM_CHOICES, BEDROOM_CHOICES, GARDEN_CHOICES, PARKING_CHOICES, PROPERTY_TYPES, WC_CHOICES, type Suggestion } from './property-listing';
 export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense';
  // Quick picks under a text field (tapping one fills it, and any fields in `also`), and a postcode lookup on an address.
@@ -201,7 +202,9 @@ export function workItemForms(a:WorkspaceAccount,w:OperationView,journeys:readon
  }
  const j=journeys.find(x=>x.propertyId===w.propertyId);
  if(!j)return own;
- if(j.workId===w.workId)return [...own,...journeyForms(a,j)];
+ // The onboarding ticket offers "Publish the agreement from the contract" too, wherever it is opened (the onboarding
+ // tracker, All work, Home), not only on the property's page.
+ if(j.workId===w.workId)return [...own,...agreementTemplateForms(a,j),...journeyForms(a,j)];
  if(w.kind==='inspection')return [...own,...journeyForms(a,j).filter(f=>INSPECTION_STEPS.includes(f.key))];
  return own;
 }
