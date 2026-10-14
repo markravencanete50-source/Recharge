@@ -123,9 +123,14 @@ export function vacantNights(propertyId: string, stays: { propertyId: string; ch
 export const DEPARTMENT_LABEL: Record<string, string> = { guest_relations: "Guest relations", client_relations: "Client relations", cleaning: "Cleaning", ready: "Ready", accounts: "Accounts", management: "Management" };
 // The department a role usually clocks in to.
 export const departmentFor = (role: string) => ({ stays: "guest_relations", cleans: "cleaning", cleaning_manager: "cleaning", ready: "ready", accounts: "accounts" } as Record<string, string>)[role] ?? "management";
-// Pauses while clocked in (lunch, a break, an emergency) and overtime once the shift is done.
+// Pauses while clocked in (a break, an emergency) and overtime once the shift is done. Lunch is no longer a
+// pause (Alex, client meeting: lunch is unpaid anyway), so nobody can start one; shifts from before still hold
+// lunch pauses, and those are read, totalled and shown as "Lunch" in the history.
 export const PAUSE_KINDS = ["lunch", "break", "emergency"] as const;
 export type PauseKind = (typeof PAUSE_KINDS)[number];
+// The pauses a person can start now.
+export const PAUSE_START_KINDS = ["break", "emergency"] as const satisfies readonly PauseKind[];
+export type PauseStartKind = (typeof PAUSE_START_KINDS)[number];
 export const PAUSE_LABEL: Record<PauseKind, string> = { lunch: "Lunch", break: "Break", emergency: "Emergency" };
 const pauseSchema = z.object({ kind: z.enum(PAUSE_KINDS), startedAt: z.string(), endedAt: z.string().nullable().optional() });
 export const pausePolicySchema = z.object({ lunchPaid: z.boolean(), breakPaid: z.boolean(), emergencyPaid: z.boolean(), version: z.number(), updatedAt: z.string().nullable().optional(), updatedBy: z.string().nullable().optional() });
