@@ -607,7 +607,7 @@ fieldset.enquiry-field { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 .enquiry-pill { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 92px; justify-content: center; padding: 0 18px; border-radius: 999px; border: 1px solid var(--rc-controlBorder); background: var(--rc-background); color: var(--rc-text); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, scale 200ms cubic-bezier(.2, 0, 0, 1); }
 .enquiry-pill input { position: absolute; opacity: 0; pointer-events: none; }
 .enquiry-pill:has(input:focus-visible) { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc-primary) 25%, transparent); }
-.enquiry-pill[data-on] { background: var(--rc-primary); border-color: var(--rc-primary); color: var(--rc-onPrimary); }
+.enquiry-pill[data-on] { background: var(--rc-selected); border-color: var(--rc-selectedBorder); color: var(--rc-onSelected); }
 .enquiry-pill:active { scale: .97; }
 .enquiry-drop { display: grid; justify-items: center; gap: 6px; padding: 26px 16px; border-radius: 18px; border: 1.5px dashed var(--rc-controlBorder); background: var(--rc-background); text-align: center; color: var(--rc-muted); cursor: pointer; transition: border-color 180ms ease, background-color 180ms ease, translate 200ms ease; }
 .enquiry-drop strong { color: var(--rc-text); font-size: 0.95rem; }
@@ -641,8 +641,8 @@ fieldset.enquiry-field { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 .estimate-rates > div { display: grid; gap: 2px; padding: 12px; border-radius: 14px; background: var(--rc-wash); min-width: 0; }
 .estimate-rates dt { font-size: 0.8rem; color: var(--rc-muted); }
 .estimate-rates dd { margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--rc-text); font-variant-numeric: tabular-nums; }
-.estimate-rates > div[data-strong] { background: var(--rc-primary); }
-.estimate-rates > div[data-strong] :is(dt, dd) { color: var(--rc-onPrimary); }
+.estimate-rates > div[data-strong] { background: var(--rc-selected); box-shadow: inset 0 0 0 1px var(--rc-selectedBorder); }
+.estimate-rates > div[data-strong] :is(dt, dd) { color: var(--rc-onSelected); }
 .estimate-notes { white-space: pre-line; font-size: 0.95rem; line-height: 1.55; color: var(--rc-text); overflow-wrap: anywhere; }
 .estimate-similar { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .estimate-similar a { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--rc-border); color: var(--rc-text); text-decoration: none; }
@@ -664,9 +664,9 @@ fieldset.enquiry-field { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 .estimate-range output { font-weight: 600; font-variant-numeric: tabular-nums; }
 .estimate-range input { width: 100%; min-height: 32px; accent-color: var(--rc-primary); }
 .estimate-range small { font-size: 0.8rem; color: var(--rc-muted); }
-.estimate-total { display: grid; gap: 2px; padding: 16px; border-radius: 18px; background: var(--rc-primary); color: var(--rc-onPrimary); }
+.estimate-total { display: grid; gap: 2px; padding: 16px; border-radius: 18px; border: 1px solid var(--rc-selectedBorder); background: var(--rc-selected); color: var(--rc-onSelected); }
 .estimate-total > span { font-size: 0.85rem; opacity: 0.85; font-variant-numeric: tabular-nums; }
-.estimate-total strong { font-size: 2rem; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; }
+.estimate-total strong { font-size: 2rem; line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; }
 .estimate-total strong small { font-size: 0.95rem; font-weight: 500; }
 .estimate-lines { display: grid; margin: 0; }
 .estimate-lines > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rc-border); font-size: 0.9rem; }
