@@ -79,6 +79,17 @@ Migration 20261019520000, `lib/estimate-link.ts`, `lib/estimate-link-server.ts`,
 - **What the team sees:** "Estimate sent" only once the email for the current estimate has gone. Otherwise it shows "Estimate ready": published but not emailed, the email failed, or the enquiry has no email address. The property's Onboarding card has **Email the estimate** (or **Resend the estimate**) and **Copy link**, which gives a link to send by hand and also works when email isn't set up.
 - **Screenshots:** `docs/screenshots/session-f/estimate-*.png`.
 
+## The Recharge logo in our emails
+
+`lib/email-brand.ts`, `public/recharge-email-logo.png`
+
+- **The image:** a 480 by 133 PNG (about 24 KB) cut from `recharge-company-logo.png`, on its own solid cream background. Email apps block SVG, and the solid background keeps it readable when a mail app shows the email dark. It is served from `https://app.rechargegroup.co.uk/recharge-email-logo.png`, with `alt="Recharge"` and the width and height set.
+- **Emails Recharge writes:** the enquiry form and the estimate email start with the logo, at 180 by 50.
+- **Replies written in Messages:** both mailboxes send an HTML part. It holds the text as written, then a small signature: the logo at 108 by 30, "Recharge Group", and the mailbox the reply came from. Plain-text parts are unchanged.
+- **Staff notice emails:** these are plain text only, so they carry no logo.
+- **The round avatar Gmail shows** for a sender comes from BIMI (DMARC at enforcement plus a paid VMC or CMC certificate) or from a Google account photo on the sending address. It is not set by the email itself.
+- **Screenshots:** `docs/screenshots/session-f/email-*.png`.
+
 ## Two addresses, never mixed (Lee's rule)
 
 - **Guests:** `guestrelations@rechargegroup.co.uk`. Comes in to Messages, Guests; every reply goes out from it, with reply-to the same.

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { formatMoney } from './format';
 import { readEstimate } from './estimate-projection';
+import { emailHeader } from './email-brand';
 
 // The estimate, emailed with a private link (Lee, 14 October). Pure: the email, the client's decision and the team's
 // wording. The server makes the link from the request (a retry is the same link) and keeps only its hash.
@@ -61,6 +62,7 @@ export function estimateEmail(input: { name: string; propertyName: string; estim
   const p = (s: string, style = '') => `<p style="margin:0 0 14px${style}">${s}</p>`;
   const row = (label: string, value: string, strong = false) => `<tr><td style="padding:6px 16px 6px 0;color:#4E6259">${label}</td><td style="padding:6px 0;font-weight:${strong ? 700 : 600}">${value}</td></tr>`;
   const html = `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.6;color:#152D28;max-width:560px">`
+    + emailHeader()
     + p(escape(greeting))
     + p(`Thank you for your enquiry. Here is our free performance estimate for <strong>${escape(input.propertyName)}</strong>.`)
     + (rates.length ? `<table role="presentation" style="border-collapse:collapse;margin:0 0 18px">${rates.map(([label, v]) => row(`${label} nightly rate`, formatMoney(v), label === 'Expected')).join('')}</table>` : '')
