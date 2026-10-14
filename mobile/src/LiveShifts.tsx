@@ -379,7 +379,7 @@ export function PauseRules({ p }: { p: Palette }) {
     ["breakPaid", "Breaks", "Short breaks"], ["emergencyPaid", "Emergencies", "Emergency pauses (managers are told)"]];
   return (
     <Section title="Breaks and pay" p={p}>
-      <Text style={[ui.small, { color: p.muted }]}>Team members pause for a break or an emergency while clocked in, and switch to overtime when their shift is done. Choose which pauses count as paid time. Lunch is unpaid and is not recorded on the clock.</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Team members pause for a break or an emergency while clocked in, and switch to overtime when their shift is done. Choose which pauses count as paid time.</Text>
       <View style={{ borderRadius: 18, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
         {rows.map(([key, title, detail], i) => (
           <View key={key} style={[ui.between, { gap: 12, minHeight: 60, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>

@@ -1,7 +1,7 @@
 -- Lunch comes off the clock (Alex, client meeting): team members can no longer start a Lunch pause. Lunch is unpaid
 -- anyway; Break and Emergency stay exactly as they are. Shifts from before keep their lunch pauses: the table still
 -- allows them, they are still read and totalled by the stored pay rule, and the app shows them as "Lunch" in the history.
--- Starting a lunch pause is refused with a plain message. Someone already on a lunch pause when this is installed can
+-- Starting a lunch pause is refused with "Choose a break or an emergency" (Lee: no mention of lunch). Someone already on a lunch pause when this is installed can
 -- still go back to work or clock out as before.
 -- Patched by anchor (sentinel, an anchor that must occur once): private.workspace_pause_action (defined in
 -- 20261011010000; nothing later patches it).
@@ -13,9 +13,8 @@ declare
   -- Starting a pause: a break or an emergency only.
   ['private.workspace_pause_action(jsonb)',
    $q$if coalesce(input->>'kind','') not in ('lunch','break','emergency') then raise exception 'Choose lunch, a break or an emergency' using errcode='22023';end if;$q$,
-   $q$if input->>'kind'='lunch' then raise exception 'Lunch is no longer recorded as a pause. Clock out for lunch, or choose a break.' using errcode='22023';end if;
-  if coalesce(input->>'kind','') not in ('break','emergency') then raise exception 'Choose a break or an emergency' using errcode='22023';end if;$q$,
-   $q$'Lunch is no longer recorded as a pause.$q$]
+   $q$if coalesce(input->>'kind','') not in ('break','emergency') then raise exception 'Choose a break or an emergency' using errcode='22023';end if;$q$,
+   $q$not in ('break','emergency') then raise exception 'Choose a break or an emergency'$q$]
  ];
  definition text;hits integer;
 begin

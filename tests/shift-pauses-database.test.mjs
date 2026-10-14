@@ -128,14 +128,15 @@ test('lunch is no longer a pause: refused in plain words, while old lunch pauses
   const before = await definition();
   await db.exec('reset role'); await db.exec(await fs.readFile(MIGRATION, 'utf8'));
   assert.equal(await definition(), before, 'a second run changes nothing');
-  assert.equal(before.split('Lunch is no longer recorded as a pause.').length, 2);
+  assert.equal(before.split("not in ('break','emergency') then raise exception 'Choose a break or an emergency'").length, 2);
+  assert.ok(!/Lunch is|for lunch/.test(before), 'the refusal never mentions lunch (Lee)');
   assert.ok(!before.includes("'Choose lunch, a break or an emergency'"), 'the old check is gone');
   // The app's own schema no longer sends a lunch pause; break and emergency stay.
   assert.ok(!teamsActionSchema.safeParse({ action: 'startPause', requestId: crypto.randomUUID(), kind: 'lunch' }).success);
   for (const kind of ['break', 'emergency']) assert.ok(teamsActionSchema.safeParse({ action: 'startPause', requestId: crypto.randomUUID(), kind }).success, kind);
   // Eric is on a break from the last test. Someone sending a lunch pause anyway (an older app) is refused.
   await as(ERIC);
-  await assert.rejects(rpc('workspace_teams_action', [{ action: 'startPause', requestId: crypto.randomUUID(), kind: 'lunch' }]), /Lunch is no longer recorded as a pause\. Clock out for lunch, or choose a break\./);
+  await assert.rejects(rpc('workspace_teams_action', [{ action: 'startPause', requestId: crypto.randomUUID(), kind: 'lunch' }]), /Choose a break or an emergency/);
   await assert.rejects(rpc('workspace_teams_action', [{ action: 'startPause', requestId: crypto.randomUUID(), kind: 'nap' }]), /Choose a break or an emergency/);
   let mine = myShiftSchema.parse(await read('shift'));
   assert.equal(mine.open.pause.kind, 'break', 'the refusal leaves the break running');
