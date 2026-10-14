@@ -567,6 +567,10 @@ input {
 /* The New Property Enquiry Form (app/enquiry): numbered sections, paired fields on wider screens,
    yes/no pills, and a drop area for photos and videos with live upload progress. */
 .enquiry-form { gap: 26px; }
+/* Always light (Alex), whatever the browser or the app is set to: the page's frame carries data-recharge-theme="light",
+   which gives everything inside it the light tokens (lib/design-tokens.ts, app/workspace-theme.css). The page behind it
+   (scrollbars, the overscroll on a phone) and the browser's own controls follow; html:root outranks the dark theme's :root rules. */
+html:root:has(.auth-page[data-recharge-theme="light"]) { color-scheme: light; }
 /* Grid items and fieldsets otherwise grow to their widest content (a long choice in a select). */
 .enquiry-form > *, .enquiry-section > *, .enquiry-pair > *, .enquiry-trio > * { min-width: 0; }
 fieldset.enquiry-field { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
@@ -599,10 +603,9 @@ fieldset.enquiry-field { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
   -webkit-box-shadow: 0 0 0 1000px var(--rc-background) inset !important; box-shadow: 0 0 0 1000px var(--rc-background) inset !important;
   transition: background-color 600000s 0s, color 600000s 0s;
 }
-/* A select's open list is drawn by the browser: it would take the page's light text on its own white list in the dark
-   theme. The options get the page's colours explicitly, and the list follows the theme (dark in the dark theme). */
+/* A select's open list is drawn by the browser. The options get the page's colours explicitly, and the list is light
+   like the rest of the form (the page's colour-scheme). */
 .enquiry-form select option, .enquiry-form select optgroup { background-color: var(--rc-surface); color: var(--rc-text); }
-:root.dark .enquiry-form select, [data-recharge-theme="dark"] .enquiry-form select { color-scheme: dark; }
 .enquiry-choice { display: flex; flex-wrap: wrap; gap: 8px; }
 .enquiry-pill { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 92px; justify-content: center; padding: 0 18px; border-radius: 999px; border: 1px solid var(--rc-controlBorder); background: var(--rc-background); color: var(--rc-text); font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, scale 200ms cubic-bezier(.2, 0, 0, 1); }
 .enquiry-pill input { position: absolute; opacity: 0; pointer-events: none; }

@@ -49,7 +49,7 @@ const hash = token => createHash('sha256').update(token).digest('hex');
 const token = () => createHash('sha256').update(crypto.randomUUID()).digest('hex');
 const pub = input => rpc('workspace_enquiry_public', [input]);
 const ANSWERS = enquiryAnswersSchema.parse({
-  fullName: 'Mark Raven Canete', companyName: 'Optimal', correspondenceAddress: '4 Queen Street\nEdinburgh EH2 1JE', email: 'mark@example.com', phone: '07700 900123', existingClient: 'no',
+  fullName: 'Mark Raven Canete', companyName: 'Optimal', email: 'mark@example.com', phone: '07700 900123',
   propertyAddress: '8 Tinibgan Road, Edinburgh EH6 6RG', propertyType: 'Flat', bedrooms: 2, wcs: 1, bathrooms: 1, parking: '', garden: '', mediaLink: '',
   shortLet: 'no', furnishQuote: 'yes', compliance: 'yes', startWhen: 'Within a month', notes: '', enquiryType: "I'd like a free performance estimate",
 });
@@ -176,8 +176,8 @@ test('the access history names who deleted which enquiry, without contact detail
   const [event] = await owner("select user_id,actor_id,old_access,new_access from public.workspace_access_events where event_type='client_enquiry.deleted' and old_access->>'enquiryId'=$1", [e.id]);
   assert.equal(event.actor_id, users[ADMIN]);
   assert.deepEqual(event.old_access, { enquiryId: e.id, name: 'Mark Raven Canete', company: 'Optimal', address: '8 Tinibgan Road, Edinburgh EH6 6RG', property: name, status: 'received', stage: 'enquiry', propertyDeleted: true });
-  // Since the history goes with it, the entry says where; still no email, phone or correspondence address.
-  for (const secret of ['mark@example.com', '07700', 'Queen Street']) assert.ok(!JSON.stringify(event).includes(secret), secret);
+  // Since the history goes with it, the entry says where; still no email or phone.
+  for (const secret of ['mark@example.com', '07700']) assert.ok(!JSON.stringify(event).includes(secret), secret);
 });
 
 test('deletes at every stage up to the agreement, with everything onboarding added', async () => {

@@ -45,7 +45,7 @@ const pub = input => rpc('workspace_enquiry_public', [input]);
 // The server adds the link's hash to the team's request (lib/client-enquiry-server.ts).
 const invite = async (t, extra = {}) => { const input = teamsActionSchema.parse({ action: 'inviteEnquiry', requestId: crypto.randomUUID(), name: 'Alex Morgan', email: 'Alex@Example.com', subject: 'Your free estimate', body: defaultBody('Alex Morgan'), delivery: 'email', ...extra }); return rpc('workspace_teams_action', [{ ...input, tokenHash: hash(t) }]); };
 const answers = enquiryAnswersSchema.parse({
-  fullName: 'Alex Morgan', companyName: 'Morgan Lets Ltd', correspondenceAddress: '4 Queen Street\nEdinburgh EH2 1JE', email: 'alex@example.com', phone: '07700 900123', existingClient: 'no',
+  fullName: 'Alex Morgan', companyName: 'Morgan Lets Ltd', email: 'alex@example.com', phone: '07700 900123',
   propertyAddress: '12 Shore Road, Leith, Edinburgh EH6 6RG', propertyType: 'Flat', bedrooms: 2, wcs: 1, bathrooms: 1, parking: 'Free on-street', garden: 'Shared', mediaLink: 'https://photos.example.com/album',
   shortLet: 'no', furnishQuote: 'yes', compliance: 'yes', startWhen: 'Within a month', notes: 'Available from November', enquiryType: "I'd like a free performance estimate",
 });
@@ -83,7 +83,7 @@ test('send, open, upload, answer, value: the whole journey', async () => {
   await pub({ action: 'addFile', tokenHash: hash(t), file: { id: crypto.randomUUID(), path: `enquiries/${sent.id}/${crypto.randomUUID()}.jpg`, name: 'kitchen.jpg', mime: 'image/jpeg', bytes: 2048 } });
   await assert.rejects(pub({ action: 'addFile', tokenHash: hash(t), file: { id: crypto.randomUUID(), path: `enquiries/${crypto.randomUUID()}/${crypto.randomUUID()}.jpg`, name: 'x.jpg', mime: 'image/jpeg', bytes: 10 } }), /Invalid file/, 'only into its own folder');
   await assert.rejects(pub({ action: 'addFile', tokenHash: hash(t), file: { id: crypto.randomUUID(), path: `enquiries/${sent.id}/${crypto.randomUUID()}.exe`, name: 'x.exe', mime: 'application/x-msdownload', bytes: 10 } }), /Invalid file/);
-  await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: { ...answers, existingClient: 'maybe' } }), /Check your answers/);
+  await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: { ...answers, shortLet: 'maybe' } }), /Check your answers/);
   await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: { ...answers, propertyAddress: ' ' } }), /marked with \*/);
   await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: { ...answers, admin: true } }), /./, 'no extra answers');
   assert.deepEqual(await pub({ action: 'submit', tokenHash: hash(t), answers }), { state: 'answered' });
@@ -117,7 +117,7 @@ test('send, open, upload, answer, value: the whole journey', async () => {
   assert.equal(enquiryStep(valued), 'valuing');
   const [journey] = await owner('select j.enquiry,j.property_type,p.bedrooms,p.region from private.workspace_journeys j join public.workspace_properties p on p.id=j.property_id where j.property_id=$1', [valued.propertyId]);
   assert.deepEqual([journey.enquiry.contactName, journey.enquiry.phone, journey.enquiry.existingClient, journey.enquiry.wcs, journey.property_type, journey.bedrooms, journey.region],
-    ['Alex Morgan', '07700 900123', false, 1, 'Flat', 2, 'Edinburgh']);
+    ['Alex Morgan', '07700 900123', undefined, 1, 'Flat', 2, 'Edinburgh'], 'no "existing client" on a new form');
   await assert.rejects(act({ action: 'startValuing', enquiryId: sent.id, version: valued.version, ...draft }), /Only an answered enquiry/);
   await assert.rejects(act({ action: 'closeEnquiry', enquiryId: sent.id, version: valued.version, note: 'Duplicate' }), /already being valued/);
   // Once the estimate is published the enquiry reads "Estimate sent".

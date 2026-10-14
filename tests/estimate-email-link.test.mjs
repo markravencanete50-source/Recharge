@@ -157,7 +157,7 @@ test('the client page: a bad link never reaches the database; the answer goes wi
   const sent = state.publicRpc.at(-1).args.input;
   assert.deepEqual(sent, { action: 'decide', tokenHash: await enquiry.tokenHash(token), decision: 'review', feedback: 'Thinking.', followUpOn: '2026-11-01' });
   r = await decide({ decision: 'proceed', followUpOn: '2026-11-01' });
-  assert.equal(state.publicRpc.at(-1).args.input.followUpOn, null, 'a date only goes with Review later');
+  assert.equal(state.publicRpc.at(-1).args.input.followUpOn, null, 'a date only goes with "Thank you, I’ll be in touch"');
   assert.equal((await r.json()).data.state, 'proceeding');
   assert.equal((await decide({ decision: 'maybe' })).status, 400);
   assert.equal((await decide({ decision: 'proceed', extra: 1 })).status, 400);
@@ -181,6 +181,23 @@ test('the team’s wording: "Estimate sent" only once emailed; enquiries say "Es
   assert.equal(enquiry.enquiryStep(e), 'estimate', 'an older enquiry without the field keeps its label');
   assert.equal(enquiry.STEP_LABEL.estimate_ready, 'Estimate ready');
   assert.equal(enquiry.STEP_LABEL.estimate, 'Estimate sent');
+});
+
+test('the client\'s three answers read Proceed, No, thank you, and Thank you, I\'ll be in touch (Alex), in that order', async () => {
+  assert.deepEqual(Object.entries(policy.DECISION_LABEL), [['proceed', 'Proceed'], ['decline', 'No, thank you'], ['review', 'Thank you, I’ll be in touch']]);
+  const view = await fs.readFile('app/estimate/estimate-view.tsx', 'utf8');
+  assert.match(view, /Object\.keys\(DECISION_LABEL\)/, 'the page shows the labels from lib/estimate-link.ts');
+  assert.doesNotMatch(view + await fs.readFile('lib/estimate-link.ts', 'utf8'), /Review later|'Decline'/);
+  // A choice the page does not offer is refused in plain words.
+  assert.equal(policy.estimateDecisionSchema.safeParse({ token: 'a'.repeat(64), decision: 'maybe' }).error.issues[0].message, 'Choose how you would like to go ahead');
+});
+
+test('the page says what the platform fee and the management fee are, beside those lines', async () => {
+  const view = (await fs.readFile('app/estimate/estimate-view.tsx', 'utf8')).replace(/\r/g, '');
+  const lines = view.indexOf('<dl className="estimate-lines">'), note = view.indexOf('Airbnb and Booking.com keep a share of each booking');
+  assert.ok(lines > 0 && note > lines && note - view.indexOf('</dl>}', lines) < 200, 'just under the fee lines');
+  assert.match(view, /Guests who book with us directly pay no platform fee\. The management fee is what Recharge charges for running your let, as a share of the booking income\./);
+  assert.match(view, /\{fees && <p className="enquiry-help">Airbnb/, 'only when the estimate has fees');
 });
 
 test('wiring: routes allowed, the app calls the mobile route, the team card and the page use theme tokens and no em dashes', async () => {

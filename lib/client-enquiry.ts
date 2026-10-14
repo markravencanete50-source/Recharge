@@ -32,10 +32,8 @@ export const ukPhone = z.string().trim().max(30).refine(v => /^(\+44\s?\(?0?\)?|
 export const enquiryAnswersSchema = z.object({
   fullName: required('your name', 200).refine(v => v.length >= 2, 'Add your name'),
   companyName: text(200).optional(),
-  correspondenceAddress: required('your correspondence address', 1000),
   email: z.string().trim().email('Enter a valid email address').max(320),
   phone: ukPhone,
-  existingClient: yesNo('Are you an existing client?'),
   propertyAddress: required('the property address', 1000).refine(v => v.length >= 5, 'Add the full property address'),
   propertyType: required('the property type', 120),
   bedrooms: count('bedrooms'),
@@ -51,7 +49,10 @@ export const enquiryAnswersSchema = z.object({
   notes: text(3000).optional(),
   enquiryType: required('how you would describe your enquiry', 200),
 }).strict();
-export type EnquiryAnswers = z.infer<typeof enquiryAnswersSchema>;
+// Forms answered before migration 20261020800000 also have a correspondence address and "Are you an existing client?" (Alex: both
+// questions removed). They still show on the enquiry; new forms never send them.
+export const storedEnquiryAnswersSchema = enquiryAnswersSchema.extend({ correspondenceAddress: text(1000).optional(), existingClient: z.enum(YES_NO).optional() });
+export type EnquiryAnswers = z.infer<typeof storedEnquiryAnswersSchema>;
 
 // What the team writes when sending the form: who to, and the email (the link is added for them).
 export const DEFAULT_SUBJECT = 'Your free property performance estimate from Recharge';
@@ -75,19 +76,22 @@ export const enquiryInviteSchema = z.object({
 }).strict();
 
 export const ENQUIRY_STATUSES = ['sent', 'opened', 'received', 'valuing', 'closed'] as const;
+export const DUPLICATE_REASONS = ['same_address', 'existing_owner', 'same_contact', 'existing_client'] as const;
 export type EnquiryStatus = (typeof ENQUIRY_STATUSES)[number];
 const fileSchema = z.object({ id: z.string().uuid(), name: z.string(), mime: z.string(), bytes: z.number() });
 export const clientEnquirySchema = z.object({
   id: z.string().uuid(), status: z.enum(ENQUIRY_STATUSES), recipientName: z.string(), recipientEmail: z.string(),
   subject: z.string(), body: z.string(), delivery: z.enum(['email', 'link']), emailStatus: z.enum(['pending', 'sent', 'failed', 'manual']),
   sentBy: z.string().uuid(), sentByName: z.string().nullable(), sentAt: z.string(), openedAt: z.string().nullable(), submittedAt: z.string().nullable(),
-  expiresAt: z.string(), answers: enquiryAnswersSchema.nullable(), files: z.array(fileSchema),
+  expiresAt: z.string(), answers: storedEnquiryAnswersSchema.nullable(), files: z.array(fileSchema),
   propertyId: z.string().uuid().nullable(), propertyName: z.string().nullable(), stage: z.string().nullable(),
   valuedByName: z.string().nullable(), valuedAt: z.string().nullable(), closedByName: z.string().nullable(), closedAt: z.string().nullable(), closeNote: z.string(), version: z.number(),
   // A possible duplicate, flagged when the form came back (migration 20261015200000): another property at the
-  // same address, or the landlord said they already work with us. Never merged; the team decides.
+  // same address; since 20261020800000 also an owner with their email, or another open enquiry with their email or
+  // phone (duplicateOf is then the owner's or that enquiry's property, when there is one). existing_client is from
+  // older forms, where the landlord said they already work with us. Never merged; the team decides.
   duplicateOf: z.string().uuid().nullable().default(null), duplicateOfName: z.string().nullable().default(null),
-  duplicateReason: z.enum(['same_address', 'existing_client']).nullable().default(null),
+  duplicateReason: z.enum(DUPLICATE_REASONS).nullable().default(null),
   // How the estimate reached them (migration 20261019520000); null without an estimate.
   estimateDelivery: estimateDeliverySchema.nullable().default(null),
 });
@@ -120,9 +124,23 @@ export const STEP_LABEL: Record<EnquiryStep, string> = {
 // The badge on a possible duplicate, and a line saying why.
 export const DUPLICATE_LABEL = 'Possible duplicate';
 export function duplicateNote(e: Pick<ClientEnquiry, 'duplicateReason' | 'duplicateOfName'>): string {
-  if (e.duplicateReason === 'same_address') return `Same address as ${e.duplicateOfName?.trim() || 'another property'}. Check before valuing; close one of them if it is the same place.`;
+  const name = e.duplicateOfName?.trim();
+  if (e.duplicateReason === 'same_address') return `Same address as ${name || 'another property'}. Check before valuing; close one of them if it is the same place.`;
+  if (e.duplicateReason === 'existing_owner') return `Their email matches ${name ? `the owner of ${name}` : 'an owner we already work with'}. Check their other properties before valuing.`;
+  if (e.duplicateReason === 'same_contact') return `Same email or phone as ${name ? `the enquiry for ${name}` : 'another enquiry'}. Check before valuing; close one of them if it is the same place.`;
   if (e.duplicateReason === 'existing_client') return 'They said they already work with us. Check their other properties before valuing.';
   return '';
+}
+// "As soon as possible" (Alex): a Priority tag in the list, and first within its step. Once closed or declined it no longer matters.
+export const PRIORITY_START = START_WHEN[0];
+export const PRIORITY_LABEL = 'Priority';
+export const isPriority = (e: Pick<ClientEnquiry, 'answers'>, step?: EnquiryStep) => e.answers?.startWhen === PRIORITY_START && step !== 'closed' && step !== 'declined';
+// The list keeps its order (newest first), except that within each step the priority enquiries take that step's first places.
+export function priorityFirst<T extends Pick<ClientEnquiry, 'answers'>>(items: T[], stepOf: (e: T) => EnquiryStep): T[] {
+  const byStep = new Map<EnquiryStep, T[]>();
+  for (const e of items) byStep.set(stepOf(e), [...(byStep.get(stepOf(e)) ?? []), e]);
+  const queued = new Map([...byStep].map(([step, list]) => [step, [...list.filter(e => isPriority(e, step)), ...list.filter(e => !isPriority(e, step))]]));
+  return items.map(e => queued.get(stepOf(e))!.shift()!);
 }
 // The main button on an answered enquiry: its property is already in Properties, so the team checks the
 // details and values it. An enquiry answered before properties were made on submit still starts valuing.
@@ -142,13 +160,13 @@ export function valuationDraft(a: EnquiryAnswers) {
     `Enquiry: ${a.enquiryType}`,
     `Short-term let now: ${yes(a.shortLet)} · Furnishing quote: ${yes(a.furnishQuote)} · Compliance and licensing: ${yes(a.compliance)}`,
     a.startWhen ? `Start: ${a.startWhen}` : '',
-    `Correspondence address: ${a.correspondenceAddress.replace(/\s*\n\s*/g, ', ')}`,
+    a.correspondenceAddress ? `Correspondence address: ${a.correspondenceAddress.replace(/\s*\n\s*/g, ', ')}` : '',
     a.notes ? `They added: ${a.notes}` : '',
   ].filter(Boolean).join('\n');
   return {
     name: firstLine.slice(0, 200), address: a.propertyAddress, region: normaliseRegion('', a.propertyAddress), propertyType: a.propertyType.slice(0, 120), bedrooms: a.bedrooms, bathrooms: a.bathrooms,
     enquiry: {
-      contactName: a.fullName, ...(a.companyName ? { companyName: a.companyName } : {}), email: a.email, phone: a.phone, existingClient: a.existingClient === 'yes',
+      contactName: a.fullName, ...(a.companyName ? { companyName: a.companyName } : {}), email: a.email, phone: a.phone, ...(a.existingClient ? { existingClient: a.existingClient === 'yes' } : {}),
       wcs: a.wcs, ...(a.parking ? { parking: a.parking } : {}), ...(a.garden ? { garden: a.garden } : {}), ...(a.mediaLink ? { photoLink: a.mediaLink } : {}),
       notes: notes.slice(0, 3000),
     },
