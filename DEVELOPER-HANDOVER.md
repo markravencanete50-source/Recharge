@@ -426,21 +426,16 @@ database tool can run it, and it is safe to run more than once.
   bars that already print their numbers don't need one.
 - **Errors** (`lib/error-copy.ts`): server reasons pass through; technical text never reaches the screen.
 
-## Demo mode (10 October 2026)
+## Demo mode: removed (14 October 2026)
 
-- **What it is:** a super admin's Live / Demo switch (header on wide screens, and Profile). Demo shows a
-  sample business on every screen; the real database is never read or written for it, and nothing
-  saves (every send answers "Demo mode: nothing is saved…"). View as works inside the demo with its
-  sample people. A banner and the left panel say it is on, with Switch to Live. It lasts for the tab.
-- **How:** `workspaceRequest` (`mobile/src/backend/client.ts`) answers reads from the recording while
-  `setDemo` is set (`demoAnswer` in `lib/demo-data.ts`): requests are matched with their dates made
-  relative to the day of recording, and every date in the answers is moved to today, so the sample
-  stays current. The recording is `mobile/web-static/demo-data.json`, served at
-  `/workspace/demo-data.json` and fetched only when someone switches demo on.
-- **Recording it again** (after schema or screen changes): run the local review backend with the sample
-  business (`scripts/demo/`), then `node scripts/build-demo-data.mjs`. It replays the reads listed per role
-  in `scripts/demo/requests.json` and writes the file. `tests/demo-data.test.mjs` checks it parses and
-  covers every role.
+- Lee: "Remove the demo moving forward we need to use live moving forward." Everyone uses Live only.
+- Gone: the Live / Demo switch, the demo banner and the Profile row, the demo backend in
+  `mobile/src/backend/client.ts`, `mobile/src/DemoMode.tsx`, `mobile/src/demo/`, `lib/demo-data.ts`, the
+  recording (`mobile/web-static/demo-data.json`, `scripts/build-demo-data.mjs`, `scripts/demo/requests.json`)
+  and the in-browser demo (`scripts/demo/browser/`, `scripts/demo/build-browser-demo.mjs`, no more
+  `/workspace/demo/` in the web build).
+- Kept: View as for real people, and the developer devstack (`scripts/demo/server.mjs` and its seed),
+  which is a local review tool and never part of the app.
 
 ## Productivity Tool: clock in and out are locked (10 October 2026)
 
@@ -512,8 +507,8 @@ database tool can run it, and it is safe to run more than once.
   Adding people to a one-to-one starts a new group. Each change shows as a line in the group
   ("Fiona added Ewan"), never counted as unread or notified. Team channels list their whole
   department; their membership still follows the rota.
-- **Who is online**: the app checks in once a minute while open and in view (`heartbeat`, never in
-  the demo or while viewing as someone). A green dot shows on people seen in the last 2½ minutes;
+- **Who is online**: the app checks in once a minute while open and in view (`heartbeat`, never while
+  viewing as someone). A green dot shows on people seen in the last 2½ minutes;
   otherwise "Active 5m ago". Owners are not shown the team's comings and goings.
 - **Your profile** (Profile & preferences → Your profile): a photo (JPG, PNG or WebP up to 5 MB,
   checked from its bytes, kept in the private `avatars` bucket), a colour behind your initials and a
@@ -586,7 +581,6 @@ database tool can run it, and it is safe to run more than once.
 - Migration `20261011030000_team_feedback.sql` (`private.workspace_feedback`, read section
   `feedback`, actions `sendFeedback` and `updateFeedback`); screen `mobile/src/LiveFeedback.tsx`;
   shared rules `lib/team-feedback.ts`; tests `tests/team-feedback-database.test.mjs`.
-- Demo mode shows it once the demo data is recorded again.
 
 ## Report a message, block a person, Reported messages (12 October 2026)
 
@@ -638,8 +632,7 @@ report objectionable content, a way to block abusive users, and timely action on
   reporter's name, the reason and an optional note, and are kept as business records).
 - Not done: telling the reporter or the sender what was decided; showing the messages around a
   reported one; a reports badge in the navigation (admins get the notice and the Open count);
-  a seeded report in the demo business (Demo says "This part isn't in the demo business" until the
-  demo data is recorded again; reporting and blocking are refused in Demo like every other save). **Admins should check Reported messages at least daily**; Apple expects action
+  a seeded report in the devstack's sample business. **Admins should check Reported messages at least daily**; Apple expects action
   within 24 hours. Not yet applied to the live database.
 
 ## Client feedback round 2: tracker rows and a calmer look, Phase 1 (12 October 2026)

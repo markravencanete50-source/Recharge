@@ -630,7 +630,7 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
     setOlderState("loading");
     try {
       const page = z.array(noticeViewSchema).parse((await readOlderNotices(before)).data);
-      // A page with nothing new (the demo answers every page alike) ends the paging too.
+      // A page with nothing new ends the paging too.
       const known = new Set(all.map(n => n.id));
       setOlder(list => mergeNotices(list, page)); setMore(mayHaveOlder(page.length) && page.some(n => !known.has(n.id))); setOlderState("idle");
     } catch { setOlderState("failed"); }

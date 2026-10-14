@@ -147,7 +147,7 @@ test('the phone bar has at most five items for every role', () => {
   assert.deepEqual(bar('cleaning_manager'), bar('cleans'));
   assert.deepEqual(labels('client'), ['Home', 'Properties', 'Inbox', 'Approvals', 'Reports'], 'owners are unchanged');
   for (const role of TEAM.filter(r => r !== 'cleans' && r !== 'cleaning_manager')) assert.ok(map.phoneBarFor(role).some(i => i.value === 'todo'), role + ' has To-do');
-  // The preview bar every demo still uses keeps its five.
+  // The older navigation bar (NavigationBar, DesktopNavigation) keeps its five.
   for (const role of ['super_admin', 'admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'client']) assert.equal(map.navigationFor(role).length, 5, role);
 });
 

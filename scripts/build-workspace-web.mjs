@@ -46,10 +46,6 @@ if (!existsSync(`${target}/index.html`)) throw new Error("The app's web build ha
 // Installable app and notifications: the manifest, home-screen icons and the service worker
 // (mobile/web-static), linked from the page so phones can add Recharge to the home screen.
 await cp(`${mobile}/web-static`, target, { recursive: true });
-// The interactive demo (scripts/demo/build-browser-demo.mjs): the demo backend, its WebAssembly
-// Postgres and the sample business, under /workspace/demo/. The app loads them only when a super
-// admin switches Demo on.
-execFileSync(process.execPath, [`${root}scripts/demo/build-browser-demo.mjs`, "--out", `${target}/demo`], { cwd: root, stdio: "inherit" });
 // The studio page is a development aid for the sample preview; the live app never links to it.
 await rm(`${target}/studio.html`, { force: true });
 const page = await readFile(`${target}/index.html`, "utf8");
