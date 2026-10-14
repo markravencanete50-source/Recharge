@@ -21,6 +21,8 @@ test('workflow sheet forms: fields a section apart, each label close to its own 
   assert.match(pages, /<View style=\{\{ gap: space\.tight \}\} pointerEvents=\{disabled \? "none" : "auto"\}>\s*<DateField /);
   assert.equal((pages.match(/<View style=\{\{ gap: space\.tight \}\}>\s*\{label\}/g) ?? []).length, 1);
   assert.doesNotMatch(pages, /<View style=\{\{ gap: 8 \}\}>\s*\{label\}/);
+  // E's gate: the last field never sits against "Save and continue": fields, error and button are a section apart.
+  assert.match(pages, /return \(\s*\/\/ The fields, any error and the save button are a section apart too[^\n]*\n\s*<View style=\{\{ gap: space\.section \}\}>\s*<View style=\{\{ gap: space\.section \}\}>\s*\{shown\.map/);
 });
 
 test('workflow forms can group fields under a heading and reveal a group once the one before is started', () => {
