@@ -2,6 +2,29 @@
 
 Start with `README.md`. It describes the parts of the platform and the commands.
 
+## Round 10 is live (14 October 2026)
+
+Integrated by the lead developer:
+- F:
+  - When an estimate is published for an enquiry client, it is emailed from `ownerrelations@`, with a private 30-day
+    link to `/estimate`. There the client chooses Proceed, Review later or Decline, which is recorded as the owner
+    decision.
+  - The Recharge logo is on every email the app sends.
+  - One client email conversation per person, with each new subject shown.
+- C: Report message on incoming Guests and Clients messages, reviewed in Reported messages (Dismiss or Hide in the app).
+- B:
+  - Admins can delete a client enquiry up to an unsigned agreement, together with its onboarding property, estimate and
+    history.
+  - Comparable messages name the field.
+- D: form spacing, and the estimate comparables grouped.
+- E: chosen chips use the shared pill tokens.
+
+Migrations `20261019510000`, `20261019520000`, `20261020210000` and `20261020300000` were installed from
+`supabase/install-pending.sql`. `main` is `17e5201` (pull request #8). Full suite 1708 of 1708. The branded Supabase Auth
+email templates are in `docs/auth-email-templates/`.
+
+A hotfix after round 9 (pull request #7, `d49603f`) stopped a non-https link from giving a 503.
+
 ## Round 9 is live (14 October 2026)
 
 Follow-ups after rounds 6 to 8, integrated by the lead developer: Messages lists put the newest message or email on top

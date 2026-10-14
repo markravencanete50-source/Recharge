@@ -220,9 +220,29 @@ Hotfix after round 9 (pull request #7, main `d49603f`, no database change): a li
 empty link field) in Publish the estimate, the enquiry photo link, Make live or Add a local event gave a 503 ("temporarily
 unavailable") because `new URL` threw inside a zod refine. It now gives a 400 with "The link must start with https://" (B).
 
-Next round (not blocking):
-- F: `69bd8d5`, the email subject on its own line in the Clients pane on phones.
-- E: chosen chips use A's pillBox and pillInk (Lee approved).
+## 5d. Round 10: LIVE (14 October 2026; main 17e5201, pull request #8, install SQL run by Lee)
+
+- F:
+  - The estimate email from ownerrelations@, with a private 30-day link to an estimate page (Proceed, Review later or
+    Decline, recorded as the owner decision).
+  - The Recharge logo on every email the app sends.
+  - One client conversation per person, with each new subject shown.
+  - The subject on its own line on phones.
+  - Branded Supabase Auth templates in `docs/auth-email-templates/`, for Lee to paste.
+- C: Report message on incoming Guests and Clients messages; admins can Dismiss or Hide in the app.
+- B:
+  - Admins can delete an enquiry up to an unsigned agreement, which removes the onboarding property, estimate and history.
+  - Per-comparable messages.
+- D: form label spacing, and the estimate comparables grouped.
+- E: chosen chips use A's pillBox and pillInk everywhere.
+
+Four migrations: `20261019510000`, `20261019520000`, `20261020210000`, `20261020300000`. Every replaced or patched function
+was fingerprinted against live first. Full `npm test` on the pull request head passed 1708 of 1708, and E's design gate
+was OK. Checked on live after Lee ran the SQL: all four are recorded, the new tables and functions exist, and
+`workspace_enquiry_moved_on` is dropped. Live check (F's steps) was sent to Lee.
+
+Next round (not blocking), optional items from E:
+- The count numbers in the LivePortfolio and PayoutStays chips use weight 700; they could be 600.
 
 Email sender picture: Lee decided (14 October) not to create Google accounts for the two mailboxes, so Gmail keeps the
 letter avatar. The Recharge logo goes inside the emails instead (F). BIMI (DMARC enforcement plus a paid VMC/CMC

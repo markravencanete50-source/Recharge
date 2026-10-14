@@ -140,7 +140,7 @@ test('only the known places send through Resend, and each names its own mailbox'
 
 // Lee, 14 October: "the logo of the email should use the logo of Recharge". Every HTML email carries it: the emails Recharge writes
 // start with it; replies written in Messages end with a small signature (logo, "Recharge Group", the mailbox). Plain text unchanged.
-test('every email carries the Recharge logo: a header on the enquiry form, a signature naming the right mailbox on replies', async () => {
+test('every email carries the Recharge logo as a signature at the bottom, naming the right mailbox', async () => {
   const LOGO = /<img src="https:\/\/app\.rechargegroup\.co\.uk\/recharge-email-logo\.png" alt="Recharge" width="(\d+)" height="(\d+)"/;
   reset();
   const REQUEST = '22222222-2222-4222-8222-222222222222';
@@ -161,8 +161,10 @@ test('every email carries the Recharge logo: a header on the enquiry form, a sig
     assert.match(signature, new RegExp(`<strong>Recharge Group</strong><br><a href="mailto:${mailbox}"`));
     assert.ok(!mail.html.includes(mailbox === GUEST ? OWNER : GUEST), 'never the other mailbox');
   }
-  assert.deepEqual(form.html.match(LOGO).slice(1), ['180', '50']);
-  assert.ok(form.html.indexOf('<img') < form.html.indexOf('<p'), 'the logo is at the top');
+  // Lee, 14 October: the logo sits at the bottom like a signature, on the enquiry form email too.
+  assert.deepEqual(form.html.match(LOGO).slice(1), ['108', '30']);
+  assert.ok(form.html.indexOf('<img') > form.html.lastIndexOf('</p>'), 'the logo is at the bottom, after the text');
+  assert.match(form.html, /<strong>Recharge Group<\/strong><br><a href="mailto:ownerrelations@rechargegroup\.co\.uk"/);
   assert.doesNotMatch(form.text, /<img|recharge-email-logo/);
   // The image is a small PNG (email apps block SVG) on its own solid background, and the Worker serves it.
   const png = await fs.readFile('public/recharge-email-logo.png');
@@ -175,7 +177,8 @@ test('every email carries the Recharge logo: a header on the enquiry form, a sig
 test('the Supabase Auth templates Lee pastes carry the same logo and keep the links the app expects', async () => {
   for (const [file, needs] of [['reset-password.html', ['{{ .ConfirmationURL }}']], ['confirm-signup.html', ['{{ .Token }}']]]) {
     const html = await fs.readFile('docs/auth-email-templates/' + file, 'utf8');
-    assert.match(html, /<img src="https:\/\/app\.rechargegroup\.co\.uk\/recharge-email-logo\.png" alt="Recharge" width="180" height="50"/, file);
+    assert.match(html, /<img src="https:\/\/app\.rechargegroup\.co\.uk\/recharge-email-logo\.png" alt="Recharge" width="108" height="30"/, file);
+    assert.ok(html.indexOf('<img') > html.lastIndexOf('</p>'), `${file}: the logo is a signature at the bottom`);
     for (const n of needs) assert.ok(html.includes(n), `${file} keeps ${n}`);
     assert.doesNotMatch(html, /—|<script/i, file);
   }

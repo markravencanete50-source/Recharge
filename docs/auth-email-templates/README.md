@@ -28,7 +28,7 @@ None of these are sent, so leave them as they are:
    - **Subject:** `Your Recharge verification code`
    - **Message body:** delete everything in it, then paste the whole of `confirm-signup.html`.
    - Press **Save**.
-5. Check it: on the sign-in page choose "Forgot password" and enter your own email. The email should show the Recharge logo at the top and a **Choose a new password** button, and the button should take you to choose a new password.
+5. Check it: on the sign-in page choose "Forgot password" and enter your own email. The email should show a **Choose a new password** button, with the Recharge logo as a signature at the bottom, and the button should take you to choose a new password.
 
 Keep the parts in double curly brackets exactly as they are, for example `{{ .ConfirmationURL }}`, `{{ .Token }}` and `{{ .Email }}`. Supabase fills these in.
 
