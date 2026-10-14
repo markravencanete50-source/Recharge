@@ -32,6 +32,8 @@ export const controlsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('updateEvent'), ...base, eventId: id, version, name: text(200).min(2), eventOn: date, sourceUrl: source, opportunity: text(2000).min(5) }).strict(),
   z.object({ action: z.literal('archiveEvent'), ...base, eventId: id, version }).strict(),
   z.object({ action: z.literal('markNotificationRead'), requestId: id, eventId: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict(),
+  // Opening Updates: everything up to the newest notice shown is read, in one request.
+  z.object({ action: z.literal('markAllNotificationsRead'), requestId: id, upTo: z.string().regex(/^[1-9][0-9]{0,15}$/) }).strict(),
   z.object({ action: z.literal('saveEstimate'), ...base, version: z.number().int().min(0), assumptions: estimateAssumptionsSchema }).strict(),
   z.object({ action: z.literal('issueOperationInvoice'), ...base, workId: id, version: version.optional(), recipientId: id.optional(), reference: text(120).min(1), amountMinor: z.number().int().positive().max(10000000) }).strict(),
 ]).superRefine((value, context) => {

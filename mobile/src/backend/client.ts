@@ -315,9 +315,17 @@ export async function photoSource(assetId: string): Promise<{ uri: string; heade
   return { uri: liveApiOrigin() + path, headers: { Authorization: `Bearer ${session!.accessToken}`, 'X-Recharge-Client': 'native' } };
 }
 
-// Browser notifications (web push): Recharge's public key, and adding or removing this browser.
-export const readNotificationKey = async () => demo || demoResume ? null : z.object({ publicKey: z.string().nullable() }).parse(await (await call('/api/workspace/notifications')).json()).publicKey;
-export const writeNotifications = async (body: { action: 'subscribe'; endpoint: string; p256dh: string; auth: string } | { action: 'unsubscribe'; endpoint: string }) => demo || demoResume ? { ok: true } : (await call('/api/workspace/notifications', body)).json();
+// Browser notifications (web push): Recharge's public key, how this person's devices are doing, adding or
+// removing this browser, and a test notification with the push service's answer.
+const pushDeviceSchema = z.object({ endpointHost: z.string().nullable(), since: z.string(), sent: z.number(), failed: z.number(), lastStatus: z.number().nullable(), lastAt: z.string().nullable() });
+export type PushDevice = z.infer<typeof pushDeviceSchema>;
+const notificationStatusSchema = z.object({ publicKey: z.string().nullable(), devices: z.array(pushDeviceSchema).nullable().optional() });
+export const readNotificationStatus = async () => demo || demoResume ? { publicKey: null, devices: null } : notificationStatusSchema.parse(await (await call('/api/workspace/notifications')).json());
+export const readNotificationKey = async () => demo || demoResume ? null : (await readNotificationStatus()).publicKey;
+type PushAddress = { endpoint: string; p256dh: string; auth: string };
+export const writeNotifications = async (body: ({ action: 'subscribe' } & PushAddress) | { action: 'unsubscribe'; endpoint: string }) => demo || demoResume ? { ok: true } : (await call('/api/workspace/notifications', body)).json();
+export const testNotification = async (address: PushAddress) => demo || demoResume ? { outcome: 'failed' as const, status: 0 } : z.object({ data: z.object({ outcome: z.enum(['sent', 'gone', 'failed']), status: z.number() }) })
+  .parse(await (await call('/api/workspace/notifications', { action: 'test', ...address })).json()).data;
 
 // Messages: conversations, a conversation's messages, people to message, and sending.
 export const readChat = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/chat?' + new URLSearchParams(query))).json();

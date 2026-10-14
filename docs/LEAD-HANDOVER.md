@@ -263,6 +263,36 @@ Email sender picture: Lee decided (14 October) not to create Google accounts for
 letter avatar. The Recharge logo goes inside the emails instead (F). BIMI (DMARC enforcement plus a paid VMC/CMC
 certificate) is the option for later if Alex wants the logo in every inbox.
 
+## 5e. Notifications fix (14 October 2026, built by the lead at Lee's request, migration `20261020500000`)
+
+Lee reported that notifications did not work: no pop-ups on computer or phone, the bell was wrong, the team got
+nothing, and there was no sound. Here is what live showed (read-only):
+- In-app notices are created (about 450 a day), but the bell marked only 20 read per visit, one request each. Mark had
+  507 unread, so the badge stayed at "99+".
+- Only one device in the whole team had switched pop-ups on (Lee's, from 14 October). Nobody else had, so the team
+  got nothing.
+- A pop-up was recorded as "sent" when it was picked up, before the push service answered, so a refused pop-up
+  looked delivered.
+- Email staff notices are not configured (NOTIFICATION_EMAIL_ENABLED and the rest are unset). Native (Expo) push has
+  no device tokens. The app had no sound at all.
+
+What the fix does:
+- Opening Updates marks everything up to the newest notice read in one request (`workspace_notifications_read_all`),
+  so the bell counts only new notices.
+- Each pop-up keeps the push service's answer and HTTP code (`workspace_web_push_sent.result/http_status/checked_at`,
+  written by the Worker via `integration_web_push_result`). Pop-ups are now sent with Urgency high.
+- Profile > Notifications has a "Send a test notification" button, which shows the push service's answer in plain
+  words, a per-device line (delivered and not delivered, with the last code), and a "Sound for new updates" switch.
+- The team sees a reminder at the top of the page until pop-ups are on. It has a Turn on button, an iPhone Home
+  Screen hint, and a "blocked" hint, and "Not now" hides it for a week.
+- A soft chime (WebAudio) plays when a new update or unread message arrives while the app is open. It never plays for
+  what was already waiting, or while viewing as someone else.
+
+After go-live: ask Lee to press "Send a test notification". If the answer is a code (403, 400 or similar), the VAPID
+keys or APP_ORIGIN in the Worker Secrets are the suspects. If the answer is "Sent" but nothing appears, the cause is
+the device's own notification settings (Focus, Do not disturb, or the browser not being allowed by the operating
+system).
+
 ## 6. Waiting on Lee
 
 - Switch A and D to Sonnet (`/model claude-sonnet-5-5` in each session).

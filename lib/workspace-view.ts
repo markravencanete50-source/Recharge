@@ -19,10 +19,8 @@ export const noticeViewSchema=z.object({id:z.number(),event_type:z.string(),crea
  property_id:z.string().nullable().optional(),work_id:z.string().nullable().optional(),work_title:z.string().nullable().optional(),work_kind:z.string().nullable().optional(),
  work_module:z.string().nullable().optional(),property_name:z.string().nullable().optional(),property_address:z.string().nullable().optional(),
  automatic:z.boolean().nullable().optional(),actor_name:z.string().nullable().optional()});
-// Updates the person has not seen yet. Opening Activity marks the newest few read, one request
-// each (the server has no batch), so a long backlog clears over a few visits without a burst.
+// Updates the person has not seen yet. Opening Activity marks them all read in one request.
 export const unreadNotices=(notices:{id:number;read_at?:string|null}[])=>notices.filter(n=>!n.read_at);
-export const MARK_READ_PER_VISIT=20;
 export type PropertyView=z.infer<typeof propertyViewSchema>;
 export type InvoiceView=z.infer<typeof invoiceViewSchema>;
 export type NoticeView=z.infer<typeof noticeViewSchema>;

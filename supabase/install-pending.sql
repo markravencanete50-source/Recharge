@@ -1,3 +1,3 @@
 -- Nothing pending. Every migration in supabase/migrations is installed in the Supabase project.
--- 20261020400000_estimate_comparables_limit (up to 20 comparables) was installed on 14 October 2026 from this file and
--- went live with main a1f7a7e (pull request #9).
+-- 20261020500000_notifications_fix (bell, pop-up results, device status) was installed on 14 October 2026 from the
+-- install file by the lead, at Lee's request, and went live with pull request #11.

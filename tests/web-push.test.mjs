@@ -65,6 +65,24 @@ test('only the browser it is for can read the message, and the request is signed
  assert.equal(await push.sendWebPush({...job,endpoint:'https://169.254.169.254/latest'},keys),'gone');assert.equal(called,false);
 });
 
+test('the push service answer is kept for each notice and device, so a refused pop-up shows',async()=>{
+ const {settings}=await vapidKeys(),keys=push.webPushKeys(settings);
+ const ua=await subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']);
+ const job={endpoint:'https://web.push.apple.com/abc',p256dh:push.b64url(new Uint8Array(await subtle.exportKey('raw',ua.publicKey))),auth:push.b64url(crypto.getRandomValues(new Uint8Array(16))),eventType:'reports.weekly_ready',outboxId:7,subscriptionId:'95000000-0000-4000-8000-000000000001'};
+ let seen;globalThis.fetch=async(url,init)=>{seen=init;return new Response('',{status:403});};
+ assert.deepEqual(await push.sendWebPushResult(job,keys),{outcome:'failed',status:403});
+ assert.equal(seen.headers.Urgency,'high','phones deliver it straight away');
+ globalThis.fetch=async()=>{throw new Error('offline');};assert.deepEqual(await push.sendWebPushResult(job,keys),{outcome:'failed',status:0});
+ // A test notification carries its own wording.
+ let body;globalThis.fetch=async(url,init)=>{body=init.body;return new Response('',{status:201});};
+ assert.deepEqual(await push.sendWebPushResult(job,keys,{title:'Recharge',message:'Test'}),{outcome:'sent',status:201});assert.ok(body.length>100);
+ // The minute run records each answer.
+ const calls=[];globalThis.fetch=async()=>new Response('',{status:403});
+ const rpc=async(name,args)=>{calls.push([name,args]);return name==='integration_claim_web_push'?[job]:null;};
+ assert.deepEqual(await push.dispatchWebPush(settings,rpc),{mode:'configured',sent:0,failed:1,claimed:1});
+ assert.deepEqual(calls[1],['integration_web_push_result',{outbox:7,subscription:job.subscriptionId,outcome:'failed',status_code:403}]);
+});
+
 test('each notice goes once to each browser of its person, and only while they have access',async()=>{
  const db=new PGlite();
  const roles=['super_admin','client','client'];
@@ -95,6 +113,20 @@ test('each notice goes once to each browser of its person, and only while they h
  await as('service');const first=await q('select public.integration_claim_web_push() r');
  assert.deepEqual(first.map(j=>[j.endpoint,j.eventType]),[['https://fcm.googleapis.com/fcm/send/one','reports.weekly_ready']]);
  assert.deepEqual(await q('select public.integration_claim_web_push() r'),[],'never sent twice');
+ // The push service's answer is kept, and the person sees how their devices are doing (nobody else's).
+ await q('select public.integration_web_push_result($1,$2,$3,$4)::text r',[first[0].outboxId,first[0].subscriptionId,'failed',403]);
+ await as(1);await assert.rejects(q('select public.integration_web_push_result($1,$2,$3,$4)::text r',[first[0].outboxId,first[0].subscriptionId,'sent',201]),/permission denied/,'only the backend records answers');
+ const [device]=await q('select public.workspace_web_push_status() r');
+ assert.deepEqual([device.endpointHost,device.sent,device.failed,device.lastStatus],['fcm.googleapis.com',0,1,403]);
+ await as(2);assert.deepEqual(await q('select public.workspace_web_push_status() r'),[]);
+ // Opening Updates: one call marks everything up to the newest shown, for this person only; a newer one stays unread.
+ await db.exec('reset role');
+ const newer=(await db.query("insert into public.workspace_activity(event_type) values('reports.weekly_ready') returning id")).rows[0].id;await db.query('insert into private.workspace_notification_outbox(user_id,event_id) values($1,$2)',[users[1],newer]);
+ await as(1);assert.deepEqual(await q('select public.workspace_notifications_read_all($1) r',[newer-1]),{read:1});
+ await db.exec('reset role');
+ assert.deepEqual((await db.query('select user_id,event_id,read_at is not null r from private.workspace_notification_outbox order by event_id')).rows.map(r=>[r.user_id===users[1]?1:2,r.r]),[[1,true],[2,false],[1,false]]);
+ await as(1);assert.deepEqual(await q('select public.workspace_notifications_read_all($1) r',[newer]),{read:1});
+ await as('service');
  // The same browser signed in as someone else now belongs to them.
  await as(2);await q('select public.workspace_web_push_subscribe($1) r',[sub('one')]);
  await db.exec('reset role');assert.equal((await db.query('select user_id from private.workspace_web_push')).rows[0].user_id,users[2]);
