@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Platform, Share, Switch, TextInput, View } from "react-native";
+import { Platform, Share, Switch, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { ChoiceField, ChoicePills } from "./ChoiceField";
@@ -19,6 +19,7 @@ import { z } from "zod";
 import { MenuOrderEditor } from "./MenuOrderEditor";
 import { MENU_ROLE_LABEL } from "../../lib/menu-layout";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { SearchBox } from "./SearchPicker";
 
 // Access control, for super admins: every account, its role and tools, and the security actions
 // (sign out everywhere, revoke the password, block, delete). The database checks every change.
@@ -41,7 +42,9 @@ function PersonRow({ p, person, first, onPress }: { p: Palette; person: AccessPe
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <Text numberOfLines={1} style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>{person.fullName || "No name yet"}</Text>
-        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{person.email ?? person.phone ?? "No contact"} · <Text style={[ui.small, { color: online ? p.success : p.muted, fontWeight: online ? "700" : "400" }]}>{presenceText(person)}</Text></Text>
+        {/* Contact and sign-in on lines of their own, so neither runs past the edge on a phone. */}
+        <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{person.email ?? person.phone ?? "No contact"}</Text>
+        <Text numberOfLines={1} style={[ui.small, { color: online ? p.success : p.muted, fontWeight: online ? "700" : "400" }]}>{presenceText(person)}</Text>
         <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
           <Tag label={roleLabel(person.role)} tone="plain" p={p} />
           <Tag label={label} tone={tone} p={p} />
@@ -326,10 +329,7 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
         <StatTile key="online" p={p} icon="monitor" label="Online now" value={summary.online} />
         <StatTile key="blocked" p={p} icon="slash" label="Blocked" value={summary.blocked} attention={summary.blocked > 0} />
       </StatGrid>
-      <View style={[ui.row, { gap: 10, paddingHorizontal: 14, minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background }]}>
-        <Feather name="search" size={18} color={p.muted} />
-        <TextInput value={query} onChangeText={setQuery} placeholder="Search by name, email, phone or role" placeholderTextColor={p.muted} accessibilityLabel="Search people" autoCapitalize="none" style={{ flex: 1, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
-      </View>
+      <SearchBox p={p} value={query} onChange={setQuery} placeholder="Search by name, email, phone or role" label="Search people" />
       <ChoicePills p={p} name="Show" values={FILTERS} value={filter} onChange={setFilter} label={v => FILTER_LABEL[v] + (v === "pending" && summary.waiting ? ` (${summary.waiting})` : v === "online" ? ` (${summary.online})` : "")} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading ? <Loading p={p} /> : (

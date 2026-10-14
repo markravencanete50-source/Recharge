@@ -945,3 +945,83 @@ setter never changes, so behaviour is the same. The unused `web` import in `Live
   Management approvals and Client relations.
   - The review server signed in as the super admin.
   - A check in the browser found no box with hidden overflow inside these pages.
+
+# Leftovers after round 6 to 8 went live: phones at 390 px in dark mode (Lead)
+
+- **Starting point:** `main` at `5763aa0` (a fast-forward, which already held my earlier commits and F's
+  LiveEnquiries changes). No migration.
+- **Client enquiries, stat tiles:** the labels wrapped ("READY TO / VALUE", "WAITING FOR / THEM",
+  "ESTIMATES / SENT"). On a phone the four tiles sit two to a row, which leaves about 95 px for a label.
+  - The labels are now "To value", "Waiting", "Valuing" and "Sent".
+  - The meaning moved to the line under each figure, which also feeds the screen-reader label: "Answered
+    forms, ready to value", "Form sent, waiting for them", "Estimates with the landlord".
+  - None of my other screens uses stat tiles.
+- **Client enquiries, rows:** on a phone the status tag beside the name cut the name to "Dougl…" and wrapped
+  the property facts over three lines. Under 600 px the tags now go under the details, so the name and
+  address keep the row's width. Wider screens are unchanged.
+- **Guest relations, title:** on a phone "Record a stay" squeezed the title until it broke mid-word ("Gues /
+  t / relati / ons"). The header now wraps like `PageHeading`: the title keeps at least 220 px and the
+  button goes under it.
+- **Checked at 390 px in dark mode with nothing else to fix:** To-do (the thin two-line cards), and the
+  Guest relations, Client relations and Management approvals tracker cards. Each page was screenshotted
+  three screens deep. A check in the browser found nothing drawn past the screen's right edge.
+- **Still to note:** the "Management approvals" title wraps beside "Ask management", at a word break only.
+  That page isn't mine, so I left it.
+- **Tests:** new `tests/phone-fit.test.mjs`, 3 of 3 pass. It covers the short tile labels and their
+  details, the tags under the details on a phone, and the wrapping Guest relations header.
+- **Screenshots:** `docs/screenshots/session-b/phone-fit/`, before (`main`) and after, 390×844 in dark mode,
+  two screens per page: Client enquiries, To-do, Guest relations, Client relations, Management approvals.
+
+# Round 9: E's sweep, R4 to R6 (Lead)
+
+- **Starting point:** `main`, with E's token commit `331b772` merged in (`d5d1ddd`). No migration.
+- **R4, Productivity month grid (Medium):** in dark mode the day cells drew text on a hand-mixed green
+  (`rgba(143,211,194,…)` at a strength set by the hours).
+  - The grid now uses only tokens.
+  - The busiest days, at two thirds or more of the month's busiest day (`BUSY_SHARE`), are `p.selected` with
+    `p.onSelected` text and a `p.selectedBorder` edge.
+  - Every other day with hours is `p.wash` with `p.text`.
+  - Days outside the month are `p.disabled` text on no fill, instead of a 38% opacity.
+  - The legend now reads "Hours worked" (wash), "Busiest days" (selected), "Change waiting" and "Planned,
+    not clocked".
+- **R5, owner booking calendar (Low):** day numbers outside the month were the muted colour at 55% opacity.
+  They are now `p.disabled` with no opacity (`LiveClientReports.tsx`).
+- **R6, Management → Responsibilities (Low):** the nine filter pills (Everything, Mine and seven
+  departments) are now the shared `Pills`, which shows a Dropdown for more than five values. The labels and
+  the filter are unchanged.
+- **Tests:** new `tests/round9-fixes.test.mjs`, 3 of 3 pass.
+  - Full suite: 1611 of 1620 pass. Seven of the failures are the known build-output tests, which need a
+    built `dist`.
+  - `tests/menu-layout-database.test.mjs` timed out under the parallel run. It passes on its own, 5 of 5.
+  - `tsc` and ESLint are clean on the three files.
+- **Screenshots:** `docs/screenshots/session-b/round9/`, before (`d5d1ddd`) and after, dark mode, on a
+  desktop (1440×900) and a phone (390×844): Productivity "By day", Management → Responsibilities, and the
+  owner's booking calendar.
+
+# "Add a local event" opened behind the property sheet (Lead, from D's round 8 review)
+
+- **Starting point:** the lead branch `claude/fervent-brahmagupta-8qd03b` at `096d5e5` (a fast-forward; it already held
+  Round 9). No migration.
+- **The bug:** on a property sheet (D opened it from Favorites, but it was the same from Properties), "Add a local
+  event" called the page's `onForm` directly. The workspace form opened behind the property sheet, so nothing seemed
+  to happen until the sheet was closed.
+  - Every other form started from that sheet goes through `openForm`, which closes the sheet first: new work, the
+    onboarding steps, and work items without their own viewer. Opening a work item closes the sheet too.
+  - "Add a local event" now uses `openForm` as well. This is the sheet-to-form pattern in `LivePages`.
+- **The date:** the workflow form's date input (an inline calendar on the web and the native picker on phones) is now
+  the shared `DateField`, in single-day mode, with "Clear date" when the date is optional.
+  - Only "Add a local event" has a date among the workflow forms, so nothing else changes.
+  - The edit sheet for a saved event already used `DateField`.
+- **Checked the rest of the property sheet:**
+  - "Access and logins" opens inline, and the profile edits inline.
+  - The weekly report and CSV downloads open no sheet, and Save to Favorites is a toggle.
+  - Tapping a saved local event opens its edit sheet nested inside the property sheet. It shows on top (screenshot 6).
+- **Tests:** new `tests/local-event-sheet.test.mjs`, 2 of 2 pass. Full suite: 1633 of 1641 pass, and the 7 failures are
+  the known build-output tests. `tsc` is clean, and ESLint is clean on `LivePages.tsx`.
+- **Screenshots:** `docs/screenshots/session-b/local-event/`, phone (390×844), dark mode:
+  1. The property opened from Favorites.
+  2. The button.
+  3. The form on top.
+  4. The DateField open.
+  5. The saved event listed.
+  6. Its edit sheet on top.

@@ -73,6 +73,16 @@ export const guestStatus = (t: { status: 'open' | 'done'; waitingSince: string |
 export const clientStatus = (c: { closed?: boolean; last: { fromOwner?: boolean; kind?: 'text' | 'event' } | null }): MessageStatus =>
   c.closed ? 'closed' : c.last?.fromOwner ? 'reply' : 'waiting';
 
+// The order of every Messages list (Guests, Clients, Team): the latest message first, whatever the status or the channel
+// (Lee: "any new message or email should always be on top. It should follow the time."). A new message from either side moves
+// a conversation to the top; the status buttons only filter. No time goes last; equal times keep a fixed order by id.
+export function byLatest<T>(items: readonly T[], at: (item: T) => string | null | undefined, id: (item: T) => string): T[] {
+  const time = (item: T) => { const v = at(item); const t = v ? Date.parse(v) : NaN; return Number.isNaN(t) ? -Infinity : t; };
+  return items.map(item => ({ item, t: time(item), k: id(item) }))
+    .sort((a, b) => b.t - a.t || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0))
+    .map(x => x.item);
+}
+
 export function statusCounts<T>(items: readonly T[], statusOf: (item: T) => MessageStatus): Record<MessageStatus, number> {
   const out: Record<MessageStatus, number> = { reply: 0, waiting: 0, closed: 0 };
   for (const item of items) out[statusOf(item)]++;

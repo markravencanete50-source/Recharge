@@ -92,7 +92,7 @@ export function LiveHome({ palette: p, desktop, account, snapshot, period, prope
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={{ color: tone.heroMuted, fontSize: 12, fontWeight: "600", letterSpacing: 1.2, textTransform: "uppercase" }}>Open tasks</Text>
               <View style={[ui.row, { gap: 10, alignItems: "flex-end" }]}>
-                {today ? <CountUp value={today.open} sessionKey={"live:open:" + period.from + ":" + period.to} style={{ color: tone.heroText, fontSize: 60, lineHeight: 66, fontWeight: "700", letterSpacing: -2.4 }} /> : <Text style={{ color: tone.heroText, fontSize: 60, lineHeight: 66, fontWeight: "700" }}>—</Text>}
+                {today ? <CountUp value={today.open} sessionKey={"live:open:" + period.from + ":" + period.to} style={{ color: tone.heroText, fontSize: 60, lineHeight: 66, fontWeight: "700", letterSpacing: -2.4 }} /> : <Text style={{ color: tone.heroText, fontSize: 60, lineHeight: 66, fontWeight: "700" }} accessibilityLabel="Loading">…</Text>}
                 <Text style={{ color: tone.heroMuted, fontSize: 14, lineHeight: 21, paddingBottom: 10 }}>tasks open</Text>
               </View>
               <Text style={{ color: tone.heroMuted, fontSize: 12, lineHeight: 18 }}>{periodLabel(period)}</Text>

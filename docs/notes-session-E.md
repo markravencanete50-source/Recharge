@@ -85,3 +85,68 @@ Routed, continuing the list above:
 | 19 | Messages (phone) | Helper lines cut short with "…" ("Hostaway isn't connected yet: log each gue…", "5 guests have waited longer than 30 minut…"). | Let them wrap (drop `numberOfLines={1}`). | C | Medium |
 | 20 | Accounts summary tiles (phone) | "TO RECONCILE" and "STATEMENTS PAID" wrap to two lines, and the three tiles use three different fills. | Shorter labels ("Reconcile", "Statements") or two tiles per row; one fill (`p.surface`). | A | Medium |
 | 21 | Everywhere | Corner and icon sizes are typed as numbers. | Use `radius`, `icon` and `space` from `theme.ts` when a file is next touched: 12/16 become `radius.control`, 20/22 become `radius.card`, icons 15/17/19 become the nearest step. | All sessions | Low |
+
+## Round 9: full sweep from main (`5763aa0`, 14 October 2026)
+
+How: the interactive demo, all eight sample roles (super admin, admin, stays, cleaning manager, cleaner, Ready,
+accounts, owner), every link in each role's left panel (desktop) and bottom bar and Menu (phone), light and dark, at
+1440×900 and 390×844, the top of each page and one screen further down: 616 page views. On every view axe-core
+checked text contrast, and a script looked for text running past the right edge. Then the Management views (Rota,
+Team performance, Onboarding & training, Day reflections, Daily tasks, Responsibilities, Decisions, Cleaning team,
+Access control and Menu order), Profile, Help, a guest conversation, the owner's Home and chat, and, outside the
+demo, the web sign-in page, the app's sign-in screen and the public enquiry form. Not opened: a cleaner's clean form
+(it needs a clean started in the demo).
+
+Checks on the branch: the full suite (`npm test`) 1618 of 1618, `tsc -p mobile` clean, ESLint clean on the changed files.
+
+### Fixed here (theme)
+
+| Where | Change |
+| --- | --- |
+| `mobile/src/CalendarPicker.tsx` | **Decision: the chosen day moves to the selected tokens.** Light mode looks the same (selected is forest). In dark mode the day is deep green with a mint edge and bone figures, like a chosen pill or tab, not a bright mint disc. Range ends and single days both use it; the days between keep the wash; today keeps its outline. |
+| `lib/design-tokens.ts` | Light `disabled` `#6A786F` → `#647169`: days outside the month in the calendar were 4.44:1 on a card; now 4.90:1. Still lighter than `muted`, as the contrast test requires. |
+
+### Must fix (owner)
+
+| # | Screen | Problem | Fix | Owner |
+| --- | --- | --- | --- | --- |
+| R1 | Cleans → Schedule (cleaning manager, Guest relations' Cleans) at 1440 | The schedule table is wider than its card: "Last update" is cut ("Last updat…", "11 Oct, 09:…"). | Fixed widths for Status and Submitted forms, or drop a column at this width, as B did for To-do. | A |
+| R2 | Maintenance rows on phones (390) | "· Urgent · Safety hazard" runs past the right edge of the row. | Let the status line wrap (`flexWrap: "wrap"`), or put the flags on their own line. | D |
+| R3 | Access control on phones (390) | "Signed in … ago" runs past the right edge of each row. | Wrap the email and sign-in line, or drop the sign-in time on phones. | D |
+| R4 | Productivity, dark mode | The month grid's day cells put text on a hand-mixed green (`rgba(143,211,194,…)`), 3.6–4.4:1. | Use `p.selected` with `p.onSelected` for the busiest days and `p.wash` with `p.text` below that, or keep the mix but cap its strength so text stays at 4.5:1. | B |
+
+### Low
+
+| # | Screen | Problem | Fix | Owner |
+| --- | --- | --- | --- | --- |
+| R5 | Owner: Stays & statements and Reports, booking calendar | Days outside the month are drawn at 55% opacity: 2.4:1 in light, 3.5:1 in dark. | `p.disabled` for those days, no opacity. | B |
+| R6 | Management → Responsibilities | Nine filter pills (Everything, Mine and seven departments). | The Dropdown, per the rule for more than 5. | B |
+| R7 | Cleans day strip (Schedule, Your cleans) | The chosen day is a solid primary fill; the calendar's chosen day now uses the selected tokens. | `p.selected`, `p.onSelected` and `p.selectedBorder` for the chosen day. | A |
+
+### Taste calls for Lee
+
+- The app's sign-in screen on wide screens: the left panel has department chips and four example activity cards
+  ("Clean accepted", "Repair booked"…). They look like buttons but do nothing. Keep them as illustration, or make the
+  panel plain like the web sign-in page?
+
+### Checked and fine
+
+Guest relations and Client relations home pages and their routines; the guest inbox with a conversation open;
+Cleans (schedule, review, disputes, not assigned, cleaners, set-ups, invoices) and the cleaner's own pages; Ready
+(reactive, preventative, inspections, purchases, furnishing quotes); Accounts (expenses, reconciliation and
+Platform stays, statements, receivable, performance, budget chart, cleaner invoices, purchases); the owner (Home, properties, approvals,
+repairs, Stays & statements, mailbox, furnishing calculator, chat); Management (people, productivity apart from R4,
+team performance, rota, onboarding and training, reflections, daily tasks, decisions, cleaning team, access control
+apart from R3, menu order); Profile; Help; both sign-in screens; the public enquiry form. axe found no other contrast
+failures in either theme.
+
+## Round 9: Lee's requests (14 October 2026)
+
+| Request | Change |
+| --- | --- |
+| "Remove all of the emdash": the line under page titles | `PageHeading` (`LivePages.tsx`) no longer draws the short green accent line; the title and its subtitle sit 6px apart. `DrawLine` is gone from `motion.tsx` (it had no other use). |
+| "Remove all of the emdash": the character | Home's loading count shows "…" instead of "—"; "Channel manager not connected. Sync is paused."; "Thanks. An admin will review this."; the owner weekly email says "None" for no review. No other user-facing "—" was left in `mobile/src`, `lib` or `app`. `tests/no-em-dash.test.mjs` fails on any new one (comments may keep them) and on a line under the page title. |
+| No second box inside a focused search field | `SearchBox` (`SearchPicker.tsx`) is now the one search field: its frame is marked bareInput, so the global input outline never draws inside it, and focus shows only as the frame's border turning `p.primary` (2px, 3:1 or more). No glow, no animation. Messages (`MessagesLayout` SearchBar, as a pill), Access control, Properties, Help, the tool directory, saved replies, New message and Add people now use it; the lists and pickers already did. The searchable Dropdown keeps its own bare-framed box (A's tests require it). `tests/search-fields.test.mjs` fails on any raw "Search …" input outside SearchBox or a bareInput frame. |
+| Plain sign-in panel (wide screens) | `LiveSignIn.tsx`: the left panel is the logo, "Welcome back." with one line, and the house. The team chips, the four example activity cards and the footer line are gone. |
+
+Screenshots: `docs/screenshots/session-e/round9/before/` and `after/`: a page title (Properties), the Messages search focused with "mark", and the sign-in screen, light and dark, 1440 and 390.

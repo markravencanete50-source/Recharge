@@ -17,7 +17,7 @@ export function Dropdown<T extends string>({ p, label, value, options, onChange,
 }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState("");
   const current = options.find(o => o.value === value)?.label ?? "";
-  const box = { minHeight: 48, paddingHorizontal: 14, borderRadius: radius.control, borderWidth: 1, borderColor: open ? p.primary : p.border, backgroundColor: p.surface };
+  const box = { minHeight: 48, paddingHorizontal: 14, borderRadius: radius.control, borderWidth: 1, borderColor: open ? p.primary : p.controlBorder, backgroundColor: p.surface };
   const caption = hideLabel ? null : <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{label}</Text>;
   if (Platform.OS === "web" && !searchable) {
     return (
@@ -25,7 +25,7 @@ export function Dropdown<T extends string>({ p, label, value, options, onChange,
         {caption}
         {createElement("select", {
           "aria-label": label, value, disabled, onChange: (e: { target: { value: string } }) => onChange(e.target.value as T),
-          style: { minHeight: 48, padding: "0 12px", borderRadius: 12, border: `1px solid ${p.border}`, background: p.surface, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular, system-ui, sans-serif", fontWeight: 400 },
+          style: { minHeight: 48, padding: "0 12px", borderRadius: 12, border: `1px solid ${p.controlBorder}`, background: p.surface, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular, system-ui, sans-serif", fontWeight: 400 },
         }, options.map(o => createElement("option", { key: o.value, value: o.value }, o.label)))}
       </View>
     );

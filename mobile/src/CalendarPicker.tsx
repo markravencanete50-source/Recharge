@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Platform, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
@@ -10,7 +10,7 @@ import {
 
 // A compact month calendar for choosing one day or a date range (lib/calendar-picker.ts holds the rules). Optional counts on
 // each day, month arrows and a "Today" link, 44pt day cells on the phone, arrow keys on the web. Calm: thin type, the chosen
-// day in solid green, the days between in a light wash, flat colours and nothing that moves on its own.
+// day in the selected colour (forest in light mode; deep green with a mint edge in dark, like a chosen pill), the days between in a light wash, flat colours and nothing that moves on its own.
 const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 
 export type CalendarPickerProps = {
@@ -38,18 +38,26 @@ export function CalendarPicker({ p, mode, value, onChange, counts, dataFrom, dat
   const [own, setOwn] = useState(() => start ?? initialMonth ?? monthOf(value.from ?? today));
   const month = start ?? own;
   const [focus, setFocus] = useState<string | null>(null);
+  // Web: one day in the grid takes Tab (the focused day, else the chosen day, today or the 1st), and the arrow keys
+  // move the browser's focus with the ring, so Enter or Space presses the day that is ringed, once.
+  const ids = useId(), cellId = (day: string) => `day${ids}${day}`;
+  const keyed = useRef(false);
+  const tabStop = [focus, value.from, today].find(d => d && monthOf(d) === month) ?? month + "-01";
+  useEffect(() => {
+    if (Platform.OS !== "web" || !keyed.current || !focus) return;
+    keyed.current = false;
+    (globalThis as { document?: { getElementById: (id: string) => { focus: () => void } | null } }).document?.getElementById(cellId(focus))?.focus();
+  });
   const weeks = useMemo(() => pickerWeeks(month, { today, value, counts, dataFrom, dataTo }), [month, today, value, counts, dataFrom, dataTo]);
   const go = (next: string) => { setOwn(next); onMonthChange?.(next); };
   const choose = (day: string) => { setFocus(day); if (monthOf(day) !== month) go(monthOf(day)); onChange(pickDay(value, day, mode, clearable)); };
   const cell = phone ? 44 : 38;
-  // Arrow keys move the focused day; Enter or Space chooses it. The month follows the focus.
+  // Arrow keys move the focused day (Enter and Space are the day button's own press). The month follows the focus.
   const keys = Platform.OS === "web" ? {
     onKeyDown: (e: { key: string; preventDefault: () => void }) => {
-      const from = focus ?? value.from ?? (today.startsWith(month) ? today : month + "-01");
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(from); return; }
-      const next = moveFocus(from, e.key);
+      const next = moveFocus(focus ?? tabStop, e.key);
       if (!next || !isDay(next)) return;
-      e.preventDefault(); setFocus(next);
+      e.preventDefault(); keyed.current = true; setFocus(next);
       if (monthOf(next) !== month) go(monthOf(next));
     },
   } : {};
@@ -71,7 +79,8 @@ export function CalendarPicker({ p, mode, value, onChange, counts, dataFrom, dat
         </View>
         {weeks.map(week => (
           <View key={week[0].date} style={{ flexDirection: "row" }}>
-            {week.map(c => <Day key={c.date} p={p} c={c} size={cell} stretch={phone} focused={focus === c.date} noun={countNoun} onPress={() => choose(c.date)} />)}
+            {week.map(c => <Day key={c.date} p={p} c={c} size={cell} stretch={phone} focused={focus === c.date} noun={countNoun} onPress={() => choose(c.date)}
+              id={cellId(c.date)} tabStop={c.date === tabStop} onFocus={() => setFocus(c.date)} />)}
           </View>
         ))}
       </View>
@@ -87,19 +96,23 @@ function Link({ p, label, onPress }: { p: Palette; label: string; onPress: () =>
   </MotionPress>;
 }
 
-function Day({ p, c, size, stretch, focused, noun, onPress }: { p: Palette; c: PickerCell; size: number; stretch: boolean; focused: boolean; noun: string; onPress: () => void }) {
+function Day({ p, c, size, stretch, focused, noun, onPress, id, tabStop, onFocus }: { p: Palette; c: PickerCell; size: number; stretch: boolean; focused: boolean; noun: string; onPress: () => void; id: string; tabStop: boolean; onFocus: () => void }) {
   const solid = c.selected;
   // Days outside the month (and days with no data) take the disabled ink rather than a see-through cell, so their
   // numbers and counts keep 3:1 on a dark card.
-  const ink = solid ? p.onPrimary : !c.inMonth ? p.disabled : c.muted ? p.muted : p.text;
+  const ink = solid ? p.onSelected : !c.inMonth ? p.disabled : c.muted ? p.muted : p.text;
+  // The wash runs under the half of each end day that faces the range, so first day, days between and last day read as one band.
+  const half = c.rangeStart && !c.rangeEnd ? { left: "50%", right: 0 } : c.rangeEnd && !c.rangeStart ? { left: 0, right: "50%" } : null;
   return (
     <MotionPress accessibilityRole="button" accessibilityLabel={cellLabel(c, noun)} accessibilityState={{ selected: c.selected || c.inRange }} onPress={onPress}
+      nativeID={id} focusable={tabStop} onFocus={onFocus}
       style={{ width: stretch ? undefined : size, flex: stretch ? 1 : undefined, height: size, alignItems: "center", justifyContent: "center", padding: 2,
-        backgroundColor: c.inRange && !solid ? p.wash : "transparent" }}>
+        backgroundColor: c.inRange && !solid ? p.wash : "transparent", ...(Platform.OS === "web" ? { outlineStyle: "none" } as object : {}) }}>
+      {half && <View pointerEvents="none" style={{ position: "absolute", top: 0, bottom: 0, ...half, backgroundColor: p.wash } as object} />}
       <View style={{ width: size - 6, height: size - 6, borderRadius: (size - 6) / 2, alignItems: "center", justifyContent: "center",
-        backgroundColor: solid ? p.primary : "transparent", borderWidth: c.isToday || focused ? 1 : 0, borderColor: focused ? p.text : p.primary }}>
+        backgroundColor: solid ? p.selected : "transparent", borderWidth: solid || c.isToday || focused ? 1 : 0, borderColor: focused ? p.text : solid ? p.selectedBorder : p.primary }}>
         <Text style={{ color: ink, fontSize: 13, fontWeight: solid ? "600" : "400", fontVariant: ["tabular-nums"], lineHeight: 16 }}>{c.day}</Text>
-        {c.count !== null && <Text style={{ color: solid ? p.onPrimary : c.inMonth ? p.primary : p.disabled, fontSize: 10, lineHeight: 12, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{c.count > 99 ? "99+" : c.count}</Text>}
+        {c.count !== null && <Text style={{ color: solid ? p.onSelected : c.inMonth ? p.primary : p.disabled, fontSize: 10, lineHeight: 12, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{c.count > 99 ? "99+" : c.count}</Text>}
       </View>
     </MotionPress>
   );
@@ -109,9 +122,15 @@ function Day({ p, c, size, stretch, focused, noun, onPress }: { p: Palette; c: P
 // handed back once both ends are chosen, so a screen never reads half a range.
 // `empty` is what the closed field says before anything is chosen ("Choose dates" by default; "Choose a date" for one day).
 // `clearable` adds "Clear date" under a chosen value, for optional dates; it hands back empty strings.
-export function DateField({ p, label, mode = "range", value, onChange, wholeMonthLink = true, today, empty, clearable = false }: { p: Palette; label: string; mode?: "single" | "range"; value: { from: string; to: string }; onChange: (next: { from: string; to: string }) => void; wholeMonthLink?: boolean; today?: string; empty?: string; clearable?: boolean }) {
+// `hint` is the range helper shown in the open calendar before the first day is chosen; the label stays a plain name.
+export function DateField({ p, label, mode = "range", value, onChange, wholeMonthLink = true, today, empty, clearable = false, hint = "Choose the first day, then the last." }: { p: Palette; label: string; mode?: "single" | "range"; value: { from: string; to: string }; onChange: (next: { from: string; to: string }) => void; wholeMonthLink?: boolean; today?: string; empty?: string; clearable?: boolean; hint?: string }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | null>(null);
+  // Web: a field near the bottom of a sheet opens its calendar below the fold; bring it into view.
+  const cardId = `calendar${useId()}`;
+  useEffect(() => {
+    if (open && Platform.OS === "web") (globalThis as { document?: { getElementById: (id: string) => { scrollIntoView: (o: object) => void } | null } }).document?.getElementById(cardId)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [open, cardId]);
   const shown = draft ?? value;
   const change = (next: DateRange) => {
     if (next.from && (next.to || mode === "single")) { setDraft(null); onChange({ from: next.from, to: next.to ?? next.from }); setOpen(false); }
@@ -126,8 +145,8 @@ export function DateField({ p, label, mode = "range", value, onChange, wholeMont
         <Text style={{ flex: 1, color: shown.from ? p.text : p.muted, fontSize: 15 }}>{rangeLabel(shown, empty)}</Text>
         <Feather name={open ? "chevron-up" : "chevron-down"} size={16} color={p.muted} />
       </MotionPress>
-      {open && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 6 }]}>
-        {mode === "range" && <Text style={[ui.small, { color: p.muted }]}>{draft?.from ? "Now choose the last day." : "Choose the first day, then the last."}</Text>}
+      {open && <View nativeID={cardId} style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 6 }]}>
+        {mode === "range" && <Text style={[ui.small, { color: p.muted }]}>{draft?.from ? "Now choose the last day." : hint}</Text>}
         <CalendarPicker p={p} mode={mode} value={{ from: shown.from || null, to: shown.to || null }} onChange={change} wholeMonthLink={wholeMonthLink} clearable={false} today={today} />
       </View>}
       {clearable && !!value.from && !open && <MotionPress accessibilityRole="button" accessibilityLabel={`Clear ${label}`} onPress={() => onChange({ from: "", to: "" })} style={{ alignSelf: "flex-start", minHeight: 36, justifyContent: "center" }}>

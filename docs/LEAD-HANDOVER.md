@@ -67,6 +67,9 @@ and five developers.
 - Never push to `main`. Lee merges pull requests. (An automatic classifier blocked a direct push.)
 - Live steps (SQL, deploys, data fixes) need Lee's explicit approval each time. Approval for one step does not cover
   the next.
+- **Tell Lee about every approval he owes as soon as it appears; don't wait for him to ask.** That covers live steps
+  and any developer session waiting on Lee in its own chat. Check every session's status (`list_sessions`) at
+  each step, and name the session and the exact question.
 - Developers never touch the live database. (B was told off once for a live SELECT.)
 - Never paste tokens, keys or passwords into chat. Lee was advised to revoke a Supabase token that was pasted in an
   earlier session.
@@ -177,7 +180,7 @@ Lee asked for every developer to stop. Each session was interrupted and told to 
 The lead branch is at `d3fde42` and later; its last full run, on `850ca09` with B, C and D merged, passed 1514/1514. Anything unpushed
 has to be redone from these notes, unless Lee asks a developer to push it as work in progress.
 
-## 5b. Rounds 6 to 8: ready to go live (13 October 2026, evening)
+## 5b. Rounds 6 to 8: LIVE (14 October 2026; main 5763aa0, pull request #4, install SQL run by Lee)
 
 Everything from A–F is merged into the lead branch. Full `npm test` on `e4baea3` passed **1618/1618**. After that only
 C's go-live note (documents) and F's one-line Unknown senders layout were added; their tests and the style and contrast

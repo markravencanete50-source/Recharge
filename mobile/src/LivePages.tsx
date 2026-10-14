@@ -35,12 +35,13 @@ import { formatCount, formatMoney } from "../../lib/format";
 import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveWorkRow, NoticeRowView, isDone, noticeIcon } from "./LiveRows";
 import { mayHaveOlder, mergeNotices, noticeRow, noticeRows, oldestNoticeId, workItemFrom, type NoticeRow } from "../../lib/notice-details";
-import { ListSearchBox, useListSearch } from "./SearchPicker";
+import { ListSearchBox, SearchBox, useListSearch } from "./SearchPicker";
 import { Calendar } from "./WorkspaceScreens";
+import { DateField } from "./CalendarPicker";
 import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
-import { DrawLine, Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
+import { Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
 import { departmentColor, primaryFill, ui, web, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
 import { WorkspaceApiError, readOlderNotices, readWorkItem, workspaceRequest, writeControls } from "./backend/client";
@@ -73,9 +74,8 @@ export async function liveApi(path: string, body?: Record<string, unknown>) {
 export function PageHeading({ title, subtitle, palette: p, action }: { title: string; subtitle: string; palette: Palette; action?: ReactNode }) {
   return (
     <View style={[ui.between, { gap: 16, alignItems: "flex-end", flexWrap: "wrap" }]}>
-      <View style={{ gap: 8, flexShrink: 1, minWidth: 220 }}>
+      <View style={{ gap: 6, flexShrink: 1, minWidth: 220 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{title}</Text>
-        <DrawLine width={40} color={p.primary} sessionKey={"heading:" + title} style={{ opacity: 0.85 }} />
         <Text style={[ui.body, { color: p.muted, maxWidth: 680 }]}>{subtitle}</Text>
       </View>
       {action}
@@ -177,7 +177,6 @@ function PostcodeLookup({ p, text, disabled, onComplete, onFound }: { p: Palette
 }
 
 function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: WorkflowField; value: unknown; onChange: (value: unknown) => void; onAlso?: (values: Record<string, string>, onlyIfEmpty?: boolean) => void; p: Palette; disabled?: boolean }) {
-  const [calendar, setCalendar] = useState(false);
   if (f.type === "checkbox") return (
     <MotionPress disabled={disabled} accessibilityRole="checkbox" accessibilityState={{ checked: value === true, disabled }} onPress={() => onChange(value !== true)} style={[ui.row, { gap: 12, minHeight: 48, paddingVertical: 10, alignItems: "flex-start" }]}>
       <View style={{ width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: value === true ? p.primary : p.controlBorder, backgroundColor: value === true ? p.primary : "transparent", alignItems: "center", justifyContent: "center" }}>{value === true && <Feather name="check" size={15} color={p.onPrimary} />}</View>
@@ -185,20 +184,12 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
     </MotionPress>
   );
   const label = <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{f.label}{!f.required ? " (optional)" : ""}</Text>;
+  // A date in a workflow form (only "Add a local event" has one) uses the shared calendar field (D's round 8 review).
   if (f.type === "date") {
     const text = value ? String(value) : "";
-    const parsed = text ? new Date(text + "T12:00:00") : new Date(), selected = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
     return (
-      <View style={{ gap: 8 }}>
-        {label}
-        <MotionPress accessibilityRole="button" accessibilityLabel={f.label + ", " + (text || "choose a date")} disabled={disabled} onPress={() => setCalendar(!calendar)} style={[ui.between, { minHeight: 50, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: calendar ? p.primary : p.controlBorder, backgroundColor: p.background }]}>
-          <Text style={{ color: text ? p.text : p.muted, fontSize: 15 }}>{text ? new Date(text + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "Choose a date"}</Text>
-          <Feather name="calendar" size={17} color={p.primary} />
-        </MotionPress>
-        {calendar && (Platform.OS === "web"
-          ? <Calendar selected={text || dateKey(new Date())} palette={p} onSelect={date => { onChange(date); setCalendar(false); }} />
-          : <DateTimePicker value={selected} mode="date" display={Platform.OS === "ios" ? "inline" : "default"} themeVariant={p.isDark ? "dark" : "light"} onDismiss={() => setCalendar(false)} onValueChange={(_event, date) => { if (Platform.OS === "android") setCalendar(false); onChange(dateKey(date)); }} />)}
-        {!f.required && !!text && <MotionPress accessibilityRole="button" onPress={() => { onChange(""); setCalendar(false); }} style={{ minHeight: 40, justifyContent: "center", alignSelf: "flex-start" }}><Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Clear date</Text></MotionPress>}
+      <View style={{ gap: 6 }} pointerEvents={disabled ? "none" : "auto"}>
+        <DateField p={p} label={f.label + (!f.required ? " (optional)" : "")} mode="single" wholeMonthLink={false} empty="Choose a date" clearable={!f.required} value={{ from: text, to: text }} onChange={next => onChange(next.from)} />
         {f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}
       </View>
     );
@@ -501,7 +492,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
         <SoftButton label="Spreadsheet (CSV)" icon="download" palette={p} disabled={exporting} onPress={() => void downloadProperty("csv")} />
         <Text style={[ui.small, { color: p.muted }]}>Pricing, listing checks and local events for {periodLabel(period)}. Choose up to 31 days in Reports.</Text>
         {account.role !== "client" && <LocalEvents p={p} propertyId={property.id} refreshKey={work} />}
-        {account.role !== "client" && <SoftButton label="Add a local event" icon="calendar" palette={p} onPress={() => onForm(localEventForm(property.id))} />}
+        {account.role !== "client" && <SoftButton label="Add a local event" icon="calendar" palette={p} onPress={() => openForm(localEventForm(property.id))} />}
         {!!exportMessage && <Text style={[ui.small, { color: p.text }]}>{exportMessage}</Text>}
       </View>}
       {invoices.some(invoice => invoice.property_id === property.id) && <View style={{ gap: 8 }}>
@@ -536,11 +527,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
           selected={selected} onSelect={setSelected} onClose={closeDetail} onOpenWork={onOpenWork} extra={property => <>{journeyBlock(property)}{moreFor(property)}</>} />
         {!loading && !properties.length && <EmptyState palette={p} icon="home" title="No properties yet" detail="Properties appear here once they are added or onboarded." />}
       </> : <>
-        <View {...(Platform.OS === "web" ? { dataSet: { searchShell: "true" } } : {})} style={[ui.row, { borderRadius: 14, minHeight: 50, borderWidth: 1, borderColor: p.controlBorder, paddingHorizontal: 14, backgroundColor: p.surface, gap: 10 }]}>
-          <Feather name="search" size={18} color={p.muted} />
-          <TextInput accessibilityLabel="Search properties" placeholder="Search by name, street, area or postcode" placeholderTextColor={p.muted} value={query} onChangeText={value => { setQuery(value); setShown(24); }} autoCorrect={false} style={{ flex: 1, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular", minHeight: 48 }} />
-          {!!query && <MotionPress accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery("")} style={{ width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={18} color={p.text} /></MotionPress>}
-        </View>
+        <SearchBox p={p} value={query} onChange={value => { setQuery(value); setShown(24); }} placeholder="Search by name, street, area or postcode" label="Search properties" />
         {visible.length ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
             {visible.slice(0, shown).map((property, index) => (

@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { TextInput, View } from "react-native";
+import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { ui, type Palette } from "./theme";
 import { MESSAGE_STATUSES, MESSAGE_STATUS_LABEL, type MessageStatus } from "../../lib/inbox-filters";
 import type { IconName } from "./LiveKit";
+import { SearchBox } from "./SearchPicker";
 
 // The pieces every Messages tab shares (Lee, round 5: "like a messenger or WhatsApp"): one search box with a small
 // action beside it, the three statuses for Guests and Clients, a quiet one-line note, and the list with the open
@@ -37,12 +38,7 @@ export function StatusFilter({ p, value, counts, onChange }: { p: Palette; value
 export function SearchBar({ p, value, onChange, placeholder, action }: { p: Palette; value: string; onChange: (v: string) => void; placeholder: string; action?: { icon: IconName; label: string; onPress: () => void } }) {
   return (
     <View style={[ui.row, { gap: 8 }]}>
-      <View style={[ui.row, { flex: 1, minWidth: 0, gap: 8, minHeight: 42, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background }]}>
-        <Feather name="search" size={16} color={p.muted} />
-        <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={p.muted} accessibilityLabel={placeholder} autoCorrect={false}
-          style={{ flex: 1, minWidth: 0, minHeight: 40, color: p.text, fontFamily: "Montserrat_400Regular", fontSize: 14 }} />
-        {!!value && <MotionPress accessibilityRole="button" accessibilityLabel="Clear the search" onPress={() => onChange("")} style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={15} color={p.muted} /></MotionPress>}
-      </View>
+      <SearchBox p={p} value={value} onChange={onChange} placeholder={placeholder} pill />
       {action && <MotionPress accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress}
         style={{ width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: p.primary }}>
         <Feather name={action.icon} size={18} color={p.onPrimary} />

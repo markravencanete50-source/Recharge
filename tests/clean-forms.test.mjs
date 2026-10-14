@@ -171,7 +171,8 @@ test('accepting a clean needs the "form checked and guest happy" tick; rejecting
 
 test('the Cleans screens show the forms column, the filter, the tick and the flag button', () => {
   const live = readFileSync('mobile/src/LiveCleans.tsx', 'utf8'), who = readFileSync('mobile/src/DefaultCleaners.tsx', 'utf8');
-  assert.match(live, /label: "Submitted forms"/);
+  assert.match(readFileSync('lib/clean-schedule-table.ts', 'utf8'), /label: 'Submitted forms'/);
+  assert.match(live, /CLEAN_SCHEDULE_COLUMNS\.map/);
   assert.match(live, /Unsubmitted forms/);
   assert.match(live, /FORM_CHECKED_LABEL/);
   assert.match(live, /REJECT_NOTE/);

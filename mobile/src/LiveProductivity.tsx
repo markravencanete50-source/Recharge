@@ -445,8 +445,13 @@ function DeclineSheet({ p, change, onClose, onDone }: { p: Palette; change: Shif
 // ---------------------------------------------------------------- by day: a calendar and the day's clock-ins
 const TIMELINE_START = 6, TIMELINE_END = 24;
 const along = (hours: number) => Math.max(0, Math.min(1, (hours - TIMELINE_START) / (TIMELINE_END - TIMELINE_START))) * 100;
-// The calendar's shade for a day's hours: a fresh green that deepens with them.
-const heat = (p: Palette, share: number) => `rgba(${p.isDark ? "143,211,194" : "47,143,111"},${(0.1 + Math.min(1, share) * (p.isDark ? 0.34 : 0.4)).toFixed(3)})`;
+// The calendar's shade for a day's hours, from the theme's own pairs so the figures always read (E's round 9
+// review: the hand-mixed green put text at 3.6 to 4.4:1 in dark mode). Any hours: the wash with the body text;
+// the busiest third of days: the selected colour with its own ink and edge.
+export const BUSY_SHARE = 2 / 3;
+const busy = (share: number) => share >= BUSY_SHARE;
+const heatFill = (p: Palette, share: number) => (busy(share) ? p.selected : p.wash);
+const heatInk = (p: Palette, share: number) => (busy(share) ? p.onSelected : p.text);
 const longDay = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 function DayView({ p, account, today, onChanged }: { p: Palette; account: WorkspaceAccount; today: string; onChanged: () => void }) {
@@ -472,8 +477,8 @@ function DayView({ p, account, today, onChanged }: { p: Palette; account: Worksp
       <WeekNav p={p} label={monthLabel(month, "long")} onMove={step => goMonth(moveMonth(month, step))} onToday={() => { setMonth(today.slice(0, 7)); setDay(today); }} />
       <MonthCalendar p={p} month={month} day={day} today={today} totals={totals} loading={!sheet} onPick={pick} />
       <View style={[ui.row, { gap: 14, flexWrap: "wrap", paddingHorizontal: 4 }]}>
-        {[["Hours worked", heat(p, 1)], ["Change waiting", p.waiting], ["Planned, not clocked", p.danger]].map(([label, color]) => (
-          <View key={label} style={[ui.row, { gap: 6 }]}><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} /><Text style={{ color: p.muted, fontSize: 12 }}>{label}</Text></View>
+        {[["Hours worked", p.wash, p.washBorder], ["Busiest days", p.selected, p.selectedBorder], ["Change waiting", p.waiting, p.waiting], ["Planned, not clocked", p.danger, p.danger]].map(([label, color, edge]) => (
+          <View key={label} style={[ui.row, { gap: 6 }]}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color, borderWidth: 1, borderColor: edge }} /><Text style={{ color: p.muted, fontSize: 12 }}>{label}</Text></View>
         ))}
       </View>
     </View>
@@ -516,16 +521,18 @@ function MonthCalendar({ p, month, day, today, totals, loading, onPick }: { p: P
                 <MotionPress {...(Platform.OS === "web" && !on ? { dataSet: { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ selected: on }}
                   accessibilityLabel={`${longDay(d)}${t?.minutes ? `, ${minutesLabel(t.minutes)} worked by ${t.people}` : ""}${t?.waiting ? `, ${t.waiting} change waiting` : ""}${t?.missed ? `, ${t.missed} not clocked` : ""}`}
                   onPress={() => onPick(d)} onHoverIn={() => setHovered(d)} onHoverOut={() => setHovered(h => (h === d ? null : h))}
-                  style={[{ minHeight: compact ? 50 : 66, borderRadius: compact ? 12 : 14, padding: compact ? 5 : 8, justifyContent: "space-between", opacity: inMonth ? 1 : 0.38,
-                    backgroundColor: on ? undefined : share > 0 ? heat(p, share) : future ? "transparent" : p.background, borderWidth: isToday && !on ? 1.5 : 0, borderColor: p.primary }, on ? primaryFill(p) : null]}>
+                  style={[{ minHeight: compact ? 50 : 66, borderRadius: compact ? 12 : 14, padding: compact ? 5 : 8, justifyContent: "space-between",
+                    // Days outside the month: the disabled ink, no fill and no opacity (their figures stay legible).
+                    backgroundColor: on ? undefined : !inMonth ? "transparent" : share > 0 ? heatFill(p, share) : future ? "transparent" : p.background,
+                    borderWidth: on ? 0 : isToday ? 1.5 : inMonth && busy(share) ? 1 : 0, borderColor: isToday ? p.primary : p.selectedBorder }, on ? primaryFill(p) : null]}>
                   <View style={[ui.between, { gap: 2 }]}>
-                    <Text style={{ color: on ? p.onPrimary : p.text, fontSize: compact ? 12 : 14, fontWeight: isToday || on ? "800" : "600", fontVariant: ["tabular-nums"] }}>{Number(d.slice(8))}</Text>
+                    <Text style={{ color: on ? p.onPrimary : !inMonth ? p.disabled : share > 0 ? heatInk(p, share) : p.text, fontSize: compact ? 12 : 14, fontWeight: isToday || on ? "800" : "600", fontVariant: ["tabular-nums"] }}>{Number(d.slice(8))}</Text>
                     <View style={[ui.row, { gap: 3 }]}>
                       {!!t?.waiting && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: p.waiting }} />}
                       {!!t?.missed && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: p.danger }} />}
                     </View>
                   </View>
-                  {!loading && !!t?.minutes && <Text numberOfLines={1} style={{ color: on ? p.onPrimary : p.text, fontSize: compact ? 10 : 12, fontWeight: "700", fontVariant: ["tabular-nums"], opacity: on ? 0.95 : 0.85 }}>{Math.round(t.minutes / 60)}h</Text>}
+                  {!loading && !!t?.minutes && <Text numberOfLines={1} style={{ color: on ? p.onPrimary : !inMonth ? p.disabled : heatInk(p, share), fontSize: compact ? 10 : 12, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{Math.round(t.minutes / 60)}h</Text>}
                 </MotionPress>
               </Pop>
             );
