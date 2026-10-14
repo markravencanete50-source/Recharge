@@ -40,7 +40,7 @@ test('older servers\' messages still read: removed and blocked default to false'
 });
 
 test('the words people read', () => {
-  assert.equal(moderation.REPORT_THANKS, 'Thanks — an admin will review this.');
+  assert.equal(moderation.REPORT_THANKS, 'Thanks. An admin will review this.');
   assert.equal(moderation.REMOVED_LABEL, 'Removed by an admin');
   assert.equal(moderation.BLOCKED_LABEL, 'Message from someone you blocked');
   assert.deepEqual(moderation.REPORT_STATUSES.map(s => moderation.REPORT_STATUS_LABEL[s]), ['Open', 'Message removed', 'Dismissed']);

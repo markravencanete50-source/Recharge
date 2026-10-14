@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { TextInput, View } from "react-native";
+import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { z } from "zod";
 import { Text } from "./Typography";
@@ -9,6 +9,7 @@ import { Pills } from "./Pills";
 import { readChat, writeChat } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import { fillReply, repliesFor, SAVED_AUDIENCE_LABEL, SAVED_AUDIENCES, savedRepliesSchema, type SavedReply } from "../../lib/workspace-chat-policy";
+import { SearchBox } from "./SearchPicker";
 
 // Saved replies in a reply box: pick one and its text goes into the box, with {guest} and
 // {property} filled in, ready to edit before sending. Admins and the Stays team keep the list here too.
@@ -73,8 +74,7 @@ export function SavedReplies({ p, audience, fill, onInsert }: { p: Palette; audi
           {!data && !error && <Loading p={p} rows={2} />}
           {!!error && <Notice text={error} p={p} tone="bad" />}
           {data && !managing && <>
-            {mine.length > 6 && <TextInput value={query} onChangeText={setQuery} placeholder="Search saved replies" placeholderTextColor={p.muted} accessibilityLabel="Search saved replies"
-              style={{ minHeight: 42, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.surface, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14 }} />}
+            {mine.length > 6 && <SearchBox p={p} value={query} onChange={setQuery} placeholder="Search saved replies" />}
             {matching.map(r => (
               <MotionPress key={r.id} accessibilityRole="button" accessibilityLabel={`Use saved reply: ${r.title}`} onPress={() => { onInsert(fillReply(r.body, fill)); setOpen(false); }}
                 style={{ gap: 2, padding: 10, borderRadius: 12, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}>

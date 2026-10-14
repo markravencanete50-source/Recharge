@@ -47,7 +47,7 @@ test("motion is calm: no springs, no pointer light, no looping placeholder, no b
   const source = read("mobile/src/motion.tsx");
   assert.doesNotMatch(source, /Animated\.spring|pointermove|blur\(|--mx|translateY/);
   assert.doesNotMatch(source, /Animated\.loop/, "nothing in motion.tsx loops, the loading placeholder is static");
-  for (const name of ["SwapIn", "Entrance", "Stagger", "Float", "Pop", "Bump", "DrawLine", "TweenNumber", "CountUp", "NavSymbol", "ExpandChevron", "Shimmer", "useReducedMotion"])
+  for (const name of ["SwapIn", "Entrance", "Stagger", "Float", "Pop", "Bump", "TweenNumber", "CountUp", "NavSymbol", "ExpandChevron", "Shimmer", "useReducedMotion"])
     assert.match(source, new RegExp("export (function|const) " + name + "(?![A-Za-z])"), name + " must stay exported");
 });
 

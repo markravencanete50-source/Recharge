@@ -139,3 +139,14 @@ repairs, Stays & statements, mailbox, furnishing calculator, chat); Management (
 team performance, rota, onboarding and training, reflections, daily tasks, decisions, cleaning team, access control
 apart from R3, menu order); Profile; Help; both sign-in screens; the public enquiry form. axe found no other contrast
 failures in either theme.
+
+## Round 9: Lee's requests (14 October 2026)
+
+| Request | Change |
+| --- | --- |
+| "Remove all of the emdash": the line under page titles | `PageHeading` (`LivePages.tsx`) no longer draws the short green accent line; the title and its subtitle sit 6px apart. `DrawLine` is gone from `motion.tsx` (it had no other use). |
+| "Remove all of the emdash": the character | Home's loading count shows "…" instead of "—"; "Channel manager not connected. Sync is paused."; "Thanks. An admin will review this."; the owner weekly email says "None" for no review. No other user-facing "—" was left in `mobile/src`, `lib` or `app`. `tests/no-em-dash.test.mjs` fails on any new one (comments may keep them) and on a line under the page title. |
+| No second box inside a focused search field | `SearchBox` (`SearchPicker.tsx`) is now the one search field: its frame is marked bareInput, so the global input outline never draws inside it, and focus shows only as the frame's border turning `p.primary` (2px, 3:1 or more). No glow, no animation. Messages (`MessagesLayout` SearchBar, as a pill), Access control, Properties, Help, the tool directory, saved replies, New message and Add people now use it; the lists and pickers already did. The searchable Dropdown keeps its own bare-framed box (A's tests require it). `tests/search-fields.test.mjs` fails on any raw "Search …" input outside SearchBox or a bareInput frame. |
+| Plain sign-in panel (wide screens) | `LiveSignIn.tsx`: the left panel is the logo, "Welcome back." with one line, and the house. The team chips, the four example activity cards and the footer line are gone. |
+
+Screenshots: `docs/screenshots/session-e/round9/before/` and `after/`: a page title (Properties), the Messages search focused with "mark", and the sign-in screen, light and dark, 1440 and 390.

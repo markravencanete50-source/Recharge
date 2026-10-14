@@ -72,7 +72,7 @@ test('Stays edit or cancel only the stays recorded in the app', () => {
 test('the Hostaway card says the sync is paused instead of offering it', () => {
   assert.equal(hostawayStatusSchema.parse({ lastRunAt: null, lastSuccessAt: null, lastTrigger: null, lastError: null, problems: [], lastSummary: {}, canSync: true, linkedProperties: 0, upcomingStays: 0, unassignedCleans: 0 }).paused, false);
   const card = source('HostawaySyncCard.tsx');
-  assert.match(card, /Channel manager not connected — sync paused/);
+  assert.match(card, /Channel manager not connected\. Sync is paused\./);
   assert.match(card, /status\.configured && !status\.paused && <Button/);
   const answers = faqsForAccess('super_admin', MODULE_IDS).map(f => f.question + ' ' + f.answer).join('\n');
   assert.doesNotMatch(answers, /Hostaway guest conversations|Communication Centre|Alex’s recordings|Alex's recordings/);

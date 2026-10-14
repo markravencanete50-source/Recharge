@@ -1,5 +1,5 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Image, Linking, Modal, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Image, Linking, Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as ImagePicker from "expo-image-picker";
 import { Text } from "./Typography";
@@ -13,6 +13,7 @@ import { useBlocks } from "./ChatSafety";
 import { chatFilesProblem, chatPeopleSchema, conversationSchema, membersSchema, MAX_CHAT_PHOTOS, MAX_CHAT_VIDEOS, preparedFilesSchema, presenceLabel, presenceOf, REACTIONS,
   type ChatAttachment, type ChatMembers, type ChatReaction, type Conversation } from "../../lib/workspace-chat-policy";
 import { ROLE_LABEL } from "../../lib/admin-live";
+import { SearchBox } from "./SearchPicker";
 
 // Messages, messenger-style: people's photos (with a dot when they are online), photos and a video
 // in a message, reactions, and the people in a conversation (adding people to a group, leaving it).
@@ -346,7 +347,7 @@ function AddPeople({ p, exclude, busy, onAdd, onCancel }: { p: Palette; exclude:
   return (
     <View style={{ gap: 8, padding: 12, borderRadius: 18, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
       <Text style={{ color: p.text, fontWeight: "700" }}>Add people</Text>
-      <TextInput value={query} onChangeText={setQuery} placeholder="Search the team" placeholderTextColor={p.muted} accessibilityLabel="Search the team" style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.surface, color: p.text, fontFamily: "Montserrat_500Medium" }} />
+      <SearchBox p={p} value={query} onChange={setQuery} placeholder="Search the team" />
       {!people && !error && <Loading p={p} rows={2} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {people && !shown.length && <Text style={[ui.small, { color: p.muted }]}>{query.trim() ? "Nobody matches." : "Everyone on the team is already here."}</Text>}

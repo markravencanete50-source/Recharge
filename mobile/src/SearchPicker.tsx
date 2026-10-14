@@ -1,9 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Platform, TextInput, View } from "react-native";
+import { Keyboard, Platform, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
-import { ui, type Palette } from "./theme";
+import { radius, ui, type Palette } from "./theme";
 import { matchesSearch, normalise, propertyOption, textOfRow, type SearchOption } from "../../lib/search-options";
 import { SHOW_SEARCH_ABOVE, pickerView } from "../../lib/search-picker";
 
@@ -12,16 +12,18 @@ import { SHOW_SEARCH_ABOVE, pickerView } from "../../lib/search-picker";
 // once something is typed the best dozen matches as chips (lib/search-picker.ts). Short lists (eight or
 // fewer) show every chip with no search box, as before.
 
-export function SearchBox({ p, value, onChange, placeholder }: { p: Palette; value: string; onChange: (v: string) => void; placeholder: string }) {
-  // On the web the browser's own focus ring would sit as a second box inside this one. The box shows focus itself instead: a thicker
-  // border in the primary colour, with the padding one pixel less so the text does not move.
+// The one search field in the app: every "Search …" box uses it (tests/search-fields.test.mjs). Its frame shows focus
+// itself: the border turns the primary colour (3:1 or more in both themes) and thickens by a pixel, with the padding one
+// pixel less so the text does not move. On the web the frame is marked bareInput, so the browser's own focus ring and the
+// global input outline never draw a second box inside it. No glow, no animation. `pill` rounds it fully (Messages).
+export function SearchBox({ p, value, onChange, placeholder, label, pill = false, autoFocus = false }: { p: Palette; value: string; onChange: (v: string) => void; placeholder: string; label?: string; pill?: boolean; autoFocus?: boolean }) {
   const [focused, setFocused] = useState(false);
   return (
-    <View {...(Platform.OS === "web" ? { dataSet: { bareInput: "true" } } : {})} style={[ui.row, { gap: 10, paddingHorizontal: focused ? 13 : 14, minHeight: 48, borderRadius: 14, borderWidth: focused ? 2 : 1, borderColor: focused ? p.primary : p.controlBorder, backgroundColor: p.background }]}>
-      <Feather name="search" size={18} color={p.muted} />
-      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={p.muted} accessibilityLabel={placeholder} autoCapitalize="none" autoCorrect={false}
-        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-        style={{ flex: 1, minWidth: 0, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14, ...(Platform.OS === "web" ? { outlineStyle: "none" } as object : {}) }} />
+    <View {...(Platform.OS === "web" ? { dataSet: { bareInput: "true" } } : {})} style={[ui.row, { flex: pill ? 1 : undefined, minWidth: 0, gap: 10, paddingHorizontal: focused ? 13 : 14, minHeight: pill ? 42 : 48, borderRadius: pill ? radius.pill : radius.control, borderWidth: focused ? 2 : 1, borderColor: focused ? p.primary : p.controlBorder, backgroundColor: p.background }]}>
+      <Feather name="search" size={pill ? 16 : 18} color={p.muted} />
+      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={p.muted} accessibilityLabel={label ?? placeholder} autoCapitalize="none" autoCorrect={false} autoFocus={autoFocus}
+        returnKeyType="search" onSubmitEditing={() => Keyboard.dismiss()} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={{ flex: 1, minWidth: 0, minHeight: pill ? 38 : 44, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 14, ...(Platform.OS === "web" ? { outlineStyle: "none" } as object : {}) }} />
       {!!value && <MotionPress accessibilityRole="button" accessibilityLabel="Clear the search" onPress={() => onChange("")} style={{ padding: 6 }}>
         <Feather name="x" size={16} color={p.muted} />
       </MotionPress>}
