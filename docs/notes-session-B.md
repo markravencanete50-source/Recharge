@@ -971,3 +971,29 @@ setter never changes, so behaviour is the same. The unused `web` import in `Live
   details, the tags under the details on a phone, and the wrapping Guest relations header.
 - **Screenshots:** `docs/screenshots/session-b/phone-fit/`, before (`main`) and after, 390×844 in dark mode,
   two screens per page: Client enquiries, To-do, Guest relations, Client relations, Management approvals.
+
+# Round 9: E's sweep, R4 to R6 (Lead)
+
+- **Starting point:** `main`, with E's token commit `331b772` merged in (`d5d1ddd`). No migration.
+- **R4, Productivity month grid (Medium):** in dark mode the day cells drew text on a hand-mixed green
+  (`rgba(143,211,194,…)` at a strength set by the hours).
+  - The grid now uses only tokens.
+  - The busiest days, at two thirds or more of the month's busiest day (`BUSY_SHARE`), are `p.selected` with
+    `p.onSelected` text and a `p.selectedBorder` edge.
+  - Every other day with hours is `p.wash` with `p.text`.
+  - Days outside the month are `p.disabled` text on no fill, instead of a 38% opacity.
+  - The legend now reads "Hours worked" (wash), "Busiest days" (selected), "Change waiting" and "Planned,
+    not clocked".
+- **R5, owner booking calendar (Low):** day numbers outside the month were the muted colour at 55% opacity.
+  They are now `p.disabled` with no opacity (`LiveClientReports.tsx`).
+- **R6, Management → Responsibilities (Low):** the nine filter pills (Everything, Mine and seven
+  departments) are now the shared `Pills`, which shows a Dropdown for more than five values. The labels and
+  the filter are unchanged.
+- **Tests:** new `tests/round9-fixes.test.mjs`, 3 of 3 pass.
+  - Full suite: 1611 of 1620 pass. Seven of the failures are the known build-output tests, which need a
+    built `dist`.
+  - `tests/menu-layout-database.test.mjs` timed out under the parallel run. It passes on its own, 5 of 5.
+  - `tsc` and ESLint are clean on the three files.
+- **Screenshots:** `docs/screenshots/session-b/round9/`, before (`d5d1ddd`) and after, dark mode, on a
+  desktop (1440×900) and a phone (390×844): Productivity "By day", Management → Responsibilities, and the
+  owner's booking calendar.
