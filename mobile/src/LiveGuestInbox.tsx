@@ -14,7 +14,7 @@ import { Button, Field, message, Notice, Tag, Loading } from "./LiveKit";
 import { Pills } from "./Pills";
 import { emailFileLink, readInbox, writeInbox } from "./backend/client";
 import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
-import { MESSAGE_STATUS_LABEL, emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
+import { MESSAGE_STATUS_LABEL, byLatest, emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, QuietLine, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { chatTime } from "../../lib/workspace-chat-policy";
 import { SavedReplies } from "./SavedReplies";
@@ -289,7 +289,7 @@ function useSeenThreads() {
 }
 
 export function GuestInbox({ palette: p, properties, desktop = false, onChanged }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void }) {
-  // Every recent conversation is read once; the status and the search filter it here, Needs a reply first.
+  // Every recent conversation is read once; the status and the search filter it here. Newest message first (byLatest).
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const [data, setData] = useState<ReturnType<typeof inboxListSchema.parse> | null>(null);
   const [error, setError] = useState(""), [logging, setLogging] = useState(false), [openId, setOpenId] = useState<string | null>(null);
@@ -309,7 +309,7 @@ export function GuestInbox({ palette: p, properties, desktop = false, onChanged 
     return () => { active = false; clearInterval(poll); clearInterval(tick); };
   }, [load]);
   const red = data ? data.threads.filter(t => t.status === "open" && waitGrade(t.waitingSince, data.targets)?.grade === "red").length : 0;
-  const threads = data?.threads ?? [];
+  const threads = byLatest(data?.threads ?? [], t => t.lastMessageAt, t => t.id);
   // The search looks at the guest's name, the property's name and address, and the booking reference.
   const address = new Map(properties.map(x => [x.id, x.address] as const));
   const found = threads.filter(t => matchesSearch(query, [t.guestName, t.propertyName, t.propertyId ? address.get(t.propertyId) : null, t.reservationRef]));

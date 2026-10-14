@@ -531,6 +531,44 @@ Work that was never pushed is left out: B's and D's later design-review items (t
 logo, the Maintenance filter, typed dates in Cleans and the calendar). The round 8 split is not in it; add one line for admins if
 it ships with rounds 6 and 7.
 
+## Messages follow the time (14 October)
+
+Lee, after inbound email went live: "any new message or email should always be on top. It should follow the time." The test email
+arrived in Guests but sat at the bottom.
+
+**Why:**
+- The guest inbox read (`workspace_guest_inbox_read('list')`) returns the conversations waiting for a reply first, oldest wait at
+  the top, then the rest by latest message. The app showed that order as it came, so a new email was listed below every older
+  waiting conversation.
+- The chat read (Clients and Team) already returns the newest first.
+
+**Change:** one shared helper, `byLatest` in `lib/inbox-filters.ts`, orders a list by its latest message, newest first:
+- it ignores the status and the channel (Hostaway, email, logged by hand, owner chat, team chat);
+- a conversation with no time goes last;
+- equal times keep a fixed order by id, so a refresh never shuffles them.
+
+It is applied after the read in `LiveGuestInbox.tsx` (Guests) and `LiveChat.tsx` (Clients and Team). The status buttons only filter
+that list. Unchanged:
+- the "N guests have waited longer than …" warning and the per-row "Waiting …" tags;
+- the refresh (the poll, and after Send or a log) keeps the open conversation open, because its pane is keyed by its id, and the
+  changed conversation moves to the top.
+
+**No migration.** Every way a message arrives (Hostaway, email, logged by hand) and every team reply moves the conversation's latest
+message time forward. The read's limit already keeps the newest 300 conversations by that time (`order by t.last_message_at desc
+nulls last limit 300`).
+
+**Tests:**
+- `tests/messages-newest-first.test.mjs`: mixed channels, statuses and time offsets newest first; a reply or a new email moves a
+  conversation to the top; ties by id; each status keeps the time order; both screens use it; the warning, tags and open pane are
+  unchanged.
+- `tests/messages-newest-first-database.test.mjs`:
+  - the read puts the oldest wait first (the reported bug), and `byLatest` puts the new email on top;
+  - a team reply moves its conversation to the top;
+  - a new guest message reopens a closed conversation and moves it to the top;
+  - the read's limit keeps the newest 300.
+
+**Screenshots:** `docs/screenshots/messages-newest-first-{light,dark}.png`, before and after on Needs a reply, with sample data.
+
 ## Not done yet (waiting for the client)
 
 - Inbound email into Messages (design above; to be built later).
