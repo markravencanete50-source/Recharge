@@ -4,7 +4,7 @@ import { z } from "zod";
 // workspace_operations_action so the app only offers actions that can succeed.
 export const REPAIR_STAGES = [
   { phase: "owner_approval", label: "Owner approval", detail: "Waiting for the owner to approve the cost" },
-  { phase: "management_approval", label: "Management approval", detail: "Above the management limit: an admin approves the cost" },
+  { phase: "management_approval", label: "Management approval", detail: "At or over the repair limit, or a contractor estimate: an admin approves the cost first" },
   { phase: "owner_declined", label: "Owner declined", detail: "The owner said no to the cost: re-quote or close it" },
   { phase: "management_declined", label: "Management declined", detail: "Management said no to the cost: re-quote or close it" },
   { phase: "triage", label: "Reported", detail: "Stays checks the issue and refers it" },
@@ -60,15 +60,17 @@ export function repairStep(role: string, phase: string, ownerByTeam = false): Re
   return null;
 }
 export const canReportRepair = (role: string) => role === "client" || STAFF.includes(role);
-// While a repair is open, Ready or Stays can update its quote. A higher quote above the owner's
-// approval limit goes back to the owner; once approved the repair carries on where it was.
+// While a repair is open, Ready or Stays can update its quote. A higher quote (or a contractor estimate) goes
+// through the approvals again: under the repair limit it is approved automatically; at or over it management
+// approve first, then the owner. Once approved the repair carries on where it was.
 export const canReviseQuote = (role: string, phase: string) => (role === "ready" || STAFF.includes(role)) && ["triage", "referred", "booked"].includes(phase) || STAFF.includes(role) && DECLINED.includes(phase);
 // After the owner (or management) declines the cost, Stays or an admin re-quote it or close it.
 export const canCloseRepair = (role: string, phase: string) => STAFF.includes(role) && DECLINED.includes(phase);
 // Why a repair is waiting, in the words shown on it: "Owner declined: <their reason>".
 export function declineNote(data: Record<string, unknown>): string | null {
   if (data.phase === "owner_declined") return "Owner declined: " + (typeof data.ownerDeclinedReason === "string" ? data.ownerDeclinedReason : "no reason given");
-  if (data.phase === "management_declined") return "Management declined: " + (typeof data.managementDeclinedReason === "string" ? data.managementDeclinedReason : "no reason given");
+  // Owners do not receive management's reason (it is for the team), so they read what happens next instead.
+  if (data.phase === "management_declined") return typeof data.managementDeclinedReason === "string" ? "Management declined: " + data.managementDeclinedReason : "Management declined the cost. Recharge will get a new quote or close the repair.";
   return null;
 }
 

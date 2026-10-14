@@ -62,8 +62,9 @@ test('daily listing evidence creates one relisting task; pricing cannot target o
  pricing=await update(pricing,'recordApplied',{evidence:'Manually applied in actual listing dashboard'});assert.equal(pricing.status,'completed');
 });
 test('maintenance above owner limit requires consent and warranty contact before shared Ready referral',async()=>{
- await as(3);repair=await create('maintenance',{issue:'Heating is not working',estimatedCostMinor:15000,hazard:false});assert.equal(repair.data.phase,'owner_approval');
+ await as(3);repair=await create('maintenance',{issue:'Heating is not working',estimatedCostMinor:15000,hazard:false});assert.equal(repair.data.phase,'management_approval');
  await assert.rejects(update(repair,'referReady',{troubleshooting:'Checked user thermostat setting',guestUpdate:'Guest informed of escalation'}),/Owner budget/);
+ await as(0);repair=await update(repair,'approveManagement',{});assert.equal(repair.data.phase,'owner_approval');
  await as(2);assert.deepEqual((await db.query('select public.workspace_operations_read($1) data',[property])).rows[0].data,[]);await assert.rejects(update(repair,'approveBudget',{consent:true}),/Work access/);
  await as(1);repair=await update(repair,'approveBudget',{consent:true});
  await as(3);await assert.rejects(update(repair,'referReady',{troubleshooting:'Checked user thermostat setting',guestUpdate:'Guest informed of escalation'}),/warrantyContactEvidence/);

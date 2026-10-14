@@ -11,12 +11,14 @@ export const decisionSchema = z.object({
   cleanerStatement: z.string().nullable(), sourceWorkId: z.string().nullable(), createdAt: z.string(),
 });
 export type Decision = z.infer<typeof decisionSchema>;
-// Repairs above the company-wide management limit, waiting for an admin to approve the cost.
+// Repairs at or over the company repair limit, or contractor estimates, waiting for an admin to approve the cost.
 export const repairApprovalSchema = z.object({
   workId: z.string().uuid(), version: z.number(), title: z.string(), propertyId: z.string().uuid(), propertyName: z.string(),
   issue: z.string().nullable(), repairType: z.string().nullable(), urgent: z.boolean(), hazard: z.boolean(),
   estimatedCostMinor: z.number().nullable(), previousEstimateMinor: z.number().nullable(), quoteReason: z.string().nullable(),
   ownerApprovedAt: z.string().nullable(), limitMinor: z.number().nullable(), waitingSince: z.string(),
+  // Repair approvals (20261020810000): where the quote came from, and whether the owner is asked after management.
+  quoteSource: z.enum(["team", "contractor"]).nullable().optional(), ownerNext: z.boolean().nullable().optional(),
 });
 export type RepairApproval = z.infer<typeof repairApprovalSchema>;
 export const managementSchema = z.object({

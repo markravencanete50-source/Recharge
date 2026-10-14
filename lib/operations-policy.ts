@@ -5,6 +5,8 @@ const id=z.string().uuid(), text=(n:number)=>z.string().trim().max(n), money=z.n
 const date=z.string().refine(v=>Boolean(parseAnalyticsDate(v)),'Choose a valid date');
 const photos=z.array(id).min(1).max(30);
 export const REPAIR_TYPES=['heating','hot_water','leak','toilet_drain','electrics','appliance','wifi','locks_access','pests','damage','other'] as const;
+// Where a repair quote came from: the Ready team, or an outside contractor's estimate (management always approve those).
+export const QUOTE_SOURCES=['team','contractor'] as const;
 const base={action:z.literal('createOperation'),requestId:id,propertyId:id};
 const update={action:z.literal('updateOperation'),requestId:id,workId:id,version:z.number().int().positive()};
 const step=<T extends z.ZodRawShape>(name:string,shape:T)=>z.object({...update,step:z.literal(name),data:z.object(shape).strict()}).strict();
@@ -14,7 +16,7 @@ export const operationsActionSchema=z.union([
  z.object({...base,kind:z.literal('listing_health'),data:z.object({checkedOn:date,platform:z.enum(['Airbnb','Booking.com','Direct','Comfy Workers']),listingVisible:z.boolean(),reviewSentiment:z.enum(['none','positive','negative']),reviewAcknowledged:z.boolean(),suspended:z.boolean(),evidence:text(2000).min(5),relist:z.boolean().optional()}).strict()}).strict(),
  z.object({...base,kind:z.literal('guest_review'),data:z.object({platform:z.enum(['Airbnb','Booking.com','Direct','Comfy Workers']),reviewedOn:date,rating:z.number().int().min(1).max(10),outOf:z.union([z.literal(5),z.literal(10)]),sentiment:z.enum(['positive','neutral','negative']),summary:text(2000).min(5),relist:z.boolean(),response:text(2000).optional()}).strict().refine(v=>v.rating<=v.outOf,'Rating is above the scale').refine(v=>!v.relist||v.sentiment==='negative','Only a bad review is sent for re-listing')}).strict(),
  z.object({...base,kind:z.literal('daily_pricing'),data:z.object({night:date,currentRateMinor:money,proposedRateMinor:money,decision:z.enum(['hold','change']),reason:text(2000).min(5)}).strict()}).strict(),
- z.object({...base,kind:z.literal('maintenance'),data:z.object({issue:text(3000).min(5),reservationId:id.optional(),estimatedCostMinor:money,hazard:z.boolean(),repairType:z.enum(REPAIR_TYPES).optional(),urgent:z.boolean().optional()}).strict()}).strict(),
+ z.object({...base,kind:z.literal('maintenance'),data:z.object({issue:text(3000).min(5),reservationId:id.optional(),estimatedCostMinor:money,hazard:z.boolean(),repairType:z.enum(REPAIR_TYPES).optional(),urgent:z.boolean().optional(),quoteSource:z.enum(QUOTE_SOURCES).optional()}).strict()}).strict(),
  z.object({...base,kind:z.literal('cleaning'),data:z.object({dueOn:date,checklist:z.array(text(200).min(1)).min(1).max(30)}).strict()}).strict(),
  z.object({...base,kind:z.literal('purchase'),data:z.object({requirements:text(3000).min(5),budgetMinor:money}).strict()}).strict(),
  step('recordApplied',{evidence:text(2000).min(5)}),
@@ -34,7 +36,8 @@ export const operationsActionSchema=z.union([
  step('resolveRepair',{resolution:text(2000).min(5)}),
  step('bookRepair',{repairOn:date,contractor:text(200).min(2),guestUpdate:text(2000).min(5)}),
  step('completeRepair',{report:text(3000).min(10),actualCostMinor:money,guestUpdate:text(2000).min(5),photoIds:z.array(id).max(30).optional()}),
- step('reviseQuote',{quoteMinor:money,reason:text(2000).min(5)}),
+ // quoteSource: a Ready team quote (the default) or a contractor's estimate, which management always approve.
+ step('reviseQuote',{quoteMinor:money,reason:text(2000).min(5),quoteSource:z.enum(QUOTE_SOURCES).optional()}),
  // Saying no to a repair's cost: the owner, or management above the company-wide limit. Stays then
  // re-quote it or close it.
  step('declineBudget',{reason:text(2000).min(5)}),

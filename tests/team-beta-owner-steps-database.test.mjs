@@ -45,7 +45,14 @@ const hostawayFlat = await rpc('workspace_save_property', [{ requestId: crypto.r
 const ownedFlat = await rpc('workspace_save_property', [{ requestId: crypto.randomUUID(), name: 'Owned flat' }]);
 for (const target of [hostawayFlat, ownedFlat]) for (const [user, kind] of [[STAYS, 'staff'], [READY, 'staff']]) await rpc('workspace_assign_property', [target, users[user], kind]);
 await rpc('workspace_assign_property', [ownedFlat, users[OWNER], 'client']);
-const repair = async (target, issue = 'Boiler pressure keeps dropping') => { await as(STAYS); return ops({ action: 'createOperation', propertyId: target, kind: 'maintenance', data: { issue, estimatedCostMinor: 18000, hazard: false, repairType: 'heating' } }); };
+// At or over the £100 limit management approve first (as an admin here); these tests are about the owner's step after that.
+const repair = async (target, issue = 'Boiler pressure keeps dropping') => {
+  await as(STAYS);
+  const created = await ops({ action: 'createOperation', propertyId: target, kind: 'maintenance', data: { issue, estimatedCostMinor: 18000, hazard: false, repairType: 'heating' } });
+  assert.equal(created.data.phase, 'management_approval');
+  await as(ADMIN); const approved = await step(created, 'approveManagement', {}); await as(STAYS);
+  return approved;
+};
 
 test('the account says whether owner accounts are off', async () => {
   await as(STAYS);

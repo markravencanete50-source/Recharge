@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 
 // Owners and approvals: an owner declining a repair cost with a reason, Stays re-quoting or closing
-// it, the company-wide management limit for repairs, and owner reports that show each owner only
+// it, the company-wide repair limit (management approve first, then the owner), and owner reports that show each owner only
 // their own bookings.
 const db=new PGlite();
 const roles=['super_admin','client','stays','ready','client','cleans','admin'];
@@ -50,7 +50,10 @@ await db.query("insert into private.workspace_journeys(property_id,client_id,wor
 test('an owner declines a repair cost with a reason; Stays re-quote it back to the owner or close it',async()=>{
  await as(STAYS);
  let repair=await report(home,{issue:'Shower tray cracked and leaking',estimatedCostMinor:45000});
- assert.equal(repair.data.phase,'owner_approval');
+ assert.equal(repair.data.phase,'management_approval','at or over the £100 limit, management approve first');
+ await as(MANAGER);repair=await update(repair,'approveManagement',{});
+ assert.equal(repair.data.phase,'owner_approval','then the owner is asked');
+ await as(STAYS);
  await assert.rejects(update(repair,'declineBudget',{reason:'Too expensive for now'}),/Only the owner/,'Stays cannot decline for the owner');
  await as(OTHER_OWNER);await assert.rejects(update(repair,'declineBudget',{reason:'Not my property at all'}),/access/i);
  await as(OWNER);
@@ -74,61 +77,65 @@ test('an owner declines a repair cost with a reason; Stays re-quote it back to t
  assert.equal(repair.data.phase,'triage','carries on as before');assert.equal(repair.data.ownerApprovedMinor,9000);
  // A second repair the owner declines is closed by Stays.
  await as(STAYS);let second=await report(home,{issue:'Replace the garden fence panels',estimatedCostMinor:30000});
+ await as(MANAGER);second=await update(second,'approveManagement',{});
+ await as(STAYS);
  await assert.rejects(update(second,'closeRepair',{note:'Owner does not want it'}),/declined repair/,'only a declined repair is closed this way');
  await as(OWNER);second=await update(second,'declineBudget',{reason:'I will arrange this myself'});
  await as(STAYS);second=await update(second,'closeRepair',{note:'Owner arranging it themselves'});
  assert.equal(second.status,'cancelled');assert.equal(second.data.phase,'closed');
 });
 
-test('above the management limit, an admin approves after the owner, or first when the owner pre-authorised it',async()=>{
- await as(STAYS);
- let small=await report(home,{issue:'Kitchen tap washer',estimatedCostMinor:60000});
- assert.equal(small.data.phase,'owner_approval');
- await as(OWNER);small=await update(small,'approveBudget',{consent:true});
- assert.equal(small.data.phase,'triage','no management limit is set by default');
-
+test('at or over the limit, management approve first and then the owner, unless the owner pre-authorised it',async()=>{
+ await as(MANAGER);
+ assert.equal((await financeRead('policy')).managementRepairLimitMinor,10000,'the limit starts at £100');
  await as(OWNER);await assert.rejects(finance({action:'setRepairApprovalLimit',version:1,managementRepairLimitMinor:50000}),/Management access|Unknown/);
  await as(STAYS);await assert.rejects(finance({action:'setRepairApprovalLimit',version:1,managementRepairLimitMinor:50000}),/Management access|Unknown/);
  const set=await setLimit(50000);assert.equal(set.managementRepairLimitMinor,50000);
  assert.equal((await financeRead('policy')).managementRepairLimitMinor,50000);
 
- // Owner first, then management.
+ // Management first, then the owner.
  await as(STAYS);let repair=await report(home,{issue:'Boiler needs replacing',estimatedCostMinor:250000,repairType:'heating'});
- assert.equal(repair.data.phase,'owner_approval');
- await as(OWNER);repair=await update(repair,'approveBudget',{consent:true});
  assert.equal(repair.data.phase,'management_approval');
- assert.equal(await told(users[MANAGER],repair.workId,'approveBudget'),1,'admins are told it needs them');
  await as(MANAGER);
  const queue=await management();
  const waiting=queue.repairApprovals.find(r=>r.workId===repair.workId);
  assert.ok(waiting,'listed in Management → Waiting on you');assert.equal(waiting.estimatedCostMinor,250000);assert.equal(waiting.limitMinor,50000);assert.equal(waiting.propertyName,'Owner home');
+ assert.equal(waiting.ownerNext,true,'the owner is asked after management');assert.equal(waiting.quoteSource,'team');
  await as(STAYS);await assert.rejects(update(repair,'approveManagement',{}),/Management approval/,'Stays cannot approve for management');
  await assert.rejects(update(repair,'referReady',{troubleshooting:'Checked the boiler',guestUpdate:'Engineer coming'}),/consent/i,'nothing moves before management');
+ await as(OWNER);await assert.rejects(update(repair,'approveBudget',{consent:true}),/consent/,'the owner is not asked before management');
  await as(MANAGER);repair=await update(repair,'approveManagement',{note:'Agreed with the owner by phone'});
- assert.equal(repair.data.phase,'triage');assert.equal(repair.data.managementApprovedMinor,250000);
- assert.equal(await told(users[STAYS],repair.workId,'approveManagement'),1,'Stays hear it can go ahead');
+ assert.equal(repair.data.phase,'owner_approval');assert.equal(repair.data.managementApprovedMinor,250000);
+ assert.equal(await told(users[OWNER],repair.workId,'approveManagement'),1,'the owner hears it is waiting for them');
+ await as(OWNER);repair=await update(repair,'approveBudget',{consent:true});
+ assert.equal(repair.data.phase,'triage','the owner’s approval lets the work go ahead');
+ assert.equal(await told(users[STAYS],repair.workId,'approveBudget'),1,'Stays hear it can go ahead');
 
- // Pre-authorised by the owner (under their limit), but above the management limit: management first.
+ // Pre-authorised by the owner (under their own limit), at or over the company limit: management only.
  await setLimit(5000);
  await as(STAYS);let pre=await report(home,{issue:'Lock barrel replacement',estimatedCostMinor:8000,repairType:'locks_access'});
  assert.equal(pre.data.phase,'management_approval');
  await as(MANAGER);
+ assert.equal((await management()).repairApprovals.find(r=>r.workId===pre.workId).ownerNext,false);
  await assert.rejects(update(pre,'declineManagement',{reason:'no'}),/reason/i);
  pre=await update(pre,'declineManagement',{reason:'Use the spare barrel in the store'});
  assert.equal(pre.data.phase,'management_declined');assert.equal(pre.status,'waiting');
- // A cheaper re-quote below the management limit carries on without asking anyone again.
+ // A cheaper re-quote under the limit is approved automatically.
  await as(STAYS);pre=await update(pre,'reviseQuote',{quoteMinor:3000,reason:'Using the spare barrel'});
- assert.equal(pre.data.phase,'triage');
+ assert.equal(pre.data.phase,'triage');assert.equal(pre.data.autoApprovedMinor,3000);
 
- // A higher quote within the owner's limit but above the management limit goes to management.
+ // A higher quote within the owner's limit but over the company limit goes to management, then carries on.
  pre=await update(pre,'reviseQuote',{quoteMinor:9500,reason:'Spare barrel does not fit'});
  assert.equal(pre.data.phase,'management_approval');assert.equal(pre.data.resumePhase,'triage');
  await as(MANAGER);pre=await update(pre,'approveManagement',{});assert.equal(pre.data.phase,'triage');
 
- // Switched off again: nothing more needs management.
+ // Cleared: it reads as the default of £100 again.
  await setLimit(null);assert.equal((await financeRead('policy')).managementRepairLimitMinor,null);
- await as(STAYS);const free=await report(home,{issue:'Cheap fix again',estimatedCostMinor:9000});
- assert.equal(free.data.phase,'triage');
+ await as(STAYS);const cheap=await report(home,{issue:'Cheap fix again',estimatedCostMinor:9000});
+ assert.equal(cheap.data.phase,'triage');assert.equal(cheap.data.autoApprovalLimitMinor,10000);
+ const dear=await report(home,{issue:'Dearer fix this time',estimatedCostMinor:10000});
+ assert.equal(dear.data.phase,'management_approval');
+ await setLimit(10000);
 });
 
 test('owner reports show each owner only their own bookings; cleaners are refused',async()=>{
