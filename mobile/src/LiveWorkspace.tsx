@@ -40,7 +40,7 @@ import { LiveAccounts } from "./LiveAccounts";
 import { LiveManagement } from "./LiveManagement";
 import { GuestRelations } from "./GuestRelations";
 import { ClientRelations } from "./ClientRelations";
-import { TodoList, TodoSummary } from "./TodoList";
+import { TodoList } from "./TodoList";
 import { ManagementApprovals } from "./ManagementApprovals";
 import { FlagButton, FlagRoleContext } from "./ManagementFlag";
 import type { SectionProps } from "./SectionProps";
@@ -591,7 +591,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     </>
   );
   const page = tab === "home"
-    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={section => (section === "activity" ? navigate(section) : setTab(section))} onTool={openTool} favoriteEntries={entries} onOpenEntry={openEntry} tasks={team ? <TodoSummary {...sectionProps} onOpenAll={() => navigate("todo")} /> : undefined} />
+    ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={section => (section === "activity" ? navigate(section) : setTab(section))} onTool={openTool} favoriteEntries={entries} onOpenEntry={openEntry} />
     : tab === "todo" ? <TodoList {...sectionProps} />
     : tab === "decisions" ? <ManagementApprovals palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />
     : tab === "calendar" ? <LiveCalendar palette={p} account={account} work={work} desktop={desktop} properties={properties} onOpenWork={setOpenWork} onOpenView={openView} />

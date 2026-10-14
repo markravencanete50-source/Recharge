@@ -64,11 +64,12 @@ test('in Demo, nothing is sent to the live API, and every flow runs in the brows
     await page.getByRole('menuitem', { name: 'Reset demo' }).waitFor({ timeout: 120_000 });
     await menu.click();
     const opened = Date.now() - switched;
-    // A write through the real database function: a management decision on a contested clean.
-    // (Home is still filling in as the demo's reads come back, so the card can move under the click.)
+    // A write through the real database function: a management decision on a contested clean. Home's
+    // "Needs you now" line opens Management's waiting list, where the contested clean is decided.
+    await page.getByRole('button', { name: /decisions? waiting for management/ }).click({ timeout: 60_000 });
     const decision = page.getByRole('button', { name: 'Uphold the rejection' });
     for (let tries = 0; tries < 5 && !(await decision.isVisible()); tries++) {
-      await page.getByRole('button', { name: 'Uphold' }).first().click().catch(() => undefined);
+      await page.getByRole('button', { name: /Contested clean/ }).first().click().catch(() => undefined);
       await decision.waitFor({ timeout: 4000 }).catch(() => undefined);
     }
     await decision.click();

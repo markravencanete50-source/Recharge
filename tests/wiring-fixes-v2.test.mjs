@@ -62,9 +62,10 @@ test('6: DirectBookings asks for the windows and keeps the fallback labels', () 
 });
 
 test('7: Re-listings open points at Client relations re-listing', () => {
-  const oversight = source('LiveOversight.tsx');
-  assert.match(oversight, /"Re-listings open"[^\n]*\{ kind: "work", view: "clients", sub: "relisting" \}/);
-  assert.doesNotMatch(oversight, /section: "Re-listings"/);
+  // Home's "Needs you now" lines live in lib/home-needs.ts now.
+  const needs = readFileSync('lib/home-needs.ts', 'utf8');
+  assert.match(needs, /'re-listings open'\)[^\n]*\{ kind: 'work', view: 'clients', sub: 'relisting' \}/);
+  assert.doesNotMatch(needs + source('LiveOversight.tsx'), /section: ["']Re-listings["']/);
   assert.deepEqual(deepLinkFor({ kind: 'work', view: 'clients', sub: 'relisting' }), { section: 'work', view: 'clients', sub: 'relisting' });
 });
 

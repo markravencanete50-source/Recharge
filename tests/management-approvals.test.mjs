@@ -203,6 +203,9 @@ test('the screens are wired: Management shows the one list, flags decide with a 
   assert.match(approvals, /<CostDecisionSheet/);
   assert.match(approvals, /<ExpenseSheet/);
   assert.match(approvals, /<TrackerList /);
-  assert.match(oversight, /view: "clients", sub: "listings"/);
-  assert.doesNotMatch(oversight, /section: "Daily checks"/);
+  // Home's lines (lib/home-needs.ts, shown by LiveOversight's AdminHome) send listing checks to Client relations.
+  const needs = read('lib/home-needs.ts');
+  assert.match(oversight, /adminNeeds\(/);
+  assert.match(needs, /work\('clients', \{ sub: 'listings' \}\)/);
+  assert.doesNotMatch(oversight + needs, /section: ["']Daily checks["']/);
 });
