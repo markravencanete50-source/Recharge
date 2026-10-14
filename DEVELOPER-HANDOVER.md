@@ -2,6 +2,16 @@
 
 Start with `README.md`. It describes the parts of the platform and the commands.
 
+## Round 9 is live (14 October 2026)
+
+Follow-ups after rounds 6 to 8, integrated by the lead developer: Messages lists put the newest message or email on top
+whatever its status (C); email to `ownerrelations@` from someone who is not an owner yet becomes a conversation in
+Messages → Clients, answered from `ownerrelations@`, and the Unknown senders panel is gone (F); no em dashes, no line
+under page titles, one search field with no inner box or animation, plain sign-in panel (E); date field fixes (A, D);
+"Add a local event" opens on top of the property sheet (B); phone-width and theme-token fixes (A, B). Migration
+`20261019500000_client_email_threads` was installed from `supabase/install-pending.sql`; `main` is `1d3c3c6` (pull
+request #6). Full suite 1658 of 1658.
+
 ## Rounds 6 to 8 are live (14 October 2026)
 
 Six sessions (A: pills and long lists become dropdowns, Properties search only, Accounts and New expense dates; B: To-do

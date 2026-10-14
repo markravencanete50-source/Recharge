@@ -22,6 +22,7 @@ import { PropertyProfile } from "./LivePropertyProfile";
 import { OnboardingPipeline, PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
 import { PropertiesTable } from "./PropertiesTable";
 import { EstimateExplorer } from "./LiveEstimate";
+import { EstimateDeliveryCard } from "./EstimateDelivery";
 import { ScotlandMap } from "./ScotlandMap";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
 import { readEstimate } from "../../lib/estimate-projection";
@@ -42,7 +43,7 @@ import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
 import { Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
-import { departmentColor, primaryFill, ui, web, type Palette } from "./theme";
+import { departmentColor, primaryFill, space, ui, web, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
 import { WorkspaceApiError, readOlderNotices, readWorkItem, workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
@@ -183,25 +184,27 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
       <View style={{ flex: 1 }}><Text style={[ui.body, { color: p.text }]}>{f.label}</Text>{f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}</View>
     </MotionPress>
   );
-  const label = <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{f.label}{!f.required ? " (optional)" : ""}</Text>;
+  // In a group ("Comparable 1") the label is short and the heading says whether it is optional; screen readers hear both.
+  const label = <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{f.label}{!f.required && !f.group ? " (optional)" : ""}</Text>;
+  const named = f.group ? `${f.group} ${f.label.toLowerCase()}` : f.label;
   // A date in a workflow form (only "Add a local event" has one) uses the shared calendar field (D's round 8 review).
   if (f.type === "date") {
     const text = value ? String(value) : "";
     return (
-      <View style={{ gap: 6 }} pointerEvents={disabled ? "none" : "auto"}>
+      <View style={{ gap: space.tight }} pointerEvents={disabled ? "none" : "auto"}>
         <DateField p={p} label={f.label + (!f.required ? " (optional)" : "")} mode="single" wholeMonthLink={false} empty="Choose a date" clearable={!f.required} value={{ from: text, to: text }} onChange={next => onChange(next.from)} />
         {f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}
       </View>
     );
   }
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: space.tight }}>
       {label}
       {f.type === "select" ? (
         // Few options as radio choices, more as a dropdown, a long list with a search box (ChoiceField).
-        <ChoiceField p={p} label={f.label} value={String(value ?? "")} options={f.options ?? []} onChange={onChange} disabled={disabled} />
+        <ChoiceField p={p} label={named} value={String(value ?? "")} options={f.options ?? []} onChange={onChange} disabled={disabled} />
       ) : (
-        <TextInput accessibilityLabel={f.label} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
+        <TextInput accessibilityLabel={named} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
           style={{ borderWidth: 1, borderRadius: 14, padding: 13, minHeight: f.type === "textarea" ? 110 : 50, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: p.background, color: p.text, borderColor: p.controlBorder, textAlignVertical: "top" }} />
       )}
       {!!f.suggestions?.length && <Suggestions p={p} label={f.label} items={f.suggestions} value={String(value ?? "")} disabled={disabled} onPick={s => { onChange(s.value); if (s.also) onAlso?.(s.also); }} />}
@@ -239,9 +242,19 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
     } catch (e) { setError(message(e)); } finally { inFlight.current = false; setBusy(false); }
   }
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;
+  // Each label belongs to the field under it: a field and its label sit close (space.tight), and the next label starts
+  // a clear step further down (space.section), so a label never reads as a caption of the field above.
+  // A group that waits on the one before (`after`) shows once that one is started, and never hides while it has values.
+  const filled = (v: unknown) => v !== undefined && v !== null && v !== "";
+  const shown = spec.fields.filter(f => !f.after || filled(values[f.after]) || spec.fields.some(g => g.group === f.group && filled(values[g.name])));
   return (
     <>
-      {spec.fields.map((f, n) => f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues(current => ({ ...current, [f.name]: v }))} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} /></Stagger>)}
+      <View style={{ gap: space.section }}>
+      {shown.map((f, n) => <View key={f.name} style={{ gap: space.row }}>
+        {!!f.section && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "600", paddingTop: n ? space.field : 0, borderTopWidth: n ? 1 : 0, borderColor: p.border }}>{f.section}</Text>}
+        {f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues(current => ({ ...current, [f.name]: v }))} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} /></Stagger>}
+      </View>)}
+      </View>
       {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}><Text style={[ui.small, { color: p.text }]}>{error}</Text></View>}
       <SoftButton label={busy ? "Saving…" : uploading ? "Saving photos…" : "Save and continue"} icon="check" primary disabled={busy || uploading} onPress={() => void save()} palette={p} />
     </>
@@ -319,6 +332,7 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work }: { j: Jour
       {!!j.invoiceOutsideAt && <Text style={[ui.small, { color: p.muted }]}>Onboarding invoice handled outside the app: {j.invoiceOutsideNote}</Text>}
       {j.estimate && !readEstimate(j.estimate) && <View style={{ gap: 6 }}><Text style={{ color: p.text, fontWeight: "700" }}>Your estimate</Text>{[["Low nightly rate", "lowRateMinor"], ["Expected nightly rate", "mediumRateMinor"], ["High nightly rate", "highRateMinor"]].map(([label, key]) => <Text key={key} style={{ color: p.text }}>{label}: {money(j.estimate?.[key])}</Text>)}</View>}
       {j.estimate && typeof j.estimate.comments === "string" && !!j.estimate.comments.trim() && <View style={{ gap: 4 }}><Text style={{ color: p.text, fontWeight: "700" }}>{account.role === "client" ? "Notes from Recharge" : "Estimate notes"}</Text><Text style={[ui.body, { color: p.muted }]}>{j.estimate.comments}</Text></View>}
+      {account.role !== "client" && !!j.estimateDelivery && ["estimate", "reviewing"].includes(j.stage) && <EstimateDeliveryCard key={j.version} p={p} propertyId={j.propertyId} delivery={j.estimateDelivery} />}
       {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
       {j.estimate && account.role === "client" && ["estimate", "reviewing"].includes(j.stage) && <EstimateGuide palette={p} />}
       {!!comparables.length && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Comparable properties</Text>{comparables.map(c => <SoftButton key={c.url} label={c.name + " · " + money(c.adrMinor) + " a night"} icon="external-link" palette={p} onPress={() => void Linking.openURL(c.url).catch(() => setLinkError("The comparable link could not be opened."))} />)}{!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}</View>}

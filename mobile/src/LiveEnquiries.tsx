@@ -22,7 +22,7 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 // Client Enquiries: send the New Property Enquiry Form to a landlord (by email, or a link to send
 // yourself), see every answer when it comes back, and start valuing the property from it.
 type Filter = "value" | "waiting" | "progress" | "all";
-const FILTER_STEPS: Record<Exclude<Filter, "all">, EnquiryStep[]> = { value: ["received"], waiting: ["sent", "opened", "expired"], progress: ["valuing", "estimate", "won"] };
+const FILTER_STEPS: Record<Exclude<Filter, "all">, EnquiryStep[]> = { value: ["received"], waiting: ["sent", "opened", "expired"], progress: ["valuing", "estimate_ready", "estimate", "won"] };
 const ago = (iso: string) => {
   const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
   return minutes < 1 ? "just now" : minutes < 60 ? `${minutes} min ago` : minutes < 48 * 60 ? `${Math.round(minutes / 60)} h ago` : `${Math.round(minutes / 1440)} days ago`;

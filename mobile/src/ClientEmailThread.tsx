@@ -90,7 +90,8 @@ export function ClientEmailThreadPane({ p, threadId, onBack, onChanged, onAssign
         <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }}><Feather name="mail" size={16} color={p.muted} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text accessibilityRole="header" numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 16 }}>{t?.name ?? t?.address ?? "Email"}</Text>
-          {!!t && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{["Email", t.name ? t.address : null, t.subject].filter(Boolean).join(" · ")}</Text>}
+          {!!t && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{["Email", t.name ? t.address : null].filter(Boolean).join(" · ")}</Text>}
+          {!!t?.subject && <Text numberOfLines={2} style={[ui.small, { color: p.text }]}>{t.subject}</Text>}
         </View>
       </ThreadHeader>
       {!data && !error && <Loading p={p} />}

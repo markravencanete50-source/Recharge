@@ -387,3 +387,19 @@ due). This adds the checklist inside the Management centre. No migration.
   demo nothing in those rows reaches past the right edge.
 - **Test:** `tests/phone-fit-rows.test.mjs` (B's `phone-fit.test.mjs` style, kept separate so the two don't clash
   when the branches meet).
+
+## Publish the estimate: labels that belong to their fields (14 October 2026)
+
+- **Cause:** the workflow sheet form (`WorkflowEditor` in LivePages.tsx) returned its fields as a fragment, so the
+  fields had no gap at all and each label sat flush under the field above it (Lee typed into the wrong field twice).
+- **Fix, every workflow form:** fields are `space.section` (20) apart and each label `space.tight` (6) above its own
+  box. The other sheets follow the same scale: sheet sections `space.section` apart (was 16) and the shared
+  `Field` label `space.tight` above its box (was 7).
+- **Publish the estimate:** each comparable has a heading, "Comparable N (optional)", over a hairline, with three
+  short labels "Name", "Link (https://)", "Nightly rate, GBP" (screen readers hear "Comparable 1 name"). Comparable 2
+  shows once comparable 1 has a name, 3 once 2 has, and a group never hides while it holds values. Built on B's
+  per-comparable messages (claude/hotfix-https-links 7eb00ad), which still apply.
+- **Renderer support:** `WorkflowField.section`, `.after` and `.group` (lib/workflow-forms.ts).
+- **Other long sheet forms:** all workflow forms get the spacing fix; none other repeats numbered groups.
+- **Tests:** `tests/form-spacing.test.mjs`.
+- **Screenshots:** `round10-estimate-{390,1440}-{dark,light}-*` (top, comparable 1, comparable 2 shown after a name).

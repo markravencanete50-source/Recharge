@@ -24,10 +24,12 @@ const endpoints = new Set([
   "/api/workspace/checklists", "/api/mobile/checklists",
   // Client Enquiries: the landlord's form (no account), and the team opening the files sent with it.
   "/enquiry", "/api/enquiry", "/api/enquiry/upload", "/api/workspace/enquiry-files", "/api/mobile/enquiry-files",
+  // The estimate emailed with a private link: the client's page (no account) and the team's Resend / Copy link.
+  "/estimate", "/api/estimate", "/api/workspace/estimate-link", "/api/mobile/estimate-link",
   // Messages photos and videos, and profile photos.
   "/api/workspace/chat-files", "/api/mobile/chat-files", "/api/workspace/profile", "/api/mobile/profile",
   "/privacy", "/terms", "/delete-account", "/api/session/delete-account", "/api/workspace/privacy", "/api/mobile/privacy",
-  "/workspace", "/favicon.svg", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png",
+  "/workspace", "/favicon.svg", "/recharge-wordmark.svg", "/recharge-company-logo.png", "/recharge-company-logo-dark.png", "/recharge-email-logo.png",
 ]);
 // The app's browser build is served from /workspace/ (scripts/build-workspace-web.mjs).
 export const isWorkspaceApp = (path: string) => path === "/workspace" || path.startsWith("/workspace/");

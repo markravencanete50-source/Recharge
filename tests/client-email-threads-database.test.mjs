@@ -29,7 +29,8 @@ const threadsBefore = (await db.query('select count(*)::int n from private.works
 await db.exec(await fs.readFile(`supabase/migrations/${MINE}.sql`, 'utf8'));
 const secondRun = await definitions();
 const threadsAfter = (await db.query('select count(*)::int n from private.workspace_client_email_threads')).rows[0].n;
-// Then the later migrations (20261020300000 patches the email files and the client email reads for hidden messages).
+// Later migrations replace or patch some of these functions again (20261019510000, 20261019520000, and 20261020300000 for hidden
+// messages); run them, in order, after the second run so the tests see the current ones.
 for (const file of files.slice(cut + 1)) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 after(() => db.close());
 
@@ -139,6 +140,39 @@ test('close and reopen; a new email reopens a closed conversation', async () => 
   assert.equal((await thread(t.id)).thread.status, 'open');
   await assert.rejects(act({ action: 'delete', threadId: t.id }), /Unknown action/);
   await assert.rejects(act({ action: 'close', threadId: t.id, extra: 1 }));
+});
+
+test('one conversation per person, but a new subject shows: its message starts with it, the conversation takes it, the reply is "Re: <it>"', async () => {
+  const sam = (extra = {}) => mail({ from: 'sam.seller@example.org', fromName: 'Sam Seller', ...extra });
+  const first = await ownerIn(sam({ subject: 'Owner test', text: 'First.' }));
+  const second = await ownerIn(sam({ subject: 'Client test 1', text: 'Second.' }));
+  assert.equal(second.threadId, first.threadId, 'same person, same conversation');
+  let view = await thread(first.threadId);
+  assert.equal(view.thread.subject, 'Client test 1', 'the row and header show the newest subject');
+  assert.deepEqual(view.messages.map(m => m.body), ['Subject: Owner test\n\nFirst.', 'Subject: Client test 1\n\nSecond.']);
+  const requestId = crypto.randomUUID();
+  const started = await act({ action: 'reply', requestId, threadId: first.threadId, body: 'Thanks.' });
+  assert.equal(started.email.subject, 'Re: Client test 1');
+  assert.match(started.email.inReplyTo, /^ce-\d+@mail\.example\.org$/);
+  await result({ requestId, ok: true, messageId: `<${requestId}@rechargegroup.co.uk>` });
+  // Their reply (headers match) and "Re:" / "Fwd:" of the same subject change nothing.
+  await ownerIn(sam({ subject: 'Re: Owner test', text: 'Back on the first.', inReplyTo: `<${requestId}@rechargegroup.co.uk>` }));
+  await ownerIn(sam({ subject: 'RE: client TEST 1', text: 'Same subject.' }));
+  await ownerIn(sam({ subject: 'Fwd: Client test 1', text: 'Forwarded.' }));
+  await ownerIn(sam({ subject: '', text: 'No subject.' }));
+  // An older email arriving late keeps its subject line but does not take over the conversation's subject.
+  await ownerIn(sam({ subject: 'Old news', text: 'Late.', receivedAt: '2020-01-01T10:00:00Z' }));
+  view = await thread(first.threadId);
+  assert.equal(view.thread.subject, 'Client test 1');
+  assert.equal(view.messages[0].body, 'Subject: Old news\n\nLate.', 'shown in date order');
+  assert.deepEqual(view.messages.slice(4).map(m => m.body), ['Back on the first.', 'Same subject.', 'Forwarded.', 'No subject.']);
+  assert.deepEqual(await sql("select private.workspace_client_email_topic(' Re: Fwd: RE[2]: Hello ') a, private.workspace_client_email_topic('Re:') b"), [{ a: 'hello', b: null }]);
+  const def = async () => (await sql("select pg_get_functiondef('private.workspace_client_email_in(text,text,text,text,text,timestamptz,text,text,text[],jsonb)'::regprocedure) d"))[0].d;
+  const once = await def();
+  await db.exec(await fs.readFile('supabase/migrations/20261019510000_client_email_new_subject.sql', 'utf8'));
+  assert.equal(await def(), once, 'the round-2 migration runs twice without change');
+  assert.match(once, /new_topic/);
+  await act({ action: 'close', threadId: first.threadId });
 });
 
 test('assigning to an owner moves the whole history into their conversation, without emailing it again, and remembers the address', async () => {

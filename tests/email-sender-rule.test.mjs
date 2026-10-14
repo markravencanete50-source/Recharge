@@ -137,3 +137,49 @@ test('only the known places send through Resend, and each names its own mailbox'
     assert.doesNotMatch(text, /guestrelations@|ownerrelations@/, file);
   }
 });
+
+// Lee, 14 October: "the logo of the email should use the logo of Recharge". Every HTML email carries it: the emails Recharge writes
+// start with it; replies written in Messages end with a small signature (logo, "Recharge Group", the mailbox). Plain text unchanged.
+test('every email carries the Recharge logo: a header on the enquiry form, a signature naming the right mailbox on replies', async () => {
+  const LOGO = /<img src="https:\/\/app\.rechargegroup\.co\.uk\/recharge-email-logo\.png" alt="Recharge" width="(\d+)" height="(\d+)"/;
+  reset();
+  const REQUEST = '22222222-2222-4222-8222-222222222222';
+  const guestContext = { request: new Request('https://app.test'), account: { userId: 'u', role: 'stays' }, client: { rpc: async name => name === 'workspace_guest_inbox_action'
+    ? { data: { send: true, conversationId: 'email:1', requestId: REQUEST, source: 'email', email: { to: 'guest@example.org', subject: 'Re: Hi', inReplyTo: 'a@b', references: [] } }, error: null } : { data: { thread: {} }, error: null } } };
+  await replies.sendGuestReply(guestContext, { action: 'sendReply', requestId: REQUEST, threadId: '33333333-3333-4333-8333-333333333333', body: 'Hello <Sam>\n\nSee you at 3.\nThanks' });
+  await outbox.runEmailOutbox();
+  const enquiryContext = { request: new Request('https://app.test'), account: { userId: '11111111-1111-4111-8111-111111111111', role: 'admin' }, client: { rpc: async (name, args) =>
+    ({ data: { id: 'e1', recipientEmail: 'alex@example.com', emailStatus: args.input.action === 'markEnquiryEmail' ? args.input.emailStatus : 'pending' }, error: null }) } };
+  await enquiry.sendEnquiryForm(enquiryContext, { action: 'inviteEnquiry', requestId: '77777777-7777-4777-8777-777777777777', name: 'Alex', email: 'alex@example.com', subject: 'Form', body: 'Hi\n\n{link}', delivery: 'email' });
+  const [guest, owner, form] = state.sent;
+  assert.equal(guest.text, 'Hello <Sam>\n\nSee you at 3.\nThanks', 'the plain text goes exactly as written');
+  assert.match(guest.html, /<p style="margin:0 0 14px">Hello &lt;Sam&gt;<\/p><p style="margin:0 0 14px">See you at 3\.<br>Thanks<\/p>/, 'the HTML is the same text, escaped');
+  for (const [mail, mailbox] of [[guest, GUEST], [owner, OWNER]]) {
+    const signature = mail.html.slice(mail.html.indexOf('<table'));
+    assert.deepEqual(signature.match(LOGO).slice(1), ['108', '30'], 'a small logo under the reply, not a header');
+    assert.ok(mail.html.indexOf('<img') > mail.html.indexOf('</p>'), 'after the message');
+    assert.match(signature, new RegExp(`<strong>Recharge Group</strong><br><a href="mailto:${mailbox}"`));
+    assert.ok(!mail.html.includes(mailbox === GUEST ? OWNER : GUEST), 'never the other mailbox');
+  }
+  assert.deepEqual(form.html.match(LOGO).slice(1), ['180', '50']);
+  assert.ok(form.html.indexOf('<img') < form.html.indexOf('<p'), 'the logo is at the top');
+  assert.doesNotMatch(form.text, /<img|recharge-email-logo/);
+  // The image is a small PNG (email apps block SVG) on its own solid background, and the Worker serves it.
+  const png = await fs.readFile('public/recharge-email-logo.png');
+  assert.deepEqual([...png.subarray(1, 4)].map(c => String.fromCharCode(c)).join(''), 'PNG');
+  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [480, 133]);
+  assert.ok(png.length < 60_000, 'small enough for an email');
+  assert.match(await fs.readFile('worker/backend-route-policy.ts', 'utf8'), /"\/recharge-email-logo\.png"/);
+});
+
+test('the Supabase Auth templates Lee pastes carry the same logo and keep the links the app expects', async () => {
+  for (const [file, needs] of [['reset-password.html', ['{{ .ConfirmationURL }}']], ['confirm-signup.html', ['{{ .Token }}']]]) {
+    const html = await fs.readFile('docs/auth-email-templates/' + file, 'utf8');
+    assert.match(html, /<img src="https:\/\/app\.rechargegroup\.co\.uk\/recharge-email-logo\.png" alt="Recharge" width="180" height="50"/, file);
+    for (const n of needs) assert.ok(html.includes(n), `${file} keeps ${n}`);
+    assert.doesNotMatch(html, /—|<script/i, file);
+  }
+  // The app exchanges ?code= for a reset (app/auth/recovery) and verifies a typed code for a signup (app/api/mobile/account).
+  assert.match(await fs.readFile('app/api/session/recovery/route.ts', 'utf8'), /resetPasswordForEmail\(body\.data\.email, \{ redirectTo: `\$\{config\.origin\}\/auth\/recovery` \}\)/);
+  assert.match(await fs.readFile('app/api/mobile/account/route.ts', 'utf8'), /\{ email: address, token: code, type: "email" \}/);
+});

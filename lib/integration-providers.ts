@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_PHOTO_BYTES,photoFormat,isMailboxAddress } from './integration-policy';
 import { noticeCopyFor } from './notice-details';
+import { noticeHtml } from './email-brand';
 
 async function jsonRequest(url:string,init:RequestInit,readOnly=false):Promise<Record<string,unknown>> {
   let response:Response;
@@ -55,7 +56,7 @@ export async function deliverNotification(settings:IntegrationSettings,job:Deliv
     }
     // Resend's idempotency window is 24 hours. An expired unknown send needs human review.
     if(Date.now()-Date.parse(job.createdAt)>23*3600000)throw new ProviderFailure('uncertain');
-    const result=await jsonRequest('https://api.resend.com/emails',{method:'POST',headers:{...headers,'Idempotency-Key':`recharge-notification/${job.id}`},body:JSON.stringify({from:settings.NOTIFICATION_FROM_EMAIL,to:[job.destination],subject:title,text})});
+    const result=await jsonRequest('https://api.resend.com/emails',{method:'POST',headers:{...headers,'Idempotency-Key':`recharge-notification/${job.id}`},body:JSON.stringify({from:settings.NOTIFICATION_FROM_EMAIL,to:[job.destination],subject:title,text,html:noticeHtml(text)})});
     if(typeof result.id!=='string'||!result.id)throw new ProviderFailure('uncertain');
     return {state:'accepted',providerId:result.id};
   }
