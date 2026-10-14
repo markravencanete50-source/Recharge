@@ -3,7 +3,7 @@ import { AppState, Platform, Pressable, ScrollView, TextInput, View, useWindowDi
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
-import { PropertySelect } from "./SearchPicker";
+import { PropertySelect, SearchBox } from "./SearchPicker";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
@@ -257,7 +257,7 @@ function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette;
   const group = picked.length > 1;
   return (
     <Sheet palette={p} visible onClose={onClose} title="New message" subtitle={only === "owners" ? "Choose an owner you look after" : "Choose one person, or several to start a group chat"} icon="people">
-      <TextInput value={query} onChangeText={setQuery} placeholder="Search by name" placeholderTextColor={p.muted} accessibilityLabel="Search people" style={{ minHeight: 46, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, color: p.text, fontFamily: "Montserrat_500Medium" }} />
+      <SearchBox p={p} value={query} onChange={setQuery} placeholder="Search by name" label="Search people" />
       {!people && !error && <Loading p={p} />}
       {people && !team.length && !owners.length && <Text style={[ui.small, { color: p.muted }]}>{query.trim() ? "Nobody matches." : only === "owners" ? "No owners to message yet. You can message the owners of the properties you look after." : "Nobody to message yet."}</Text>}
       {!!team.length && <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Team</Text>}

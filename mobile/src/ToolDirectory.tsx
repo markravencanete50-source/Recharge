@@ -1,13 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Animated,
-  Keyboard,
-  Platform,
-  ScrollView,
-  TextInput,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Animated, Platform, ScrollView, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { Artwork, Glyph, DepartmentArtwork, FeatureTile } from "./Artwork";
@@ -23,6 +15,7 @@ import {
 import { findTools, titleParts, type FinderEntry } from "../../lib/tool-finder";
 import { StateGraphic } from "./StateGraphic";
 import { PinnedTools } from "./PinnedTools";
+import { SearchBox } from "./SearchPicker";
 type Props = {
   role: WorkspaceRole;
   palette: Palette;
@@ -304,57 +297,7 @@ export function ToolDirectory({
       }}
       pointerEvents={hidden ? "none" : "auto"}
     >
-      <View
-        {...(Platform.OS==='web'?{dataSet:{searchShell:'true'}}:{})}
-        style={[
-          ui.row,
-          {
-            backgroundColor: p.surface,
-            borderColor: p.controlBorder,
-            borderWidth: 1,
-            borderRadius: 16,
-            minHeight: 52,
-            paddingLeft: 16,
-            gap: 12,
-          },
-        ]}
-      >
-        <Feather name="search" size={20} color={p.muted} />
-        <TextInput
-          accessibilityLabel="Search feature titles"
-          placeholder="Search feature titles"
-          placeholderTextColor={p.muted}
-          value={query}
-          onChangeText={(value) => {
-            onQuery(value);
-            setHidden(false);
-          }}
-          autoCorrect={false}
-          returnKeyType="search"
-          onSubmitEditing={() => Keyboard.dismiss()}
-          style={{
-            flex: 1,
-            minHeight: 52,
-            color: p.text,
-            fontFamily: "Montserrat_400Regular",
-            fontSize: 15,
-          }}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Clear feature search"
-          disabled={!query}
-          onPress={() => onQuery("")}
-          style={{
-            width: 48,
-            height: 48,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {query ? <Feather name="x" size={18} color={p.muted} /> : null}
-        </Pressable>
-      </View>
+      <SearchBox p={p} value={query} onChange={(value) => { onQuery(value); setHidden(false); }} placeholder="Search feature titles" />
       {!desktop && (
         <ScrollView
           horizontal

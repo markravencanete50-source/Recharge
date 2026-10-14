@@ -222,21 +222,13 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme, notice = "" }: { p
         <View style={{ flex: 1, maxWidth: 640, backgroundColor: darkBrandCanvas, paddingHorizontal: 48, paddingVertical: 44, overflow: "hidden" }}>
           <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, opacity: 0.9 }}><HeroGlow palette={p} /></View>
           <Rise index={0}><CompanyLogo palette={p} variant="dark" width={168} /></Rise>
-          {/* Words and the showcase sit together in the middle, so the panel never has a gap. */}
-          <View style={{ flex: 1, justifyContent: "center", gap: 34, paddingTop: 24 }}>
-            <View style={{ gap: 16 }}>
-              <Rise index={1}><Text style={{ color: "#FAF7F0", fontSize: 46, lineHeight: 52, fontWeight: "700", letterSpacing: -1.6 }}>{creating ? "Welcome." : "Welcome back."}</Text></Rise>
-              <Rise index={2}><Text style={{ color: "#D3E0D8", fontSize: 17, lineHeight: 26, maxWidth: 420 }}>Your properties, stays, cleans and repairs, together in one place.</Text></Rise>
-              <Rise index={3}><TeamChips /></Rise>
-            </View>
-            <Showcase panel={Math.min(640, width / 2) - 96} />
+          {/* Plain on purpose (Lee: fewer buttons, less confusion): the brand, one line of words and the house. Nothing in
+              this panel looks like something to press. */}
+          <View style={{ flex: 1, justifyContent: "center", gap: 16, paddingTop: 24 }}>
+            <Rise index={1}><Text style={{ color: "#FAF7F0", fontSize: 46, lineHeight: 52, fontWeight: "700", letterSpacing: -1.6 }}>{creating ? "Welcome." : "Welcome back."}</Text></Rise>
+            <Rise index={2}><Text style={{ color: "#D3E0D8", fontSize: 17, lineHeight: 26, maxWidth: 420 }}>Your properties, stays, cleans and repairs, together in one place.</Text></Rise>
           </View>
-          <Rise index={8}>
-            <View style={[ui.row, { gap: 12, paddingTop: 18, borderTopWidth: 1, borderTopColor: "rgba(167,217,193,0.18)" }]}>
-              <Text style={{ color: "#A7D9C1", fontSize: 11, fontWeight: "700", letterSpacing: 1.6, textTransform: "uppercase", flex: 1 }}>Recharge · Scotland</Text>
-              <Text style={{ color: "#C9D7CF", fontSize: 12 }}>One standard, every stage</Text>
-            </View>
-          </Rise>
+          <Rise index={3}><View style={{ alignItems: "flex-end", paddingBottom: 36 }}><ChargeScene width={Math.round(Math.max(160, Math.min(220, Math.min(640, width / 2) - 300)))} /></View></Rise>
         </View>
         <View style={{ flex: 1, overflow: "hidden" }}>
           <View style={{ alignItems: "flex-end", padding: 20 }}>{themeButton("page")}</View>
@@ -287,64 +279,6 @@ function ChargeScene({ width }: { width: number }) {
     <View style={{ width, height: width * 0.75, alignItems: "center", justifyContent: "flex-end" }}>
       <View pointerEvents="none" style={{ position: "absolute", bottom: -glow * 0.22, width: glow, height: glow * 0.5, borderRadius: glow, backgroundColor: "#A7D9C1", opacity: 0.1 }} />
       <HomeScene width={width} />
-    </View>
-  );
-}
-// A glimpse of the workspace at work: activity cards sit beside the house.
-const ACTIVITY: { icon: "check-circle" | "tool" | "message-circle" | "file-text"; title: string; detail: string }[] = [
-  { icon: "check-circle", title: "Clean accepted", detail: "Ready for guests" },
-  { icon: "tool", title: "Repair booked", detail: "Boiler · Tue 10:00" },
-  { icon: "message-circle", title: "Guest answered", detail: "Replied in 3 min" },
-  { icon: "file-text", title: "Statement ready", detail: "Owner payout" },
-];
-function Showcase({ panel }: { panel: number }) {
-  // Cards and picture each get their own column, so neither ever sits on top of the other.
-  const cards = Math.round(Math.max(200, Math.min(250, panel * 0.5))), scene = Math.round(Math.max(150, Math.min(300, panel - cards - 20)));
-  return (
-    <View style={[ui.row, { gap: 20, alignItems: "center" }]}>
-      <View style={{ width: cards, gap: 10 }}>
-        {ACTIVITY.map((item, i) => <Rise key={item.title} index={4 + i}><ActivityCard {...item} index={i} lit={i === 0} /></Rise>)}
-      </View>
-      <View style={{ flex: 1, alignItems: "center" }}><ChargeScene width={scene} /></View>
-    </View>
-  );
-}
-function ActivityCard({ icon, title, detail, lit }: { icon: "check-circle" | "tool" | "message-circle" | "file-text"; title: string; detail: string; index: number; lit: boolean }) {
-  const reduced = useReducedMotion();
-  const [glow] = useState(() => new Animated.Value(lit ? 1 : 0));
-  useEffect(() => { const a = Animated.timing(glow, { toValue: lit ? 1 : 0, duration: reduced ? 0 : motionTokens.page + 160, easing: motionTokens.standard, useNativeDriver: false }); a.start(); return () => a.stop(); }, [lit, glow, reduced]);
-  return (
-    <Animated.View style={[ui.row, { gap: 12, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1,
-      borderColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(167,217,193,0.18)", "rgba(167,217,193,0.6)"] }),
-      backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(250,247,240,0.05)", "rgba(250,247,240,0.12)"] }), },
-      Platform.OS === "web" ? ({ backdropFilter: "blur(6px)" } as object) : null]}>
-      <Animated.View style={{ width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center",
-        backgroundColor: glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(167,217,193,0.14)", "rgba(167,217,193,0.3)"] }) }}>
-        <Feather name={icon} size={16} color="#A7D9C1" />
-      </Animated.View>
-      <View style={{ flex: 1, gap: 1 }}>
-        <Text numberOfLines={1} style={{ color: "#FAF7F0", fontSize: 13, fontWeight: "700" }}>{title}</Text>
-        <Text numberOfLines={1} style={{ color: "#C9D7CF", fontSize: 12 }}>{detail}</Text>
-      </View>
-    </Animated.View>
-  );
-}
-// The four teams.
-function TeamChips() {
-  const teams: { label: string; icon: "home" | "droplet" | "tool" | "pie-chart" }[] = [
-    { label: "Stays", icon: "home" }, { label: "Cleans", icon: "droplet" }, { label: "Ready", icon: "tool" }, { label: "Accounts", icon: "pie-chart" }];
-  return (
-    <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-      {teams.map(team => <TeamChip key={team.label} {...team} />)}
-    </View>
-  );
-}
-function TeamChip({ label, icon }: { label: string; icon: "home" | "droplet" | "tool" | "pie-chart" }) {
-  return (
-    <View style={[ui.row, { gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: "rgba(167,217,193,.35)",
-      backgroundColor: "rgba(250,247,240,.06)" }]}>
-      <Feather name={icon} size={14} color="#A7D9C1" />
-      <Text style={{ color: "#FAF7F0", fontSize: 13, fontWeight: "600" }}>{label}</Text>
     </View>
   );
 }

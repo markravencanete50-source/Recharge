@@ -35,12 +35,12 @@ import { formatCount, formatMoney } from "../../lib/format";
 import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveWorkRow, NoticeRowView, isDone, noticeIcon } from "./LiveRows";
 import { mayHaveOlder, mergeNotices, noticeRow, noticeRows, oldestNoticeId, workItemFrom, type NoticeRow } from "../../lib/notice-details";
-import { ListSearchBox, useListSearch } from "./SearchPicker";
+import { ListSearchBox, SearchBox, useListSearch } from "./SearchPicker";
 import { Calendar } from "./WorkspaceScreens";
 import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
 import { StateGraphic } from "./StateGraphic";
-import { DrawLine, Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
+import { Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
 import { departmentColor, primaryFill, ui, web, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
 import { WorkspaceApiError, readOlderNotices, readWorkItem, workspaceRequest, writeControls } from "./backend/client";
@@ -73,9 +73,8 @@ export async function liveApi(path: string, body?: Record<string, unknown>) {
 export function PageHeading({ title, subtitle, palette: p, action }: { title: string; subtitle: string; palette: Palette; action?: ReactNode }) {
   return (
     <View style={[ui.between, { gap: 16, alignItems: "flex-end", flexWrap: "wrap" }]}>
-      <View style={{ gap: 8, flexShrink: 1, minWidth: 220 }}>
+      <View style={{ gap: 6, flexShrink: 1, minWidth: 220 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{title}</Text>
-        <DrawLine width={40} color={p.primary} sessionKey={"heading:" + title} style={{ opacity: 0.85 }} />
         <Text style={[ui.body, { color: p.muted, maxWidth: 680 }]}>{subtitle}</Text>
       </View>
       {action}
@@ -536,11 +535,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
           selected={selected} onSelect={setSelected} onClose={closeDetail} onOpenWork={onOpenWork} extra={property => <>{journeyBlock(property)}{moreFor(property)}</>} />
         {!loading && !properties.length && <EmptyState palette={p} icon="home" title="No properties yet" detail="Properties appear here once they are added or onboarded." />}
       </> : <>
-        <View {...(Platform.OS === "web" ? { dataSet: { searchShell: "true" } } : {})} style={[ui.row, { borderRadius: 14, minHeight: 50, borderWidth: 1, borderColor: p.controlBorder, paddingHorizontal: 14, backgroundColor: p.surface, gap: 10 }]}>
-          <Feather name="search" size={18} color={p.muted} />
-          <TextInput accessibilityLabel="Search properties" placeholder="Search by name, street, area or postcode" placeholderTextColor={p.muted} value={query} onChangeText={value => { setQuery(value); setShown(24); }} autoCorrect={false} style={{ flex: 1, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular", minHeight: 48 }} />
-          {!!query && <MotionPress accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery("")} style={{ width: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={18} color={p.text} /></MotionPress>}
-        </View>
+        <SearchBox p={p} value={query} onChange={value => { setQuery(value); setShown(24); }} placeholder="Search by name, street, area or postcode" label="Search properties" />
         {visible.length ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
             {visible.slice(0, shown).map((property, index) => (

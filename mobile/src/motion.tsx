@@ -161,10 +161,6 @@ export function Shimmer({ rows = 3, color, highlight }: { rows?: number; color: 
 export function Bump({ children, style, pointerEvents }: { value: string | number; children: ReactNode; style?: StyleProp<ViewStyle>; pointerEvents?: 'none' | 'auto' | 'box-none' }) {
   return <View pointerEvents={pointerEvents} style={style}>{children}</View>;
 }
-// A page title accent line. It used to draw itself across; it now simply sits there.
-export function DrawLine({ width, height = 3, color, style }: { width: number; height?: number; color: string; sessionKey: string; style?: StyleProp<ViewStyle> }) {
-  return <View style={[style, { width, height, borderRadius: height, backgroundColor: color }]} />;
-}
 // A chevron that turns to point the way a section opens or closes.
 export function ExpandChevron({ open, color, size = 18 }: { open: boolean; color: string; size?: number }) {
   const reduced = useReducedMotion(), turn = useState(() => new Animated.Value(open ? 1 : 0))[0];
