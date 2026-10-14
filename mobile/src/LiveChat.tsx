@@ -8,10 +8,11 @@ import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
 import { depth, primaryFill, ui, type Palette } from "./theme";
-import { readChat, readInbox, viewMode, writeChat } from "./backend/client";
+import { readChat, readInbox, viewMode, writeChat, readClientEmail } from "./backend/client";
 import { GuestInbox } from "./LiveGuestInbox";
 import { SavedReplies } from "./SavedReplies";
-import { EmailUnknownSenders } from "./EmailUnknownSenders";
+import { ClientEmailRow, ClientEmailThreadPane } from "./ClientEmailThread";
+import { clientEmailListSchema, clientEmailStatus, type ClientEmailThread } from "../../lib/client-email-policy";
 import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, messageTabs, presenceLabel, presenceOf, threadSchema, type ChatMessage, type ChatReaction, type Conversation, type MessagesTab } from "../../lib/workspace-chat-policy";
 import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
 import { MessageSafety } from "./ChatSafety";
@@ -296,6 +297,11 @@ function NewConversation({ p, properties, only, onClose, onOpen }: { p: Palette;
   );
 }
 
+// A row in a Messages list: a chat conversation, or (Clients only) an email conversation with someone who is not an owner yet.
+type Row = { kind: "chat"; id: string; at: string | null; c: Conversation } | { kind: "email"; id: string; at: string | null; t: ClientEmailThread };
+const chatRow = (c: Conversation): Row => ({ kind: "chat", id: c.id, at: c.lastMessageAt, c });
+const emailRow = (t: ClientEmailThread): Row => ({ kind: "email", id: "email:" + t.id, at: t.lastMessageAt, t });
+
 export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, openConversation, updates, initialTab }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; openConversation?: string; updates?: ReactNode; initialTab?: "updates" }) {
   const owner = account.role === "client", guests = hasGuestInbox(account);
   // While a super admin views as someone nothing can be started or saved. A role preview (no person) reads the super admin's
@@ -319,8 +325,16 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   // Viewing as an owner: open the conversation they already have with Recharge, if any (starting one would be a change).
   const ownerThread = owner && mode.person ? list?.find(c => c.kind === "owner")?.id ?? null : null;
   useEffect(() => { if (ownerThread && !open) queueMicrotask(() => setOpen(ownerThread)); }, [ownerThread, open]);
-  useVisiblePoll(() => void loadList(), LIST_EVERY, !owner);
-  const changed = useCallback(() => { void loadList(); onUnread(); }, [loadList, onUnread]);
+  // Email to ownerrelations@ from someone who is not an owner yet: its own conversations in Clients, for admins and client relations.
+  const emailTeam = !owner && !mode.readOnly && ["admin", "super_admin", "stays"].includes(account.role);
+  const [emails, setEmails] = useState<ClientEmailThread[]>([]);
+  const loadEmails = useCallback(async () => {
+    if (!emailTeam) return;
+    try { setEmails(clientEmailListSchema.parse((await readClientEmail({ section: "list" })).data).threads); } catch { setEmails([]); }
+  }, [emailTeam]);
+  useEffect(() => { queueMicrotask(() => void loadEmails()); }, [loadEmails]);
+  useVisiblePoll(() => { void loadList(); void loadEmails(); }, LIST_EVERY, !owner);
+  const changed = useCallback(() => { void loadList(); void loadEmails(); onUnread(); }, [loadList, loadEmails, onUnread]);
   // Three tabs at most: Guests for the guest inbox, Clients for the people who answer owners, Team for everything else
   // (the department channels are ordinary conversations there). Updates is not a tab: a link to it (Home, Recent activity)
   // opens the feed here in place, with a way back to Messages.
@@ -329,7 +343,8 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const [showUpdates, setShowUpdates] = useState(openUpdates);
   const [chosenTab, setTab] = useState<Tab>(openConversation ? "team" : guests ? "guests" : "team");
   const tab: Tab = tabs.includes(chosenTab) ? chosenTab : "team";
-  const count = (t: Tab) => t === "guests" ? guestWaiting ?? 0 : (list ?? []).filter(c => tabOf(c) === t).reduce((sum, c) => sum + c.unread, 0);
+  const count = (t: Tab) => t === "guests" ? guestWaiting ?? 0 : (list ?? []).filter(c => tabOf(c) === t).reduce((sum, c) => sum + c.unread, 0)
+    + (t === "clients" ? emails.filter(e => clientEmailStatus(e) === "reply").length : 0);
   // The first time the list arrives, open the first tab that needs attention, unless one was chosen.
   const picked = useRef(!!openConversation || openUpdates);
   const attention = list && !owner ? tabs.find(t => count(t) > 0) ?? null : undefined;
@@ -342,21 +357,26 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const choose = (t: Tab) => { picked.current = true; setTab(t); setOpen(null); setQuery(""); setStatus("reply"); };
   // Newest message first in every tab (byLatest); the status buttons only filter.
-  const inTab = byLatest((list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab), c => c.lastMessageAt, c => c.id);
+  // In Clients, email conversations (id "email:<uuid>") interleave with owner conversations by time, through the same byLatest.
+  const inTab = byLatest<Row>([...(list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab).map(chatRow), ...(tab === "clients" ? emails.map(emailRow) : [])], r => r.at, r => r.id);
   const placeText = new Map(properties.map(x => [x.id, [x.name, x.address].filter(Boolean).join(" ")] as const));
-  const searchable = (c: Conversation) => [c.title, c.subtitle, c.propertyName, c.last?.authorName, ...c.propertyIds.map(id => placeText.get(id))];
-  const found = inTab.filter(c => matchesSearch(query, searchable(c)));
+  const searchable = (r: Row) => r.kind === "email" ? [r.t.name, r.t.address, r.t.subject] : [r.c.title, r.c.subtitle, r.c.propertyName, r.c.last?.authorName, ...r.c.propertyIds.map(id => placeText.get(id))];
+  const found = inTab.filter(r => matchesSearch(query, searchable(r)));
   const clients = tab === "clients" && tabs.length > 1;
+  const statusOf = (r: Row) => r.kind === "email" ? clientEmailStatus(r.t) : clientStatus(r.c);
   // The conversation open beside the list stays listed while it is read, so it does not jump away.
-  const shown = clients ? found.filter(c => clientStatus(c) === status || (desktop && c.id === open)) : found;
-  const thread = (id: string, back?: () => void) => <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} onOpen={c => { setOpen(c.id); void loadList(); }} onLeft={() => { setOpen(null); void loadList(); }} />;
+  const shown = clients ? found.filter(r => statusOf(r) === status || (desktop && r.id === open)) : found;
+  const thread = (id: string, back?: () => void) => id.startsWith("email:")
+    ? <ClientEmailThreadPane key={id} p={p} threadId={id.slice(6)} onBack={back} onChanged={changed} onAssigned={c => { setOpen(c); void loadList(); void loadEmails(); }} />
+    : <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} onOpen={c => { setOpen(c.id); void loadList(); }} onLeft={() => { setOpen(null); void loadList(); }} />;
   const listView = (
     <View style={{ gap: 10 }}>
       <SearchBar p={p} value={query} onChange={setQuery} placeholder={clients ? "Search owner or property" : "Search conversations or people"}
         action={mode.readOnly ? undefined : { icon: "edit-3", label: clients ? "New message to an owner" : "New message", onPress: () => setCreating(true) }} />
-      {clients && !!list && <StatusFilter p={p} value={status} counts={statusCounts(found, clientStatus)} onChange={setStatus} />}
-      {clients && !mode.readOnly && ["admin", "super_admin", "stays"].includes(account.role) && <EmailUnknownSenders p={p} onChanged={changed} />}
-      {!list ? <Loading p={p} /> : shown.length ? <View style={{ gap: 2 }}>{shown.map(c => <ConversationRow key={c.id} p={p} c={c} active={c.id === open} onPress={() => setOpen(c.id)} />)}</View>
+      {clients && !!list && <StatusFilter p={p} value={status} counts={statusCounts(found, statusOf)} onChange={setStatus} />}
+      {!list ? <Loading p={p} /> : shown.length ? <View style={{ gap: 2 }}>{shown.map(r => r.kind === "email"
+        ? <ClientEmailRow key={r.id} p={p} t={r.t} active={r.id === open} onPress={() => setOpen(r.id)} />
+        : <ConversationRow key={r.id} p={p} c={r.c} active={r.id === open} onPress={() => setOpen(r.id)} />)}</View>
         : <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{emptyStatusMessage(clients ? "clients" : "team", clients ? status : null, !!query.trim())}</Text>}
     </View>
   );

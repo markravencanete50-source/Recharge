@@ -26,7 +26,7 @@ const secondRun = await definitions();
 after(() => db.close());
 
 const roles = ['super_admin', 'stays', 'stays', 'stays', 'cleans', 'ready', 'client', 'client', 'accounts'];
-const [ADMIN, STAYS, NO_TOOL, CLIENT_REL, CLEANER, READY, OWNER, OTHER_OWNER, ACCOUNTS] = roles.map((_, i) => i);
+const [ADMIN, STAYS, NO_TOOL, CLIENT_REL, CLEANER, READY, OWNER, OTHER_OWNER] = roles.map((_, i) => i);
 const users = roles.map((_, i) => `99100000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
 const session = i => users[i].replace('9910', '9920');
 for (let i = 0; i < users.length; i++) {
