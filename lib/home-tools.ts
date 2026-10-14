@@ -37,7 +37,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
   admin: [
     tool('queue', 'Waiting on you', 'Decisions and approvals', 'hourglass', work('management', { sub: 'queue' })),
     tool('people', 'People', 'Accounts, roles and tools', 'people', work('management', { sub: 'people' })),
-    tool('performance', 'Performance', 'Shifts, replies and sign-offs', 'medal', work('management', { sub: 'performance' })),
+    tool('performance', 'Performance', 'KPIs, shifts, replies and sign-offs', 'medal', work('management', { sub: 'performance' })),
     tool('stays', 'Guest relations', 'Bookings, AirCover and repairs', 'building', work('stays')),
     tool('clients', 'Client relations', 'Onboarding, licensing, listings', 'key', work('clients')),
     tool('cleans', 'Cleans', 'Schedule, reviews and cleaners', 'spray', work('cleans')),

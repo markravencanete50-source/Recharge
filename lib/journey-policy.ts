@@ -8,6 +8,8 @@ export const HTTPS_LINK_MESSAGE='The link must start with https://';
 export const isHttpsLink=(v:string)=>{try{return new URL(v).protocol==='https:';}catch{return false;}};
 const https=z.string({required_error:HTTPS_LINK_MESSAGE,invalid_type_error:HTTPS_LINK_MESSAGE}).max(1000).refine(isHttpsLink,HTTPS_LINK_MESSAGE);
 // A comparable on the estimate: the name, an https link and the nightly rate, each with a plain message.
+// As many as the team wants (Lee, 14 October), up to a generous ceiling; the database checks the same number.
+export const MAX_COMPARABLES=20;
 const comparable=z.object({name:text(160).min(1,'Add the name').refine(v=>!/^(https?:|www\.)/i.test(v),'Put the link in the link field'),url:https,adrMinor:z.number({required_error:'Add the nightly rate',invalid_type_error:'Add the nightly rate'}).int().min(0).max(10000000)}).strict();
 const base={requestId:id,propertyId:id,version:z.number().int().positive()};
 export const onboardingFormSchema=z.object({
@@ -29,7 +31,7 @@ export const enquiryDetailsSchema=z.object({
 }).strict();
 export const journeyActionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('createEnquiry'),requestId:id,clientId:id.optional(),name:text(200).min(2),address:text(1000).min(5),region:text(200).default(''),propertyType:text(120).min(2),bedrooms:z.number().int().min(0).max(40),bathrooms:z.number().int().min(0).max(40),enquiry:enquiryDetailsSchema.optional()}).strict(),
- z.object({action:z.literal('publishEstimate'),...base,lowRateMinor:money.min(100),mediumRateMinor:money.min(100),highRateMinor:money.min(100),comparables:z.array(comparable).max(3),comments:text(5000).default(''),occupancyBps:z.number().int().min(0).max(10000).optional(),directBookingBps:z.number().int().min(0).max(10000).optional(),otaFeeBps:z.number().int().min(0).max(10000).optional(),managementFeeBps:z.number().int().min(0).max(10000).optional()}).strict(),
+ z.object({action:z.literal('publishEstimate'),...base,lowRateMinor:money.min(100),mediumRateMinor:money.min(100),highRateMinor:money.min(100),comparables:z.array(comparable).max(MAX_COMPARABLES,`Up to ${MAX_COMPARABLES} comparables`),comments:text(5000).default(''),occupancyBps:z.number().int().min(0).max(10000).optional(),directBookingBps:z.number().int().min(0).max(10000).optional(),otaFeeBps:z.number().int().min(0).max(10000).optional(),managementFeeBps:z.number().int().min(0).max(10000).optional()}).strict(),
  z.object({action:z.literal('decideEstimate'),...base,decision:z.enum(['proceed','review','decline']),feedback:text(5000).default(''),followUpOn:date.nullable().optional()}).strict(),
  z.object({action:z.literal('publishAgreement'),...base,agreement:text(10000).min(20)}).strict(),
  z.object({action:z.literal('signAgreement'),...base,agreementRevision:z.number().int().positive(),signedName:text(200).min(2),consent:z.literal(true)}).strict(),

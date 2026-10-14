@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { estimateDeliverySchema } from './estimate-link';
 import { normaliseRegion } from './regions';
-import { emailHeader } from './email-brand';
+import { emailSignature } from './email-brand';
+import { ENQUIRY_REPLY_TO } from './integration-policy';
 
 // Client Enquiries: the New Property Enquiry Form landlords fill in from a link the team emails
 // them, and what the team does with each answer (value the property, or close it).
@@ -161,7 +162,7 @@ export function enquiryEmail(subject: string, body: string, link: string) {
   const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const button = `<p style="margin:28px 0"><a href="${escape(link)}" style="background:#1F3D38;color:#FAF7F0;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">Open the property form</a></p>`;
   const paragraphs = body.split(/\n{2,}/).map(part => part.includes(LINK_PLACEHOLDER) ? button : `<p style="margin:0 0 14px">${escape(part).replace(/\n/g, '<br>')}</p>`).join('');
-  const html = `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.6;color:#152D28;max-width:560px">${emailHeader()}${paragraphs}${body.includes(LINK_PLACEHOLDER) ? '' : button}<p style="margin:0;color:#4E6259;font-size:13px;word-break:break-all">If the button doesn't work, copy this link into your browser: ${escape(link)}</p></div>`;
+  const html = `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.6;color:#152D28;max-width:560px">${paragraphs}${body.includes(LINK_PLACEHOLDER) ? '' : button}<p style="margin:0;color:#4E6259;font-size:13px;word-break:break-all">If the button doesn't work, copy this link into your browser: ${escape(link)}</p>${emailSignature(ENQUIRY_REPLY_TO)}</div>`;
   return { subject, text, html };
 }
 

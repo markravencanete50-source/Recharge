@@ -51,7 +51,7 @@ const ALSO: Record<string, string> = {
   'view:accounts': 'accounts money finance expenses payouts statements invoices',
   'view:all': 'all work tasks everything',
   'tool:queue': 'approvals flags decisions waiting',
-  'tool:performance': 'reflection end of day shifts replies sign-offs rota',
+  'tool:performance': 'team performance kpi kpis targets bonus tiers reflection end of day shifts replies sign-offs rota',
   'tool:productivity': 'timesheets rota hours clock in clock out',
 };
 const SUB_ART: Record<string, ToolArt> = {

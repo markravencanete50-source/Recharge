@@ -82,7 +82,8 @@ test('publishing emails the estimate once per publish, from ownerrelations@ with
   assert.equal(issue.input.tokenHash, await enquiry.tokenHash(link[1]), 'only the hash goes to the database');
   assert.ok(!JSON.stringify(state.rpc).includes(link[1]), 'never the token itself');
   assert.match(mail.body.html, /View your estimate/);
-  assert.ok(mail.body.html.indexOf('recharge-email-logo.png') < mail.body.html.indexOf('<p'), 'the Recharge logo is at the top');
+  assert.ok(mail.body.html.indexOf('recharge-email-logo.png') > mail.body.html.lastIndexOf('</p>'), 'the Recharge logo is a signature at the bottom');
+  assert.match(mail.body.html, /<strong>Recharge Group<\/strong><br><a href="mailto:ownerrelations@rechargegroup\.co\.uk"/);
   assert.doesNotMatch(mail.body.text, /recharge-email-logo/);
   assert.match(mail.body.text, /Expected: £110\.00/);
   assert.match(mail.body.text, /Flat nearby, £105\.00 a night: https:\/\/www\.airbnb\.co\.uk\/rooms\/1/);

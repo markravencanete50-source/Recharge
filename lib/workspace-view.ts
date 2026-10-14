@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { estimateDeliverySchema } from './estimate-link';
+import { MAX_COMPARABLES } from './journey-policy';
 // The property read returns table rows, so its last change arrives as updated_at; it is carried as updatedAt.
 const propertyRowSchema=z.object({id:z.string().uuid(),name:z.string(),address:z.string(),region:z.string(),status:z.string(),version:z.number(),bedrooms:z.number(),latitude:z.number().nullish(),longitude:z.number().nullish(),updated_at:z.string().optional(),updatedAt:z.string().optional()});
 export const propertyViewSchema=propertyRowSchema.transform(({updated_at,updatedAt,...p}):Omit<z.infer<typeof propertyRowSchema>,'updated_at'>=>{const at=updatedAt??updated_at;return at===undefined?p:{...p,updatedAt:at};});
@@ -27,7 +28,7 @@ export type InvoiceView=z.infer<typeof invoiceViewSchema>;
 export type NoticeView=z.infer<typeof noticeViewSchema>;
 export const readableStage=(s:string)=>s.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase());
 const comparableSchema=z.object({name:z.string().min(1).max(160),url:z.string().url().refine(value=>{try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password;}catch{return false;}}),adrMinor:z.number().int().nonnegative().max(10000000)});
-export function estimateComparables(estimate:Record<string,unknown>|null){const parsed=z.array(comparableSchema).max(3).safeParse(estimate?.comparables);return parsed.success?parsed.data:[];}
+export function estimateComparables(estimate:Record<string,unknown>|null){const parsed=z.array(comparableSchema).max(MAX_COMPARABLES).safeParse(estimate?.comparables);return parsed.success?parsed.data:[];}
 const phases=['Enquiry','Estimate','Agreement','Property setup','Invoice','Inspection','Live'];
 const stages:Record<string,number>={enquiry:0,estimate:1,reviewing:1,agreement:2,form:3,invoice:4,inspection_to_book:5,inspection_booked:5,inspection_complete:5,live:6};
 const next:Record<string,string>={enquiry:'Recharge reviews the enquiry and prepares an estimate.',estimate:'The property owner reviews the estimate.',reviewing:'The estimate remains open until the owner decides.',agreement:'Publish and accept the management agreement to continue.',form:'The owner completes property setup. Accounts can issue the onboarding invoice.',invoice:'The setup form and verified invoice payment are required before inspection.',inspection_to_book:'Ready can now book the property inspection.',inspection_booked:'The inspection is booked. Record the findings after the visit.',inspection_complete:'Complete the required handovers and record the actual live listing.',live:'The property is live. Operational work remains linked to this property.',archived:'The owner declined the estimate. This shared enquiry is archived.'};

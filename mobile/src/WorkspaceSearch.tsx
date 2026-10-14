@@ -28,9 +28,12 @@ function Highlight({ text, query, palette: p }: { text: string; query: string; p
 // The search panel: type anything (a page, a tool, a property, a job, an invoice) and open it,
 // or star it to keep it in Favorites. With nothing typed it shows Favorites and the main pages.
 export function SearchPanel({ visible, onClose, palette: p, entries, onOpen }: { visible: boolean; onClose: () => void; palette: Palette; entries: SearchEntry[]; onOpen: (entry: SearchEntry) => void }) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const wide = width >= 768;
+  // On a computer the panel sits 72 from the top and stops 24 above the bottom. Its height is set in pixels,
+  // not as a percentage, so the results list always gets the room it needs and never collapses to a sliver.
+  const panelMax = Math.max(320, height - 72 - 24);
   const favorites = useFavorites();
   const [query, setQuery] = useState(""), [selected, setSelected] = useState(0);
   const input = useRef<TextInput>(null), list = useRef<ScrollView>(null);
@@ -68,7 +71,7 @@ export function SearchPanel({ visible, onClose, palette: p, entries, onOpen }: {
     <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
       <View {...(isWeb ? { dataSet: { overlay: "blur" } } : {})} style={{ flex: 1, backgroundColor: p.overlay, alignItems: "center", paddingTop: wide ? 72 : 0 }}>
         <MotionPress accessibilityLabel="Close search" onPress={close} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
-        <SwapIn swapKey={visible ? "open" : "closed"} style={{ width: "100%", maxWidth: wide ? 680 : undefined, flex: wide ? undefined : 1, alignItems: "center" }}><View accessibilityViewIsModal style={{ width: "100%", maxWidth: wide ? 680 : undefined, flex: wide ? undefined : 1, maxHeight: wide ? "80%" : undefined, backgroundColor: p.surface, borderRadius: wide ? 28 : 0, ...(wide ? depth.floating : {}), borderWidth: wide ? 1 : 0, borderColor: p.border, paddingTop: wide ? 16 : insets.top + 12, paddingHorizontal: 16, paddingBottom: wide ? 12 : insets.bottom + 8, gap: 10, overflow: "hidden", ...(isWeb ? { boxShadow: "0 40px 80px -30px rgba(10, 26, 21, 0.55)" } : { elevation: 12 }) }}>
+        <SwapIn swapKey={visible ? "open" : "closed"} style={{ width: "100%", maxWidth: wide ? 680 : undefined, flex: wide ? undefined : 1, alignItems: "center" }}><View accessibilityViewIsModal style={{ width: "100%", maxWidth: wide ? 680 : undefined, flex: wide ? undefined : 1, maxHeight: wide ? panelMax : undefined, backgroundColor: p.surface, borderRadius: wide ? 28 : 0, ...(wide ? depth.floating : {}), borderWidth: wide ? 1 : 0, borderColor: p.border, paddingTop: wide ? 16 : insets.top + 12, paddingHorizontal: 16, paddingBottom: wide ? 12 : insets.bottom + 8, gap: 10, overflow: "hidden", ...(isWeb ? { boxShadow: "0 40px 80px -30px rgba(10, 26, 21, 0.55)" } : { elevation: 12 }) }}>
           <View style={[ui.row, { gap: 10 }]}>
             <View {...(isWeb ? { dataSet: { bareInput: "true" } } : {})} style={[ui.row, { flex: 1, minWidth: 0, gap: 10, borderWidth: 2, borderColor: p.primary, borderRadius: 18, paddingHorizontal: 14, backgroundColor: p.background }]}>
               <Feather name="search" size={20} color={p.primary} />
@@ -83,7 +86,7 @@ export function SearchPanel({ visible, onClose, palette: p, entries, onOpen }: {
           <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted, paddingHorizontal: 4 }]}>
             {query.trim() ? (result.total ? `${result.total} ${result.total === 1 ? "match" : "matches"} · tap the star to save one to Favorites` : "Nothing matches. Try one word, such as a street, a tool or a guest's job.") : "Tip: search by property name, street, postcode, job title or tool."}
           </Text>
-          <ScrollView ref={list} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 14, paddingBottom: 8 }}>
+          <ScrollView ref={list} keyboardShouldPersistTaps="handled" style={wide ? { flexGrow: 0, flexShrink: 1, flexBasis: "auto" } : undefined} contentContainerStyle={{ gap: 14, paddingBottom: 8 }}>
             {sections.map(section => (
               <View key={section.title} style={{ gap: 2 }}>
                 <Text style={heading(p)}>{section.title}</Text>
