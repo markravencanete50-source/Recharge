@@ -38,6 +38,8 @@ export const operationsActionSchema=z.union([
  // readyUserId: the one contractor (a Ready user with access to the property) who gets the job.
  step('referReady',{troubleshooting:text(2000).min(5),warrantyContactEvidence:text(2000).optional(),guestUpdate:text(2000).min(5),urgent:z.boolean().optional(),readyUserId:id}),
  step('reassignReady',{readyUserId:id,reason:text(2000).min(5)}),
+ // The team checked a contractor's estimate (phase team_review): approved within the owner's limit, else the owner is asked.
+ step('reviewDone',{note:text(2000).optional()}),
  // A repair still in triage closed without a visit: what fixed it (Stays or management; resolveRepair in the database).
  step('resolveRepair',{resolution:text(2000).min(5)}),
  z.object({...update,step:z.literal('bookRepair'),data:z.object({repairOn:date,contractor:text(200).min(2),guestUpdate:text(2000).min(5),visitFrom:clock,visitTo:clock}).strict()

@@ -89,8 +89,9 @@ export function CostDecisionSheet({ p, decision, start = "approve", onClose, onD
           {!!tags.length && <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>{tags}</View>}
         </View>
         <WorkPhotos key={decision.workId + ":" + decision.version} p={p} workId={decision.workId} title="Photos" />
-        {/* A contractor's estimate: who sent it and the quote they attached (management only). */}
-        {!owner && <ApprovalContractor key={"contractor:" + decision.workId + ":" + decision.version} p={p} workId={decision.workId} version={decision.version} />}
+        {/* A contractor's estimate: who sent it, what the work is and the quote they attached. Owners approve these after the
+            team's review (Repairs with contractors); the team records the owner's answer while owners have no accounts. */}
+        <ApprovalContractor key={"contractor:" + decision.workId + ":" + decision.version} p={p} workId={decision.workId} version={decision.version} showReason={decision.previousEstimateMinor === null || !decision.quoteReason} />
         {/* The amount, the earlier quote if it changed, and the limit it is above. */}
         <View style={{ gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
           <View style={{ gap: 2 }}>

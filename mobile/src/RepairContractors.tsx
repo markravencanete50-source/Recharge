@@ -6,11 +6,12 @@ import * as DocumentPicker from "expo-document-picker";
 import { z } from "zod";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
-import { Button, dayLabel, Loading, message, Notice, Tag } from "./LiveKit";
+import { Button, dayLabel, Field, Loading, message, Notice, Tag, useRequestId } from "./LiveKit";
+import { Sheet } from "./TeamFlows";
 import { SearchPicker } from "./SearchPicker";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { OpenMessagesContext } from "./PropertyTeamChat";
-import { photoSource, readInbox, readOperations, readRepairContractors, readWorkItem, readWorkMedia, uploadWorkFile } from "./backend/client";
+import { photoSource, readInbox, readOperations, readRepairContractors, readWorkItem, readWorkMedia, uploadWorkFile, writeOperation } from "./backend/client";
 import { icon, radius, ui, type Palette } from "./theme";
 import { documentsAllowed } from "../../lib/integration-policy";
 import { inboxThreadSchema } from "../../lib/guest-inbox-policy";
@@ -19,7 +20,7 @@ import { formatMoney } from "../../lib/format";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import {
   assignedContractor, assignedTo, clashWarning, contractorLabel, contractorsSchema, contractorStage, CONTRACTOR_STAGES, guestConversationOf,
-  guestSendRoute, quoteFilesOf, visitWindowLabel, type Clash, type Contractor, type ContractorStage,
+  guestSendRoute, ownerLimitLine, quoteFilesOf, reviewData, REVIEW_PHASE, REVIEW_STEP, visitWindowLabel, type Clash, type Contractor, type ContractorStage,
 } from "../../lib/repair-contractors";
 
 // Repairs with contractors: the pieces the repair screens share (lib/repair-contractors.ts has the rules and names).
@@ -173,9 +174,10 @@ export function ContractorLine({ p, data }: { p: Palette; data: Record<string, u
   return <View style={[ui.row, { gap: 8 }]}><Feather name="tool" size={icon.row} color={p.muted} /><Text style={{ color: p.text, fontSize: 14 }}>Contractor: <Text style={{ fontWeight: "600" }}>{who.name}</Text></Text></View>;
 }
 
-// Management approving a contractor's estimate: who sent it and the quote they attached (read from the repair itself,
-// so the management queue needs no change).
-export function ApprovalContractor({ p, workId, version }: { p: Palette; workId: string; version: number }) {
+// A contractor's estimate on an approval (the owner's Approvals, and Management for older ones): who sent it, what the
+// work is and the quote they attached, read from the repair itself so the approval lists need no change.
+// showReason: say what the work is (when the sheet does not already show it).
+export function ApprovalContractor({ p, workId, version, showReason = false }: { p: Palette; workId: string; version: number; showReason?: boolean }) {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   useEffect(() => {
     let active = true;
@@ -188,6 +190,7 @@ export function ApprovalContractor({ p, workId, version }: { p: Palette; workId:
   return (
     <View style={{ gap: 8 }} {...(Platform.OS === "web" ? { dataSet: { approvalContractor: workId } } : {})}>
       <ContractorLine p={p} data={data} />
+      {showReason && typeof data.quoteReason === "string" && !!data.quoteReason && <Text style={[ui.small, { color: p.text }]}>What the work is: {data.quoteReason}</Text>}
       <RepairFileList p={p} workId={workId} ids={quote} title="Contractor's quote" />
     </View>
   );
@@ -204,7 +207,7 @@ export function ContractorJobs({ p, userId, properties, onOpen }: { p: Palette; 
   }, [userId]);
   const name = (id: string) => properties?.find(x => x.id === id)?.name ?? "Property";
   const groups = CONTRACTOR_STAGES.filter(s => s.stage !== "done").map(s => ({ ...s, jobs: (jobs ?? []).filter(j => contractorStage(j.data) === s.stage) })).filter(g => g.jobs.length);
-  const tone: Record<ContractorStage, "good" | "wait" | "bad" | "plain"> = { estimate: "wait", waiting: "plain", book: "good", booked: "plain", declined: "bad", done: "good" };
+  const tone: Record<ContractorStage, "good" | "wait" | "bad" | "plain"> = { estimate: "wait", review: "plain", owner: "plain", waiting: "plain", book: "good", booked: "plain", declined: "bad", done: "good" };
   return (
     <View style={{ gap: 10 }} {...(Platform.OS === "web" ? { dataSet: { contractorJobs: "home" } } : {})}>
       <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Jobs for you</Text>
@@ -239,3 +242,78 @@ export function ContractorJobs({ p, userId, properties, onOpen }: { p: Palette; 
   );
 }
 
+
+// --- Review done (management: admins and super admins) ----------------------------------------------------
+export const REVIEW_CAPTION = "Management approval of the contractor's estimate";
+// The estimate, who sent it, and the owner's limit as a preview (the database decides on Review done). Never for Ready.
+export function EstimatePreview({ p, role, data }: { p: Palette; role: string; data: Record<string, unknown> }) {
+  if (role === "ready" || role === "client") return null;
+  const who = assignedContractor(data);
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: p.text, fontSize: 24, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{typeof data.estimatedCostMinor === "number" ? formatMoney(data.estimatedCostMinor) : "–"}</Text>
+      <Text style={[ui.small, { color: p.muted }]}>{who ? `${who.name}'s estimate.` : "A contractor's estimate."} Check the price, what the work is and the quote.</Text>
+      <Notice text={ownerLimitLine(role, data) ?? "Within the owner's limit it is approved straight away; above it, the owner is asked."} p={p} />
+      <Text style={[ui.small, { color: p.muted }]}>This is a preview. The owner’s limit is checked again when management press Review done.</Text>
+    </View>
+  );
+}
+
+function ReviewSheet({ p, role, job, propertyName, onClose, onDone }: { p: Palette; role: string; job: Job | null; propertyName: string; onClose: () => void; onDone: () => Promise<void> }) {
+  const [note, setNote] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const request = useRequestId(job ? [REVIEW_STEP, job.workId, job.version, note.trim()].join(":") : null);
+  async function review() {
+    if (!job || busy) return;
+    setBusy(true); setError("");
+    try {
+      await writeOperation({ action: "updateOperation", requestId: request.get(), workId: job.workId, version: job.version, step: REVIEW_STEP, data: reviewData(note) } as Parameters<typeof writeOperation>[0]);
+      request.done(); setNote(""); await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  return (
+    <Sheet palette={p} visible={!!job} onClose={onClose} title={propertyName} subtitle="Contractor estimate to review" icon="hardhat">
+      {job && <View style={{ gap: 12 }} {...(Platform.OS === "web" ? { dataSet: { reviewSheet: job.workId } } : {})}>
+        <Text style={{ color: p.text }}>{typeof job.data.issue === "string" && job.data.issue ? job.data.issue : job.title}</Text>
+        <EstimatePreview p={p} role={role} data={job.data} />
+        <ApprovalContractor p={p} workId={job.workId} version={job.version} showReason />
+        <Field label="Note for the team (optional)" value={note} onChange={setNote} p={p} multiline />
+        {!!error && <Notice text={error} p={p} tone="bad" />}
+        <Button label={busy ? "Saving…" : "Review done"} icon="check" primary p={p} disabled={busy} onPress={() => void review()} />
+        <Text style={[ui.small, { color: p.muted }]}>{REVIEW_CAPTION}</Text>
+      </View>}
+    </Sheet>
+  );
+}
+
+// Management approvals: contractors' estimates waiting in team_review, each opening Review done. Admins and super admins only.
+export function ContractorReviews({ p, role, properties, refreshKey = 0 }: { p: Palette; role: string; properties?: PropertyView[]; refreshKey?: number }) {
+  const [jobs, setJobs] = useState<Job[]>([]), [openId, setOpenId] = useState<string | null>(null), [tick, setTick] = useState(0);
+  const management = role === "admin" || role === "super_admin";
+  useEffect(() => {
+    let active = true;
+    if (management) queueMicrotask(() => void readOperations().then(r => { if (active) setJobs(z.array(operationViewSchema).parse(r.data).filter(op => op.kind === "maintenance" && op.data.phase === REVIEW_PHASE)); }).catch(() => undefined));
+    return () => { active = false; };
+  }, [management, refreshKey, tick]);
+  if (!management || !jobs.length) return null;
+  const name = (id: string) => properties?.find(x => x.id === id)?.name ?? "Property";
+  const open = jobs.find(j => j.workId === openId) ?? null;
+  return (
+    <View style={{ gap: 8 }} {...(Platform.OS === "web" ? { dataSet: { contractorReviews: String(jobs.length) } } : {})}>
+      <Text style={[ui.small, { color: p.muted, fontWeight: "700" }]}>Contractor estimates to review · {jobs.length}</Text>
+      <View style={{ borderRadius: radius.tile, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, overflow: "hidden" }}>
+        {jobs.map((j, i) => (
+          <MotionPress key={j.workId} accessibilityRole="button" accessibilityLabel={`${name(j.propertyId)}: contractor estimate to review`} onPress={() => setOpenId(j.workId)}
+            style={[ui.row, { gap: 10, minHeight: 56, paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <Text numberOfLines={1} style={{ color: p.text, fontSize: 14 }}><Text style={{ fontWeight: "600" }}>{name(j.propertyId)}</Text>{` · ${typeof j.data.issue === "string" && j.data.issue ? j.data.issue : j.title}`}</Text>
+              <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{[assignedContractor(j.data)?.name, typeof j.data.estimatedCostMinor === "number" ? formatMoney(j.data.estimatedCostMinor) : null].filter(Boolean).join(" · ")}</Text>
+            </View>
+            <Tag label="Contractor estimate to review" tone="wait" p={p} />
+            <Feather name="chevron-right" size={icon.row} color={p.muted} />
+          </MotionPress>
+        ))}
+      </View>
+      <ReviewSheet p={p} role={role} job={open} propertyName={open ? name(open.propertyId) : ""} onClose={() => setOpenId(null)} onDone={async () => { setOpenId(null); setTick(t => t + 1); }} />
+    </View>
+  );
+}

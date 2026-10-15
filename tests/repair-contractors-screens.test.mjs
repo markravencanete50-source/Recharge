@@ -16,6 +16,8 @@ const media = await vite.ssrLoadModule('/lib/integration-policy.ts');
 const { guestNameVisible } = await vite.ssrLoadModule('/lib/feedback-defaults.ts');
 const source = file => readFileSync(file, 'utf8');
 const repairs = source('mobile/src/LiveRepairs.tsx'), shared = source('mobile/src/RepairContractors.tsx'), inbox = source('mobile/src/LiveGuestInbox.tsx');
+const { repairStep } = await vite.ssrLoadModule('/lib/repairs-live.ts');
+const limiter = source('mobile/src/LimitChanger.tsx'), managementApprovals = source('mobile/src/ManagementApprovals.tsx'), management = source('mobile/src/LiveManagement.tsx');
 const readyHome = source('mobile/src/ReadyHome.tsx'), approvals = source('mobile/src/LiveApprovals.tsx'), photos = source('mobile/src/Photos.tsx');
 
 const W = '11111111-1111-4111-8111-111111111111', P = '22222222-2222-4222-8222-222222222222', ME = '33333333-3333-4333-8333-333333333333';
@@ -51,8 +53,12 @@ test('the contractor: send an estimate, wait for approval, book only once approv
   assert.equal(rc.contractorStage({ ...mine, phase: 'referred' }), 'estimate');
   assert.equal(rc.contractorAction('ready', ME, { ...mine, phase: 'referred' }), 'estimate');
   assert.equal(rc.contractorAction('ready', OTHER, { ...mine, phase: 'referred' }), null, 'never on a job given to someone else');
-  assert.equal(rc.contractorStage({ ...mine, phase: 'management_approval' }), 'waiting');
-  assert.equal(rc.contractorStage({ ...mine, phase: 'owner_approval' }), 'waiting');
+  // After the estimate: being reviewed by management, then waiting for the owner, then "Approved, please book".
+  assert.equal(rc.contractorStage({ ...mine, phase: 'team_review' }), 'review');
+  assert.equal(rc.contractorStageLabel('review'), 'Being reviewed by management');
+  assert.equal(rc.contractorStage({ ...mine, phase: 'owner_approval' }), 'owner');
+  assert.equal(rc.contractorStageLabel('owner'), 'Waiting for the owner');
+  assert.equal(rc.contractorStage({ ...mine, phase: 'management_approval' }), 'waiting', 'older estimates still waiting on management');
   // "Approved, please book" = referred AND bookingApprovedAt. No fallback.
   assert.equal(rc.contractorStage({ ...mine, phase: 'referred', managementApprovedAt: '2026-10-15T10:00:00Z' }), 'estimate');
   assert.equal(rc.contractorStage({ ...mine, phase: 'referred', bookingApprovedAt: '2026-10-15T10:00:00Z' }), 'book');
@@ -132,8 +138,8 @@ test('the sheets: Send to contractor, Send estimate, Approved please book, Mark 
   assert.match(readyHome, /<ContractorJobs p=\{p\} userId=\{userId\}/);
   assert.match(shared, />Jobs for you</);
   assert.match(shared, /assignedTo\(op\.data, userId\) && !!assignedContractor\(op\.data\)/);
-  // Management approvals: the contractor's name and their quote, read from the repair.
-  assert.match(approvals, /!owner && <ApprovalContractor/);
+  // Approvals: the contractor's name and their quote, read from the repair.
+  assert.match(approvals, /<ApprovalContractor key=/);
   assert.match(shared, /readWorkItem\(workId\)/);
   assert.match(shared, /title="Contractor's quote"/);
 });
@@ -163,4 +169,99 @@ test('the older generic repair forms point to Maintenance for the steps that now
   const forms = source('lib/workflow-forms.ts');
   assert.match(forms, /'Open this repair from Maintenance to choose the contractor it goes to\.'/);
   assert.match(forms, /'Open this repair from Maintenance to book the day and time of the visit\.'/);
+});
+
+test('Review done: management (admins and super admins) review a contractor estimate; Stays see it waiting; a preview of the owner limit', () => {
+  assert.equal(repairStep('admin', 'team_review'), 'reviewDone');
+  assert.equal(repairStep('super_admin', 'team_review'), 'reviewDone');
+  for (const role of ['stays', 'ready', 'client', 'accounts']) assert.equal(repairStep(role, 'team_review'), null, role);
+  update('reviewDone', rc.reviewData(''));
+  assert.deepEqual(rc.reviewData('  Checked against the last repair '), { note: 'Checked against the last repair' });
+  update('reviewDone', rc.reviewData('Checked against the last repair'));
+  assert.throws(() => update('reviewDone', { note: 'ok', approve: true }), 'nothing else is sent');
+  const est = { phase: 'team_review', estimatedCostMinor: 18000 };
+  assert.equal(rc.ownerLimitLine('admin', { ...est, ownerLimitMinor: 25000, ownerFullPermission: false, ownerLimitSource: 'set' }), "Within the owner's limit (£250): this will be approved straight away.");
+  assert.equal(rc.ownerLimitLine('stays', { ...est, ownerLimitMinor: 10000, ownerFullPermission: false, ownerLimitSource: 'form' }), "Above the owner's limit (£100): the owner will be asked.");
+  assert.equal(rc.ownerLimitLine('admin', { ...est, ownerLimitMinor: 18000 }), "Within the owner's limit (£180): this will be approved straight away.", 'at the limit is within it');
+  assert.match(rc.ownerLimitLine('admin', { ...est, ownerLimitMinor: null, ownerFullPermission: true, ownerLimitSource: 'set' }), /full permission/);
+  assert.match(rc.ownerLimitLine('admin', { ...est, ownerLimitMinor: null, ownerFullPermission: false, ownerLimitSource: 'none' }), /owner will be asked/);
+  assert.equal(rc.ownerLimitLine('admin', est), null, 'no fields: the general line instead');
+  assert.match(repairs, /\{step === "reviewDone" && <Text style=\{\[ui\.small, \{ color: p\.muted \}\]\}>\{REVIEW_CAPTION\}<\/Text>\}/);
+  assert.match(shared, /export const REVIEW_CAPTION = "Management approval of the contractor's estimate";/);
+  assert.match(repairs, /: <Notice text="Waiting for management to review\." p=\{p\} \/>/);
+  assert.match(repairs, /phase === "team_review" && seesGuestChat\(role\) && <View/);
+  // In Management approvals, labelled "Contractor estimate to review", with Review done there too.
+  assert.match(managementApprovals, /\{admin && <ContractorReviews p=\{p\} role=\{account\.role\}/);
+  assert.match(shared, /<Tag label="Contractor estimate to review"/);
+  assert.match(shared, /label=\{busy \? "Saving…" : "Review done"\}/);
+  // The owner's Approvals: the contractor, what the work is and the quote.
+  assert.match(approvals, /<ApprovalContractor key=\{"contractor:" \+ decision\.workId \+ ":" \+ decision\.version\} p=\{p\} workId=\{decision\.workId\} version=\{decision\.version\} showReason=/);
+});
+
+test('a contractor never sees an owner limit, even when a limit field is present', () => {
+  const leaked = { phase: 'referred', estimatedCostMinor: 18000, ownerLimitMinor: 25000, ownerFullPermission: false, ownerLimitSource: 'set', autoApprovedMinor: 18000, autoApprovalLimitMinor: 25000, autoApprovalSource: 'set' };
+  assert.equal(rc.ownerLimitLine('ready', leaked), null);
+  assert.match(shared, /export function EstimatePreview[^\n]*\n\s*if \(role === "ready" \|\| role === "client"\) return null;/);
+  assert.match(repairs, /role !== "ready" && !!autoApprovalLabel\(repair\.data\)/);
+  for (const s of rc.CONTRACTOR_STAGES) assert.doesNotMatch(s.label + s.detail, /limit/i, s.stage);
+  // The contractor's own screens: Jobs for you, and the Send estimate panel.
+  const jobs = shared.slice(shared.indexOf('export function ContractorJobs'), shared.indexOf('// --- Review done'));
+  assert.ok(jobs.length > 100);
+  assert.doesNotMatch(jobs, /limit/i);
+  const estimate = repairs.slice(repairs.indexOf('dataSet: { repairSheet: "estimate" }'), repairs.indexOf('{!contractorView && canReviseQuote'));
+  assert.ok(estimate.length > 100);
+  assert.doesNotMatch(estimate, /limit/i);
+  const waiting = repairs.slice(repairs.indexOf('{!step && contractorView && !estimating'), repairs.indexOf('{!step && !contractorView'));
+  assert.ok(waiting.length > 100);
+  assert.doesNotMatch(waiting, /limit/i);
+});
+
+test('Limit Changer: every owner and property, super admins change limits, admins look; waiting estimates approved after a change', () => {
+  const query = Object.fromEntries(new URLSearchParams(rc.limitsQuery().slice(1)));
+  assert.deepEqual(operationsReadSchema.parse(query), { section: 'repairLimits' });
+  const server = source('lib/journey-server.ts');
+  assert.match(server, /parsed\.data\.section===LIMITS_READ\.section\?await session\.client\.rpc\(LIMITS_READ\.rpc\)/);
+  assert.match(server, /\(body as \{action\?:unknown\}\)\.action===LIMITS_ACTION\.action/);
+  assert.match(server, /session\.client\.rpc\(LIMITS_ACTION\.rpc,\{\[LIMITS_ACTION\.arg\]:limit\.data\}\)/);
+  assert.equal(rc.LIMITS_ACTION.rpc, 'workspace_repair_limits_action');
+  assert.equal(rc.LIMITS_READ.rpc, 'workspace_repair_limits_read');
+
+  const amount = rc.limitAction(W, [P], 'amount', '250');
+  assert.deepEqual(amount.data, { requestId: W, action: 'setRepairLimit', propertyIds: [P], limitMinor: 25000, fullPermission: false });
+  assert.deepEqual(rc.limitAction(W, [P, ME], 'full', '250').data, { requestId: W, action: 'setRepairLimit', propertyIds: [P, ME], limitMinor: null, fullPermission: true }, 'full permission has no amount');
+  assert.deepEqual(rc.limitAction(W, [P], 'ask', '').data, { requestId: W, action: 'setRepairLimit', propertyIds: [P], limitMinor: null, fullPermission: false });
+  assert.match(rc.limitAction(W, [P], 'amount', 'lots').error, /pounds/);
+  assert.match(rc.limitAction(W, [], 'ask', '').error, /property/);
+  assert.equal(rc.repairLimitActionSchema.safeParse({ requestId: W, action: 'setRepairLimit', propertyIds: [P], limitMinor: 100, fullPermission: true }).success, false);
+  assert.equal(rc.repairLimitActionSchema.safeParse({ requestId: W, action: 'setRepairLimit', propertyIds: Array(201).fill(P), limitMinor: null, fullPermission: false }).success, false);
+
+  const limits = rc.limitsSchema.parse({ companyLimitMinor: 10000, canEdit: false, owners: [
+    { ownerKey: 'user:' + ME, ownerName: 'Jo Owner', properties: [{ propertyId: P, propertyName: 'Flat 1', limitMinor: 25000, fullPermission: false, source: 'set', updatedBy: 'Alex', updatedAt: '2026-10-15T09:00:00Z' }] },
+    { ownerKey: 'property:' + P, ownerName: null, properties: [{ propertyId: P, propertyName: 'Flat 2', limitMinor: null, fullPermission: false, source: 'none', updatedBy: null, updatedAt: null }] },
+  ] });
+  assert.equal(limits.canEdit, false);
+  assert.equal(rc.ownerTitle(limits.owners[1]), 'Owner not recorded');
+  assert.equal(rc.limitText(limits.owners[0].properties[0]), 'Up to £250');
+  assert.equal(rc.limitText({ limitMinor: null, fullPermission: true }), 'Full permission');
+  assert.equal(rc.limitText({ limitMinor: null, fullPermission: false }), 'Always ask');
+  assert.equal(rc.SOURCE_TEXT.form, 'From the set-up form');
+  assert.equal(rc.SOURCE_TEXT.set, 'Set in Limit Changer');
+  assert.equal(rc.changedText(limits.owners[0].properties[0]), 'Changed by Alex on 15 Oct 2026');
+  assert.equal(rc.changedText({ updatedBy: ME, updatedAt: null }), null, 'never a raw id');
+  assert.equal(rc.autoApprovedText(2), '2 waiting estimates were approved automatically.');
+  assert.equal(rc.autoApprovedText(1), '1 waiting estimate was approved automatically.');
+  assert.deepEqual(rc.limitResultSchema.parse({ properties: [], autoApproved: [W] }).autoApproved, [W]);
+
+  // The screen: editing only when the read says canEdit (super admins); admins see the limits.
+  assert.match(limiter, /\{limits && !limits\.canEdit && <Notice text="Only a super admin can change repair limits\. You can see them here\."/);
+  assert.match(limiter, /\{limits\?\.canEdit && o\.properties\.length > 1 && <Button label="Set for all of this owner's properties"/);
+  assert.match(limiter, /canEdit=\{!!limits\?\.canEdit\}/);
+  assert.match(limiter, /\{canEdit && <Button label="Change"/);
+  assert.match(limiter, /Company limit for estimates the team enters/);
+  assert.match(limiter, /<Notice text=\{autoApprovedText\(approved\.length\)\}/);
+  assert.match(limiter, /onOpenWork\(op\)/);
+  assert.match(management, /\(v !== "limits" \|\| isWorkspaceAdmin\(account\.role\)\)/);
+  assert.match(management, /limits: "Limit Changer"/);
+  assert.match(source('lib/home-tools.ts'), /tool\('limits', 'Limit Changer', 'Repair spending limits by owner', 'coins', work\('management', \{ sub: 'limits' \}\)\)/);
+  assert.match(source('lib/role-panel.ts'), /'tool:access', 'tool:limits'/);
 });

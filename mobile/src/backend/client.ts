@@ -16,7 +16,7 @@ import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import type { DeleteAccountInput } from '../../../lib/privacy-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 import { VIEW_AS_ENDED, VIEW_AS_HEADER, viewAsPeopleSchema } from '../../../lib/view-as';
-import { contractorsQuery } from '../../../lib/repair-contractors';
+import { contractorsQuery, limitsQuery, type RepairLimitAction } from '../../../lib/repair-contractors';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -189,6 +189,9 @@ export async function uploadWorkPhoto(input: {requestId: string;workId?: string;
 // Repairs with contractors (lib/repair-contractors.ts): the contractors for a property, and a contractor's quote or invoice
 // as a PDF (photos go through the upload queue like any other photo). The server checks the file and who may add it.
 export const readRepairContractors = async (propertyId: string) => (await workspaceRequest('/api/mobile/operations' + contractorsQuery(propertyId))).json();
+// Limit Changer: every owner's properties and their repair limits; a super admin changes one or several.
+export const readRepairLimits = async () => (await workspaceRequest('/api/mobile/operations' + limitsQuery())).json();
+export const writeRepairLimit = async (action: RepairLimitAction) => (await workspaceRequest('/api/mobile/operations', action)).json();
 export async function uploadWorkFile(input: { requestId: string; workId: string; purpose: PhotoPurpose }, file: { uri: string; name: string; file?: File }) {
   const form = new FormData();
   form.append('requestId', input.requestId); form.append('workId', input.workId); form.append('purpose', input.purpose);

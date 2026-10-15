@@ -8,8 +8,15 @@ import { poundsToMinor } from './repairs-live';
 export const REPAIR_FIELDS = {
   guestConversation: 'guestConversationId', readyUser: 'readyUserId', assignedId: 'assignedReadyId', assignedName: 'assignedReadyName',
   quoteFiles: 'quoteFileIds', invoiceFiles: 'invoiceFileIds', visitFrom: 'visitFrom', visitTo: 'visitTo', clashes: 'clashes', bookingApproved: 'bookingApprovedAt',
+  // While the team reviews a contractor's estimate (team_review): the owner's effective limit, for the Review done preview.
+  // The database strips these from everything Ready reads; the screens never show them to a contractor either.
+  ownerLimit: 'ownerLimitMinor', ownerFullPermission: 'ownerFullPermission', ownerLimitSource: 'ownerLimitSource',
 } as const;
 export const REASSIGN_STEP = 'reassignReady' as const;
+// Management (admins and super admins) checked a contractor's estimate: approved within the owner's limit, else the owner
+// is asked (the database decides). Stays see the estimate waiting for management.
+export const REVIEW_STEP = 'reviewDone' as const;
+export const REVIEW_PHASE = 'team_review' as const;
 // GET /api/mobile/operations?section=repairContractors&propertyId=… reads rpc workspace_repair_contractors(property_id).
 export const CONTRACTORS_READ = { section: 'repairContractors', rpc: 'workspace_repair_contractors', arg: 'property_id' } as const;
 export const contractorsQuery = (propertyId: string) => '?' + new URLSearchParams({ section: CONTRACTORS_READ.section, propertyId }).toString();
@@ -51,9 +58,12 @@ export const assignedTo = (data: Record<string, unknown>, userId: string) => { c
 export const bookingApproved = (data: Record<string, unknown>) => !!str(data[REPAIR_FIELDS.bookingApproved]);
 
 // Where a job is for the contractor, in the words on their Home.
-export type ContractorStage = 'estimate' | 'waiting' | 'book' | 'booked' | 'declined' | 'done';
+// A contractor never sees why an estimate goes to the owner (the owner's limit): only where it is.
+export type ContractorStage = 'estimate' | 'review' | 'owner' | 'waiting' | 'book' | 'booked' | 'declined' | 'done';
 export const CONTRACTOR_STAGES: { stage: ContractorStage; label: string; detail: string }[] = [
   { stage: 'estimate', label: 'Send an estimate', detail: 'Look at the job and send your price' },
+  { stage: 'review', label: 'Being reviewed by management', detail: 'Recharge management are checking your estimate' },
+  { stage: 'owner', label: 'Waiting for the owner', detail: 'The owner is approving your estimate' },
   { stage: 'waiting', label: 'Waiting for approval', detail: 'Recharge are checking your estimate' },
   { stage: 'book', label: 'Approved, please book', detail: 'Choose the day and time for the visit' },
   { stage: 'booked', label: 'Booked', detail: 'Do the job, then mark it done' },
@@ -63,7 +73,9 @@ export const CONTRACTOR_STAGES: { stage: ContractorStage; label: string; detail:
 export function contractorStage(data: Record<string, unknown>): ContractorStage | null {
   const phase = String(data.phase ?? '');
   if (phase === 'referred') return bookingApproved(data) ? 'book' : 'estimate';
-  if (phase === 'management_approval' || phase === 'owner_approval') return 'waiting';
+  if (phase === REVIEW_PHASE) return 'review';
+  if (phase === 'owner_approval') return 'owner';
+  if (phase === 'management_approval') return 'waiting';
   if (phase === 'booked') return 'booked';
   if (phase === 'management_declined' || phase === 'owner_declined') return 'declined';
   if (phase === 'completed') return 'done';
@@ -78,7 +90,7 @@ export function contractorAction(role: string, userId: string, data: Record<stri
 }
 // Stays and admins change the contractor while it is with them or waiting on approval.
 export const canReassign = (role: string, data: Record<string, unknown>) => ['stays', 'admin', 'super_admin'].includes(role) && !!assignedContractor(data)
-  && ['referred', 'booked', 'management_approval', 'owner_approval'].includes(String(data.phase ?? ''));
+  && ['referred', 'booked', REVIEW_PHASE, 'management_approval', 'owner_approval'].includes(String(data.phase ?? ''));
 
 // --- Visit window ------------------------------------------------------------------------------------
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -145,3 +157,62 @@ export function guestSendRoute(view: { canSend: boolean; canSendEmail: boolean; 
 export const seesGuestChat = (role: string) => ['stays', 'admin', 'super_admin'].includes(role);
 // "Fixed in chat": the words sent to the guest, from what fixed it.
 export const fixedInChatMessage = (resolution: string) => `Thanks for your patience. ${resolution.trim().replace(/\.?$/, '.')} Let us know if anything else needs a look.`;
+
+// --- Review done: the owner's limit, as a preview for the team ------------------------------------------
+// The decision is the database's (reviewDone, with the limit as it is then). Never shown to a contractor (role 'ready').
+const poundsText = (minor: number) => '£' + (minor % 100 ? (minor / 100).toFixed(2) : String(minor / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+export function ownerLimitLine(role: string, data: Record<string, unknown>): string | null {
+  if (role === 'ready' || role === 'client') return null;
+  const estimate = typeof data.estimatedCostMinor === 'number' ? data.estimatedCostMinor : null;
+  const limit = data[REPAIR_FIELDS.ownerLimit], full = data[REPAIR_FIELDS.ownerFullPermission], source = data[REPAIR_FIELDS.ownerLimitSource];
+  if (full === true) return "The owner gave full permission: this will be approved straight away.";
+  if (typeof limit === 'number' && estimate !== null) return estimate <= limit
+    ? `Within the owner's limit (${poundsText(limit)}): this will be approved straight away.`
+    : `Above the owner's limit (${poundsText(limit)}): the owner will be asked.`;
+  if (source === 'none' || (source !== undefined && limit === null)) return "The owner has no repair limit set: the owner will be asked.";
+  return null;
+}
+export const reviewData = (note: string): Record<string, unknown> => note.trim() ? { note: note.trim().slice(0, 2000) } : {};
+
+// --- Limit Changer -------------------------------------------------------------------------------------
+// GET /api/mobile/operations?section=repairLimits → rpc workspace_repair_limits_read() (admins and super admins).
+// POST /api/mobile/operations {action:'setRepairLimit',…} → rpc workspace_repair_limits_action(input) (super admins only).
+export const LIMITS_READ = { section: 'repairLimits', rpc: 'workspace_repair_limits_read' } as const;
+export const LIMITS_ACTION = { action: 'setRepairLimit', rpc: 'workspace_repair_limits_action', arg: 'input' } as const;
+export const limitsQuery = () => '?' + new URLSearchParams({ section: LIMITS_READ.section }).toString();
+export const repairLimitActionSchema = z.object({
+  requestId: uuid, action: z.literal(LIMITS_ACTION.action), propertyIds: z.array(uuid).min(1).max(200),
+  limitMinor: z.number().int().min(0).max(10000000).nullable(), fullPermission: z.boolean(),
+}).strict().refine(v => !(v.fullPermission && v.limitMinor !== null), { message: 'Full permission has no amount' });
+export type RepairLimitAction = z.infer<typeof repairLimitActionSchema>;
+export const limitRowSchema = z.object({
+  propertyId: uuid, propertyName: z.string(), limitMinor: z.number().nullable(), fullPermission: z.boolean(),
+  source: z.enum(['form', 'set', 'none']), updatedBy: z.string().nullable().optional(), updatedByName: z.string().nullable().optional(), updatedAt: z.string().nullable().optional(),
+});
+export type LimitRow = z.infer<typeof limitRowSchema>;
+export const limitsSchema = z.object({
+  companyLimitMinor: z.number().nullable(), canEdit: z.boolean().default(false),
+  owners: z.array(z.object({ ownerKey: z.string(), ownerName: z.string().nullable(), properties: z.array(limitRowSchema) })),
+});
+export type Limits = z.infer<typeof limitsSchema>;
+export const limitResultSchema = z.object({ properties: z.array(limitRowSchema).default([]), autoApproved: z.array(uuid).default([]) });
+export const ownerTitle = (owner: { ownerName: string | null }) => owner.ownerName?.trim() || 'Owner not recorded';
+export const limitText = (row: Pick<LimitRow, 'limitMinor' | 'fullPermission'>) => row.fullPermission ? 'Full permission' : row.limitMinor === null ? 'Always ask' : `Up to ${poundsText(row.limitMinor)}`;
+export const SOURCE_TEXT: Record<LimitRow['source'], string> = { form: 'From the set-up form', set: 'Set in Limit Changer', none: 'Not set' };
+// "Changed by Alex on 15 Oct": a name, never a raw id.
+export function changedText(row: Pick<LimitRow, 'updatedBy' | 'updatedByName' | 'updatedAt'>): string | null {
+  const who = row.updatedByName?.trim() || (row.updatedBy && !uuid.safeParse(row.updatedBy).success ? row.updatedBy : null);
+  const when = row.updatedAt ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' }).format(new Date(row.updatedAt)) : null;
+  return who || when ? ['Changed', who ? 'by ' + who : null, when ? 'on ' + when : null].filter(Boolean).join(' ') : null;
+}
+export type LimitChoice = 'amount' | 'full' | 'ask';
+export const LIMIT_CHOICES: { value: LimitChoice; label: string }[] = [{ value: 'amount', label: 'Up to an amount' }, { value: 'full', label: 'Full permission' }, { value: 'ask', label: 'Always ask' }];
+export const choiceOf = (row: Pick<LimitRow, 'limitMinor' | 'fullPermission'>): LimitChoice => row.fullPermission ? 'full' : row.limitMinor === null ? 'ask' : 'amount';
+export function limitAction(requestId: string, propertyIds: readonly string[], choice: LimitChoice, amount: string): Built<RepairLimitAction> {
+  if (!propertyIds.length) return { error: 'Choose at least one property.' };
+  const minor = choice === 'amount' ? poundsToMinor(amount) : null;
+  if (choice === 'amount' && minor === null) return { error: 'Add the limit in pounds, like 250.' };
+  const parsed = repairLimitActionSchema.safeParse({ requestId, action: LIMITS_ACTION.action, propertyIds: [...propertyIds], limitMinor: minor, fullPermission: choice === 'full' });
+  return parsed.success ? { data: parsed.data } : { error: 'Check the limit and try again.' };
+}
+export const autoApprovedText = (n: number) => n ? `${n} waiting estimate${n === 1 ? ' was' : 's were'} approved automatically.` : 'No waiting estimates were within the new limit.';

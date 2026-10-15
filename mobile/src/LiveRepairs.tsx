@@ -36,9 +36,9 @@ import { pillBox, pillInk } from "./Pills";
 import { autoApprovalLabel, QUOTE_SOURCE_LABEL, repairWhatsAppLink, type QuoteSource } from "../../lib/repair-approvals";
 import {
   assignedContractor, bookingData, canReassign, clashesOf, completeData, contractorAction, contractorStage, estimateData, fixedInChatMessage, guestConversationOf,
-  invoiceFilesOf, matchStay, quoteFilesOf, reassignData, referData, REASSIGN_STEP, seesGuestChat, VISIT_TIMES, visitGuestUpdate, type ChatPrefill, type Clash,
+  invoiceFilesOf, matchStay, quoteFilesOf, reassignData, referData, REASSIGN_STEP, reviewData, seesGuestChat, VISIT_TIMES, visitGuestUpdate, type ChatPrefill, type Clash,
 } from "../../lib/repair-contractors";
-import { ClashNotice, ContractorLine, ContractorPicker, GuestChatLink, RepairFileList, RepairFiles, useGuestSend, VisitDetails } from "./RepairContractors";
+import { ClashNotice, ContractorLine, ContractorPicker, EstimatePreview, GuestChatLink, RepairFileList, RepairFiles, REVIEW_CAPTION, useGuestSend, VisitDetails } from "./RepairContractors";
 
 // Live repairs: the maintenance pipeline from report to completed repair, and
 // Ready's routine visits. Every action here is checked again by the database.
@@ -48,7 +48,7 @@ const pounds = (minor: unknown) => typeof minor === "number" ? formatMoney(minor
 // A repair reported with no estimate waits in triage; say so rather than showing £0.00.
 const estimateText = (data: Record<string, unknown>) => data.estimatedCostMinor === 0 && data.phase === "triage" ? "Cost not known yet" : `Estimate ${pounds(data.estimatedCostMinor)}`;
 const SOURCE_OPTIONS = (["team", "contractor"] as const).map(value => ({ value, label: QUOTE_SOURCE_LABEL[value] }));
-const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", approveManagement: "Approve the cost (management)", referReady: "Send to contractor", bookRepair: "Book the visit", completeRepair: "Mark done" };
+const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", approveManagement: "Approve the cost (management)", reviewDone: "Review done", referReady: "Send to contractor", bookRepair: "Book the visit", completeRepair: "Mark done" };
 const TIME_OPTIONS = VISIT_TIMES.map(t => ({ value: t, label: t }));
 // The step this person takes on a repair. A contractor on a job given to them follows its own steps (send an estimate,
 // book once approved, mark done); older repairs with no contractor named, and the team, follow repairStep as before.
@@ -272,6 +272,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
     if (step === "approveBudget" && forOwner) return consent && f("ownerAgreement").trim().length >= 5 ? { consent: true, ownerAgreement: f("ownerAgreement").trim().slice(0, 500) } : "Add how the owner agreed and tick to record their approval.";
     if (step === "approveBudget") return consent ? { consent: true } : "Tick to approve the cost.";
     if (step === "approveManagement") return f("managementNote").trim() ? { note: f("managementNote").trim() } : {};
+    if (step === "reviewDone") return reviewData(f("reviewNote"));
     if (step === "referReady") {
       const built = referData({ troubleshooting: troubleshootingNote(type, ticked, f("troubleshooting")), guestUpdate: f("guestUpdate"), urgent, warranty: f("warrantyContactEvidence"), warrantyNeeded: repair?.data.warrantyRequired === true, readyUserId: f("readyUserId") });
       return "error" in built ? built.error : built.data;
@@ -376,7 +377,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
           {repair.data.urgent === true && <Tag label="Urgent" tone="bad" p={p} />}
           {repair.data.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
           {repair.data.quoteSource === "contractor" && <Tag label="Contractor estimate" tone="plain" p={p} />}
-          {!!autoApprovalLabel(repair.data) && <Tag label={autoApprovalLabel(repair.data)!} tone="good" p={p} />}
+          {role !== "ready" && !!autoApprovalLabel(repair.data) && <Tag label={autoApprovalLabel(repair.data)!} tone="good" p={p} />}
           {typeof repair.data.managementApprovedAt === "string" && <Tag label="Management approved" tone="good" p={p} />}
           {typeof repair.data.ownerApprovedAt === "string" && <Tag label="Owner approved" tone="good" p={p} />}
           {typeof repair.data.quoteRevisedAt === "string" && <Tag label="Quote updated" tone="wait" p={p} />}
@@ -413,6 +414,13 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
           </MotionPress>
         )}
         <Detail label="How the owner agreed" value={repair.data.ownerAgreement} p={p} />
+        {/* A contractor's estimate in team_review: management (admins) press Review done; Stays see it waiting for management.
+            The owner's limit line is a preview (the database decides). Never shown to Ready. */}
+        {phase === "team_review" && seesGuestChat(role) && <View style={{ gap: 10 }} {...(Platform.OS === "web" ? { dataSet: { repairSheet: "review" } } : {})}>
+          <EstimatePreview p={p} role={role} data={repair.data} />
+          {step === "reviewDone" ? <Field label="Note for the team (optional)" value={f("reviewNote")} onChange={set("reviewNote")} p={p} multiline placeholder="For example: checked against the last boiler repair" />
+            : <Notice text="Waiting for management to review." p={p} />}
+        </View>}
         {step === "approveManagement" && !declining && <>
           <Text style={[ui.small, { color: p.muted }]}>{repair.data.quoteSource === "contractor" ? "A contractor estimate, which management always approve." : "At or over the repair limit."}{typeof repair.data.ownerApprovedAt === "string" ? " The owner has already approved it." : " Once you approve, the owner is asked, unless they pre-authorised it on their set-up form."}</Text>
           <Field label="Note for the team (optional)" value={f("managementNote")} onChange={set("managementNote")} p={p} multiline />
@@ -485,7 +493,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
         </>}
         {contractorView && canReviseQuote(role, phase) && !clashes && (estimating || quoting ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }} {...(Platform.OS === "web" ? { dataSet: { repairSheet: "estimate" } } : {})}>
           <Text style={{ color: p.text, fontWeight: "700" }}>{estimating ? "Send estimate" : "Send a new estimate"}</Text>
-          <Text style={[ui.small, { color: p.muted }]}>Your price for the job. Recharge check it (and the owner, when it is over their limit) before you book. The job shows “Approved, please book” once it is approved.</Text>
+          <Text style={[ui.small, { color: p.muted }]}>Your price for the job. Recharge check it before you book. The job shows “Approved, please book” once it is approved.</Text>
           <Field label="Your price" value={f("quote")} onChange={set("quote")} p={p} placeholder="£0.00" />
           <Field label="What the work is" value={f("quoteReason")} onChange={set("quoteReason")} p={p} multiline placeholder="For example: replace the kitchen tap cartridge, parts and labour" />
           <RepairFiles key={"quote:" + resetKey} p={p} workId={repair.workId} label="Your quote (optional)" hint="A photo of your written quote, or the PDF." onChange={(ids, loading) => { setQuoteIds(ids); setFilesUploading(loading); }} />
@@ -536,10 +544,11 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
             <Button label="Cancel" p={p} onPress={() => setResolving(false)} />
           </View>
         </View> : <Button label={chatId ? "Fixed in chat" : "Resolved without a visit"} icon="check-circle" p={p} onPress={() => { setResolving(true); setError(""); }} />)}
-        {!step && contractorView && !estimating && <Notice text={stage === "waiting" ? `Waiting for approval. Recharge are checking your estimate of ${pounds(repair.data.estimatedCostMinor)}. You will be told when you can book.` : stage === "declined" ? "Your estimate was declined. Recharge will be in touch." : stage === "done" ? "This job is done. Thank you." : "Nothing for you to do at this stage."} p={p} />}
-        {!step && !contractorView && <Notice text={phase === "resolved" ? "This repair was resolved without a visit." : phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will send this to a contractor." : "Nothing for you to do at this stage."} p={p} />}
+        {!step && contractorView && !estimating && <Notice text={stage === "review" ? `Being reviewed by the team. Recharge are checking your estimate of ${pounds(repair.data.estimatedCostMinor)}. You will be told when you can book.` : stage === "owner" ? `Waiting for the owner to approve your estimate of ${pounds(repair.data.estimatedCostMinor)}. You will be told when you can book.` : stage === "waiting" ? `Waiting for approval. Recharge are checking your estimate of ${pounds(repair.data.estimatedCostMinor)}. You will be told when you can book.` : stage === "declined" ? "Your estimate was declined. Recharge will be in touch." : stage === "done" ? "This job is done. Thank you." : "Nothing for you to do at this stage."} p={p} />}
+        {!step && !contractorView && <Notice text={phase === "resolved" ? "This repair was resolved without a visit." : phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will send this to a contractor." : phase === "team_review" ? "Waiting for management to review the contractor's estimate." : "Nothing for you to do at this stage."} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
         {step && !declining && !resolving && !reassigning && !clashes && <Button label={busy ? "Saving…" : uploading || filesUploading ? "Saving photos…" : forOwner ? "Record the owner's approval" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading || filesUploading} onPress={() => void save()} />}
+        {step === "reviewDone" && <Text style={[ui.small, { color: p.muted }]}>{REVIEW_CAPTION}</Text>}
         {team && <View style={{ gap: 6 }}>
           <Button label="Send by WhatsApp" icon="message-circle" p={p} onPress={() => void Linking.openURL(repairWhatsAppLink({
             propertyName, issue: typeof repair.data.issue === "string" ? repair.data.issue : repair.title, phase, estimateMinor: typeof repair.data.estimatedCostMinor === "number" ? repair.data.estimatedCostMinor : null,
