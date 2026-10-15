@@ -171,7 +171,7 @@ test('Home is the person\'s own area: no action pills, no property count, their 
   const owner = home.slice(home.indexOf('function OwnerLiveHome('));
   assert.match(team, /<HomeFavorites [^\n]*savedOnly \/>/, 'the team Home keeps only the places they starred');
   assert.match(tools, /saved\.length \|\| savedOnly \? \[\]/, 'the suggestions are left to the Favorites page');
-  assert.match(owner, /\{ key: "properties"/, 'owners keep their property count');
+  assert.match(owner, /<OwnerHome /, 'owners keep where each of their properties is up to');
   assert.doesNotMatch(team, /properties\.length/, 'the team Home has no property count');
   for (const prop of ['favoriteEntries', 'onOpenEntry']) assert.match(home, new RegExp(prop + '\\?:'), prop + ' is an optional prop');
   // My performance is the page in the menu (Reports.tsx), the schedule sits with the shift, the to-do list on its tab.

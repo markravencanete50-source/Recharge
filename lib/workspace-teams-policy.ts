@@ -32,9 +32,12 @@ export const teamsReadSchema = z.object({
     'kpis',
     // Management's Home: guest replies on time this month and the same days of last month (20261020910000).
     'guestReplies',
+    // Each role's Home (20261021300000): the caller's own counts and figures; `role` is the role an admin previews.
+    'roleHome',
     // Business reports for admins (20261020860000): enquiries, repairs and spend, to-dos, messages, time worked.
     ...BUSINESS_REPORT_SECTIONS]),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
+  role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),
 }).strict().superRefine((value, context) => {
   if (value.section === 'schedule') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the schedule dates' });

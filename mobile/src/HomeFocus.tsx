@@ -87,11 +87,13 @@ export function NeedsList({ palette: p, lines, loading, error, onOpen, title = "
 
 // "This month": the business at a glance for admins (lib/home-overview.ts). Each figure a value, a short label and,
 // where it means something, a quiet change against last month; tap one to open where its detail lives. Four to a
-// row on a computer, two on a phone. A figure that can't load shows "–"; a zero is shown quietly.
-export function BusinessFigures({ palette: p, figures, desktop, loading, onOpen }: { palette: Palette; figures: BusinessFigure[]; desktop: boolean; loading: boolean; onOpen: (figure: BusinessFigure) => void }) {
+// row on a computer, two on a phone. A figure that can't load shows "–"; a zero is shown quietly. Every other role's
+// Home uses the same tiles for its own figures (lib/role-home.ts), under its own title.
+type FigureTile = Omit<BusinessFigure, "key"> & { key: string };
+export function BusinessFigures({ palette: p, figures, desktop, loading, onOpen, title = "This month" }: { palette: Palette; figures: FigureTile[]; desktop: boolean; loading: boolean; onOpen: (figure: FigureTile) => void; title?: string }) {
   return (
     <View testID="home-business" style={{ gap: 8 }}>
-      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>This month</Text>
+      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>{title}</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
         {figures.map(f => {
           const waiting = loading && f.missing;

@@ -70,9 +70,11 @@ test('Home: greeting, search, Needs you now; what moved off Home is still one ta
   const team = home.slice(home.indexOf('function TeamHome('), home.indexOf('function OwnerLiveHome('));
   const owner = home.slice(home.indexOf('function OwnerLiveHome('));
   assert.match(home, /role === "client" \? <OwnerLiveHome \{\.\.\.props\} \/> : <TeamHome \{\.\.\.props\} \/>/);
-  for (const part of ['<HomeGreeting ', '<ShiftButton ', '<AskBox ', '<EndOfDayCard palette={p} account={account} />', '<AdminHome ', '<TodayBoard ', '<NeedsList ', '<SearchPanel ']) assert.ok(team.includes(part), part);
+  for (const part of ['<HomeGreeting ', '<ShiftButton ', '<AskBox ', '<EndOfDayCard palette={p} account={account} />', '<AdminHome ', '<RoleHome ', '<TodayBoard ', '<NeedsList ', '<SearchPanel ']) assert.ok(team.includes(part), part);
   for (const gone of ['WelcomeHeader', 'Recent activity', 'Help for your role', 'QuickOverview', '<ShiftCard', 'Needs attention']) assert.ok(!team.includes(gone), gone + ' is off the team Home');
-  for (const kept of ['<WelcomeHeader ', '<HomeTools ', '<OwnerHome ', '<QuickOverview ', 'Needs attention', 'Recent activity', 'Help for your role']) assert.ok(owner.includes(kept), 'owners keep ' + kept);
+  // Owners have the calm Home too (Lee): their figures, Needs you now, their properties, then their tools.
+  for (const kept of ['<HomeGreeting ', '<BusinessFigures ', '<NeedsList ', '<OwnerHome ', '<HomeTools ', 'Help for your role']) assert.ok(owner.includes(kept), 'owners have ' + kept);
+  for (const gone of ['WelcomeHeader', 'QuickOverview', 'Needs attention', 'Recent activity', 'OpenTasksTrend']) assert.ok(!owner.includes(gone), gone + ' is off the owner Home');
   assert.match(focus, /All clear\. Nothing needs you right now\./);
   assert.match(focus, /What do you need\?/);
   assert.match(oversight, /<NeedsList [^\n]*title="Needs your attention"[^\n]*onOpen=\{onOpen\}/);
@@ -86,6 +88,6 @@ test('Home: greeting, search, Needs you now; what moved off Home is still one ta
 });
 
 test('no em dashes in the new Home', () => {
-  for (const file of ['lib/home-needs.ts', 'mobile/src/HomeFocus.tsx', 'mobile/src/LiveHome.tsx', 'mobile/src/LiveOversight.tsx', 'tests/home-needs.test.mjs'])
+  for (const file of ['lib/home-needs.ts', 'lib/role-home.ts', 'mobile/src/HomeFocus.tsx', 'mobile/src/LiveHome.tsx', 'mobile/src/RoleHome.tsx', 'mobile/src/LiveOwnerHome.tsx', 'mobile/src/LiveOversight.tsx', 'tests/home-needs.test.mjs', 'tests/role-home.test.mjs'])
     assert.doesNotMatch(read(file), new RegExp(String.fromCharCode(0x2014)), file);
 });
