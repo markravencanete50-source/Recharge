@@ -111,7 +111,8 @@ test('automatic outcomes (20261022050000): the reason under the outcome on scree
   const parsed = inv.payInvoiceSchema.parse(auto);
   assert.deepEqual(parsed.lines.map(l => inv.autoOutcomeNote(l)), ['', 'Auto: redo accepted after rejection', ''], 'only an automatic outcome says Auto');
   assert.equal(inv.autoOutcomeNote({ outcomeSource: 'auto', outcomeReason: 'no_form' }), 'Auto: no clean form');
-  assert.deepEqual(Object.values(inv.AUTO_REASON_LABEL), ['no clean form', 'rejected and not redone', 'redo accepted after rejection', "dispute decided in the cleaner's favour", 'clean form arrived late', 'flag cleared']);
+  assert.deepEqual(Object.values(inv.AUTO_REASON_LABEL), ['no clean form', 'rejected and not redone', 'redo accepted after rejection', "dispute decided in the cleaner's favour", 'clean form arrived late', 'flag cleared',
+    'redo accepted after the earlier request was approved', 'dispute won after the earlier request was approved']);
   assert.equal(inv.payInvoiceSchema.safeParse(mixed({ lines: [line(0, { outcomeSource: 'robot' })] })).success, false);
   assert.equal(inv.payInvoiceSchema.parse(invoice()).lines[0].outcomeSource, undefined, 'an older answer without the source still reads');
   // The printed document keeps its current notes.
@@ -131,6 +132,22 @@ test('automatic outcomes (20261022050000): the reason under the outcome on scree
   const source = read('mobile/src/CleanerInvoices.tsx');
   assert.match(source, /autoOutcomeNote\(l\)/);
   assert.match(source, /auto\.get\(l\.key\)/);
+});
+
+test('a late redo or dispute (20261022050000): the follow-up line names the earlier request, on screen and on the document', () => {
+  const late = invoice({ totalMinor: 6513, lineCount: 2, lines: [
+    line(0, { rateMinor: 4525, amountMinor: 2263, outcome: 'partial', outcomeSource: 'auto', outcomeReason: 'late_redo_accepted', followsNumber: 'RC-RFI-2026-0003' }),
+    line(1, { rateMinor: 4250, amountMinor: 4250, outcome: 'completed', outcomeSource: 'auto', outcomeReason: 'late_dispute_won', followsNumber: 'RC-RFI-2026-0004' })] });
+  const parsed = inv.payInvoiceSchema.parse(late);
+  assert.deepEqual(parsed.lines.map(l => inv.autoOutcomeNote(l)), ['Auto: redo accepted after RC-RFI-2026-0003 was approved', 'Auto: dispute won after RC-RFI-2026-0004 was approved']);
+  assert.deepEqual(inv.invoiceDoc(late).lines.map(l => l.outcomeNote), ['Half of £45.25 · Late redo, see RC-RFI-2026-0003', 'Late dispute, see RC-RFI-2026-0004']);
+  const html = inv.invoiceHtml(late);
+  assert.match(html, /<td>Flat 0<\/td><td class="outcome"><span class="label">Partially successful<\/span><span class="note">Half of £45\.25 · Late redo, see RC-RFI-2026-0003<\/span><\/td><td class="num">£22\.63<\/td>/);
+  assert.match(html, /<span class="label">Completed<\/span><span class="note">Late dispute, see RC-RFI-2026-0004<\/span>/);
+  assert.doesNotMatch(html, /Auto|automatically/, 'the document keeps the outcome note style, not the app words');
+  assert.equal(inv.lateNote({ outcomeReason: 'redo_accepted', followsNumber: null }), '');
+  const h = inv.payHistorySchema.parse({ at: '2026-10-13T10:00:00Z', actorName: null, event: 'outcome', propertyName: '12 Leith St', cleanOn: '2026-10-07', auto: true, reason: 'late_redo_accepted', afterNumber: 'RC-RFI-2026-0003', from: 'unsuccessful', to: 'partial' });
+  assert.equal(inv.historyLine(h), 'Set 12 Leith St, Wed 7 Oct to Partially successful automatically: redo accepted after RC-RFI-2026-0003 was approved (was Unsuccessful)');
 });
 
 test('the screen paper and the download share one document model', () => {

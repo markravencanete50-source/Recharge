@@ -33,24 +33,34 @@ export const outcomeMinor = (rateMinor: number, outcome: CleanOutcome | null | u
 // ('manual'); none when nobody has. A person's choice is never changed by the flags again.
 export const OUTCOME_SOURCES = ['auto', 'manual'] as const;
 // Why the request set an outcome itself, in the words shown after "Auto:" and in the history.
-export const AUTO_REASONS = ['no_form', 'rejected', 'redo_accepted', 'dispute_won', 'form_in', 'cleared'] as const;
+// late_redo_accepted and late_dispute_won: a follow-up line on a later request for a clean that was Unsuccessful at £0 on an
+// approved request, then redone or its dispute won (followsNumber is that request).
+export const AUTO_REASONS = ['no_form', 'rejected', 'redo_accepted', 'dispute_won', 'form_in', 'cleared', 'late_redo_accepted', 'late_dispute_won'] as const;
 export type AutoReason = (typeof AUTO_REASONS)[number];
 export const AUTO_REASON_LABEL: Record<AutoReason, string> = {
   no_form: 'no clean form', rejected: 'rejected and not redone', redo_accepted: 'redo accepted after rejection',
   dispute_won: "dispute decided in the cleaner's favour", form_in: 'clean form arrived late', cleared: 'flag cleared',
+  late_redo_accepted: 'redo accepted after the earlier request was approved', late_dispute_won: 'dispute won after the earlier request was approved',
 };
+// The reason in words, naming the earlier request for a late redo or dispute: "redo accepted after RC-RFI-2026-0007 was approved".
+export function autoReasonText(reason: AutoReason, earlier?: string | null) {
+  if (earlier && reason === 'late_redo_accepted') return `redo accepted after ${earlier} was approved`;
+  if (earlier && reason === 'late_dispute_won') return `dispute won after ${earlier} was approved`;
+  return AUTO_REASON_LABEL[reason];
+}
 
 // amountMinor is what the clean earns at its outcome; rateMinor its snapshot rate.
 export const payInvoiceLineSchema = z.object({
   workId: id, cleanOn: day.nullable(), propertyName: z.string(), amountMinor: z.number().int(),
   rateMinor: z.number().int().optional(), outcome: z.enum(CLEAN_OUTCOMES).nullable().optional(),
   outcomeSource: z.enum(OUTCOME_SOURCES).nullable().optional(), outcomeReason: z.enum(AUTO_REASONS).nullable().optional(),
+  followsNumber: z.string().nullable().optional(),
 });
 export const payHistorySchema = z.object({
   at: z.string(), event: z.enum(['issued', 'outcome', 'queried', 'approved', 'paid']), actorName: z.string().nullable(), workId: id.nullable().optional(),
   from: z.enum(CLEAN_OUTCOMES).optional(), to: z.enum(CLEAN_OUTCOMES).optional(), amountMinor: z.number().optional(), totalMinor: z.number().optional(),
   propertyName: z.string().nullable().optional(), cleanOn: day.nullable().optional(), note: z.string().optional(), paidOn: day.optional(), cleans: z.number().optional(),
-  auto: z.boolean().optional(), reason: z.enum(AUTO_REASONS).optional(),
+  auto: z.boolean().optional(), reason: z.enum(AUTO_REASONS).optional(), afterNumber: z.string().nullable().optional(),
 });
 export type PayHistory = z.infer<typeof payHistorySchema>;
 export const payInvoiceSchema = z.object({
@@ -66,8 +76,15 @@ export type PayInvoiceLine = z.infer<typeof payInvoiceLineSchema>;
 export const lineOutcome = (l: Pick<PayInvoiceLine, 'outcome'>): CleanOutcome => l.outcome ?? 'completed';
 export const lineRate = (l: Pick<PayInvoiceLine, 'rateMinor' | 'amountMinor'>) => l.rateMinor ?? l.amountMinor;
 // Under the outcome in the app's request sheet (never on the printed document): "Auto: no clean form".
-export const autoOutcomeNote = (l: Pick<PayInvoiceLine, 'outcomeSource' | 'outcomeReason'>) =>
-  l.outcomeSource === 'auto' && l.outcomeReason ? `Auto: ${AUTO_REASON_LABEL[l.outcomeReason]}` : '';
+export const autoOutcomeNote = (l: Pick<PayInvoiceLine, 'outcomeSource' | 'outcomeReason' | 'followsNumber'>) =>
+  l.outcomeSource === 'auto' && l.outcomeReason ? `Auto: ${autoReasonText(l.outcomeReason, l.followsNumber)}` : '';
+// On the document too, after the outcome note: a follow-up for a late redo or dispute names the earlier request.
+export function lateNote(l: Pick<PayInvoiceLine, 'outcomeReason' | 'followsNumber'>) {
+  if (!l.followsNumber) return '';
+  if (l.outcomeReason === 'late_redo_accepted') return `Late redo, see ${l.followsNumber}`;
+  if (l.outcomeReason === 'late_dispute_won') return `Late dispute, see ${l.followsNumber}`;
+  return '';
+}
 export const payInvoicesSchema = z.array(payInvoiceSchema);
 
 export const earningsSchema = z.object({
@@ -164,7 +181,7 @@ const outcomeNote = (outcome: CleanOutcome, rate: number) => outcome === 'partia
 export function invoiceDoc(i: PayInvoice): InvoiceDoc {
   const raw = i.lines ?? [];
   const lines = raw.map(l => ({ key: l.workId, date: l.cleanOn ? shortDay(l.cleanOn) : '', property: l.propertyName, outcome: lineOutcome(l), outcomeLabel: OUTCOME_LABEL[lineOutcome(l)],
-    outcomeNote: outcomeNote(lineOutcome(l), lineRate(l)), amount: money(l.amountMinor) }));
+    outcomeNote: [outcomeNote(lineOutcome(l), lineRate(l)), lateNote(l)].filter(Boolean).join(' · '), amount: money(l.amountMinor) }));
   const full = raw.reduce((t, l) => t + lineRate(l), 0), earned = raw.reduce((t, l) => t + l.amountMinor, 0);
   const s = statusOf(i), paid = i.status === 'paid';
   const facts: InvoiceFact[] = [
@@ -192,7 +209,7 @@ export function historyLine(h: PayHistory) {
     case 'outcome': {
       const was = `${h.from ? ` (was ${OUTCOME_LABEL[h.from]})` : ''}${h.totalMinor != null ? `. ${AMOUNT_LABEL} now ${money(h.totalMinor)}` : ''}`;
       // Set by the request from the app's flags: "Set 12 Leith St, Wed 7 Oct to Unsuccessful automatically: no clean form".
-      if (h.auto) return `Set ${clean} to ${OUTCOME_LABEL[h.to ?? 'completed']} automatically${h.reason ? `: ${AUTO_REASON_LABEL[h.reason]}` : ''}${was}`;
+      if (h.auto) return `Set ${clean} to ${OUTCOME_LABEL[h.to ?? 'completed']} automatically${h.reason ? `: ${autoReasonText(h.reason, h.afterNumber)}` : ''}${was}`;
       return `${who} set ${clean} to ${OUTCOME_LABEL[h.to ?? 'completed']}${was}`;
     }
     case 'queried': return `${who} queried it${h.note ? `: ${h.note}` : ''}`;

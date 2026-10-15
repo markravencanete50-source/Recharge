@@ -9,7 +9,8 @@ import { PGlite } from '@electric-sql/pglite';
 // request is made and whenever a flag changes while it waits; never over a person's choice; each change re-totals the
 // request and is kept in its history with the reason; nothing changes once it is approved. Cleans not done properly (no
 // form, or rejected with no redo) are on the request too, Unsuccessful at £0; cleans waiting for review or in a redo
-// still underway wait for a later request. The flags come from the real flows: the clean-form sweep and the review.
+// still underway wait for a later request. A redo accepted or a dispute won after approval goes on the next request as
+// a follow-up line, and a clean is never paid twice. The flags come from the real flows: the clean-form sweep and the review.
 const MIGRATION = 'supabase/migrations/20261022050000_clean_outcome_flags.sql';
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -22,10 +23,10 @@ for (const file of files) await db.exec(await fs.readFile('supabase/migrations/'
 // Safe to run twice.
 await db.exec(await fs.readFile(MIGRATION, 'utf8'));
 
-const roles = ['super_admin', 'cleaning_manager', 'accounts', 'stays', 'cleans', 'cleans', 'cleans', 'cleans', 'cleans', 'cleans'];
-const names = ['Admin', 'Manager', 'Accounts', 'Stays', 'Angela Cleaner', 'Ben Cleaner', 'Cara Cleaner', 'Dan Cleaner', 'Eve Cleaner', 'Finn Cleaner'];
+const roles = ['super_admin', 'cleaning_manager', 'accounts', 'stays', 'cleans', 'cleans', 'cleans', 'cleans', 'cleans', 'cleans', 'cleans'];
+const names = ['Admin', 'Manager', 'Accounts', 'Stays', 'Angela Cleaner', 'Ben Cleaner', 'Cara Cleaner', 'Dan Cleaner', 'Eve Cleaner', 'Finn Cleaner', 'Gil Cleaner'];
 const users = roles.map((_, i) => `97700000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
-const [ADMIN, MANAGER, ACCOUNTS, STAYS, ANGELA, BEN, CARA, DAN, EVE, FINN] = roles.map((_, i) => i);
+const [ADMIN, MANAGER, ACCOUNTS, STAYS, ANGELA, BEN, CARA, DAN, EVE, FINN, GIL] = roles.map((_, i) => i);
 const session = i => users[i].replace('9770', '9870');
 for (let i = 0; i < users.length; i++) {
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())', [users[i], `flags${i}@example.com`]);
@@ -51,8 +52,8 @@ const notices = async (user, prefix) => (await owner(`select a.event_type,d.prev
 
 await as(ADMIN);
 const leith = await rpc('workspace_save_property', [{ requestId: crypto.randomUUID(), name: '12 Leith St' }]);
-for (const [user, kind] of [[MANAGER, 'cleaning_manager'], [STAYS, 'staff'], [ANGELA, 'cleaner'], [BEN, 'cleaner'], [CARA, 'cleaner'], [DAN, 'cleaner'], [EVE, 'cleaner'], [FINN, 'cleaner']]) await rpc('workspace_assign_property', [leith, users[user], kind]);
-for (const [cleaner, rate] of [[ANGELA, 4000], [BEN, 3000], [CARA, 5000], [DAN, 4525], [EVE, 3600], [FINN, 2000]]) await teams({ action: 'setCleanerRate', cleanerId: users[cleaner], rateMinor: rate, version: 0 });
+for (const [user, kind] of [[MANAGER, 'cleaning_manager'], [STAYS, 'staff'], [ANGELA, 'cleaner'], [BEN, 'cleaner'], [CARA, 'cleaner'], [DAN, 'cleaner'], [EVE, 'cleaner'], [FINN, 'cleaner'], [GIL, 'cleaner']]) await rpc('workspace_assign_property', [leith, users[user], kind]);
+for (const [cleaner, rate] of [[ANGELA, 4000], [BEN, 3000], [CARA, 5000], [DAN, 4525], [EVE, 3600], [FINN, 2000], [GIL, 2500]]) await teams({ action: 'setCleanerRate', cleanerId: users[cleaner], rateMinor: rate, version: 0 });
 beforeEach(async () => { await db.exec('reset role'); await db.exec('delete from private.workspace_write_limits'); });
 after(() => db.close());
 
@@ -249,24 +250,93 @@ test('waiting for review or a redo underway: left off; once settled, on the next
 });
 
 test('nothing changes once the request is approved, nor on an invoice Accounts recorded by hand', async () => {
-  // Finn's £0 request is approved; then a redo is accepted: it stays Unsuccessful.
+  // Finn's £0 request is approved (and paid); then one clean is redone and accepted, the other's dispute is won.
   const inv = await requestOf(FINN);
-  const [w] = await linesOn(inv.id);
+  const [{ underway }] = await owner("select l.work_id underway from private.workspace_cleaner_invoice_lines l join private.workspace_domain_details d on d.work_id=l.work_id where l.invoice_id=$1 and l.live and d.data->>'redoBy' like '2027-02-09%'", [inv.id]);
+  const [resent] = (await linesOn(inv.id)).filter(w => w !== underway);
   const approved = await approve(inv);
   assert.deepEqual([approved.status, approved.totalMinor], ['approved', 0]);
+  await owner('update private.workspace_cleaner_invoices set paid_on=current_date where id=$1', [inv.id]);
   const steps = (await autoHistory(inv.id)).length;
-  await redo(w, FINN);
-  assert.deepEqual(await lineOf(w), { outcome: 'unsuccessful', source: 'auto', reason: 'rejected', rate: 2000, pay: 0 });
+  await redo(resent, FINN);
+  await overturn(underway);
+  for (const w of [resent, underway]) assert.deepEqual(await lineOf(w), { outcome: 'unsuccessful', source: 'auto', reason: 'rejected', rate: 2000, pay: 0 });
   assert.equal(await owner('select private.workspace_clean_outcomes_auto_invoice($1) n', [inv.id]).then(r => r[0].n), 0);
-  const after = (await owner('select version from private.workspace_cleaner_invoices where id=$1', [inv.id]))[0];
-  assert.deepEqual([after.version, (await autoHistory(inv.id)).length], [approved.version, steps]);
-  assert.equal(await run('2027-03-01T00:30:00Z'), 0, 'the clean is on a request already');
+  const after = (await owner('select version,pay_minor::int pay from private.workspace_cleaner_invoices where id=$1', [inv.id]))[0];
+  assert.deepEqual([after.version, after.pay, (await autoHistory(inv.id)).length], [approved.version, 0, steps]);
   // An invoice recorded by hand: a later rejection of that clean (written straight in) changes nothing.
   const c = await accepted(DAN);
   await as(ACCOUNTS);
   await rpc('workspace_payables_action', [{ action: 'recordCleanerInvoice', requestId: crypto.randomUUID(), supplier: 'Dan Cleaner', cleanerId: users[DAN], reference: 'DAN-HAND', invoiceDate: await inDays(0), totalMinor: 4525, lines: [{ workId: c, amountMinor: 4525 }] }]);
   await owner(`insert into private.workspace_cleaning_reviews(work_id,cleaner_id,reviewer_id,accepted,guest_feedback,review_note,created_at) values($1,$2,$3,false,'Crumbs','Bathroom missed',now()+interval '1 minute')`, [c, users[DAN], users[STAYS]]);
   assert.deepEqual(await lineOf(c), { outcome: null, source: null, reason: null, rate: 4525, pay: null });
+});
+
+test('a redo accepted or a dispute won after approval: on the cleaner\'s next request as a follow-up, never paid twice', async () => {
+  const earlier = await requestOf(FINN);
+  const [{ underway }] = await owner("select l.work_id underway from private.workspace_cleaner_invoice_lines l join private.workspace_domain_details d on d.work_id=l.work_id where l.invoice_id=$1 and l.live and d.data->>'redoBy' like '2027-02-09%'", [earlier.id]);
+  const [resent] = (await linesOn(earlier.id)).filter(w => w !== underway);
+  const earlierLine = async w => (await owner('select id from private.workspace_cleaner_invoice_lines where invoice_id=$1 and work_id=$2', [earlier.id, w]))[0].id;
+  const [lineResent, lineUnderway] = [await earlierLine(resent), await earlierLine(underway)];
+  // On the test's calendar: the redo accepted on Sat 20 Feb 2027, the dispute decided on Sun 21 Feb.
+  await owner("update private.workspace_cleaning_reviews set created_at='2027-02-20 10:00' where work_id=$1 and accepted", [resent]);
+  await owner("update private.workspace_cleaning_reviews set overturned_at='2027-02-21 10:00' where work_id=$1 and overturned_at is not null", [underway]);
+  assert.equal(await run('2027-03-01T00:30:00Z'), 1, 'the next request');
+  const next = await requestOf(FINN);
+  assert.notEqual(next.id, earlier.id);
+  assert.deepEqual([(await owner('select period_start::text p from private.workspace_cleaner_invoices where id=$1', [next.id]))[0].p, await linesOn(next.id)], ['2027-02-15', [resent, underway].sort()]);
+  assert.deepEqual(await lineOf(resent), { outcome: 'partial', source: 'auto', reason: 'late_redo_accepted', rate: 2000, pay: 1000 });
+  assert.deepEqual(await lineOf(underway), { outcome: 'completed', source: 'auto', reason: 'late_dispute_won', rate: 2000, pay: 2000 });
+  assert.deepEqual([Number(next.total_minor), Number(next.pay_minor)], [4000, 3000]);
+  assert.deepEqual((await notices(FINN, 'cleaning.invoice_ready')).map(n => n.preview).slice(-1), [`Request for invoice ${next.number} ready: £30.00 for 2 cleans`]);
+  // What the app reads: the follow-ups name the earlier request; the earlier request is as it was.
+  await as(ACCOUNTS);
+  const read = await rpc('workspace_cleaner_pay_read', ['invoice', next.id]);
+  assert.deepEqual(read.lines.map(l => [l.outcomeReason, l.followsNumber]).sort(), [['late_dispute_won', earlier.number], ['late_redo_accepted', earlier.number]]);
+  assert.deepEqual(read.history.filter(h => h.auto).map(h => [h.reason, h.afterNumber, h.from, h.to]).sort(),
+    [['late_dispute_won', earlier.number, 'unsuccessful', 'completed'], ['late_redo_accepted', earlier.number, 'unsuccessful', 'partial']]);
+  const old = await rpc('workspace_cleaner_pay_read', ['invoice', earlier.id]);
+  assert.deepEqual([old.status, old.totalMinor, old.lineCount, old.lines.map(l => [l.outcome, l.amountMinor])], ['paid', 0, 2, [['unsuccessful', 0], ['unsuccessful', 0]]]);
+  // Once on the next request it moves only between a late redo and a late dispute: nothing to change now.
+  assert.equal(await owner('select private.workspace_clean_outcomes_auto_invoice($1) n', [next.id]).then(r => r[0].n), 0);
+
+  // Never paid twice.
+  const paidFor = async w => (await owner(`select coalesce(sum(coalesce(l.pay_minor,l.amount_minor)),0)::int n from private.workspace_cleaner_invoice_lines l
+    join private.workspace_cleaner_invoices v on v.id=l.invoice_id where l.work_id=$1 and v.status<>'rejected'`, [w]))[0].n;
+  assert.deepEqual([await paidFor(resent), await paidFor(underway)], [1000, 2000]);
+  const [{ property_id: prop }] = await owner('select property_id from private.workspace_cleaner_invoice_lines where id=$1', [lineResent]);
+  // Another live line for the clean: the one-live-line rule.
+  await assert.rejects(owner('insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor,pay_minor) values($1,$2,$3,2000,2000)', [next.id, resent, prop]), /duplicate key/);
+  // A second follow-up for the same clean: at most one, ever.
+  await assert.rejects(owner('insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor,pay_minor,live,follows_line_id) values($1,$2,$3,2000,2000,false,$4)', [next.id, resent, prop, lineResent]), /duplicate key/);
+  // The earlier line can never earn or be live again.
+  await assert.rejects(owner('update private.workspace_cleaner_invoice_lines set pay_minor=2000 where id=$1', [lineUnderway]), /cannot be paid twice/);
+  await assert.rejects(owner("update private.workspace_cleaner_invoice_lines set outcome='completed',pay_minor=null where id=$1", [lineUnderway]), /cannot be paid twice/);
+  await assert.rejects(owner('update private.workspace_cleaner_invoice_lines set live=true where id=$1', [lineResent]), /cannot be paid twice|duplicate key/);
+  // A follow-up only for a clean that was Unsuccessful at £0: never for one that was paid.
+  const [{ id: paidLine, work_id: paidClean }] = await owner("select l.id,l.work_id,l.invoice_id from private.workspace_cleaner_invoice_lines l join private.workspace_cleaner_invoices v on v.id=l.invoice_id where v.cleaner_id=$1 and l.live and coalesce(l.pay_minor,l.amount_minor)>0 and l.follows_line_id is null limit 1", [users[FINN]]);
+  await assert.rejects(owner('insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor,pay_minor,live,follows_line_id) values($1,$2,$3,2000,2000,false,$4)', [next.id, paidClean, prop, paidLine]), /only for a clean that was Unsuccessful/);
+  // And the run never takes them again.
+  assert.equal(await run('2027-03-08T00:30:00Z'), 0);
+  assert.deepEqual([await paidFor(resent), await paidFor(underway)], [1000, 2000]);
+  assert.equal(await onTwo(), 0);
+});
+
+test('a person\'s Unsuccessful on the earlier request means a person decided: no follow-up', async () => {
+  const w = await failed(GIL);
+  await dated(w, '2027-03-02');
+  assert.equal(await run('2027-03-08T00:30:00Z'), 1);
+  const inv = await requestOf(GIL);
+  assert.equal((await lineOf(w)).reason, 'rejected');
+  await as(MANAGER);
+  let v = await pay({ action: 'setPayLineOutcome', invoiceId: inv.id, workId: w, outcome: 'partial', version: (await requestOf(GIL)).version });
+  v = await pay({ action: 'setPayLineOutcome', invoiceId: inv.id, workId: w, outcome: 'unsuccessful', version: v.version });
+  assert.deepEqual(await lineOf(w), { outcome: 'unsuccessful', source: 'manual', reason: null, rate: 2500, pay: 0 });
+  await approve(inv);
+  await redo(w, GIL);
+  await owner("update private.workspace_cleaning_reviews set created_at='2027-03-10 10:00' where work_id=$1 and accepted", [w]);
+  assert.equal(await run('2027-03-15T00:30:00Z'), 0);
+  assert.equal((await owner('select count(*)::int n from private.workspace_cleaner_invoice_lines where work_id=$1', [w]))[0].n, 1);
 });
 
 test('the backend may re-apply the rules to every waiting request; nobody else may call them', async () => {
@@ -290,12 +360,16 @@ test('safe to run twice: each patch once, nothing dropped or deleted, CRLF and n
     ['private.workspace_cleaner_pay_action(jsonb)', 'Clean outcome flags (20261022050000): manual'],
     ['private.workspace_cleaner_pay_action(jsonb)', 'Clean outcome flags (20261022050000): gate'],
     ['private.workspace_cleaner_pay_invoice(private.workspace_cleaner_invoices,boolean)', 'Clean outcome flags (20261022050000): source'],
+    ['private.workspace_cleaner_pay_invoice(private.workspace_cleaner_invoices,boolean)', 'Clean outcome flags (20261022050000): follows'],
+    ['private.workspace_cleaner_pay_invoice(private.workspace_cleaner_invoices,boolean)', 'Clean outcome flags (20261022050000): made good, counted'],
+    ['private.workspace_cleaner_pay_invoice(private.workspace_cleaner_invoices,boolean)', 'Clean outcome flags (20261022050000): made good, shown'],
+    ['private.workspace_cleaner_invoice_run(timestamptz)', 'Clean outcome flags (20261022050000): late follow-ups'],
   ]) {
     const [{ def }] = await owner('select pg_get_functiondef($1::regprocedure) def', [fn]);
     assert.equal(def.split(sentinel).length - 1, 1, sentinel);
   }
-  const triggers = await owner("select tgname from pg_trigger where tgname in ('clean_outcome_form_flag','clean_outcome_review_flag') order by 1");
-  assert.deepEqual(triggers.map(t => t.tgname), ['clean_outcome_form_flag', 'clean_outcome_review_flag']);
+  const triggers = await owner("select tgname from pg_trigger where tgname in ('clean_outcome_form_flag','clean_outcome_review_flag','clean_follow_up_guard') order by 1");
+  assert.deepEqual(triggers.map(t => t.tgname), ['clean_follow_up_guard', 'clean_outcome_form_flag', 'clean_outcome_review_flag']);
   assert.equal((await owner('select count(*)::int n from private.workspace_clean_outcome_settings'))[0].n, 1);
   const text = await fs.readFile(MIGRATION, 'utf8');
   const code = text.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');

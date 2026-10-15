@@ -30,6 +30,21 @@
 -- is Unsuccessful (it is not paid), so a request with a no-form clean at £0 can still be approved; a no-form clean set
 -- to anything else still blocks it.
 --
+-- Late redo or dispute (the lead, 15 October 2026): a cleaner must not lose pay because their redo was accepted, or their
+-- dispute won, after the request was approved. A clean on an approved (or paid) request as Unsuccessful at £0, set by
+-- the request itself ('auto'), whose redo is then accepted or whose dispute is then won, goes on the cleaner's NEXT
+-- request as a follow-up line (private.workspace_clean_late_open, private.workspace_clean_late_attach): Partially
+-- successful for a redo (late_redo_accepted), Completed for a dispute (late_dispute_won), at the earlier line's rate,
+-- source 'auto', pointing at the earlier line (follows_line_id). It goes on the request for the period in which the
+-- redo was accepted or the dispute decided (its latest review), or the next one made after that. The earlier line stays
+-- on the approved request as it was (still shown, still £0) but is no longer the clean's live line, so the existing
+-- one-live-line-per-clean index allows exactly this one follow-up. A guard trigger
+-- (private.workspace_clean_follow_up_guard) and a unique index make sure a clean is never paid twice: a follow-up only
+-- for an earlier line of the same clean that is not live, Unsuccessful, £0 and 'auto', at most one follow-up per clean,
+-- and the earlier line can never be made live again or earn anything. An Unsuccessful a person set ('manual') means a
+-- person decided: no follow-up. The app says "Auto: redo accepted after RC-RFI-... was approved"; the printed document
+-- adds "Late redo, see RC-RFI-..." (or "Late dispute, see ...") to the outcome note.
+--
 -- How they apply:
 -- * Only on a request the run made (generated) while it waits for approval (to_approve, not paid). Nothing changes
 --   once it is approved, paid or rejected, and never on an invoice Accounts recorded by hand.
@@ -54,7 +69,33 @@
 -- Nothing is dropped or deleted. Safe to run twice.
 
 alter table private.workspace_cleaner_invoice_lines add column if not exists outcome_source text check(outcome_source in ('auto','manual'));
-alter table private.workspace_cleaner_invoice_lines add column if not exists outcome_reason text check(outcome_reason in ('no_form','rejected','redo_accepted','dispute_won','form_in','cleared'));
+alter table private.workspace_cleaner_invoice_lines add column if not exists outcome_reason text check(outcome_reason in ('no_form','rejected','redo_accepted','dispute_won','form_in','cleared','late_redo_accepted','late_dispute_won'));
+-- A follow-up line: the earlier line of the same clean, Unsuccessful at £0 on an approved request, that it makes good.
+alter table private.workspace_cleaner_invoice_lines add column if not exists follows_line_id uuid references private.workspace_cleaner_invoice_lines(id);
+-- At most one follow-up per clean, ever.
+create unique index if not exists workspace_cleaner_invoice_lines_follow_up_idx on private.workspace_cleaner_invoice_lines(work_id) where follows_line_id is not null;
+
+-- Never paid twice: a follow-up only makes good an earlier line of the same clean that is not live, Unsuccessful, £0 and
+-- set by the request, and is not itself a follow-up; an earlier line that has a follow-up never becomes live again and
+-- never earns anything.
+create or replace function private.workspace_clean_follow_up_guard() returns trigger language plpgsql security definer set search_path='' as $fn$
+declare p private.workspace_cleaner_invoice_lines;
+begin
+ if new.follows_line_id is not null then
+  select * into p from private.workspace_cleaner_invoice_lines x where x.id=new.follows_line_id;
+  if p.id is null or p.id=new.id or p.work_id<>new.work_id or p.follows_line_id is not null or p.live or coalesce(p.pay_minor,p.amount_minor)<>0
+   or p.outcome is distinct from 'unsuccessful' or p.outcome_source is distinct from 'auto' then
+   raise exception 'A follow-up line is only for a clean that was Unsuccessful at £0, set automatically' using errcode='23514';
+  end if;
+ end if;
+ if tg_op='UPDATE' and (new.live or coalesce(new.pay_minor,new.amount_minor)<>0)
+  and exists(select 1 from private.workspace_cleaner_invoice_lines f where f.follows_line_id=new.id) then
+  raise exception 'This clean is already made good on a later request: it cannot be paid twice' using errcode='23514';
+ end if;
+ return new;
+end $fn$;
+create or replace trigger clean_follow_up_guard before insert or update on private.workspace_cleaner_invoice_lines
+ for each row execute function private.workspace_clean_follow_up_guard();
 
 -- 1. The flags ------------------------------------------------------------------------------------------------------
 -- The sweep tagged the clean as having no form, and the form is still not in.
@@ -78,7 +119,7 @@ end $fn$;
 
 -- The outcome each reason gives.
 create or replace function private.workspace_clean_outcome_for(reason text) returns text language sql immutable set search_path='' as $fn$
- select case reason when 'no_form' then 'unsuccessful' when 'rejected' then 'unsuccessful' when 'redo_accepted' then 'partial' else 'completed' end;
+ select case reason when 'no_form' then 'unsuccessful' when 'rejected' then 'unsuccessful' when 'redo_accepted' then 'partial' when 'late_redo_accepted' then 'partial' else 'completed' end;
 $fn$;
 
 -- Since when a clean not done properly is put on a request: the day this migration was first installed (London).
@@ -134,6 +175,11 @@ begin
  if not l.live or coalesce(l.outcome_source,'')='manual' then return false;end if;
  current_outcome:=coalesce(l.outcome,'completed');
  reason:=private.workspace_clean_outcome_flag(l.work_id,i.cleaner_id);
+ -- A follow-up only moves between a late redo and a late dispute.
+ if l.follows_line_id is not null then
+  if reason is null or reason not in ('redo_accepted','dispute_won') then return false;end if;
+  reason:='late_'||reason;
+ end if;
  if reason is null then
   -- No flag. A line the request never set stays as it is; an automatic one goes back to Completed.
   if l.outcome_source is null or (current_outcome='completed' and l.outcome_reason in ('dispute_won','form_in','cleared')) then return false;end if;
@@ -170,6 +216,53 @@ begin
   if private.workspace_clean_outcome_auto(l.id,at_time) then n:=n+1;end if;
  end loop;
  return n;
+end $fn$;
+
+-- 2b. Late redo or dispute -----------------------------------------------------------------------------------------
+-- Cleans Unsuccessful at £0 (set automatically) on an approved or paid request whose redo was since accepted or whose
+-- dispute was since won, with no follow-up yet; for one cleaner (null: all), decided (latest review) before a moment.
+create or replace function private.workspace_clean_late_open(cleaner uuid,before_at timestamptz)
+returns table(cleaner_id uuid,line_id uuid,work_id uuid,property_id uuid,rate_minor bigint,reason text,moment timestamptz) language sql stable security definer set search_path='' as $fn$
+ select v.cleaner_id,l.id,l.work_id,l.property_id,l.amount_minor,'late_'||f.flag,m.moment
+ from private.workspace_cleaner_invoice_lines l
+ join private.workspace_cleaner_invoices v on v.id=l.invoice_id
+ cross join lateral (select private.workspace_clean_outcome_flag(l.work_id,v.cleaner_id) flag) f
+ cross join lateral (select max(greatest(r.created_at,coalesce(r.overturned_at,r.created_at))) moment from private.workspace_cleaning_reviews r where r.work_id=l.work_id and r.cleaner_id=v.cleaner_id) m
+ where l.live and l.follows_line_id is null and v.generated and v.status='approved'
+  and l.outcome='unsuccessful' and l.outcome_source='auto' and coalesce(l.pay_minor,l.amount_minor)=0
+  and f.flag in ('redo_accepted','dispute_won')
+  and (cleaner is null or v.cleaner_id=cleaner) and (before_at is null or m.moment<before_at)
+  and not exists(select 1 from private.workspace_cleaner_invoice_lines x where x.follows_line_id=l.id)
+  and exists(select 1 from public.workspace_work_items w where w.id=l.work_id and w.status not in ('cancelled','declined'))
+$fn$;
+
+-- Puts them on a new request: the earlier line stops being the clean's live line, the follow-up takes its place.
+create or replace function private.workspace_clean_late_attach(invoice uuid,cleaner uuid,before_at timestamptz) returns integer language plpgsql security definer set search_path='' as $fn$
+declare r record;n integer:=0;target text;
+begin
+ for r in select * from private.workspace_clean_late_open(cleaner,before_at) o order by o.moment,o.work_id loop
+  target:=private.workspace_clean_outcome_for(r.reason);
+  update private.workspace_cleaner_invoice_lines set live=false where id=r.line_id;
+  insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor,pay_minor,outcome,outcome_source,outcome_reason,follows_line_id)
+   values(invoice,r.work_id,r.property_id,r.rate_minor,private.workspace_clean_outcome_minor(r.rate_minor,target),target,'auto',r.reason,r.line_id);
+  n:=n+1;
+ end loop;
+ return n;
+end $fn$;
+
+-- When a request is made, after it is issued: the follow-ups in its history, then the automatic outcomes, then the amount
+-- to invoice from its lines.
+create or replace function private.workspace_clean_outcomes_issue(invoice uuid,at_time timestamptz default now()) returns void language plpgsql security definer set search_path='' as $fn$
+begin
+ insert into private.workspace_cleaner_invoice_history(invoice_id,event,actor_id,work_id,detail,at)
+  select invoice,'outcome',null,l.work_id,jsonb_build_object('from','unsuccessful','to',l.outcome,'amountMinor',l.pay_minor,'auto',true,'reason',l.outcome_reason,
+    'afterNumber',(select coalesce(v.number,v.reference) from private.workspace_cleaner_invoice_lines p join private.workspace_cleaner_invoices v on v.id=p.invoice_id where p.id=l.follows_line_id),
+    'propertyName',(select nullif(btrim(pr.name),'') from public.workspace_properties pr where pr.id=l.property_id),
+    'cleanOn',coalesce((select e.clean_on from private.workspace_clean_earnings e where e.work_id=l.work_id),private.workspace_clean_day(l.work_id))),coalesce(at_time,now())
+  from private.workspace_cleaner_invoice_lines l where l.invoice_id=invoice and l.live and l.follows_line_id is not null order by coalesce(private.workspace_clean_day(l.work_id),current_date),l.work_id;
+ perform private.workspace_clean_outcomes_auto_invoice(invoice,at_time);
+ update private.workspace_cleaner_invoices v set pay_minor=(select coalesce(sum(coalesce(x.pay_minor,x.amount_minor)),0) from private.workspace_cleaner_invoice_lines x where x.invoice_id=v.id and x.live)
+  where v.id=invoice;
 end $fn$;
 
 -- Every request waiting for approval (for the backend, and once below).
@@ -211,22 +304,30 @@ declare
   ['private.workspace_cleaner_invoice_run(timestamptz)',
    $q$insert into private.workspace_cleaner_invoice_history(invoice_id,event,detail,at) values(inv.id,'issued',jsonb_build_object('totalMinor',total,'cleans',cleans),stamp);$q$,
    $q$insert into private.workspace_cleaner_invoice_history(invoice_id,event,detail,at) values(inv.id,'issued',jsonb_build_object('totalMinor',total,'cleans',cleans),stamp);
-    -- Clean outcome flags (20261022050000): automatic outcomes, then the notice says the amount to invoice.
-    perform private.workspace_clean_outcomes_auto_invoice(inv.id,stamp);
+    -- Clean outcome flags (20261022050000): automatic outcomes (late follow-ups first), then the notice says the amount to invoice.
+    perform private.workspace_clean_outcomes_issue(inv.id,stamp);
     total:=coalesce((select v.pay_minor from private.workspace_cleaner_invoices v where v.id=inv.id),total);$q$,
    $q$Clean outcome flags (20261022050000): automatic outcomes$q$],
   -- The run also takes the cleans not done properly: which cleaners have something to request, from when ...
   ['private.workspace_cleaner_invoice_run(timestamptz)',
    $q$for c in select e.cleaner_id,min(e.accepted_at) first_at from private.workspace_clean_earnings e$q$,
    $q$for c in select e.cleaner_id,min(e.accepted_at) first_at from (select x.cleaner_id,x.accepted_at,x.work_id,x.rate_minor from private.workspace_clean_earnings x
-   union all select f.cleaner_id,(f.clean_on::timestamp at time zone 'Europe/London'),f.work_id,f.rate_minor from private.workspace_clean_failed_open(null,null,stamp) f /* Clean outcome flags (20261022050000): failed cleaners */) e$q$,
+   union all select f.cleaner_id,(f.clean_on::timestamp at time zone 'Europe/London'),f.work_id,f.rate_minor from private.workspace_clean_failed_open(null,null,stamp) f /* Clean outcome flags (20261022050000): failed cleaners */
+   union all select g.cleaner_id,g.moment,null::uuid,g.rate_minor from private.workspace_clean_late_open(null,null) g) e$q$,
    $q$Clean outcome flags (20261022050000): failed cleaners$q$],
   -- ... how much and how many for a period ...
   ['private.workspace_cleaner_invoice_run(timestamptz)',
    $q$select coalesce(sum(o.rate_minor),0),count(*) into total,cleans from private.workspace_clean_earnings_open(c.cleaner_id,until_at,p_after) o;$q$,
    $q$select coalesce(sum(o.rate_minor),0),count(*) into total,cleans from (select x.work_id,x.rate_minor from private.workspace_clean_earnings_open(c.cleaner_id,until_at,p_after) x
-     union all select f.work_id,f.rate_minor from private.workspace_clean_failed_open(c.cleaner_id,p_after,stamp) f /* Clean outcome flags (20261022050000): failed count */) o;$q$,
+     union all select f.work_id,f.rate_minor from private.workspace_clean_failed_open(c.cleaner_id,p_after,stamp) f /* Clean outcome flags (20261022050000): failed count */
+     union all select g.work_id,g.rate_minor from private.workspace_clean_late_open(c.cleaner_id,until_at) g) o;$q$,
    $q$Clean outcome flags (20261022050000): failed count$q$],
+  -- ... the follow-ups for a late redo or dispute ...
+  ['private.workspace_cleaner_invoice_run(timestamptz)',
+   $q$insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor,pay_minor)$q$,
+   $q$perform private.workspace_clean_late_attach(inv.id,c.cleaner_id,until_at) /* Clean outcome flags (20261022050000): late follow-ups */;
+    insert into private.workspace_cleaner_invoice_lines(invoice_id,work_id,property_id,amount_minor,pay_minor)$q$,
+   $q$Clean outcome flags (20261022050000): late follow-ups$q$],
   -- ... and their lines (the rules then make them Unsuccessful).
   ['private.workspace_cleaner_invoice_run(timestamptz)',
    $q$select inv.id,o.work_id,o.property_id,o.rate_minor,o.rate_minor from private.workspace_clean_earnings_open(c.cleaner_id,until_at,p_after) o;$q$,
@@ -247,7 +348,19 @@ declare
   ['private.workspace_cleaner_pay_invoice(private.workspace_cleaner_invoices,boolean)',
    $q$'outcome',coalesce(l.outcome,'completed'),'amountMinor',coalesce(l.pay_minor,l.amount_minor))$q$,
    $q$'outcome',coalesce(l.outcome,'completed'),'amountMinor',coalesce(l.pay_minor,l.amount_minor),'outcomeSource',l.outcome_source,'outcomeReason',l.outcome_reason /* Clean outcome flags (20261022050000): source */)$q$,
-   $q$Clean outcome flags (20261022050000): source$q$]
+   $q$Clean outcome flags (20261022050000): source$q$],
+  ['private.workspace_cleaner_pay_invoice(private.workspace_cleaner_invoices,boolean)',
+   $q$'outcomeReason',l.outcome_reason /* Clean outcome flags (20261022050000): source */)$q$,
+   $q$'outcomeReason',l.outcome_reason /* Clean outcome flags (20261022050000): source */,'followsNumber',(select coalesce(fv.number,fv.reference) from private.workspace_cleaner_invoice_lines fp join private.workspace_cleaner_invoices fv on fv.id=fp.invoice_id where fp.id=l.follows_line_id) /* Clean outcome flags (20261022050000): follows */)$q$,
+   $q$Clean outcome flags (20261022050000): follows$q$],
+  ['private.workspace_cleaner_pay_invoice(private.workspace_cleaner_invoices,boolean)',
+   $q$l.invoice_id=i.id and (l.live or i.status='rejected')))$q$,
+   $q$l.invoice_id=i.id and (l.live or i.status='rejected' or exists(select 1 from private.workspace_cleaner_invoice_lines fc where fc.follows_line_id=l.id) /* Clean outcome flags (20261022050000): made good, counted */)))$q$,
+   $q$Clean outcome flags (20261022050000): made good, counted$q$],
+  ['private.workspace_cleaner_pay_invoice(private.workspace_cleaner_invoices,boolean)',
+   $q$l.invoice_id=i.id and (l.live or i.status='rejected')),'[]'::jsonb)$q$,
+   $q$l.invoice_id=i.id and (l.live or i.status='rejected' or exists(select 1 from private.workspace_cleaner_invoice_lines fs where fs.follows_line_id=l.id) /* Clean outcome flags (20261022050000): made good, shown */)),'[]'::jsonb)$q$,
+   $q$Clean outcome flags (20261022050000): made good, shown$q$]
  ];
  definition text;hits integer;
 begin
@@ -263,7 +376,8 @@ begin
 end $patch$;
 
 -- Who may call what: the backend may re-apply the rules to every waiting request; the rest runs inside the database.
-revoke all on function private.workspace_clean_failed_settled(jsonb,uuid,uuid,timestamptz),private.workspace_clean_failed_open(uuid,date,timestamptz),
+revoke all on function private.workspace_clean_follow_up_guard(),private.workspace_clean_late_open(uuid,timestamptz),private.workspace_clean_late_attach(uuid,uuid,timestamptz),
+ private.workspace_clean_outcomes_issue(uuid,timestamptz),private.workspace_clean_failed_settled(jsonb,uuid,uuid,timestamptz),private.workspace_clean_failed_open(uuid,date,timestamptz),
  private.workspace_clean_form_flagged(jsonb),private.workspace_clean_outcome_flag(uuid,uuid),private.workspace_clean_outcome_for(text),
  private.workspace_clean_outcome_auto(uuid,timestamptz),private.workspace_clean_outcomes_auto_invoice(uuid,timestamptz),private.workspace_clean_outcomes_auto_all(),
  public.workspace_clean_outcomes_auto_all(),private.workspace_clean_outcome_form_changed(),private.workspace_clean_outcome_review_changed() from public,anon,authenticated;
