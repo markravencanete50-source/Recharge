@@ -12,7 +12,7 @@ import { List, Row } from "./AccountsPayable";
 import { readTeams, writeTeams } from "./backend/client";
 import { exportReport } from "./exportReport";
 import {
-  approveInvoiceAction, cleanerList, earningsFigures, earningsSchema, INVOICE_PAPER, invoiceDoc, invoiceFileName, invoiceHtml, longDay, markPaidAction, money,
+  approveInvoiceAction, cleanerList, earningsFigures, earningsSchema, INVOICE_PAPER, invoiceDoc, invoiceFileName, invoiceHtml, longDay, markPaidAction, money, NO_TIMES,
   payEarningsQuery, payInvoiceQuery, payInvoiceSchema, payInvoicesQuery, payInvoicesSchema, payPeriodAction, paySettingsQuery, paySettingsSchema, periodLabel,
   queryInvoiceAction, statusOf, toApprove, toPayGroups, type Earnings, type PayInvoice, type PayPeriod, type PaySettings, type StatusTone,
 } from "../../lib/cleaner-invoices";
@@ -45,7 +45,7 @@ export async function downloadInvoice(invoice: PayInvoice) {
 // pill (and a forest PAID mark once paid), From and Billed to, the key facts, the lines with hairlines and a light zebra,
 // the totals bottom right, and the thank-you footer.
 export function InvoicePaper({ invoice }: { invoice: PayInvoice }) {
-  const doc = invoiceDoc(invoice), c = INVOICE_PAPER, tone = c.tone[doc.status.tone];
+  const doc = invoiceDoc(invoice), c = INVOICE_PAPER, tone = c.tone[doc.chip?.tone ?? doc.status.tone];
   const label = { color: c.muted, fontSize: 10, fontWeight: "600" as const, letterSpacing: 1.4, textTransform: "uppercase" as const };
   return (
     <View accessibilityLabel={`Invoice ${doc.number}, ${doc.status.label}, ${doc.totalLabel} ${doc.total}`} style={{ backgroundColor: c.page, borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: c.rule }}>
@@ -58,8 +58,7 @@ export function InvoicePaper({ invoice }: { invoice: PayInvoice }) {
       </View>
       <View style={{ padding: 20, gap: 18 }}>
         <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-          <View style={{ backgroundColor: tone.wash, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 }}><Text style={{ color: tone.ink, fontSize: 12, fontWeight: "600" }}>{doc.status.label}</Text></View>
-          <Text style={{ color: c.muted, fontSize: 12 }}>Status: {doc.status.line}</Text>
+          {doc.chip && <View style={{ backgroundColor: tone.wash, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 }}><Text style={{ color: tone.ink, fontSize: 12, fontWeight: "600" }}>{doc.chip.label}</Text></View>}
           {doc.paidStamp && <View accessible={false} style={{ marginLeft: "auto", borderWidth: 2, borderColor: c.forest, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, transform: [{ rotate: "-6deg" }], opacity: 0.8 }}>
             <Text style={{ color: c.forest, fontWeight: "600", letterSpacing: 3 }}>PAID</Text>
           </View>}
@@ -77,7 +76,7 @@ export function InvoicePaper({ invoice }: { invoice: PayInvoice }) {
           {doc.lines.map((l, n) => (
             <View key={l.key} style={[ui.row, { gap: 8, paddingVertical: 8, paddingHorizontal: 2, borderBottomWidth: 1, borderBottomColor: c.rule, backgroundColor: n % 2 ? c.zebra : c.page, alignItems: "flex-start" }]}>
               <Text style={{ width: 84, color: c.ink, fontSize: 13 }}>{l.date}</Text>
-              <View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: c.ink, fontSize: 13 }}>{l.property}</Text>{!!l.times && <Text style={{ color: c.muted, fontSize: 12 }}>{l.times}</Text>}</View>
+              <View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: c.ink, fontSize: 13 }}>{l.property}</Text>{doc.showTimes && <Text style={{ color: c.muted, fontSize: 12 }} accessibilityLabel={l.times || "No times"}>{l.times || NO_TIMES}</Text>}</View>
               <Text style={{ color: c.ink, fontSize: 13, textAlign: "right", fontVariant: ["tabular-nums"] }}>{l.amount}</Text>
             </View>
           ))}

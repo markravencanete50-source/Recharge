@@ -85,16 +85,27 @@ export function statusOf(i: Pick<PayInvoice, 'status' | 'paidOn' | 'queried'>): 
   if (i.status === 'rejected') return { label: 'Rejected', tone: 'bad' };
   return { label: i.queried ? 'To approve · queried' : 'To approve', tone: 'wait' };
 }
-// The status line for the template: "Status: To approve / Approved / Paid (date)".
+// The status in words: "To approve", "Approved" or "Paid (date)" (lists and screen readers).
 export const statusLine = (i: Pick<PayInvoice, 'status' | 'paidOn' | 'queried'>) => i.status === 'paid' && i.paidOn ? `Paid (${longDay(i.paidOn)})` : statusOf({ ...i, queried: false }).label;
 
 // --- The invoice document ----------------------------------------------------------------------------------------
 export const BILLED_TO = 'Recharge Stays';
 export const THANK_YOU = 'Thank you for keeping our homes guest-ready.';
 export type InvoiceFact = { label: string; value: string };
+// The chip on the template, only while the invoice is not paid: "Awaiting approval" or "Due Tue 20 Oct". A paid invoice
+// says so with the PAID stamp and the "Paid on" fact instead.
+export type InvoiceChip = { label: string; tone: StatusTone };
+export function invoiceChip(i: Pick<PayInvoice, 'status' | 'queried' | 'dueOn'>): InvoiceChip | null {
+  if (i.status === 'paid') return null;
+  if (i.status === 'approved') return { label: `Due ${shortDay(i.dueOn)}`, tone: 'good' };
+  if (i.status === 'rejected') return { label: 'Rejected', tone: 'bad' };
+  return { label: i.queried ? 'Awaiting approval · queried' : 'Awaiting approval', tone: 'wait' };
+}
+// A line with no known times shows a muted dash so the column still reads as a column.
+export const NO_TIMES = '–';
 export type InvoiceDocLine = { key: string; date: string; property: string; times: string; amount: string };
 export type InvoiceDoc = {
-  title: 'Invoice'; number: string; status: { label: string; tone: StatusTone; line: string }; paidStamp: string | null;
+  title: 'Invoice'; number: string; status: { label: string; tone: StatusTone; line: string }; chip: InvoiceChip | null; paidStamp: string | null;
   from: string; billedTo: string; facts: InvoiceFact[]; showTimes: boolean; lines: InvoiceDocLine[]; count: number;
   subtotal: string; total: string; totalLabel: 'Total due' | 'Total paid'; thanks: string; footer: string;
 };
@@ -115,7 +126,7 @@ export function invoiceDoc(i: PayInvoice): InvoiceDoc {
     paid ? { label: 'Paid on', value: i.paidOn ? longDay(i.paidOn) : '' } : { label: 'Due date', value: i.status === 'rejected' ? '' : longDay(i.dueOn) },
   ].filter(f => f.value);
   return {
-    title: 'Invoice', number: i.number, status: { ...s, line: statusLine(i) }, paidStamp: paid && i.paidOn ? `Paid ${longDay(i.paidOn)}` : paid ? 'Paid' : null,
+    title: 'Invoice', number: i.number, status: { ...s, line: statusLine(i) }, chip: invoiceChip(i), paidStamp: paid && i.paidOn ? `Paid ${longDay(i.paidOn)}` : paid ? 'Paid' : null,
     from: i.cleanerName || i.supplier, billedTo: BILLED_TO, facts, showTimes: lines.some(l => l.times), lines, count: lines.length || i.lineCount,
     subtotal: money(lines.length ? subtotal : i.totalMinor), total: money(i.totalMinor), totalLabel: paid ? 'Total paid' : 'Total due', thanks: THANK_YOU,
     footer: `${BILLED_TO} · ${i.number}`,
@@ -144,10 +155,10 @@ const escape = (text: string) => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', 
 // and "page X of Y" in the footer of each page. Vector text, so the PDF saved from print is crisp. `origin` is where the
 // logo and the Montserrat files are served (the app's own site; a file:// folder for the sample).
 export function invoiceHtml(i: PayInvoice, options: { origin?: string } = {}) {
-  const doc = invoiceDoc(i), origin = (options.origin ?? 'https://app.rechargegroup.co.uk').replace(/\/$/, ''), c = INVOICE_PAPER, tone = c.tone[doc.status.tone], logo = logoBox(188);
+  const doc = invoiceDoc(i), origin = (options.origin ?? 'https://app.rechargegroup.co.uk').replace(/\/$/, ''), c = INVOICE_PAPER, tone = c.tone[doc.chip?.tone ?? doc.status.tone], logo = logoBox(188);
   const font = (weight: number) => `@font-face{font-family:"Montserrat";font-weight:${weight};font-style:normal;src:url("${origin}/fonts/montserrat-${weight}.ttf") format("truetype")}`;
   const facts = doc.facts.map(f => `<div class="fact"><dt>${escape(f.label)}</dt><dd>${escape(f.value)}</dd></div>`).join('');
-  const rows = doc.lines.map(l => `<tr><td class="date">${escape(l.date)}</td><td>${escape(l.property)}</td>${doc.showTimes ? `<td class="times">${escape(l.times)}</td>` : ''}<td class="num">${escape(l.amount)}</td></tr>`).join('');
+  const rows = doc.lines.map(l => `<tr><td class="date">${escape(l.date)}</td><td>${escape(l.property)}</td>${doc.showTimes ? (l.times ? `<td class="times">${escape(l.times)}</td>` : `<td class="times none" aria-label="No times">${NO_TIMES}</td>`) : ''}<td class="num">${escape(l.amount)}</td></tr>`).join('');
   return `<!doctype html>
 <html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Invoice ${escape(doc.number)} · ${escape(doc.from)}</title>
@@ -161,8 +172,7 @@ body{margin:0;background:${c.band};color:${c.ink};font:400 10pt/1.5 "Montserrat"
 .title{text-align:right}.word{font-weight:600;font-size:20pt;letter-spacing:.32em;margin-right:-.32em;color:${c.forest};line-height:1.1}.number{margin-top:6px;font-size:10.5pt;letter-spacing:.06em;color:${c.muted}}
 .body{padding:28px 40px 36px;position:relative}
 .status{display:flex;align-items:center;gap:12px;margin:0 0 26px}.pill{display:inline-block;padding:5px 14px;border-radius:999px;background:${tone.wash};color:${tone.ink};font-weight:600;font-size:9pt;letter-spacing:.02em}
-.status .line{color:${c.muted};font-size:9pt}
-.stamp{position:absolute;right:46px;top:96px;transform:rotate(-8deg);border:2px solid ${c.forest};color:${c.forest};border-radius:10px;padding:8px 16px;text-align:center;opacity:.78;font-weight:600;letter-spacing:.24em;font-size:15pt;line-height:1.1}
+.stamp{position:absolute;right:46px;top:${doc.chip ? 96 : 20}px;transform:rotate(-8deg);border:2px solid ${c.forest};color:${c.forest};border-radius:10px;padding:8px 16px;text-align:center;opacity:.78;font-weight:600;letter-spacing:.24em;font-size:15pt;line-height:1.1}
 .stamp small{display:block;letter-spacing:.06em;font-size:8pt;font-weight:400;margin-top:4px}
 .parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:22px}
 h2{margin:0 0 4px;font-size:8pt;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:${c.muted}}.party p{margin:0;font-size:12pt;font-weight:600}
@@ -181,7 +191,7 @@ td{padding:9px 10px;border-bottom:1px solid ${c.rule};vertical-align:top}tbody t
 <main class="sheet" aria-label="Invoice ${escape(doc.number)}">
 <header class="band"><div class="logo"><img src="${escape(origin)}/${LOGO_FILE}" alt="Recharge"></div><div class="title"><div class="word">INVOICE</div><div class="number">${escape(doc.number)}</div></div></header>
 <div class="body">
-<div class="status"><span class="pill">${escape(doc.status.label)}</span><span class="line">Status: ${escape(doc.status.line)}</span></div>
+${doc.chip ? `<div class="status"><span class="pill">${escape(doc.chip.label)}</span></div>` : ''}
 ${doc.paidStamp ? `<div class="stamp" aria-hidden="true">PAID<small>${escape(doc.paidStamp.replace(/^Paid /, ''))}</small></div>` : ''}
 <section class="parties"><div class="party"><h2>From</h2><p>${escape(doc.from)}</p></div><div class="party"><h2>Billed to</h2><p>${escape(doc.billedTo)}</p></div></section>
 <dl class="facts">${facts}</dl>

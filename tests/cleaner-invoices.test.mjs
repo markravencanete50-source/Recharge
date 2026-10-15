@@ -28,13 +28,19 @@ test('the invoice template carries the logo, number, status pill, From and Bille
   const html = inv.invoiceHtml(invoice(), { origin: 'https://app.example' });
   assert.match(html, /<img src="https:\/\/app\.example\/recharge-company-logo\.png" alt="Recharge">/, 'the brand logo');
   assert.match(html, /<div class="word">INVOICE<\/div><div class="number">RC-CLN-2026-0007<\/div>/, 'INVOICE with the number under it');
-  assert.match(html, /<span class="pill">To approve<\/span><span class="line">Status: To approve<\/span>/);
+  assert.match(html, /<div class="status"><span class="pill">Awaiting approval<\/span><\/div>/, 'an unpaid invoice has the chip');
+  assert.doesNotMatch(html, /Status:/, 'no separate status line');
+  assert.match(inv.invoiceHtml(invoice({ status: 'approved' })), /<span class="pill">Due Tue 20 Oct<\/span>/);
+  assert.match(inv.invoiceHtml(invoice({ queried: true })), /<span class="pill">Awaiting approval · queried<\/span>/);
   assert.match(html, /<h2>From<\/h2><p>Angela Morrison<\/p>/);
   assert.match(html, /<h2>Billed to<\/h2><p>Recharge Stays<\/p>/);
   assert.match(html, /<thead><tr><th>Date<\/th><th>Property<\/th><th>Times<\/th><th class="num">Rate<\/th><\/tr><\/thead>/);
   assert.match(html, /thead\{display:table-header-group\}/, 'the table head repeats on every page');
   assert.match(html, /<td class="date">Tue 6 Oct<\/td><td>Flat 0<\/td><td class="times">Check-out 10:00<\/td><td class="num">£45\.00<\/td>/);
   assert.match(html, /Next guests 15:00/);
+  const gap = inv.invoiceHtml(invoice({ lines: [line(0), line(2, { checkoutTime: null })] }));
+  assert.match(gap, /<td class="times none" aria-label="No times">–<\/td>/, 'a line with no times shows a muted dash');
+  assert.equal(inv.invoiceDoc(invoice({ lines: [line(2, { checkoutTime: null })] })).showTimes, false, 'no times column when no line has times');
   assert.match(html, /£1,189\.50/, 'money with thousands separators');
   assert.match(html, /<span>Total due<\/span><span class="num">£1,234\.50<\/span>/);
   assert.match(html, /Thank you for keeping our homes guest-ready\./);
@@ -51,7 +57,8 @@ test('the invoice template carries the logo, number, status pill, From and Bille
 
 test('a paid invoice shows the paid pill, the forest stamp and Total paid; HTML is escaped', () => {
   const html = inv.invoiceHtml(invoice({ status: 'paid', paidOn: '2026-10-17', cleanerName: 'A <b>&', supplier: 'A <b>&' }));
-  assert.match(html, /<span class="pill">Paid on Sat 17 Oct 2026<\/span><span class="line">Status: Paid \(Sat 17 Oct 2026\)<\/span>/);
+  assert.doesNotMatch(html, /class="pill"|Status:/, 'paid says so once with the stamp and once in the facts, no chip or status line');
+  assert.equal((html.match(/Sat 17 Oct 2026/g) ?? []).length, 2, 'the paid date: the stamp and the Paid on fact');
   assert.match(html, /<div class="stamp" aria-hidden="true">PAID<small>/);
   assert.match(html, /<span>Total paid<\/span>/);
   assert.match(html, /A &lt;b&gt;&amp;/);
