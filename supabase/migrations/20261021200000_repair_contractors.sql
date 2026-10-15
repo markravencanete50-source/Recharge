@@ -135,7 +135,7 @@ $$;
 -- One property's row on the Limit Changer.
 create or replace function private.workspace_repair_limit_row(prop uuid) returns jsonb language sql stable security definer set search_path='' as $$
  select jsonb_build_object('propertyId',p.id,'propertyName',p.name,'limitMinor',(o->>'limitMinor')::bigint,'fullPermission',(o->>'fullPermission')::boolean,'source',o->>'source',
-   'updatedBy',(select nullif(trim(u.full_name),'') from public.workspace_profiles u where u.user_id=(o->>'updatedBy')::uuid),'updatedById',o->>'updatedBy','updatedAt',o->>'updatedAt')
+   'updatedBy',o->>'updatedBy','updatedByName',(select nullif(trim(u.full_name),'') from public.workspace_profiles u where u.user_id=(o->>'updatedBy')::uuid),'updatedAt',o->>'updatedAt')
  from public.workspace_properties p cross join lateral (select private.workspace_repair_owner_limit(p.id) o) x where p.id=prop;
 $$;
 

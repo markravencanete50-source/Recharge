@@ -245,7 +245,7 @@ test('a limit change approves waiting estimates now within it, and refreshes est
  assert.equal((await fresh(r)).data.ownerLimitMinor,10000);
  await as(SUPER);const result=await limits({propertyIds:[second],limitMinor:50000,fullPermission:false});
  assert.deepEqual(result.autoApproved,[w.workId]);
- assert.equal(result.properties[0].limitMinor,50000);assert.equal(result.properties[0].source,'set');assert.equal(result.properties[0].updatedBy,'Alex Super');
+ assert.equal(result.properties[0].limitMinor,50000);assert.equal(result.properties[0].source,'set');assert.equal(result.properties[0].updatedBy,users[SUPER]);assert.equal(result.properties[0].updatedByName,'Alex Super');
  w=await fresh(w);
  assert.equal(w.data.phase,'referred');assert.ok(w.data.bookingApprovedAt);assert.equal(w.data.autoApprovedMinor,40000);assert.equal(w.data.autoApprovalSource,'set');
  for(const who of [READY_A,ADMIN,OWNER])assert.equal(await told(users[who],w.workId,'operations.repairLimit.autoApproved'),1,roles[who]+' is told');
