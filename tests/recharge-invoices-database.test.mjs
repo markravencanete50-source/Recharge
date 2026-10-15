@@ -225,3 +225,30 @@ test('the document for an existing bill to an owner follows the invoice row: the
   await as(OWNER);
   assert.equal((await read('invoice', bill)).paidOn, today);
 });
+
+test('RC-RFI numbers are shared with the cleaners\' requests: a cleaner request and a maker request in the same year are consecutive and distinct', async () => {
+  const counter = async () => (await owner('select coalesce((select last_number from private.workspace_cleaner_invoice_numbers where year=$1),0) n', [Number(year)]))[0].n;
+  const rfi = n => `RC-RFI-${year}-${String(n).padStart(4, '0')}`;
+  const start = await counter();
+  // A maker request first.
+  await as(ACCOUNTS);
+  const m1 = await act(draft({ kind: 'request', recipientId: users[CLEANER] }));
+  const first = (await act({ action: 'issueDocument', id: m1.id, version: m1.version })).number;
+  assert.equal(first, rfi(start + 1));
+  // Then the cleaners' run: an accepted clean ten days ago, in a week that has ended, makes the cleaner's request.
+  await as(ADMIN);
+  const clean = await rpc('workspace_operations_action', [{ requestId: crypto.randomUUID(), action: 'createOperation', propertyId: hawk, kind: 'cleaning', data: { dueOn: today, checklist: ['Kitchen'] } }]);
+  await owner(`insert into private.workspace_clean_earnings(work_id,cleaner_id,property_id,clean_on,accepted_at,rate_minor)
+    values($1,$2,$3,(now() at time zone 'Europe/London')::date-10,now()-interval '10 days',4000)`, [clean.workId, users[CLEANER], hawk]);
+  assert.equal((await owner('select private.workspace_cleaner_invoice_run(now()) r'))[0].r.invoices, 1);
+  const cleanerRequest = (await owner('select number from private.workspace_cleaner_invoices where cleaner_id=$1 and generated', [users[CLEANER]]))[0].number;
+  assert.equal(cleanerRequest, rfi(start + 2));
+  // And a maker request after it.
+  await as(ACCOUNTS);
+  const m2 = await act(draft({ kind: 'request', recipientId: users[CLEANER] }));
+  assert.equal((await act({ action: 'issueDocument', id: m2.id, version: m2.version })).number, rfi(start + 3));
+  assert.equal(await counter(), start + 3, 'one counter');
+  const all = (await owner(`select number from private.workspace_documents where number like 'RC-RFI-%' union all select number from private.workspace_cleaner_invoices where number is not null`)).map(r => r.number);
+  assert.equal(new Set(all).size, all.length, 'never the same number twice');
+  assert.equal((await owner("select count(*)::int n from private.workspace_document_numbers where prefix<>'RC-INV'"))[0].n, 0, 'the maker keeps no RC-RFI counter of its own');
+});

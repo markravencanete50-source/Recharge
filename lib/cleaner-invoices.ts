@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { brandCanvas, darkBrandCanvas, depthTokens, designTokens } from './design-tokens';
 import { formatMoney } from './format';
-import { legalDetails } from './legal-details';
+import { groupTradingName, legalDetails } from './legal-details';
 
 // Requests for invoice (migration 20261022000000). At the end of each pay period (weekly, Monday to Sunday, or monthly)
 // each cleaner's accepted cleans become one request for invoice, RC-RFI-YYYY-NNNN, "To approve": Recharge asks the cleaner
@@ -116,7 +116,7 @@ export const statusLine = (i: Pick<PayInvoice, 'status' | 'paidOn' | 'queried'>)
 // Who the request is from. Lee is confirming which name goes where: this is the one place to change it. The address and
 // the company come from lib/legal-details.ts, never a second copy.
 export const RECHARGE_PARTY = {
-  name: 'Recharge Group',
+  name: groupTradingName,
   lines: [legalDetails.registeredAddress, `${legalDetails.legalName} · Company no. ${legalDetails.companyNumber}`],
 } as const;
 // The terms near the bottom. Lee may replace this text; {number} becomes the request's number. "Within 7 days" is the

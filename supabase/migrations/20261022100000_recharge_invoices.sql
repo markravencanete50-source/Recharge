@@ -20,7 +20,7 @@
 --     lines (description, quantity, rate; the amount is worked out here), GBP or USD, issue and due dates, an optional
 --     period and note, and the terms text.
 --   Drafts are saved and edited; Issue locks the document and numbers it RC-INV-YYYY-NNNN or RC-RFI-YYYY-NNNN from a
---   counter per prefix and year that only goes up (private.workspace_document_numbers). An issued document is marked
+--   counter per year that only goes up (RC-RFI shares the cleaners' counter, see Numbers below). An issued document is marked
 --   paid with the paid-on date or voided with a reason; a draft can be voided too. Nothing is ever deleted: a draft's
 --   lines are kept per revision, and every change is in private.workspace_document_history with who and when.
 --   Every change is checked against the document's version.
@@ -96,10 +96,12 @@ create table if not exists private.workspace_document_lines (
 alter table private.workspace_document_lines enable row level security;
 revoke all on private.workspace_document_lines from public,anon,authenticated;
 
--- TODO(lead, at merge): RC-RFI numbers are shared with the cleaner requests in 20261022000000. Until the numbering is
--- unified, the maker keeps its own counter per prefix and year here.
+-- Numbers. RC-INV-YYYY-NNNN for the maker's invoices comes from this counter. RC-RFI-YYYY-NNNN for a request for invoice
+-- comes from the SAME counter as the cleaners' requests, private.workspace_cleaner_invoice_numbers (20261022000000,
+-- private.workspace_cleaner_invoice_run), taken the same way (one upsert per number, the row lock holds concurrent issues
+-- in line), so a cleaner request and a maker request can never share a number.
 create table if not exists private.workspace_document_numbers (
- prefix text not null check(prefix in ('RC-INV','RC-RFI')),
+ prefix text not null check(prefix in ('RC-INV')),
  year integer not null check(year between 2000 and 2999),
  last_number integer not null default 0 check(last_number>=0),
  primary key(prefix,year)
@@ -365,8 +367,14 @@ begin
    raise exception 'Add at least one line with an amount before issuing' using errcode='22023';
   end if;
   pfx:=case when d.kind='request' then 'RC-RFI' else 'RC-INV' end;yr:=extract(year from today)::integer;
-  insert into private.workspace_document_numbers(prefix,year,last_number) values(pfx,yr,1)
-   on conflict(prefix,year) do update set last_number=private.workspace_document_numbers.last_number+1 returning last_number into num;
+  if d.kind='request' then
+   -- The cleaners' request counter (20261022000000), shared so the two kinds of request never collide.
+   insert into private.workspace_cleaner_invoice_numbers(year,last_number) values(yr,1)
+    on conflict(year) do update set last_number=private.workspace_cleaner_invoice_numbers.last_number+1 returning last_number into num;
+  else
+   insert into private.workspace_document_numbers(prefix,year,last_number) values(pfx,yr,1)
+    on conflict(prefix,year) do update set last_number=private.workspace_document_numbers.last_number+1 returning last_number into num;
+  end if;
   update private.workspace_documents set status='issued',number=pfx||'-'||yr||'-'||case when num<10000 then lpad(num::text,4,'0') else num::text end,
    issued_by=auth.uid(),issued_at=now(),version=version+1,updated_by=auth.uid(),updated_at=now() where id=d.id returning * into d;
   insert into private.workspace_document_history(document_id,actor_id,action,from_status,to_status,version,detail) values(d.id,auth.uid(),'issued','draft','issued',d.version,jsonb_build_object('number',d.number));

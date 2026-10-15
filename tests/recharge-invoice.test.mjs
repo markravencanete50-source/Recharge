@@ -10,6 +10,7 @@ const vite = await createServer({ configFile: false, server: { middlewareMode: t
 after(() => vite.close());
 const doc = await vite.ssrLoadModule('/lib/recharge-invoice.ts');
 const legal = await vite.ssrLoadModule('/lib/legal-details.ts');
+const cleaner = await vite.ssrLoadModule('/lib/cleaner-invoices.ts');
 const read = path => readFileSync(path, 'utf8');
 
 const bill = (over = {}) => ({
@@ -53,6 +54,11 @@ test('the terms are one constant with the 7-day rule; no bank details until Lee 
   assert.equal(doc.INVOICE_DUE_DAYS, 7);
   assert.equal(doc.DEFAULT_TERMS.invoice, 'Payment is due within 7 days of the invoice date. Please quote the invoice number with your payment.');
   assert.equal(doc.PAYMENT_DETAILS, null);
+  // A request for invoice uses the cleaner requests' words exactly, with its own number; the thanks line asks nothing else.
+  assert.equal(doc.DEFAULT_TERMS.request, cleaner.REQUEST_TERMS);
+  assert.equal(doc.termsFor(doc.DEFAULT_TERMS.request, 'RC-RFI-2026-0007'), cleaner.requestTerms('RC-RFI-2026-0007'));
+  assert.equal(doc.termsFor(doc.DEFAULT_TERMS.request, 'RC-RFI-2026-0007'), 'Please send us your invoice for the amount above, quoting reference RC-RFI-2026-0007. We pay valid invoices within 7 days.');
+  assert.equal(cleaner.RECHARGE_PARTY.name, legal.groupTradingName, 'one copy of the trading name');
   const html = doc.rechargeInvoiceHtml(doc.fromWorkspaceInvoice(bill()));
   assert.doesNotMatch(html, /Payment details|Sort code|IBAN/);
   const withBank = doc.rechargeInvoiceHtml(doc.fromWorkspaceInvoice(bill()), { payment: [{ label: 'Sort code', value: '00-00-00' }] });
@@ -106,10 +112,10 @@ test('where the document opens: owner bills on Reports and Accounts, Receivable,
   assert.match(read('supabase/migrations/20261022100000_recharge_invoices.sql'), /private\.workspace_owner_bill_module\(i\.module_id\) or not private\.workspace_invoice_visible\(i\)/);
 });
 
-test('the look is shared with the cleaner invoice, which is not changed here', () => {
+test('the look is shared with the cleaner invoice; only its request terms are taken from it', () => {
   const ours = read('lib/recharge-invoice.ts'), theirs = read('lib/cleaner-invoices.ts');
   assert.match(ours, /shares its look with the cleaner invoice in lib\/cleaner-invoices\.ts/);
-  assert.doesNotMatch(ours, /from '\.\/cleaner-invoices'/);
+  assert.deepEqual(ours.match(/import .* from '\.\/cleaner-invoices';/g), ["import { REQUEST_TERMS } from './cleaner-invoices';"]);
   for (const rule of ['.band{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:28px 40px;', 'tbody tr:nth-child(even) td{background:', '.totals .grand span:last-child{font-size:18pt;font-weight:600;']) {
     assert.ok(ours.includes(rule) && theirs.includes(rule), rule);
   }

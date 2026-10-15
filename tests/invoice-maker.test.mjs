@@ -102,7 +102,8 @@ test('the live preview is the branded document: REQUEST FOR INVOICE, Requested f
   assert.deepEqual(view.rows, [{ key: '0', description: 'Virtual assistant, October', quantity: '80', rate: '$6.25', amount: '$500.00' }]);
   assert.deepEqual(view.facts.map(f => f.label), ['Request date', 'Due date', 'Period', 'Currency']);
   assert.equal(view.facts.at(-1).value, 'US dollars');
-  assert.equal(view.terms, doc.DEFAULT_TERMS.request);
+  assert.equal(view.terms, 'Please send us your invoice for the amount above, quoting reference (given when issued). We pay valid invoices within 7 days.', 'a draft has no number yet');
+  assert.equal(doc.rechargeInvoiceDoc({ ...maker.formToInvoice(f), status: 'issued', number: 'RC-RFI-2026-0042' }).terms, 'Please send us your invoice for the amount above, quoting reference RC-RFI-2026-0042. We pay valid invoices within 7 days.');
   const html = doc.rechargeInvoiceHtml(maker.formToInvoice(f));
   assert.match(html, /<div class="word">REQUEST FOR INVOICE<\/div><div class="number">DRAFT<\/div>/);
   assert.match(html, /<th class="num">Qty<\/th><th class="num">Rate<\/th><th class="num">Amount<\/th>/);
@@ -202,5 +203,7 @@ test('the route, the requests and where the screens are wired', () => {
   const screen = read('mobile/src/InvoiceMaker.tsx');
   assert.match(screen, /<RechargeInvoicePaper invoice=\{formToInvoice\(/, 'the live preview');
   for (const label of ['Save draft', 'Issue', 'Mark paid', 'Void it', 'Add a line', 'Up', 'Down', 'Remove', 'Someone in the app', 'Someone else']) assert.ok(screen.includes(`"${label}`) || screen.includes(`? "${label}"`) || screen.includes(`: "${label}"`), label);
-  assert.match(read('supabase/migrations/20261022100000_recharge_invoices.sql'), /TODO\(lead, at merge\): RC-RFI numbers are shared with the cleaner requests in 20261022000000/);
+  const sql = read('supabase/migrations/20261022100000_recharge_invoices.sql');
+  assert.doesNotMatch(sql, /TODO/);
+  assert.match(sql, /insert into private\.workspace_cleaner_invoice_numbers\(year,last_number\)/, 'RC-RFI from the cleaners\' counter');
 });

@@ -1,4 +1,5 @@
 import { brandCanvas, darkBrandCanvas, depthTokens, designTokens } from './design-tokens';
+import { REQUEST_TERMS } from './cleaner-invoices';
 import { groupTradingName, legalDetails } from './legal-details';
 import type { ReceivableItem } from './tracker-receivable';
 
@@ -7,7 +8,8 @@ import type { ReceivableItem } from './tracker-receivable';
 // It shares its look with the cleaner invoice in lib/cleaner-invoices.ts (invoiceHtml, INVOICE_PAPER, logoBox): cream header
 // band with the RECHARGE logo, spaced INVOICE with the number under it, From and Billed to, a row of key facts, a striped
 // table, subtotal and a big total, a PAID stamp, a footer. The CSS is a copy on purpose: that file is being reworked
-// separately, so nothing here imports from it. Change both together to keep them alike.
+// separately, so the only thing taken from it is the request terms (REQUEST_TERMS), worded once for both kinds of request.
+// Change both together to keep them alike.
 //
 // Where Recharge bills someone (see the report in migration 20261022100000):
 //  * public.workspace_invoices bills to an owner: onboarding, direct booking, repair (fromWorkspaceInvoice);
@@ -22,11 +24,15 @@ export type DocTone = 'wait' | 'good' | 'paid' | 'bad';
 // Payment is due this many days after the invoice date: the rule the maker uses for its default due date (Lee, 15 Oct 2026)
 // and the cleaner invoices use for theirs. Bills with no due date of their own are shown with this one.
 export const INVOICE_DUE_DAYS = 7;
-// The terms printed on every document, in one place. Lee may replace the words; the documents follow.
+// The terms printed on every document, in one place. Lee may replace the words; the documents follow. A request for invoice
+// uses the cleaner requests' words exactly (lib/cleaner-invoices.ts REQUEST_TERMS). {number} in any terms becomes the
+// document's number when it is drawn; a draft has none yet, so it reads NUMBER_PENDING until it is issued.
 export const DEFAULT_TERMS: Record<DocKind, string> = {
   invoice: `Payment is due within ${INVOICE_DUE_DAYS} days of the invoice date. Please quote the invoice number with your payment.`,
-  request: `Please send ${groupTradingName} your invoice for the amount below within ${INVOICE_DUE_DAYS} days, quoting this request number.`,
+  request: REQUEST_TERMS,
 };
+export const NUMBER_PENDING = '(given when issued)';
+export const termsFor = (terms: string, number?: string | null) => terms.split('{number}').join(number?.trim() || NUMBER_PENDING);
 // Bank details for paying Recharge. Deliberately empty: Lee supplies them separately. While this is null the payment block
 // is left off every document. Fill it as label and value pairs, for example [{ label: 'Sort code', value: '00-00-00' }].
 export type PaymentDetail = { label: string; value: string };
@@ -78,7 +84,7 @@ export type RechargeInvoiceDoc = {
   subtotal: string; adjustments: { label: string; value: string }[]; total: string; totalLabel: 'Total due' | 'Total paid' | 'Balance due' | 'Amount to invoice' | 'Total';
   note: string; terms: string; payment: readonly PaymentDetail[] | null; thanks: string; footer: string;
 };
-const THANKS: Record<DocKind, string> = { invoice: 'Thank you for your business.', request: `Thank you. Please send your invoice to ${groupTradingName}.` };
+const THANKS: Record<DocKind, string> = { invoice: 'Thank you for your business.', request: 'Thank you.' };
 
 export function rechargeInvoiceDoc(i: RechargeInvoice, options: { today?: string; payment?: readonly PaymentDetail[] | null } = {}): RechargeInvoiceDoc {
   const request = i.kind === 'request', money = (m: number) => docMoney(m, i.currency);
@@ -111,7 +117,7 @@ export function rechargeInvoiceDoc(i: RechargeInvoice, options: { today?: string
     facts, showQuantities, rows, empty: 'No lines yet.',
     subtotal: money(subtotalMinor), adjustments: paidSoFar > 0 ? [{ label: 'Paid so far', value: money(-paidSoFar) }] : [],
     total: money(subtotalMinor - paidSoFar), totalLabel,
-    note: i.note?.trim() ?? '', terms: (i.terms ?? DEFAULT_TERMS[i.kind]).trim(), payment: options.payment === undefined ? PAYMENT_DETAILS : options.payment,
+    note: i.note?.trim() ?? '', terms: termsFor((i.terms ?? DEFAULT_TERMS[i.kind]).trim(), i.number), payment: options.payment === undefined ? PAYMENT_DETAILS : options.payment,
     thanks: THANKS[i.kind], footer: `${groupTradingName} · ${legalDetails.legalName} · Company no. ${legalDetails.companyNumber}${i.number ? ' · ' + i.number : ''}`,
   };
 }
