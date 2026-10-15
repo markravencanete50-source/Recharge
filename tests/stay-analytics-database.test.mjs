@@ -123,6 +123,15 @@ test('Guests & stays: the figures for a small month', async () => {
   assert.equal(V.notKnownLine(r.guests.known, r.stays), 'Not known for 14% of stays');
   assert.equal(V.notKnownLine(r.leadTime.known, r.stays), 'Not known for 57% of stays');
   assert.doesNotMatch(JSON.stringify(r), /HM8|HA:|Owner stay/, 'no booking references or stay ids');
+  // Why they stay, the rating and the survey (20261021800000): nobody has been asked here, so none is known yet.
+  assert.deepEqual(r.reasons, { known: 0, counts: ['holiday', 'work', 'family_friends', 'event', 'other'].map(reason => ({ reason, stays: 0 })) });
+  assert.deepEqual([r.rating, r.survey], [{ known: 0, average: null }, { sent: 0, answered: 0 }]);
+  await sql("update private.workspace_reservations set stay_reason='work' where reference in ('HA:8101','HA:8301')");
+  await sql("update private.workspace_reservations set stay_reason='holiday' where reference='HA:8305'");
+  await as(ADMIN);
+  const why = await read('2025-11-01', '2025-11-30');
+  assert.deepEqual([why.reasons.known, why.reasons.counts.find(c => c.reason === 'work').stays, why.reasons.counts.find(c => c.reason === 'holiday').stays], [2, 2, 0], 'the owner stay\'s reason is not counted');
+  assert.equal(V.notKnownLine(why.reasons.known, why.stays), 'Not known for 71% of stays');
 
   // Two months: a stay across both is counted in each.
   const two = await read('2025-10-01', '2025-11-30');

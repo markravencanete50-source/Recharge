@@ -34,6 +34,8 @@ export const workspaceTeams = rpcRoute({
     : input.section in BUSINESS_REPORT_KIND ? client.rpc('workspace_business_report', { section: BUSINESS_REPORT_KIND[input.section as keyof typeof BUSINESS_REPORT_KIND], start_on: input.from, end_on: input.to })
     // Reports > Guests & stays (admins only, checked by the database): stays in the dates, optionally one property and one channel.
     : input.section === 'stayAnalytics' ? client.rpc('workspace_stay_analytics', { start_on: input.from, end_on: input.to, target_property: input.propertyId || null, target_channel: input.channel || null })
+    // Its two switches (admins only, checked by the database).
+    : input.section === 'stayReasonSettings' ? client.rpc('workspace_stay_reason_settings')
     // Client enquiries also say whether the email service is set up (or the team copies the link).
     : input.section === 'clientEnquiries' ? Promise.all([client.rpc('workspace_teams_read', { section: input.section }),
       import('./integration-server').then(m => enquiryEmailReady(m.integrationSettings()), () => false)]).then(([r, email]) => r.error ? r : { ...r, data: { ...(r.data as object), emailReady: email } })
@@ -49,7 +51,7 @@ export const workspaceTeams = rpcRoute({
     : input.action === 'decideChatReport' && input.decision === 'remove' ? import('./chat-media-server').then(m => m.decideChatReport(context, input)) : null,
   // Favorites and View as have their own database functions.
   actionFor: input => input.action === 'saveFavorites' ? 'workspace_save_favorites' : input.action === 'startViewAs' ? 'workspace_view_as_start'
-    : input.action === 'stopViewAs' ? 'workspace_view_as_stop' : 'workspace_teams_action',
+    : input.action === 'stopViewAs' ? 'workspace_view_as_stop' : input.action === 'setStayReasonSwitch' ? 'workspace_stay_reason_switch' : 'workspace_teams_action',
 });
 
 export const workspaceAdmin = rpcRoute({

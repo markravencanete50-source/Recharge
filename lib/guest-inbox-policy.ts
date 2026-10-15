@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { threadStayReasonSchema } from './stay-reason';
 
 // The guest inbox: conversations with guests from Airbnb, Booking.com, Vrbo and direct. Hostaway
 // fills it by itself (guest messages and the team's replies sent there) and, when switched on
@@ -40,6 +41,8 @@ export const guestThreadSchema = z.object({
   lastMessageAt: z.string().nullable(), preview: z.string().nullable(), lastFrom: z.enum(['guest', 'team']).nullable(), waitingSince: z.string().nullable(), messages: z.number(),
   // The reader replied or logged a message here, or looks after the property (the Mine chip).
   mine: z.boolean().default(false),
+  // When the stay's reason was asked (Hostaway conversations only), and the answer once known (20261021800000).
+  stayReason: threadStayReasonSchema.nullable().default(null),
 });
 export type GuestThread = z.infer<typeof guestThreadSchema>;
 const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() });

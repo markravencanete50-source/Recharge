@@ -37,7 +37,9 @@ export const teamsReadSchema = z.object({
     // Business reports for admins (20261020860000): enquiries, repairs and spend, to-dos, messages, time worked.
     ...BUSINESS_REPORT_SECTIONS,
     // Reports > Guests & stays (20261021600000), admins only: optionally one property and one channel.
-    'stayAnalytics']),
+    'stayAnalytics',
+    // Its two switches (20261021800000), admins only: ask guests why they stay, and the survey after direct stays.
+    'stayReasonSettings']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
   channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).optional(),
   role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),
@@ -122,6 +124,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('saveFavorites'), items: z.array(favoriteItemSchema).max(40) }).strict(),
   z.object({ action: z.literal('startViewAs'), userId: z.string().uuid() }).strict(),
   z.object({ action: z.literal('stopViewAs') }).strict(),
+  // Reports > Guests & stays: "Ask guests the reason for their stay" and "Send a survey after direct stays" (admins only, 20261021800000).
+  z.object({ action: z.literal('setStayReasonSwitch'), switch: z.enum(['ask', 'survey']), on: z.boolean() }).strict(),
   // The rota by date (a null shift clears the day), and corrected or forgotten shifts.
   z.object({ action: z.literal('planRota'), requestId: id, userId: id, days: z.array(z.object({ day: date, shift: z.enum(ROTA_SHIFTS).nullable(),
     department: z.enum(DEPARTMENTS).optional(), note: z.string().trim().max(300).optional() }).strict()).min(1).max(31) }).strict(),

@@ -66,7 +66,7 @@ export const newMessageId = (seed: string) => `${seed}@${MAIL_DOMAIN}`;
  * Sends one email as a mailbox, with In-Reply-To and References so the other person's mail app threads it. The idempotency key makes a
  * retried call the same email. Returns the Message-ID it went out under (set by us), and Resend's own id.
  */
-export async function sendMailboxEmail(mailbox: Mailbox, email: { to: string; subject: string; text: string; inReplyTo?: string | null; references?: string[]; idempotencyKey: string }) {
+export async function sendMailboxEmail(mailbox: Mailbox, email: { to: string; subject: string; text: string; html?: string; inReplyTo?: string | null; references?: string[]; idempotencyKey: string }) {
   const messageId = newMessageId(email.idempotencyKey.split('/').pop()!);
   const wrap = (id: string) => id.startsWith('<') ? id : `<${id}>`;
   const headers: Record<string, string> = { 'Message-ID': `<${messageId}>` };
@@ -77,8 +77,9 @@ export async function sendMailboxEmail(mailbox: Mailbox, email: { to: string; su
   if (isMailboxAddress(email.to)) throw new ResendError('Not sent: the address is one of our own mailboxes', 400);
   const response = await resend('/emails', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': email.idempotencyKey },
-    // The text goes as written; the HTML part is the same text with a small Recharge signature under it (lib/email-brand.ts).
-    body: JSON.stringify({ from, to: [email.to], reply_to: address, subject: email.subject, text: email.text, html: replyHtml(email.text, address), headers }),
+    // The text goes as written; the HTML part is the same text with a small Recharge signature under it (lib/email-brand.ts),
+    // or the caller's own HTML (the survey after a direct stay, lib/stay-reason.ts, which carries the same signature).
+    body: JSON.stringify({ from, to: [email.to], reply_to: address, subject: email.subject, text: email.text, html: email.html ?? replyHtml(email.text, address), headers }),
   });
   const result = await response.json() as { id?: string };
   if (typeof result.id !== 'string' || !result.id) throw new ResendError('Resend gave no id', 502);
