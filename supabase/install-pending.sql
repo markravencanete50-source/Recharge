@@ -1,3 +1,4 @@
 -- Nothing pending. Every migration in supabase/migrations is installed in the Supabase project.
 -- 20261021100000_chat_voice_notes: the safe part was installed by the lead on 14 October 2026; Lee ran the
 -- check swap (the part with a DROP) on 15 October 2026. It went live with the voice notes pull request.
+-- 20261021200000_repair_contractors: installed by the lead on 15 October 2026 (no DROP or DELETE). It went live with the repairs with contractors pull request.
