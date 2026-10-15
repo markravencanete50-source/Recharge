@@ -56,7 +56,7 @@ async function submittedClean(cleaner = CLEANER, dueOn = day.d) {
 }
 async function review(clean, accepted, reviewer = MANAGER) {
   await as(reviewer);
-  return operation({ action: 'updateOperation', workId: clean.workId, version: clean.version, step: 'reviewCleaning', data: { accepted, guestFeedback: accepted ? 'Guests were happy' : 'Guest found hair in the shower', reviewNote: accepted ? 'All checks fine' : 'Shower not cleaned' } });
+  return operation({ action: 'updateOperation', workId: clean.workId, version: clean.version, step: 'reviewCleaning', data: { accepted, ...(accepted ? {} : { redoBy: new Date(Date.now() + 3600000).toISOString() }), guestFeedback: accepted ? 'Guests were happy' : 'Guest found hair in the shower', reviewNote: accepted ? 'All checks fine' : 'Shower not cleaned' } });
 }
 async function rejectedClean(cleaner = CLEANER) {
   const clean = await submittedClean(cleaner);
@@ -93,18 +93,20 @@ test('the cleaner hears when a clean is accepted or rejected and when the disput
   const good = await submittedClean();
   await review(good, true);
   const bad = await rejectedClean();
-  assert.deepEqual((await notices(CLEANER, good.workId)).filter(e => e.startsWith('cleaning.')), ['cleaning.accepted']);
-  assert.deepEqual((await notices(CLEANER, bad.workId)).filter(e => e.startsWith('cleaning.')), ['cleaning.rejected']);
-  assert.ok(!(await notices(MANAGER)).some(e => e === 'cleaning.accepted' || e === 'cleaning.rejected'), 'only the cleaner, not the reviewer');
+  // Cleaner flow (20261021500000): the cleaner hears "New clean" when assigned, and "Please redo" instead of "Clean not accepted".
+  const review_ = e => e.startsWith('cleaning.') && e !== 'cleaning.assigned';
+  assert.deepEqual((await notices(CLEANER, good.workId)).filter(review_), ['cleaning.accepted']);
+  assert.deepEqual((await notices(CLEANER, bad.workId)).filter(review_), ['cleaning.redo']);
+  assert.ok(!(await notices(MANAGER)).some(e => e === 'cleaning.accepted' || e === 'cleaning.rejected' || e === 'cleaning.redo'), 'only the cleaner, not the reviewer');
   await as(CLEANER);
   const inApp = (await rpc('workspace_controls_read', ['notifications', null, null])).map(n => n.event_type);
-  assert.ok(inApp.includes('cleaning.accepted') && inApp.includes('cleaning.rejected'), 'shown in the app');
+  assert.ok(inApp.includes('cleaning.accepted') && inApp.includes('cleaning.redo'), 'shown in the app');
   // The rejected clean carries the reason and links to its dispute.
   let clean = (await rpc('workspace_operations_read', [property])).find(w => w.workId === bad.workId);
   assert.equal(clean.data.accepted, false); assert.equal(clean.data.reviewNote, 'Shower not cleaned'); assert.equal(clean.data.complaintWorkId, bad.complaint.id);
   await as(MANAGER);
   await teams({ action: 'decideComplaint', workId: bad.complaint.id, version: bad.complaint.version, outcome: 'upheld', note: 'Guest photo shows hair in the shower' });
-  assert.deepEqual((await notices(CLEANER, bad.workId)).filter(e => e.startsWith('cleaning.')), ['cleaning.rejected', 'cleaning.dispute_upheld']);
+  assert.deepEqual((await notices(CLEANER, bad.workId)).filter(review_), ['cleaning.redo', 'cleaning.dispute_upheld']);
   await as(CLEANER);
   clean = (await rpc('workspace_operations_read', [property])).find(w => w.workId === bad.workId);
   assert.equal(clean.data.disputeDecision, 'upheld'); assert.equal(clean.data.disputeNote, 'Guest photo shows hair in the shower');
@@ -162,13 +164,14 @@ test('a pay rate per clean gives the cleaner their month and Accounts the amount
   await as(MANAGER);
   let row = (await read('performance')).find(c => c.cleanerId === users[CLEANER]);
   assert.equal(row.rateMinor, null); assert.equal(row.rateVersion, 0);
-  for (const [who, pattern] of [[CLEANER, /cleaning manager can set/], [STAYS, /cleaning manager can set/], [OTHER_MANAGER, /cleaning manager can set/], [ACCOUNTS, /cleaning manager can set/]]) {
+  // Cleaner flow (20261021500000): only admins and Accounts set rates; cleaning managers no longer do.
+  for (const [who, pattern] of [[CLEANER, /admins and Accounts can set/], [STAYS, /admins and Accounts can set/], [OTHER_MANAGER, /admins and Accounts can set/], [MANAGER, /admins and Accounts can set/]]) {
     await as(who);
     await assert.rejects(teams({ action: 'setCleanerRate', cleanerId: users[CLEANER], rateMinor: 9900, version: 0 }), pattern, roles[who]);
   }
   await as(ADMIN);
-  await assert.rejects(teams({ action: 'setCleanerRate', cleanerId: users[STAYS], rateMinor: 2500, version: 0 }), /cleaning manager can set/, 'only cleaners have a rate');
-  await as(MANAGER);
+  await assert.rejects(teams({ action: 'setCleanerRate', cleanerId: users[STAYS], rateMinor: 2500, version: 0 }), /Only cleaners have a rate/, 'only cleaners have a rate');
+  await as(ACCOUNTS);
   await assert.rejects(teams({ action: 'setCleanerRate', cleanerId: users[CLEANER], rateMinor: 0, version: 0 }), /between/);
   const first = await teams({ action: 'setCleanerRate', cleanerId: users[CLEANER], rateMinor: 2000, version: 0 });
   assert.deepEqual(first, { cleanerId: users[CLEANER], rateMinor: 2000, version: 1 });
@@ -203,7 +206,7 @@ test('cleaners see how many guests leave and arrive, and nothing else about the 
   await as(CLEANER);
   const schedule = await read('schedule', day.before, day.far, null, users[CLEANER]);
   assert.deepEqual(schedule.stays, [], 'no bookings for cleaners');
-  assert.deepEqual(schedule.cleanGuests.find(g => g.workId === clean.workId), { workId: clean.workId, guestsLeaving: 4, nextArrivalOn: day.soon, nextArrivalGuests: 2 });
+  assert.deepEqual(schedule.cleanGuests.find(g => g.workId === clean.workId), { workId: clean.workId, guestsLeaving: 4, nextArrivalOn: day.soon, nextArrivalGuests: 2, checkoutTime: null, nextArrivalTime: null });
   const text = JSON.stringify(schedule);
   for (const secret of ['SECRET-REF', 'HM-SECRET', 'BK-SECRET', 'airbnb', 'booking_com', 'payout', 'channel', 'reservationId', 'reference']) assert.ok(!text.includes(secret), secret);
   await as(OTHER_CLEANER);

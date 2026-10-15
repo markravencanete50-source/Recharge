@@ -145,12 +145,15 @@ export function cleanNext(clean: CleanFormInput & { data: Record<string, unknown
 
 // Accepting a clean means the team checked the cleaner's form and the guest is happy. Rejecting goes to
 // management as a complaint and needs no tick. Returns what still stops the review being saved.
-export type ReviewDraft = { accepted: boolean | null; formChecked: boolean; guestFeedback: string; reviewNote: string };
+// Guest feedback is needed to reject (optional to accept, migration 20261021500000); a rejection needs a redo deadline.
+export type ReviewDraft = { accepted: boolean | null; formChecked: boolean; guestFeedback: string; reviewNote: string; redoBy?: string | null };
 export function reviewBlockers(draft: ReviewDraft): string[] {
   const out: string[] = [];
   if (draft.accepted === null) out.push('Choose Accept or Reject.');
   if (draft.accepted === true && !draft.formChecked) out.push('Tick that the form is checked and the guest is happy.');
-  if (draft.guestFeedback.trim().length < 5) out.push('Add what the guest said (a few words).');
+  const feedback = draft.guestFeedback.trim().length;
+  if ((draft.accepted === false && feedback < 5) || (feedback > 0 && feedback < 5)) out.push('Add what the guest said (a few words).');
+  if (draft.accepted === false && !draft.redoBy) out.push('Choose when the clean must be redone by, in the next seven days.');
   if (draft.reviewNote.trim().length < 5) out.push('Add your review (a few words).');
   return out;
 }

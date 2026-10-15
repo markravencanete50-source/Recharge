@@ -6,6 +6,7 @@ import { workspaceDateKey } from './analytics';
 import { HTTPS_LINK_MESSAGE, MAX_COMPARABLES, isHttpsLink } from './journey-policy';
 import { ownCostFields, ownCostsFrom } from './own-costs';
 import { agreementTemplateForms } from './agreement-template';
+import { defaultRedoBy } from './cleans-live';
 import { BATHROOM_CHOICES, BEDROOM_CHOICES, GARDEN_CHOICES, PARKING_CHOICES, PROPERTY_TYPES, WC_CHOICES, type Suggestion } from './property-listing';
 export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense';
  // Quick picks under a text field (tapping one fills it, and any fields in `also`), and a postcode lookup on an address.
@@ -155,7 +156,8 @@ export function operationForms(a:WorkspaceAccount,w:OperationView):WorkflowForm[
  }
  if(w.kind==='cleaning'){
   if(a.role==='cleans'&&w.assigneeId===a.userId&&w.data.phase==='assigned')add('submitCleaning','Submit your clean',[field('report','Cleaning report','textarea')],v=>v,'Open this clean from Cleans to tick the checklist and add your photos.');
-  if((admin(a)||actorIs(a,'stays','cleaning_manager'))&&w.data.phase==='review')add('reviewCleaning','Review the clean and guest feedback',[field('accepted','Accept the completed clean','checkbox',false),field('guestFeedback','Guest feedback','textarea'),field('reviewNote','Management review','textarea')]);
+  if((admin(a)||actorIs(a,'stays','cleaning_manager'))&&w.data.phase==='review')add('reviewCleaning','Review the clean and guest feedback',[field('accepted','Accept the completed clean','checkbox',false),{...field('guestFeedback','Guest feedback (needed to reject)','textarea',false),help:'A rejected clean is to be redone by the usual time: 18:00 today, or 12:00 tomorrow after 18:00. Open it from Cleans to choose another time.'},field('reviewNote','Management review','textarea')],
+   ({guestFeedback,...v})=>({...v,...(typeof guestFeedback==='string'&&guestFeedback.trim()?{guestFeedback:guestFeedback.trim()}:{}),...(v.accepted?{}:{redoBy:defaultRedoBy()})}));
  }
  if(w.kind==='purchase'){
   const purchasing=admin(a)||(a.role==='accounts'&&a.modules.includes('purchase-order-accounts'));

@@ -28,7 +28,7 @@ test('a problem reported from a clean passes the server check, with or without p
 });
 
 test('the review the cleaning manager saves still passes', () => {
-  const review = { action: 'updateOperation', requestId: id(), workId: id(), version: 2, step: 'reviewCleaning', data: { accepted: false, guestFeedback: 'Guest found hair', reviewNote: 'Shower not cleaned' } };
+  const review = { action: 'updateOperation', requestId: id(), workId: id(), version: 2, step: 'reviewCleaning', data: { accepted: false, redoBy: new Date(Date.now() + 3600000).toISOString(), guestFeedback: 'Guest found hair', reviewNote: 'Shower not cleaned' } };
   assert.ok(operationsActionSchema.safeParse(review).success);
 });
 

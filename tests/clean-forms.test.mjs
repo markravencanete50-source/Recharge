@@ -162,7 +162,10 @@ test('accepting a clean needs the "form checked and guest happy" tick; rejecting
   const draft = (extra = {}) => ({ accepted: true, formChecked: true, guestFeedback: 'Guest was happy', reviewNote: 'Checked the form', ...extra });
   assert.deepEqual(f.reviewBlockers(draft()), []);
   assert.deepEqual(f.reviewBlockers(draft({ formChecked: false })), ['Tick that the form is checked and the guest is happy.']);
-  assert.deepEqual(f.reviewBlockers(draft({ accepted: false, formChecked: false })), []);
+  assert.deepEqual(f.reviewBlockers(draft({ accepted: false, formChecked: false, redoBy: '2026-10-15T17:00:00.000Z' })), []);
+  // Cleaner flow: no guest feedback is needed to accept; a rejection needs it, and a redo deadline.
+  assert.deepEqual(f.reviewBlockers(draft({ guestFeedback: '' })), []);
+  assert.deepEqual(f.reviewBlockers(draft({ accepted: false, guestFeedback: '' })), ['Add what the guest said (a few words).', 'Choose when the clean must be redone by, in the next seven days.']);
   assert.deepEqual(f.reviewBlockers(draft({ accepted: null, formChecked: false })), ['Choose Accept or Reject.']);
   assert.equal(f.reviewBlockers(draft({ guestFeedback: 'ok', reviewNote: '' })).length, 2);
   assert.equal(f.FORM_CHECKED_LABEL, 'Form checked and guest happy');
