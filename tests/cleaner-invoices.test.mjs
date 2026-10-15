@@ -33,7 +33,7 @@ test('the invoice template carries the logo, number, status pill, From and Bille
   assert.match(inv.invoiceHtml(invoice({ status: 'approved' })), /<span class="pill">Due Tue 20 Oct<\/span>/);
   assert.match(inv.invoiceHtml(invoice({ queried: true })), /<span class="pill">Awaiting approval · queried<\/span>/);
   assert.match(html, /<h2>From<\/h2><p>Angela Morrison<\/p>/);
-  assert.match(html, /<h2>Billed to<\/h2><p>Recharge Stays<\/p>/);
+  assert.match(html, /<h2>Billed to<\/h2><p>Recharge Group<\/p>/);
   assert.match(html, /<thead><tr><th>Date<\/th><th>Property<\/th><th>Times<\/th><th class="num">Rate<\/th><\/tr><\/thead>/);
   assert.match(html, /thead\{display:table-header-group\}/, 'the table head repeats on every page');
   assert.match(html, /<td class="date">Tue 6 Oct<\/td><td>Flat 0<\/td><td class="times">Check-out 10:00<\/td><td class="num">£45\.00<\/td>/);
@@ -46,7 +46,7 @@ test('the invoice template carries the logo, number, status pill, From and Bille
   assert.match(html, /Thank you for keeping our homes guest-ready\./);
   assert.match(html, /@page\{size:A4 portrait/);
   assert.match(html, /counter\(page\) " of " counter\(pages\)/, 'page X of Y');
-  assert.match(html, /Recharge Stays · RC-CLN-2026-0007/);
+  assert.match(html, /Recharge Group · RC-CLN-2026-0007/);
   assert.match(html, /Tue 13 Oct 2026/);
   assert.match(html, /6–12 Oct 2026/);
   assert.match(html, /Tue 20 Oct 2026/);
@@ -72,7 +72,7 @@ test('a paid invoice shows the paid pill, the forest stamp and Total paid; HTML 
 test('the screen paper and the download share one document model', () => {
   const doc = inv.invoiceDoc(invoice());
   assert.equal(doc.from, 'Angela Morrison');
-  assert.equal(doc.billedTo, 'Recharge Stays');
+  assert.equal(doc.billedTo, 'Recharge Group');
   assert.deepEqual(doc.facts.map(f => f.label), ['Issue date', 'Period', 'Cleans', 'Due date']);
   assert.deepEqual(doc.lines.map(l => l.date), ['Tue 6 Oct', 'Wed 7 Oct']);
   assert.equal(doc.total, '£1,234.50');

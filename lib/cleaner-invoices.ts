@@ -89,7 +89,7 @@ export function statusOf(i: Pick<PayInvoice, 'status' | 'paidOn' | 'queried'>): 
 export const statusLine = (i: Pick<PayInvoice, 'status' | 'paidOn' | 'queried'>) => i.status === 'paid' && i.paidOn ? `Paid (${longDay(i.paidOn)})` : statusOf({ ...i, queried: false }).label;
 
 // --- The invoice document ----------------------------------------------------------------------------------------
-export const BILLED_TO = 'Recharge Stays';
+export const BILLED_TO = 'Recharge Group';
 export const THANK_YOU = 'Thank you for keeping our homes guest-ready.';
 export type InvoiceFact = { label: string; value: string };
 // The chip on the template, only while the invoice is not paid: "Awaiting approval" or "Due Tue 20 Oct". A paid invoice
