@@ -3,7 +3,7 @@ import { businessContext,businessResponse,databaseFailure } from './business-ser
 import { authSecurityConfiguration,requestQuota,securityRpc } from './auth-security';
 import { isSameOrigin,securityHeaders } from './auth-security-policy';
 import { isNativeRequest } from './native-request-policy';
-import { integrationConfiguration,MAX_PHOTO_BYTES,mediaInputSchema,photoFormat } from './integration-policy';
+import { documentsAllowed,integrationConfiguration,MAX_PHOTO_BYTES,mediaContentType,mediaFormat,mediaInputSchema } from './integration-policy';
 import { uploadPrivatePhoto,downloadPrivatePhoto,uploadStoragePhoto,downloadStoragePhoto,STORAGE_PREFIX } from './integration-providers';
 import { integrationSettings } from './integration-server';
 
@@ -24,7 +24,7 @@ export async function mediaRoute(request:Request,native=false) {
         if(result.error)return databaseFailure(result.error);
         const settings=integrationSettings();if(!integrationConfiguration(settings).media)return businessResponse({error:'Photo service is awaiting configuration'},503);
         const bytes=String(result.data.providerAssetId).startsWith(STORAGE_PREFIX)?await downloadStoragePhoto(settings,result.data):await downloadPrivatePhoto(settings,result.data);
-        return new Response(bytes,{headers:{...securityHeaders,Vary:'Cookie, Authorization','Cache-Control':'private, max-age=3600','Content-Type':`image/${result.data.format==='jpg'?'jpeg':result.data.format}`,'Content-Disposition':`inline; filename="recharge-photo.${result.data.format}"`}});
+        return new Response(bytes,{headers:{...securityHeaders,Vary:'Cookie, Authorization','Cache-Control':'private, max-age=3600','Content-Type':mediaContentType(String(result.data.format)),'Content-Disposition':`inline; filename="recharge-${result.data.format==='pdf'?'file':'photo'}.${result.data.format}"`}});
       }
       const result=await session.client.rpc('workspace_media_read',{target_work:parsed.data.workId});
       return result.error?databaseFailure(result.error):businessResponse({data:result.data,uploadsEnabled:integrationConfiguration(integrationSettings()).media});
@@ -43,8 +43,10 @@ export async function mediaRoute(request:Request,native=false) {
     if([...form.keys()].some(k=>!['requestId','workId','expenseId','purpose','checklistItem','photo'].includes(k))||[...form.keys()].some(k=>form.getAll(k).length!==1))return businessResponse({error:'Unexpected upload fields'},400);
     const parsed=mediaInputSchema.safeParse({requestId:form.get('requestId'),workId:form.get('workId')??undefined,expenseId:form.get('expenseId')??undefined,purpose:form.get('purpose'),checklistItem:form.get('checklistItem')??undefined});
     const photo=form.get('photo');if(!parsed.success||!(photo instanceof Blob))return businessResponse({error:'Check the photo and work details'},400);
-    const bytes=new Uint8Array(await photo.arrayBuffer()),format=photoFormat(bytes);
-    if(!format)return businessResponse({error:'Choose a JPEG, PNG or WebP photo up to 8 MB'},400);
+    // A photo, or a PDF where the purpose allows one (integration-policy DOCUMENT_PURPOSES: a contractor's quote or invoice).
+    const bytes=new Uint8Array(await photo.arrayBuffer()),format=mediaFormat(bytes,parsed.data.purpose);
+    if(!format)return businessResponse({error:documentsAllowed(parsed.data.purpose)?'Choose a photo (JPEG, PNG or WebP) or a PDF up to 8 MB':'Choose a JPEG, PNG or WebP photo up to 8 MB'},400);
+    if(format==='pdf'&&integrationConfiguration(settings).mediaProvider==='cloudinary')return businessResponse({error:'PDF files can be added once storage is switched to Recharge storage. Add a photo of it instead.'},400);
     const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(b=>b.toString(16).padStart(2,'0')).join('');
     const prepared=await session.client.rpc('workspace_prepare_upload',{input:{...parsed.data,contentHash:hash}});
     if(prepared.error)return databaseFailure(prepared.error);

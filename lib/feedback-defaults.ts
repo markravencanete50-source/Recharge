@@ -66,8 +66,8 @@ export const VISIT_FORM_REQUIRED = true;
 
 // --- A9: team calendar (migration 20261012210000_team_calendar) ------------------------------------
 // SQL: private.workspace_guest_name_visible(role). Only these roles see a guest's name; cleaners, the
-// cleaning manager and owners get null.
-export const GUEST_NAME_VISIBLE_ROLES = ['admin', 'super_admin', 'stays', 'ready', 'accounts'] as const;
+// cleaning manager, contractors (Ready, since migration 20261021200000) and owners get null.
+export const GUEST_NAME_VISIBLE_ROLES = ['admin', 'super_admin', 'stays', 'accounts'] as const;
 export const guestNameVisible = (role: string | null | undefined): boolean => !!role && (GUEST_NAME_VISIBLE_ROLES as readonly string[]).includes(role);
 // SQL: private.workspace_team_event_kinds(). You add your own; admins can change anyone's; the whole
 // team sees them; owners never do.

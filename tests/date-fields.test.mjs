@@ -18,7 +18,7 @@ test('the converted forms use the shared calendar field', () => {
     'LiveCleans.tsx': /<DateField p=\{p\} label="Date" mode="single"/,
     'StaySheet.tsx': /<DateField p=\{p\} label="Check-in to check-out"/,
     'StayEditSheet.tsx': /<DateField p=\{p\} label="Check-in to check-out"/,
-    'LiveRepairs.tsx': /<DateField p=\{p\} label="Repair date" mode="single"/,
+    'LiveRepairs.tsx': /<DateField p=\{p\} label="Day of the visit" mode="single"/,
     'LiveCalendar.tsx': /<DateField p=\{p\} label="Date" mode="single"/,
     'LocalEvents.tsx': /<DateField p=\{p\} label="Date" mode="single"/,
     'TeamEvents.tsx': /<DateField p=\{p\} label="Dates" hint="Choose the first day, then the last\. For one day, choose it twice\."/,

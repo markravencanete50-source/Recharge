@@ -10,6 +10,7 @@ import { Button, Field, message, Notice, Section, StatGrid, StatTile, Tag, useRe
 import { List, Row } from "./LiveAccounts";
 import { EmptyState, PageHeading, SoftButton } from "./LivePages";
 import { WorkPhotos } from "./Photos";
+import { ApprovalContractor } from "./RepairContractors";
 import { writeOperation } from "./backend/client";
 import { formatMoney } from "../../lib/format";
 import { managementReason } from "../../lib/repair-approvals";
@@ -88,6 +89,8 @@ export function CostDecisionSheet({ p, decision, start = "approve", onClose, onD
           {!!tags.length && <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>{tags}</View>}
         </View>
         <WorkPhotos key={decision.workId + ":" + decision.version} p={p} workId={decision.workId} title="Photos" />
+        {/* A contractor's estimate: who sent it and the quote they attached (management only). */}
+        {!owner && <ApprovalContractor key={"contractor:" + decision.workId + ":" + decision.version} p={p} workId={decision.workId} version={decision.version} />}
         {/* The amount, the earlier quote if it changed, and the limit it is above. */}
         <View style={{ gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: p.border, backgroundColor: p.background }}>
           <View style={{ gap: 2 }}>

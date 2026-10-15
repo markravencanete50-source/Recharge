@@ -20,6 +20,9 @@ import { chatTime } from "../../lib/workspace-chat-policy";
 import { SavedReplies } from "./SavedReplies";
 import { HiddenMessage, InboxMessageSafety, MessageMenuButton } from "./ChatSafety";
 import type { PropertyView } from "../../lib/workspace-view";
+import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { canReportRepair } from "../../lib/repairs-live";
+import { ReportSheet } from "./LiveRepairs";
 
 // The guest inbox (the Guests tab of Messages): every conversation with guests, the longest wait first, filtered
 // by Needs a reply, Engaged or Closed and by one search box. A conversation opens in place: beside the
@@ -131,7 +134,8 @@ function LogMessageSheet({ p, properties, onClose, onDone }: { p: Palette; prope
 
 type Loaded = ReturnType<typeof inboxThreadSchema.parse>;
 // One guest conversation, open in place. `onBack` (phones) puts the list back.
-function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Palette; threadId: string; properties: PropertyView[]; onBack?: () => void; onChanged: () => void }) {
+// account: who is reading, for "Report a repair" (Stays and admins), which opens the report sheet prefilled from the conversation.
+function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged }: { p: Palette; threadId: string; properties: PropertyView[]; account?: WorkspaceAccount; onBack?: () => void; onChanged: () => void }) {
   const celebrate = useCelebrate();
   const [data, setData] = useState<Loaded | null>(null);
   const [reply, setReply] = useState(""), [guestText, setGuestText] = useState("");
@@ -139,6 +143,7 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [note, setNote] = useState("");
   // The guest message whose menu is open (Report message), as in Team chat.
   const [reporting, setReporting] = useState<Loaded["messages"][number] | null>(null);
+  const [repairing, setRepairing] = useState(false);
   const scroller = useRef<ScrollView>(null);
   const load = useCallback(async () => {
     try { setData(inboxThreadSchema.parse((await readInbox({ section: "thread", threadId })).data)); setError(""); }
@@ -260,6 +265,7 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
           {t.status === "open" ? <Button label="Close" icon="archive" p={p} disabled={busy} onPress={() => void run({ action: "setStatus", requestId: Crypto.randomUUID(), threadId, status: "done" }, "Conversation closed")} />
             : <Button label="Reopen" icon="rotate-ccw" p={p} disabled={busy} onPress={() => void run({ action: "setStatus", requestId: Crypto.randomUUID(), threadId, status: "open" }, "Reopened")} />}
           <Button label="Guest details" icon="edit-2" p={p} onPress={() => { setEditing(!editing); setGuest(t.guestName ?? ""); setProperty(t.propertyId); setBooking(t.reservationRef ?? ""); }} />
+          {!!account && canReportRepair(account.role) && <Button label="Report a repair" icon="tool" p={p} onPress={() => setRepairing(true)} />}
         </View>
         {editing && <View style={{ gap: 10, padding: 12, borderRadius: 16, backgroundColor: p.background }}>
           <Field label="Guest’s name" value={guest} onChange={setGuest} p={p} />
@@ -269,6 +275,9 @@ function GuestThreadPane({ p, threadId, properties, onBack, onChanged }: { p: Pa
         </View>}
       </>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
+      {repairing && account && t && <ReportSheet p={p} account={account} visible properties={properties} onClose={() => setRepairing(false)}
+        prefill={{ propertyId: t.propertyId, guestConversationId: t.id, guestName: t.guestName, reservationRef: t.reservationRef, checkIn: t.checkIn }}
+        onDone={async () => { setRepairing(false); celebrate("Repair reported"); }} />}
       {reporting && <InboxMessageSafety key={reporting.id} p={p} source="guest" id={reporting.id} from={t?.guestName ?? "the guest"} body={reporting.body ?? ""} at={reporting.sentAt} onClose={() => setReporting(null)} />}
     </View>
   );
@@ -296,7 +305,7 @@ function useSeenThreads() {
 }
 
 // emails: Messages > Guest emails (guestrelations@) shows only email conversations; Guests shows the rest (Lee, 14 October).
-export function GuestInbox({ palette: p, properties, desktop = false, onChanged, openThread, emails = false }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void; openThread?: string; emails?: boolean }) {
+export function GuestInbox({ palette: p, properties, desktop = false, onChanged, openThread, emails = false, account }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void; openThread?: string; emails?: boolean; account?: WorkspaceAccount }) {
   // Every recent conversation is read once; the status and the search filter it here. Newest message first (byLatest).
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const [data, setData] = useState<ReturnType<typeof inboxListSchema.parse> | null>(null);
@@ -339,7 +348,7 @@ export function GuestInbox({ palette: p, properties, desktop = false, onChanged,
       )}
     </View>
   );
-  const detail = openId ? <GuestThreadPane key={openId} p={p} threadId={openId} properties={properties} onBack={desktop ? undefined : () => open(null)} onChanged={() => { void load(); onChanged?.(); }} /> : null;
+  const detail = openId ? <GuestThreadPane key={openId} p={p} threadId={openId} properties={properties} account={account} onBack={desktop ? undefined : () => open(null)} onChanged={() => { void load(); onChanged?.(); }} /> : null;
   return (
     <>
       <MessagesSplit p={p} desktop={desktop} list={list} detail={detail} />

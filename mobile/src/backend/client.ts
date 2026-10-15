@@ -16,6 +16,7 @@ import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import type { DeleteAccountInput } from '../../../lib/privacy-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 import { VIEW_AS_ENDED, VIEW_AS_HEADER, viewAsPeopleSchema } from '../../../lib/view-as';
+import { contractorsQuery } from '../../../lib/repair-contractors';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -185,6 +186,16 @@ export async function uploadWorkPhoto(input: {requestId: string;workId?: string;
 
 // Photos already saved on a work item, and where to load each one from. In the browser the
 // web session cookie goes with the image request; the phone app sends its access token.
+// Repairs with contractors (lib/repair-contractors.ts): the contractors for a property, and a contractor's quote or invoice
+// as a PDF (photos go through the upload queue like any other photo). The server checks the file and who may add it.
+export const readRepairContractors = async (propertyId: string) => (await workspaceRequest('/api/mobile/operations' + contractorsQuery(propertyId))).json();
+export async function uploadWorkFile(input: { requestId: string; workId: string; purpose: PhotoPurpose }, file: { uri: string; name: string; file?: File }) {
+  const form = new FormData();
+  form.append('requestId', input.requestId); form.append('workId', input.workId); form.append('purpose', input.purpose);
+  if (Platform.OS === 'web') form.append('photo', file.file ?? new File([await (await fetch(file.uri)).blob()], file.name, { type: 'application/pdf' }));
+  else form.append('photo', { uri: file.uri, name: file.name, type: 'application/pdf' } as unknown as Blob);
+  return (await workspaceRequest('/api/mobile/media', form)).json();
+}
 export const readWorkMedia = async (workId: string) => (await workspaceRequest('/api/mobile/media?workId=' + encodeURIComponent(workId))).json();
 export async function photoSource(assetId: string): Promise<{ uri: string; headers?: Record<string, string> }> {
   const path = '/api/mobile/media?assetId=' + encodeURIComponent(assetId);

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { FlagButton } from "./ManagementFlag";
 import { AirCoverFlag } from "./AirCoverFlag";
-import { Linking, View } from "react-native";
+import { Linking, Platform, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
@@ -18,7 +18,7 @@ import { Dropdown } from "./Dropdown";
 import { icon, radius, space, textSize, ui, type Palette } from "./theme";
 import { addDays, Anchor, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading } from "./LiveKit";
 import { formatMoney } from "../../lib/format";
-import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeOperation, writeTeams } from "./backend/client";
+import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeInbox, writeOperation, writeTeams } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { PropertyAccess } from "./LiveTools";
 import { REPAIR_GUIDES, SAFETY_STOP, repairTypeLabel, troubleshootingNote, type RepairType } from "../../lib/repair-guides";
@@ -34,6 +34,11 @@ import { PurchaseOrdersList } from "./PurchaseOrdersList";
 import type { SectionProps } from "./SectionProps";
 import { pillBox, pillInk } from "./Pills";
 import { autoApprovalLabel, QUOTE_SOURCE_LABEL, repairWhatsAppLink, type QuoteSource } from "../../lib/repair-approvals";
+import {
+  assignedContractor, bookingData, canReassign, clashesOf, completeData, contractorAction, contractorStage, estimateData, fixedInChatMessage, guestConversationOf,
+  invoiceFilesOf, matchStay, quoteFilesOf, reassignData, referData, REASSIGN_STEP, seesGuestChat, VISIT_TIMES, visitGuestUpdate, type ChatPrefill, type Clash,
+} from "../../lib/repair-contractors";
+import { ClashNotice, ContractorLine, ContractorPicker, GuestChatLink, RepairFileList, RepairFiles, useGuestSend, VisitDetails } from "./RepairContractors";
 
 // Live repairs: the maintenance pipeline from report to completed repair, and
 // Ready's routine visits. Every action here is checked again by the database.
@@ -43,7 +48,19 @@ const pounds = (minor: unknown) => typeof minor === "number" ? formatMoney(minor
 // A repair reported with no estimate waits in triage; say so rather than showing £0.00.
 const estimateText = (data: Record<string, unknown>) => data.estimatedCostMinor === 0 && data.phase === "triage" ? "Cost not known yet" : `Estimate ${pounds(data.estimatedCostMinor)}`;
 const SOURCE_OPTIONS = (["team", "contractor"] as const).map(value => ({ value, label: QUOTE_SOURCE_LABEL[value] }));
-const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", approveManagement: "Approve the cost (management)", referReady: "Refer to Ready", bookRepair: "Book the repair", completeRepair: "Complete the repair" };
+const STEP_TITLE: Record<RepairStep, string> = { approveBudget: "Approve the repair cost", approveManagement: "Approve the cost (management)", referReady: "Send to contractor", bookRepair: "Book the visit", completeRepair: "Mark done" };
+const TIME_OPTIONS = VISIT_TIMES.map(t => ({ value: t, label: t }));
+// The step this person takes on a repair. A contractor on a job given to them follows its own steps (send an estimate,
+// book once approved, mark done); older repairs with no contractor named, and the team, follow repairStep as before.
+function stepFor(account: WorkspaceAccount, data: Record<string, unknown>): RepairStep | null {
+  if (account.role === "ready" && assignedContractor(data)) {
+    const next = contractorAction(account.role, account.userId, data);
+    return next === "book" ? "bookRepair" : next === "complete" ? "completeRepair" : null;
+  }
+  return repairStep(account.role, String(data.phase), account.teamOnly);
+}
+// A contractor's estimate is their next step too.
+const contractorEstimates = (account: WorkspaceAccount, data: Record<string, unknown>) => contractorAction(account.role, account.userId, data) === "estimate";
 
 // `sectionProps` (from the Work area) lets Ready also see the purchase orders below the repairs.
 export function LiveRepairs({ palette: p, account, properties, showRoutines = true, sectionProps }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; showRoutines?: boolean; sectionProps?: SectionProps }) {
@@ -85,7 +102,7 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
 
   const nameOf = useCallback((id: string) => properties.find(x => x.id === id)?.name ?? "Property", [properties]);
   const counts = useMemo(() => Object.fromEntries(REPAIR_STAGES.map(s => [s.phase, repairs.filter(r => repairStage(r.data) === s.phase).length])), [repairs]);
-  const mineToAct = repairs.filter(r => repairStep(account.role, String(r.data.phase), account.teamOnly) || canCloseRepair(account.role, String(r.data.phase)));
+  const mineToAct = repairs.filter(r => stepFor(account, r.data) || contractorEstimates(account, r.data) || canCloseRepair(account.role, String(r.data.phase)));
   const inStage = stage === "open" ? repairs.filter(r => !repairClosed(String(r.data.phase))) : stage === "action" ? mineToAct : repairs.filter(r => repairStage(r.data) === stage);
   const search = useListSearch(inStage, r => [nameOf(r.propertyId), r.title, r.data.issue, typeof r.data.repairType === "string" ? repairTypeLabel(r.data.repairType) : "", REPAIR_STAGES.find(s => s.phase === repairStage(r.data))?.label], LIST_PREVIEW + 2), shown = search.shown;
   // Visits are created a batch at a time; keep asking until none are left.
@@ -124,12 +141,12 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
         <ListSearchBox p={p} search={search} nouns="repairs" />
         {search.missed ? null : shown.length ? <View style={{ borderRadius: radius.tile, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, overflow: "hidden" }}>
           {shown.map((r, i) => {
-            const phase = String(r.data.phase), step = repairStep(account.role, phase), stageNow = repairStage(r.data), label = REPAIR_STAGES.find(s => s.phase === stageNow)?.label ?? phase;
+            const phase = String(r.data.phase), step = stepFor(account, r.data), stageNow = repairStage(r.data), label = REPAIR_STAGES.find(s => s.phase === stageNow)?.label ?? phase;
             const declined = declineNote(r.data), followUp = canCloseRepair(account.role, phase);
             const problem = typeof r.data.issue === "string" && r.data.issue ? r.data.issue : r.title;
             const updated = londonDayOf(r.lastActivityAt ?? r.updatedAt);
             const flags = [r.data.urgent === true && "Urgent", r.data.hazard === true && "Safety hazard"].filter(Boolean).join(" · ");
-            const next = step ? STEP_TITLE[step] : followUp ? "Update the quote or close the repair" : "";
+            const next = step ? (step === "bookRepair" && account.role === "ready" ? "Approved, please book" : STEP_TITLE[step]) : contractorEstimates(account, r.data) ? "Send an estimate" : followUp ? "Update the quote or close the repair" : "";
             return (
               // One thin row a repair: property and problem, then status, cost and when it last moved.
               <MotionPress key={r.workId} accessibilityRole="button" accessibilityLabel={`${nameOf(r.propertyId)}, ${label}${next ? ". Next for you: " + next : ""}`} onPress={() => setOpenId(r.workId)}
@@ -194,11 +211,12 @@ function RepairPhotos({ p, repair }: { p: Palette; repair: Operation }) {
   const [ids, setIds] = useState<string[]>([]);
   useEffect(() => {
     let active = true;
-    readWorkMedia(repair.workId).then(r => { const parsed = z.array(z.object({ id: z.string().uuid(), purpose: z.string() })).safeParse(r.data); if (active && parsed.success) setIds(parsed.data.filter(x => x.purpose === "maintenance").map(x => x.id)); }).catch(() => undefined);
+    readWorkMedia(repair.workId).then(r => { const parsed = z.array(z.object({ id: z.string().uuid(), purpose: z.string(), format: z.string().nullable().optional() })).safeParse(r.data); if (active && parsed.success) setIds(parsed.data.filter(x => x.purpose === "maintenance" && x.format !== "pdf").map(x => x.id)); }).catch(() => undefined);
     return () => { active = false; };
   }, [repair.workId, repair.version]);
   const after = Array.isArray(repair.data.photoIds) ? repair.data.photoIds.filter((x): x is string => typeof x === "string") : [];
-  const before = ids.filter(id => !after.includes(id));
+  const papers = [...quoteFilesOf(repair.data), ...invoiceFilesOf(repair.data)];
+  const before = ids.filter(id => !after.includes(id) && !papers.includes(id));
   if (!before.length && !after.length) return null;
   return (
     <View style={{ gap: 8 }}>
@@ -210,7 +228,18 @@ function RepairPhotos({ p, repair }: { p: Palette; repair: Operation }) {
 
 // ownerPhone: the owner's number from their enquiry, when we hold one, for "Send by WhatsApp".
 function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone, onClose, onDone }: { p: Palette; account: WorkspaceAccount; role: string; repair?: Operation; propertyName: string; today: string; ownerPhone?: string | null; onClose: () => void; onDone: () => Promise<void> }) {
-  const phase = String(repair?.data.phase ?? ""), step = repair ? repairStep(role, phase, account.teamOnly) : null;
+  const phase = String(repair?.data.phase ?? ""), step = repair ? stepFor(account, repair.data) : null;
+  // Repairs with contractors: the contractor on the job, what they do next, and the guest conversation it came from.
+  const contractor = repair ? assignedContractor(repair.data) : null, estimating = !!repair && contractorEstimates(account, repair.data);
+  const contractorView = role === "ready" && !!contractor, chatId = repair ? guestConversationOf(repair.data) : null;
+  const [quoteIds, setQuoteIds] = useState<string[]>([]), [invoiceIds, setInvoiceIds] = useState<string[]>([]);
+  const [clashes, setClashes] = useState<Clash[] | null>(null), [reassigning, setReassigning] = useState(false);
+  // "Fixed in chat": send the resolution to the guest (on by default), in words the person can change (null: the suggested words).
+  const [tellGuest, setTellGuest] = useState(true), [guestNote, setGuestNote] = useState<string | null>(null);
+  const guestSend = useGuestSend(phase === "triage" && seesGuestChat(role) ? chatId : null);
+  // The contractor's quote or invoice files are still saving.
+  const [filesUploading, setFilesUploading] = useState(false);
+  const stage = repair ? contractorStage(repair.data) : null;
   // Team beta: Stays or an admin records the owner's answer, with how the owner gave it.
   const forOwner = role !== "client" && phase === "owner_approval";
   const team = ["ready", "stays", "admin", "super_admin"].includes(role);
@@ -227,45 +256,70 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
   // Closing a repair that is still in triage without a visit: Stays or management write what fixed it.
   const [resolving, setResolving] = useState(false);
   const request = useRequestId(repair ? repair.workId + ":" + repair.version : null);
-  const quoteRequest = useRequestId(repair && quoting ? ["quote", repair.workId, repair.version, fields.quote ?? "", fields.quoteReason ?? "", fields.quoteSource ?? "team"].join(":") : null);
+  const quoteRequest = useRequestId(repair && (quoting || estimating) ? ["quote", repair.workId, repair.version, fields.quote ?? "", fields.quoteReason ?? "", fields.quoteSource ?? "team", quoteIds.join(",")].join(":") : null);
+  const reassignRequest = useRequestId(repair && reassigning ? ["reassign", repair.workId, repair.version, fields.newContractor ?? "", fields.reassignReason ?? ""].join(":") : null);
+  const guestRequest = useRequestId(chatId && resolving ? ["fixed", chatId, fields.resolution ?? ""].join(":") : null);
   const resolveRequest = useRequestId(repair && resolving ? ["resolve", repair.workId, repair.version, fields.resolution ?? ""].join(":") : null);
   const declineRequest = useRequestId(repair && declining ? [declining, repair.workId, repair.version, fields.declineReason ?? ""].join(":") : null);
   const set = (k: string) => (v: string) => setFields(f => ({ ...f, [k]: v }));
   const f = (k: string) => fields[k] ?? "";
   // Reset only when a different repair (or a newer version of it) opens, not on every refresh of the list.
   const resetKey = repair ? repair.workId + ":" + repair.version : "", urgentNow = repair?.data.urgent === true;
-  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today }); setConsent(false); setTicked([]); setUrgent(urgentNow); setError(""); setQuoting(false); setAfterIds([]); setAddingBefore(false); setUploading(false); setDeclining(null); setResolving(false); } }); return () => { active = false; }; }, [resetKey, urgentNow, today]);
+  const contractorName = contractor?.name ?? "";
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setFields({ repairOn: today, visitFrom: "09:00", visitTo: "12:00", contractor: role === "ready" ? contractorName : "" }); setQuoteIds([]); setInvoiceIds([]); setFilesUploading(false); setClashes(null); setReassigning(false); setTellGuest(true); setGuestNote(null); setConsent(false); setTicked([]); setUrgent(urgentNow); setError(""); setQuoting(false); setAfterIds([]); setAddingBefore(false); setUploading(false); setDeclining(null); setResolving(false); } }); return () => { active = false; }; }, [resetKey, urgentNow, today, role, contractorName]);
 
   function build(): Record<string, unknown> | string {
     if (step === "approveBudget" && forOwner) return consent && f("ownerAgreement").trim().length >= 5 ? { consent: true, ownerAgreement: f("ownerAgreement").trim().slice(0, 500) } : "Add how the owner agreed and tick to record their approval.";
     if (step === "approveBudget") return consent ? { consent: true } : "Tick to approve the cost.";
     if (step === "approveManagement") return f("managementNote").trim() ? { note: f("managementNote").trim() } : {};
     if (step === "referReady") {
-      const note = troubleshootingNote(type, ticked, f("troubleshooting"));
-      if (note.trim().length < 5 || f("guestUpdate").trim().length < 5) return "Tick the checks you went through (or describe them) and add what the guest was told.";
-      if (repair?.data.warrantyRequired === true && f("warrantyContactEvidence").trim().length < 10) return "This property needs the warranty provider contacted first. Add who you contacted.";
-      return { troubleshooting: note, guestUpdate: f("guestUpdate").trim(), urgent, ...(f("warrantyContactEvidence").trim() ? { warrantyContactEvidence: f("warrantyContactEvidence").trim() } : {}) };
+      const built = referData({ troubleshooting: troubleshootingNote(type, ticked, f("troubleshooting")), guestUpdate: f("guestUpdate"), urgent, warranty: f("warrantyContactEvidence"), warrantyNeeded: repair?.data.warrantyRequired === true, readyUserId: f("readyUserId") });
+      return "error" in built ? built.error : built.data;
     }
     if (step === "bookRepair") {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(f("repairOn")) || f("contractor").trim().length < 2 || f("guestUpdate").trim().length < 5) return "Add the date, contractor and guest update.";
-      return { repairOn: f("repairOn"), contractor: f("contractor").trim(), guestUpdate: f("guestUpdate").trim() };
+      // The guest update says when, unless the person writes their own.
+      const suggested = /^\d{4}-\d{2}-\d{2}$/.test(f("repairOn")) && f("visitFrom") < f("visitTo") ? visitGuestUpdate(f("repairOn"), f("visitFrom"), f("visitTo")) : "";
+      const built = bookingData({ day: f("repairOn"), from: f("visitFrom"), to: f("visitTo"), contractor: f("contractor"), guestUpdate: f("guestUpdate").trim() || suggested });
+      return "error" in built ? built.error : built.data;
     }
     if (step === "completeRepair") {
-      const cost = poundsToMinor(f("actualCost"));
-      if (f("report").trim().length < 10 || f("guestUpdate").trim().length < 5 || cost === null) return "Add the repair report, the actual cost and the guest update.";
-      if (typeof repair?.data.estimatedCostMinor === "number" && cost > repair.data.estimatedCostMinor) return "The cost is above the approved estimate. Use “Update the quote” first; it goes for approval if it needs it, then you can complete the repair.";
-      return { report: f("report").trim(), actualCostMinor: cost, guestUpdate: f("guestUpdate").trim(), ...(afterIds.length ? { photoIds: afterIds } : {}) };
+      const built = completeData({ report: f("report"), cost: f("actualCost"), guestUpdate: f("guestUpdate").trim() || (contractorView ? "The repair is done." : ""), estimateMinor: repair?.data.estimatedCostMinor, photoIds: afterIds, invoiceIds });
+      return "error" in built ? built.error : built.data;
     }
     return "Nothing to do.";
   }
   async function save() {
-    if (!repair || !step || busy || uploading) return;
+    if (!repair || !step || busy || uploading || filesUploading) return;
     const data = build();
     if (typeof data === "string") { setError(data); return; }
     setBusy(true); setError("");
     try {
-      await writeOperation({ action: "updateOperation", requestId: request.get(), workId: repair.workId, version: repair.version, step, data } as Parameters<typeof writeOperation>[0]);
-      request.done(); await onDone();
+      const result = await writeOperation({ action: "updateOperation", requestId: request.get(), workId: repair.workId, version: repair.version, step, data } as Parameters<typeof writeOperation>[0]);
+      request.done();
+      // A booking that overlaps a guest stay is saved, with a warning to read before the sheet closes.
+      const overlaps = step === "bookRepair" ? clashesOf((result as { data?: unknown }).data) : [];
+      if (overlaps.length) setClashes(overlaps); else await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  // A contractor's estimate: their price, what the work is and their quote. Management always approve it.
+  async function sendEstimate() {
+    if (!repair || busy || filesUploading) return;
+    const built = estimateData(f("quote"), f("quoteReason"), quoteIds);
+    if ("error" in built) { setError(built.error); return; }
+    setBusy(true); setError("");
+    try {
+      await writeOperation({ action: "updateOperation", requestId: quoteRequest.get(), workId: repair.workId, version: repair.version, step: "reviseQuote", data: built.data } as Parameters<typeof writeOperation>[0]);
+      quoteRequest.done(); setQuoting(false); await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  async function reassign() {
+    if (!repair || busy) return;
+    const built = reassignData(f("newContractor"), contractor?.id ?? null, f("reassignReason"));
+    if ("error" in built) { setError(built.error); return; }
+    setBusy(true); setError("");
+    try {
+      await writeOperation({ action: "updateOperation", requestId: reassignRequest.get(), workId: repair.workId, version: repair.version, step: REASSIGN_STEP, data: built.data } as unknown as Parameters<typeof writeOperation>[0]);
+      reassignRequest.done(); setReassigning(false); await onDone();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   async function reviseQuote() {
@@ -285,8 +339,15 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
     setBusy(true); setError("");
     try {
       await writeOperation({ action: "updateOperation", requestId: resolveRequest.get(), workId: repair.workId, version: repair.version, step: "resolveRepair", data: { resolution } } as Parameters<typeof writeOperation>[0]);
-      resolveRequest.done(); setResolving(false); await onDone();
-    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+      resolveRequest.done();
+    } catch (e) { setError(message(e)); setBusy(false); return; }
+    // "Fixed in chat": the words go to the guest through the guest inbox's own send, when it can send.
+    const words = (guestNote ?? fixedInChatMessage(resolution)).trim();
+    if (chatId && guestSend === "send" && tellGuest && words) {
+      try { await writeInbox({ action: "sendReply", requestId: guestRequest.get(), threadId: chatId, body: words }); guestRequest.done(); }
+      catch (e) { setBusy(false); setError(`Marked as fixed. The message to the guest was not sent: ${message(e)} Send it from the guest chat.`); return; }
+    }
+    setBusy(false); setResolving(false); await onDone();
   }
   async function decide() {
     if (!repair || !declining || busy) return;
@@ -306,6 +367,8 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
     <Sheet palette={p} visible={!!repair} onClose={onClose} title={propertyName} subtitle={label ? `${label.label} · ${label.detail}` : ""} icon="hardhat">
       {repair && <>
         <Detail label="Issue" value={repair.data.issue} p={p} />
+        <ContractorLine p={p} data={repair.data} />
+        {seesGuestChat(role) && phase !== "triage" && <GuestChatLink p={p} data={repair.data} />}
         {!!declined && <Notice text={declined} p={p} tone="bad" />}
         <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
           <Tag label={estimateText(repair.data)} tone="plain" p={p} />
@@ -330,15 +393,18 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
         )}
         <Detail label="Checks made" value={repair.data.troubleshooting} p={p} />
         <Detail label="How it was resolved" value={repair.data.resolution} p={p} />
-        <Detail label="Contractor" value={repair.data.contractor} p={p} />
-        <Detail label="Repair date" value={typeof repair.data.repairOn === "string" ? dayLabel(repair.data.repairOn) : undefined} p={p} />
+        {repair.data.contractor !== contractor?.name && <Detail label={contractor ? "Booked as" : "Contractor"} value={repair.data.contractor} p={p} />}
+        <VisitDetails p={p} data={repair.data} />
+        {phase === "booked" && !clashes && <ClashNotice p={p} clashes={clashesOf(repair.data)} forContractor={role === "ready"} />}
         <Detail label="Repair report" value={repair.data.report} p={p} />
         <Detail label="Latest guest update" value={repair.data.guestUpdate} p={p} />
         <RepairPhotos p={p} repair={repair} />
+        <RepairFileList p={p} workId={repair.workId} ids={quoteFilesOf(repair.data)} title="Contractor's quote" />
+        <RepairFileList p={p} workId={repair.workId} ids={invoiceFilesOf(repair.data)} title="Contractor's invoice" />
         {team && ["referred", "booked"].includes(phase) && (addingBefore
           ? <PhotoPicker key={"before:" + resetKey} p={p} workId={repair.workId} purpose="maintenance" label="Photos before the repair" hint="The problem as you found it. Each photo is saved as you add it." onChange={(_ids, loading) => setUploading(loading)} />
           : <Button label="Add before photos" icon="camera" p={p} onPress={() => setAddingBefore(true)} />)}
-        {step && <Text accessibilityRole="header" style={{ color: p.text, fontSize: textSize.body, fontWeight: "600" }}>{forOwner ? "Record the owner's approval" : STEP_TITLE[step]}</Text>}
+        {step && !clashes && <Text accessibilityRole="header" style={{ color: p.text, fontSize: textSize.body, fontWeight: "600" }}>{forOwner ? "Record the owner's approval" : step === "referReady" ? "Try to fix it with the guest" : contractorView && step === "bookRepair" ? "Approved, please book" : STEP_TITLE[step]}</Text>}
         {step === "approveBudget" && forOwner && !declining && <Field label="How the owner agreed" value={f("ownerAgreement")} onChange={set("ownerAgreement")} p={p} placeholder="For example: by phone with the owner on 10 October" />}
         {step === "approveBudget" && !declining && (
           <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: consent }} onPress={() => setConsent(c => !c)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: consent ? p.successWash : p.elevated }]}>
@@ -361,7 +427,8 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
           </View>
         </View> : <Button label={closable ? "Close the repair" : forOwner ? "The owner declined" : "Decline the cost"} icon="x" p={p} onPress={() => { setDeclining(closable ? "close" : "decline"); setError(""); }} />)}
         {step === "referReady" && <>
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: 8 }} {...(Platform.OS === "web" ? { dataSet: { repairSheet: "troubleshoot" } } : {})}>
+            <GuestChatLink p={p} data={repair.data} />
             <Text style={{ color: p.text, fontWeight: "700" }}>{REPAIR_GUIDES[type].label}: go through these with the guest</Text>
             <View style={[ui.row, { gap: 8, padding: 10, borderRadius: radius.control, backgroundColor: p.cautionWash, alignItems: "flex-start" }]}><Feather name="alert-triangle" size={icon.row} color={p.danger} style={{ marginTop: 2 }} /><Text style={[ui.small, { color: p.text, flex: 1 }]}>{SAFETY_STOP}</Text></View>
             {REPAIR_GUIDES[type].checks.map(c => {
@@ -380,21 +447,54 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
             <Text style={{ color: p.text, flex: 1 }}>Urgent: the guest can’t use the property properly until it’s fixed</Text>
           </MotionPress>
           {repair.data.warrantyRequired === true && <Field label="Warranty provider contacted" value={f("warrantyContactEvidence")} onChange={set("warrantyContactEvidence")} p={p} multiline />}
-          <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
+          {/* Send to contractor: one named contractor gets the job, with what was tried and what the guest was told. */}
+          <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }} {...(Platform.OS === "web" ? { dataSet: { repairSheet: "send-to-contractor" } } : {})}>
+            <Text style={{ color: p.text, fontWeight: "700" }}>Send to contractor</Text>
+            <Text style={[ui.small, { color: p.muted }]}>Can’t fix it in the chat? Send it to one contractor for an estimate. Management check the estimate before the visit is booked.</Text>
+            <ContractorPicker p={p} propertyId={repair.propertyId} value={f("readyUserId")} onChange={set("readyUserId")} />
+            <Detail label="What the contractor reads about the checks" value={troubleshootingNote(type, ticked, f("troubleshooting")).trim() || "Tick the checks above, or describe what you tried."} p={p} />
+            <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline placeholder="For example: a contractor is being arranged and we will confirm a time" />
+          </View>
         </>}
-        {step === "bookRepair" && <>
-          <DateField p={p} label="Repair date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today} value={{ from: f("repairOn"), to: f("repairOn") }} onChange={next => set("repairOn")(next.from)} />
-          <Field label="Contractor" value={f("contractor")} onChange={set("contractor")} p={p} />
-          <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
-        </>}
+        {step === "bookRepair" && !clashes && <View style={{ gap: 10 }} {...(Platform.OS === "web" ? { dataSet: { repairSheet: "book" } } : {})}>
+          {contractorView && <Text style={[ui.small, { color: p.muted }]}>Your estimate of {pounds(repair.data.estimatedCostMinor)} is approved. Choose the day and the time you will be there. Stays let the guest know.</Text>}
+          <DateField p={p} label="Day of the visit" mode="single" wholeMonthLink={false} empty="Choose a date" today={today} value={{ from: f("repairOn"), to: f("repairOn") }} onChange={next => set("repairOn")(next.from)} />
+          <View style={[ui.row, { gap: 10, alignItems: "flex-start" }]}>
+            <View style={{ flex: 1, minWidth: 0 }}><Dropdown p={p} label="From" value={f("visitFrom")} onChange={set("visitFrom")} options={TIME_OPTIONS} /></View>
+            <View style={{ flex: 1, minWidth: 0 }}><Dropdown p={p} label="To" value={f("visitTo")} onChange={set("visitTo")} options={TIME_OPTIONS} /></View>
+          </View>
+          {!contractorView && <Field label="Who is doing the repair" value={f("contractor")} onChange={set("contractor")} p={p} />}
+          <Field label={contractorView ? "Note for the guest (optional, Stays pass it on)" : "Update for the guest (optional)"} value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline
+            placeholder={/^\d{4}-\d{2}-\d{2}$/.test(f("repairOn")) && f("visitFrom") < f("visitTo") ? visitGuestUpdate(f("repairOn"), f("visitFrom"), f("visitTo")) : "When the visit is"} />
+          <Text style={[ui.small, { color: p.muted }]}>If a guest is staying around then, you will see a warning once it is booked. It does not stop the booking.</Text>
+        </View>}
+        {!!clashes && <View style={{ gap: 10 }}>
+          <Notice text="The visit is booked." p={p} />
+          <ClashNotice p={p} clashes={clashes} forContractor={role === "ready"} />
+          <Button label="Done" icon="check" primary p={p} onPress={() => void onDone()} />
+        </View>}
         {step === "completeRepair" && <>
           <Field label="Repair report" value={f("report")} onChange={set("report")} p={p} multiline placeholder="What was fixed and anything still outstanding" />
           <Field label={`Actual cost (up to ${pounds(repair.data.estimatedCostMinor)})`} value={f("actualCost")} onChange={set("actualCost")} p={p} placeholder="£0.00" />
-          <Field label="Update for the guest" value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline />
+          <Field label={contractorView ? "Note for the guest (optional, Stays pass it on)" : "Update for the guest"} value={f("guestUpdate")} onChange={set("guestUpdate")} p={p} multiline placeholder={contractorView ? "The repair is done." : undefined} />
           <PhotoPicker key={"after:" + resetKey} p={p} workId={repair.workId} purpose="maintenance" label="After photos (optional)" hint="The finished repair. They go to Accounts with your report." onChange={(ids, loading) => { setAfterIds(ids); setUploading(loading); }} />
-          <Text style={[ui.small, { color: p.muted }]}>Completing sends the cost to Accounts as a draft expense, with your report and the before and after photos.</Text>
+          <View {...(Platform.OS === "web" ? { dataSet: { repairSheet: "invoice" } } : {})}>
+            <RepairFiles key={"invoice:" + resetKey} p={p} workId={repair.workId} label="Invoice (optional)" hint="A photo of the invoice, or the PDF. It goes to Accounts with the cost." onChange={(ids, loading) => { setInvoiceIds(ids); setFilesUploading(loading); }} />
+          </View>
+          <Text style={[ui.small, { color: p.muted }]}>Marking it done sends the cost to Accounts as a draft expense, with your report, the before and after photos and the invoice.</Text>
         </>}
-        {canReviseQuote(role, phase) && (quoting ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }}>
+        {contractorView && canReviseQuote(role, phase) && !clashes && (estimating || quoting ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }} {...(Platform.OS === "web" ? { dataSet: { repairSheet: "estimate" } } : {})}>
+          <Text style={{ color: p.text, fontWeight: "700" }}>{estimating ? "Send estimate" : "Send a new estimate"}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>Your price for the job. Recharge check it (and the owner, when it is over their limit) before you book. The job shows “Approved, please book” once it is approved.</Text>
+          <Field label="Your price" value={f("quote")} onChange={set("quote")} p={p} placeholder="£0.00" />
+          <Field label="What the work is" value={f("quoteReason")} onChange={set("quoteReason")} p={p} multiline placeholder="For example: replace the kitchen tap cartridge, parts and labour" />
+          <RepairFiles key={"quote:" + resetKey} p={p} workId={repair.workId} label="Your quote (optional)" hint="A photo of your written quote, or the PDF." onChange={(ids, loading) => { setQuoteIds(ids); setFilesUploading(loading); }} />
+          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+            <Button label={busy ? "Sending…" : filesUploading ? "Saving files…" : "Send estimate"} icon="send" primary p={p} disabled={busy || filesUploading} onPress={() => void sendEstimate()} />
+            {!estimating && <Button label="Cancel" p={p} onPress={() => setQuoting(false)} />}
+          </View>
+        </View> : <Button label="Send a new estimate" icon="edit-3" p={p} onPress={() => { setQuoting(true); setError(""); }} />)}
+        {!contractorView && canReviseQuote(role, phase) && (quoting ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }}>
           <Text style={{ color: p.text, fontWeight: "700" }}>Update the quote</Text>
           <Text style={[ui.small, { color: p.muted }]}>{phase === "owner_declined" ? "The new quote goes back to the owner to approve (to management first if it needs it)." : "A higher quote under the repair limit is approved automatically. At or over it, management approve first, then the owner. A contractor estimate always goes to management. The repair carries on once approved."}</Text>
           <Field label={`New quote (now ${pounds(repair.data.estimatedCostMinor)})`} value={f("quote")} onChange={set("quote")} p={p} placeholder="£0.00" />
@@ -406,18 +506,40 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
             <Button label="Cancel" p={p} onPress={() => setQuoting(false)} />
           </View>
         </View> : <Button label="Update the quote" icon="edit-3" p={p} onPress={() => setQuoting(true)} />)}
-        {canResolveRepair(role, phase) && (resolving ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }}>
-          <Text style={{ color: p.text, fontWeight: "700" }}>Resolved without a visit</Text>
+        {canReassign(role, repair.data) && (reassigning ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }} {...(Platform.OS === "web" ? { dataSet: { repairSheet: "reassign" } } : {})}>
+          <Text style={{ color: p.text, fontWeight: "700" }}>Give the job to another contractor</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{contractor?.name ?? "The contractor"} will no longer see the job. Both of them are told.</Text>
+          <ContractorPicker p={p} propertyId={repair.propertyId} value={f("newContractor")} onChange={set("newContractor")} exclude={contractor?.id} label="New contractor" />
+          <Field label="Why it is moving" value={f("reassignReason")} onChange={set("reassignReason")} p={p} multiline placeholder="For example: not available until next week" />
+          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+            <Button label={busy ? "Saving…" : "Change contractor"} primary p={p} disabled={busy} onPress={() => void reassign()} />
+            <Button label="Cancel" p={p} onPress={() => setReassigning(false)} />
+          </View>
+        </View> : <Button label="Change contractor" icon="repeat" p={p} onPress={() => { setReassigning(true); setError(""); }} />)}
+        {canResolveRepair(role, phase) && (resolving ? <View style={{ gap: 10, padding: 12, borderRadius: radius.control, borderWidth: 1, borderColor: p.border }} {...(Platform.OS === "web" ? { dataSet: { repairSheet: "fixed-in-chat" } } : {})}>
+          <Text style={{ color: p.text, fontWeight: "700" }}>{chatId ? "Fixed in chat" : "Resolved without a visit"}</Text>
           <Text style={[ui.small, { color: p.muted }]}>Use this when troubleshooting fixed it and no one needs to attend. The repair is closed as resolved and the owner and team are told.</Text>
           <Field label="What fixed it (the owner can read this)" value={f("resolution")} onChange={set("resolution")} p={p} multiline placeholder="For example: reset the boiler with the guest and the heating came back" />
+          {!!chatId && (guestSend === null ? <Text style={[ui.small, { color: p.muted }]}>Checking the guest chat…</Text>
+            : guestSend === "send" ? <>
+              <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: tellGuest }} onPress={() => setTellGuest(t => !t)} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: radius.control, backgroundColor: tellGuest ? p.successWash : p.elevated }]}>
+                <Feather name={tellGuest ? "check-square" : "square"} size={icon.control} color={tellGuest ? p.success : p.muted} />
+                <Text style={{ color: p.text, flex: 1 }}>Send this to the guest in the chat</Text>
+              </MotionPress>
+              {tellGuest && <Field label="Message to the guest" value={guestNote ?? (f("resolution").trim() ? fixedInChatMessage(f("resolution")) : "")} onChange={setGuestNote} p={p} multiline />}
+            </> : <>
+              <Text style={[ui.small, { color: p.muted }]}>Messages can’t be sent to this guest from Recharge. Let them know in the chat.</Text>
+              <GuestChatLink p={p} data={repair.data} />
+            </>)}
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-            <Button label={busy ? "Saving…" : "Mark as resolved"} primary p={p} disabled={busy} onPress={() => void resolve()} />
+            <Button label={busy ? "Saving…" : chatId && guestSend === "send" && tellGuest ? "Mark as fixed and send" : "Mark as resolved"} primary p={p} disabled={busy} onPress={() => void resolve()} />
             <Button label="Cancel" p={p} onPress={() => setResolving(false)} />
           </View>
-        </View> : <Button label="Resolved without a visit" icon="check-circle" p={p} onPress={() => { setResolving(true); setError(""); }} />)}
-        {!step && <Notice text={phase === "resolved" ? "This repair was resolved without a visit." : phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will refer this to Ready." : "Nothing for you to do at this stage."} p={p} />}
+        </View> : <Button label={chatId ? "Fixed in chat" : "Resolved without a visit"} icon="check-circle" p={p} onPress={() => { setResolving(true); setError(""); }} />)}
+        {!step && contractorView && !estimating && <Notice text={stage === "waiting" ? `Waiting for approval. Recharge are checking your estimate of ${pounds(repair.data.estimatedCostMinor)}. You will be told when you can book.` : stage === "declined" ? "Your estimate was declined. Recharge will be in touch." : stage === "done" ? "This job is done. Thank you." : "Nothing for you to do at this stage."} p={p} />}
+        {!step && !contractorView && <Notice text={phase === "resolved" ? "This repair was resolved without a visit." : phase === "completed" ? "This repair is complete." : phase === "closed" ? "This repair was closed without the work going ahead." : closable ? "Update the quote to send it back for approval, or close the repair." : declined && role === "client" ? "Recharge will get a new quote or close this repair." : role === "ready" && phase === "triage" ? "Stays will send this to a contractor." : "Nothing for you to do at this stage."} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
-        {step && !declining && !resolving && <Button label={busy ? "Saving…" : uploading ? "Saving photos…" : forOwner ? "Record the owner's approval" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading} onPress={() => void save()} />}
+        {step && !declining && !resolving && !reassigning && !clashes && <Button label={busy ? "Saving…" : uploading || filesUploading ? "Saving photos…" : forOwner ? "Record the owner's approval" : STEP_TITLE[step]} primary p={p} disabled={busy || uploading || filesUploading} onPress={() => void save()} />}
         {team && <View style={{ gap: 6 }}>
           <Button label="Send by WhatsApp" icon="message-circle" p={p} onPress={() => void Linking.openURL(repairWhatsAppLink({
             propertyName, issue: typeof repair.data.issue === "string" ? repair.data.issue : repair.title, phase, estimateMinor: typeof repair.data.estimatedCostMinor === "number" ? repair.data.estimatedCostMinor : null,
@@ -437,8 +559,10 @@ function PropertyChips({ p, properties, value, onChange }: { p: Palette; propert
   return <PropertySelect p={p} properties={properties} value={value} onChange={onChange} />;
 }
 
-function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: Palette; account: WorkspaceAccount; visible: boolean; properties: PropertyView[]; onClose: () => void; onDone: () => Promise<void> }) {
-  const [propertyId, setPropertyId] = useState("");
+// prefill: opened from a guest conversation ("Report a repair" in Messages → Guests): its property, stay and the
+// conversation itself, so the repair links back to the chat.
+export function ReportSheet({ p, account, visible, properties, onClose, onDone, prefill }: { p: Palette; account: WorkspaceAccount; visible: boolean; properties: PropertyView[]; onClose: () => void; onDone: () => Promise<void>; prefill?: ChatPrefill }) {
+  const [propertyId, setPropertyId] = useState(() => prefill?.propertyId ?? "");
   const [type, setType] = useState<RepairType>("other");
   const [urgent, setUrgent] = useState(false);
   const [stays, setStays] = useState<StayLine[]>([]);
@@ -450,10 +574,14 @@ function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: 
     if (!canLink || !propertyId) return () => { active = false; };
     void workspaceRequest("/api/mobile/portfolio?" + new URLSearchParams({ section: "reservations", propertyId })).then(r => r.json()).then(body => {
       const parsed = reservationsSchema.safeParse(body.data);
-      if (active && parsed.success) setStays(stayLines(parsed.data, london(new Date()), 6));
+      if (!active || !parsed.success) return;
+      const lines = stayLines(parsed.data, london(new Date()), 6);
+      setStays(lines);
+      // From a guest chat: the stay it is about, when it is among them.
+      if (prefill && propertyId === prefill.propertyId) setReservationId(matchStay(lines, prefill));
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [canLink, propertyId]);
+  }, [canLink, propertyId, prefill]);
   const [issue, setIssue] = useState("");
   const [estimate, setEstimate] = useState("");
   const [source, setSource] = useState<QuoteSource>("team");
@@ -465,11 +593,12 @@ function ReportSheet({ p, account, visible, properties, onClose, onDone }: { p: 
     const cost = poundsToMinor(estimate);
     if (!propertyId || issue.trim().length < 5 || cost === null) { setError("Choose the property, describe the issue and add an estimate."); return; }
     setBusy(true); setError("");
-    try { await writeOperation({ action: "createOperation", requestId: request.get(), propertyId, kind: "maintenance", data: { issue: issue.trim(), estimatedCostMinor: cost, hazard, repairType: type, urgent: urgent || hazard, ...(reservationId ? { reservationId } : {}), ...(account.role !== "client" && cost > 0 ? { quoteSource: source } : {}) } }); request.done(); setIssue(""); setEstimate(""); setSource("team"); setHazard(false); setUrgent(false); setType("other"); await onDone(); }
+    try { await writeOperation({ action: "createOperation", requestId: request.get(), propertyId, kind: "maintenance", data: { issue: issue.trim(), estimatedCostMinor: cost, hazard, repairType: type, urgent: urgent || hazard, ...(reservationId ? { reservationId } : {}), ...(account.role !== "client" && cost > 0 ? { quoteSource: source } : {}), ...(prefill ? { guestConversationId: prefill.guestConversationId } : {}) } }); request.done(); setIssue(""); setEstimate(""); setSource("team"); setHazard(false); setUrgent(false); setType("other"); await onDone(); }
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="Report a repair" subtitle={account.role === "client" ? "Recharge check the cost with you when it needs your approval" : "Under the repair limit it is approved automatically. At or over it, management approve first, then the owner."} icon="hardhat">
+      {!!prefill && <View {...(Platform.OS === "web" ? { dataSet: { repairSheet: "from-chat" } } : {})}><Notice text={`From the guest chat${prefill.guestName ? " with " + prefill.guestName : ""}. The repair links back to the conversation.`} p={p} /></View>}
       <PropertyChips p={p} properties={properties} value={propertyId} onChange={setPropertyId} />
       <Text style={{ color: p.text, fontWeight: "700" }}>Type of repair</Text>
       <ChoiceField p={p} label="Type of repair" value={type} onChange={setType} options={(Object.keys(REPAIR_GUIDES) as RepairType[]).map(t => ({ value: t, label: REPAIR_GUIDES[t].label }))} />
