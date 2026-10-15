@@ -63,7 +63,9 @@ test('revoked access prevents a delayed provider response from committing eviden
  await as('service');await assert.rejects(rpc('integration_commit_upload',[pending.id,{assetId:'test',publicId:pending.publicId,version:1,format:'jpg',bytes:100}]),/revoked/);
  await db.exec('reset role');await db.query("update public.workspace_profiles set status='active' where user_id=$1",[users[1]]);
 });
-async function enqueue(subject=users[1]) {
+// Notices are emailed to a staff member: cleaners get theirs on their phone only (20261021900000).
+const RECIPIENT=users[2];
+async function enqueue(subject=RECIPIENT) {
  await db.exec('reset role');const event=(await db.query("insert into public.workspace_activity(actor_id,property_id,work_id,event_type) values($1,$2,$3,'test.event') returning id",[users[0],property,clean.workId])).rows[0].id;
  await db.query('insert into private.workspace_notification_outbox(user_id,work_id,event_id) values($1,$2,$3)',[subject,clean.workId,event]);
 }
@@ -86,23 +88,23 @@ test('provider acceptance and delivery are distinct; stale send leases require r
 test('revoked recipients are cancelled before retry and notification status is admin-only',async()=>{
  await enqueue();await as('service');const jobs=await rpc('integration_claim_notifications',[true,false]);
  for(const job of jobs)await rpc('integration_finish_notification',[job.id,job.lease,'retryable',null]);
- await db.exec('reset role');await db.query("update public.workspace_profiles set status='revoked' where user_id=$1",[users[1]]);await db.exec("update private.workspace_notification_deliveries set next_attempt_at=now()-interval '1 second'");
+ await db.exec('reset role');await db.query("update public.workspace_profiles set status='revoked' where user_id=$1",[RECIPIENT]);await db.exec("update private.workspace_notification_deliveries set next_attempt_at=now()-interval '1 second'");
  await as('service');assert.deepEqual(await rpc('integration_claim_notifications',[true,false]),[]);
  await as(3);await assert.rejects(rpc('workspace_integration_status'),/Admin access/);
- await db.exec('reset role');await db.query("update public.workspace_profiles set status='active' where user_id=$1",[users[1]]);
+ await db.exec('reset role');await db.query("update public.workspace_profiles set status='active' where user_id=$1",[RECIPIENT]);
 });
 test('access revoked after a batch claim is checked again before the individual send',async()=>{
  await enqueue();await as('service');const jobs=await rpc('integration_claim_notifications',[true,false]);assert.ok(jobs.length);
  for(const job of jobs)assert.equal(await rpc('integration_check_notification',[job.id,job.lease]),true);
- await db.exec('reset role');await db.query("update public.workspace_profiles set status='revoked' where user_id=$1",[users[1]]);
+ await db.exec('reset role');await db.query("update public.workspace_profiles set status='revoked' where user_id=$1",[RECIPIENT]);
  await as('service');for(const job of jobs)assert.equal(await rpc('integration_check_notification',[job.id,job.lease]),false);
- await db.exec('reset role');await db.query("update public.workspace_profiles set status='active' where user_id=$1",[users[1]]);
+ await db.exec('reset role');await db.query("update public.workspace_profiles set status='active' where user_id=$1",[RECIPIENT]);
  await as(1);await assert.rejects(rpc('integration_check_notification',[jobs[0].id,jobs[0].lease]),/permission denied/);
 });
 test('email and push are only queued for notices from the last 24 hours',async()=>{
  await db.exec('reset role');
  const mk=async(age)=>{const event=(await db.query("insert into public.workspace_activity(actor_id,property_id,work_id,event_type,created_at) values($1,$2,$3,'test.recent',now()-$4::interval) returning id",[users[0],property,clean.workId,age])).rows[0].id;
-  return (await db.query('insert into private.workspace_notification_outbox(user_id,work_id,event_id) values($1,$2,$3) returning id',[users[1],clean.workId,event])).rows[0].id;};
+  return (await db.query('insert into private.workspace_notification_outbox(user_id,work_id,event_id) values($1,$2,$3) returning id',[RECIPIENT,clean.workId,event])).rows[0].id;};
  const old=await mk('3 days'),fresh=await mk('1 hour');
  await as('service');await rpc('integration_claim_notifications',[true,false]);await db.exec('reset role');
  const rows=async id=>(await db.query("select 1 from private.workspace_notification_deliveries where outbox_id=$1 and channel='email'",[id])).rows.length;
