@@ -50,7 +50,7 @@ test('the page: logo band, spaced INVOICE and its number, Billed to, the facts, 
   assert.match(doc.rechargeInvoiceHtml(doc.fromWorkspaceInvoice(bill()), { today: '2026-10-20' }), /<span class="pill">Overdue<\/span>/);
 });
 
-test('the terms are one constant with the 7-day rule; How to pay comes from the app, on invoices only, never seeded', () => {
+test('the terms are one constant with the 7-day rule; How to pay comes from the app, on unpaid invoices only, never seeded', () => {
   assert.equal(doc.INVOICE_DUE_DAYS, 7);
   assert.equal(doc.DEFAULT_TERMS.invoice, 'Payment is due within 7 days of the invoice date. Please quote the invoice number with your payment.');
   assert.equal(doc.PAYMENT_DETAILS, undefined, 'no bank details in code');
@@ -67,6 +67,11 @@ test('the terms are one constant with the 7-day rule; How to pay comes from the 
   const withBank = doc.rechargeInvoiceHtml(doc.fromWorkspaceInvoice({ ...bill(), paymentDetails: FAKE }));
   assert.match(withBank, /<h2>How to pay<\/h2><p>TEST ONLY account name<br>TEST ONLY 00-00-00 &lt;00000000&gt;<\/p>/, 'shown once filled in, line by line, escaped');
   assert.equal(doc.rechargeInvoiceDoc({ ...doc.fromWorkspaceInvoice(bill()), paymentDetails: '  \n ' }).payment, '', 'blank shows nothing');
+  // Hidden once paid; kept on every unpaid invoice, old ones included.
+  const paidBill = doc.fromWorkspaceInvoice({ ...bill(), status: 'paid', paidOn: '2026-10-18', paymentDetails: FAKE });
+  assert.equal(paidBill.status, 'paid');
+  assert.doesNotMatch(doc.rechargeInvoiceHtml(paidBill), /How to pay|TEST ONLY/, 'never on a paid invoice');
+  assert.equal(doc.rechargeInvoiceDoc({ ...doc.fromWorkspaceInvoice(bill()), issueOn: '2025-01-02', paymentDetails: FAKE }).payment, FAKE, 'an old unpaid one keeps it');
   const request = { ...doc.fromWorkspaceInvoice(bill()), kind: 'request', paymentDetails: FAKE };
   assert.equal(doc.rechargeInvoiceDoc(request).payment, '');
   assert.doesNotMatch(doc.rechargeInvoiceHtml(request), /How to pay|TEST ONLY/, 'never on a request for invoice');

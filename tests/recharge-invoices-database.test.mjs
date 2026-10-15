@@ -348,3 +348,17 @@ test('guests: chosen from the stays, emailed from the guest mailbox; owners from
   assert.deepEqual([state.recipient.kind, state.recipient.mailbox, state.recipient.hasEmail, state.recipient.email, state.sends.map(s => [s.mailbox, s.status])], ['guest', 'guest', true, undefined, [['guest', 'sent']]]);
   for (const who of [STAYS, OWNER, CLEANER]) { await as(who); assert.equal(await code(emailHub(guestBill)), '42501', names[who]); assert.equal(await code(read('receivable', guestBill)), '42501', names[who]); }
 });
+
+test('a Receivable invoice emailed is then marked sent through Mark sent\'s own path, with the version the email read', async () => {
+  const sam = (await owner("select r.id from private.workspace_reservations r where r.reference='GUEST-SAM'"))[0].id;
+  await as(ACCOUNTS);
+  const item = (await rpc('workspace_teams_action', [{ action: 'saveHubItem', requestId: crypto.randomUUID(), kind: 'invoice', title: 'Extra night', amountMinor: 9000, reference: 'INV-MARK', reservationId: sam }])).id;
+  const started = await act({ action: 'emailReceivable', itemId: item, requestId: crypto.randomUUID() });
+  assert.equal(started.receivable.status, 'to_send');
+  // What the server does once Resend accepted it (lib/invoice-maker-server.ts emailReceivable).
+  await rpc('workspace_teams_action', [{ action: 'moveHubItem', requestId: crypto.randomUUID(), id: item, version: started.receivable.version, status: 'sent' }]);
+  const row = (await owner('select status,version from private.workspace_hub_items where id=$1', [item]))[0];
+  assert.deepEqual([row.status, row.version], ['sent', started.receivable.version + 1]);
+  const again = await act({ action: 'emailReceivable', itemId: item, requestId: crypto.randomUUID() });
+  assert.equal(again.receivable.status, 'sent', 'already sent: the server leaves it');
+});

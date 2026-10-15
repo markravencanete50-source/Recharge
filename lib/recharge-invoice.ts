@@ -35,9 +35,10 @@ export const NUMBER_PENDING = '(given when issued)';
 export const termsFor = (terms: string, number?: string | null) => terms.split('{number}').join(number?.trim() || NUMBER_PENDING);
 // How to pay Recharge: not in code. Management type it in the app (Invoice maker, Payment details), the database keeps it
 // (migration 20261022100000, private.workspace_finance_settings, empty until saved) and hands it out with each document
-// as paymentDetails. An invoice shows it as "How to pay" while it is not empty; a request for invoice never does.
+// as paymentDetails. An unpaid invoice (old ones included) shows it as "How to pay" while it is not empty; a paid invoice
+// and a request for invoice never do (Lee, 15 October 2026).
 export const PAYMENT_DETAILS_MAX = 1000;
-export const paymentBlock = (i: Pick<RechargeInvoice, 'kind' | 'paymentDetails'>) => i.kind === 'invoice' ? (i.paymentDetails ?? '').trim() : '';
+export const paymentBlock = (i: Pick<RechargeInvoice, 'kind' | 'status' | 'paymentDetails'>) => i.kind === 'invoice' && i.status !== 'paid' ? (i.paymentDetails ?? '').trim() : '';
 
 // Who the document is from: the trading name in bold, the registered address, then the legal line. All from lib/legal-details.ts.
 export const FROM_BLOCK = { name: groupTradingName, lines: [legalDetails.registeredAddress, `${legalDetails.legalName} · Company no. ${legalDetails.companyNumber}`] };

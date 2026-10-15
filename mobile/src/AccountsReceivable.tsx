@@ -196,7 +196,7 @@ export function AccountsReceivable({ p, account, properties }: { p: Palette; acc
       <TrackerDetailSheet p={p} item={open ?? null} forms={open ? [...receivableForms(open.source), viewForm] as unknown as WorkflowForm[] : []} onForm={f => onForm(open, f)} onClose={() => setOpenId(null)} />
       <InvoiceSheet p={p} form={form} report={report} properties={properties} onClose={() => setForm(null)} onDone={load} />
       <PaymentSheet p={p} item={paying} onClose={() => setPaying(null)} onDone={load} />
-      <RechargeInvoiceSheet p={p} invoice={viewing ? fromReceivable(viewing) : null} receivableId={viewing?.itemId ?? null} onClose={() => setViewing(null)} />
+      <RechargeInvoiceSheet p={p} invoice={viewing ? fromReceivable(viewing) : null} receivableId={viewing?.itemId ?? null} onClose={() => setViewing(null)} onSent={load} />
     </View>
   );
 }

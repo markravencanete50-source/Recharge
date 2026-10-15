@@ -253,6 +253,38 @@ test('a guest is emailed from guestrelations@ and an owner from ownerrelations@;
   delete state.env.DOCUMENT_EMAIL_ENABLED; delete state.env.EMAIL_REPLIES_ENABLED;
 });
 
+test('a Receivable invoice emailed is marked sent the way Mark sent does (moveHubItem, its version); one already sent, or a failed email, is left alone', async () => {
+  for (const k of Object.keys(state.env)) delete state.env[k];
+  Object.assign(state.env, { RESEND_API_KEY: 're_test' });
+  const run = async (status, { fail = false, moveError = null } = {}) => {
+    const calls = [];
+    const data = { send: true, status: 'pending', requestId: id(24), mailbox: 'guest', recipientKind: 'guest', email: { to: 'sam@guest.example', name: 'Sam Guest' },
+      receivable: receivable({ status, version: 4, sentOn: status === 'sent' ? '2026-10-10' : null }), paymentDetails: '' };
+    const client = { rpc: async (name, args) => { calls.push([name, args.input]); return name === 'workspace_documents_action' ? { data, error: null } : { data: moveError ? null : {}, error: moveError }; } };
+    const before = globalThis.fetch;
+    if (fail) globalThis.fetch = async () => Response.json({ message: 'nope' }, { status: 422 });
+    try { const res = await server.emailReceivable({ request: new Request('https://app.test'), account: { userId: id(30), role: 'accounts' }, client }, { action: 'emailReceivable', requestId: id(24), itemId: id(41) }); return { res, body: await res.json(), calls }; }
+    finally { globalThis.fetch = before; }
+  };
+  const toSend = await run('to_send');
+  assert.equal(toSend.res.status, 200);
+  assert.deepEqual(toSend.calls.map(c => c[0]), ['workspace_documents_action', 'workspace_teams_action']);
+  const move = toSend.calls[1][1];
+  assert.deepEqual([move.action, move.id, move.version, move.status], ['moveHubItem', id(41), 4, 'sent']);
+  assert.match(move.requestId, /^[0-9a-f-]{36}$/);
+  assert.equal(toSend.body.data.marked, true);
+  const already = await run('sent');
+  assert.deepEqual(already.calls.map(c => c[0]), ['workspace_documents_action'], 'already sent: nothing changes');
+  const failed = await run('to_send', { fail: true });
+  assert.equal(failed.res.status, 502);
+  assert.deepEqual(failed.calls.map(c => c[0]), ['workspace_documents_action'], 'not emailed: not marked');
+  const stale = await run('to_send', { moveError: { code: '40001', message: 'changed' } });
+  assert.equal(stale.res.status, 200);
+  assert.equal(stale.body.note, 'Emailed, but it could not be marked sent. Refresh and use Mark sent.');
+  assert.match(read('mobile/src/AccountsReceivable.tsx'), /onSent=\{load\} \/>/);
+  assert.match(read('lib/tracker-receivable.ts'), /row\.status === 'to_send' \? \{ key: MARK_SENT, title: 'Mark sent' \}/, 'Mark sent stays for invoices shared by download');
+});
+
 test('a guest in the form: chosen from the stays, saved as a guest, emailed only from guestrelations@; payment details shown on invoices only', () => {
   const f = { ...maker.emptyForm('2026-10-15'), recipientType: 'guest', reservationId: id(40), recipientName: 'Sam Guest', lines: [maker.newLine({ description: 'Late checkout', rate: '40' })] };
   const built = maker.formToAction(f, id(1));
@@ -273,6 +305,7 @@ test('a guest in the form: chosen from the stays, saved as a guest, emailed only
   assert.equal(doc.rechargeInvoiceDoc(maker.formToInvoice(f, FAKE)).payment, FAKE);
   assert.equal(doc.rechargeInvoiceDoc(maker.formToInvoice(maker.withKind(f, 'request'), FAKE)).payment, '');
   assert.equal(doc.rechargeInvoiceDoc(maker.fromMakerDocument(maker.makerDocumentSchema.parse(saved({ paymentDetails: FAKE })))).payment, FAKE);
+  assert.equal(doc.rechargeInvoiceDoc(maker.fromMakerDocument(maker.makerDocumentSchema.parse(saved({ status: 'paid', paidOn: '2026-10-18', paymentDetails: FAKE })))).payment, '', 'never on a paid invoice');
   assert.ok(maker.documentsActionSchema.safeParse({ action: 'savePaymentDetails', requestId: id(1), version: 0, paymentDetails: '' }).success, 'empty clears it');
   assert.ok(!maker.documentsActionSchema.safeParse({ action: 'savePaymentDetails', requestId: id(1), version: -1, paymentDetails: 'x' }).success);
   assert.equal(maker.paymentSavedLine({ version: 0, updatedAt: null, updatedBy: null }), 'Not filled in yet: invoices show no How to pay.');

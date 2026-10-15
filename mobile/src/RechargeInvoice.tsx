@@ -107,7 +107,7 @@ export function DocumentView({ p, invoice, children, onDownloaded }: { p: Palett
 
 // A document already in hand (a Receivable row), in a sheet. With its hub item id it also reads the payment details and who
 // it would be emailed to: the owner or client from ownerrelations@, or the guest of its stay from guestrelations@.
-export function RechargeInvoiceSheet({ p, invoice, receivableId, onClose }: { p: Palette; invoice: RechargeInvoice | null; receivableId?: string | null; onClose: () => void }) {
+export function RechargeInvoiceSheet({ p, invoice, receivableId, onClose, onSent }: { p: Palette; invoice: RechargeInvoice | null; receivableId?: string | null; onClose: () => void; onSent?: () => void | Promise<void> }) {
   const [state, setState] = useState<ReceivableState | null>(null), [error, setError] = useState(""), [note, setNote] = useState(""), [busy, setBusy] = useState(false);
   const request = useRequestId(receivableId ? `receivable:${receivableId}:${state?.sends.length ?? 0}` : null);
   useEffect(() => {
@@ -124,7 +124,8 @@ export function RechargeInvoiceSheet({ p, invoice, receivableId, onClose }: { p:
     try {
       const r = await writeDocuments({ action: "emailReceivable", requestId: request.get("email"), itemId: receivableId });
       request.done("email");
-      setNote(typeof r?.note === "string" ? r.note : `Emailed to ${who?.name ?? "them"}.`);
+      setNote(typeof r?.note === "string" ? r.note : `Emailed to ${who?.name ?? "them"}.${invoice?.status === "to_send" ? " Marked sent." : ""}`);
+      await onSent?.();
       setState(receivableStateSchema.parse((await readDocuments(receivableQuery(receivableId))).data));
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }

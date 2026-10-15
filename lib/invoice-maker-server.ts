@@ -91,7 +91,15 @@ export async function emailReceivable({ client, account }: RpcContext, input: Ex
   const invoice = fromReceivable(state.data.receivable, state.data.paymentDetails);
   const result = await deliver(account, input.requestId, mailbox, state.data.email.to, failure ? null : invoiceEmail(invoice, state.data.email.name, authSecurityConfiguration()?.origin), failure);
   if (result.failure) return businessResponse({ error: result.failure }, 502);
-  return businessResponse({ ok: true, data: { status: 'sent' }, ...(result.recorded ? {} : { note: 'Sent. Refresh to see it recorded here.' }) });
+  // Emailed: the invoice is sent, marked the same way Mark sent does (moveHubItem, with its version and history). One
+  // already sent is left as it is.
+  let marked = true;
+  if (state.data.receivable.status === 'to_send') {
+    const move = await client.rpc('workspace_teams_action', { input: { action: 'moveHubItem', requestId: crypto.randomUUID(), id: state.data.receivable.itemId, version: state.data.receivable.version, status: 'sent' } });
+    marked = !move.error;
+  }
+  const note = !marked ? 'Emailed, but it could not be marked sent. Refresh and use Mark sent.' : result.recorded ? '' : 'Sent. Refresh to see it recorded here.';
+  return businessResponse({ ok: true, data: { status: 'sent', marked }, ...(note ? { note } : {}) });
 }
 
 export const workspaceDocuments = rpcRoute({
