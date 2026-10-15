@@ -12,9 +12,9 @@ create table auth.sessions(id uuid primary key,user_id uuid references auth.user
 create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
-const roles = ['super_admin', 'admin', 'cleaning_manager', 'cleaning_manager', 'stays', 'cleans', 'cleans', 'cleans', 'accounts', 'client'];
+const roles = ['super_admin', 'admin', 'cleaning_manager', 'cleaning_manager', 'stays', 'cleans', 'cleans', 'cleans', 'accounts', 'client', 'ready'];
 const users = roles.map((_, i) => `95000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
-const [SUPER, ADMIN, MANAGER, OTHER_MANAGER, STAYS, CLEANER, OTHER_CLEANER, THIRD_CLEANER, ACCOUNTS, OWNER] = roles.map((_, i) => i);
+const [SUPER, ADMIN, MANAGER, OTHER_MANAGER, STAYS, CLEANER, OTHER_CLEANER, THIRD_CLEANER, ACCOUNTS, OWNER, READY] = roles.map((_, i) => i);
 const session = i => users[i].replace('9500', '9600');
 for (let i = 0; i < users.length; i++) {
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())', [users[i], `disputes${i}@example.com`]);
@@ -38,7 +38,7 @@ const day = (await db.query("select current_date::text d,(current_date-3)::text 
 await as(SUPER);
 const property = await rpc('workspace_save_property', [{ requestId: crypto.randomUUID(), name: 'Dispute test flat' }]);
 const elsewhere = await rpc('workspace_save_property', [{ requestId: crypto.randomUUID(), name: 'Another flat' }]);
-for (const [user, kind] of [[MANAGER, 'cleaning_manager'], [STAYS, 'staff'], [CLEANER, 'cleaner'], [OTHER_CLEANER, 'cleaner'], [THIRD_CLEANER, 'cleaner'], [OWNER, 'client']]) await rpc('workspace_assign_property', [property, users[user], kind]);
+for (const [user, kind] of [[MANAGER, 'cleaning_manager'], [STAYS, 'staff'], [CLEANER, 'cleaner'], [OTHER_CLEANER, 'cleaner'], [THIRD_CLEANER, 'cleaner'], [OWNER, 'client'], [READY, 'staff']]) await rpc('workspace_assign_property', [property, users[user], kind]);
 await rpc('workspace_assign_property', [elsewhere, users[OTHER_MANAGER], 'cleaning_manager']);
 beforeEach(async () => { await db.exec('reset role'); await db.exec('delete from private.workspace_write_limits'); });
 after(() => db.close());
@@ -247,7 +247,7 @@ test('a cleaner reports a problem from a clean: a repair in triage for Stays, wi
   const listed = (await rpc('workspace_operations_read', [property])).find(w => w.workId === problem.repairWorkId);
   assert.equal(listed.kind, 'maintenance');
   assert.deepEqual((await rpc('workspace_media_read', [problem.repairWorkId])).map(x => x.id), [photo]);
-  const referred = await operation({ action: 'updateOperation', workId: listed.workId, version: listed.version, step: 'referReady', data: { troubleshooting: 'Checked the tap, leak confirmed', guestUpdate: 'Plumber on the way' } });
+  const referred = await operation({ action: 'updateOperation', workId: listed.workId, version: listed.version, step: 'referReady', data: { troubleshooting: 'Checked the tap, leak confirmed', guestUpdate: 'Plumber on the way', readyUserId: users[READY] } });
   assert.equal(referred.data.phase, 'referred');
   await as(CLEANER);
   assert.ok(!(await rpc('workspace_operations_read', [property])).some(w => w.workId === problem.repairWorkId), 'the cleaner does not see the repair itself');

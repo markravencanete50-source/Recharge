@@ -68,9 +68,9 @@ test('maintenance above owner limit requires consent and warranty contact before
  await as(2);assert.deepEqual((await db.query('select public.workspace_operations_read($1) data',[property])).rows[0].data,[]);await assert.rejects(update(repair,'approveBudget',{consent:true}),/Work access/);
  await as(1);repair=await update(repair,'approveBudget',{consent:true});
  await as(3);await assert.rejects(update(repair,'referReady',{troubleshooting:'Checked user thermostat setting',guestUpdate:'Guest informed of escalation'}),/warrantyContactEvidence/);
- repair=await update(repair,'referReady',{troubleshooting:'Checked user thermostat setting',warrantyContactEvidence:'Manufacturer contacted and could not repair',guestUpdate:'Guest informed of escalation'});
+ repair=await update(repair,'referReady',{troubleshooting:'Checked user thermostat setting',warrantyContactEvidence:'Manufacturer contacted and could not repair',guestUpdate:'Guest informed of escalation',readyUserId:users[4]});
  await as(4);const shared=(await db.query('select public.workspace_operations_read($1) data',[property])).rows[0].data.find(w=>w.workId===repair.workId);assert.ok(shared);
- repair=await update(repair,'bookRepair',{repairOn:today,contractor:'Test-only repair company',guestUpdate:'Guest informed of booked repair'});
+ repair=await update(repair,'bookRepair',{repairOn:today,visitFrom:'10:00',visitTo:'12:00',contractor:'Test-only repair company',guestUpdate:'Guest informed of booked repair'});
  await assert.rejects(update(repair,'completeRepair',{report:'Repair report with test findings',actualCostMinor:16000,guestUpdate:'Guest informed of completion'}),/Increased repair/);
  repair=await update(repair,'completeRepair',{report:'Repair report with test findings',actualCostMinor:15000,guestUpdate:'Guest informed of completion'});assert.equal(repair.status,'completed');
 });

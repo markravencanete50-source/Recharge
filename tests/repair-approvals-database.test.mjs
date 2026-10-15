@@ -37,6 +37,8 @@ after(async()=>{await db.close();await vite.close();});
 // Every action goes through the HTTP schema first, as the route does.
 const action=async input=>(await db.query('select public.workspace_operations_action($1::jsonb) result',[JSON.stringify(operationsActionSchema.parse({requestId:crypto.randomUUID(),...input}))])).rows[0].result;
 const update=(w,step,data)=>action({action:'updateOperation',workId:w.workId,version:w.version,step,data});
+// Steps with the contractor fields from 20261021200000 (readyUserId, visit times) go straight to the database.
+const direct=async(w,step,data)=>(await db.query('select public.workspace_operations_action($1::jsonb) result',[JSON.stringify({requestId:crypto.randomUUID(),action:'updateOperation',workId:w.workId,version:w.version,step,data})])).rows[0].result;
 const report=(propertyId,data)=>action({action:'createOperation',propertyId,kind:'maintenance',data:{hazard:false,repairType:'leak',issue:'Kitchen tap dripping all day',...data}});
 const finance=async input=>(await db.query('select public.workspace_finance_action($1::jsonb) result',[JSON.stringify({requestId:crypto.randomUUID(),...input})])).rows[0].result;
 const financeRead=async section=>(await db.query('select public.workspace_finance_read($1,null,null,null,null) result',[section])).rows[0].result;
@@ -84,8 +86,8 @@ test('under the limit: approved automatically, and the owner sees it',async()=>{
  const theirs=await seen(OWNER,r);
  assert.equal(theirs.data.autoApprovedMinor,9999);assert.equal(theirs.data.reportedBy,undefined,'no staff identity');
  // The work is booked as normal.
- await as(STAYS);r=await update(r,'referReady',{troubleshooting:'Washer worn, tap dripping',guestUpdate:'A plumber is being arranged'});
- await as(READY);r=await update(r,'bookRepair',{repairOn:new Date().toISOString().slice(0,10),contractor:'Leith Plumbing',guestUpdate:'Plumber booked'});
+ await as(STAYS);r=await direct(r,'referReady',{troubleshooting:'Washer worn, tap dripping',guestUpdate:'A plumber is being arranged',readyUserId:users[READY]});
+ await as(READY);r=await direct(r,'bookRepair',{repairOn:new Date().toISOString().slice(0,10),visitFrom:'09:00',visitTo:'10:00',contractor:'Leith Plumbing',guestUpdate:'Plumber booked'});
  assert.equal(r.data.phase,'booked');
  // A cost not known yet (£0) is not an approval.
  await as(STAYS);const unknown=await report(home,{estimatedCostMinor:0});
@@ -136,15 +138,18 @@ test('a contractor estimate goes to management even under the limit, and the own
  await as(ADMIN);assert.equal((await management()).repairApprovals.find(x=>x.workId===r.workId).quoteSource,'contractor');
  r=await update(r,'approveManagement',{});
  assert.equal(r.data.phase,'triage','under the limit, the owner is not asked');
- // A contractor's re-quote on a repair in progress goes to management too, even when it is lower.
+ // A Ready user's re-quote on a repair in progress is a contractor's estimate: from 20261021200000 it goes to
+ // management's review (team_review, then reviewDone), not to management approval.
  await as(STAYS);let t=await report(home,{estimatedCostMinor:8000});assert.equal(t.data.phase,'triage');
- t=await update(t,'referReady',{troubleshooting:'Checked the tap and the valve',guestUpdate:'A plumber is being arranged'});
+ t=await direct(t,'referReady',{troubleshooting:'Checked the tap and the valve',guestUpdate:'A plumber is being arranged',readyUserId:users[READY]});
  await as(READY);t=await update(t,'reviseQuote',{quoteMinor:7000,reason:'Contractor quoted for the part',quoteSource:'contractor'});
- assert.equal(t.data.phase,'management_approval');assert.equal(t.data.resumePhase,'referred');
- await as(ADMIN);t=await update(t,'approveManagement',{});assert.equal(t.data.phase,'referred');
- // A later Ready team quote that is lower carries on.
+ assert.equal(t.data.phase,'team_review');assert.equal(t.data.resumePhase,'referred');
+ await as(ADMIN);t=await direct(t,'reviewDone',{});assert.equal(t.data.phase,'owner_approval','the owner pre-authorised nothing');
+ await as(OWNER);t=await update(t,'approveBudget',{consent:true});assert.equal(t.data.phase,'referred');
+ // Even a lower one, and even when it says it is a team quote.
  await as(READY);t=await update(t,'reviseQuote',{quoteMinor:6000,reason:'Ready team will fit the part'});
- assert.equal(t.data.phase,'referred');assert.equal(t.data.quoteSource,'team');
+ assert.equal(t.data.phase,'team_review');assert.equal(t.data.quoteSource,'contractor');
+ await as(ADMIN);t=await direct(t,'reviewDone',{});assert.equal(t.data.phase,'referred','within what the owner already approved');
 });
 
 test('declined at each stage: by management, by the owner after management, and re-quoted',async()=>{
