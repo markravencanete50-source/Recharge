@@ -230,7 +230,7 @@ test('a real step through the operations action: one notice each, also on a retr
   await as(SAM);
   const repair = await action({ action: 'createOperation', propertyId: HOME, kind: 'maintenance', data: { issue: 'The kitchen tap drips', estimatedCostMinor: 0, hazard: false } });
   assert.equal(repair.data.phase, 'triage');
-  await action({ action: 'updateOperation', workId: repair.workId, version: repair.version, step: 'referReady', data: { troubleshooting: 'Tightened the tap, still drips', guestUpdate: 'A plumber will be booked' } });
+  await action({ action: 'updateOperation', workId: repair.workId, version: repair.version, step: 'referReady', data: { troubleshooting: 'Tightened the tap, still drips', guestUpdate: 'A plumber will be booked', readyUserId: users[RORY] } });
   const [refer] = await sql("select id from public.workspace_activity where work_id=$1 and event_type='operations.updateOperation.referReady'", [repair.workId]);
   const referHeard = await recipients(refer.id);
   assert.equal(referHeard.filter(n => n === 'Rory Ready').length, 1);
