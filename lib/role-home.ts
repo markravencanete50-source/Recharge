@@ -25,12 +25,16 @@ export const roleHomeSchema = z.object({
   // Cleaning managers and cleaners.
   unassignedToday: count, unassignedTomorrow: count, toReview: count, disputes: count, complaintsThisMonth: count, cleansThisWeek: count, restockOpen: count,
   reviewedFirst: count, acceptedFirst: count, overdue: count, redo: count, toRespond: count, doneThisMonth: count,
+  // Cleaners' own pay (20261022000000): paid this month, waiting to be paid, and projected for the current period.
+  payPaidThisMonthMinor: money, payWaitingMinor: money, payProjectedMinor: money,
   // Ready.
   newJobs: count, approvedToBook: count, repairsToday: count, toMarkDone: count, openJobs: count, repairsThisWeek: count, repairsDoneThisMonth: count,
   visitsToday: count, visitsOverdue: count, visitsThisWeek: count, visitsDoneThisMonth: count,
   // Accounts (money in pence, for the finance roles only).
   expensesToApprove: count, payoutsOverdue: count, statementsToIssue: count, cleanerInvoicesToApprove: count, purchasesToApprove: count, purchaseInvoicesToRecord: count,
   payoutsReceivedMinor: money, expensesMinor: money, expensesCount: count, statementsIssued: count, ownerPayoutsMinor: money,
+  // Cleaner invoices (20261022000000): waiting for approval, and approved and not paid yet.
+  cleanerInvoicesToApproveMinor: money, cleanerInvoicesToPay: count, cleanerInvoicesToPayMinor: money, cleanerInvoicesDueThisWeek: count,
 });
 export type RoleHome = z.infer<typeof roleHomeSchema>;
 export const roleHomeQuery = (role: RoleHomeRole) => ({ section: 'roleHome', role });
@@ -59,6 +63,11 @@ const work = (view: 'stays' | 'clients' | 'cleans' | 'repairs' | 'accounts', ext
 const CLEANS = work('cleans', { section: 'Schedule' });
 const REPAIRS = work('repairs', { section: 'Reactive maintenance' });
 const CALENDAR: NeedOpen = { kind: 'page', section: 'calendar' };
+// "£60 waiting · £135 projected", leaving out what is nothing.
+function payDetail(h: RoleHome) {
+  const out = [n(h.payWaitingMinor) ? `${formatMoneyShort(h.payWaitingMinor)} waiting` : '', n(h.payProjectedMinor) ? `${formatMoneyShort(h.payProjectedMinor)} projected` : ''].filter(Boolean);
+  return out.length ? out.join(' · ') : 'Paid to you this month';
+}
 
 // The tiles for each role, in reading order: today first, then the week and the month. Nothing about money outside
 // Accounts, and nothing business-wide: every figure is the person's own properties or work.
@@ -77,7 +86,10 @@ export function roleFigures(h: RoleHome, extra: { payLabel?: string | null; payD
   ];
   if (h.role === 'cleans') return [
     figure('done', 'Cleans done', h.doneThisMonth, formatCount, 'This month', work('cleans', { section: 'Your month' })),
-    wordFigure('pay', 'Pay this month', extra.payLabel ?? null, extra.payDetail ?? 'At your rate per clean', work('cleans', { section: 'Your month' })),
+    // Paid this month from their invoices once the read has it (20261022000000); else their month at their rate.
+    h.payPaidThisMonthMinor != null
+      ? figure('pay', 'Pay this month', h.payPaidThisMonthMinor, formatMoneyShort, payDetail(h), work('cleans', { section: 'Your pay' }))
+      : wordFigure('pay', 'Pay this month', extra.payLabel ?? null, extra.payDetail ?? 'At your rate per clean', work('cleans', { section: 'Your month' })),
     firstTime(h, work('cleans', { section: 'Your month' })),
     figure('week', 'Cleans this week', h.cleansThisWeek, formatCount, 'Monday to Sunday', CLEANS),
   ];
@@ -91,6 +103,8 @@ export function roleFigures(h: RoleHome, extra: { payLabel?: string | null; payD
     figure('expenses', 'Expenses', h.expensesMinor, formatMoneyShort, h.expensesCount != null ? `${formatCount(h.expensesCount)} received this month` : 'Received this month', work('accounts', { sub: 'expenses' })),
     figure('issued', 'Statements issued', h.statementsIssued, formatCount, 'This month', work('accounts', { sub: 'statements' })),
     figure('ownerPayouts', 'Paid to owners', h.ownerPayoutsMinor, formatMoneyShort, 'This month', work('accounts', { sub: 'statements' })),
+    ...(h.cleanerInvoicesToPayMinor != null ? [figure('cleanerPay', 'Cleaners to pay', h.cleanerInvoicesToPayMinor, formatMoneyShort,
+      h.cleanerInvoicesToPay ? `${formatCount(h.cleanerInvoicesToPay)} approved invoice${h.cleanerInvoicesToPay === 1 ? '' : 's'}` : 'Approved invoices', work('accounts', { section: 'Cleaner invoices to pay' }))] : []),
   ];
   return [];
 }

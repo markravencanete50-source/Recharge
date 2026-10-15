@@ -15,6 +15,7 @@ import { FlagButton } from "./ManagementFlag";
 import { PhotoPicker } from "./Photos";
 import { DisputeSheet, type DisputeTarget } from "./CleanDisputes";
 import { RateSheet } from "./CleanerPay";
+import { CleanerInvoicesReadOnly, CleanerPay, PayPeriodSheet } from "./CleanerInvoices";
 import { ProblemForm } from "./CleanProblem";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { CleanChecklist, ChecklistReview, type ChecklistState } from "./CleanChecklist";
@@ -65,6 +66,9 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   const canSetRate = ["admin", "super_admin", "accounts"].includes(account.role);
   const [dispute, setDispute] = useState<DisputeTarget | null>(null);
   const [rateFor, setRateFor] = useState<CleanerMonth | null>(null);
+  // Cleaner invoices (20261022000000): a cleaner's pay period, and the pay section reloading with the screen.
+  const [periodFor, setPeriodFor] = useState<CleanerMonth | null>(null);
+  const [payTick, setPayTick] = useState(0);
   const [performance, setPerformance] = useState<Performance>([]);
   const [day, setDay] = useState(today);
   const [cleaner, setCleaner] = useState("everyone");
@@ -89,7 +93,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
 
   const load = useCallback(async () => {
-    setLoading(true); setError("");
+    setLoading(true); setError(""); setPayTick(t => t + 1);
     const from = addDays(today, -7), to = addDays(today, 28);
     const query: Record<string, string> = { section: "schedule", from, to };
     if (!manager) query.userId = account.userId;
@@ -306,11 +310,17 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
                     {canSetRate && <MotionPress accessibilityRole="button" accessibilityLabel={`Set pay per clean for ${row.fullName}`} onPress={() => setRateFor(row)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}>
                       <Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>{pay.rateMinor === null ? "Set pay rate" : "Change rate"}</Text>
                     </MotionPress>}
+                    {/* Cleaner invoices: weekly or monthly, set by admins and Accounts like the rate. */}
+                    {canSetRate && <MotionPress accessibilityRole="button" accessibilityLabel={`Set the pay period for ${row.fullName}`} onPress={() => setPeriodFor(row)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}>
+                      <Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Pay period</Text>
+                    </MotionPress>}
                   </View>}
                 </View>
               );
             }) : <Notice text="Cleaner results appear after the first reviewed clean." p={p} />}
           </Section>
+          {/* Cleaner invoices: a cleaning manager reads their own cleaners' invoices; Accounts and admins decide them in Accounts. */}
+          {account.role === "cleaning_manager" && <CleanerInvoicesReadOnly p={p} />}
         </>
       )}
       {!manager && mine && (
@@ -324,6 +334,8 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
           </View>
         </Section>
       )}
+      {/* Cleaner invoices: earnings, waiting to be paid, projected, and the cleaner's own invoices. */}
+      {!manager && <CleanerPay p={p} tick={payTick} />}
       {!manager && <RefreshButton p={p} loading={loading} onPress={() => void load()} />}
 
       <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} flags={flags} now={now} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
@@ -334,6 +346,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       <StatementSheet p={p} workId={statementFor} onClose={() => setStatementFor(null)} onDone={saved(async () => { setStatementFor(null); await load(); })} />
       <DisputeSheet p={p} target={dispute} onClose={() => setDispute(null)} onDone={saved(load)} />
       <RateSheet p={p} cleaner={rateFor} onClose={() => setRateFor(null)} onDone={saved(load)} />
+      <PayPeriodSheet p={p} cleaner={periodFor} onClose={() => setPeriodFor(null)} onDone={saved(load)} />
     </View>
   );
 }
