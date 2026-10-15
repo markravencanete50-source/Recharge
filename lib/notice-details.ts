@@ -60,12 +60,14 @@ export type NoticeRow = { key: string; title: string; line: string; detail: stri
 export const CLEANER_NOTICES: ReadonlySet<string> = new Set(['cleaning.assigned', 'cleaning.unassigned', 'cleaning.moved', 'cleaning.cancelled', 'cleaning.redo', 'cleaning.morning',
   // Cleaner invoices (20261022000000).
   'cleaning.invoice_ready', 'cleaning.invoice_approved', 'cleaning.invoice_queried', 'cleaning.invoice_paid']);
+// A VA's request for invoice notices (migration 20261022200000) say what happened, like the cleaner's own.
+export const VA_PAY_NOTICES: ReadonlySet<string> = new Set(['vapay.request_approved', 'vapay.request_paid']);
 
 // One notice as a row: the title says what it is, the line where, who and when.
 export function noticeRow(n: NoticeDetail): NoticeRow {
   const label = workKindLabel(n.work_kind, n.work_module), title = n.work_title?.trim();
   const fallback = noticeCopy(n.event_type).title;
-  const heading = CLEANER_NOTICES.has(n.event_type) ? fallback
+  const heading = CLEANER_NOTICES.has(n.event_type) || VA_PAY_NOTICES.has(n.event_type) ? fallback
     : n.work_id && title ? `${label ?? 'Task'}: ${title}`
     : (n.event_type === 'chat.message' || n.event_type === 'chat.owner_message') && n.actor_name?.trim() ? `Message from ${n.actor_name.trim()}`
     : n.event_type === 'guest.message' ? (n.property_name?.trim() ? `Guest message · ${n.property_name.trim()}` : 'Guest message')

@@ -82,6 +82,9 @@ const EXACT: Record<string, NoticeCopy> = {
   'cleaning.invoice_approved': copy('Invoice approved', 'Accounts approved one of your invoices. It will be paid by its due date.'),
   'cleaning.invoice_queried': copy('A question about your invoice', 'Accounts have a question about one of your invoices. Open Cleans, Your pay to read it.'),
   'cleaning.invoice_paid': copy('Invoice paid', 'One of your invoices has been paid. Open Cleans, Your pay to see it.'),
+  // VA pay (migration 20261022200000): to the VA, in the app only, with the number and the amount in the row's detail.
+  'vapay.request_approved': copy('Request for invoice approved', 'Management approved your request for invoice. Please send us your invoice for the amount shown. Open My performance, Your requests for invoice to see it.'),
+  'vapay.request_paid': copy('Request for invoice paid', 'Your request for invoice has been paid. Open My performance, Your requests for invoice to see it.'),
   'cleaning.checklist_saved': copy('Clean checklist updated', 'A clean checklist, and which checks need photos, has been updated.'),
   'cleaning.checklist_removed': copy('Clean checklist removed', 'A clean checklist has been removed. Cleans use the checklist for every property instead.'),
   'operations.updateOperation.reportCleanProblem': copy('Problem reported from a clean', 'A cleaner has reported a problem at a property.'),
@@ -175,6 +178,7 @@ const BY_AREA: [string, NoticeCopy][] = [
   ['aircover.', copy('AirCover update', 'There is an update on an AirCover claim.')],
   ['team.', copy('Team update', 'There is an update to the team’s rota or responsibilities.')],
   ['property_details.', copy('Property details updated', 'A property’s details have been updated.')],
+  ['vapay.', copy('Request for invoice update', 'There is an update on your request for invoice.')],
 ];
 const FALLBACK = copy('Update in Recharge', 'There is an update in your Recharge workspace.');
 

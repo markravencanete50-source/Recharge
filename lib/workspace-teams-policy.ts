@@ -42,14 +42,17 @@ export const teamsReadSchema = z.object({
     'stayReasonSettings',
     // Cleaner invoices (20261022000000): invoices (userId: one cleaner), one invoice (invoiceId), a cleaner's earnings
     // (userId, else the cleaner's own) and the cleaners' rates and pay periods. Read through workspace_cleaner_pay_read.
-    'payInvoices', 'payInvoice', 'payEarnings', 'paySettings']),
+    'payInvoices', 'payInvoice', 'payEarnings', 'paySettings',
+    // VA pay (20261022200000): who may see it, the requests for invoice (userId: one VA), one request (invoiceId) and the
+    // VAs' pay setup. Read through workspace_va_pay_read, which decides who sees what.
+    'vaPayAccess', 'vaPayRequests', 'vaPayRequest', 'vaPaySetup']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(),
   channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).optional(),
   role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),
 }).strict().superRefine((value, context) => {
   if (value.channel && value.section !== 'stayAnalytics') context.addIssue({ code: 'custom', message: 'A channel is only for Guests & stays' });
-  if (value.invoiceId && value.section !== 'payInvoice') context.addIssue({ code: 'custom', message: 'An invoice is only for one cleaner invoice' });
-  if (value.section === 'payInvoice' && !value.invoiceId) context.addIssue({ code: 'custom', message: 'Choose an invoice' });
+  if (value.invoiceId && value.section !== 'payInvoice' && value.section !== 'vaPayRequest') context.addIssue({ code: 'custom', message: 'An invoice is only for one cleaner invoice or one request for invoice' });
+  if ((value.section === 'payInvoice' || value.section === 'vaPayRequest') && !value.invoiceId) context.addIssue({ code: 'custom', message: 'Choose an invoice' });
   if (value.section === 'schedule') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the schedule dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
@@ -158,6 +161,17 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('queryPayInvoice'), requestId: id, invoiceId: id, version, note }).strict(),
   z.object({ action: z.literal('markPayInvoicePaid'), requestId: id, invoiceId: id, version, paidOn: date }).strict(),
   z.object({ action: z.literal('setCleanerPayPeriod'), requestId: id, cleanerId: id, period: z.enum(['weekly', 'monthly']), version: z.number().int().min(0) }).strict(),
+  // VA pay (20261022200000), through workspace_va_pay_action, management only: a VA's hourly rate and bonus per KPI tier in US
+  // cents (version 0 before the first save); approve, query or reject a request for invoice (with a note), adjust it before
+  // approval (an hours correction in minutes and/or the bonus, with a reason) and mark it paid. The database also refuses an adjustment that changes neither.
+  z.object({ action: z.literal('saveVaPay'), requestId: id, vaId: id, version: z.number().int().min(0), hourlyRateMinor: z.number().int().min(1).max(100000).nullable(),
+    bonusTargetMinor: z.number().int().min(0).max(10000000), bonusTier2Minor: z.number().int().min(0).max(10000000), bonusTier3Minor: z.number().int().min(0).max(10000000) }).strict(),
+  z.object({ action: z.literal('approveVaRequest'), requestId: id, id, version }).strict(),
+  z.object({ action: z.literal('queryVaRequest'), requestId: id, id, version, note }).strict(),
+  z.object({ action: z.literal('rejectVaRequest'), requestId: id, id, version, note }).strict(),
+  z.object({ action: z.literal('adjustVaRequest'), requestId: id, id, version, hoursAdjustMinutes: z.number().int().min(-44640).max(44640).optional(),
+    bonusMinor: z.number().int().min(0).max(10000000).nullable().optional(), reason: text(5, 500) }).strict(),
+  z.object({ action: z.literal('markVaRequestPaid'), requestId: id, id, version, paidOn: date }).strict(),
   z.object({ action: z.literal('saveRoutinePlan'), requestId: id, planId: id.optional(), version: version.optional(), propertyId: id,
     moduleId: z.enum(['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']), title: text(2, 200),
     checklist: z.array(text(1, 200)).min(1).max(30), frequency: z.enum(['monthly', 'quarterly']), dayOfMonth: z.number().int().min(1).max(28),
