@@ -6,3 +6,4 @@
 -- on 15 October 2026 (no DROP or DELETE). They went live with the chat mentions, cleaner flow, role Home and stay analytics pull request.
 -- 20261021700000_repair_owner_contractor_times: installed by the lead on 15 October 2026 (no DROP or DELETE).
 -- 20261021900000_cleaner_notices_phone_only: installed by the lead on 15 October 2026 (no DROP or DELETE).
+-- 20261021800000_stay_reason: installed by the lead on 15 October 2026 (no DROP or DELETE). Both switches (ask and survey) are OFF.
