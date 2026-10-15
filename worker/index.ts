@@ -111,6 +111,16 @@ const worker = {
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_clean_morning_notices', {})).catch(() => {
       console.error('Clean morning notices failed; the next run retries.');
     }));
+    // Why guests stay (20261021800000), both OFF until an admin switches them on in Reports > Guests & stays. From 10:00
+    // London (catching up until 12:59): the question to each guest 3 days before check-in, through the Guest inbox's own
+    // Hostaway send, and the survey email the day after a direct stay, from the guest mailbox. The database takes each stay
+    // once, so a late or doubled tick never sends twice. Nothing goes unless Hostaway replies or guest email are switched on.
+    ctx.waitUntil(import('../lib/stay-reason-server').then(module => module.runStayReasonQuestions()).catch(() => {
+      console.error('Stay reason questions failed; the next run retries.');
+    }));
+    ctx.waitUntil(import('../lib/stay-reason-server').then(module => module.runStaySurveys()).catch(() => {
+      console.error('Stay surveys failed; the next run retries.');
+    }));
     // Owners are reminded once an approval has waited 48 hours; client relations are told at 96.
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_chase_owner_approvals', {})).catch(() => {
       console.error('Owner approval reminders failed; the next run retries.');

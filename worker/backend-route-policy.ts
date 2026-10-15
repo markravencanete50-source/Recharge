@@ -26,6 +26,8 @@ const endpoints = new Set([
   "/enquiry", "/api/enquiry", "/api/enquiry/upload", "/api/workspace/enquiry-files", "/api/mobile/enquiry-files",
   // The estimate emailed with a private link: the client's page (no account) and the team's Resend / Copy link.
   "/estimate", "/api/estimate", "/api/workspace/estimate-link", "/api/mobile/estimate-link",
+  // The survey a guest opens from the email after a direct stay (no account; the link is for one stay).
+  "/stay-survey", "/api/stay-survey",
   // Onboarding settings (the contract used as the agreement template) and the owner's account made on Proceed.
   "/api/workspace/onboarding-settings", "/api/mobile/onboarding-settings", "/api/workspace/owner-account", "/api/mobile/owner-account",
   // Messages photos and videos, and profile photos.

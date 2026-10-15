@@ -67,6 +67,29 @@ test('plain words: what is not known, comparisons, countries and the guest mix',
   ]);
 });
 
+test('why they stay, the rating and the survey replies (20261021800000), in plain words', () => {
+  const base = { stays: 10, reasons: { known: 4, counts: [{ reason: 'holiday', stays: 2 }, { reason: 'work', stays: 1 }, { reason: 'event', stays: 1 }] }, rating: { known: 3, average: 4.3 }, survey: { sent: 4, answered: 3 } };
+  assert.deepEqual(V.reasonRows(base).map(r => [r.label, r.stays]), [['Holiday', 2], ['Work', 1], ['Visiting family or friends', 0], ['An event', 1], ['Something else', 0]], 'every reason, in the question\'s order');
+  assert.equal(V.notKnownLine(base.reasons.known, base.stays), 'Not known for 60% of stays');
+  assert.equal(V.ratingLine(base), 'From 3 stays');
+  assert.equal(V.ratingLine({ ...base, rating: { known: 1, average: 5 } }), 'From 1 stay');
+  assert.equal(V.ratingLine({ ...base, rating: { known: 0, average: null } }), 'No ratings yet');
+  assert.equal(V.surveyReplyLine(base), '3 of 4 surveys answered');
+  assert.equal(V.surveyReplyLine({ ...base, survey: { sent: 0, answered: 0 } }), 'No surveys sent for these dates');
+  // Before the update is installed the report still reads.
+  const { reasons, rating, survey, ...older } = base;
+  assert.ok(reasons && rating && survey);
+  assert.deepEqual(V.reasonRows(older).map(r => r.stays), [0, 0, 0, 0, 0]);
+  assert.ok(!V.STAYS_NOTES.some(n => /not asked yet/.test(n)), 'the old note is gone');
+  assert.ok(V.STAYS_NOTES.some(n => /switches them on/.test(n)));
+  const screen = read('mobile/src/StayReports.tsx');
+  assert.match(screen, /title="Why they stay"/);
+  assert.match(screen, /notKnownLine\(r\.reasons\.known, r\.stays\)/, '"Not known for N%"');
+  assert.match(screen, /label="Average rating"/);
+  assert.match(screen, /label="Survey replies"/);
+  assert.match(screen, /<Switch accessibilityLabel=\{STAY_SWITCHES\[which\]\}/);
+});
+
 test('the Reports page shows Guests & stays to admins only, in the calm style, with no guest details', () => {
   const page = read('mobile/src/LiveWorkspace.tsx');
   assert.match(page, /\{isWorkspaceAdmin\(account\.role\) && <StayReports p=\{p\} account=\{account\} properties=\{properties\} \/>\}/);
