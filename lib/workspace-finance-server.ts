@@ -1,6 +1,7 @@
 import { rpcRoute } from './workspace-rpc-route';
 import { ACCOUNTS_ACTIONS, ACCOUNTS_SECTIONS, PAYABLES_ACTIONS, REPORT_SECTIONS, financeActionSchema, financeBodyLimit, financeReadSchema, prepareFinanceAction } from './workspace-finance-policy';
 import { BUSINESS_REPORT_KIND, teamsActionSchema, teamsReadSchema } from './workspace-teams-policy';
+import { PAY_ACTIONS, PAY_READ_SECTIONS } from './cleaner-invoices';
 import { adminActionSchema, adminReadSchema } from './workspace-admin-policy';
 import { enquiryEmailReady } from './integration-policy';
 
@@ -28,6 +29,8 @@ export const workspaceTeams = rpcRoute({
     : input.section === 'viewAsPeople' ? client.rpc('workspace_view_as_people')
     // Home's "Guest replies on time" (admins only, checked by the database); `from` may name the day, else London's today.
     : input.section === 'guestReplies' ? client.rpc('workspace_guest_reply_glance', { on_day: input.from || null })
+    // Cleaner invoices: the database decides who sees whose (a cleaner their own, a cleaning manager their cleaners').
+    : input.section in PAY_READ_SECTIONS ? client.rpc('workspace_cleaner_pay_read', { section: PAY_READ_SECTIONS[input.section as keyof typeof PAY_READ_SECTIONS], target_id: input.invoiceId || input.userId || null })
     // Each role's Home: the database answers for the caller's role, or the role an admin previews (it refuses anyone else's).
     : input.section === 'roleHome' ? client.rpc('workspace_role_home', { view_role: input.role || null })
     // The business reports (admins only, checked by the database) have their own read.
@@ -51,7 +54,9 @@ export const workspaceTeams = rpcRoute({
     : input.action === 'decideChatReport' && input.decision === 'remove' ? import('./chat-media-server').then(m => m.decideChatReport(context, input)) : null,
   // Favorites and View as have their own database functions.
   actionFor: input => input.action === 'saveFavorites' ? 'workspace_save_favorites' : input.action === 'startViewAs' ? 'workspace_view_as_start'
-    : input.action === 'stopViewAs' ? 'workspace_view_as_stop' : input.action === 'setStayReasonSwitch' ? 'workspace_stay_reason_switch' : 'workspace_teams_action',
+    : input.action === 'stopViewAs' ? 'workspace_view_as_stop' : input.action === 'setStayReasonSwitch' ? 'workspace_stay_reason_switch'
+    // Cleaner invoices and pay periods have their own database function.
+    : (PAY_ACTIONS as readonly string[]).includes(input.action) ? 'workspace_cleaner_pay_action' : 'workspace_teams_action',
 });
 
 export const workspaceAdmin = rpcRoute({

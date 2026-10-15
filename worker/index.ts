@@ -98,6 +98,11 @@ const worker = {
       ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_clean_form_sweep', {})).catch(() => {
         console.error('Clean form check failed; the next run retries.');
       }));
+      // Hourly, so the first tick after midnight London closes the week or month: each cleaner's accepted cleans become
+      // one invoice for the period that ended. Idempotent (one invoice per cleaner and period), and a missed hour catches up.
+      ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_cleaner_invoice_run', {})).catch(() => {
+        console.error('Cleaner invoices failed; the next run retries.');
+      }));
     }
     // Every six hours: a long stay booked through a booking site gets its direct-booking follow-up (at most 50 a run).
     // A scheduled sweep rather than a trigger, so it can never hold up the Hostaway sync.
