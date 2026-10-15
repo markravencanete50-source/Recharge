@@ -90,8 +90,8 @@ export function AccountsWork({ palette: p, account, properties, onOpenWork }: { 
         <TrackerList p={p} items={purchaseItems} empty="No purchase requests waiting on Accounts." owner={owner}
           onOpen={item => { const w = purchases.find(x => x.workId === item.workId); if (w) onOpenWork(w); }} />
       </Section>
-      {/* Cleaner invoices made at the end of each pay period (20261022000000): approve or query, then pay. */}
-      {canPayCleaners && <AccountsCleanerPay p={p} />}
+      {/* Requests for invoice made at the end of each pay period (20261022000000): approve or query, then pay. */}
+      {canPayCleaners && <AccountsCleanerPay p={p} canSetOutcome={["admin", "super_admin"].includes(account.role)} />}
       <Section title="Cleaner invoices" count={groups.length} p={p}>
         <Text style={[ui.small, { color: p.muted }]}>Accepted cleans waiting to be invoiced, by cleaner. Tap a cleaner to record their invoice.</Text>
         <List p={p} empty="No accepted cleans waiting to be invoiced.">

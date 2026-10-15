@@ -77,11 +77,11 @@ const EXACT: Record<string, NoticeCopy> = {
   'cleaning.cancelled': copy('Clean cancelled', 'One of your cleans has been cancelled, usually because the stay was cancelled. You do not need to do it.'),
   'cleaning.redo': copy('Please redo a clean', 'One of your cleans was not accepted. Please redo it by the time shown, then send the form again. You can give your side too.'),
   'cleaning.morning': copy('Your cleans today', 'Good morning. Open Cleans to see today\'s cleans, with the checkout times and when the next guests arrive.'),
-  // Cleaner invoices (migration 20261022000000): to the cleaner, with the number and the amount in the pop-up only.
-  'cleaning.invoice_ready': copy('Your invoice is ready', 'Your accepted cleans for the period are on a new invoice. Open Cleans, Your pay to see it.'),
-  'cleaning.invoice_approved': copy('Invoice approved', 'Accounts approved one of your invoices. It will be paid by its due date.'),
-  'cleaning.invoice_queried': copy('A question about your invoice', 'Accounts have a question about one of your invoices. Open Cleans, Your pay to read it.'),
-  'cleaning.invoice_paid': copy('Invoice paid', 'One of your invoices has been paid. Open Cleans, Your pay to see it.'),
+  // Requests for invoice (migration 20261022000000): to the cleaner, with the number and the amount in the pop-up only.
+  'cleaning.invoice_ready': copy('Your request for invoice is ready', 'Your accepted cleans for the period are on a new request for invoice. Open Cleans, Your pay to see it and send us your invoice.'),
+  'cleaning.invoice_approved': copy('Request approved', 'Accounts approved one of your requests for invoice. It will be paid by its due date.'),
+  'cleaning.invoice_queried': copy('A question about your request', 'Accounts have a question about one of your requests for invoice. Open Cleans, Your pay to read it.'),
+  'cleaning.invoice_paid': copy('Request paid', 'One of your requests for invoice has been paid. Open Cleans, Your pay to see it.'),
   // VA pay (migration 20261022200000): to the VA, in the app only, with the number and the amount in the row's detail.
   'vapay.request_approved': copy('Request for invoice approved', 'Management approved your request for invoice. Please send us your invoice for the amount shown. Open My performance, Your requests for invoice to see it.'),
   'vapay.request_paid': copy('Request for invoice paid', 'Your request for invoice has been paid. Open My performance, Your requests for invoice to see it.'),

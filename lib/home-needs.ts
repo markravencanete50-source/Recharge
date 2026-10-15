@@ -129,9 +129,9 @@ export function accountsNeeds(h: RoleHome): NeedLine[] {
     line('expenses', e, say(e, 'expense to approve', 'expenses to approve'), work('accounts', { sub: 'expenses' })),
     line('purchases', pa, say(pa, 'purchase to approve', 'purchases to approve'), work('accounts', { section: 'Purchases' })),
     line('purchaseInvoices', pi, say(pi, 'purchase invoice to record', 'purchase invoices to record'), work('accounts', { section: 'Purchases' })),
-    line('cleanerInvoices', ci, say(ci, 'cleaner invoice to approve', 'cleaner invoices to approve'), work('accounts', { section: 'Cleaner invoices to approve' })),
-    // Cleaner invoices (20261022000000): approved and due by Sunday, or overdue.
-    line('cleanerPay', cp, say(cp, 'cleaner invoice to pay this week', 'cleaner invoices to pay this week'), work('accounts', { section: 'Cleaner invoices to pay' })),
+    line('cleanerInvoices', ci, say(ci, 'request for invoice to approve', 'requests for invoice to approve'), work('accounts', { section: 'Requests for invoice to approve' })),
+    // Requests for invoice (20261022000000): approved and due by Sunday, or overdue.
+    line('cleanerPay', cp, say(cp, 'request for invoice to pay this week', 'requests for invoice to pay this week'), work('accounts', { section: 'Requests for invoice to pay' })),
     line('statements', s, say(s, 'statement to issue', 'statements to issue'), work('accounts', { sub: 'statements' })),
   ]);
 }

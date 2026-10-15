@@ -172,6 +172,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('adjustVaRequest'), requestId: id, id, version, hoursAdjustMinutes: z.number().int().min(-44640).max(44640).optional(),
     bonusMinor: z.number().int().min(0).max(10000000).nullable().optional(), reason: text(5, 500) }).strict(),
   z.object({ action: z.literal('markVaRequestPaid'), requestId: id, id, version, paidOn: date }).strict(),
+  // Requests for invoice (20261022000000): a clean's outcome while its request waits for approval.
+  z.object({ action: z.literal('setPayLineOutcome'), requestId: id, invoiceId: id, workId: id, outcome: z.enum(['completed', 'partial', 'unsuccessful']), version }).strict(),
   z.object({ action: z.literal('saveRoutinePlan'), requestId: id, planId: id.optional(), version: version.optional(), propertyId: id,
     moduleId: z.enum(['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']), title: text(2, 200),
     checklist: z.array(text(1, 200)).min(1).max(30), frequency: z.enum(['monthly', 'quarterly']), dayOfMonth: z.number().int().min(1).max(28),

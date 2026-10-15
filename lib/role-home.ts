@@ -33,7 +33,7 @@ export const roleHomeSchema = z.object({
   // Accounts (money in pence, for the finance roles only).
   expensesToApprove: count, payoutsOverdue: count, statementsToIssue: count, cleanerInvoicesToApprove: count, purchasesToApprove: count, purchaseInvoicesToRecord: count,
   payoutsReceivedMinor: money, expensesMinor: money, expensesCount: count, statementsIssued: count, ownerPayoutsMinor: money,
-  // Cleaner invoices (20261022000000): waiting for approval, and approved and not paid yet.
+  // Requests for invoice (20261022000000): waiting for approval, and approved and not paid yet, at the amount to invoice.
   cleanerInvoicesToApproveMinor: money, cleanerInvoicesToPay: count, cleanerInvoicesToPayMinor: money, cleanerInvoicesDueThisWeek: count,
 });
 export type RoleHome = z.infer<typeof roleHomeSchema>;
@@ -86,7 +86,7 @@ export function roleFigures(h: RoleHome, extra: { payLabel?: string | null; payD
   ];
   if (h.role === 'cleans') return [
     figure('done', 'Cleans done', h.doneThisMonth, formatCount, 'This month', work('cleans', { section: 'Your month' })),
-    // Paid this month from their invoices once the read has it (20261022000000); else their month at their rate.
+    // Paid this month from their requests for invoice once the read has it (20261022000000); else their month at their rate.
     h.payPaidThisMonthMinor != null
       ? figure('pay', 'Pay this month', h.payPaidThisMonthMinor, formatMoneyShort, payDetail(h), work('cleans', { section: 'Your pay' }))
       : wordFigure('pay', 'Pay this month', extra.payLabel ?? null, extra.payDetail ?? 'At your rate per clean', work('cleans', { section: 'Your month' })),
@@ -104,7 +104,7 @@ export function roleFigures(h: RoleHome, extra: { payLabel?: string | null; payD
     figure('issued', 'Statements issued', h.statementsIssued, formatCount, 'This month', work('accounts', { sub: 'statements' })),
     figure('ownerPayouts', 'Paid to owners', h.ownerPayoutsMinor, formatMoneyShort, 'This month', work('accounts', { sub: 'statements' })),
     ...(h.cleanerInvoicesToPayMinor != null ? [figure('cleanerPay', 'Cleaners to pay', h.cleanerInvoicesToPayMinor, formatMoneyShort,
-      h.cleanerInvoicesToPay ? `${formatCount(h.cleanerInvoicesToPay)} approved invoice${h.cleanerInvoicesToPay === 1 ? '' : 's'}` : 'Approved invoices', work('accounts', { section: 'Cleaner invoices to pay' }))] : []),
+      h.cleanerInvoicesToPay ? `${formatCount(h.cleanerInvoicesToPay)} approved request${h.cleanerInvoicesToPay === 1 ? '' : 's'} for invoice` : 'Approved requests for invoice', work('accounts', { section: 'Requests for invoice to pay' }))] : []),
   ];
   return [];
 }
