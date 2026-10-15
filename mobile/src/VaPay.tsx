@@ -12,7 +12,7 @@ import { List, Row } from "./AccountsPayable";
 import { readTeams, writeTeams } from "./backend/client";
 import { exportReport } from "./exportReport";
 import {
-  adjustVaAction, approveVaAction, hoursAmount, hoursLabel, markVaPaidAction, monthLabel, parseUsd, queryVaAction, rateLabel, rejectVaAction, saveVaPayAction, signedHours,
+  adjustVaAction, approveVaAction, hoursAmount, issueMonths, issueVaAction, hoursLabel, markVaPaidAction, monthLabel, parseUsd, queryVaAction, rateLabel, rejectVaAction, saveVaPayAction, signedHours,
   TIER_LABEL, usd, VA_DOC_TITLE, VA_PAPER, vaDoc, vaFileName, vaGroups, vaPayAccessQuery, vaPayAccessSchema, vaPaySetupQuery, vaPaySetupSchema, vaRequestHtml, vaRequestQuery,
   vaRequestSchema, vaRequestsQuery, vaRequestsSchema, vaStatus, longDay, type StatusTone, type VaPayAccess, type VaPayRow, type VaPaySetup, type VaRequest,
 } from "../../lib/va-pay";
@@ -296,6 +296,7 @@ export function VaPayManagement({ p }: { p: Palette }) {
 // Each VA's hourly rate and bonus amounts, with the bonus KPI of their area and its tiers.
 function VaPaySetupList({ p, onChanged }: { p: Palette; onChanged: () => Promise<void> }) {
   const [setup, setSetup] = useState<VaPaySetup | null>(null), [error, setError] = useState(""), [editing, setEditing] = useState<VaPayRow | null>(null), [tick, setTick] = useState(0);
+  const [issuing, setIssuing] = useState<VaPayRow | null>(null);
   useEffect(() => {
     let active = true;
     readTeams(vaPaySetupQuery()).then(r => { if (active) { setSetup(vaPaySetupSchema.parse(r.data)); setError(""); } }).catch(e => { if (active) setError(message(e)); });
@@ -310,17 +311,49 @@ function VaPaySetupList({ p, onChanged }: { p: Palette; onChanged: () => Promise
       {setup && <List p={p} empty="No VAs yet.">
         {setup.vas.map((v, n) => {
           const k = kpiFor(v.area);
-          return <Row key={v.userId} p={p} first={n === 0} avatar={v.fullName ?? "VA"} tone="stays" title={`${v.fullName ?? "VA"} · ${areaLabel(v.area)}`}
-            detail={v.hourlyRateMinor == null ? "No hourly rate yet, so no request" : `${rateLabel(v.hourlyRateMinor)} · bonus ${usd(v.bonusTargetMinor)} / ${usd(v.bonusTier2Minor)} / ${usd(v.bonusTier3Minor)}${k ? ` on ${k.name}` : ""}`}
-            tags={v.own ? [["You", "plain"]] : v.hourlyRateMinor == null ? [["Not set", "wait"]] : undefined} onPress={v.own ? undefined : () => setEditing(v)} />;
+          return <View key={v.userId}>
+            <Row p={p} first={n === 0} avatar={v.fullName ?? "VA"} tone="stays" title={`${v.fullName ?? "VA"} · ${areaLabel(v.area)}`}
+              detail={v.hourlyRateMinor == null ? "No hourly rate yet, so no request" : `${rateLabel(v.hourlyRateMinor)} · bonus ${usd(v.bonusTargetMinor)} / ${usd(v.bonusTier2Minor)} / ${usd(v.bonusTier3Minor)}${k ? ` on ${k.name}` : ""}`}
+              tags={v.own ? [["You", "plain"]] : v.hourlyRateMinor == null ? [["Not set", "wait"]] : undefined} onPress={v.own ? undefined : () => setEditing(v)} />
+            {!v.own && <View style={{ paddingBottom: 12, alignItems: "flex-start" }}><Button label="Issue now" icon="file-plus" quiet p={p} onPress={() => setIssuing(v)} /></View>}
+          </View>;
         })}
       </List>}
       {!!setup?.history.length && <View style={{ gap: 4 }}>
         <Text style={[ui.small, { color: p.muted, fontWeight: "700" }]}>Recent changes</Text>
         {setup.history.slice(0, 10).map((h, i) => <Text key={i} style={[ui.small, { color: p.muted }]}>{`${longDay(h.changedAt.slice(0, 10))} · ${h.changedByName ?? "Someone"} changed ${h.fullName ?? "a VA"}'s pay`}</Text>)}
       </View>}
+      <VaIssueSheet p={p} row={issuing} onClose={() => setIssuing(null)} onDone={onChanged} />
       <VaPaySetupSheet p={p} row={editing} kpi={editing ? kpiFor(editing.area) ?? null : null} onClose={() => setEditing(null)} onDone={async () => { setTick(t => t + 1); await onChanged(); }} />
     </Section>
+  );
+}
+
+// Issue now: the monthly run's request for one VA and a month that has ended and has no request yet.
+function VaIssueSheet({ p, row, onClose, onDone }: { p: Palette; row: VaPayRow | null; onClose: () => void; onDone: () => Promise<void> }) {
+  const months = useMemo(() => issueMonths(london(new Date())), []);
+  const [month, setMonth] = useState(months[0]!), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const ids = useRequestId(row ? `vapay-issue:${row.userId}:${row.version}` : null);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { if (active && row) { setMonth(months[0]!); setError(""); } });
+    return () => { active = false; };
+  }, [row, months]);
+  async function issue() {
+    if (!row || busy) return;
+    setBusy(true); setError("");
+    try {
+      await writeTeams(issueVaAction({ requestId: ids.get(month), vaId: row.userId, month, version: row.version }));
+      onClose(); await onDone();
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  return (
+    <Sheet palette={p} visible={!!row} onClose={onClose} title="Issue a request now" subtitle={row?.fullName ?? undefined} icon="receipt">
+      <Text style={[ui.body, { color: p.text }]}>Makes the request for invoice for the month you pick, as the monthly run would: their clocked hours at the rate in force that month, plus the bonus for the highest KPI tier they reached. It then waits for approval as usual.</Text>
+      <Pills p={p} title="Month" values={months} value={month} onChange={setMonth} label={m => monthLabel(`${m}-01`)} />
+      {!!error && <Notice text={error} p={p} tone="bad" />}
+      <Button label={busy ? "Issuing…" : `Issue for ${monthLabel(`${month}-01`)}`} icon="file-plus" primary p={p} disabled={busy} onPress={() => void issue()} />
+    </Sheet>
   );
 }
 

@@ -11,7 +11,7 @@
 --
 -- Who manages VA pay (private.workspace_va_pay_manager): admins and super admins, and VAs whose KPI area is management,
 -- the same "management area" the KPI tracker's combined management measure uses (20261016310000). They see every VA's
--- pay setup and requests and act on them, never on their own: nobody edits their own pay or approves, adjusts, rejects
+-- pay setup and requests and act on them, never on their own: nobody edits their own pay or issues, approves, adjusts, rejects
 -- or marks paid their own request. Every other VA sees only their own requests, read only. Nobody else (other roles,
 -- owners, Ready, cleaners, guests) sees any of it.
 --
@@ -40,14 +40,16 @@
 --    row before it), else the current ones. One request per VA per month is enforced by a unique key (va_id,
 --    period_start), so the run is safe to repeat. Numbered RC-VA-YYYY-NNNN (issue year) from a counter that only goes up.
 --    Status to_approve; due 7 days after the issue date.
--- 4. Management: approve (then due on the due date), query with a note (shown to the VA), adjust before approval with a
+-- 4. Management: issue now (the run's work for one VA and one chosen month that has ended, within two years, when it
+--    has no request yet: same unique key, numbering and history line, version-checked against the VA's pay setup),
+--    approve (then due on the due date), query with a note (shown to the VA), adjust before approval with a
 --    reason (an hours correction in minutes and/or the bonus amount; null puts the bonus back to the KPI's), reject with
 --    a note, and mark paid with the paid date. Each is version-checked and recorded in
 --    private.workspace_va_pay_request_changes with who, when and the reason.
--- 5. Notices: the VA is told in the app when their request is approved or paid (vapay.request_approved,
---    vapay.request_paid). In the app only: the email, phone and web push claims skip vapay notices (patches below).
+-- 5. Notices: the VA is told in the app when their request is approved, paid, queried (with the note) or rejected (with
+--    the reason): vapay.request_approved, vapay.request_paid, vapay.request_queried, vapay.request_rejected. In the app only: the email, phone and web push claims skip vapay notices (patches below).
 -- 6. Reads, public.workspace_va_pay_read(section, target): 'access', 'requests', 'request', 'setup'. Actions,
---    public.workspace_va_pay_action(input): saveVaPay, approveVaRequest, queryVaRequest, adjustVaRequest,
+--    public.workspace_va_pay_action(input): saveVaPay, issueVaRequest, approveVaRequest, queryVaRequest, adjustVaRequest,
 --    rejectVaRequest, markVaRequestPaid. The run, public.workspace_va_pay_run(): service_role only (the worker, hourly).
 --
 -- Money is integer US cents. Patches read the latest definition, need their anchor exactly once (kept at the start of
@@ -194,60 +196,87 @@ create or replace function private.workspace_va_bonus_amount(tier text,s jsonb) 
   when 'target' then (s->>'bonus_target_minor')::bigint end,0)
 $fn$;
 
+-- One request for one VA and one month: the work of the monthly run and of management's "Issue now". Returns the new
+-- request, or null when there is nothing to issue (already requested, not a VA, no hourly rate in force, or no clocked
+-- time in the month). `replies` are the month's guest waits (private.workspace_kpi_reply_rows); null reads them here.
+-- `issued_by` is who issued it by hand (null for the run), kept on the history line; issued by hand, each of those
+-- cases raises a plain message instead of returning null.
+create or replace function private.workspace_va_pay_issue(va uuid,p_start date,issue_on date,stamp timestamptz,replies jsonb default null,issued_by uuid default null)
+returns private.workspace_va_pay_requests language plpgsql security definer set search_path='' as $fn$
+declare p_end date:=(p_start+interval '1 month'-interval '1 day')::date;lower_at timestamptz;upper_at timestamptz;va_area text:=private.workspace_va_area(va);
+ s jsonb;days jsonb;worked integer;k private.workspace_kpis;res jsonb;tier text;bonus bigint:=0;hours bigint;num integer;yr integer;ref text;req private.workspace_va_pay_requests;
+begin
+ if va_area is null then
+  if issued_by is null then return null;end if;
+  raise exception 'Only VAs have VA pay' using errcode='22023';
+ end if;
+ if exists(select 1 from private.workspace_va_pay_requests q where q.va_id=va and q.period_start=p_start) then
+  if issued_by is null then return null;end if;
+  raise exception 'There is already a request for that month' using errcode='23505';
+ end if;
+ lower_at:=p_start::timestamp at time zone 'Europe/London';upper_at:=(p_end+1)::timestamp at time zone 'Europe/London';
+ -- The rate and bonus amounts in force at the end of the month, else the current ones.
+ s:=coalesce((select h.after from private.workspace_va_pay_settings_history h where h.user_id=va and h.changed_at<upper_at order by h.changed_at desc,h.id desc limit 1),
+  (select to_jsonb(x) from private.workspace_va_pay_settings x where x.user_id=va));
+ if s is null or s->>'hourly_rate_minor' is null then
+  if issued_by is null then return null;end if;
+  raise exception 'Set an hourly rate first: there was none at the end of that month' using errcode='22023';
+ end if;
+ select coalesce(jsonb_agg(jsonb_build_object('day',d.day,'minutes',d.minutes) order by d.day),'[]'::jsonb),coalesce(sum(d.minutes),0)::int into days,worked
+ from (select (h.clocked_in_at at time zone 'Europe/London')::date as day,
+   round(sum(extract(epoch from h.clocked_out_at-h.clocked_in_at)/60-private.workspace_shift_unpaid_minutes(h.id)))::int minutes
+  from private.workspace_shifts h where h.user_id=va and h.clocked_out_at is not null and h.clocked_in_at>=lower_at and h.clocked_in_at<upper_at
+  group by 1) d where d.minutes>0;
+ if worked<=0 then
+  if issued_by is null then return null;end if;
+  raise exception 'No clocked time in that month' using errcode='22023';
+ end if;
+ hours:=private.workspace_va_hours_minor(worked,(s->>'hourly_rate_minor')::int);
+ -- The bonus: the VA's own value for their area's bonus KPI, from the KPI tracker's functions.
+ select * into k from private.workspace_kpis x where x.area=va_area and x.counts_for_bonus and x.active order by x.sort_order,x.created_at limit 1;
+ if k.id is not null then
+  replies:=coalesce(replies,(select jsonb_agg(jsonb_build_object('u',x.user_id,'m',x.minutes,'a',x.answered)) from private.workspace_kpi_reply_rows(lower_at,upper_at) x),'[]'::jsonb);
+  res:=private.workspace_kpi_result(k,private.workspace_kpi_person_value(k.measure,k.minutes,va,p_start,p_end,
+   (select coalesce(jsonb_agg(e),'[]'::jsonb) from jsonb_array_elements(replies) e where e->>'u'=va::text)));
+  tier:=private.workspace_va_bonus_tier(res);
+  bonus:=private.workspace_va_bonus_amount(tier,s);
+ end if;
+ yr:=extract(year from issue_on)::integer;
+ insert into private.workspace_va_pay_numbers(year,last_number) values(yr,1)
+  on conflict(year) do update set last_number=private.workspace_va_pay_numbers.last_number+1 returning last_number into num;
+ ref:='RC-VA-'||yr||'-'||case when num<10000 then lpad(num::text,4,'0') else num::text end;
+ insert into private.workspace_va_pay_requests(number,va_id,va_name,area,period_start,period_end,hourly_rate_minor,worked_minutes,days,hours_minor,
+   kpi_id,kpi_name,kpi_value,kpi_tier,bonus_auto_minor,total_minor,issue_on,due_on,created_at,updated_at)
+  values(ref,va,left(coalesce(nullif(btrim((select p.full_name from public.workspace_profiles p where p.user_id=va)),''),'VA'),200),va_area,p_start,p_end,
+   (s->>'hourly_rate_minor')::int,worked,days,hours,k.id,k.name,(res->>'value')::int,tier,bonus,hours+bonus,issue_on,issue_on+7,stamp,stamp)
+  on conflict (va_id,period_start) do nothing returning * into req;
+ if req.id is not null then
+  insert into private.workspace_va_pay_request_changes(request_id,change,reason,after,changed_by)
+   values(req.id,'issued',case when issued_by is not null then 'Issued now by management' end,to_jsonb(req),issued_by);
+ end if;
+ return req;
+end $fn$;
+
 -- The run (service_role, hourly from the worker). See the header, part 3.
 create or replace function private.workspace_va_pay_run(at_time timestamptz default now()) returns jsonb language plpgsql security definer set search_path='' as $fn$
 declare stamp timestamptz:=coalesce(at_time,now());today date:=(coalesce(at_time,now()) at time zone 'Europe/London')::date;
- p_start date;p_end date;lower_at timestamptz;upper_at timestamptz;replies jsonb;v record;s jsonb;days jsonb;worked integer;
- k private.workspace_kpis;res jsonb;tier text;bonus bigint;hours bigint;num integer;yr integer;ref text;req private.workspace_va_pay_requests;made integer:=0;
+ p_start date;replies jsonb;v record;made integer:=0;
 begin
  perform pg_advisory_xact_lock(hashtextextended('workspace_va_pay_run',0));
  -- The 1st of the month, catching up to the 7th.
  if extract(day from today)>7 then return jsonb_build_object('requests',0);end if;
- p_start:=(date_trunc('month',today)-interval '1 month')::date;p_end:=(date_trunc('month',today)-interval '1 day')::date;
- lower_at:=p_start::timestamp at time zone 'Europe/London';upper_at:=(p_end+1)::timestamp at time zone 'Europe/London';
+ p_start:=(date_trunc('month',today)-interval '1 month')::date;
  -- The combined management measure answers this run (no signed-in user), for this transaction only.
  perform set_config('recharge.va_pay_run','on',true);
- replies:=coalesce((select jsonb_agg(jsonb_build_object('u',x.user_id,'m',x.minutes,'a',x.answered)) from private.workspace_kpi_reply_rows(lower_at,upper_at) x),'[]'::jsonb);
- for v in select p.user_id,p.full_name,private.workspace_va_area(p.user_id) area from public.workspace_profiles p
-  where private.workspace_is_va(p.user_id)
-   and not exists(select 1 from private.workspace_va_pay_requests q where q.va_id=p.user_id and q.period_start=p_start)
+ replies:=coalesce((select jsonb_agg(jsonb_build_object('u',x.user_id,'m',x.minutes,'a',x.answered))
+  from private.workspace_kpi_reply_rows(p_start::timestamp at time zone 'Europe/London',(date_trunc('month',today))::timestamp at time zone 'Europe/London') x),'[]'::jsonb);
+ for v in select p.user_id from public.workspace_profiles p
+  where private.workspace_is_va(p.user_id) and not exists(select 1 from private.workspace_va_pay_requests q where q.va_id=p.user_id and q.period_start=p_start)
   order by p.user_id
  loop
-  -- The rate and bonus amounts in force at the end of the month, else the current ones.
-  s:=coalesce((select h.after from private.workspace_va_pay_settings_history h where h.user_id=v.user_id and h.changed_at<upper_at order by h.changed_at desc,h.id desc limit 1),
-   (select to_jsonb(x) from private.workspace_va_pay_settings x where x.user_id=v.user_id));
-  continue when s is null or s->>'hourly_rate_minor' is null;
-  select coalesce(jsonb_agg(jsonb_build_object('day',d.day,'minutes',d.minutes) order by d.day),'[]'::jsonb),coalesce(sum(d.minutes),0)::int into days,worked
-  from (select (h.clocked_in_at at time zone 'Europe/London')::date as day,
-    round(sum(extract(epoch from h.clocked_out_at-h.clocked_in_at)/60-private.workspace_shift_unpaid_minutes(h.id)))::int minutes
-   from private.workspace_shifts h where h.user_id=v.user_id and h.clocked_out_at is not null and h.clocked_in_at>=lower_at and h.clocked_in_at<upper_at
-   group by 1) d where d.minutes>0;
-  continue when worked<=0;
-  hours:=private.workspace_va_hours_minor(worked,(s->>'hourly_rate_minor')::int);
-  k:=null;res:=null;tier:=null;bonus:=0;
-  select * into k from private.workspace_kpis x where x.area=v.area and x.counts_for_bonus and x.active order by x.sort_order,x.created_at limit 1;
-  if k.id is not null then
-   res:=private.workspace_kpi_result(k,private.workspace_kpi_person_value(k.measure,k.minutes,v.user_id,p_start,p_end,
-    (select coalesce(jsonb_agg(e),'[]'::jsonb) from jsonb_array_elements(replies) e where e->>'u'=v.user_id::text)));
-   tier:=private.workspace_va_bonus_tier(res);
-   bonus:=private.workspace_va_bonus_amount(tier,s);
-  end if;
-  yr:=extract(year from today)::integer;
-  insert into private.workspace_va_pay_numbers(year,last_number) values(yr,1)
-   on conflict(year) do update set last_number=private.workspace_va_pay_numbers.last_number+1 returning last_number into num;
-  ref:='RC-VA-'||yr||'-'||case when num<10000 then lpad(num::text,4,'0') else num::text end;
-  insert into private.workspace_va_pay_requests(number,va_id,va_name,area,period_start,period_end,hourly_rate_minor,worked_minutes,days,hours_minor,
-    kpi_id,kpi_name,kpi_value,kpi_tier,bonus_auto_minor,total_minor,issue_on,due_on,created_at,updated_at)
-   values(ref,v.user_id,left(coalesce(nullif(btrim(v.full_name),''),'VA'),200),v.area,p_start,p_end,(s->>'hourly_rate_minor')::int,worked,days,hours,
-    k.id,k.name,(res->>'value')::int,tier,bonus,hours+bonus,today,today+7,stamp,stamp)
-   on conflict (va_id,period_start) do nothing returning * into req;
-  if req.id is not null then
-   insert into private.workspace_va_pay_request_changes(request_id,change,after) values(req.id,'issued',to_jsonb(req));
-   made:=made+1;
-  end if;
-  req:=null;
+  if (private.workspace_va_pay_issue(v.user_id,p_start,today,stamp,replies,null)).id is not null then made:=made+1;end if;
  end loop;
- return jsonb_build_object('requests',made,'periodStart',p_start,'periodEnd',p_end);
+ return jsonb_build_object('requests',made,'periodStart',p_start,'periodEnd',(date_trunc('month',today)-interval '1 day')::date);
 end $fn$;
 create or replace function public.workspace_va_pay_run() returns jsonb language sql security invoker set search_path='' as $fn$ select private.workspace_va_pay_run() $fn$;
 
@@ -321,7 +350,7 @@ end $fn$;
 create or replace function private.workspace_va_pay_action(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $fn$
 declare actor text:=private.workspace_actor_role();a text;req uuid;prior private.workspace_action_receipts;result jsonb;
  q private.workspace_va_pay_requests;old private.workspace_va_pay_requests;s private.workspace_va_pay_settings;olds private.workspace_va_pay_settings;
- va uuid;today date:=(now() at time zone 'Europe/London')::date;paid date;note_text text;adj bigint;bon bigint;change text;
+ va uuid;today date:=(now() at time zone 'Europe/London')::date;paid date;p_start date;note_text text;adj bigint;bon bigint;change text;
  uuid_re constant text:='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
 begin
  if actor is null then raise exception 'Active access required' using errcode='42501';end if;
@@ -331,6 +360,7 @@ begin
  req:=(input->>'requestId')::uuid;
  if not private.workspace_va_pay_manager() then raise exception 'Only management can do this' using errcode='42501';end if;
  if a='saveVaPay' then perform private.workspace_json_keys(input,array['action','requestId','vaId','version','hourlyRateMinor','bonusTargetMinor','bonusTier2Minor','bonusTier3Minor']);
+ elsif a='issueVaRequest' then perform private.workspace_json_keys(input,array['action','requestId','vaId','month','version']);
  elsif a='approveVaRequest' then perform private.workspace_json_keys(input,array['action','requestId','id','version']);
  elsif a in ('queryVaRequest','rejectVaRequest') then perform private.workspace_json_keys(input,array['action','requestId','id','version','note']);
  elsif a='adjustVaRequest' then perform private.workspace_json_keys(input,array['action','requestId','id','version','hoursAdjustMinutes','bonusMinor','reason']);
@@ -364,6 +394,22 @@ begin
   insert into private.workspace_va_pay_settings_history(user_id,before,after,changed_by) values(va,case when olds.user_id is not null then to_jsonb(olds) end,to_jsonb(s),auth.uid());
   result:=jsonb_build_object('vaId',s.user_id,'hourlyRateMinor',s.hourly_rate_minor,'bonusTargetMinor',s.bonus_target_minor,'bonusTier2Minor',s.bonus_tier2_minor,
    'bonusTier3Minor',s.bonus_tier3_minor,'currency',s.currency,'version',s.version);
+ elsif a='issueVaRequest' then
+  -- Issue now: the monthly run's work for one VA and one month that has ended. The version is the VA's pay setup
+  -- version as management saw it (0 when there is none yet).
+  if coalesce(input->>'vaId','')!~uuid_re then raise exception 'Choose a VA' using errcode='22023';end if;
+  va:=(input->>'vaId')::uuid;
+  if va=auth.uid() then raise exception 'Someone else in management issues your own request' using errcode='42501';end if;
+  if jsonb_typeof(input->'month') is distinct from 'string' or input->>'month'!~'^\d{4}-(0[1-9]|1[0-2])$' then raise exception 'Choose a month' using errcode='22023';end if;
+  p_start:=(input->>'month'||'-01')::date;
+  if p_start>=date_trunc('month',today)::date then raise exception 'Choose a month that has ended' using errcode='22023';end if;
+  if p_start<(date_trunc('month',today)-interval '24 months')::date then raise exception 'Choose a month in the last two years' using errcode='22023';end if;
+  perform pg_advisory_xact_lock(hashtextextended('va-pay:'||va::text,0));
+  perform pg_advisory_xact_lock(hashtextextended('workspace_va_pay_run',0));
+  select * into olds from private.workspace_va_pay_settings x where x.user_id=va for update;
+  if coalesce(olds.version,0)<>(input->>'version')::int then raise exception 'The pay setup was changed by someone else. Refresh and try again' using errcode='40001';end if;
+  q:=private.workspace_va_pay_issue(va,p_start,today,now(),null,auth.uid());
+  result:=private.workspace_va_pay_request_view(q,false,true);
  else
   if coalesce(input->>'id','')!~uuid_re then raise exception 'Request not found' using errcode='P0002';end if;
   select * into old from private.workspace_va_pay_requests x where x.id=(input->>'id')::uuid for update;
@@ -381,11 +427,13 @@ begin
    note_text:=private.workspace_required_text(input,'note',5,2000);
    update private.workspace_va_pay_requests set query_note=note_text,queried_by=auth.uid(),queried_at=now(),version=version+1,updated_at=now() where id=old.id returning * into q;
    change:='queried';
+   perform private.workspace_clean_notify(q.va_id,null,null,'vapay.request_queried','Request '||q.number||' queried: '||note_text,false);
   elsif a='rejectVaRequest' then
    if old.status<>'to_approve' then raise exception 'Only a request waiting for approval can be rejected' using errcode='42501';end if;
    note_text:=private.workspace_required_text(input,'note',5,2000);
    update private.workspace_va_pay_requests set status='rejected',reject_note=note_text,rejected_by=auth.uid(),rejected_at=now(),version=version+1,updated_at=now() where id=old.id returning * into q;
    change:='rejected';
+   perform private.workspace_clean_notify(q.va_id,null,null,'vapay.request_rejected','Request '||q.number||' rejected: '||note_text,false);
   elsif a='adjustVaRequest' then
    if old.status<>'to_approve' then raise exception 'Only a request waiting for approval can be adjusted' using errcode='42501';end if;
    if not (input ? 'hoursAdjustMinutes' or input ? 'bonusMinor') then raise exception 'Change the hours or the bonus' using errcode='22023';end if;
@@ -460,7 +508,7 @@ end $patch$;
 -- Who may call what. The run is for the backend only; the reads and actions for signed-in people, checked inside.
 revoke all on function private.workspace_va_area(uuid),private.workspace_is_va(uuid),private.workspace_va_pay_manager(),private.workspace_usd(bigint),
  private.workspace_va_hours_minor(integer,integer),private.workspace_va_bonus_tier(jsonb),private.workspace_va_bonus_amount(text,jsonb),
- private.workspace_va_pay_run(timestamptz),public.workspace_va_pay_run(),
+ private.workspace_va_pay_issue(uuid,date,date,timestamptz,jsonb,uuid),private.workspace_va_pay_run(timestamptz),public.workspace_va_pay_run(),
  private.workspace_va_pay_request_view(private.workspace_va_pay_requests,boolean,boolean),private.workspace_va_pay_read(text,uuid),public.workspace_va_pay_read(text,uuid),
  private.workspace_va_int(jsonb,text,bigint,bigint,text),private.workspace_va_pay_action(jsonb),public.workspace_va_pay_action(jsonb) from public,anon,authenticated;
 grant execute on function private.workspace_va_pay_run(timestamptz),public.workspace_va_pay_run() to service_role;

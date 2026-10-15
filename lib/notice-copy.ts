@@ -84,6 +84,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'cleaning.invoice_paid': copy('Request paid', 'One of your requests for invoice has been paid. Open Cleans, Your pay to see it.'),
   // VA pay (migration 20261022200000): to the VA, in the app only, with the number and the amount in the row's detail.
   'vapay.request_approved': copy('Request for invoice approved', 'Management approved your request for invoice. Please send us your invoice for the amount shown. Open My performance, Your requests for invoice to see it.'),
+  'vapay.request_queried': copy('Request for invoice queried', 'Management has a question about your request for invoice. Open My performance, Your requests for invoice to see their note.'),
+  'vapay.request_rejected': copy('Request for invoice rejected', 'Management rejected your request for invoice. Open My performance, Your requests for invoice to see the reason.'),
   'vapay.request_paid': copy('Request for invoice paid', 'Your request for invoice has been paid. Open My performance, Your requests for invoice to see it.'),
   'cleaning.checklist_saved': copy('Clean checklist updated', 'A clean checklist, and which checks need photos, has been updated.'),
   'cleaning.checklist_removed': copy('Clean checklist removed', 'A clean checklist has been removed. Cleans use the checklist for every property instead.'),

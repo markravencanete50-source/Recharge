@@ -61,7 +61,7 @@ export const CLEANER_NOTICES: ReadonlySet<string> = new Set(['cleaning.assigned'
   // Cleaner invoices (20261022000000).
   'cleaning.invoice_ready', 'cleaning.invoice_approved', 'cleaning.invoice_queried', 'cleaning.invoice_paid']);
 // A VA's request for invoice notices (migration 20261022200000) say what happened, like the cleaner's own.
-export const VA_PAY_NOTICES: ReadonlySet<string> = new Set(['vapay.request_approved', 'vapay.request_paid']);
+export const VA_PAY_NOTICES: ReadonlySet<string> = new Set(['vapay.request_approved', 'vapay.request_paid', 'vapay.request_queried', 'vapay.request_rejected']);
 
 // One notice as a row: the title says what it is, the line where, who and when.
 export function noticeRow(n: NoticeDetail): NoticeRow {

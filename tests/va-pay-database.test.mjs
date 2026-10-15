@@ -241,6 +241,7 @@ test('approve, query, adjust with a reason, reject and mark paid; version-checke
   r = await act({ action: 'markVaRequestPaid', id: g.id, version: 6, paidOn: '2026-10-07' });
   assert.deepEqual([r.status, r.paidOn, r.version], ['paid', '2026-10-07', 7]);
   assert.deepEqual((await notices(GUEST)).map(n => [n.event_type, n.preview]), [
+    ['vapay.request_queried', `Request ${g.number} queried: Was the 9th a full hour?`],
     ['vapay.request_approved', `Request ${g.number} approved: please send us your invoice for $271.88`],
     ['vapay.request_paid', `Paid: $271.88 (${g.number})`]]);
   // Reject: a note, and then it cannot be approved.
@@ -250,7 +251,7 @@ test('approve, query, adjust with a reason, reject and mark paid; version-checke
   r = await act({ action: 'rejectVaRequest', id: a.id, version: a.version, note: 'Hours belong to another month' });
   assert.equal(r.status, 'rejected');
   await assert.rejects(act({ action: 'approveVaRequest', id: a.id, version: r.version }), /waiting for approval/);
-  assert.deepEqual(await notices(ACCT), [], 'no notice for a rejection');
+  assert.deepEqual((await notices(ACCT)).map(n => [n.event_type, n.preview]), [['vapay.request_rejected', `Request ${a.number} rejected: Hours belong to another month`]], 'the VA is told why');
   // Mia's own request is approved by an admin.
   const m = await requestOf(MGR);
   await as(ADMIN2);
@@ -274,5 +275,44 @@ test('vapay notices stay in the app: no email or phone push is queued for them',
     join public.workspace_activity a on a.id=o.event_id where o.user_id=$1 order by d.channel`, [users[GUEST]]);
   assert.deepEqual(delivered.map(d => [d.event_type, d.channel]), [['team.rota_planned', 'email'], ['team.rota_planned', 'push']]);
   assert.match((await owner("select pg_get_functiondef('private.integration_claim_web_push()'::regprocedure) d"))[0].d, /a\.event_type not like 'vapay\.%'/);
-  assert.equal((await notices(GUEST)).length, 2, 'still in the in-app list');
+  assert.equal((await notices(GUEST)).length, 3, 'still in the in-app list');
+  // Queried and rejected notices stay in the app too.
+  await owner("update public.workspace_activity a set created_at=now() from private.workspace_notification_outbox o where o.event_id=a.id and o.user_id=$1", [users[ACCT]]);
+  await owner('select private.integration_claim_notifications(true,true)');
+  assert.deepEqual(await owner('select d.id from private.workspace_notification_deliveries d join private.workspace_notification_outbox o on o.id=d.outbox_id where o.user_id=$1', [users[ACCT]]), []);
+});
+
+test('issue now: management issues one VA\'s request for a month that has ended, as the run would; version-checked, once, never your own', async () => {
+  const version = async i => (await owner('select coalesce((select version from private.workspace_va_pay_settings where user_id=$1),0) v', [users[i]]))[0].v;
+  const thisMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7);
+  const v = await version(GUEST);
+  await as(GUEST);
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[ACCT], month: '2026-08', version: await version(ACCT) }), /Only management/);
+  await as(MGR);
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[MGR], month: '2026-08', version: await version(MGR) }), /your own request/, 'not your own pay');
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[GUEST], month: thisMonth, version: v }), /has ended/, 'this month has not ended');
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[GUEST], month: '2020-01', version: v }), /last two years/);
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[GUEST], month: '2026-13', version: v }), /Choose a month/);
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[GUEST], month: '2026-08', version: v - 1 }), /changed by someone else/, 'a stale version');
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[GUEST], month: '2026-09', version: v }), /already a request/, 'the same unique key');
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[NOROTA], month: '2026-08', version: await version(NOROTA) }), /No clocked time/);
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[ADMIN], month: '2026-09', version: await version(ADMIN) }), /hourly rate/);
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[CLEANER], month: '2026-08', version: 0 }), /Only VAs/);
+  const before = (await owner('select count(*)::int n from private.workspace_va_pay_requests'))[0].n;
+  // Gina, August 2026: the 22:00-23:30 shift on 31 August (90 minutes) at the rate in force then ($12.50); nothing to
+  // measure for the bonus.
+  const requestId = crypto.randomUUID(), input = { action: 'issueVaRequest', requestId, vaId: users[GUEST], month: '2026-08', version: v };
+  const r = await rpc('workspace_va_pay_action', [input]);
+  assert.deepEqual([r.status, r.periodStart, r.periodEnd, r.minutes, r.hourlyRateMinor, r.hoursMinor, r.bonusMinor, r.totalMinor], ['to_approve', '2026-08-01', '2026-08-31', 90, 1250, 1875, 0, 1875]);
+  assert.match(r.number, /^RC-VA-\d{4}-\d{4}$/);
+  assert.deepEqual(await rpc('workspace_va_pay_action', [input]), r, 'the same request identifier answers again');
+  assert.equal((await owner('select count(*)::int n from private.workspace_va_pay_requests'))[0].n, before + 1);
+  await assert.rejects(act({ action: 'issueVaRequest', vaId: users[GUEST], month: '2026-08', version: v }), /already a request/);
+  const [c] = await owner('select change,reason,changed_by from private.workspace_va_pay_request_changes where request_id=$1', [r.id]);
+  assert.deepEqual([c.change, c.reason, c.changed_by], ['issued', 'Issued now by management', users[MGR]]);
+  assert.equal((await owner('select count(*)::int n from private.workspace_action_receipts where request_id=$1', [requestId]))[0].n, 1);
+  // The run for August then leaves it alone.
+  assert.equal((await run('2026-09-01T05:00:00Z')).requests, 0, 'August: Gina is already issued and nobody else has August hours');
+  await as(GUEST);
+  assert.ok((await read('requests')).some(x => x.id === r.id), 'Gina sees it');
 });

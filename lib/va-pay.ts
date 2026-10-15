@@ -61,6 +61,8 @@ export const vaPaySetupQuery = () => ({ section: 'vaPaySetup' });
 type Ref = Pick<VaRequest, 'id' | 'version'>;
 export const saveVaPayAction = (i: { requestId: string; vaId: string; version: number; hourlyRateMinor: number | null; bonusTargetMinor: number; bonusTier2Minor: number; bonusTier3Minor: number }) =>
   ({ action: 'saveVaPay' as const, requestId: i.requestId, vaId: i.vaId, version: i.version, hourlyRateMinor: i.hourlyRateMinor, bonusTargetMinor: i.bonusTargetMinor, bonusTier2Minor: i.bonusTier2Minor, bonusTier3Minor: i.bonusTier3Minor });
+export const issueVaAction = (i: { requestId: string; vaId: string; month: string; version: number }) =>
+  ({ action: 'issueVaRequest' as const, requestId: i.requestId, vaId: i.vaId, month: i.month, version: i.version });
 export const approveVaAction = (i: { requestId: string; request: Ref }) => ({ action: 'approveVaRequest' as const, requestId: i.requestId, id: i.request.id, version: i.request.version });
 export const queryVaAction = (i: { requestId: string; request: Ref; note: string }) => ({ action: 'queryVaRequest' as const, requestId: i.requestId, id: i.request.id, version: i.request.version, note: i.note.trim() });
 export const rejectVaAction = (i: { requestId: string; request: Ref; note: string }) => ({ action: 'rejectVaRequest' as const, requestId: i.requestId, id: i.request.id, version: i.request.version, note: i.note.trim() });
@@ -70,7 +72,7 @@ export const adjustVaAction = (i: { requestId: string; request: Ref; reason: str
   ...(i.hoursAdjustMinutes !== undefined ? { hoursAdjustMinutes: i.hoursAdjustMinutes } : {}), ...(i.bonusMinor !== undefined ? { bonusMinor: i.bonusMinor } : {}),
 });
 export const markVaPaidAction = (i: { requestId: string; request: Ref; paidOn: string }) => ({ action: 'markVaRequestPaid' as const, requestId: i.requestId, id: i.request.id, version: i.request.version, paidOn: i.paidOn });
-export const VA_PAY_ACTIONS = ['saveVaPay', 'approveVaRequest', 'queryVaRequest', 'rejectVaRequest', 'adjustVaRequest', 'markVaRequestPaid'] as const;
+export const VA_PAY_ACTIONS = ['saveVaPay', 'issueVaRequest', 'approveVaRequest', 'queryVaRequest', 'rejectVaRequest', 'adjustVaRequest', 'markVaRequestPaid'] as const;
 
 // --- Money, hours and dates, written one way everywhere for VAs ----------------------------------------------------
 const dollars = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -97,6 +99,14 @@ const parts = (iso: string) => { const d = new Date(iso.slice(0, 10) + 'T12:00:0
 export const longDay = (iso: string) => { const p = parts(iso); return `${p.w} ${p.d} ${p.m} ${p.y}`; };
 export const shortDay = (iso: string) => { const p = parts(iso); return `${p.w} ${p.d} ${p.m}`; };
 export const monthLabel = (iso: string) => { const p = parts(iso); return `${p.ml} ${p.y}`; };
+// The months management can issue a request for now: those that have ended, newest first, up to two years back (the
+// database allows the same). `today` is London's date, YYYY-MM-DD; each month is YYYY-MM.
+export function issueMonths(today: string, count = 24) {
+  let y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
+  const out: string[] = [];
+  for (let i = 0; i < count; i++) { m -= 1; if (m === 0) { m = 12; y -= 1; } out.push(`${y}-${String(m).padStart(2, '0')}`); }
+  return out;
+}
 
 // --- The lines -------------------------------------------------------------------------------------------------------
 // "Hours worked September 2026: 13h 15m at $12.50/h", then "Bonus: Replies within 5 minutes, Tier 2 (95%)" when a tier

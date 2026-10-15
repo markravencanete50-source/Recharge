@@ -166,6 +166,7 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   // approval (an hours correction in minutes and/or the bonus, with a reason) and mark it paid. The database also refuses an adjustment that changes neither.
   z.object({ action: z.literal('saveVaPay'), requestId: id, vaId: id, version: z.number().int().min(0), hourlyRateMinor: z.number().int().min(1).max(100000).nullable(),
     bonusTargetMinor: z.number().int().min(0).max(10000000), bonusTier2Minor: z.number().int().min(0).max(10000000), bonusTier3Minor: z.number().int().min(0).max(10000000) }).strict(),
+  z.object({ action: z.literal('issueVaRequest'), requestId: id, vaId: id, month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), version: z.number().int().min(0) }).strict(),
   z.object({ action: z.literal('approveVaRequest'), requestId: id, id, version }).strict(),
   z.object({ action: z.literal('queryVaRequest'), requestId: id, id, version, note }).strict(),
   z.object({ action: z.literal('rejectVaRequest'), requestId: id, id, version, note }).strict(),

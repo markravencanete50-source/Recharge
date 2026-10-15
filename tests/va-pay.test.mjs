@@ -101,33 +101,48 @@ test('the Team route takes the VA pay reads and actions; the database answers ea
   for (const action of [
     va.saveVaPayAction({ requestId, vaId: id(2), version: 0, hourlyRateMinor: 1250, bonusTargetMinor: 5000, bonusTier2Minor: 10000, bonusTier3Minor: 20000 }),
     va.saveVaPayAction({ requestId, vaId: id(2), version: 1, hourlyRateMinor: null, bonusTargetMinor: 0, bonusTier2Minor: 0, bonusTier3Minor: 0 }),
+    va.issueVaAction({ requestId, vaId: id(2), month: '2026-08', version: 0 }), va.issueVaAction({ requestId, vaId: id(2), month: '2025-12', version: 4 }),
     va.approveVaAction({ requestId, request: r }), va.queryVaAction({ requestId, request: r, note: 'Was the 9th a full hour?' }),
     va.rejectVaAction({ requestId, request: r, note: 'Hours belong to another month' }), va.markVaPaidAction({ requestId, request: r, paidOn: '2026-10-07' }),
     va.adjustVaAction({ requestId, request: r, reason: 'Forgot to clock out', hoursAdjustMinutes: -45 }), va.adjustVaAction({ requestId, request: r, reason: 'Back to the KPI bonus', bonusMinor: null }),
   ]) assert.ok(teamsActionSchema.safeParse(action).success, JSON.stringify(action));
+  for (const month of ['2026-13', '2026-8', '2026-08-01', '']) assert.equal(teamsActionSchema.safeParse(va.issueVaAction({ requestId, vaId: id(2), month, version: 0 })).success, false, month);
+  assert.equal(teamsActionSchema.safeParse(va.issueVaAction({ requestId, vaId: 'nobody', month: '2026-08', version: 0 })).success, false, 'a VA id');
   assert.equal(teamsActionSchema.safeParse({ ...va.saveVaPayAction({ requestId, vaId: id(2), version: 0, hourlyRateMinor: 1250, bonusTargetMinor: 0, bonusTier2Minor: 0, bonusTier3Minor: 0 }), currency: 'GBP' }).success, false, 'USD only');
   assert.deepEqual(Object.keys(va.adjustVaAction({ requestId, request: r, reason: 'Only the hours', hoursAdjustMinutes: 30 })).sort(), ['action', 'hoursAdjustMinutes', 'id', 'reason', 'requestId', 'version']);
   const server = read('lib/workspace-finance-server.ts');
   assert.match(server, /client\.rpc\('workspace_va_pay_read'/);
   assert.match(server, /VA_PAY_ACTIONS as readonly string\[\]\)\.includes\(input\.action\) \? 'workspace_va_pay_action'/);
-  assert.deepEqual([...va.VA_PAY_ACTIONS].sort(), ['adjustVaRequest', 'approveVaRequest', 'markVaRequestPaid', 'queryVaRequest', 'rejectVaRequest', 'saveVaPay']);
+  assert.deepEqual([...va.VA_PAY_ACTIONS].sort(), ['adjustVaRequest', 'approveVaRequest', 'issueVaRequest', 'markVaRequestPaid', 'queryVaRequest', 'rejectVaRequest', 'saveVaPay']);
 });
 
-test('the VA is told in the app when a request is approved or paid, with no money in the wording', () => {
-  for (const event of ['vapay.request_approved', 'vapay.request_paid']) {
+test('issue now offers the months that have ended, newest first, two years back', () => {
+  const months = va.issueMonths('2026-10-15');
+  assert.equal(months.length, 24);
+  assert.deepEqual(months.slice(0, 3), ['2026-09', '2026-08', '2026-07']);
+  assert.equal(months.at(-1), '2024-10');
+  assert.deepEqual(va.issueMonths('2027-01-01', 2), ['2026-12', '2026-11'], 'across the new year');
+});
+
+test('the VA is told in the app when a request is approved, paid, queried or rejected, with no money in the wording', () => {
+  for (const event of ['vapay.request_approved', 'vapay.request_paid', 'vapay.request_queried', 'vapay.request_rejected']) {
     const c = noticeCopy(event);
     assert.notEqual(c.title, 'Update in Recharge', event);
     assert.doesNotMatch(c.title + c.message, /[$£]/, event);
     assert.equal(noticeRow({ id: 1, event_type: event, created_at: '2026-10-07T10:00:00Z' }).title, c.title);
   }
   assert.equal(noticeCopy('vapay.something_new').title, 'Request for invoice update');
+  assert.match(noticeCopy('vapay.request_queried').message, /note/);
+  assert.match(noticeCopy('vapay.request_rejected').message, /reason/);
 });
 
 test('the screens and the monthly run are wired where people look for them', () => {
   const screens = read('mobile/src/VaPay.tsx');
   for (const title of ['To approve', 'To pay', 'Paid']) assert.ok(screens.includes(`section("${title}"`), title);
   for (const title of ['Your requests for invoice', 'VA pay setup']) assert.ok(screens.includes(`title="${title}"`), title);
-  for (const word of ['Download', 'Mark paid', 'Query', 'Adjust', 'Reject', 'Approve']) assert.ok(screens.includes(`"${word}`), word);
+  for (const word of ['Download', 'Mark paid', 'Query', 'Adjust', 'Reject', 'Approve', 'Issue now']) assert.ok(screens.includes(`"${word}`), word);
+  assert.match(screens, /<Button label="Issue now"[^>]*onPress=\{\(\) => setIssuing\(v\)\}/, 'on the VA\'s row');
+  assert.match(screens, /writeTeams\(issueVaAction\(\{ requestId: ids\.get\(month\), vaId: row\.userId, month, version: row\.version \}\)\)/);
   assert.doesNotMatch(screens, /expo-print/, 'phones share the HTML page');
   assert.match(screens, /exportReport\(vaRequestHtml\(request\), vaFileName\(request\), \{ mime: "text\/html"/);
   assert.match(read('mobile/src/LiveManagement.tsx'), /view === "vapay" && <VaPayPanel p=\{p\} account=\{account\} place="management" \/>/);
