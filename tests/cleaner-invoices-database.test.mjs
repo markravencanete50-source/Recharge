@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-// Cleaner invoices (migration 20261022000000): accepted cleans recorded with the rate at the time, one invoice per cleaner
-// per pay period (weekly or monthly) at the period's end, numbered RC-CLN-YYYY-NNNN, never empty and never twice; a clean
-// accepted late goes on the next one; Accounts approve, query and mark paid; who sees what; the cleaner's notices (phone
-// only); earnings and projected pay; and the figures on each role's Home.
+// Requests for invoice (migration 20261022000000): accepted cleans recorded with the rate at the time, one request per
+// cleaner per pay period (weekly or monthly) at the period's end, numbered RC-RFI-YYYY-NNNN, never empty and never twice;
+// a clean accepted late goes on the next one; each clean's outcome (completed, partially successful, unsuccessful) set by
+// management or the cleaning manager, re-totalling the request and kept in its history; Accounts approve, query and mark
+// paid; who sees what; the cleaner's notices (phone only); earnings and projected pay; and the figures on each role's Home.
 const MIGRATION = 'supabase/migrations/20261022000000_cleaner_invoices.sql';
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -118,7 +119,7 @@ test('weekly (Monday to Sunday): one invoice at the end of the week, numbered, w
   assert.equal(await run('2027-01-10T12:00:00Z'), 0, 'Sunday: the week has not ended');
   assert.equal(await run('2027-01-11T00:30:00Z'), 2, 'Monday 00:30 London: Angela and Cara');
   const [inv] = await invoicesOf(ANGELA);
-  assert.match(inv.number, /^RC-CLN-2027-000[12]$/);
+  assert.match(inv.number, /^RC-RFI-2027-000[12]$/);
   assert.deepEqual([inv.status, inv.period_kind, inv.ps, inv.pe, inv.issued, inv.due, Number(inv.total_minor), inv.lines.map(l => l.amount)], ['to_approve', 'weekly', '2027-01-04', '2027-01-10', '2027-01-11', '2027-01-18', 8500, [4000, 4500]]);
   assert.equal(inv.reference, inv.number); assert.equal(inv.supplier, 'Angela Cleaner'); assert.equal(inv.currency, 'GBP');
   assert.equal((await invoicesOf(CARA))[0].lines.length, 1);
@@ -128,26 +129,26 @@ test('weekly (Monday to Sunday): one invoice at the end of the week, numbered, w
   assert.equal((await invoicesOf(ANGELA)).length, 1, 'never invoiced twice');
   assert.equal((await invoicesOf(BEN)).length, 0, 'no invoice for a period with nothing accepted');
   assert.equal((await owner('select count(*)::int n from private.workspace_cleaner_invoice_lines l join private.workspace_clean_earnings e on e.work_id=l.work_id where l.live group by l.work_id having count(*)>1')).length, 0);
-  // The cleaner is told: "Invoice RC-CLN-… ready: £85.00 for 2 cleans".
+  // The cleaner is told: "Invoice RC-RFI-… ready: £85.00 for 2 cleans".
   const ready = await notices(ANGELA, 'cleaning.invoice_ready');
-  assert.deepEqual(ready.map(n => n.preview), [`Invoice ${inv.number} ready: £85.00 for 2 cleans`]);
+  assert.deepEqual(ready.map(n => n.preview), [`Request for invoice ${inv.number} ready: £85.00 for 2 cleans`]);
   assert.equal(ready[0].work_id, null); assert.equal(ready[0].property_id, null, 'never on an owner\'s feed');
-  assert.deepEqual((await notices(CARA, 'cleaning.invoice_ready')).map(n => n.preview), [`Invoice ${(await invoicesOf(CARA))[0].number} ready: £28.00 for 1 clean`]);
+  assert.deepEqual((await notices(CARA, 'cleaning.invoice_ready')).map(n => n.preview), [`Request for invoice ${(await invoicesOf(CARA))[0].number} ready: £28.00 for 1 clean`]);
 });
 
 test('invoice numbers are sequential per year and never reused', async () => {
   const before = (await owner('select number from private.workspace_cleaner_invoices where generated order by number')).map(r => r.number);
-  assert.deepEqual(before, ['RC-CLN-2027-0001', 'RC-CLN-2027-0002']);
+  assert.deepEqual(before, ['RC-RFI-2027-0001', 'RC-RFI-2027-0002']);
   const c = await accepted(DAN);
   await when(c, '2027-01-13', '2027-01-13 18:00');
   assert.equal(await run('2027-01-18T01:00:00Z'), 1);
-  assert.equal((await invoicesOf(DAN))[0].number, 'RC-CLN-2027-0003');
+  assert.equal((await invoicesOf(DAN))[0].number, 'RC-RFI-2027-0003');
   // Rejecting an invoice (the older Accounts decision) frees its cleans, but its number is never given out again.
   await as(ACCOUNTS);
   const dan = (await invoicesOf(DAN))[0];
   await rpc('workspace_payables_action', [{ action: 'decideCleanerInvoice', requestId: crypto.randomUUID(), invoiceId: dan.id, decision: 'reject', note: 'Wrong property on the clean' }]);
   assert.equal(await run('2027-01-18T02:00:00Z'), 1, 'the freed clean goes on a new invoice');
-  assert.deepEqual((await invoicesOf(DAN)).map(i => [i.number, i.status]), [['RC-CLN-2027-0003', 'rejected'], ['RC-CLN-2027-0004', 'to_approve']]);
+  assert.deepEqual((await invoicesOf(DAN)).map(i => [i.number, i.status]), [['RC-RFI-2027-0003', 'rejected'], ['RC-RFI-2027-0004', 'to_approve']]);
   assert.deepEqual((await owner('select year,last_number from private.workspace_cleaner_invoice_numbers')), [{ year: 2027, last_number: 4 }]);
 });
 
@@ -209,21 +210,21 @@ test('Accounts approve, query with a note to the cleaner, and mark paid with the
   const act = (who, input) => as(who).then(() => pay({ invoiceId: inv.id, ...input }));
   for (const who of [STAYS, MANAGER, ANGELA, OWNER, READY]) await assert.rejects(act(who, { action: 'approvePayInvoice', version: inv.version }), /Only Accounts and admins/, roles[who]);
   await assert.rejects(act(ACCOUNTS, { action: 'queryPayInvoice', version: inv.version, note: 'Hi' }), /note/);
-  await assert.rejects(act(ACCOUNTS, { action: 'markPayInvoicePaid', version: inv.version, paidOn: '2027-01-12' }), /Only an approved invoice/);
+  await assert.rejects(act(ACCOUNTS, { action: 'markPayInvoicePaid', version: inv.version, paidOn: '2027-01-12' }), /Only an approved request/);
   const queried = await act(ACCOUNTS, { action: 'queryPayInvoice', version: inv.version, note: 'Was the Hawk clean a deep clean?' });
   assert.deepEqual([queried.status, queried.queried, queried.queryNote], ['to_approve', true, 'Was the Hawk clean a deep clean?']);
-  assert.deepEqual((await notices(ANGELA, 'cleaning.invoice_queried')).map(n => n.preview), [`Invoice ${inv.number} queried: Was the Hawk clean a deep clean?`]);
+  assert.deepEqual((await notices(ANGELA, 'cleaning.invoice_queried')).map(n => n.preview), [`Request ${inv.number} queried: Was the Hawk clean a deep clean?`]);
   await assert.rejects(act(ACCOUNTS, { action: 'approvePayInvoice', version: inv.version }), /changed by someone else/);
   const approved = await act(ACCOUNTS, { action: 'approvePayInvoice', version: queried.version });
   assert.equal(approved.status, 'approved');
-  assert.deepEqual((await notices(ANGELA, 'cleaning.invoice_approved')).map(n => n.preview), [`Invoice approved: ${inv.number}, £85.00`]);
+  assert.deepEqual((await notices(ANGELA, 'cleaning.invoice_approved')).map(n => n.preview), [`Request approved: ${inv.number}, £85.00`]);
   // The cleans' invoice tasks are done.
   const tasks = await owner(`select w.status from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where d.kind='cleaning_invoice'
     and d.data->>'sourceWorkId' in (select l.work_id::text from private.workspace_cleaner_invoice_lines l where l.invoice_id=$1)`, [inv.id]);
   assert.ok(tasks.length >= 2 && tasks.every(t => t.status === 'completed'));
   await assert.rejects(act(ACCOUNTS, { action: 'queryPayInvoice', version: approved.version, note: 'One more question' }), /waiting for approval/);
   const today = await inDays(0);
-  await assert.rejects(act(ACCOUNTS, { action: 'markPayInvoicePaid', version: approved.version, paidOn: await inDays(1) }), /between the invoice date and today/);
+  await assert.rejects(act(ACCOUNTS, { action: 'markPayInvoicePaid', version: approved.version, paidOn: await inDays(1) }), /between the request date and today/);
   await assert.rejects(act(ACCOUNTS, { action: 'markPayInvoicePaid', version: approved.version, paidOn: '2027-02-30' }), /date it was paid/);
   // The made invoices are dated in 2027 by the test calendar; date this one today so it can be paid today.
   await owner("update private.workspace_cleaner_invoices set invoice_date=current_date where id=$1", [inv.id]);
@@ -248,8 +249,10 @@ test('who sees what: a cleaner their own, Accounts and admins all, a cleaning ma
   const full = await read('invoice', angela.id);
   assert.deepEqual([full.number, full.cleanerName, full.status, full.totalMinor, full.lines.length, full.periodStart, full.periodEnd], [angela.number, 'Angela Cleaner', 'paid', 8500, 2, '2027-01-04', '2027-01-10']);
   assert.deepEqual(full.lines.map(l => l.propertyName).sort(), ['110 Hawk', '12 Leith St']);
-  assert.ok(full.lines.every(l => 'checkoutTime' in l && 'nextArrivalTime' in l && typeof l.cleanOn === 'string'));
-  await assert.rejects(read('invoice', ben.id), /Invoice not found/, 'not someone else\'s');
+  assert.ok(full.lines.every(l => l.outcome === 'completed' && l.rateMinor === l.amountMinor && typeof l.cleanOn === 'string' && !('checkoutTime' in l)));
+  assert.deepEqual(full.history.map(h => h.event), ['issued', 'queried', 'approved', 'paid']);
+  assert.deepEqual([full.history[1].note, full.history[1].actorName, full.history[3].paidOn], ['Was the Hawk clean a deep clean?', 'Accounts', full.paidOn]);
+  await assert.rejects(read('invoice', ben.id), /Request not found/, 'not someone else\'s');
   assert.ok(!(await read('invoices', users[BEN])).length);
   await assert.rejects(read('earnings', users[BEN]), /Cleaner not found/);
   await assert.rejects(read('settings'), /access required/);
@@ -269,7 +272,7 @@ test('who sees what: a cleaner their own, Accounts and admins all, a cleaning ma
   await assert.rejects(pay({ action: 'approvePayInvoice', invoiceId: ben.id, version: ben.version }), /Only Accounts and admins/, 'read only');
   await as(OTHER);
   assert.deepEqual(await read('invoices'), [], 'a cleaning manager with none of these cleaners');
-  await assert.rejects(read('invoice', ben.id), /Invoice not found/);
+  await assert.rejects(read('invoice', ben.id), /Request not found/);
   for (const who of [OWNER, READY, STAYS]) {
     await as(who);
     for (const [section, target] of [['invoices', null], ['invoice', ben.id], ['earnings', users[BEN]], ['settings', null]]) await assert.rejects(read(section, target), /Cleaner pay access required/, `${roles[who]} ${section}`);
@@ -297,7 +300,7 @@ test('earnings: paid this month and this year, waiting to be paid, and projected
   await rpc('workspace_assign_work', [upcoming.workId, upcoming.version, users[ANGELA]]);
   // A second invoice for Angela, approved and not paid.
   const [{ id: extra }] = await owner(`insert into private.workspace_cleaner_invoices(supplier,cleaner_id,reference,invoice_date,total_minor,created_by,request_id,status,number,generated,due_on)
-    values('Angela Cleaner',$1,'RC-CLN-2027-0900',current_date,6000,$1,gen_random_uuid(),'approved','RC-CLN-2027-0900',true,current_date) returning id`, [users[ANGELA]]);
+    values('Angela Cleaner',$1,'RC-RFI-2027-0900',current_date,6000,$1,gen_random_uuid(),'approved','RC-RFI-2027-0900',true,current_date) returning id`, [users[ANGELA]]);
   await as(ANGELA);
   const e = await read('earnings');
   assert.deepEqual([e.paidThisMonthMinor, e.paidThisYearMinor, e.waitingMinor, e.waitingApprovedMinor, e.periodKind], [8500, 8500, 6000, 6000, 'weekly']);
@@ -312,9 +315,9 @@ test('earnings: paid this month and this year, waiting to be paid, and projected
   // Accounts' Home: what waits for approval and payment.
   await as(ACCOUNTS);
   const accounts = await rpc('workspace_role_home', [null]);
-  const [{ n, minor }] = await owner("select count(*)::int n,coalesce(sum(total_minor),0)::int minor from private.workspace_cleaner_invoices where status='to_approve'");
+  const [{ n, minor }] = await owner("select count(*)::int n,coalesce(sum(coalesce(pay_minor,total_minor)),0)::int minor from private.workspace_cleaner_invoices where status='to_approve'");
   assert.deepEqual([accounts.cleanerInvoicesToApprove, accounts.cleanerInvoicesToApproveMinor], [n, minor]);
-  const [{ pn, pm }] = await owner("select count(*)::int pn,coalesce(sum(total_minor),0)::int pm from private.workspace_cleaner_invoices where status='approved' and paid_on is null");
+  const [{ pn, pm }] = await owner("select count(*)::int pn,coalesce(sum(coalesce(pay_minor,total_minor)),0)::int pm from private.workspace_cleaner_invoices where status='approved' and paid_on is null");
   assert.deepEqual([accounts.cleanerInvoicesToPay, accounts.cleanerInvoicesToPayMinor], [pn, pm]);
   assert.ok(accounts.cleanerInvoicesDueThisWeek >= 1);
   assert.ok('expensesToApprove' in accounts && 'payoutsReceivedMinor' in accounts);
@@ -330,10 +333,63 @@ test('the cleaner\'s invoice notices go to the phone only, never by email', { sk
   assert.ok(!deliveries.some(d => d.channel === 'email'), 'no email');
 });
 
+test('outcomes: management and the cleaner\'s cleaning manager set them while the request waits; each re-totals it and is kept in its history', async () => {
+  // The rule: completed (or none set) the full rate, partially successful half rounded half a penny up, unsuccessful nothing.
+  const rule = await owner("select private.workspace_clean_outcome_minor(4500,null) a,private.workspace_clean_outcome_minor(4500,'completed') b,private.workspace_clean_outcome_minor(4500,'partial') c,private.workspace_clean_outcome_minor(4525,'partial') d,private.workspace_clean_outcome_minor(1,'partial') e,private.workspace_clean_outcome_minor(4500,'unsuccessful') f");
+  assert.deepEqual(Object.values(rule[0]).map(Number), [4500, 4500, 2250, 2263, 1, 0]);
+  const [ben] = await invoicesOf(BEN);
+  assert.equal(ben.status, 'to_approve');
+  const [{ one: first, two: second }] = await owner("select (array_agg(l.work_id order by e.clean_on))[1] one,(array_agg(l.work_id order by e.clean_on))[2] two from private.workspace_cleaner_invoice_lines l join private.workspace_clean_earnings e on e.work_id=l.work_id where l.invoice_id=$1", [ben.id]);
+  const set = (who, workId, outcome, version, invoiceId = ben.id) => as(who).then(() => pay({ action: 'setPayLineOutcome', invoiceId, workId, outcome, version }));
+  for (const who of [ACCOUNTS, STAYS, BEN, OWNER, READY]) await assert.rejects(set(who, first, 'partial', ben.version), /Only management and cleaning managers/, roles[who]);
+  await assert.rejects(set(OTHER, first, 'partial', ben.version), /Request not found/, 'a cleaning manager without this cleaner');
+  await assert.rejects(set(MANAGER, first, 'excellent', ben.version), /Choose Completed, Partially successful or Unsuccessful/);
+  await assert.rejects(set(MANAGER, crypto.randomUUID(), 'partial', ben.version), /not on this request/);
+  const line = (r, w) => r.lines.find(l => l.workId === w);
+  const partial = await set(MANAGER, first, 'partial', ben.version);
+  assert.equal(partial.version, ben.version + 1);
+  assert.deepEqual([line(partial, first).outcome, line(partial, first).rateMinor, line(partial, first).amountMinor, line(partial, second).outcome, partial.totalMinor], ['partial', 3550, 1775, 'completed', 1775 + 3550]);
+  await assert.rejects(set(ADMIN, second, 'unsuccessful', ben.version), /changed by someone else/);
+  const none = await set(ADMIN, second, 'unsuccessful', partial.version);
+  assert.deepEqual([line(none, second).amountMinor, none.totalMinor], [0, 1775]);
+  assert.equal((await set(ADMIN, second, 'unsuccessful', none.version)).version, none.version, 'the same outcome again changes nothing');
+  // Every clean unsuccessful: nothing to invoice, and that is allowed.
+  const zero = await set(ADMIN, first, 'unsuccessful', none.version);
+  assert.equal(zero.totalMinor, 0);
+  const back = await set(MANAGER, first, 'completed', zero.version);
+  assert.equal(back.totalMinor, 3550);
+  // The cleaner reads the outcomes and the history; a line never set reads as completed.
+  await as(BEN);
+  const mine = await read('invoice', ben.id);
+  assert.deepEqual(mine.lines.map(l => l.outcome), ['completed', 'unsuccessful']);
+  const steps = mine.history.filter(h => h.event === 'outcome');
+  assert.deepEqual(steps.map(h => [h.actorName, h.from, h.to, h.amountMinor, h.totalMinor]), [
+    ['Manager', 'completed', 'partial', 1775, 5325], ['Admin', 'completed', 'unsuccessful', 0, 1775], ['Admin', 'partial', 'unsuccessful', 0, 0], ['Manager', 'unsuccessful', 'completed', 3550, 3550]]);
+  assert.deepEqual([steps[0].propertyName, steps[0].cleanOn, steps[0].workId], ['12 Leith St', '2027-02-03', first]);
+  assert.equal(mine.history[0].event, 'issued');
+  // Accounts' older view and the clean's cost use what the clean earns.
+  const [{ view }] = await owner('select private.workspace_cleaner_invoice_view(i) view from private.workspace_cleaner_invoices i where i.id=$1', [ben.id]);
+  assert.equal(view.totalMinor, 3550);
+  assert.deepEqual(view.lines.map(l => [l.outcome, l.amountMinor, l.rateMinor]).sort(), [['completed', 3550, 3550], ['unsuccessful', 0, 3550]]);
+  assert.equal(Number((await owner('select private.workspace_clean_cost($1) c', [second]))[0].c), 0);
+  // Approved at the amount to invoice; then the outcomes are fixed.
+  await as(ACCOUNTS);
+  const approved = await pay({ action: 'approvePayInvoice', invoiceId: ben.id, version: back.version });
+  assert.equal(approved.totalMinor, 3550);
+  assert.deepEqual((await notices(BEN, 'cleaning.invoice_approved')).map(n => n.preview), [`Request approved: ${ben.number}, £35.50`]);
+  await assert.rejects(set(ADMIN, first, 'partial', approved.version), /waits for approval/);
+  // An invoice Accounts recorded by hand has no outcomes.
+  const [{ id: manual, version: manualVersion }] = await owner("select id,version from private.workspace_cleaner_invoices where reference='DAN-APRIL'");
+  const [{ work_id: manualClean }] = await owner('select work_id from private.workspace_cleaner_invoice_lines where invoice_id=$1', [manual]);
+  await assert.rejects(set(ADMIN, manualClean, 'partial', manualVersion, manual), /only for requests for invoice/);
+});
+
 test('safe to run twice, and nothing in the migration drops or deletes', async () => {
   await db.exec(await fs.readFile(MIGRATION, 'utf8'));
   const [{ def }] = await owner("select pg_get_functiondef('private.workspace_role_home(text)'::regprocedure) def");
-  for (const sentinel of ['Cleaner invoices (20261022000000): the cleaner\'s own pay', 'Cleaner invoices (20261022000000): what waits for approval and payment']) assert.equal(def.split(sentinel).length - 1, 1, sentinel);
+  for (const sentinel of ['Requests for invoice (20261022000000): the cleaner\'s own pay', 'Requests for invoice (20261022000000): what waits for approval and payment']) assert.equal(def.split(sentinel).length - 1, 1, sentinel);
+  const [{ view }] = await owner("select pg_get_functiondef('private.workspace_cleaner_invoice_view(private.workspace_cleaner_invoices)'::regprocedure) view");
+  for (const sentinel of ['Requests for invoice (20261022000000): amount to invoice', 'Requests for invoice (20261022000000): outcome']) assert.equal(view.split(sentinel).length - 1, 1, sentinel);
   const text = await fs.readFile(MIGRATION, 'utf8');
   const code = text.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
   assert.doesNotMatch(code, /\bdrop\b/i);

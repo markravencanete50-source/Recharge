@@ -1,13 +1,17 @@
 import { z } from 'zod';
 import { brandCanvas, darkBrandCanvas, depthTokens, designTokens } from './design-tokens';
 import { formatMoney } from './format';
+import { legalDetails } from './legal-details';
 
-// Cleaner invoices (migration 20261022000000). At the end of each pay period (weekly, Monday to Sunday, or monthly) each
-// cleaner's accepted cleans become one invoice, RC-CLN-YYYY-NNNN, "To approve". Accounts approve it (or query it with a
-// note to the cleaner), then mark it paid with the date. The cleaner sees their earnings, what is waiting to be paid and
-// what is projected, and every invoice opens as the same designed document on screen and as a print-ready page (save as
-// PDF from the browser's print). This file holds the shapes the database returns, the requests the screens send, the
-// Accounts groupings, and the invoice document itself (one view model drawn by the app and by the HTML page).
+// Requests for invoice (migration 20261022000000). At the end of each pay period (weekly, Monday to Sunday, or monthly)
+// each cleaner's accepted cleans become one request for invoice, RC-RFI-YYYY-NNNN, "To approve": Recharge asks the cleaner
+// to invoice us for the amount. Each clean has an outcome (Completed, Partially successful at half the rate, Unsuccessful
+// at nothing) that management or the cleaning manager can change while the request waits. Accounts approve it (or query
+// it with a note to the cleaner), then mark it paid with the date. The cleaner sees their earnings, what is waiting to be
+// paid and what is projected, and every request opens as the same designed document on screen and as a print-ready page
+// (save as PDF from the browser's print). This file holds the shapes the database returns, the requests the screens send,
+// the Accounts groupings, and the document itself (one view model drawn by the app and by the HTML page). Code names keep
+// "invoice"; the words people read say "request for invoice".
 
 const id = z.string().uuid();
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -16,20 +20,38 @@ export type PayPeriod = (typeof PAY_PERIODS)[number];
 export const INVOICE_STATUSES = ['to_approve', 'approved', 'paid', 'rejected'] as const;
 export type PayInvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
+// Each clean's outcome on a request. None set counts as completed.
+export const CLEAN_OUTCOMES = ['completed', 'partial', 'unsuccessful'] as const;
+export type CleanOutcome = (typeof CLEAN_OUTCOMES)[number];
+export const OUTCOME_LABEL: Record<CleanOutcome, string> = { completed: 'Completed', partial: 'Partially successful', unsuccessful: 'Unsuccessful' };
+// What a clean earns for its outcome, in pence. The same rule as private.workspace_clean_outcome_minor: the full rate,
+// half the rate rounded to the penny with half a penny going up ((rate + 1) / 2 in whole pence: £45.25 gives £22.63), or 0.
+export const outcomeMinor = (rateMinor: number, outcome: CleanOutcome | null | undefined) =>
+  outcome === 'partial' ? Math.floor((rateMinor + 1) / 2) : outcome === 'unsuccessful' ? 0 : rateMinor;
+
+// amountMinor is what the clean earns at its outcome; rateMinor its snapshot rate.
 export const payInvoiceLineSchema = z.object({
   workId: id, cleanOn: day.nullable(), propertyName: z.string(), amountMinor: z.number().int(),
-  checkoutTime: z.string().nullable().optional(), nextArrivalOn: day.nullable().optional(), nextArrivalTime: z.string().nullable().optional(),
+  rateMinor: z.number().int().optional(), outcome: z.enum(CLEAN_OUTCOMES).nullable().optional(),
 });
+export const payHistorySchema = z.object({
+  at: z.string(), event: z.enum(['issued', 'outcome', 'queried', 'approved', 'paid']), actorName: z.string().nullable(), workId: id.nullable().optional(),
+  from: z.enum(CLEAN_OUTCOMES).optional(), to: z.enum(CLEAN_OUTCOMES).optional(), amountMinor: z.number().optional(), totalMinor: z.number().optional(),
+  propertyName: z.string().nullable().optional(), cleanOn: day.nullable().optional(), note: z.string().optional(), paidOn: day.optional(), cleans: z.number().optional(),
+});
+export type PayHistory = z.infer<typeof payHistorySchema>;
 export const payInvoiceSchema = z.object({
   id, number: z.string(), reference: z.string(), generated: z.boolean(),
   cleanerId: id.nullable(), cleanerName: z.string(), supplier: z.string(),
   status: z.enum(INVOICE_STATUSES), queried: z.boolean(), queryNote: z.string().nullable(), queriedAt: z.string().nullable(),
   issueOn: day, periodKind: z.enum(PAY_PERIODS).nullable(), periodStart: day.nullable(), periodEnd: day.nullable(), dueOn: day,
   approvedAt: z.string().nullable(), paidOn: day.nullable(), totalMinor: z.number().int(), currency: z.literal('GBP'), version: z.number().int(), lineCount: z.number().int(),
-  lines: z.array(payInvoiceLineSchema).optional(),
+  lines: z.array(payInvoiceLineSchema).optional(), history: z.array(payHistorySchema).optional(),
 });
 export type PayInvoice = z.infer<typeof payInvoiceSchema>;
 export type PayInvoiceLine = z.infer<typeof payInvoiceLineSchema>;
+export const lineOutcome = (l: Pick<PayInvoiceLine, 'outcome'>): CleanOutcome => l.outcome ?? 'completed';
+export const lineRate = (l: Pick<PayInvoiceLine, 'rateMinor' | 'amountMinor'>) => l.rateMinor ?? l.amountMinor;
 export const payInvoicesSchema = z.array(payInvoiceSchema);
 
 export const earningsSchema = z.object({
@@ -55,9 +77,11 @@ export const approveInvoiceAction = (i: { requestId: string; invoice: Pick<PayIn
 export const queryInvoiceAction = (i: { requestId: string; invoice: Pick<PayInvoice, 'id' | 'version'>; note: string }) => ({ action: 'queryPayInvoice' as const, requestId: i.requestId, invoiceId: i.invoice.id, version: i.invoice.version, note: i.note.trim() });
 export const markPaidAction = (i: { requestId: string; invoice: Pick<PayInvoice, 'id' | 'version'>; paidOn: string }) => ({ action: 'markPayInvoicePaid' as const, requestId: i.requestId, invoiceId: i.invoice.id, version: i.invoice.version, paidOn: i.paidOn });
 export const payPeriodAction = (i: { requestId: string; cleanerId: string; period: PayPeriod; version: number }) => ({ action: 'setCleanerPayPeriod' as const, requestId: i.requestId, cleanerId: i.cleanerId, period: i.period, version: i.version });
-export const PAY_ACTIONS = ['approvePayInvoice', 'queryPayInvoice', 'markPayInvoicePaid', 'setCleanerPayPeriod'] as const;
+// A clean's outcome on a request waiting for approval: management and the cleaner's cleaning manager.
+export const outcomeAction = (i: { requestId: string; invoice: Pick<PayInvoice, 'id' | 'version'>; workId: string; outcome: CleanOutcome }) => ({ action: 'setPayLineOutcome' as const, requestId: i.requestId, invoiceId: i.invoice.id, workId: i.workId, outcome: i.outcome, version: i.invoice.version });
+export const PAY_ACTIONS = ['approvePayInvoice', 'queryPayInvoice', 'markPayInvoicePaid', 'setCleanerPayPeriod', 'setPayLineOutcome'] as const;
 
-// --- Dates and money, written one way everywhere on the invoice --------------------------------------------------
+// --- Dates and money, written one way everywhere on the request --------------------------------------------------
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -88,11 +112,22 @@ export function statusOf(i: Pick<PayInvoice, 'status' | 'paidOn' | 'queried'>): 
 // The status in words: "To approve", "Approved" or "Paid (date)" (lists and screen readers).
 export const statusLine = (i: Pick<PayInvoice, 'status' | 'paidOn' | 'queried'>) => i.status === 'paid' && i.paidOn ? `Paid (${longDay(i.paidOn)})` : statusOf({ ...i, queried: false }).label;
 
-// --- The invoice document ----------------------------------------------------------------------------------------
-export const BILLED_TO = 'Recharge Group';
+// --- The request for invoice document ----------------------------------------------------------------------------
+// Who the request is from. Lee is confirming which name goes where: this is the one place to change it. The address and
+// the company come from lib/legal-details.ts, never a second copy.
+export const RECHARGE_PARTY = {
+  name: 'Recharge Group',
+  lines: [legalDetails.registeredAddress, `${legalDetails.legalName} · Company no. ${legalDetails.companyNumber}`],
+} as const;
+// The terms near the bottom. Lee may replace this text; {number} becomes the request's number. "Within 7 days" is the
+// database's rule: a request is due 7 days after it is issued (PAY_WITHIN_DAYS).
+export const PAY_WITHIN_DAYS = 7;
+export const REQUEST_TERMS = 'Please send us your invoice for the amount above, quoting reference {number}. We pay valid invoices within 7 days.';
+export const requestTerms = (number: string) => REQUEST_TERMS.split('{number}').join(number);
 export const THANK_YOU = 'Thank you for keeping our homes guest-ready.';
+export const AMOUNT_LABEL = 'Amount to invoice';
 export type InvoiceFact = { label: string; value: string };
-// The chip on the template, only while the invoice is not paid: "Awaiting approval" or "Due Tue 20 Oct". A paid invoice
+// The chip on the document, only while the request is not paid: "Awaiting approval" or "Due Tue 20 Oct". A paid request
 // says so with the PAID stamp and the "Paid on" fact instead.
 export type InvoiceChip = { label: string; tone: StatusTone };
 export function invoiceChip(i: Pick<PayInvoice, 'status' | 'queried' | 'dueOn'>): InvoiceChip | null {
@@ -101,23 +136,20 @@ export function invoiceChip(i: Pick<PayInvoice, 'status' | 'queried' | 'dueOn'>)
   if (i.status === 'rejected') return { label: 'Rejected', tone: 'bad' };
   return { label: i.queried ? 'Awaiting approval · queried' : 'Awaiting approval', tone: 'wait' };
 }
-// A line with no known times shows a muted dash so the column still reads as a column.
-export const NO_TIMES = '–';
-export type InvoiceDocLine = { key: string; date: string; property: string; times: string; amount: string };
+export type InvoiceDocLine = { key: string; date: string; property: string; outcome: CleanOutcome; outcomeLabel: string; outcomeNote: string; amount: string };
 export type InvoiceDoc = {
-  title: 'Invoice'; number: string; status: { label: string; tone: StatusTone; line: string }; chip: InvoiceChip | null; paidStamp: string | null;
-  from: string; billedTo: string; facts: InvoiceFact[]; showTimes: boolean; lines: InvoiceDocLine[]; count: number;
-  subtotal: string; total: string; totalLabel: 'Total due' | 'Total paid'; thanks: string; footer: string;
+  title: 'Request for invoice'; heading: 'REQUEST FOR INVOICE'; number: string; status: { label: string; tone: StatusTone; line: string }; chip: InvoiceChip | null; paidStamp: string | null;
+  from: { name: string; lines: readonly string[] }; to: string; facts: InvoiceFact[]; lines: InvoiceDocLine[]; count: number;
+  fullRate: string; adjustment: string | null; total: string; totalLabel: typeof AMOUNT_LABEL; terms: string; thanks: string; footer: string;
 };
-// Check-out and the next guests' arrival when they are known; the next guests only when they arrive that day.
-export function lineTimes(l: Pick<PayInvoiceLine, 'checkoutTime' | 'nextArrivalOn' | 'nextArrivalTime' | 'cleanOn'>) {
-  const out = [l.checkoutTime ? `Check-out ${l.checkoutTime}` : '', l.nextArrivalTime && l.nextArrivalOn && l.cleanOn && l.nextArrivalOn === l.cleanOn ? `Next guests ${l.nextArrivalTime}` : ''];
-  return out.filter(Boolean).join(' · ');
-}
-// Everything the template shows, empty fields left out (never placeholder text).
+// What the outcome cell says under its label: nothing for a completed clean, the full rate otherwise.
+const outcomeNote = (outcome: CleanOutcome, rate: number) => outcome === 'partial' ? `Half of ${money(rate)}` : outcome === 'unsuccessful' ? `Rate ${money(rate)}, not paid` : '';
+// Everything the document shows, empty fields left out (never placeholder text).
 export function invoiceDoc(i: PayInvoice): InvoiceDoc {
-  const lines = (i.lines ?? []).map(l => ({ key: l.workId, date: l.cleanOn ? shortDay(l.cleanOn) : '', property: l.propertyName, times: lineTimes(l), amount: money(l.amountMinor) }));
-  const subtotal = (i.lines ?? []).reduce((t, l) => t + l.amountMinor, 0);
+  const raw = i.lines ?? [];
+  const lines = raw.map(l => ({ key: l.workId, date: l.cleanOn ? shortDay(l.cleanOn) : '', property: l.propertyName, outcome: lineOutcome(l), outcomeLabel: OUTCOME_LABEL[lineOutcome(l)],
+    outcomeNote: outcomeNote(lineOutcome(l), lineRate(l)), amount: money(l.amountMinor) }));
+  const full = raw.reduce((t, l) => t + lineRate(l), 0), earned = raw.reduce((t, l) => t + l.amountMinor, 0);
   const s = statusOf(i), paid = i.status === 'paid';
   const facts: InvoiceFact[] = [
     { label: 'Issue date', value: longDay(i.issueOn) },
@@ -126,15 +158,33 @@ export function invoiceDoc(i: PayInvoice): InvoiceDoc {
     paid ? { label: 'Paid on', value: i.paidOn ? longDay(i.paidOn) : '' } : { label: 'Due date', value: i.status === 'rejected' ? '' : longDay(i.dueOn) },
   ].filter(f => f.value);
   return {
-    title: 'Invoice', number: i.number, status: { ...s, line: statusLine(i) }, chip: invoiceChip(i), paidStamp: paid && i.paidOn ? `Paid ${longDay(i.paidOn)}` : paid ? 'Paid' : null,
-    from: i.cleanerName || i.supplier, billedTo: BILLED_TO, facts, showTimes: lines.some(l => l.times), lines, count: lines.length || i.lineCount,
-    subtotal: money(lines.length ? subtotal : i.totalMinor), total: money(i.totalMinor), totalLabel: paid ? 'Total paid' : 'Total due', thanks: THANK_YOU,
-    footer: `${BILLED_TO} · ${i.number}`,
+    title: 'Request for invoice', heading: 'REQUEST FOR INVOICE', number: i.number, status: { ...s, line: statusLine(i) }, chip: invoiceChip(i),
+    paidStamp: paid && i.paidOn ? `Paid ${longDay(i.paidOn)}` : paid ? 'Paid' : null,
+    from: RECHARGE_PARTY, to: i.cleanerName || i.supplier, facts, lines, count: lines.length || i.lineCount,
+    fullRate: money(raw.length ? full : i.totalMinor), adjustment: raw.length && full !== earned ? `−${money(full - earned)}` : null,
+    total: money(i.totalMinor), totalLabel: AMOUNT_LABEL, terms: requestTerms(i.number), thanks: THANK_YOU, footer: `${RECHARGE_PARTY.name} · ${i.number}`,
   };
 }
-export const invoiceFileName = (i: Pick<PayInvoice, 'number'>) => `${i.number.replace(/[^A-Za-z0-9-]+/g, '-')}.html`;
+export const invoiceFileName = (i: Pick<PayInvoice, 'number'>) => `Request-for-invoice-${i.number.replace(/[^A-Za-z0-9-]+/g, '-')}.html`;
 
-// The template's colours, all from the app's light theme (paper is always light, also in dark mode and in print).
+// The history under the document: who did what, in words.
+export function historyLine(h: PayHistory) {
+  const who = h.actorName ?? 'Recharge';
+  const clean = [h.propertyName, h.cleanOn ? shortDay(h.cleanOn) : ''].filter(Boolean).join(', ') || 'A clean';
+  switch (h.event) {
+    case 'issued': return `Issued${h.cleans != null ? ` for ${h.cleans} clean${h.cleans === 1 ? '' : 's'}` : ''}${h.totalMinor != null ? `, ${money(h.totalMinor)}` : ''}`;
+    case 'outcome': return `${who} set ${clean} to ${OUTCOME_LABEL[h.to ?? 'completed']}${h.from ? ` (was ${OUTCOME_LABEL[h.from]})` : ''}${h.totalMinor != null ? `. ${AMOUNT_LABEL} now ${money(h.totalMinor)}` : ''}`;
+    case 'queried': return `${who} queried it${h.note ? `: ${h.note}` : ''}`;
+    case 'approved': return `${who} approved it${h.totalMinor != null ? ` at ${money(h.totalMinor)}` : ''}`;
+    case 'paid': return `${who} marked it paid${h.paidOn ? ` on ${longDay(h.paidOn)}` : ''}`;
+  }
+}
+// The London day of a moment, "Mon 6 Oct 2026".
+export function historyDay(at: string) {
+  try { return longDay(new Date(at).toLocaleDateString('en-CA', { timeZone: 'Europe/London' })); } catch { return longDay(at.slice(0, 10)); }
+}
+
+// The document's colours, all from the app's light theme (paper is always light, also in dark mode and in print).
 const paper = designTokens.light;
 export const INVOICE_PAPER = {
   page: paper.surface, band: brandCanvas, ink: paper.text, muted: paper.muted, rule: paper.border, zebra: paper.background, forest: darkBrandCanvas,
@@ -146,22 +196,22 @@ export const INVOICE_PAPER = {
   } satisfies Record<StatusTone, { wash: string; ink: string }>,
 };
 // The supplied logo (docs/BRAND.md) has generous margins around the line art; the app's CompanyLogo clips them in the
-// layout, never by editing the file, and the template does the same: width, height and offsets for a given width.
+// layout, never by editing the file, and the document does the same: width, height and offsets for a given width.
 export const LOGO_FILE = 'recharge-company-logo.png';
 export const logoBox = (width: number) => { const s = width / 1900; return { width, height: Math.round(400 * s), imageWidth: Math.round(2171 * s), imageHeight: Math.round(724 * s), left: -Math.round(105 * s), top: -Math.round(110 * s) }; };
 
 const escape = (text: string) => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-// The invoice as a page: A4 portrait, one page for a usual invoice; a long one runs on with the table header repeated
+// The request as a page: A4 portrait, one page for a usual request; a long one runs on with the table header repeated
 // and "page X of Y" in the footer of each page. Vector text, so the PDF saved from print is crisp. `origin` is where the
 // logo and the Montserrat files are served (the app's own site; a file:// folder for the sample).
 export function invoiceHtml(i: PayInvoice, options: { origin?: string } = {}) {
   const doc = invoiceDoc(i), origin = (options.origin ?? 'https://app.rechargegroup.co.uk').replace(/\/$/, ''), c = INVOICE_PAPER, tone = c.tone[doc.chip?.tone ?? doc.status.tone], logo = logoBox(188);
   const font = (weight: number) => `@font-face{font-family:"Montserrat";font-weight:${weight};font-style:normal;src:url("${origin}/fonts/montserrat-${weight}.ttf") format("truetype")}`;
   const facts = doc.facts.map(f => `<div class="fact"><dt>${escape(f.label)}</dt><dd>${escape(f.value)}</dd></div>`).join('');
-  const rows = doc.lines.map(l => `<tr><td class="date">${escape(l.date)}</td><td>${escape(l.property)}</td>${doc.showTimes ? (l.times ? `<td class="times">${escape(l.times)}</td>` : `<td class="times none" aria-label="No times">${NO_TIMES}</td>`) : ''}<td class="num">${escape(l.amount)}</td></tr>`).join('');
+  const rows = doc.lines.map(l => `<tr class="${l.outcome}"><td class="date">${escape(l.date)}</td><td>${escape(l.property)}</td><td class="outcome"><span class="label">${escape(l.outcomeLabel)}</span>${l.outcomeNote ? `<span class="note">${escape(l.outcomeNote)}</span>` : ''}</td><td class="num">${escape(l.amount)}</td></tr>`).join('');
   return `<!doctype html>
 <html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Invoice ${escape(doc.number)} · ${escape(doc.from)}</title>
+<title>Request for invoice ${escape(doc.number)} · ${escape(doc.to)}</title>
 <style>${font(400)}${font(600)}
 @page{size:A4 portrait;margin:16mm 16mm 20mm;@bottom-left{content:"${escape(doc.footer)}";font:400 8pt "Montserrat",Helvetica,Arial,sans-serif;color:${c.muted}}@bottom-right{content:"Page " counter(page) " of " counter(pages);font:400 8pt "Montserrat",Helvetica,Arial,sans-serif;color:${c.muted}}}
 *{box-sizing:border-box}html{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-scheme:light}
@@ -169,34 +219,37 @@ body{margin:0;background:${c.band};color:${c.ink};font:400 10pt/1.5 "Montserrat"
 .sheet{max-width:794px;margin:24px auto;background:${c.page};border-radius:14px;overflow:hidden;box-shadow:${depthTokens.light['elev-2']}}
 .band{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:28px 40px;background:${c.band};border-bottom:1px solid ${c.rule}}
 .logo{position:relative;width:${logo.width}px;height:${logo.height}px;overflow:hidden;flex:none}.logo img{position:absolute;width:${logo.imageWidth}px;height:${logo.imageHeight}px;left:${logo.left}px;top:${logo.top}px}
-.title{text-align:right}.word{font-weight:600;font-size:20pt;letter-spacing:.32em;margin-right:-.32em;color:${c.forest};line-height:1.1}.number{margin-top:6px;font-size:10.5pt;letter-spacing:.06em;color:${c.muted}}
+.title{text-align:right}.word{font-weight:600;font-size:15pt;letter-spacing:.24em;margin-right:-.24em;color:${c.forest};line-height:1.2}.number{margin-top:6px;font-size:10.5pt;letter-spacing:.06em;color:${c.muted}}
 .body{padding:28px 40px 36px;position:relative}
 .status{display:flex;align-items:center;gap:12px;margin:0 0 26px}.pill{display:inline-block;padding:5px 14px;border-radius:999px;background:${tone.wash};color:${tone.ink};font-weight:600;font-size:9pt;letter-spacing:.02em}
-.stamp{position:absolute;right:46px;top:${doc.chip ? 96 : 20}px;transform:rotate(-8deg);border:2px solid ${c.forest};color:${c.forest};border-radius:10px;padding:8px 16px;text-align:center;opacity:.78;font-weight:600;letter-spacing:.24em;font-size:15pt;line-height:1.1}
+.stamp{position:absolute;right:46px;top:${doc.chip ? 96 : 20}px;transform:rotate(-8deg);border:2px solid ${c.forest};color:${c.forest};border-radius:10px;padding:8px 16px;text-align:center;opacity:.78;font-weight:600;letter-spacing:.24em;font-size:15pt;line-height:1.1;background:${c.page}}
 .stamp small{display:block;letter-spacing:.06em;font-size:8pt;font-weight:400;margin-top:4px}
 .parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:22px}
-h2{margin:0 0 4px;font-size:8pt;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:${c.muted}}.party p{margin:0;font-size:12pt;font-weight:600}
+h2{margin:0 0 4px;font-size:8pt;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:${c.muted}}.party p{margin:0}.party .name{font-size:12pt;font-weight:600}.party .line{font-size:9pt;color:${c.muted}}
 .facts{display:grid;grid-template-columns:repeat(${Math.max(doc.facts.length, 1)},1fr);gap:0;margin:0 0 28px;border-top:1px solid ${c.rule};border-bottom:1px solid ${c.rule}}
 .fact{padding:12px 14px 12px 0}.fact+.fact{padding-left:14px;border-left:1px solid ${c.rule}}.fact dt{font-size:7.5pt;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:${c.muted};margin-bottom:3px}.fact dd{margin:0;font-size:10pt}
 table{width:100%;border-collapse:collapse}thead{display:table-header-group}th{font-size:7.5pt;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:${c.muted};text-align:left;padding:0 10px 8px;border-bottom:1px solid ${c.ink}}
 td{padding:9px 10px;border-bottom:1px solid ${c.rule};vertical-align:top}tbody tr:nth-child(even) td{background:${c.zebra}}tr{break-inside:avoid}
-.date{white-space:nowrap;width:22%}.times{color:${c.muted};font-size:9pt}.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}th.num{text-align:right}
-.totals{margin:22px 0 0 auto;width:min(300px,100%);break-inside:avoid}.totals .row{display:flex;justify-content:space-between;gap:16px;padding:6px 10px}.totals .sub{color:${c.muted};border-bottom:1px solid ${c.rule}}
+.date{white-space:nowrap;width:20%}.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}th.num{text-align:right}
+.outcome .label{display:block}.outcome .note{display:block;color:${c.muted};font-size:8.5pt}.completed .outcome .label{color:${c.muted}}.partial .outcome .label,.unsuccessful .outcome .label{font-weight:600}
+.totals{margin:22px 0 0 auto;width:min(320px,100%);break-inside:avoid}.totals .row{display:flex;justify-content:space-between;gap:16px;padding:6px 10px}.totals .sub{color:${c.muted};border-bottom:1px solid ${c.rule}}
 .totals .grand{align-items:baseline;padding-top:12px}.totals .grand span:first-child{font-weight:600;letter-spacing:.04em}.totals .grand span:last-child{font-size:18pt;font-weight:600;color:${c.forest}}
-.thanks{margin:44px 0 0;padding-top:16px;border-top:1px solid ${c.rule};color:${c.muted};font-size:9.5pt;break-inside:avoid}.thanks p{margin:0}.thanks .who{margin-top:4px;font-size:8.5pt}
+.terms{margin:30px 0 0;padding:14px 16px;border-radius:10px;background:${c.zebra};break-inside:avoid}.terms p{margin:0;font-size:9.5pt}
+.thanks{margin:28px 0 0;padding-top:16px;border-top:1px solid ${c.rule};color:${c.muted};font-size:9.5pt;break-inside:avoid}.thanks p{margin:0}.thanks .who{margin-top:4px;font-size:8.5pt}
 .print{display:block;margin:0 auto 24px;font:600 10pt "Montserrat",Helvetica,Arial,sans-serif;padding:10px 20px;border-radius:999px;border:1px solid ${c.forest};background:${c.page};color:${c.forest};cursor:pointer}
-@media print{html,body{background:${c.page}}.sheet{margin:0;max-width:none;border-radius:0;box-shadow:none;overflow:visible}.print{display:none}.band{padding:20px 22px;border-radius:10px;border-bottom:0}.body{padding:22px 0 0}.stamp{right:6px}.thanks{margin-top:24px}.thanks .who{display:none}}
+@media print{html,body{background:${c.page}}.sheet{margin:0;max-width:none;border-radius:0;box-shadow:none;overflow:visible}.print{display:none}.band{padding:20px 22px;border-radius:10px;border-bottom:0}.body{padding:22px 0 0}.stamp{right:6px}.terms{margin-top:22px}.thanks{margin-top:20px}.thanks .who{display:none}}
 </style></head>
 <body>
-<main class="sheet" aria-label="Invoice ${escape(doc.number)}">
-<header class="band"><div class="logo"><img src="${escape(origin)}/${LOGO_FILE}" alt="Recharge"></div><div class="title"><div class="word">INVOICE</div><div class="number">${escape(doc.number)}</div></div></header>
+<main class="sheet" aria-label="Request for invoice ${escape(doc.number)}">
+<header class="band"><div class="logo"><img src="${escape(origin)}/${LOGO_FILE}" alt="Recharge"></div><div class="title"><div class="word">${doc.heading}</div><div class="number">${escape(doc.number)}</div></div></header>
 <div class="body">
 ${doc.chip ? `<div class="status"><span class="pill">${escape(doc.chip.label)}</span></div>` : ''}
 ${doc.paidStamp ? `<div class="stamp" aria-hidden="true">PAID<small>${escape(doc.paidStamp.replace(/^Paid /, ''))}</small></div>` : ''}
-<section class="parties"><div class="party"><h2>From</h2><p>${escape(doc.from)}</p></div><div class="party"><h2>Billed to</h2><p>${escape(doc.billedTo)}</p></div></section>
+<section class="parties"><div class="party"><h2>From</h2><p class="name">${escape(doc.from.name)}</p>${doc.from.lines.map(l => `<p class="line">${escape(l)}</p>`).join('')}</div><div class="party"><h2>To</h2><p class="name">${escape(doc.to)}</p></div></section>
 <dl class="facts">${facts}</dl>
-<table><thead><tr><th>Date</th><th>Property</th>${doc.showTimes ? '<th>Times</th>' : ''}<th class="num">Rate</th></tr></thead><tbody>${rows}</tbody></table>
-<section class="totals"><div class="row sub"><span>Subtotal</span><span class="num">${escape(doc.subtotal)}</span></div><div class="row grand"><span>${doc.totalLabel}</span><span class="num">${escape(doc.total)}</span></div></section>
+<table><thead><tr><th>Date</th><th>Property</th><th>Outcome</th><th class="num">Rate</th></tr></thead><tbody>${rows}</tbody></table>
+<section class="totals"><div class="row sub"><span>${doc.count} clean${doc.count === 1 ? '' : 's'} at full rate</span><span class="num">${escape(doc.fullRate)}</span></div>${doc.adjustment ? `<div class="row sub"><span>Outcome adjustments</span><span class="num">${escape(doc.adjustment)}</span></div>` : ''}<div class="row grand"><span>${doc.totalLabel}</span><span class="num">${escape(doc.total)}</span></div></section>
+<section class="terms"><h2>Terms</h2><p>${escape(doc.terms)}</p></section>
 <footer class="thanks"><p>${escape(doc.thanks)}</p><p class="who">${escape(doc.footer)}</p></footer>
 </div>
 </main>
@@ -238,9 +291,9 @@ export const PROJECTED_LABEL = 'Projected, if all your cleans are accepted';
 export function earningsFigures(e: Earnings) {
   return {
     earnings: { label: 'Earnings', value: money(e.paidThisMonthMinor), detail: `Paid this month · ${money(e.paidThisYearMinor)} this year` },
-    waiting: { label: 'Waiting to be paid', value: money(e.waitingMinor), detail: e.waitingCount ? `${e.waitingCount} invoice${e.waitingCount === 1 ? '' : 's'}: ${money(e.waitingApprovedMinor)} approved, ${money(e.waitingToApproveMinor)} to approve` : 'Nothing waiting' },
+    waiting: { label: 'Waiting to be paid', value: money(e.waitingMinor), detail: e.waitingCount ? `${e.waitingCount} request${e.waitingCount === 1 ? '' : 's'}: ${money(e.waitingApprovedMinor)} approved, ${money(e.waitingToApproveMinor)} to approve` : 'Nothing waiting' },
     projected: { label: PROJECTED_LABEL, value: money(e.projectedMinor),
-      detail: [`${e.acceptedNotInvoicedCount} accepted, not invoiced yet`, `${e.upcomingCount} more this ${e.periodKind === 'monthly' ? 'month' : 'week'}${e.rateMinor ? ` at ${money(e.rateMinor)}` : ''}`].join(' · ')
+      detail: [`${e.acceptedNotInvoicedCount} accepted, not on a request yet`, `${e.upcomingCount} more this ${e.periodKind === 'monthly' ? 'month' : 'week'}${e.rateMinor ? ` at ${money(e.rateMinor)}` : ''}`].join(' · ')
         + (e.unpricedCount ? ` · ${e.unpricedCount} waiting for your rate` : '') },
   };
 }
