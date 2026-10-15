@@ -141,7 +141,7 @@ test('each notice goes once to each browser of its person, and only while they h
 
 test('on computers the pop-up stays until clicked, and an open Recharge window chimes the moment it arrives',async()=>{
  const sw=await fs.readFile('mobile/web-static/sw.js','utf8');
- assert.match(sw,/requireInteraction: true/);assert.match(sw,/tag: "recharge", renotify: true/,'a new one replaces the last and alerts again');
+ assert.match(sw,/requireInteraction: true/);assert.match(sw,/tag, renotify: true/,'a new one replaces the last of its conversation and alerts again (tests/push-copy.test.mjs)');
  assert.match(sw,/postMessage\(\{ type: "recharge-push" \}\)/);
  const page=await fs.readFile('mobile/src/LiveWorkspace.tsx','utf8');
  assert.match(page,/type !== "recharge-push"/);

@@ -71,7 +71,9 @@ export const chatActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('startOwner'), ownerId: uuid.optional() }).strict(),
   z.object({ action: z.literal('send'), requestId: uuid, conversationId: uuid, body: z.string().trim().max(4000, 'Messages can be up to 4,000 characters'),
     // Files uploaded for this message with prepareFiles (words, photos or both).
-    attachments: z.array(uuid).max(MAX_CHAT_PHOTOS + MAX_CHAT_VIDEOS).optional() }).strict(),
+    attachments: z.array(uuid).max(MAX_CHAT_PHOTOS + MAX_CHAT_VIDEOS).optional(),
+    // @mentions in a group conversation (migration 20261021400000): the people it mentions, and whether it mentions everyone.
+    mentions: z.array(uuid).max(50).optional(), mentionEveryone: z.boolean().optional() }).strict(),
   z.object({ action: z.literal('markRead'), conversationId: uuid }).strict(),
   // Makes the team channels (Everyone and each department) the first time anyone opens Messages.
   z.object({ action: z.literal('openTeams') }).strict(),
@@ -123,6 +125,8 @@ export const conversationSchema = z.object({
   mine: z.boolean().optional(), propertyIds: z.array(uuid).default([]),
   // An owner conversation the team has closed (the team's view only; migration 20261015320000).
   closed: z.boolean().default(false),
+  // An unread message here mentions the reader, or everyone (migration 20261021400000): the list shows "@".
+  mentioned: z.boolean().default(false),
 });
 export type Conversation = z.infer<typeof conversationSchema>;
 // The channels first, in their fixed order, then everything else as the list gave it (newest first).
@@ -142,7 +146,9 @@ export const messageSchema = z.object({ id: uuid, body: z.string(), at: z.string
   // An "event" is a line about the group ("added Alex"), shown in the middle.
   kind: z.enum(['text', 'event']).default('text'), attachments: z.array(attachmentSchema).default([]), reactions: z.array(reactionSchema).default([]),
   // Removed by an admin (for everyone), or written by someone you blocked (for you). Either way the words, photos and reactions are withheld.
-  removed: z.boolean().default(false), blocked: z.boolean().default(false) });
+  removed: z.boolean().default(false), blocked: z.boolean().default(false),
+  // Who it mentions (you: the reader), and whether it mentions everyone (migration 20261021400000).
+  mentions: z.array(z.object({ userId: uuid, name: z.string(), you: z.boolean() })).default([]), mentionsEveryone: z.boolean().default(false) });
 export type ChatMessage = z.infer<typeof messageSchema>;
 export const threadSchema = z.object({ conversation: conversationSchema, messages: z.array(messageSchema) });
 const personSchema = z.object({ userId: uuid, fullName: z.string(), role: z.string(), photo: z.string().nullable().default(null), seenAt: seenSchema });

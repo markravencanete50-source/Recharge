@@ -106,6 +106,11 @@ const worker = {
         console.error('Direct-booking follow-ups failed; the next run retries.');
       }));
     }
+    // Each morning from 07:00 London: one "your cleans today" notice per cleaner with a clean that day. It runs every
+    // 15 minutes so a missed 07:00 tick catches up; the database sends each notice once and never from 11:00.
+    ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_clean_morning_notices', {})).catch(() => {
+      console.error('Clean morning notices failed; the next run retries.');
+    }));
     // Owners are reminded once an approval has waited 48 hours; client relations are told at 96.
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_chase_owner_approvals', {})).catch(() => {
       console.error('Owner approval reminders failed; the next run retries.');

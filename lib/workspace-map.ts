@@ -112,7 +112,9 @@ export function phoneBarFor(role: string): readonly BarItem[] {
   if (role === "client") return ownerNavigation();
   const item = (value: WorkspaceSection, label: string, icon: string): BarItem => ({ value, label, icon });
   const home = item("home", "Home", "home"), todo = item("todo", "To-do", "check-circle"), calendar = item("calendar", "Calendar", "calendar"), messages = item("inbox", "Messages", "message-circle");
-  if (role === "cleans" || role === "cleaning_manager") return [home, todo, item("work", "Cleans", "check-square"), item("properties", "Properties", "key"), messages];
+  // Cleaners: Calendar replaces Properties (now in the Menu), so their week with checkout and arrival times is one tap away.
+  if (role === "cleans") return [home, todo, item("work", "Cleans", "check-square"), calendar, messages];
+  if (role === "cleaning_manager") return [home, todo, item("work", "Cleans", "check-square"), item("properties", "Properties", "key"), messages];
   if (role === "ready") return [home, item("work", "Maintenance", "tool"), calendar, todo, messages];
   // Accounts: invoices and owner statements stay the daily work.
   if (role === "accounts") return [home, todo, item("work", "Invoices", "file-text"), item("statements", "Statements", "pie-chart"), messages];

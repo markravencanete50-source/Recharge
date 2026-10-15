@@ -121,7 +121,7 @@ export function businessFigures(d: OverviewData, today: string): BusinessFigure[
 }
 
 // The words for one figure, for screen readers and tests: "Occupancy: 64.2%, up 4.2 points on Sep. Open".
-export const figureText = (f: BusinessFigure) => `${f.label}: ${f.missing ? 'not available' : f.value}${f.change ? `, ${f.change.spoken}` : ''}`;
+export const figureText = (f: Pick<BusinessFigure, 'label' | 'value' | 'missing' | 'change'>) => `${f.label}: ${f.missing ? 'not available' : f.value}${f.change ? `, ${f.change.spoken}` : ''}`;
 
 // "Needs your attention" on the admins' Home: the first six, then "See all (n)" opens the rest in place.
 export const ATTENTION_SHOWN = 6;

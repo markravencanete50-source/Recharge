@@ -25,7 +25,7 @@ import { DateField } from "./CalendarPicker";
 import { radius, space, textSize, ui, type Palette } from "./theme";
 import { readControls, readOperations, readTeams, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
-import { candidatesSchema, disputeFor, guestLine, monthPay, performanceSchema, problemsOf, scheduleSchema, type CleanerMonth } from "../../lib/cleans-live";
+import { candidatesSchema, cleanTimesLine, defaultRedoBy, disputeFor, guestLine, hoursLine, hoursProblem, monthPay, performanceSchema, problemsOf, redoByFrom, redoByLabel, redoParts, scheduleSchema, type CleanerMonth } from "../../lib/cleans-live";
 import { repairTypeLabel } from "../../lib/repair-guides";
 import { formatDay, formatMoney } from "../../lib/format";
 import { canStart } from "../../lib/home-tools";
@@ -49,7 +49,9 @@ const phaseLabel: Record<string, string> = { assigned: "To do", review: "Waiting
 // One clean in the schedule list: the schedule row and its operation, with what the list shows about
 // them (address, cleaner, status, whether its form is in, what is next and when it last changed).
 type ScheduleWork = Schedule["work"][number];
-type CleanRow = { w: ScheduleWork; phase: string; address: string; state: FormState; late: boolean; forms: FormsIn; management: string | null; next: CleanNext | null; stamp: string; redo: boolean; problems: number; checks: number; people: string | null };
+type CleanRow = { w: ScheduleWork; phase: string; address: string; state: FormState; late: boolean; forms: FormsIn; management: string | null; next: CleanNext | null; stamp: string; redo: boolean; problems: number; checks: number; people: string | null;
+  // Cleaner flow: "Checkout 10:00 · next guests 15:00", and "Redo by 18:00 today" on a clean sent back.
+  times: string | null; redoBy: string | null };
 
 export function LiveCleans({ palette: p, account, properties, onForm }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onForm?: (form: WorkflowForm) => void }) {
   const saved = useSaved();
@@ -60,6 +62,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   // Open disputes about rejected cleans. Admins and cleaning managers decide them and set cleaners' pay.
   const [complaints, setComplaints] = useState<Operation[]>([]);
   const canDecide = ["admin", "super_admin", "cleaning_manager"].includes(account.role);
+  const canSetRate = ["admin", "super_admin", "accounts"].includes(account.role);
   const [dispute, setDispute] = useState<DisputeTarget | null>(null);
   const [rateFor, setRateFor] = useState<CleanerMonth | null>(null);
   const [performance, setPerformance] = useState<Performance>([]);
@@ -136,6 +139,8 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       w, phase: String(op?.data.phase ?? ""), address: addressOf(property) || w.propertyName, state, late: submittedLate(input), forms: formsIn(op?.data), management: managementLine(state, flags, w.workId),
       next: op ? cleanNext({ ...input, data: op.data }, { manager, userId: account.userId }) : null, stamp: manager && op ? updateStamp(lastUpdateOf(op), now) : "",
       redo: String(op?.data.phase ?? "") === "assigned" && op?.data.accepted === false, problems: op ? problemsOf(op.data).length : 0, checks: checklistOf(op).length, people: guestLine(guests.get(w.workId)),
+      times: cleanTimesLine(guests.get(w.workId), w.dueOn),
+      redoBy: String(op?.data.phase ?? "") === "assigned" && op?.data.accepted === false ? redoByLabel(typeof op?.data.redoBy === "string" ? op.data.redoBy : null, now) : null,
     };
   };
   // The Unsubmitted forms filter lists every clean in view whose form is unsubmitted or a warning, oldest day first.
@@ -297,9 +302,10 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
                   </View>
                   {canDecide && <View style={[ui.between, { gap: 10, flexWrap: "wrap" }]}>
                     <Text style={[ui.small, { color: p.muted, flex: 1, minWidth: 160 }]}>{pay.rateMinor === null ? "No pay rate set yet" : `${formatMoney(pay.rateMinor)} a clean · ${pay.label} this month`}</Text>
-                    <MotionPress accessibilityRole="button" accessibilityLabel={`Set pay per clean for ${row.fullName}`} onPress={() => setRateFor(row)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}>
+                    {/* Cleaner flow: only admins and Accounts set rates (cleaning managers see them). */}
+                    {canSetRate && <MotionPress accessibilityRole="button" accessibilityLabel={`Set pay per clean for ${row.fullName}`} onPress={() => setRateFor(row)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}>
                       <Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>{pay.rateMinor === null ? "Set pay rate" : "Change rate"}</Text>
-                    </MotionPress>
+                    </MotionPress>}
                   </View>}
                 </View>
               );
@@ -338,7 +344,7 @@ function StatusTags({ p, row }: { p: Palette; row: CleanRow }) {
   return (
     <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
       <Tag label={phaseLabel[row.phase] ?? readableStage(row.w.status)} tone={row.phase === "accepted" ? "good" : row.phase === "review" ? "wait" : "plain"} p={p} />
-      {row.redo && <Tag label="Not accepted" tone="bad" p={p} />}
+      {row.redo && <Tag label={row.redoBy ?? "Not accepted"} tone="bad" p={p} />}
       {row.problems > 0 && <Tag label={row.problems === 1 ? "Problem reported" : `${row.problems} problems reported`} tone="wait" p={p} />}
     </View>
   );
@@ -389,6 +395,10 @@ function CleanCard({ p, row, manager, showDate, onOpen }: { p: Palette; row: Cle
       </View>
       {!!row.next && <Text numberOfLines={2} style={[ui.small, { color: row.next.mine ? p.primary : p.muted, fontWeight: "600" }]}>{row.next.label}</Text>}
       {manager && !!row.stamp && <Text numberOfLines={1} style={[ui.small, { color: p.muted, fontVariant: ["tabular-nums"] }]}>{row.stamp}</Text>}
+      {!!row.times && <View style={[ui.row, { gap: 8 }]}>
+        <Feather name="clock" size={14} color={p.muted} />
+        <Text style={[ui.small, { color: p.muted, flex: 1 }]}>{row.times}</Text>
+      </View>}
       {!!row.people && <View style={[ui.row, { gap: 8 }]}>
         <Feather name="users" size={14} color={p.muted} />
         <Text style={[ui.small, { color: p.muted, flex: 1 }]}>{row.people}</Text>
@@ -439,6 +449,15 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
   const [formChecked, setFormChecked] = useState(false);
   const [guestFeedback, setGuestFeedback] = useState("");
   const [reviewNote, setReviewNote] = useState("");
+  // Cleaner flow: optional start and finish times on the form; on a rejection, when to redo it (London day and time).
+  const [startedAt, setStartedAt] = useState("");
+  const [finishedAt, setFinishedAt] = useState("");
+  const [redoDay, setRedoDay] = useState("");
+  const [redoTime, setRedoTime] = useState("");
+  const chooseAccepted = (value: boolean) => {
+    setAccepted(value);
+    if (!value && !redoDay) { const usual = redoParts(defaultRedoBy(new Date())); setRedoDay(usual.day); setRedoTime(usual.time); }
+  };
   const [candidates, setCandidates] = useState<z.infer<typeof candidatesSchema>>([]);
   const request = useRequestId(op ? op.workId + ":" + op.version : null);
   const canSubmit = !manager && op?.assigneeId === account.userId && phase === "assigned";
@@ -450,7 +469,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
   const workId = op?.workId;
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setAnswers({}); setItems([]); setList(null); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setFormChecked(false); setGuestFeedback(""); setReviewNote(""); setReporting(false); });
+    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setAnswers({}); setItems([]); setList(null); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setFormChecked(false); setGuestFeedback(""); setReviewNote(""); setReporting(false); setStartedAt(""); setFinishedAt(""); setRedoDay(""); setRedoTime(""); });
     return () => { active = false; };
   }, [workId]);
   useEffect(() => {
@@ -471,7 +490,8 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
   const sent = [...new Set([...verified, ...(list?.photoIds ?? [])])].slice(0, 30);
   const left = unanswered(answers);
   const blockers = [...submitBlockers(progress, { report, savedPhotos: sent.length, uploading: photos.uploading || !!list?.uploading || (postPhotos && mailPhotos.uploading) }),
-    ...(left ? [`Answer the property check (${left} question${left === 1 ? "" : "s"} left).`] : [])];
+    ...(left ? [`Answer the property check (${left} question${left === 1 ? "" : "s"} left).`] : []),
+    ...(hoursProblem(startedAt, finishedAt) ? [hoursProblem(startedAt, finishedAt)!] : [])];
   const condition = conditionOf(answers, items);
   const purchaseForm = op && submitted ? followUp(account, op.propertyId, op.workId, "purchase", "") : null;
   const repairForm = op && submitted ? followUp(account, op.propertyId, op.workId, "maintenance", "") : null;
@@ -479,7 +499,10 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
   // Where this clean's form stands, and whether management already holds a flag for it.
   const formInput: CleanFormInput = { dueOn: op?.dueOn ?? (typeof op?.data.dueOn === "string" ? op.data.dueOn : null), status: op?.status, assigneeId: op?.assigneeId, data: op?.data };
   const state = formState(formInput, now), late = submittedLate(formInput), openFlag = op ? openFlagFor(flags, { workId: op.workId }) : null;
-  const reviewProblems = reviewBlockers({ accepted, formChecked, guestFeedback, reviewNote });
+  const redoBy = accepted === false ? redoByFrom(redoDay, redoTime, now) : null;
+  const reviewProblems = reviewBlockers({ accepted, formChecked, guestFeedback, reviewNote, redoBy });
+  const hours = op ? hoursLine(op.data) : null;
+  const redoLabel = op && phase === "assigned" && op.data.accepted === false ? redoByLabel(typeof op.data.redoBy === "string" ? op.data.redoBy : null, now) : null;
 
   return (
     <Sheet palette={p} visible={!!op} onClose={onClose} title={propertyName} subtitle={op ? `${typeof op.data.dueOn === "string" ? dayLabel(op.data.dueOn) : ""} · ${phaseLabel[phase] ?? readableStage(op.status)}` : ""} icon="spray">
@@ -495,8 +518,10 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
         </View>
         {!!rejection && <View style={{ gap: 6 }}>
           <Notice text={`${dispute?.status === "overturned" ? "Rejected, then overturned" : phase === "assigned" ? "Not accepted" : "Earlier review, not accepted"}: ${rejection}`} p={p} tone={dispute?.status !== "overturned" && phase === "assigned" ? "bad" : "plain"} />
+          {!!redoLabel && <Tag label={redoLabel} tone="bad" p={p} />}
           {!!feedback && <Text style={[ui.small, { color: p.muted }]}>Guest feedback: {feedback}</Text>}
         </View>}
+        {!!hours && !canSubmit && <Text style={[ui.small, { color: p.muted }]}>{hours}</Text>}
         {!!dispute && <View style={{ gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.border }}>
           <View style={[ui.between, { gap: 8 }]}>
             <Text style={{ color: p.text, fontWeight: "700", flex: 1 }}>Dispute</Text>
@@ -526,6 +551,10 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
           <PhotoPicker key={"photos:" + op.workId} p={p} workId={op.workId} purpose="cleaning" label="Photos" max={30} onChange={onCleanPhotos} />
           <Field label="Report" value={report} onChange={setReport} p={p} multiline placeholder="What you cleaned, anything broken or missing, Wi-Fi checked" />
           <CleanCheckForm p={p} answers={answers} items={items} onAnswers={setAnswers} onItems={setItems} />
+          <View style={[ui.row, { gap: 8 }]}>
+            <View style={{ flex: 1 }}><Field label="Started (optional)" value={startedAt} onChange={setStartedAt} p={p} placeholder="10:30" /></View>
+            <View style={{ flex: 1 }}><Field label="Finished (optional)" value={finishedAt} onChange={setFinishedAt} p={p} placeholder="13:15" /></View>
+          </View>
           {/* The owner's mailbox permission from onboarding: the cleaner records doing exactly that. */}
           {mailPreference && <View style={{ gap: 8 }}>
             <Text accessibilityRole="header" style={{ color: p.text, fontSize: textSize.body, fontWeight: "600" }}>Post</Text>
@@ -537,7 +566,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
             {postPhotos && <PhotoPicker key={op.workId} p={p} workId={op.workId} purpose="mailbox" label="Photos of the post" hint="The owner sees these in their Mailbox." onChange={onMailPhotos} />}
           </View>}
           <Button label={busy ? "Sending…" : "Submit clean"} icon="send" primary p={p} disabled={!ready || busy}
-            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: sent, ...(condition ? { condition } : {}), mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}), ...(postPhotos && mailPhotos.ids.length ? { mailPhotoIds: mailPhotos.ids } : {}) } }))} />
+            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "submitCleaning", data: { checks: checklist, report: report.trim(), photoIds: sent, ...(condition ? { condition } : {}), mailAction: mailPreference && mailDone ? mailPreference : "none", ...(mailPreference && mailDone && mailNote.trim() ? { mailNote: mailNote.trim().slice(0, 500) } : {}), ...(postPhotos && mailPhotos.ids.length ? { mailPhotoIds: mailPhotos.ids } : {}), ...(startedAt.trim() ? { startedAt: startedAt.trim() } : {}), ...(finishedAt.trim() ? { finishedAt: finishedAt.trim() } : {}) } }))} />
           {!ready && <View accessibilityLiveRegion="polite" style={{ gap: 2 }}>{blockers.map(b => <Text key={b} style={[ui.small, { color: p.muted }]}>{b}</Text>)}</View>}
         </>}
 
@@ -546,6 +575,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
           onRepair={repairForm && onForm ? text => onForm(followUp(account, op.propertyId, op.workId, "maintenance", text)!) : undefined} />}
         {canReview && <>
           <Notice text={typeof op.data.report === "string" ? `Cleaner's report: ${op.data.report}` : "The cleaner has submitted this clean."} p={p} />
+          {!!hours && <Tag label={hours} tone="plain" p={p} />}
           <ChecklistReview key={op.workId} p={p} workId={op.workId} checklist={checklist} />
           <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: formChecked }} onPress={() => { if (formChecked && accepted === true) setAccepted(null); setFormChecked(v => !v); }} style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, backgroundColor: formChecked ? p.successWash : p.elevated }]}>
             <Feather name={formChecked ? "check-square" : "square"} size={20} color={formChecked ? p.success : p.muted} />
@@ -553,14 +583,22 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
           </MotionPress>
           {!formChecked && <Text style={[ui.small, { color: p.muted }]}>Tick the box to accept this clean. You can reject it without ticking.</Text>}
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true, disabled: !formChecked }} disabled={!formChecked} onPress={() => { if (formChecked) setAccepted(true); }} style={[ui.button, { flex: 1, opacity: formChecked ? 1 : 0.5, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? p.onSuccess : p.primary }]}>Accept</Text></MotionPress>
-            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === false }} onPress={() => setAccepted(false)} style={[ui.button, { flex: 1, backgroundColor: accepted === false ? p.danger : p.wash }]}><Text style={[ui.buttonText, { color: accepted === false ? p.onPrimary : p.primary }]}>Reject</Text></MotionPress>
+            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === true, disabled: !formChecked }} disabled={!formChecked} onPress={() => { if (formChecked) chooseAccepted(true); }} style={[ui.button, { flex: 1, opacity: formChecked ? 1 : 0.5, backgroundColor: accepted === true ? p.success : p.wash }]}><Text style={[ui.buttonText, { color: accepted === true ? p.onSuccess : p.primary }]}>Accept</Text></MotionPress>
+            <MotionPress accessibilityRole="radio" accessibilityState={{ selected: accepted === false }} onPress={() => chooseAccepted(false)} style={[ui.button, { flex: 1, backgroundColor: accepted === false ? p.danger : p.wash }]}><Text style={[ui.buttonText, { color: accepted === false ? p.onPrimary : p.primary }]}>Reject</Text></MotionPress>
           </View>
-          <Field label="Guest feedback" value={guestFeedback} onChange={setGuestFeedback} p={p} multiline placeholder="What guests said, or 'No comments'" />
+          <Field label={accepted === false ? "Guest feedback" : "Guest feedback (optional)"} value={guestFeedback} onChange={setGuestFeedback} p={p} multiline placeholder="What guests said, or 'No comments'" />
           <Field label="Your review" value={reviewNote} onChange={setReviewNote} p={p} multiline placeholder={accepted === false ? "What was not up to standard" : "What you checked"} />
-          {accepted === false && <Text style={[ui.small, { color: p.muted }]}>{REJECT_NOTE}</Text>}
+          {accepted === false && <>
+            <Text accessibilityRole="header" style={{ color: p.text, fontSize: textSize.body, fontWeight: "600" }}>Redo by</Text>
+            <View style={[ui.row, { gap: 8 }]}>
+              <View style={{ flex: 1 }}><DateField p={p} label="Day" mode="single" wholeMonthLink={false} empty="Choose a day" today={london(now)} value={{ from: redoDay, to: redoDay }} onChange={next => setRedoDay(next.from)} /></View>
+              <View style={{ flex: 1 }}><Field label="Time" value={redoTime} onChange={setRedoTime} p={p} placeholder="18:00" /></View>
+            </View>
+            <Text style={[ui.small, { color: redoBy ? p.muted : p.danger }]}>{redoBy ? `${redoByLabel(redoBy, now)}. The cleaner is told straight away.` : "Choose a day and time (HH:MM) in the next seven days."}</Text>
+            <Text style={[ui.small, { color: p.muted }]}>{REJECT_NOTE}</Text>
+          </>}
           <Button label={busy ? "Saving…" : accepted === false ? "Reject and send to management" : "Save review"} primary p={p} disabled={busy || reviewProblems.length > 0}
-            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "reviewCleaning", data: { accepted: accepted === true, guestFeedback: guestFeedback.trim(), reviewNote: reviewNote.trim() } }))} />
+            onPress={() => void run(() => writeOperation({ action: "updateOperation", requestId: request.get(), workId: op.workId, version: op.version, step: "reviewCleaning", data: { accepted: accepted === true, ...(guestFeedback.trim() ? { guestFeedback: guestFeedback.trim() } : {}), reviewNote: reviewNote.trim(), ...(accepted === false && redoBy ? { redoBy } : {}) } }))} />
         </>}
 
         {canAssign && <>

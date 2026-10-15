@@ -15,7 +15,8 @@ import { SavedReplies } from "./SavedReplies";
 import { ClientEmailRow, ClientEmailThreadPane } from "./ClientEmailThread";
 import { clientEmailListSchema, clientEmailStatus, type ClientEmailThread } from "../../lib/client-email-policy";
 import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, messageTabs, presenceLabel, presenceOf, threadSchema, type ChatMessage, type ChatReaction, type Conversation, type MessagesTab } from "../../lib/workspace-chat-policy";
-import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
+import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, MentionPicker, MessageText, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
+import { insertMention, mentionOptions, mentionQuery, mentionsIn, type MentionOption } from "../../lib/chat-mentions";
 import { MessageSafety } from "./ChatSafety";
 import { MicButton, VoiceBar, useVoiceNote } from "./VoiceNotes";
 import { BLOCKED_LABEL, REMOVED_LABEL } from "../../lib/chat-moderation";
@@ -70,7 +71,7 @@ export function useGuestWaiting(account: WorkspaceAccount) {
 
 function ConversationRow({ p, c, active, onPress }: { p: Palette; c: Conversation; active: boolean; onPress: () => void }) {
   return (
-    <MotionPress accessibilityRole="button" accessibilityLabel={`${c.title}${c.unread ? `, ${c.unread} unread` : ""}`} onPress={onPress}
+    <MotionPress accessibilityRole="button" accessibilityLabel={`${c.title}${c.unread ? `, ${c.unread} unread` : ""}${c.mentioned ? ", you were mentioned" : ""}`} onPress={onPress}
       style={[ui.row, { gap: 12, padding: 12, borderRadius: 16, backgroundColor: active ? p.wash : "transparent" }]}>
       <ConversationAvatar p={p} c={c} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -82,6 +83,8 @@ function ConversationRow({ p, c, active, onPress }: { p: Palette; c: Conversatio
           <Text numberOfLines={1} style={[ui.small, { color: c.unread ? p.text : p.muted, flex: 1, fontWeight: c.unread ? "600" : "400" }]}>
             {c.last ? c.last.kind === "event" ? `${c.last.authorName} ${c.last.body}` : `${c.kind !== "direct" || c.last.authorName === "You" ? c.last.authorName + ": " : ""}${c.last.body}` : c.propertyName ? `About ${c.propertyName}` : c.subtitle ?? "No messages yet"}
           </Text>
+          {/* An unread message here mentions you (or everyone): "@" beside the count. */}
+          {c.mentioned && <View {...(Platform.OS === "web" ? { dataSet: { mentioned: "true" } } : {})} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: p.primary, alignItems: "center", justifyContent: "center" }}><Text style={{ color: p.surface, fontSize: 13, fontWeight: "600", lineHeight: 16 }}>@</Text></View>}
           {c.unread > 0 && <View style={{ minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: p.primary, alignItems: "center", justifyContent: "center" }}><Text style={{ color: p.surface, fontSize: 12, fontWeight: "600" }}>{c.unread > 99 ? "99+" : c.unread}</Text></View>}
         </View>
       </View>
@@ -131,7 +134,7 @@ function Bubble({ p, m, showName, readOnly, reacting, onReacting, onReact, onSaf
         <Pressable onLongPress={readOnly ? undefined : () => onReacting(true)} delayLongPress={350} style={{ maxWidth: "78%", gap: 4, alignItems: mine ? "flex-end" : "flex-start" }}>
           {!!m.attachments.length && <Attachments p={p} items={m.attachments} mine={mine} />}
           {words && <View style={[{ paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, borderBottomRightRadius: mine ? 6 : 20, borderBottomLeftRadius: mine ? 20 : 6, borderWidth: mine ? 0 : 1, borderColor: p.border }, mine ? primaryFill(p) : { backgroundColor: p.surface, ...depth.card }]}>
-            <Text selectable style={{ color: mine ? p.onPrimary : p.text, fontSize: 15, lineHeight: 21 }}>{m.body}</Text>
+            <MessageText p={p} m={m} />
           </View>}
         </Pressable>
         {react}
@@ -208,7 +211,9 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
     box.style.height = before;
     setInputHeight(next);
   });
-  const write = (value: string) => { setText(value); fit(); };
+  // Where the caret is, for @mentions: typing at the end keeps it at the end.
+  const [caret, setCaret] = useState(0), [placeCaret, setPlaceCaret] = useState<number | null>(null);
+  const write = (value: string) => { if (caret >= text.length) setCaret(value.length); setText(value); fit(); };
   // A ref (not state) guards against a second tap or Enter in the same instant, and the request id is
   // kept until the message is sent, so a retry after a timeout never posts it twice.
   const inFlight = useRef(false), pending = useRef<{ key: string; requestId: string } | null>(null);
@@ -220,8 +225,11 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
     const key = body + "|" + attachments.join();
     if (pending.current?.key !== key) pending.current = { key, requestId: Crypto.randomUUID() };
     try {
-      await writeChat({ action: "send", requestId: pending.current.requestId, conversationId: id, body, ...(attachments.length ? { attachments } : {}) });
-      pending.current = null; setText(""); setInputHeight(INPUT_MIN); files.clear(); atEnd.current = true; await load(); onChanged();
+      // Who the message mentions, from the people in this group conversation; the database checks them again.
+      const mentioned = mentionable ? mentionsIn(body, mentionPeople) : { userIds: [], everyone: false };
+      await writeChat({ action: "send", requestId: pending.current.requestId, conversationId: id, body, ...(attachments.length ? { attachments } : {}),
+        ...(mentioned.userIds.length ? { mentions: mentioned.userIds } : {}), ...(mentioned.everyone ? { mentionEveryone: true } : {}) });
+      pending.current = null; setText(""); setCaret(0); setDismissed(null); setInputHeight(INPUT_MIN); files.clear(); atEnd.current = true; await load(); onChanged();
     }
     catch (e) { setError(message(e)); } finally { inFlight.current = false; setSending(false); }
   }
@@ -230,6 +238,19 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
   const showMic = voice.supported && !readOnly && (voice.active || (!text.trim() && !files.items.length));
   async function attach() { setError(""); const problem = await files.pick().catch(e => message(e)); if (problem) setError(problem); }
   const c = thread?.conversation;
+  // @mentions: only in a group conversation (a team channel or a group chat), never 1-to-1 or with an owner. Typing "@" lists the
+  // people in it and @everyone, narrowed as you type; Enter or a tap picks, Escape closes the list.
+  const mentionable = c?.kind === "group" && !readOnly;
+  const mentionPeople = (members?.members ?? []).map(x => ({ userId: x.userId, fullName: x.fullName, you: x.you }));
+  const typing = mentionable ? mentionQuery(text, caret) : null;
+  const [dismissed, setDismissed] = useState<number | null>(null);
+  const options = typing && typing.start !== dismissed ? mentionOptions(typing.query, mentionPeople) : [];
+  function pickMention(option: MentionOption) {
+    if (!typing) return;
+    const next = insertMention(text, typing.start, caret, option);
+    setText(next.text); setCaret(next.caret); setPlaceCaret(next.caret); fit();
+    input.current?.focus();
+  }
   // The team's side of an owner conversation can be closed (the Clients tab's Closed); any new message reopens it.
   const teamOwnerView = c?.kind === "owner" && c.title !== "Recharge";
   const [closing, setClosing] = useState(false);
@@ -273,6 +294,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
       {!!problem && <Notice text={problem} p={p} tone="bad" />}
       {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.title, property: c.propertyName }} onInsert={reply => { setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply); fit(); }} />}
       <PendingFiles p={p} items={files.items} onRemove={files.remove} onRetry={files.retry} />
+      {!voice.active && <MentionPicker p={p} options={options} members={members?.members ?? []} onPick={pickMention} />}
       <View style={[ui.row, { gap: 8, alignItems: "flex-end" }]}>
         {voice.active ? <VoiceBar p={p} voice={voice} /> : <View style={[ui.row, { flex: 1, gap: 8, alignItems: "flex-end" }]}>
           {!readOnly && <MotionPress accessibilityRole="button" accessibilityLabel="Add photos or a video (up to 5 photos and 1 video of 50 MB)" onPress={() => void attach()}
@@ -281,7 +303,15 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
           </MotionPress>}
           <TextInput ref={input} value={text} onChangeText={write} placeholder={files.items.length ? "Add a message (optional)" : "Write a message"} placeholderTextColor={p.muted} multiline maxLength={4000} accessibilityLabel="Message"
             onFocus={() => { if (voice.error) voice.clearError(); }}
-            onKeyPress={e => { const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean }; if (Platform.OS === "web" && key.key === "Enter" && !key.shiftKey) { (e as unknown as { preventDefault: () => void }).preventDefault(); void send(); } }}
+            selection={placeCaret === null ? undefined : { start: placeCaret, end: placeCaret }}
+            onSelectionChange={e => { setCaret(e.nativeEvent.selection.end); if (placeCaret !== null) setPlaceCaret(null); }}
+            onKeyPress={e => {
+              const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean }, stop = () => (e as unknown as { preventDefault: () => void }).preventDefault();
+              if (Platform.OS !== "web") return;
+              if (options.length && (key.key === "Enter" || key.key === "Tab") && !key.shiftKey) { stop(); pickMention(options[0]); return; }
+              if (options.length && key.key === "Escape" && typing) { stop(); setDismissed(typing.start); return; }
+              if (key.key === "Enter" && !key.shiftKey) { stop(); void send(); }
+            }}
             style={[{ flex: 1, minHeight: 46, maxHeight: INPUT_MAX, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 18, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 15 },
               Platform.OS === "web" ? { height: inputHeight, lineHeight: INPUT_LINE, fontSize: 16 } : null]} />
         </View>}

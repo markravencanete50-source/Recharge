@@ -87,7 +87,7 @@ test('management: decide complaints and cleaner reviews from the queue', async (
     let job = (await rpc('workspace_operations_read', [property])).map(o => operationViewSchema.parse(o)).find(o => o.workId === created.workId);
     job = await operation({ action: 'updateOperation', workId: job.workId, version: job.version, step: 'submitCleaning', data: { checks: ['Kitchen'], report: 'Kitchen cleaned', photoIds: [photo], mailAction: 'none' } });
     await as(MANAGER);
-    await operation({ action: 'updateOperation', workId: job.workId, version: job.version, step: 'reviewCleaning', data: { accepted: false, guestFeedback: 'Guest found crumbs', reviewNote: 'Counter missed' } });
+    await operation({ action: 'updateOperation', workId: job.workId, version: job.version, step: 'reviewCleaning', data: { accepted: false, redoBy: new Date(Date.now() + 3600000).toISOString(), guestFeedback: 'Guest found crumbs', reviewNote: 'Counter missed' } });
   };
   await rejectClean(day.d);
   await rejectClean(day.d1);

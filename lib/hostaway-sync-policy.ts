@@ -20,6 +20,10 @@ export type SyncReservation = {
   channel: SyncChannel; channelReference: string | null; guests: number | null; payoutMinor: number | null;
   // What the expected payout was worked out from (null when the stay is not in pounds, or is an owner stay).
   payoutBreakdown: PayoutBreakdown | null;
+  // The stay's check-in and checkout times ("15:00"), when Hostaway gives them; only present then (migration 20261021500000).
+  checkInTime?: string; checkOutTime?: string;
+  // Booking detail for Reports > Guests & stays (20261021600000). Null for an owner stay; each field null when Hostaway did not say.
+  stayDetails: StayDetails | null;
 };
 
 export function syncListing(raw: unknown): SyncListing | null {
@@ -146,6 +150,63 @@ export function syncPayout(r: Raw, channel: SyncChannel): { payoutMinor: number 
 }
 export const syncPayoutMinor = (r: Raw, channel: SyncChannel): number | null => syncPayout(r, channel).payoutMinor;
 
+// --- Booking detail for Guests & stays ---------------------------------------------------------------------
+// Every Hostaway field name read for the report, first match wins. Taken from Hostaway's reservation object as other code
+// here already reads it (lib/hostaway.ts reads adults/numberOfAdults, children/numberOfChildren, infants/numberOfInfants)
+// and from Hostaway's public API reference. Assumptions to check against a real response:
+// - pets is a count, like adults. numberOfPets is read as well in case it is named like the others.
+// - guestCountry is the guest's country as Hostaway gives it: a two-letter code (kept in capitals) or a country name.
+//   Only the country is read; never the guest's address, city, postcode, phone or email.
+// - reservationDate is when the guest booked ("YYYY-MM-DD HH:MM:SS", UTC like Hostaway's other times). insertedOn, when
+//   Hostaway recorded the booking, is the fallback; for a booking imported into Hostaway later it can be later than the real
+//   booking, so the lead time can read short.
+// Planned check-in and checkout times are not here: the cleaner flow (20261021500000, syncClock below) already keeps
+// Hostaway's checkInTime and checkOutTime on the stay (check_in_time, check_out_time).
+export const HOSTAWAY_STAY_FIELDS = {
+  adults: ['adults', 'numberOfAdults'], children: ['children', 'numberOfChildren'], infants: ['infants', 'numberOfInfants'], pets: ['pets', 'numberOfPets'],
+  guestCountry: ['guestCountry'], bookedAt: ['reservationDate', 'insertedOn'],
+} as const;
+export type StayDetails = {
+  adults: number | null; children: number | null; infants: number | null; pets: number | null;
+  guestCountry: string | null; bookedAt: string | null;
+};
+const pick = (r: Raw, keys: readonly string[]) => keys.map(k => r[k]).find(v => v !== undefined && v !== null && v !== '');
+// A head count from 0 to 50, else unknown.
+function headCount(value: unknown): number | null {
+  const n = number(value);
+  return n !== null && n >= 0 && n <= 50 && Number.isInteger(n) ? n : null;
+}
+// A country code or name only: letters, spaces and a few marks, 2 to 60 characters. Anything else is not stored.
+function country(value: unknown): string | null {
+  const t = text(value).replace(/\s+/g, ' ');
+  if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase();
+  return /^\p{L}[\p{L} .'()-]{2,59}$/u.test(t) ? t : null;
+}
+// "2026-10-12 09:30:00" (UTC), an ISO time with a zone, or a bare day -> ISO UTC; null when it cannot be read.
+function bookedTime(value: unknown): string | null {
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(Z|[+-]\d{2}:?\d{2})?)?$/i.exec(text(value));
+  if (!m) return null;
+  const zone = !m[4] || m[4].toUpperCase() === 'Z' ? 'Z' : m[4].replace(/^([+-]\d{2})(\d{2})$/, '$1:$2');
+  const at = new Date(`${m[1]}T${m[2] ?? '00:00'}:${m[3] ?? '00'}${zone}`);
+  return Number.isNaN(at.getTime()) ? null : at.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+export function syncStayDetails(r: Raw): StayDetails {
+  const f = HOSTAWAY_STAY_FIELDS;
+  return {
+    adults: headCount(pick(r, f.adults)), children: headCount(pick(r, f.children)), infants: headCount(pick(r, f.infants)), pets: headCount(pick(r, f.pets)),
+    guestCountry: country(pick(r, f.guestCountry)), bookedAt: bookedTime(pick(r, f.bookedAt)),
+  };
+}
+
+// Hostaway's checkInTime and checkOutTime: an hour (15) or a clock ("15:30"), as "HH:MM"; null for anything else.
+export function syncClock(value: unknown): string | null {
+  const t = text(value);
+  const m = /^(\d{1,2})(?::(\d{2}))?(?::\d{2})?$/.exec(t);
+  if (!m) return null;
+  const hour = Number(m[1]), minute = Number(m[2] ?? 0);
+  return hour <= 23 && minute <= 59 ? `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}` : null;
+}
+
 export function syncReservation(raw: unknown): SyncReservation | null {
   const r = object(raw);
   const id = first(r.id, r.hostawayReservationId);
@@ -159,11 +220,14 @@ export function syncReservation(raw: unknown): SyncReservation | null {
   const channel = owner ? 'other' : syncChannel(first(r.channelName, r.source));
   const guests = number(r.numberOfGuests) ?? ((number(r.adults) ?? 0) + (number(r.children) ?? 0) || null);
   const payout = owner ? { payoutMinor: 0, breakdown: null } : syncPayout(r, channel);
+  const checkInTime = syncClock(r.checkInTime), checkOutTime = syncClock(r.checkOutTime);
   return {
     id, listingId, checkIn, checkOut, status, channel,
     channelReference: owner ? 'Owner stay' : first(r.channelReservationId, r.confirmationCode, r.reservationId).slice(0, 120) || null,
     guests: guests !== null && guests >= 1 && guests <= 50 ? Math.round(guests) : null,
     payoutMinor: payout.payoutMinor, payoutBreakdown: payout.breakdown,
+    ...(checkInTime ? { checkInTime } : {}), ...(checkOutTime ? { checkOutTime } : {}),
+    stayDetails: owner ? null : syncStayDetails(r),
   };
 }
 

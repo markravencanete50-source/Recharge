@@ -25,6 +25,7 @@ import { RechargeSplash } from "./RechargeSplash";
 import { GreetingCard } from "./WelcomeMoment";
 import { Reports } from "./Reports";
 import { BusinessReports } from "./BusinessReports";
+import { StayReports } from "./StayReports";
 import { Sheet } from "./TeamFlows";
 import { Bump, MotionPress, MotionProvider, Stagger, SwapIn, useMotionPreference, useReducedMotion } from "./motion";
 import { headerPalette, themes, ui, web, type Palette } from "./theme";
@@ -139,6 +140,8 @@ function IconButton({ label, icon, onPress, palette: p }: { label: string; icon:
   );
 }
 
+// A conversation's id in a pop-up's link.
+const CHAT_LINK = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p, theme, setTheme, onSignedOut, onDeleted, onAccount, welcomeOnOpen }: { account: WorkspaceAccount; realAccount: WorkspaceAccount; viewAs: ViewAs | null; onViewAs: (view: ViewAs | null) => Promise<void>; notice: string; palette: Palette; theme: "light" | "dark"; setTheme: (theme: "light" | "dark", reduced?: boolean) => void; onSignedOut: () => void; onDeleted: () => void; onAccount: (account: WorkspaceAccount) => void; welcomeOnOpen: boolean }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
@@ -248,6 +251,25 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // Set when Messages should open on its Updates tab (an old Updates link or a notice).
   const [chatUpdates, setChatUpdates] = useState<number | null>(null);
   const openMessages = (id: string) => { setOpenWork(null); setChatTarget({ id, nonce: Date.now() }); setChatUpdates(null); setFocus(null); router.setParams({ section: "inbox" }); };
+  // A tapped pop-up opens what it is about (mobile/web-static/sw.js): the conversation for a message ("chat" in the address when
+  // the app opens from it, or a message from the service worker when Recharge is already open), otherwise Messages or Home.
+  const { chat: chatLink } = useLocalSearchParams<{ chat?: string }>();
+  const popupOpen = useRef({ openMessages, navigate });
+  useEffect(() => { popupOpen.current = { openMessages, navigate }; });
+  useEffect(() => {
+    if (typeof chatLink === "string" && CHAT_LINK.test(chatLink)) queueMicrotask(() => popupOpen.current.openMessages(chatLink));
+  }, [chatLink]);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.serviceWorker) return;
+    const onOpen = (event: MessageEvent) => {
+      const data = event.data as { type?: string; url?: string } | null;
+      if (data?.type !== "recharge-open" || typeof data.url !== "string" || !data.url.startsWith("/workspace")) return;
+      const params = new URL(data.url, "https://recharge.invalid").searchParams, chat = params.get("chat") ?? "";
+      if (CHAT_LINK.test(chat)) popupOpen.current.openMessages(chat); else if (params.get("section") === "inbox") popupOpen.current.navigate("inbox");
+    };
+    navigator.serviceWorker.addEventListener("message", onOpen);
+    return () => navigator.serviceWorker.removeEventListener("message", onOpen);
+  }, []);
   const lastRefresh = useRef(0), editing = useRef(false);
   // A super admin can change someone's role or tools while they are signed in. Every read carries
   // the current account, so the app switches to the new role's Home, Work and tools on the next refresh.
@@ -579,6 +601,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       )}
       {(isWorkspaceAdmin(account.role) || account.role === "accounts") && !!invoices.length && invoiceList}
       {/* Business reports (enquiries, repairs, to-dos, messages, time): admins only, never owners or clients. */}
+      {/* Guests & stays (20261021600000): who stays, for how long and how far ahead they book. Admins only. */}
+      {isWorkspaceAdmin(account.role) && <StayReports p={p} account={account} properties={properties} />}
       {isWorkspaceAdmin(account.role) && <BusinessReports p={p} account={account} />}
     </>
   );

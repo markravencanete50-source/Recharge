@@ -2,3 +2,5 @@
 -- 20261021100000_chat_voice_notes: the safe part was installed by the lead on 14 October 2026; Lee ran the
 -- check swap (the part with a DROP) on 15 October 2026. It went live with the voice notes pull request.
 -- 20261021200000_repair_contractors: installed by the lead on 15 October 2026 (no DROP or DELETE). It went live with the repairs with contractors pull request.
+-- 20261021300000_role_home, 20261021400000_chat_mentions, 20261021500000_cleaner_flow and 20261021600000_stay_analytics: installed together by the lead
+-- on 15 October 2026 (no DROP or DELETE). They went live with the chat mentions, cleaner flow, role Home and stay analytics pull request.

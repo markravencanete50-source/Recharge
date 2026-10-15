@@ -53,8 +53,11 @@ export const operationsActionSchema=z.union([
  step('approveManagement',{note:text(2000).optional()}),
  step('declineManagement',{reason:text(2000).min(5)}),
  step('closeRepair',{note:text(2000).min(5)}),
- step('submitCleaning',{checks:z.array(text(200).min(1)).min(1).max(30),report:text(3000).min(5),photoIds:photos,mailAction:z.enum(['none','photograph','open_and_photograph','leave_safely']),mailNote:text(500).optional(),mailPhotoIds:z.array(id).min(1).max(20).optional(),condition:cleanConditionSchema.optional()}),
- step('reviewCleaning',{accepted:z.boolean(),guestFeedback:text(2000).min(5),reviewNote:text(2000).min(5)}),
+ // Optional start and finish times on the clean form (HH:MM).
+ step('submitCleaning',{checks:z.array(text(200).min(1)).min(1).max(30),report:text(3000).min(5),photoIds:photos,mailAction:z.enum(['none','photograph','open_and_photograph','leave_safely']),mailNote:text(500).optional(),mailPhotoIds:z.array(id).min(1).max(20).optional(),condition:cleanConditionSchema.optional(),startedAt:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/,'Enter the start time as HH:MM').optional(),finishedAt:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/,'Enter the finish time as HH:MM').optional()}),
+ // Guest feedback is needed to reject, with redoBy: when the cleaner must redo the clean (an ISO time; the database checks it is in the next seven days).
+ z.object({...update,step:z.literal('reviewCleaning'),data:z.object({accepted:z.boolean(),guestFeedback:text(2000).min(5).optional(),reviewNote:text(2000).min(5),redoBy:z.string().datetime({offset:true}).optional()}).strict()
+  .refine(v=>v.accepted||v.guestFeedback!==undefined,{message:'Add what the guest said',path:['guestFeedback']}).refine(v=>v.accepted?v.redoBy===undefined:v.redoBy!==undefined,{message:'Choose when the clean must be redone by',path:['redoBy']})}).strict(),
  // The assigned cleaner reports a problem found on the clean; it becomes a repair for the Stays team.
  step('reportCleanProblem',{issue:text(3000).min(5),urgent:z.boolean(),repairType:z.enum(REPAIR_TYPES).optional(),photoIds:z.array(id).min(1).max(10).optional()}),
  step('approvePurchase',{approvedAmountMinor:money,approvalNote:text(2000).min(5),budgetItemId:id.optional(),quantity:z.number().int().min(1).max(100).optional()}),

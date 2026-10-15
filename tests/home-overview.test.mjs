@@ -47,7 +47,8 @@ test('admins and super admins see the business figures; nobody else does', () =>
   const home = read('mobile/src/LiveHome.tsx');
   assert.match(home, /const admin = account\.role === "admin" \|\| account\.role === "super_admin";/);
   assert.match(home, /\{admin \? <AdminHome /);
-  assert.ok(!home.includes('<BusinessFigures'), 'the team and owners keep their Home');
+  // Every other role's Home has its own figures (lib/role-home.ts), never the business figures.
+  assert.ok(!home.includes('businessFigures(') && !read('mobile/src/RoleHome.tsx').includes('businessFigures('), 'the business figures are management\'s only');
 });
 
 test('eight figures with their values and changes against last month', () => {

@@ -29,7 +29,8 @@ test('Home counts unread updates only, and Activity marks them read', () => {
   const notices = [{ id: 3, event_type: 'a', created_at: 'x', read_at: null }, { id: 2, event_type: 'b', created_at: 'x', read_at: '2026-10-09T10:00:00Z' }, { id: 1, event_type: 'c', created_at: 'x' }];
   assert.deepEqual(unreadNotices(notices).map(n => n.id), [3, 1]);
   assert.equal(noticeViewSchema.parse(notices[1]).read_at, '2026-10-09T10:00:00Z', 'the read time survives parsing');
-  assert.match(source('LiveHome.tsx'), /unreadNotices\(notices\)\.length/);
+  // The bell counts unread updates (Home itself no longer shows an updates count; owners see new messages as a line).
+  assert.match(readFileSync('lib/header-actions.ts', 'utf8'), /unreadNotices\(\[\.\.\.notices\]\)\.length/);
   assert.match(source('LivePages.tsx'), /writeControls\(\{ action: "markAllNotificationsRead"/, 'one request, however long the backlog');
 });
 
