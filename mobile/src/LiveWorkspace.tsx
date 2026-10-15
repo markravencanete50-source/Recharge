@@ -38,6 +38,8 @@ import { DateRangeSheet, EmptyState, LiveActivity, LiveHelp, LiveProperties, Pag
 import { LiveCleans } from "./LiveCleans";
 import { LiveRepairs } from "./LiveRepairs";
 import { LiveAccounts } from "./LiveAccounts";
+import { OwnerBillSheet } from "./RechargeInvoice";
+import { isOwnerBill } from "../../lib/recharge-invoice";
 import { LiveManagement } from "./LiveManagement";
 import { GuestRelations } from "./GuestRelations";
 import { ClientRelations } from "./ClientRelations";
@@ -182,6 +184,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [period, setPeriod] = useState<AnalyticsPeriod>(() => presetPeriod(30)), [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null), [reportError, setReportError] = useState(""), [dates, setDates] = useState(false);
   const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
   const [form, setForm] = useState<WorkflowForm | null>(null), [openWork, setOpenWork] = useState<OperationView | null>(null);
+  const [billOpen, setBillOpen] = useState<string | null>(null);
   const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active"), [workQuery, setWorkQuery] = useState("");
   // The bottom bar and sidebar open each page at its start, not where a Home tool last pointed.
   // Accounts' Invoices opens Work → Accounts on its expenses.
@@ -554,6 +557,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
         {invoiceSearch.shown.map((invoice, i) => (
           <View key={invoice.id} style={[ui.between, { gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: p.border }]}>
             <View style={{ flex: 1, gap: 2 }}><Text style={{ color: p.text, fontWeight: "600" }}>{invoice.reference}</Text><Text style={[ui.small, { color: p.muted }]}>{names.get(invoice.property_id) ?? "Property"} · {invoice.currency === "GBP" ? formatMoney(invoice.amount_minor) : `${invoice.currency} ${(invoice.amount_minor / 100).toFixed(2)}`} · {readableStage(invoice.status)}</Text></View>
+            {/* Recharge's bills to owners open as the branded document (lib/recharge-invoice.ts). */}
+            {isOwnerBill(invoice.module_id) && <MotionPress accessibilityRole="button" accessibilityLabel={"View invoice " + invoice.reference} onPress={() => setBillOpen(invoice.id)} style={[ui.button, { backgroundColor: p.wash, minHeight: 40 }]}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>View</Text></MotionPress>}
             {invoice.status === "issued" && <MotionPress accessibilityRole="button" onPress={() => setForm({ key: "settle-" + invoice.id, title: "Confirm verified invoice payment", description: "Only confirm after checking the payment has actually settled.", endpoint: "workspace", fields: [{ name: "verified", label: "I have verified this invoice payment has settled", type: "checkbox", required: true }], build: () => ({ action: "setInvoiceStatus", invoiceId: invoice.id, version: invoice.version, status: "paid" }) })} style={[ui.button, { backgroundColor: p.wash, minHeight: 40 }]}><Text style={[ui.small, { color: p.primary, fontWeight: "700" }]}>Record payment</Text></MotionPress>}
           </View>
         ))}
@@ -771,6 +776,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <BlockedPeopleSheet p={p} visible={blockedOpen} onClose={() => setBlockedOpen(false)} />
       <DeleteAccountSheet p={p} visible={deleting} onClose={() => setDeleting(false)} onDeleted={() => { setDeleting(false); onDeleted(); }} />
       <WorkflowSheet spec={form} invoices={invoices} budget={budget} palette={p} onClose={() => setForm(null)} onSaved={refresh} />
+      <OwnerBillSheet p={p} invoiceId={billOpen} onClose={() => setBillOpen(null)} />
       <Sheet palette={p} visible={!!openWork} onClose={() => setOpenWork(null)} title={openWork?.title ?? ""} subtitle={openWork ? [names.get(openWork.propertyId), readableStage(openWork.status)].filter(Boolean).join(" · ") : undefined} icon="clipboard">
         {openWork && openTracker && (
           <TrackerDetail p={p} item={openTracker} owner={account.role === "client"} forms={formsFor(openWork)} onForm={f => { setOpenWork(null); setForm(f); }}>

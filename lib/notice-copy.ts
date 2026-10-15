@@ -82,6 +82,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'cleaning.invoice_approved': copy('Invoice approved', 'Accounts approved one of your invoices. It will be paid by its due date.'),
   'cleaning.invoice_queried': copy('A question about your invoice', 'Accounts have a question about one of your invoices. Open Cleans, Your pay to read it.'),
   'cleaning.invoice_paid': copy('Invoice paid', 'One of your invoices has been paid. Open Cleans, Your pay to see it.'),
+  // The invoice maker (migration 20261022100000): an invoice or a request for invoice sent to someone in the app; the number and amount in the pop-up only.
+  'finance.document_sent': copy('A document from Recharge Group', 'You have been sent an invoice or a request for an invoice. Open Home, Documents for you to see it.'),
   'cleaning.checklist_saved': copy('Clean checklist updated', 'A clean checklist, and which checks need photos, has been updated.'),
   'cleaning.checklist_removed': copy('Clean checklist removed', 'A clean checklist has been removed. Cleans use the checklist for every property instead.'),
   'operations.updateOperation.reportCleanProblem': copy('Problem reported from a clean', 'A cleaner has reported a problem at a property.'),
