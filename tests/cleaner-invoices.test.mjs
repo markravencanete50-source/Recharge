@@ -105,6 +105,34 @@ test('the history reads in words', () => {
   assert.equal(inv.payInvoiceSchema.parse(invoice({ history: [{ at, event: 'issued', actorName: null, workId: null, cleans: 2, totalMinor: 9000 }] })).history.length, 1);
 });
 
+test('automatic outcomes (20261022050000): the reason under the outcome on screen, in the history, never on the document', () => {
+  const auto = mixed({ lines: [line(0), line(1, { rateMinor: 4525, amountMinor: 2263, outcome: 'partial', outcomeSource: 'auto', outcomeReason: 'redo_accepted' }),
+    line(2, { rateMinor: 4000, amountMinor: 0, outcome: 'unsuccessful', outcomeSource: 'manual', outcomeReason: null })] });
+  const parsed = inv.payInvoiceSchema.parse(auto);
+  assert.deepEqual(parsed.lines.map(l => inv.autoOutcomeNote(l)), ['', 'Auto: redo accepted after rejection', ''], 'only an automatic outcome says Auto');
+  assert.equal(inv.autoOutcomeNote({ outcomeSource: 'auto', outcomeReason: 'no_form' }), 'Auto: no clean form');
+  assert.deepEqual(Object.values(inv.AUTO_REASON_LABEL), ['no clean form', 'rejected and not redone', 'redo accepted after rejection', "dispute decided in the cleaner's favour", 'clean form arrived late', 'flag cleared']);
+  assert.equal(inv.payInvoiceSchema.safeParse(mixed({ lines: [line(0, { outcomeSource: 'robot' })] })).success, false);
+  assert.equal(inv.payInvoiceSchema.parse(invoice()).lines[0].outcomeSource, undefined, 'an older answer without the source still reads');
+  // The printed document keeps its current notes.
+  const html = inv.invoiceHtml(auto);
+  assert.doesNotMatch(html, /Auto|automatically|redo accepted/);
+  assert.equal(html, inv.invoiceHtml(mixed()), 'the same document as without the source');
+  // The history names the reason.
+  const h = over => inv.payHistorySchema.parse({ at: '2026-10-13T10:00:00Z', actorName: null, event: 'outcome', propertyName: '12 Leith St', cleanOn: '2026-10-07', ...over });
+  assert.equal(inv.historyLine(h({ auto: true, reason: 'no_form', from: 'completed', to: 'unsuccessful', amountMinor: 0, totalMinor: 4500 })),
+    'Set 12 Leith St, Wed 7 Oct to Unsuccessful automatically: no clean form (was Completed). Amount to invoice now £45.00');
+  assert.equal(inv.historyLine(h({ auto: true, reason: 'redo_accepted', from: 'completed', to: 'partial', totalMinor: 2250 })),
+    'Set 12 Leith St, Wed 7 Oct to Partially successful automatically: redo accepted after rejection (was Completed). Amount to invoice now £22.50');
+  assert.equal(inv.historyLine(h({ auto: true, reason: 'dispute_won', from: 'partial', to: 'completed' })),
+    "Set 12 Leith St, Wed 7 Oct to Completed automatically: dispute decided in the cleaner's favour (was Partially successful)");
+  assert.equal(inv.historyLine(h({ actorName: 'Mia Manager', from: 'unsuccessful', to: 'partial' })), 'Mia Manager set 12 Leith St, Wed 7 Oct to Partially successful (was Unsuccessful)', 'a person as before');
+  // On screen: under the outcome on the paper and in the outcome editor.
+  const source = read('mobile/src/CleanerInvoices.tsx');
+  assert.match(source, /autoOutcomeNote\(l\)/);
+  assert.match(source, /auto\.get\(l\.key\)/);
+});
+
 test('the screen paper and the download share one document model', () => {
   const doc = inv.invoiceDoc(invoice());
   assert.equal(doc.title, 'Request for invoice');

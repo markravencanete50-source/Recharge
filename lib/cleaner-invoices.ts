@@ -29,15 +29,28 @@ export const OUTCOME_LABEL: Record<CleanOutcome, string> = { completed: 'Complet
 export const outcomeMinor = (rateMinor: number, outcome: CleanOutcome | null | undefined) =>
   outcome === 'partial' ? Math.floor((rateMinor + 1) / 2) : outcome === 'unsuccessful' ? 0 : rateMinor;
 
+// Who set a clean's outcome (migration 20261022050000): the request itself from the app's flags ('auto') or a person
+// ('manual'); none when nobody has. A person's choice is never changed by the flags again.
+export const OUTCOME_SOURCES = ['auto', 'manual'] as const;
+// Why the request set an outcome itself, in the words shown after "Auto:" and in the history.
+export const AUTO_REASONS = ['no_form', 'rejected', 'redo_accepted', 'dispute_won', 'form_in', 'cleared'] as const;
+export type AutoReason = (typeof AUTO_REASONS)[number];
+export const AUTO_REASON_LABEL: Record<AutoReason, string> = {
+  no_form: 'no clean form', rejected: 'rejected and not redone', redo_accepted: 'redo accepted after rejection',
+  dispute_won: "dispute decided in the cleaner's favour", form_in: 'clean form arrived late', cleared: 'flag cleared',
+};
+
 // amountMinor is what the clean earns at its outcome; rateMinor its snapshot rate.
 export const payInvoiceLineSchema = z.object({
   workId: id, cleanOn: day.nullable(), propertyName: z.string(), amountMinor: z.number().int(),
   rateMinor: z.number().int().optional(), outcome: z.enum(CLEAN_OUTCOMES).nullable().optional(),
+  outcomeSource: z.enum(OUTCOME_SOURCES).nullable().optional(), outcomeReason: z.enum(AUTO_REASONS).nullable().optional(),
 });
 export const payHistorySchema = z.object({
   at: z.string(), event: z.enum(['issued', 'outcome', 'queried', 'approved', 'paid']), actorName: z.string().nullable(), workId: id.nullable().optional(),
   from: z.enum(CLEAN_OUTCOMES).optional(), to: z.enum(CLEAN_OUTCOMES).optional(), amountMinor: z.number().optional(), totalMinor: z.number().optional(),
   propertyName: z.string().nullable().optional(), cleanOn: day.nullable().optional(), note: z.string().optional(), paidOn: day.optional(), cleans: z.number().optional(),
+  auto: z.boolean().optional(), reason: z.enum(AUTO_REASONS).optional(),
 });
 export type PayHistory = z.infer<typeof payHistorySchema>;
 export const payInvoiceSchema = z.object({
@@ -52,6 +65,9 @@ export type PayInvoice = z.infer<typeof payInvoiceSchema>;
 export type PayInvoiceLine = z.infer<typeof payInvoiceLineSchema>;
 export const lineOutcome = (l: Pick<PayInvoiceLine, 'outcome'>): CleanOutcome => l.outcome ?? 'completed';
 export const lineRate = (l: Pick<PayInvoiceLine, 'rateMinor' | 'amountMinor'>) => l.rateMinor ?? l.amountMinor;
+// Under the outcome in the app's request sheet (never on the printed document): "Auto: no clean form".
+export const autoOutcomeNote = (l: Pick<PayInvoiceLine, 'outcomeSource' | 'outcomeReason'>) =>
+  l.outcomeSource === 'auto' && l.outcomeReason ? `Auto: ${AUTO_REASON_LABEL[l.outcomeReason]}` : '';
 export const payInvoicesSchema = z.array(payInvoiceSchema);
 
 export const earningsSchema = z.object({
@@ -173,7 +189,12 @@ export function historyLine(h: PayHistory) {
   const clean = [h.propertyName, h.cleanOn ? shortDay(h.cleanOn) : ''].filter(Boolean).join(', ') || 'A clean';
   switch (h.event) {
     case 'issued': return `Issued${h.cleans != null ? ` for ${h.cleans} clean${h.cleans === 1 ? '' : 's'}` : ''}${h.totalMinor != null ? `, ${money(h.totalMinor)}` : ''}`;
-    case 'outcome': return `${who} set ${clean} to ${OUTCOME_LABEL[h.to ?? 'completed']}${h.from ? ` (was ${OUTCOME_LABEL[h.from]})` : ''}${h.totalMinor != null ? `. ${AMOUNT_LABEL} now ${money(h.totalMinor)}` : ''}`;
+    case 'outcome': {
+      const was = `${h.from ? ` (was ${OUTCOME_LABEL[h.from]})` : ''}${h.totalMinor != null ? `. ${AMOUNT_LABEL} now ${money(h.totalMinor)}` : ''}`;
+      // Set by the request from the app's flags: "Set 12 Leith St, Wed 7 Oct to Unsuccessful automatically: no clean form".
+      if (h.auto) return `Set ${clean} to ${OUTCOME_LABEL[h.to ?? 'completed']} automatically${h.reason ? `: ${AUTO_REASON_LABEL[h.reason]}` : ''}${was}`;
+      return `${who} set ${clean} to ${OUTCOME_LABEL[h.to ?? 'completed']}${was}`;
+    }
     case 'queried': return `${who} queried it${h.note ? `: ${h.note}` : ''}`;
     case 'approved': return `${who} approved it${h.totalMinor != null ? ` at ${money(h.totalMinor)}` : ''}`;
     case 'paid': return `${who} marked it paid${h.paidOn ? ` on ${longDay(h.paidOn)}` : ''}`;
