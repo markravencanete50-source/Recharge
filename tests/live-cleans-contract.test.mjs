@@ -78,7 +78,7 @@ test('the live Cleans flow parses every response and passes every request schema
 
   // Manager: reject, which opens a complaint the cleaner can answer.
   await as(MANAGER);
-  await operation({ action: 'updateOperation', requestId: crypto.randomUUID(), workId: job.workId, version: job.version, step: 'reviewCleaning', data: { accepted: false, guestFeedback: 'Guest found crumbs', reviewNote: 'Counter missed' } });
+  await operation({ action: 'updateOperation', requestId: crypto.randomUUID(), workId: job.workId, version: job.version, step: 'reviewCleaning', data: { accepted: false, redoBy: new Date(Date.now() + 3600000).toISOString(), guestFeedback: 'Guest found crumbs', reviewNote: 'Counter missed' } });
   const team = performanceSchema.parse(await read({ section: 'performance' }));
   assert.equal(team.find(r => r.cleanerId === users[CLEANER]).rejected, 1);
 

@@ -70,6 +70,13 @@ const EXACT: Record<string, NoticeCopy> = {
   'cleaning.rejected': copy('Clean not accepted', 'One of your cleans was not accepted. You can see why, and give your side before management decides.'),
   'cleaning.dispute_upheld': copy('Rejection upheld', 'Management has looked at the rejected clean and your response. The rejection stands.'),
   'cleaning.dispute_overturned': copy('Rejection overturned', 'Management has overturned the rejection of your clean. It no longer counts against you.'),
+  // The cleaner flow (migration 20261021500000): to the cleaner, each with the property, day and times in the pop-up.
+  'cleaning.assigned': copy('New clean for you', 'A clean has been added to your list. Open Cleans to see the day, the checkout time and when the next guests arrive.'),
+  'cleaning.unassigned': copy('Clean taken off your list', 'A clean you had has been given to someone else or taken off your list. You do not need to do it.'),
+  'cleaning.moved': copy('Clean moved', 'One of your cleans has moved to another day. Open Cleans to see the new day.'),
+  'cleaning.cancelled': copy('Clean cancelled', 'One of your cleans has been cancelled, usually because the stay was cancelled. You do not need to do it.'),
+  'cleaning.redo': copy('Please redo a clean', 'One of your cleans was not accepted. Please redo it by the time shown, then send the form again. You can give your side too.'),
+  'cleaning.morning': copy('Your cleans today', 'Good morning. Open Cleans to see today\'s cleans, with the checkout times and when the next guests arrive.'),
   'cleaning.checklist_saved': copy('Clean checklist updated', 'A clean checklist, and which checks need photos, has been updated.'),
   'cleaning.checklist_removed': copy('Clean checklist removed', 'A clean checklist has been removed. Cleans use the checklist for every property instead.'),
   'operations.updateOperation.reportCleanProblem': copy('Problem reported from a clean', 'A cleaner has reported a problem at a property.'),

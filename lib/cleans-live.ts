@@ -4,7 +4,9 @@ import type { RepairType } from "./repair-guides";
 
 // Response shapes the live Cleans screens rely on, shared with the tests that
 // check them against the real database functions.
-const guestsSchema = z.object({ workId: z.string().uuid(), guestsLeaving: z.number().nullable(), nextArrivalOn: z.string().nullable(), nextArrivalGuests: z.number().nullable() });
+// checkoutTime and nextArrivalTime ("10:00") come from the stays' Hostaway times (migration 20261021500000); null or missing when unknown.
+const guestsSchema = z.object({ workId: z.string().uuid(), guestsLeaving: z.number().nullable(), nextArrivalOn: z.string().nullable(), nextArrivalGuests: z.number().nullable(),
+  checkoutTime: z.string().nullable().optional(), nextArrivalTime: z.string().nullable().optional() });
 export const scheduleSchema = z.object({
   work: z.array(z.object({ workId: z.string().uuid(), propertyId: z.string().uuid(), propertyName: z.string(), title: z.string(), status: z.string(), dueOn: z.string().nullable(), assigneeId: z.string().nullable(), assigneeName: z.string().nullable(), kind: z.string().nullable(), version: z.number() })),
   stays: z.array(z.object({ reservationId: z.string(), propertyId: z.string(), propertyName: z.string(), checkIn: z.string(), checkOut: z.string(), guests: z.number().nullable() })),
@@ -36,7 +38,7 @@ export function guestLine(g: CleanGuests | undefined, today = new Date()): strin
 // The month's pay: the cleans paid for this month at the cleaner's rate, or null while no rate is set.
 export function monthPay(row: Pick<CleanerMonth, "rateMinor" | "paidCleans"> | undefined) {
   const rate = typeof row?.rateMinor === "number" ? row.rateMinor : null, cleans = row?.paidCleans ?? 0;
-  return { rateMinor: rate, cleans, amountMinor: rate === null ? null : rate * cleans, label: rate === null ? "Rate not set yet" : formatMoney(rate * cleans), detail: rate === null ? "Your cleaning manager sets your rate per clean" : `${plural(cleans, "clean")} at ${formatMoney(rate)}` };
+  return { rateMinor: rate, cleans, amountMinor: rate === null ? null : rate * cleans, label: rate === null ? "Rate not set yet" : formatMoney(rate * cleans), detail: rate === null ? "The office sets your rate per clean" : `${plural(cleans, "clean")} at ${formatMoney(rate)}` };
 }
 
 // Where a rejected clean's dispute is up to, from the clean itself and the cleaner's month.
@@ -67,3 +69,65 @@ export const cleanerRateAction = (input: { requestId: string; cleanerId: string;
   ({ action: "setCleanerRate" as const, requestId: input.requestId, cleanerId: input.cleanerId, rateMinor: input.rateMinor, version: input.version });
 export const disputeAction = (input: { requestId: string; workId: string; version: number; outcome: "upheld" | "overturned"; note: string }) =>
   ({ action: "decideComplaint" as const, requestId: input.requestId, workId: input.workId, version: input.version, outcome: input.outcome, note: input.note.trim() });
+
+// --- The cleaner flow (migration 20261021500000) ----------------------------------------------------------------
+// "Checkout 10:00 · next guests 15:00" for a clean on `day`; "next guests Sun 19 Oct" when they arrive later; null when
+// nothing is known. Times and days only: cleaners never see who the guests are.
+export function cleanTimesLine(g: Pick<CleanGuests, "nextArrivalOn" | "checkoutTime" | "nextArrivalTime"> | undefined, day: string | null | undefined, today = new Date()): string | null {
+  if (!g) return null;
+  const next = g.nextArrivalOn ? (g.nextArrivalOn.slice(0, 10) === day ? `next guests ${g.nextArrivalTime || "today"}` : `next guests ${formatDay(g.nextArrivalOn, today)}`) : "";
+  const parts = [g.checkoutTime ? `checkout ${g.checkoutTime}` : "", next].filter(Boolean);
+  return parts.length ? parts.join(" · ").replace(/^./, c => c.toUpperCase()) : null;
+}
+
+// Start and finish times on the clean form: HH:MM, the finish after the start (the same day or overnight), at most 12 hours.
+export const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+export function hoursProblem(start: string, finish: string): string | null {
+  const s = start.trim(), f = finish.trim();
+  if (s && !CLOCK.test(s)) return "Enter the start time as HH:MM, for example 10:30.";
+  if (f && !CLOCK.test(f)) return "Enter the finish time as HH:MM, for example 13:15.";
+  if (!s || !f) return null;
+  const minutes = (m: string) => Number(m.slice(0, 2)) * 60 + Number(m.slice(3));
+  let span = minutes(f) - minutes(s);
+  if (span <= 0) span += 1440;
+  return span >= 1440 || span > 720 ? "The finish time must be after the start time, at most 12 hours later." : null;
+}
+// "Cleaned 10:15–13:40" for the reviewer; null when the cleaner gave no times.
+export const hoursLine = (data: Record<string, unknown>) => {
+  const s = typeof data.startedAt === "string" ? data.startedAt : "", f = typeof data.finishedAt === "string" ? data.finishedAt : "";
+  return s && f ? `Cleaned ${s}–${f}` : s ? `Started ${s}` : f ? `Finished ${f}` : null;
+};
+
+// London wall-clock parts of an instant, and the instant of a London wall-clock time (BST and GMT aware).
+const londonParts = (at: Date) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(at).map(x => [x.type, x.value]));
+  return { day: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour), minute: Number(parts.minute) };
+};
+const pad = (n: number) => String(n).padStart(2, "0");
+export function londonInstant(day: string, time: string): Date {
+  const guess = Date.parse(`${day}T${time}:00Z`);
+  const seen = londonParts(new Date(guess));
+  const offset = Date.parse(`${seen.day}T${pad(seen.hour)}:${pad(seen.minute)}:00Z`) - guess;
+  return new Date(guess - offset);
+}
+const nextDay = (day: string) => { const d = new Date(day + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+// The usual redo deadline: 18:00 today when it is before then, otherwise 12:00 tomorrow (London time). The reviewer can change it.
+export function defaultRedoBy(now = new Date()): string {
+  const here = londonParts(now);
+  return (here.hour < 18 ? londonInstant(here.day, "18:00") : londonInstant(nextDay(here.day), "12:00")).toISOString();
+}
+// The London day and time of a redo deadline, for the reviewer's fields.
+export const redoParts = (iso: string) => { const at = londonParts(new Date(iso)); return { day: at.day, time: `${pad(at.hour)}:${pad(at.minute)}` }; };
+// "Redo by 18:00 today", "Redo by Fri 17 Oct, 12:00"; null without a deadline.
+export function redoByLabel(iso: string | null | undefined, now = new Date()): string | null {
+  if (!iso || Number.isNaN(Date.parse(iso))) return null;
+  const at = redoParts(iso);
+  return at.day === londonParts(now).day ? `Redo by ${at.time} today` : `Redo by ${formatDay(at.day, now)}, ${at.time}`;
+}
+// A redo deadline from the reviewer's day and time: an ISO time, or null unless it is a time in the next seven days.
+export function redoByFrom(day: string, time: string, now = new Date()): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !CLOCK.test(time)) return null;
+  const at = londonInstant(day, time);
+  return at.getTime() > now.getTime() && at.getTime() <= now.getTime() + 7 * 86_400_000 ? at.toISOString() : null;
+}

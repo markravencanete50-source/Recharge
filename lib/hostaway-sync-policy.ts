@@ -20,6 +20,8 @@ export type SyncReservation = {
   channel: SyncChannel; channelReference: string | null; guests: number | null; payoutMinor: number | null;
   // What the expected payout was worked out from (null when the stay is not in pounds, or is an owner stay).
   payoutBreakdown: PayoutBreakdown | null;
+  // The stay's check-in and checkout times ("15:00"), when Hostaway gives them; only present then (migration 20261021500000).
+  checkInTime?: string; checkOutTime?: string;
 };
 
 export function syncListing(raw: unknown): SyncListing | null {
@@ -146,6 +148,15 @@ export function syncPayout(r: Raw, channel: SyncChannel): { payoutMinor: number 
 }
 export const syncPayoutMinor = (r: Raw, channel: SyncChannel): number | null => syncPayout(r, channel).payoutMinor;
 
+// Hostaway's checkInTime and checkOutTime: an hour (15) or a clock ("15:30"), as "HH:MM"; null for anything else.
+export function syncClock(value: unknown): string | null {
+  const t = text(value);
+  const m = /^(\d{1,2})(?::(\d{2}))?(?::\d{2})?$/.exec(t);
+  if (!m) return null;
+  const hour = Number(m[1]), minute = Number(m[2] ?? 0);
+  return hour <= 23 && minute <= 59 ? `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}` : null;
+}
+
 export function syncReservation(raw: unknown): SyncReservation | null {
   const r = object(raw);
   const id = first(r.id, r.hostawayReservationId);
@@ -159,11 +170,13 @@ export function syncReservation(raw: unknown): SyncReservation | null {
   const channel = owner ? 'other' : syncChannel(first(r.channelName, r.source));
   const guests = number(r.numberOfGuests) ?? ((number(r.adults) ?? 0) + (number(r.children) ?? 0) || null);
   const payout = owner ? { payoutMinor: 0, breakdown: null } : syncPayout(r, channel);
+  const checkInTime = syncClock(r.checkInTime), checkOutTime = syncClock(r.checkOutTime);
   return {
     id, listingId, checkIn, checkOut, status, channel,
     channelReference: owner ? 'Owner stay' : first(r.channelReservationId, r.confirmationCode, r.reservationId).slice(0, 120) || null,
     guests: guests !== null && guests >= 1 && guests <= 50 ? Math.round(guests) : null,
     payoutMinor: payout.payoutMinor, payoutBreakdown: payout.breakdown,
+    ...(checkInTime ? { checkInTime } : {}), ...(checkOutTime ? { checkOutTime } : {}),
   };
 }
 

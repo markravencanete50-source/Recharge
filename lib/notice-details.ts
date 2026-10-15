@@ -55,11 +55,16 @@ export type NoticeTarget = { kind: 'work'; workId: string } | { kind: 'messages'
 // `clock` is the time alone (14:47), for a list already grouped by day.
 export type NoticeRow = { key: string; title: string; line: string; detail: string; when: string; clock: string; target: NoticeTarget; unread: boolean; notices: NoticeDetail[] };
 
+// The cleaner's own clean notices (migration 20261021500000) say what happened ("Clean moved") rather than the clean's
+// title ("Clean: Checkout clean"), which is the same for every clean; the property is on the second line.
+export const CLEANER_NOTICES: ReadonlySet<string> = new Set(['cleaning.assigned', 'cleaning.unassigned', 'cleaning.moved', 'cleaning.cancelled', 'cleaning.redo', 'cleaning.morning']);
+
 // One notice as a row: the title says what it is, the line where, who and when.
 export function noticeRow(n: NoticeDetail): NoticeRow {
   const label = workKindLabel(n.work_kind, n.work_module), title = n.work_title?.trim();
   const fallback = noticeCopy(n.event_type).title;
-  const heading = n.work_id && title ? `${label ?? 'Task'}: ${title}`
+  const heading = CLEANER_NOTICES.has(n.event_type) ? fallback
+    : n.work_id && title ? `${label ?? 'Task'}: ${title}`
     : (n.event_type === 'chat.message' || n.event_type === 'chat.owner_message') && n.actor_name?.trim() ? `Message from ${n.actor_name.trim()}`
     : n.event_type === 'guest.message' ? (n.property_name?.trim() ? `Guest message · ${n.property_name.trim()}` : 'Guest message')
     : fallback;

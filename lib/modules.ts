@@ -94,7 +94,8 @@ const STAYS_ONLY_MODULES = [
 
 export const DEFAULT_ROLE_MODULES: Record<WorkspaceRole, readonly ModuleId[]> = {
   client: CLIENT_MODULES,
-  cleans: ["cleaning-schedule", "cleaner-performance", "cleans-invoices"],
+  // Cleaners no longer get Clean invoices by default (cleaner flow, migration 20261021500000): Accounts handle invoices.
+  cleans: ["cleaning-schedule", "cleaner-performance"],
   cleaning_manager: [...CLEANS_MODULES, "clean-reporting"],
   ready: READY_MODULES,
   // Accounts: invoice approvals with evidence, reconciliation and owner statements.

@@ -26,6 +26,7 @@ import { workViewsFor, type WorkView } from "../../lib/tool-directory";
 import { readableStage, type PropertyView } from "../../lib/workspace-view";
 import { rotaPlanSchema, type RotaPlan } from "../../lib/workspace-teams-policy";
 import { formatMoney } from "../../lib/format";
+import { cleanTimesLine } from "../../lib/cleans-live";
 import { validClock } from "../../lib/team-time";
 import type { OperationView } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -235,6 +236,9 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   }, [staff, rotaFrom, rotaTo]);
 
   const entries = useMemo(() => schedule ? calendarEntries(schedule) : [], [schedule]);
+  // Each clean's checkout time and next guests ("Checkout 10:00 · next guests 15:00"), for cleaners too: times, never names.
+  const cleanTimes = useMemo(() => new Map((schedule?.cleanGuests ?? []).map(g => [g.workId, g])), [schedule]);
+  const timesOf = (e: CalendarEntry) => e.work && e.kind === "clean" ? cleanTimesLine(cleanTimes.get(e.work.workId), e.date) : null;
   const evList = useMemo(() => events?.events ?? [], [events]);
   const teams = calendarTeamsFor(account.role);
   const propertyList = useMemo(() => {
@@ -280,7 +284,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   const who = (e: CalendarEntry) => e.personId === account.userId ? "You" : e.personName ?? "Not assigned yet";
   const detailOf = (e: CalendarEntry) => e.stay ? [e.propertyName, stayDetail(e.stay), channelName(e.stay.channel)].filter(Boolean).join(" · ")
     : e.payments ? `${e.propertyName} · ${paymentSummary(e.payments)}`
-    : [timeRange(e.time, e.endTime), e.propertyName, who(e)].filter(Boolean).join(" · ");
+    : [timeRange(e.time, e.endTime), e.propertyName, timesOf(e), who(e)].filter(Boolean).join(" · ");
   const addressOf = (id: string, name: string) => { const a = properties.find(x => x.id === id)?.address; return a && a !== name ? a : ""; };
   const canChat = account.role !== "client" && account.role !== "accounts";
   const canTime = account.role !== "client" && account.role !== "cleans";
@@ -503,6 +507,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
           <Fact p={p} icon={KIND_ICON[open.kind]} label="Type" value={open.kind === "work" && open.work.kind ? readableStage(open.work.kind) : KIND_LABEL[open.kind]} />
           <Fact p={p} icon="home" label="Property" value={open.propertyName} />
           <Fact p={p} icon="clock" label="Time" value={timeRange(open.time, open.endTime) ?? "Any time"} />
+          {open.kind === "clean" && <Fact p={p} icon="log-out" label="Guests" value={timesOf(open) ?? "No checkout or arrival time known yet"} />}
           <Fact p={p} icon="user" label="Assigned to" value={who(open)} />
           <Fact p={p} icon="activity" label="Status" value={readableStage(open.work.status)} />
           <Fact p={p} icon="users" label="Team" value={TEAM_LABEL[open.team]} />

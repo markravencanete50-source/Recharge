@@ -48,7 +48,7 @@ async function rejectedClean(cleaner = CLEANER) {
   let work = (await rpc('workspace_operations_read', [property])).find(w => w.workId === clean.workId);
   work = await operation({ action: 'updateOperation', workId: clean.workId, version: work.version, step: 'submitCleaning', data: { checks: ['Kitchen'], report: 'Kitchen cleaned', photoIds: [photo] } });
   await as(MANAGER);
-  await operation({ action: 'updateOperation', workId: clean.workId, version: work.version, step: 'reviewCleaning', data: { accepted: false, guestFeedback: 'Guest reported crumbs', reviewNote: 'Counter not wiped' } });
+  await operation({ action: 'updateOperation', workId: clean.workId, version: work.version, step: 'reviewCleaning', data: { accepted: false, redoBy: new Date(Date.now() + 3600000).toISOString(), guestFeedback: 'Guest reported crumbs', reviewNote: 'Counter not wiped' } });
   await db.exec('reset role');
   const complaint = (await db.query("select w.id,w.version from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where d.kind='cleaning_complaint' and d.data->>'sourceWorkId'=$1", [clean.workId])).rows[0];
   return { clean: clean.workId, complaint };

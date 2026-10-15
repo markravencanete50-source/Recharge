@@ -143,8 +143,9 @@ test('the phone bar has at most five items for every role', () => {
   assert.deepEqual(labels('stays'), ['Home', 'To-do', 'Work', 'Calendar', 'Messages']);
   assert.deepEqual(labels('ready'), ['Home', 'Maintenance', 'Calendar', 'To-do', 'Messages']);
   assert.deepEqual(bar('accounts'), ['home:Home', 'todo:To-do', 'work:Invoices', 'statements:Statements', 'inbox:Messages']);
-  assert.deepEqual(bar('cleans'), ['home:Home', 'todo:To-do', 'work:Cleans', 'properties:Properties', 'inbox:Messages']);
-  assert.deepEqual(bar('cleaning_manager'), bar('cleans'));
+  // Cleaner flow: cleaners have Calendar on the bar; Properties moves to their Menu. Cleaning managers keep Properties.
+  assert.deepEqual(bar('cleans'), ['home:Home', 'todo:To-do', 'work:Cleans', 'calendar:Calendar', 'inbox:Messages']);
+  assert.deepEqual(bar('cleaning_manager'), ['home:Home', 'todo:To-do', 'work:Cleans', 'properties:Properties', 'inbox:Messages']);
   assert.deepEqual(labels('client'), ['Home', 'Properties', 'Inbox', 'Approvals', 'Reports'], 'owners are unchanged');
   for (const role of TEAM.filter(r => r !== 'cleans' && r !== 'cleaning_manager')) assert.ok(map.phoneBarFor(role).some(i => i.value === 'todo'), role + ' has To-do');
   // The older navigation bar (NavigationBar, DesktopNavigation) keeps its five.
