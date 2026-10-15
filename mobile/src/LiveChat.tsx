@@ -17,6 +17,7 @@ import { clientEmailListSchema, clientEmailStatus, type ClientEmailThread } from
 import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, messageTabs, presenceLabel, presenceOf, threadSchema, type ChatMessage, type ChatReaction, type Conversation, type MessagesTab } from "../../lib/workspace-chat-policy";
 import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
 import { MessageSafety } from "./ChatSafety";
+import { MicButton, VoiceBar, useVoiceNote } from "./VoiceNotes";
 import { BLOCKED_LABEL, REMOVED_LABEL } from "../../lib/chat-moderation";
 import { inboxListSchema, isGuestEmail } from "../../lib/guest-inbox-policy";
 import { byLatest, clientStatus, emptyStatusMessage, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
@@ -224,6 +225,9 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
     }
     catch (e) { setError(message(e)); } finally { inFlight.current = false; setSending(false); }
   }
+  // Voice notes: the microphone takes the send button's place while the box is empty.
+  const voice = useVoiceNote(id, () => { atEnd.current = true; void load(); onChanged(); });
+  const showMic = voice.supported && !readOnly && (voice.active || (!text.trim() && !files.items.length));
   async function attach() { setError(""); const problem = await files.pick().catch(e => message(e)); if (problem) setError(problem); }
   const c = thread?.conversation;
   // The team's side of an owner conversation can be closed (the Clients tab's Closed); any new message reopens it.
@@ -237,6 +241,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
   }
   const seen = c?.kind === "direct" ? presenceLabel(c.peer?.seenAt) : "";
   const subtitle = c ? [seen || c.subtitle, c.propertyName ? `About ${c.propertyName}` : null].filter(Boolean).join(" · ") || (c.kind === "owner" ? "Owner conversation" : "Direct message") : "";
+  const problem = error || voice.error;
   return (
     <View {...(Platform.OS === "web" ? { dataSet: { chatThread: screen ? "screen" : "page" } } : {})} style={screen ? { flex: 1, gap: 8, paddingHorizontal: 12, paddingTop: 6, paddingBottom: 8 } : { flex: 1, minHeight: 420, gap: 10 }}>
       <View style={[ui.row, { gap: 10, paddingBottom: screen ? 8 : 10, borderBottomWidth: 1, borderColor: p.border }]}>
@@ -265,24 +270,25 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
           <Feather name="arrow-down" size={15} color={p.onPrimary} /><Text style={{ color: p.onPrimary, fontSize: 13, fontWeight: "600" }}>New messages</Text>
         </MotionPress>}
       </View>
-      {!!error && <Notice text={error} p={p} tone="bad" />}
+      {!!problem && <Notice text={problem} p={p} tone="bad" />}
       {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.title, property: c.propertyName }} onInsert={reply => { setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply); fit(); }} />}
       <PendingFiles p={p} items={files.items} onRemove={files.remove} onRetry={files.retry} />
       <View style={[ui.row, { gap: 8, alignItems: "flex-end" }]}>
-        <View style={[ui.row, { flex: 1, gap: 8, alignItems: "flex-end" }]}>
+        {voice.active ? <VoiceBar p={p} voice={voice} /> : <View style={[ui.row, { flex: 1, gap: 8, alignItems: "flex-end" }]}>
           {!readOnly && <MotionPress accessibilityRole="button" accessibilityLabel="Add photos or a video (up to 5 photos and 1 video of 50 MB)" onPress={() => void attach()}
             style={{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}>
             <Feather name="image" size={19} color={p.primary} />
           </MotionPress>}
           <TextInput ref={input} value={text} onChangeText={write} placeholder={files.items.length ? "Add a message (optional)" : "Write a message"} placeholderTextColor={p.muted} multiline maxLength={4000} accessibilityLabel="Message"
+            onFocus={() => { if (voice.error) voice.clearError(); }}
             onKeyPress={e => { const key = e.nativeEvent as unknown as { key: string; shiftKey?: boolean }; if (Platform.OS === "web" && key.key === "Enter" && !key.shiftKey) { (e as unknown as { preventDefault: () => void }).preventDefault(); void send(); } }}
             style={[{ flex: 1, minHeight: 46, maxHeight: INPUT_MAX, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 18, borderWidth: 1, borderColor: p.controlBorder, backgroundColor: p.background, color: p.text, fontFamily: "Montserrat_500Medium", fontSize: 15 },
               Platform.OS === "web" ? { height: inputHeight, lineHeight: INPUT_LINE, fontSize: 16 } : null]} />
-        </View>
-        <MotionPress accessibilityRole="button" accessibilityLabel={files.uploading ? "Send (waiting for uploads)" : "Send"} disabled={!canSend} onPress={() => void send()}
+        </View>}
+        {showMic ? <MicButton p={p} voice={voice} /> : <MotionPress accessibilityRole="button" accessibilityLabel={files.uploading ? "Send (waiting for uploads)" : "Send"} disabled={!canSend} onPress={() => void send()}
           style={[{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" }, canSend ? primaryFill(p) : { backgroundColor: p.wash }]}>
           <Feather name="send" size={19} color={canSend ? p.onPrimary : p.muted} />
-        </MotionPress>
+        </MotionPress>}
       </View>
       {safety && <MessageSafety key={safety.id} p={p} m={safety} onClose={() => setSafety(null)} onChanged={() => { void load(); onChanged(); }} />}
       {people && c && <MembersSheet p={p} conversation={c} members={members} onClose={() => setPeople(false)} onChanged={() => { void reloadMembers(); void load(); onChanged(); }}
@@ -452,7 +458,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   // Client emails lists the email conversations (id "email:<uuid>"); every other tab its chat conversations.
   const inTab = byLatest<Row>(tab === "clientEmails" ? emails.map(emailRow) : (list ?? []).filter(c => tabs.length < 2 || tabOf(c) === tab).map(chatRow), r => r.at, r => r.id);
   const placeText = new Map(properties.map(x => [x.id, [x.name, x.address].filter(Boolean).join(" ")] as const));
-  // The newest message's words count too.
+  // The newest message's words count too, so a voice note ("Voice note (0:42)") or a photo is found by what it is.
   const searchable = (r: Row) => r.kind === "email" ? [r.t.name, r.t.address, r.t.subject] : [r.c.title, r.c.subtitle, r.c.propertyName, r.c.last?.authorName, r.c.last?.body, ...r.c.propertyIds.map(id => placeText.get(id))];
   const found = inTab.filter(r => matchesSearch(query, searchable(r)));
   const clients = (tab === "clients" || tab === "clientEmails") && tabs.length > 1;

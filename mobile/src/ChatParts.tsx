@@ -14,6 +14,7 @@ import { chatFilesProblem, chatPeopleSchema, conversationSchema, membersSchema, 
   type ChatAttachment, type ChatMembers, type ChatReaction, type Conversation } from "../../lib/workspace-chat-policy";
 import { ROLE_LABEL } from "../../lib/admin-live";
 import { SearchBox } from "./SearchPicker";
+import { VoiceNotePlayer } from "./VoiceNotes";
 
 // Messages, messenger-style: people's photos (with a dot when they are online), photos and a video
 // in a message, reactions, and the people in a conversation (adding people to a group, leaving it).
@@ -59,7 +60,7 @@ export function ConversationAvatar({ p, c, size = 44 }: { p: Palette; c: Convers
 }
 
 // ---------------------------------------------------------------- photos and a video in a message
-type Link = { url: string; mime: string; name: string; kind: "image" | "video" };
+type Link = { url: string; mime: string; name: string; kind: "image" | "video" | "audio" };
 function useLinks(items: ChatAttachment[]) {
   const ids = items.map(x => x.id).join();
   const [links, setLinks] = useState<Map<string, Link> | null>(null), [failed, setFailed] = useState(false);
@@ -87,7 +88,7 @@ export function Attachments({ p, items, mine }: { p: Palette; items: ChatAttachm
   const { links, failed } = useLinks(items);
   const { width: screen } = useWindowDimensions();
   const [open, setOpen] = useState<number | null>(null);
-  const images = items.filter(x => x.kind === "image"), videos = items.filter(x => x.kind === "video");
+  const images = items.filter(x => x.kind === "image"), videos = items.filter(x => x.kind === "video"), voice = items.filter(x => x.kind === "audio");
   const full = Math.min(280, Math.round(screen * 0.68));
   const one = images.length === 1 ? images[0] : null;
   const ratio = one?.width && one.height ? Math.min(1.6, Math.max(0.62, one.width / one.height)) : 4 / 3;
@@ -107,6 +108,7 @@ export function Attachments({ p, items, mine }: { p: Palette; items: ChatAttachm
         })}
       </View>}
       {videos.map(x => <Video key={x.id} p={p} link={links?.get(x.id)} width={full} />)}
+      {voice.map(x => <VoiceNotePlayer key={x.id} p={p} item={x} url={links?.get(x.id)?.url} failed={failed} mine={mine} />)}
       <Modal visible={open !== null} transparent animationType="fade" onRequestClose={() => setOpen(null)}>
         <View style={{ flex: 1, backgroundColor: "rgba(6,12,10,0.94)", alignItems: "center", justifyContent: "center", padding: 16 }}>
           {open !== null && (() => {

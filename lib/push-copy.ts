@@ -1,5 +1,6 @@
 import { noticeCopyFor } from './notice-details';
 import type { NoticeCopy } from './notice-copy';
+import { voicePreviewLength } from './workspace-chat-policy';
 
 // Direct pop-ups (Lee, 14 October: "Mark, new guest message", "John, guest, replied"): the pop-up names the person it is for, who
 // sent it and what it says, from the details the backend hands each pop-up (integration_push_details, migration 20261020700000).
@@ -21,6 +22,8 @@ const text = (value: string | null | undefined) => value?.trim() || '';
 export function pushCopy(eventType: string | null | undefined, workKind?: string | null, details: PushDetails = {}): NoticeCopy {
   const base = noticeCopyFor(eventType, workKind);
   const who = text(details.who), preview = text(details.preview), place = text(details.propertyName), context = text(details.context);
+  // A voice note's preview is its label ("🎤 Voice note (0:42)", migration 20261021100000): "Alex sent a voice note (0:42)".
+  const voice = voicePreviewLength(preview);
   let title: string, message: string;
   switch (eventType) {
     case 'guest.message':
@@ -28,10 +31,12 @@ export function pushCopy(eventType: string | null | undefined, workKind?: string
       message = [place, preview].filter(Boolean).join(': ');
       break;
     case 'chat.message':
+      if (voice && who) { title = `${who} sent a voice note (${voice})`; message = context ? `In ${context}` : 'Tap to listen'; break; }
       title = who ? (context ? `${who} in ${context}` : `${who} sent you a message`) : base.title;
       message = preview;
       break;
     case 'chat.owner_message':
+      if (voice && who) { title = `${who} (owner) sent a voice note (${voice})`; message = place || 'Tap to listen'; break; }
       title = who ? `${who} (owner) sent a message` : base.title;
       message = [place, preview].filter(Boolean).join(': ');
       break;

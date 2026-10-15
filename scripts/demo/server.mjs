@@ -175,7 +175,7 @@ async function publicApi(req, res, url, origin, file) {
   return response.status;
 }
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.mjs': 'application/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain', '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.webp': 'image/webp', '.gif': 'image/gif', '.wasm': 'application/wasm' };
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain', '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.webp': 'image/webp', '.gif': 'image/gif', '.wasm': 'application/wasm' };
 function serveStatic(req, res, url) {
   if (!STATIC) return send(res, 404, `<p>No web build: start with <code>--static &lt;dir&gt;</code> (an <code>expo export --platform web</code> output built with EXPO_PUBLIC_WORKSPACE_WEB=same-origin).</p>`);
   const relative = decodeURIComponent(url.pathname.replace(/^\/workspace\/?/, ''));
@@ -262,7 +262,16 @@ const server = http.createServer(async (req, res) => {
       const [bucket, ...rest] = p.slice('/devstack-storage/'.length).split('/').map(decodeURIComponent);
       const bytes = await storageGet(bucket, rest.join('/')).catch(() => null);
       if (!bytes) status = send(res, 404, { error: 'Not found' }) ?? 404;
-      else { res.writeHead(200, { 'content-type': TYPES[path.extname(rest.at(-1)).toLowerCase()] ?? 'application/octet-stream', 'cache-control': 'private, no-store', ...(url.searchParams.get('download') ? { 'content-disposition': `attachment; filename="${url.searchParams.get('download').replace(/"/g, '')}"` } : {}) }); res.end(bytes); status = 200; }
+      else {
+        // Byte ranges, as Supabase Storage serves them: Safari only plays (and any browser only seeks in) audio and video that way.
+        const headers = { 'content-type': TYPES[path.extname(rest.at(-1)).toLowerCase()] ?? 'application/octet-stream', 'cache-control': 'private, no-store', 'accept-ranges': 'bytes', ...(url.searchParams.get('download') ? { 'content-disposition': `attachment; filename="${url.searchParams.get('download').replace(/"/g, '')}"` } : {}) };
+        const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
+        if (range && (range[1] || range[2])) {
+          const start = range[1] ? Number(range[1]) : Math.max(0, bytes.length - Number(range[2])), end = range[1] && range[2] ? Math.min(bytes.length - 1, Number(range[2])) : bytes.length - 1;
+          if (start >= bytes.length || start > end) { res.writeHead(416, { ...headers, 'content-range': `bytes */${bytes.length}` }); res.end(); status = 416; }
+          else { res.writeHead(206, { ...headers, 'content-range': `bytes ${start}-${end}/${bytes.length}`, 'content-length': end - start + 1 }); res.end(bytes.subarray(start, end + 1)); status = 206; }
+        } else { res.writeHead(200, { ...headers, 'content-length': bytes.length }); res.end(bytes); status = 200; }
+      }
     }
     else if (p === '/workspace' || p.startsWith('/workspace/')) status = serveStatic(req, res, url);
     else if (p === '/favicon.ico') { res.writeHead(302, { location: '/workspace/favicon.ico' }); res.end(); status = 302; }

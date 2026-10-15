@@ -25,7 +25,7 @@ export async function proxy(request: NextRequest) {
     : Object.entries(securityHeaders);
   let response = NextResponse.next({ request });
   for (const [name, value] of responseHeaders) response.headers.set(name, value);
-  response.headers.set("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)");
+  response.headers.set("Permissions-Policy", "geolocation=(), microphone=(self), camera=(self)");
   if (isNativeRequest(request)) { response.headers.set("Vary", "Authorization"); return response; }
   const config = supabaseConfiguration();
   if (!config) return response;
@@ -37,7 +37,7 @@ export async function proxy(request: NextRequest) {
         for (const { name, value } of values) request.cookies.set(name, value);
         response = NextResponse.next({ request });
         for (const [name, value] of responseHeaders) response.headers.set(name, value);
-        response.headers.set("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)");
+        response.headers.set("Permissions-Policy", "geolocation=(), microphone=(self), camera=(self)");
         for (const { name, value, options } of values) response.cookies.set(name, value, options);
       },
     },
