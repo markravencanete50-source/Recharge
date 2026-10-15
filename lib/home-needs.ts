@@ -123,13 +123,15 @@ export function readyNeeds(h: RoleHome): NeedLine[] {
 
 // Accounts: overdue payouts first, then what waits for their approval, then what to record and issue.
 export function accountsNeeds(h: RoleHome): NeedLine[] {
-  const p = of(h.payoutsOverdue), e = of(h.expensesToApprove), pa = of(h.purchasesToApprove), pi = of(h.purchaseInvoicesToRecord), ci = of(h.cleanerInvoicesToApprove), s = of(h.statementsToIssue);
+  const p = of(h.payoutsOverdue), e = of(h.expensesToApprove), pa = of(h.purchasesToApprove), pi = of(h.purchaseInvoicesToRecord), ci = of(h.cleanerInvoicesToApprove), s = of(h.statementsToIssue), cp = of(h.cleanerInvoicesDueThisWeek);
   return waiting([
     line('payouts', p, say(p, 'payout overdue to reconcile', 'payouts overdue to reconcile'), work('accounts', { sub: 'payouts' }), true),
     line('expenses', e, say(e, 'expense to approve', 'expenses to approve'), work('accounts', { sub: 'expenses' })),
     line('purchases', pa, say(pa, 'purchase to approve', 'purchases to approve'), work('accounts', { section: 'Purchases' })),
     line('purchaseInvoices', pi, say(pi, 'purchase invoice to record', 'purchase invoices to record'), work('accounts', { section: 'Purchases' })),
-    line('cleanerInvoices', ci, say(ci, 'cleaner invoice to approve', 'cleaner invoices to approve'), work('accounts', { section: 'Cleaner invoices' })),
+    line('cleanerInvoices', ci, say(ci, 'request for invoice to approve', 'requests for invoice to approve'), work('accounts', { section: 'Requests for invoice to approve' })),
+    // Requests for invoice (20261022000000): approved and due by Sunday, or overdue.
+    line('cleanerPay', cp, say(cp, 'request for invoice to pay this week', 'requests for invoice to pay this week'), work('accounts', { section: 'Requests for invoice to pay' })),
     line('statements', s, say(s, 'statement to issue', 'statements to issue'), work('accounts', { sub: 'statements' })),
   ]);
 }

@@ -57,7 +57,9 @@ export type NoticeRow = { key: string; title: string; line: string; detail: stri
 
 // The cleaner's own clean notices (migration 20261021500000) say what happened ("Clean moved") rather than the clean's
 // title ("Clean: Checkout clean"), which is the same for every clean; the property is on the second line.
-export const CLEANER_NOTICES: ReadonlySet<string> = new Set(['cleaning.assigned', 'cleaning.unassigned', 'cleaning.moved', 'cleaning.cancelled', 'cleaning.redo', 'cleaning.morning']);
+export const CLEANER_NOTICES: ReadonlySet<string> = new Set(['cleaning.assigned', 'cleaning.unassigned', 'cleaning.moved', 'cleaning.cancelled', 'cleaning.redo', 'cleaning.morning',
+  // Cleaner invoices (20261022000000).
+  'cleaning.invoice_ready', 'cleaning.invoice_approved', 'cleaning.invoice_queried', 'cleaning.invoice_paid']);
 
 // One notice as a row: the title says what it is, the line where, who and when.
 export function noticeRow(n: NoticeDetail): NoticeRow {

@@ -77,6 +77,11 @@ const EXACT: Record<string, NoticeCopy> = {
   'cleaning.cancelled': copy('Clean cancelled', 'One of your cleans has been cancelled, usually because the stay was cancelled. You do not need to do it.'),
   'cleaning.redo': copy('Please redo a clean', 'One of your cleans was not accepted. Please redo it by the time shown, then send the form again. You can give your side too.'),
   'cleaning.morning': copy('Your cleans today', 'Good morning. Open Cleans to see today\'s cleans, with the checkout times and when the next guests arrive.'),
+  // Requests for invoice (migration 20261022000000): to the cleaner, with the number and the amount in the pop-up only.
+  'cleaning.invoice_ready': copy('Your request for invoice is ready', 'Your accepted cleans for the period are on a new request for invoice. Open Cleans, Your pay to see it and send us your invoice.'),
+  'cleaning.invoice_approved': copy('Request approved', 'Accounts approved one of your requests for invoice. It will be paid by its due date.'),
+  'cleaning.invoice_queried': copy('A question about your request', 'Accounts have a question about one of your requests for invoice. Open Cleans, Your pay to read it.'),
+  'cleaning.invoice_paid': copy('Request paid', 'One of your requests for invoice has been paid. Open Cleans, Your pay to see it.'),
   'cleaning.checklist_saved': copy('Clean checklist updated', 'A clean checklist, and which checks need photos, has been updated.'),
   'cleaning.checklist_removed': copy('Clean checklist removed', 'A clean checklist has been removed. Cleans use the checklist for every property instead.'),
   'operations.updateOperation.reportCleanProblem': copy('Problem reported from a clean', 'A cleaner has reported a problem at a property.'),

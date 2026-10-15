@@ -39,12 +39,17 @@ export const teamsReadSchema = z.object({
     // Reports > Guests & stays (20261021600000), admins only: optionally one property and one channel.
     'stayAnalytics',
     // Its two switches (20261021800000), admins only: ask guests why they stay, and the survey after direct stays.
-    'stayReasonSettings']),
-  from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
+    'stayReasonSettings',
+    // Cleaner invoices (20261022000000): invoices (userId: one cleaner), one invoice (invoiceId), a cleaner's earnings
+    // (userId, else the cleaner's own) and the cleaners' rates and pay periods. Read through workspace_cleaner_pay_read.
+    'payInvoices', 'payInvoice', 'payEarnings', 'paySettings']),
+  from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(),
   channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).optional(),
   role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),
 }).strict().superRefine((value, context) => {
   if (value.channel && value.section !== 'stayAnalytics') context.addIssue({ code: 'custom', message: 'A channel is only for Guests & stays' });
+  if (value.invoiceId && value.section !== 'payInvoice') context.addIssue({ code: 'custom', message: 'An invoice is only for one cleaner invoice' });
+  if (value.section === 'payInvoice' && !value.invoiceId) context.addIssue({ code: 'custom', message: 'Choose an invoice' });
   if (value.section === 'schedule') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the schedule dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
@@ -147,6 +152,14 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   // A property's usual cleaner, who gets its cleans automatically (null clears it).
   z.object({ action: z.literal('setDefaultCleaner'), requestId: id, propertyId: id, cleanerId: id.nullable() }).strict(),
   z.object({ action: z.literal('setCleanerRate'), requestId: id, cleanerId: id, rateMinor: z.number().int().min(1).max(100000), version: z.number().int().min(0) }).strict(),
+  // Cleaner invoices (20261022000000), through workspace_cleaner_pay_action: Accounts and admins approve, query (a note to the
+  // cleaner) and mark paid; and set a cleaner's pay period, weekly or monthly.
+  z.object({ action: z.literal('approvePayInvoice'), requestId: id, invoiceId: id, version }).strict(),
+  z.object({ action: z.literal('queryPayInvoice'), requestId: id, invoiceId: id, version, note }).strict(),
+  z.object({ action: z.literal('markPayInvoicePaid'), requestId: id, invoiceId: id, version, paidOn: date }).strict(),
+  z.object({ action: z.literal('setCleanerPayPeriod'), requestId: id, cleanerId: id, period: z.enum(['weekly', 'monthly']), version: z.number().int().min(0) }).strict(),
+  // Requests for invoice (20261022000000): a clean's outcome while its request waits for approval.
+  z.object({ action: z.literal('setPayLineOutcome'), requestId: id, invoiceId: id, workId: id, outcome: z.enum(['completed', 'partial', 'unsuccessful']), version }).strict(),
   z.object({ action: z.literal('saveRoutinePlan'), requestId: id, planId: id.optional(), version: version.optional(), propertyId: id,
     moduleId: z.enum(['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule']), title: text(2, 200),
     checklist: z.array(text(1, 200)).min(1).max(30), frequency: z.enum(['monthly', 'quarterly']), dayOfMonth: z.number().int().min(1).max(28),

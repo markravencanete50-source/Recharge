@@ -41,7 +41,7 @@ test('cleaning managers, cleaners, Ready and Accounts: their own lines, most urg
   assert.deepEqual(texts(needs.readyNeeds(base('ready', { toMarkDone: 1, approvedToBook: 2, visitsOverdue: 0, newJobs: 1, repairsToday: 1, visitsToday: 2 }))),
     ['1 repair visit passed: mark it done', '2 repairs approved: book the visits', '1 new repair for you: estimate or book it', '1 repair visit today', '2 routine visits today']);
   assert.deepEqual(texts(needs.accountsNeeds(base('accounts', { payoutsOverdue: 7, expensesToApprove: 2, purchasesToApprove: 1, purchaseInvoicesToRecord: 1, cleanerInvoicesToApprove: 3, statementsToIssue: 4 }))),
-    ['7 payouts overdue to reconcile', '2 expenses to approve', '1 purchase to approve', '1 purchase invoice to record', '3 cleaner invoices to approve', '4 statements to issue']);
+    ['7 payouts overdue to reconcile', '2 expenses to approve', '1 purchase to approve', '1 purchase invoice to record', '3 requests for invoice to approve', '4 statements to issue']);
   for (const [build, role] of [[needs.cleaningManagerNeeds, 'cleaning_manager'], [needs.cleanerNeeds, 'cleans'], [needs.readyNeeds, 'ready'], [needs.accountsNeeds, 'accounts']]) {
     assert.deepEqual(build(base(role)), [], role + ': nothing waiting, All clear');
     const all = build(base(role, Object.fromEntries(Object.keys(rh.roleHomeSchema.shape).filter(k => !['role', 'today', 'weekStart', 'month'].includes(k)).map(k => [k, 1]))));
