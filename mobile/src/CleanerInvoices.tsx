@@ -12,7 +12,7 @@ import { List, Row } from "./AccountsPayable";
 import { readTeams, writeTeams } from "./backend/client";
 import { exportReport } from "./exportReport";
 import {
-  approveInvoiceAction, CLEAN_OUTCOMES, cleanerList, earningsFigures, earningsSchema, historyDay, historyLine, INVOICE_PAPER, invoiceDoc, invoiceFileName, invoiceHtml, lineOutcome,
+  approveInvoiceAction, autoOutcomeNote, CLEAN_OUTCOMES, cleanerList, earningsFigures, earningsSchema, historyDay, historyLine, INVOICE_PAPER, invoiceDoc, invoiceFileName, invoiceHtml, lineOutcome,
   longDay, markPaidAction, money, OUTCOME_LABEL, outcomeAction, payEarningsQuery, payInvoiceQuery, payInvoiceSchema, payInvoicesQuery, payInvoicesSchema, payPeriodAction,
   paySettingsQuery, paySettingsSchema, periodLabel, queryInvoiceAction, shortDay, statusOf, toApprove, toPayGroups, type CleanOutcome, type Earnings, type PayInvoice,
   type PayPeriod, type PaySettings, type StatusTone,
@@ -48,6 +48,8 @@ export async function downloadInvoice(invoice: PayInvoice) {
 // (date, property, outcome, rate) with hairlines and a light zebra, the totals bottom right, the terms and the footer.
 export function InvoicePaper({ invoice }: { invoice: PayInvoice }) {
   const doc = invoiceDoc(invoice), c = INVOICE_PAPER, tone = c.tone[doc.chip?.tone ?? doc.status.tone];
+  // On screen only, never in the download: why the request set an outcome itself ("Auto: no clean form").
+  const auto = new Map((invoice.lines ?? []).map(l => [l.workId, autoOutcomeNote(l)]));
   const label = { color: c.muted, fontSize: 10, fontWeight: "600" as const, letterSpacing: 1.4, textTransform: "uppercase" as const };
   const num = { fontVariant: ["tabular-nums" as const] };
   return (
@@ -88,6 +90,7 @@ export function InvoicePaper({ invoice }: { invoice: PayInvoice }) {
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ color: l.outcome === "completed" ? c.muted : c.ink, fontSize: 12, fontWeight: l.outcome === "completed" ? "400" : "600" }}>{l.outcomeLabel}</Text>
                 {!!l.outcomeNote && <Text style={{ color: c.muted, fontSize: 11 }}>{l.outcomeNote}</Text>}
+                {!!auto.get(l.key) && <Text style={{ color: c.muted, fontSize: 11, fontStyle: "italic" }}>{auto.get(l.key)}</Text>}
               </View>
               <Text style={[{ color: c.ink, fontSize: 13, textAlign: "right" }, num]}>{l.amount}</Text>
             </View>
@@ -125,11 +128,12 @@ function OutcomeEditor({ p, invoice, onDone }: { p: Palette; invoice: PayInvoice
   return (
     <View style={{ gap: 10 }}>
       <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Outcome of each clean</Text>
-      <Text style={[ui.small, { color: p.muted }]}>Completed pays the full rate, Partially successful half, Unsuccessful nothing. The amount to invoice updates at once.</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Completed pays the full rate, Partially successful half, Unsuccessful nothing. The amount to invoice updates at once. Outcomes marked Auto come from the clean&apos;s flags; once you choose one, it stays yours.</Text>
       {(invoice.lines ?? []).map(l => (
         <View key={l.workId} style={{ gap: 6, opacity: busy && busy !== l.workId ? 0.6 : 1 }}>
           <Text style={{ color: p.text, fontWeight: "600" }}>{[l.cleanOn ? shortDay(l.cleanOn) : "", l.propertyName].filter(Boolean).join(" · ")} · {money(l.amountMinor)}</Text>
           <Pills p={p} title="Outcome" values={CLEAN_OUTCOMES} value={lineOutcome(l)} label={v => OUTCOME_LABEL[v]} onChange={v => { if (v !== lineOutcome(l)) void set(l.workId, v); }} />
+          {!!autoOutcomeNote(l) && <Text style={[ui.small, { color: p.muted }]}>{autoOutcomeNote(l)}</Text>}
         </View>
       ))}
       {!!error && <Notice text={error} p={p} tone="bad" />}
