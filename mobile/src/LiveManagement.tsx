@@ -21,6 +21,7 @@ import { ReflectionReview } from "./ReflectionReview";
 import { ManagementApprovals } from "./ManagementApprovals";
 import { LimitChanger } from "./LimitChanger";
 import { ResponsibilitiesTab, RotaTab } from "./LiveTeamTime";
+import { VaPayPanel } from "./VaPay";
 import { readTeams, WorkspaceApiError } from "./backend/client";
 import { managementSchema, type Management } from "../../lib/management-live";
 import { performanceSchema } from "../../lib/cleans-live";
@@ -56,7 +57,7 @@ function ShiftChangesWaiting({ p, onOpen }: { p: Palette; onOpen: () => void }) 
   );
 }
 
-const MANAGEMENT_VIEWS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "onboarding", "limits", "decisions", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
+const MANAGEMENT_VIEWS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "onboarding", "limits", "decisions", "vapay", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
 type ManagementView = (typeof MANAGEMENT_VIEWS)[number];
 export function LiveManagement({ palette: p, account, properties, work, onOpenWork }: { palette: Palette; account: WorkspaceAccount } & Partial<Pick<SectionProps, "properties" | "work" | "onOpenWork">>) {
   const [queue, setQueue] = useState<Management | null>(null);
@@ -90,7 +91,7 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
       <ManagementChecklist p={p} account={account} onSetUp={() => { setDailyOnly("management"); setView("dailytasks"); }} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && view === "team" && <Loading p={p} />}
-      <Pills p={p} title="Management section" values={MANAGEMENT_VIEWS.filter(v => (v !== "access" || account.role === "super_admin") && (v !== "onboarding" || isWorkspaceAdmin(account.role)) && (v !== "limits" || isWorkspaceAdmin(account.role)))} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", productivity: "Productivity", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", reflections: "Day reflections", onboarding: "Onboarding settings", dailytasks: "Daily tasks", rota: "Rota", responsibilities: "Responsibilities", limits: "Limit Changer", access: "Access control" })[v]} />
+      <Pills p={p} title="Management section" values={MANAGEMENT_VIEWS.filter(v => (v !== "access" || account.role === "super_admin") && (v !== "onboarding" || isWorkspaceAdmin(account.role)) && (v !== "limits" || isWorkspaceAdmin(account.role)))} value={view} onChange={setView} label={v => ({ queue: "Waiting on you", people: "People", properties: "Properties", productivity: "Productivity", performance: "Team performance", team: "Cleaning team", training: "Onboarding & training", decisions: "Decisions", reflections: "Day reflections", onboarding: "Onboarding settings", dailytasks: "Daily tasks", rota: "Rota", responsibilities: "Responsibilities", vapay: "VA pay", limits: "Limit Changer", access: "Access control" })[v]} />
 
       {view === "access" && <AccessControl palette={p} account={account} />}
       {/* Repair spending limits per owner and property (super admins change them; admins can look). */}
@@ -120,6 +121,8 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
       {view === "dailytasks" && <DailyTaskSettings p={p} account={account} only={dailyOnly} onShowAll={() => setDailyOnly(null)} />}
       {view === "rota" && <RotaTab p={p} account={account} />}
       {view === "responsibilities" && <ResponsibilitiesTab p={p} account={account} />}
+      {/* VA pay (20261022200000): each VA's monthly Request for Invoice and their pay setup; the database keeps it to management. */}
+      {view === "vapay" && <VaPayPanel p={p} account={account} place="management" />}
       {view === "productivity" && <LiveProductivity key={productivityTab} palette={p} account={account} initial={productivityTab} />}
       {view === "performance" && <LiveTeamPerformance palette={p} role={account.role} />}
       {(view === "people" || view === "properties") && <LivePeople palette={p} account={account} view={view} />}
