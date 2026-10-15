@@ -7,7 +7,9 @@ import { PGlite } from '@electric-sql/pglite';
 // no clean form makes a clean Unsuccessful, a rejection that stands with no redo accepted Unsuccessful, a redo accepted
 // after a rejection Partially successful, and a dispute decided in the cleaner's favour Completed again. Applied when the
 // request is made and whenever a flag changes while it waits; never over a person's choice; each change re-totals the
-// request and is kept in its history with the reason; nothing changes once it is approved.
+// request and is kept in its history with the reason; nothing changes once it is approved. Cleans not done properly (no
+// form, or rejected with no redo) are on the request too, Unsuccessful at £0; cleans waiting for review or in a redo
+// still underway wait for a later request. The flags come from the real flows: the clean-form sweep and the review.
 const MIGRATION = 'supabase/migrations/20261022050000_clean_outcome_flags.sql';
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -20,10 +22,10 @@ for (const file of files) await db.exec(await fs.readFile('supabase/migrations/'
 // Safe to run twice.
 await db.exec(await fs.readFile(MIGRATION, 'utf8'));
 
-const roles = ['super_admin', 'cleaning_manager', 'accounts', 'stays', 'cleans', 'cleans', 'cleans', 'cleans'];
-const names = ['Admin', 'Manager', 'Accounts', 'Stays', 'Angela Cleaner', 'Ben Cleaner', 'Cara Cleaner', 'Dan Cleaner'];
+const roles = ['super_admin', 'cleaning_manager', 'accounts', 'stays', 'cleans', 'cleans', 'cleans', 'cleans', 'cleans', 'cleans'];
+const names = ['Admin', 'Manager', 'Accounts', 'Stays', 'Angela Cleaner', 'Ben Cleaner', 'Cara Cleaner', 'Dan Cleaner', 'Eve Cleaner', 'Finn Cleaner'];
 const users = roles.map((_, i) => `97700000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
-const [ADMIN, MANAGER, ACCOUNTS, STAYS, ANGELA, BEN, CARA, DAN] = roles.map((_, i) => i);
+const [ADMIN, MANAGER, ACCOUNTS, STAYS, ANGELA, BEN, CARA, DAN, EVE, FINN] = roles.map((_, i) => i);
 const session = i => users[i].replace('9770', '9870');
 for (let i = 0; i < users.length; i++) {
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())', [users[i], `flags${i}@example.com`]);
@@ -49,8 +51,8 @@ const notices = async (user, prefix) => (await owner(`select a.event_type,d.prev
 
 await as(ADMIN);
 const leith = await rpc('workspace_save_property', [{ requestId: crypto.randomUUID(), name: '12 Leith St' }]);
-for (const [user, kind] of [[MANAGER, 'cleaning_manager'], [STAYS, 'staff'], [ANGELA, 'cleaner'], [BEN, 'cleaner'], [CARA, 'cleaner'], [DAN, 'cleaner']]) await rpc('workspace_assign_property', [leith, users[user], kind]);
-for (const [cleaner, rate] of [[ANGELA, 4000], [BEN, 3000], [CARA, 5000], [DAN, 4525]]) await teams({ action: 'setCleanerRate', cleanerId: users[cleaner], rateMinor: rate, version: 0 });
+for (const [user, kind] of [[MANAGER, 'cleaning_manager'], [STAYS, 'staff'], [ANGELA, 'cleaner'], [BEN, 'cleaner'], [CARA, 'cleaner'], [DAN, 'cleaner'], [EVE, 'cleaner'], [FINN, 'cleaner']]) await rpc('workspace_assign_property', [leith, users[user], kind]);
+for (const [cleaner, rate] of [[ANGELA, 4000], [BEN, 3000], [CARA, 5000], [DAN, 4525], [EVE, 3600], [FINN, 2000]]) await teams({ action: 'setCleanerRate', cleanerId: users[cleaner], rateMinor: rate, version: 0 });
 beforeEach(async () => { await db.exec('reset role'); await db.exec('delete from private.workspace_write_limits'); });
 after(() => db.close());
 
@@ -76,6 +78,10 @@ async function clean(cleaner) {
 }
 // Accepted first time.
 async function accepted(cleaner) { const w = await clean(cleaner); await submit(w, cleaner); await review(w, true); return w; }
+// Sent, then rejected through the review (a dispute opens, the redo is due within the hour); not redone.
+async function failed(cleaner) { const w = await clean(cleaner); await submit(w, cleaner); await review(w, false); return w; }
+// The redo sent again and accepted.
+async function redo(workId, cleaner) { await submit(workId, cleaner, 'Floor mopped again'); return review(workId, true, MANAGER); }
 // Rejected (a dispute opens), redone, then the redo accepted.
 async function redone(cleaner) {
   const w = await clean(cleaner); await submit(w, cleaner); await review(w, false);
@@ -86,15 +92,19 @@ const when = (workId, cleanOn, acceptedAt) => owner("update private.workspace_cl
 const requestOf = async user => (await owner("select * from private.workspace_cleaner_invoices where cleaner_id=$1 and generated and status<>'rejected' order by number desc limit 1", [users[user]]))[0];
 const lineOf = async workId => (await owner('select outcome,outcome_source source,outcome_reason reason,amount_minor::int rate,pay_minor::int pay from private.workspace_cleaner_invoice_lines where work_id=$1 and live', [workId]))[0];
 const autoHistory = async invoiceId => (await owner("select detail,actor_id,work_id from private.workspace_cleaner_invoice_history where invoice_id=$1 and event='outcome' order by id", [invoiceId]));
-// A rejection the request sees while it waits. In the app a clean only reaches a request once accepted, so a rejection
-// that stands is written straight in, as the review flow would, a moment after the last review.
-const reject = (workId, cleaner) => owner(`insert into private.workspace_cleaning_reviews(work_id,cleaner_id,reviewer_id,accepted,guest_feedback,review_note,created_at)
-  select $1,$2,$3,false,'Guest saw crumbs','Bathroom missed',greatest(now(),(select max(created_at) from private.workspace_cleaning_reviews where work_id=$1))+interval '1 second'`, [workId, users[cleaner], users[STAYS]]);
-const acceptAgain = (workId, cleaner) => owner(`insert into private.workspace_cleaning_reviews(work_id,cleaner_id,reviewer_id,accepted,guest_feedback,review_note,created_at)
-  select $1,$2,$3,true,'','Redo fine',(select max(created_at) from private.workspace_cleaning_reviews where work_id=$1)+interval '1 second'`, [workId, users[cleaner], users[MANAGER]]);
-// The sweep's no-form tag on a clean whose form is not in, and the form arriving late.
-const noForm = workId => owner(`update private.workspace_domain_details set data=(data-'submittedBy'-'submittedAt')||jsonb_build_object('phase','assigned','warning','no_form','formWarningAt','2027-01-01T09:00:00.000Z') where work_id=$1`, [workId]);
-const formIn = workId => owner(`update private.workspace_domain_details set data=data||jsonb_build_object('phase','accepted','submittedBy',$2::text) where work_id=$1`, [workId, users[CARA]]);
+// The clean's day on the test's calendar (a clean not accepted has no earnings row: its day is the work's due day).
+const dated = (workId, day) => owner('update public.workspace_work_items set due_on=$2::date where id=$1', [workId, day]);
+// The real clean-form sweep, the morning after the clean's (real) day.
+const sweepAfter = async () => (await owner("select private.workspace_clean_form_sweep(($1||' 10:00')::timestamp at time zone 'Europe/London') r", [await inDays(3)]))[0].r;
+const complaintOf = async workId => (await owner("select (data->>'complaintWorkId')::uuid c from private.workspace_domain_details where work_id=$1", [workId]))[0].c;
+async function overturn(workId) {
+  const c = await complaintOf(workId);
+  await as(ADMIN);
+  return teams({ action: 'decideComplaint', workId: c, version: await version(c), outcome: 'overturned', note: 'The guest left the crumbs' });
+}
+const approve = async inv => { await as(ACCOUNTS); return pay({ action: 'approvePayInvoice', invoiceId: inv.id, version: (await owner('select version from private.workspace_cleaner_invoices where id=$1', [inv.id]))[0].version }); };
+const linesOn = async invoiceId => (await owner('select work_id from private.workspace_cleaner_invoice_lines where invoice_id=$1 and live order by work_id', [invoiceId])).map(r => r.work_id);
+const onTwo = async () => (await owner('select work_id from private.workspace_cleaner_invoice_lines where live group by work_id having count(*)>1')).length;
 
 test('rejected, then redo accepted: Partially successful when the request is made; the cleaner is told the amount to invoice', async () => {
   const good = await accepted(ANGELA), bad = await redone(ANGELA);
@@ -133,98 +143,129 @@ test('a dispute decided in the cleaner\'s favour while the request waits: back t
   assert.equal((await requestOf(ANGELA)).version, now.version);
 });
 
-test('rejected and not redone: Unsuccessful, when the request is made and when a rejection comes while it waits; then redo and dispute', async () => {
-  const early = await accepted(BEN), late = await accepted(BEN);
-  await when(early, '2027-01-12', '2027-01-12 10:00'); await when(late, '2027-01-13', '2027-01-13 10:00');
-  await reject(early, BEN);
+test('rejected and not redone (the review flow): on the request as Unsuccessful at £0; the redo accepted and the dispute won move it on', async () => {
+  const one = await failed(BEN), two = await failed(BEN), good = await accepted(BEN);
+  await dated(one, '2027-01-12'); await dated(two, '2027-01-13'); await when(good, '2027-01-14', '2027-01-14 10:00');
   assert.equal(await run('2027-01-18T00:30:00Z'), 1);
   const inv = await requestOf(BEN);
-  assert.deepEqual(await lineOf(early), { outcome: 'unsuccessful', source: 'auto', reason: 'rejected', rate: 3000, pay: 0 });
-  assert.deepEqual(await lineOf(late), { outcome: null, source: null, reason: null, rate: 3000, pay: 3000 });
-  assert.equal(Number(inv.pay_minor), 3000);
-  // While it waits: a rejection that stands, the redo accepted, then the dispute won.
-  await reject(late, BEN);
-  assert.deepEqual(await lineOf(late), { outcome: 'unsuccessful', source: 'auto', reason: 'rejected', rate: 3000, pay: 0 });
-  assert.equal(Number((await requestOf(BEN)).pay_minor), 0, 'every clean unsuccessful: nothing to invoice');
-  await acceptAgain(late, BEN);
-  assert.deepEqual(await lineOf(late), { outcome: 'partial', source: 'auto', reason: 'redo_accepted', rate: 3000, pay: 1500 });
-  await owner('update private.workspace_cleaning_reviews set overturned_at=now(),overturned_by=$2 where work_id=$1 and not accepted', [late, users[ADMIN]]);
-  assert.deepEqual(await lineOf(late), { outcome: 'completed', source: 'auto', reason: 'dispute_won', rate: 3000, pay: 3000 });
+  assert.deepEqual(await linesOn(inv.id), [one, two, good].sort());
+  assert.deepEqual(await lineOf(one), { outcome: 'unsuccessful', source: 'auto', reason: 'rejected', rate: 3000, pay: 0 });
+  assert.deepEqual(await lineOf(two), { outcome: 'unsuccessful', source: 'auto', reason: 'rejected', rate: 3000, pay: 0 });
+  assert.deepEqual(await lineOf(good), { outcome: null, source: null, reason: null, rate: 3000, pay: 3000 });
+  assert.deepEqual([Number(inv.total_minor), Number(inv.pay_minor)], [9000, 3000]);
+  assert.deepEqual((await notices(BEN, 'cleaning.invoice_ready')).map(n => n.preview), [`Request for invoice ${inv.number} ready: £30.00 for 3 cleans`]);
+  // While it waits: the first is redone and the redo accepted; the second's dispute is decided for the cleaner.
+  await redo(one, BEN);
+  assert.deepEqual(await lineOf(one), { outcome: 'partial', source: 'auto', reason: 'redo_accepted', rate: 3000, pay: 1500 });
+  await overturn(two);
+  assert.deepEqual(await lineOf(two), { outcome: 'completed', source: 'auto', reason: 'dispute_won', rate: 3000, pay: 3000 });
+  assert.equal(Number((await requestOf(BEN)).pay_minor), 7500);
   const steps = await autoHistory(inv.id);
-  assert.deepEqual(steps.map(s => [s.work_id === early ? 'early' : 'late', s.detail.reason, s.detail.to, s.detail.totalMinor]),
-    [['early', 'rejected', 'unsuccessful', 3000], ['late', 'rejected', 'unsuccessful', 0], ['late', 'redo_accepted', 'partial', 1500], ['late', 'dispute_won', 'completed', 3000]]);
+  assert.deepEqual(steps.map(s => [s.work_id === one ? 'one' : 'two', s.detail.reason, s.detail.to, s.detail.totalMinor]),
+    [['one', 'rejected', 'unsuccessful', 6000], ['two', 'rejected', 'unsuccessful', 3000], ['one', 'redo_accepted', 'partial', 4500], ['two', 'dispute_won', 'completed', 7500]]);
+  // Both are accepted now (and recorded for pay), but never asked for twice.
+  assert.equal((await owner('select count(*)::int n from private.workspace_clean_earnings where work_id=any($1)', [[one, two]]))[0].n, 2);
+  assert.equal(await run('2027-01-25T00:30:00Z'), 0);
+  assert.equal(await onTwo(), 0);
   // The cleaner hears only that the request is ready: no notice for the automatic changes.
   assert.deepEqual((await notices(BEN, 'cleaning.invoice')).map(n => n.event_type), ['cleaning.invoice_ready']);
 });
 
 test('a person\'s outcome sticks: the rules never change it again, whatever the flags do', async () => {
-  const inv = await requestOf(BEN);
-  const [{ early }] = await owner("select work_id early from private.workspace_cleaner_invoice_lines where invoice_id=$1 and outcome_reason='rejected'", [inv.id]);
+  const w = await failed(EVE), other = await accepted(EVE);
+  await dated(w, '2027-01-26'); await when(other, '2027-01-26', '2027-01-26 12:00');
+  assert.equal(await run('2027-02-01T00:30:00Z'), 1);
+  const inv = await requestOf(EVE);
+  assert.equal((await lineOf(w)).reason, 'rejected');
   // The cleaning manager changes the automatic Unsuccessful to Partially successful.
   await as(MANAGER);
-  const set = await pay({ action: 'setPayLineOutcome', invoiceId: inv.id, workId: early, outcome: 'partial', version: inv.version });
-  assert.deepEqual(await lineOf(early), { outcome: 'partial', source: 'manual', reason: null, rate: 3000, pay: 1500 });
-  const line = set.lines.find(l => l.workId === early);
+  const set = await pay({ action: 'setPayLineOutcome', invoiceId: inv.id, workId: w, outcome: 'partial', version: (await requestOf(EVE)).version });
+  assert.deepEqual(await lineOf(w), { outcome: 'partial', source: 'manual', reason: null, rate: 3600, pay: 1800 });
+  const line = set.lines.find(l => l.workId === w);
   assert.deepEqual([line.outcomeSource, line.outcomeReason], ['manual', null]);
   const before = (await autoHistory(inv.id)).length;
-  // The dispute is then won, a redo accepted and another rejection: the person's choice stays.
-  await owner('update private.workspace_cleaning_reviews set overturned_at=now() where work_id=$1 and not accepted', [early]);
-  await acceptAgain(early, BEN);
-  await reject(early, BEN);
-  assert.deepEqual(await lineOf(early), { outcome: 'partial', source: 'manual', reason: null, rate: 3000, pay: 1500 });
+  // The redo is accepted, then the dispute is won: the person's choice stays.
+  await redo(w, EVE);
+  await overturn(w);
+  assert.deepEqual(await lineOf(w), { outcome: 'partial', source: 'manual', reason: null, rate: 3600, pay: 1800 });
   assert.equal(await owner('select private.workspace_clean_outcomes_auto_invoice($1) n', [inv.id]).then(r => r[0].n), 0);
   assert.equal((await autoHistory(inv.id)).length, before);
-  assert.equal((await requestOf(BEN)).version, set.version, 'nothing changed');
+  assert.equal((await requestOf(EVE)).version, set.version, 'nothing changed');
   const history = await owner("select actor_id,detail from private.workspace_cleaner_invoice_history where invoice_id=$1 and event='outcome' and actor_id is not null", [inv.id]);
   assert.deepEqual(history.map(h => [h.actor_id, h.detail.from, h.detail.to, h.detail.auto ?? false]), [[users[MANAGER], 'unsuccessful', 'partial', false]]);
 });
 
-test('no clean form: Unsuccessful when the request is made and when the sweep tags it while it waits; the late form puts it back', async () => {
-  const tagged = await accepted(CARA), fine = await accepted(CARA);
-  await when(tagged, '2027-01-19', '2027-01-19 10:00'); await when(fine, '2027-01-20', '2027-01-20 10:00');
-  await noForm(tagged);
+test('no clean form (the sweep): on the request as Unsuccessful at £0; the late form puts it back; approving is not held up by a £0 clean', async () => {
+  const late = await clean(CARA), never = await clean(CARA), fine = await accepted(CARA);
+  const swept = await sweepAfter();
+  assert.ok(swept.warned >= 2, 'the sweep tags both');
+  for (const w of [late, never]) assert.equal((await owner("select data->>'warning' w from private.workspace_domain_details where work_id=$1", [w]))[0].w, 'no_form');
+  await dated(late, '2027-01-19'); await dated(never, '2027-01-20'); await when(fine, '2027-01-21', '2027-01-21 10:00');
   assert.equal(await run('2027-01-25T00:30:00Z'), 1);
   const inv = await requestOf(CARA);
-  assert.deepEqual(await lineOf(tagged), { outcome: 'unsuccessful', source: 'auto', reason: 'no_form', rate: 5000, pay: 0 });
-  assert.equal(Number(inv.pay_minor), 5000);
-  // The form arrives late: back to Completed.
-  await formIn(tagged);
-  assert.deepEqual(await lineOf(tagged), { outcome: 'completed', source: 'auto', reason: 'form_in', rate: 5000, pay: 5000 });
-  // Tagged while the request waits.
-  await noForm(fine);
-  assert.deepEqual(await lineOf(fine), { outcome: 'unsuccessful', source: 'auto', reason: 'no_form', rate: 5000, pay: 0 });
+  assert.deepEqual(await linesOn(inv.id), [late, never, fine].sort());
+  for (const w of [late, never]) assert.deepEqual(await lineOf(w), { outcome: 'unsuccessful', source: 'auto', reason: 'no_form', rate: 5000, pay: 0 });
   assert.equal(Number((await requestOf(CARA)).pay_minor), 5000);
-  // No form outranks a redo accepted after a rejection.
-  await reject(fine, CARA); await acceptAgain(fine, CARA);
-  assert.equal((await lineOf(fine)).reason, 'no_form');
-  await formIn(fine);
-  assert.deepEqual(await lineOf(fine), { outcome: 'partial', source: 'auto', reason: 'redo_accepted', rate: 5000, pay: 2500 });
+  // The form arrives late (the cleaner sends it): back to Completed.
+  await submit(late, CARA, 'Sorry, sent late');
+  assert.deepEqual(await lineOf(late), { outcome: 'completed', source: 'auto', reason: 'form_in', rate: 5000, pay: 5000 });
+  assert.equal(Number((await requestOf(CARA)).pay_minor), 10000);
+  // A no-form clean set to anything but Unsuccessful still holds approval up; at £0 it does not.
+  await as(MANAGER);
+  let current = await pay({ action: 'setPayLineOutcome', invoiceId: inv.id, workId: never, outcome: 'completed', version: (await requestOf(CARA)).version });
+  await as(ACCOUNTS);
+  await assert.rejects(pay({ action: 'approvePayInvoice', invoiceId: inv.id, version: current.version }), /needs its clean form/);
+  await as(MANAGER);
+  current = await pay({ action: 'setPayLineOutcome', invoiceId: inv.id, workId: never, outcome: 'unsuccessful', version: current.version });
+  const approved = await approve(inv);
+  assert.deepEqual([approved.status, approved.totalMinor], ['approved', 10000]);
   const steps = await autoHistory(inv.id);
-  assert.deepEqual(steps.map(s => [s.detail.reason, s.detail.from, s.detail.to, s.detail.totalMinor]),
-    [['no_form', 'completed', 'unsuccessful', 5000], ['form_in', 'unsuccessful', 'completed', 10000], ['no_form', 'completed', 'unsuccessful', 5000], ['redo_accepted', 'unsuccessful', 'partial', 7500]]);
-  // An edit to the clean that leaves the flag as it was changes nothing.
-  const v = (await requestOf(CARA)).version;
-  await owner("update private.workspace_domain_details set data=data||'{\"note\":\"x\"}' where work_id=$1", [fine]);
-  assert.equal((await requestOf(CARA)).version, v);
+  assert.deepEqual(steps.filter(s => s.actor_id === null).map(s => [s.work_id === late ? 'late' : 'never', s.detail.reason, s.detail.to]),
+    [['late', 'no_form', 'unsuccessful'], ['never', 'no_form', 'unsuccessful'], ['late', 'form_in', 'completed']]);
+});
+
+test('waiting for review or a redo underway: left off; once settled, on the next request; a request all Unsuccessful is made at £0', async () => {
+  const resent = await failed(FINN), underway = await failed(FINN), good = await accepted(FINN);
+  await submit(resent, FINN, 'Done again, please look');
+  await owner(`update private.workspace_domain_details set data=data||'{"redoBy":"2027-02-09T12:00:00Z"}' where work_id=$1`, [underway]);
+  await dated(resent, '2027-02-02'); await dated(underway, '2027-02-03'); await when(good, '2027-02-04', '2027-02-04 10:00');
+  // Dated before 20261022050000 was installed: never asked about.
+  const old = await failed(FINN);
+  await dated(old, '2026-01-05');
+  assert.equal(await run('2027-02-08T00:30:00Z'), 1);
+  const first = await requestOf(FINN);
+  assert.deepEqual(await linesOn(first.id), [good], 'only the accepted clean');
+  // The resent clean is rejected again; the redo time of the other passes.
+  await review(resent, false);
+  assert.equal(await run('2027-02-15T00:30:00Z'), 1);
+  const second = await requestOf(FINN);
+  assert.notEqual(second.id, first.id);
+  assert.deepEqual(await linesOn(second.id), [resent, underway].sort(), 'on the next request');
+  for (const w of [resent, underway]) assert.deepEqual(await lineOf(w), { outcome: 'unsuccessful', source: 'auto', reason: 'rejected', rate: 2000, pay: 0 });
+  assert.deepEqual([Number(second.total_minor), Number(second.pay_minor)], [4000, 0]);
+  assert.deepEqual((await notices(FINN, 'cleaning.invoice_ready')).map(n => n.preview).slice(-1), [`Request for invoice ${second.number} ready: £0.00 for 2 cleans`]);
+  assert.equal((await owner('select count(*)::int n from private.workspace_cleaner_invoice_lines where work_id=$1', [old]))[0].n, 0);
+  assert.equal(await onTwo(), 0);
 });
 
 test('nothing changes once the request is approved, nor on an invoice Accounts recorded by hand', async () => {
-  const inv = await requestOf(ANGELA);
-  await as(ACCOUNTS);
-  const approved = await pay({ action: 'approvePayInvoice', invoiceId: inv.id, version: inv.version });
-  assert.equal(approved.status, 'approved');
-  const [{ good }] = await owner('select work_id good from private.workspace_cleaner_invoice_lines where invoice_id=$1 and outcome_source is null', [inv.id]);
+  // Finn's £0 request is approved; then a redo is accepted: it stays Unsuccessful.
+  const inv = await requestOf(FINN);
+  const [w] = await linesOn(inv.id);
+  const approved = await approve(inv);
+  assert.deepEqual([approved.status, approved.totalMinor], ['approved', 0]);
   const steps = (await autoHistory(inv.id)).length;
-  await reject(good, ANGELA);
-  assert.deepEqual(await lineOf(good), { outcome: null, source: null, reason: null, rate: 4000, pay: 4000 });
+  await redo(w, FINN);
+  assert.deepEqual(await lineOf(w), { outcome: 'unsuccessful', source: 'auto', reason: 'rejected', rate: 2000, pay: 0 });
   assert.equal(await owner('select private.workspace_clean_outcomes_auto_invoice($1) n', [inv.id]).then(r => r[0].n), 0);
-  const after = await requestOf(ANGELA);
-  assert.deepEqual([after.version, Number(after.pay_minor), (await autoHistory(inv.id)).length], [approved.version, 8000, steps]);
-  // An invoice recorded by hand.
+  const after = (await owner('select version from private.workspace_cleaner_invoices where id=$1', [inv.id]))[0];
+  assert.deepEqual([after.version, (await autoHistory(inv.id)).length], [approved.version, steps]);
+  assert.equal(await run('2027-03-01T00:30:00Z'), 0, 'the clean is on a request already');
+  // An invoice recorded by hand: a later rejection of that clean (written straight in) changes nothing.
   const c = await accepted(DAN);
   await as(ACCOUNTS);
   await rpc('workspace_payables_action', [{ action: 'recordCleanerInvoice', requestId: crypto.randomUUID(), supplier: 'Dan Cleaner', cleanerId: users[DAN], reference: 'DAN-HAND', invoiceDate: await inDays(0), totalMinor: 4525, lines: [{ workId: c, amountMinor: 4525 }] }]);
-  await reject(c, DAN);
+  await owner(`insert into private.workspace_cleaning_reviews(work_id,cleaner_id,reviewer_id,accepted,guest_feedback,review_note,created_at) values($1,$2,$3,false,'Crumbs','Bathroom missed',now()+interval '1 minute')`, [c, users[DAN], users[STAYS]]);
   assert.deepEqual(await lineOf(c), { outcome: null, source: null, reason: null, rate: 4525, pay: null });
 });
 
@@ -235,6 +276,7 @@ test('the backend may re-apply the rules to every waiting request; nobody else m
     await as(who);
     await assert.rejects(rpc('workspace_clean_outcomes_auto_all'), /permission denied/, roles[who]);
     await assert.rejects(db.query('select private.workspace_clean_outcome_flag($1,$2)', [users[0], users[0]]), /permission denied/, roles[who]);
+    await assert.rejects(db.query('select * from private.workspace_clean_failed_open(null,null)'), /permission denied/, roles[who]);
   }
 });
 
@@ -242,14 +284,19 @@ test('safe to run twice: each patch once, nothing dropped or deleted, CRLF and n
   await db.exec(await fs.readFile(MIGRATION, 'utf8'));
   for (const [fn, sentinel] of [
     ['private.workspace_cleaner_invoice_run(timestamptz)', 'Clean outcome flags (20261022050000): automatic outcomes'],
+    ['private.workspace_cleaner_invoice_run(timestamptz)', 'Clean outcome flags (20261022050000): failed cleaners'],
+    ['private.workspace_cleaner_invoice_run(timestamptz)', 'Clean outcome flags (20261022050000): failed count'],
+    ['private.workspace_cleaner_invoice_run(timestamptz)', 'Clean outcome flags (20261022050000): failed lines'],
     ['private.workspace_cleaner_pay_action(jsonb)', 'Clean outcome flags (20261022050000): manual'],
+    ['private.workspace_cleaner_pay_action(jsonb)', 'Clean outcome flags (20261022050000): gate'],
     ['private.workspace_cleaner_pay_invoice(private.workspace_cleaner_invoices,boolean)', 'Clean outcome flags (20261022050000): source'],
   ]) {
     const [{ def }] = await owner('select pg_get_functiondef($1::regprocedure) def', [fn]);
-    assert.equal(def.split(sentinel).length - 1, 1, fn);
+    assert.equal(def.split(sentinel).length - 1, 1, sentinel);
   }
   const triggers = await owner("select tgname from pg_trigger where tgname in ('clean_outcome_form_flag','clean_outcome_review_flag') order by 1");
   assert.deepEqual(triggers.map(t => t.tgname), ['clean_outcome_form_flag', 'clean_outcome_review_flag']);
+  assert.equal((await owner('select count(*)::int n from private.workspace_clean_outcome_settings'))[0].n, 1);
   const text = await fs.readFile(MIGRATION, 'utf8');
   const code = text.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
   assert.doesNotMatch(code, /\bdrop\b/i);

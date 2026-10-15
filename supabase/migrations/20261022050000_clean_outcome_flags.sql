@@ -14,6 +14,22 @@
 --    overturned_by, overturn_note). When every rejection of the clean by this cleaner was overturned it is Completed.
 -- Rule 1 comes first, then 2 to 4. The rules only look at the cleaner the request is for.
 --
+-- Cleans not done properly are on the request too (the lead, 15 October 2026: they appear as Unsuccessful at £0, they do
+-- not silently drop off). When the run makes a cleaner's request for a period it also takes that cleaner's cleans dated
+-- before the period's end that are not accepted and have settled (private.workspace_clean_failed_open):
+--   (a) the sweep tagged it no-form and the form is still not in, or
+--   (b) a rejection stands with nothing accepted after it, the clean was not sent again and its redo time (data.redoBy)
+--       has passed.
+-- Each is a line at the cleaner's rate at the time of the run, then Unsuccessful ('auto', reason no_form or rejected),
+-- earning £0. A clean waiting for review, or in a redo still underway, stays off: it is picked up by a later request once
+-- accepted (as before) or once it settles. A clean dated in a period already requested that settles later goes on the
+-- cleaner's next request. A clean is never on two requests (the one-live-line-per-clean index, and both lists leave out
+-- a clean already on a live line). A request whose lines are all Unsuccessful is still made, at £0. Only cleans dated
+-- on or after the day this migration was installed (private.workspace_clean_outcome_settings), like earnings, which
+-- start with 20261022000000: nothing older is asked about. Approving: the clean-form gate no longer counts a line that
+-- is Unsuccessful (it is not paid), so a request with a no-form clean at £0 can still be approved; a no-form clean set
+-- to anything else still blocks it.
+--
 -- How they apply:
 -- * Only on a request the run made (generated) while it waits for approval (to_approve, not paid). Nothing changes
 --   once it is approved, paid or rejected, and never on an invoice Accounts recorded by hand.
@@ -65,6 +81,45 @@ create or replace function private.workspace_clean_outcome_for(reason text) retu
  select case reason when 'no_form' then 'unsuccessful' when 'rejected' then 'unsuccessful' when 'redo_accepted' then 'partial' else 'completed' end;
 $fn$;
 
+-- Since when a clean not done properly is put on a request: the day this migration was first installed (London).
+create table if not exists private.workspace_clean_outcome_settings (
+ id boolean primary key default true check(id),
+ failed_since date not null
+);
+alter table private.workspace_clean_outcome_settings enable row level security;
+revoke all on private.workspace_clean_outcome_settings from public,anon,authenticated;
+insert into private.workspace_clean_outcome_settings(id,failed_since) values(true,(now() at time zone 'Europe/London')::date) on conflict (id) do nothing;
+
+-- A clean not accepted that has settled as not done properly at a moment: (a) no form, or (b) a rejection that stands,
+-- not sent again, its redo time passed. Waiting for review or a redo still underway: false.
+create or replace function private.workspace_clean_failed_settled(item jsonb,work uuid,cleaner uuid,at_time timestamptz) returns boolean language plpgsql stable security definer set search_path='' as $fn$
+declare redo timestamptz;
+begin
+ if private.workspace_clean_form_flagged(item) then return true;end if;
+ if coalesce(item->>'phase','assigned')<>'assigned' then return false;end if;
+ if private.workspace_clean_outcome_flag(work,cleaner) is distinct from 'rejected' then return false;end if;
+ begin redo:=nullif(item->>'redoBy','')::timestamptz; exception when others then redo:=null; end;
+ return redo is null or redo<=coalesce(at_time,now());
+end $fn$;
+
+-- The cleans not done properly, not on a live line, dated before a day (null: any), for one cleaner (null: all), at the
+-- cleaner's current rate (none: left off until they have one, like an unpriced accepted clean).
+create or replace function private.workspace_clean_failed_open(cleaner uuid,before_day date,at_time timestamptz default now())
+returns table(cleaner_id uuid,work_id uuid,property_id uuid,clean_on date,rate_minor integer) language sql stable security definer set search_path='' as $fn$
+ select w.assignee_id,w.id,w.property_id,private.workspace_clean_form_day(w.due_on,d.data),r.rate_minor
+ from public.workspace_work_items w
+ join private.workspace_domain_details d on d.work_id=w.id and d.kind='cleaning'
+ join public.workspace_profiles p on p.user_id=w.assignee_id and p.role='cleans'
+ join private.workspace_cleaner_rates r on r.cleaner_id=w.assignee_id
+ where (cleaner is null or w.assignee_id=cleaner) and w.property_id is not null
+  and w.status not in ('cancelled','declined') and coalesce(d.data->>'phase','assigned')<>'accepted'
+  and not exists(select 1 from private.workspace_clean_earnings e where e.work_id=w.id)
+  and not exists(select 1 from private.workspace_cleaner_invoice_lines l where l.work_id=w.id and l.live)
+  and private.workspace_clean_form_day(w.due_on,d.data)>=(select s.failed_since from private.workspace_clean_outcome_settings s where s.id)
+  and (before_day is null or private.workspace_clean_form_day(w.due_on,d.data)<before_day)
+  and private.workspace_clean_failed_settled(d.data,w.id,w.assignee_id,at_time)
+$fn$;
+
 -- 2. Applying them --------------------------------------------------------------------------------------------------
 -- One line: true when its outcome or reason changed. Skips a line a person set, and a request that is not a generated
 -- request waiting for approval.
@@ -110,7 +165,7 @@ create or replace function private.workspace_clean_outcomes_auto_invoice(invoice
 declare n integer:=0;l record;
 begin
  for l in select x.id from private.workspace_cleaner_invoice_lines x left join private.workspace_clean_earnings e on e.work_id=x.work_id
-  where x.invoice_id=invoice and x.live order by e.clean_on,x.work_id
+  where x.invoice_id=invoice and x.live order by coalesce(e.clean_on,private.workspace_clean_day(x.work_id)),x.work_id
  loop
   if private.workspace_clean_outcome_auto(l.id,at_time) then n:=n+1;end if;
  end loop;
@@ -160,6 +215,29 @@ declare
     perform private.workspace_clean_outcomes_auto_invoice(inv.id,stamp);
     total:=coalesce((select v.pay_minor from private.workspace_cleaner_invoices v where v.id=inv.id),total);$q$,
    $q$Clean outcome flags (20261022050000): automatic outcomes$q$],
+  -- The run also takes the cleans not done properly: which cleaners have something to request, from when ...
+  ['private.workspace_cleaner_invoice_run(timestamptz)',
+   $q$for c in select e.cleaner_id,min(e.accepted_at) first_at from private.workspace_clean_earnings e$q$,
+   $q$for c in select e.cleaner_id,min(e.accepted_at) first_at from (select x.cleaner_id,x.accepted_at,x.work_id,x.rate_minor from private.workspace_clean_earnings x
+   union all select f.cleaner_id,(f.clean_on::timestamp at time zone 'Europe/London'),f.work_id,f.rate_minor from private.workspace_clean_failed_open(null,null,stamp) f /* Clean outcome flags (20261022050000): failed cleaners */) e$q$,
+   $q$Clean outcome flags (20261022050000): failed cleaners$q$],
+  -- ... how much and how many for a period ...
+  ['private.workspace_cleaner_invoice_run(timestamptz)',
+   $q$select coalesce(sum(o.rate_minor),0),count(*) into total,cleans from private.workspace_clean_earnings_open(c.cleaner_id,until_at,p_after) o;$q$,
+   $q$select coalesce(sum(o.rate_minor),0),count(*) into total,cleans from (select x.work_id,x.rate_minor from private.workspace_clean_earnings_open(c.cleaner_id,until_at,p_after) x
+     union all select f.work_id,f.rate_minor from private.workspace_clean_failed_open(c.cleaner_id,p_after,stamp) f /* Clean outcome flags (20261022050000): failed count */) o;$q$,
+   $q$Clean outcome flags (20261022050000): failed count$q$],
+  -- ... and their lines (the rules then make them Unsuccessful).
+  ['private.workspace_cleaner_invoice_run(timestamptz)',
+   $q$select inv.id,o.work_id,o.property_id,o.rate_minor,o.rate_minor from private.workspace_clean_earnings_open(c.cleaner_id,until_at,p_after) o;$q$,
+   $q$select inv.id,o.work_id,o.property_id,o.rate_minor,o.rate_minor from (select x.work_id,x.property_id,x.rate_minor from private.workspace_clean_earnings_open(c.cleaner_id,until_at,p_after) x
+     union all select f.work_id,f.property_id,f.rate_minor from private.workspace_clean_failed_open(c.cleaner_id,p_after,stamp) f /* Clean outcome flags (20261022050000): failed lines */) o;$q$,
+   $q$Clean outcome flags (20261022050000): failed lines$q$],
+  -- Approving: an Unsuccessful clean is not paid, so its missing form no longer holds the request up.
+  ['private.workspace_cleaner_pay_action(jsonb)',
+   $q$l.live and d.kind='cleaning' and not private.workspace_clean_form_in(d.data)) then$q$,
+   $q$l.live and coalesce(l.outcome,'completed')<>'unsuccessful' /* Clean outcome flags (20261022050000): gate */ and d.kind='cleaning' and not private.workspace_clean_form_in(d.data)) then$q$,
+   $q$Clean outcome flags (20261022050000): gate$q$],
   -- A person's outcome is theirs: the rules never change it again.
   ['private.workspace_cleaner_pay_action(jsonb)',
    $q$update private.workspace_cleaner_invoice_lines set outcome=chosen,pay_minor=amount where id=line.id;$q$,
@@ -185,7 +263,8 @@ begin
 end $patch$;
 
 -- Who may call what: the backend may re-apply the rules to every waiting request; the rest runs inside the database.
-revoke all on function private.workspace_clean_form_flagged(jsonb),private.workspace_clean_outcome_flag(uuid,uuid),private.workspace_clean_outcome_for(text),
+revoke all on function private.workspace_clean_failed_settled(jsonb,uuid,uuid,timestamptz),private.workspace_clean_failed_open(uuid,date,timestamptz),
+ private.workspace_clean_form_flagged(jsonb),private.workspace_clean_outcome_flag(uuid,uuid),private.workspace_clean_outcome_for(text),
  private.workspace_clean_outcome_auto(uuid,timestamptz),private.workspace_clean_outcomes_auto_invoice(uuid,timestamptz),private.workspace_clean_outcomes_auto_all(),
  public.workspace_clean_outcomes_auto_all(),private.workspace_clean_outcome_form_changed(),private.workspace_clean_outcome_review_changed() from public,anon,authenticated;
 grant execute on function private.workspace_clean_outcomes_auto_all(),public.workspace_clean_outcomes_auto_all() to service_role;
