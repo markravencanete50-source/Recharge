@@ -17,6 +17,7 @@ import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, isGuestEmail, inboxTh
 import { MESSAGE_STATUS_LABEL, byLatest, emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, QuietLine, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { chatTime } from "../../lib/workspace-chat-policy";
+import { threadStayReasonLines } from "../../lib/stay-reason";
 import { SavedReplies } from "./SavedReplies";
 import { HiddenMessage, InboxMessageSafety, MessageMenuButton } from "./ChatSafety";
 import type { PropertyView } from "../../lib/workspace-view";
@@ -213,6 +214,8 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged }
           {wait ? <Tag label={`Needs a reply · waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} /> : <Tag label={MESSAGE_STATUS_LABEL[t.status === "done" ? "closed" : "waiting"]} tone={t.status === "done" ? "plain" : "good"} p={p} />}
           {t.source === "manual" && <Tag label="Logged by hand" tone="plain" p={p} />}
         </View>
+        {/* The pre-arrival question (20261021800000): when it was asked, and the guest's answer once known. */}
+        {!!t.stayReason && <Text style={[ui.small, { color: p.muted }]}>{threadStayReasonLines(t.stayReason).join(" · ")}</Text>}
         <ScrollView ref={scroller} style={{ maxHeight: Platform.OS === "web" ? 460 : 380 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })}>
           {data.messages.map(m => {
             const team = m.direction === "team";

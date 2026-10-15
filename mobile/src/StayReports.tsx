@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { Switch, View } from "react-native";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 import { Anchor, Loading, london, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
 import { List, Row } from "./AccountsPayable";
 import { Pills } from "./Pills";
 import { DateField } from "./CalendarPicker";
-import { readTeams } from "./backend/client";
+import { readTeams, writeTeams } from "./backend/client";
 import { plural } from "../../lib/format";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import {
   arrivalDayName, compareLine, comparisonLabel, comparisonRange, countryName, guestMix, LEAD_LABEL, LENGTH_LABEL, notKnownLine, oneDecimal, percent, plainDays,
-  STAY_CHANNELS, STAYS_INTRO, STAYS_NOTES, STAYS_SECTION, stayAnalyticsSchema, stayChannelName, stayMonthName, stayRangeError, thisMonth,
+  ratingLine, reasonRows, surveyReplyLine, STAY_CHANNELS, STAYS_INTRO, STAYS_NOTES, STAYS_SECTION, stayAnalyticsSchema, stayChannelName, stayMonthName, stayRangeError, thisMonth,
   type StayAnalytics, type StayChannel, type StayRange,
 } from "../../lib/stay-analytics-view";
+import { STAY_SWITCHES, STAY_SWITCH_HELP, STAY_SWITCHES_SECTION, staySwitchesSchema, type StaySwitches } from "../../lib/stay-reason";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // Reports > Guests & stays (Alex: "analytics on each stay, average number of guests etc"). Admins and super admins only:
@@ -83,7 +84,45 @@ export function StayReports({ p, account, properties }: { p: Palette; account: W
         <Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>What this report cannot show</Text>
         {STAYS_NOTES.map(note => <Text key={note} style={[ui.small, { color: p.muted }]}>{note}</Text>)}
       </View>}
+      <StaySwitchesCard p={p} />
     </View></Anchor>
+  );
+}
+
+// Why guests stay (20261021800000): the two switches, both off to start. Admins and super admins only (this section is
+// drawn for them only, and the database refuses everyone else). Who turned each one on or off, and when, is shown.
+function StaySwitchesCard({ p }: { p: Palette }) {
+  const [switches, setSwitches] = useState<StaySwitches | null>(null);
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    readTeams({ section: STAY_SWITCHES_SECTION }).then(r => { if (active) setSwitches(staySwitchesSchema.parse(r.data)); }).catch(e => { if (active) setError(message(e)); });
+    return () => { active = false; };
+  }, []);
+  async function turn(which: keyof typeof STAY_SWITCHES, on: boolean) {
+    setBusy(true); setError("");
+    try { setSwitches(staySwitchesSchema.parse((await writeTeams({ action: "setStayReasonSwitch", switch: which, on })).data)); }
+    catch (e) { setError(message(e)); }
+    finally { setBusy(false); }
+  }
+  const changed = (s: StaySwitches["ask"]) => s.changedAt ? `${s.on ? "Turned on" : "Turned off"}${s.changedBy ? ` by ${s.changedBy}` : ""} on ${new Date(s.changedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}` : "Off until an admin turns it on";
+  return (
+    <Section title="Asking guests" p={p}>
+      <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 16 }]}>
+        {!switches && !error && <Loading p={p} />}
+        {switches && (Object.keys(STAY_SWITCHES) as (keyof typeof STAY_SWITCHES)[]).map(which => (
+          <View key={which} style={[ui.between, { gap: 12, alignItems: "flex-start" }]}>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{STAY_SWITCHES[which]}</Text>
+              <Text style={[ui.small, { color: p.muted }]}>{STAY_SWITCH_HELP[which]}</Text>
+              <Text style={[ui.small, { color: p.muted }]}>{changed(switches[which])}</Text>
+            </View>
+            <Switch accessibilityLabel={STAY_SWITCHES[which]} value={switches[which].on} disabled={busy} onValueChange={on => void turn(which, on)} trackColor={{ false: p.controlBorder, true: p.primary }} thumbColor={p.surface} />
+          </View>
+        ))}
+        {!!error && <Notice text={error} p={p} tone="bad" />}
+      </View>
+    </Section>
   );
 }
 
@@ -122,6 +161,15 @@ function StaysView({ p, r, before, against }: { p: Palette; r: StayAnalytics; be
       <StatTile p={p} icon="moon" label="Nights per stay" value={oneDecimal(r.averageNights)} detail={compareLine(r.averageNights, before?.averageNights ?? null, "nights", against, 1) || "On average"} />
       <StatTile p={p} icon="clock" label="Booked ahead" value={plainDays(r.leadTime.averageDays)} detail={[notKnownLine(r.leadTime.known, r.stays), compareLine(r.leadTime.averageDays, before?.leadTime.averageDays ?? null, "days", against)].filter(Boolean).join(" · ") || "On average, from booking to arrival"} />
     </StatGrid>
+    {!!r.reasons && <Section title="Why they stay" p={p}>
+      {r.reasons.known
+        ? <Bars p={p} of={r.reasons.known} rows={reasonRows(r)} note={notKnownLine(r.reasons.known, r.stays)} />
+        : <Notice p={p} text="Not known for any of these stays. Guests are asked before they arrive once the question is switched on." />}
+    </Section>}
+    {(!!r.rating || !!r.survey) && <StatGrid showZeros>
+      {!!r.rating && <StatTile p={p} icon="star" label="Average rating" value={r.rating.average === null ? "Not known" : `${oneDecimal(r.rating.average)} of 5`} detail={ratingLine(r)} />}
+      {!!r.survey && <StatTile p={p} icon="mail" label="Survey replies" value={r.survey.sent ? `${percent(r.survey.answered, r.survey.sent)}%` : "None sent"} detail={surveyReplyLine(r)} />}
+    </StatGrid>}
     <Section title="Who stays" p={p}>
       <List p={p} empty="" search={false}>
         {mix.map((m, i) => <Row key={m.label} p={p} first={i === 0} title={m.label} detail={m.detail || (m.known ? "" : "Not known")} amount={m.known ? String(m.total) : "–"} />)}

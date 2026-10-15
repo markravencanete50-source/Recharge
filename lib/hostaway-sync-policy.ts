@@ -24,6 +24,9 @@ export type SyncReservation = {
   checkInTime?: string; checkOutTime?: string;
   // Booking detail for Reports > Guests & stays (20261021600000). Null for an owner stay; each field null when Hostaway did not say.
   stayDetails: StayDetails | null;
+  // The guest's first name, and for a direct booking their email, for the pre-arrival question and the survey after a
+  // direct stay (20261021800000). Only present when one is known; never for an owner stay. Kept apart from the report.
+  guestContact?: GuestContact;
 };
 
 export function syncListing(raw: unknown): SyncListing | null {
@@ -198,6 +201,19 @@ export function syncStayDetails(r: Raw): StayDetails {
   };
 }
 
+// --- The guest's first name and a direct booking's email (20261021800000) -----------------------------------------------
+// Used only to greet the guest in the pre-arrival question and to send the survey after a direct stay. Never sent for an
+// owner stay; the email only for a booking made direct (other channels give relay addresses, which are not ours to
+// write to). The database keeps them apart from the stay (private.workspace_stay_contacts) and checks them again.
+export type GuestContact = { firstName?: string; email?: string };
+export function syncGuestContact(r: Raw, channel: SyncChannel): GuestContact | null {
+  const name = first(r.guestFirstName) || first(r.guestName).split(/\s+/)[0] || '';
+  const firstName = name.length <= 60 && /^\p{L}[\p{L}'.-]*$/u.test(name) ? name : '';
+  const raw = channel === 'direct' ? first(r.guestEmail).toLowerCase() : '';
+  const email = raw.length <= 320 && z.string().email().safeParse(raw).success ? raw : '';
+  return firstName || email ? { ...(firstName ? { firstName } : {}), ...(email ? { email } : {}) } : null;
+}
+
 // Hostaway's checkInTime and checkOutTime: an hour (15) or a clock ("15:30"), as "HH:MM"; null for anything else.
 export function syncClock(value: unknown): string | null {
   const t = text(value);
@@ -221,6 +237,7 @@ export function syncReservation(raw: unknown): SyncReservation | null {
   const guests = number(r.numberOfGuests) ?? ((number(r.adults) ?? 0) + (number(r.children) ?? 0) || null);
   const payout = owner ? { payoutMinor: 0, breakdown: null } : syncPayout(r, channel);
   const checkInTime = syncClock(r.checkInTime), checkOutTime = syncClock(r.checkOutTime);
+  const guestContact = owner ? null : syncGuestContact(r, channel);
   return {
     id, listingId, checkIn, checkOut, status, channel,
     channelReference: owner ? 'Owner stay' : first(r.channelReservationId, r.confirmationCode, r.reservationId).slice(0, 120) || null,
@@ -228,6 +245,7 @@ export function syncReservation(raw: unknown): SyncReservation | null {
     payoutMinor: payout.payoutMinor, payoutBreakdown: payout.breakdown,
     ...(checkInTime ? { checkInTime } : {}), ...(checkOutTime ? { checkOutTime } : {}),
     stayDetails: owner ? null : syncStayDetails(r),
+    ...(guestContact ? { guestContact } : {}),
   };
 }
 

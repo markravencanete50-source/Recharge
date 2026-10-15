@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { STAY_REASONS, STAY_REASON_LABEL } from './stay-reason';
 
 // Reports > Guests & stays (Alex, via Lee: "analytics on each stay, average number of guests etc"). The database works every
 // figure out from what Hostaway already sends (workspace_stay_analytics, migration 20261021600000); this file reads the
@@ -17,7 +18,8 @@ export const STAYS_NOTES = [
   'A stay with nights in two months is counted in both months.',
   'Days booked ahead count from the day the guest booked to the day they arrive. For a booking added to Hostaway later, it can read short.',
   'Repeat guests are not shown: Recharge keeps nothing about a guest that could link two stays.',
-  'Why guests stay is not asked yet.',
+  'Why guests stay is known only when they answered the question before arrival or the survey after a direct stay. Both are off until an admin switches them on below.',
+  'The rating and the survey replies are for direct bookings only, the only stays sent the survey.',
 ];
 
 // --- What the database answers ----------------------------------------------------------------------
@@ -37,6 +39,10 @@ export const stayAnalyticsSchema = z.object({
   channels: z.array(z.object({ channel: z.string(), stays: count })),
   countries: z.object({ known: count, others: count, top: z.array(z.object({ country: z.string(), stays: count })) }),
   byMonth: z.array(z.object({ month: z.string(), stays: count, nights: count, averageNights: average, guestsKnown: count, averageGuests: average, leadKnown: count, averageLeadDays: average })),
+  // Why they stay, the rating and the survey replies (20261021800000). Missing before that update is installed.
+  reasons: z.object({ known: count, counts: z.array(z.object({ reason: z.string(), stays: count })) }).optional(),
+  rating: z.object({ known: count, average }).optional(),
+  survey: z.object({ sent: count, answered: count }).optional(),
   byProperty: z.array(z.object({
     propertyId: z.string().uuid(), propertyName: z.string(), stays: count, nights: count, averageNights: average, guestsKnown: count, averageGuests: average,
     leadKnown: count, averageLeadDays: average, childrenKnown: count, childrenStays: count, petsKnown: count, petsStays: count,
@@ -121,6 +127,22 @@ export function countryName(country: string): string {
     const names = new Intl.DisplayNames(['en-GB'], { type: 'region' });
     return names.of(country) ?? country;
   } catch { return country; }
+}
+
+// Why they stay, in the question's order, with plain names.
+export function reasonRows(r: StayAnalytics) {
+  const counts = new Map((r.reasons?.counts ?? []).map(c => [c.reason, c.stays]));
+  return STAY_REASONS.map(reason => ({ key: reason, label: STAY_REASON_LABEL[reason], stays: counts.get(reason) ?? 0 }));
+}
+// "Average 4.6 from 12 stays", or what is missing.
+export function ratingLine(r: StayAnalytics): string {
+  if (!r.rating || r.rating.known === 0) return 'No ratings yet';
+  return `From ${r.rating.known} ${r.rating.known === 1 ? 'stay' : 'stays'}`;
+}
+// "5 of 8 surveys answered", or '' when none was sent.
+export function surveyReplyLine(r: StayAnalytics): string {
+  if (!r.survey || r.survey.sent === 0) return 'No surveys sent for these dates';
+  return `${r.survey.answered} of ${r.survey.sent} ${r.survey.sent === 1 ? 'survey' : 'surveys'} answered`;
 }
 
 // The guest mix as plain lines: each kind of guest, the share of stays with them, and how much is not known.
