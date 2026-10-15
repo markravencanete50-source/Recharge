@@ -103,6 +103,11 @@ const worker = {
       ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_cleaner_invoice_run', {})).catch(() => {
         console.error('Cleaner invoices failed; the next run retries.');
       }));
+      // Hourly, so the first tick after midnight London on the 1st makes each VA's Request for Invoice for the month just
+      // ended. Idempotent (one request per VA per month, a unique key), and a missed day catches up until the 7th.
+      ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_va_pay_run', {})).catch(() => {
+        console.error('VA requests for invoice failed; the next run retries.');
+      }));
     }
     // Every six hours: a long stay booked through a booking site gets its direct-booking follow-up (at most 50 a run).
     // A scheduled sweep rather than a trigger, so it can never hold up the Hostaway sync.
