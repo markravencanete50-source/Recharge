@@ -7,3 +7,4 @@
 -- 20261021700000_repair_owner_contractor_times: installed by the lead on 15 October 2026 (no DROP or DELETE).
 -- 20261021900000_cleaner_notices_phone_only: installed by the lead on 15 October 2026 (no DROP or DELETE).
 -- 20261021800000_stay_reason: installed by the lead on 15 October 2026 (no DROP or DELETE). Both switches (ask and survey) are OFF.
+-- 20261022000000_cleaner_invoices (requests for invoice): installed by the lead on 15 October 2026 (no DROP or DELETE).
