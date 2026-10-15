@@ -18,7 +18,7 @@
       "package": "com.rechargegroup.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1B3E38",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -44,7 +44,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#F3EEE4",
           "dark": {
-            "backgroundColor": "#101614"
+            "backgroundColor": "#101614",
+            "image": "./assets/splash-icon-dark.png"
           }
         }
       ],
