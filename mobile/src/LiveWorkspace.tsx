@@ -25,6 +25,7 @@ import { RechargeSplash } from "./RechargeSplash";
 import { GreetingCard } from "./WelcomeMoment";
 import { Reports } from "./Reports";
 import { BusinessReports } from "./BusinessReports";
+import { StayReports } from "./StayReports";
 import { Sheet } from "./TeamFlows";
 import { Bump, MotionPress, MotionProvider, Stagger, SwapIn, useMotionPreference, useReducedMotion } from "./motion";
 import { headerPalette, themes, ui, web, type Palette } from "./theme";
@@ -579,6 +580,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       )}
       {(isWorkspaceAdmin(account.role) || account.role === "accounts") && !!invoices.length && invoiceList}
       {/* Business reports (enquiries, repairs, to-dos, messages, time): admins only, never owners or clients. */}
+      {/* Guests & stays (20261021600000): who stays, for how long and how far ahead they book. Admins only. */}
+      {isWorkspaceAdmin(account.role) && <StayReports p={p} account={account} properties={properties} />}
       {isWorkspaceAdmin(account.role) && <BusinessReports p={p} account={account} />}
     </>
   );
