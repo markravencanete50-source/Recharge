@@ -12,6 +12,8 @@ export type RepairApproval = {
   kind: 'repair'; key: string; work: OperationView; propertyId: string; propertyName: string;
   issue: string; repairType: string | null; urgent: boolean; hazard: boolean;
   estimateMinor: number | null; previousEstimateMinor: number | null; quoteReason: string | null;
+  // The contractor doing the work, by name only (owners never get the contractor's id; migration 20261021700000).
+  contractor: string | null;
   // The owner's own limit from their set-up form: repairs up to it go ahead without asking.
   limitMinor: number | null; anyAmount: boolean;
 };
@@ -40,6 +42,7 @@ export function ownerApprovals(account: WorkspaceAccount, work: readonly Operati
         kind: 'repair', key: 'repair:' + w.workId, work: w, propertyId: w.propertyId, propertyName: names.get(w.propertyId) ?? 'Your property',
         issue: textOr(w.data.issue) ?? w.title, repairType: textOr(w.data.repairType), urgent: w.data.urgent === true, hazard: w.data.hazard === true,
         estimateMinor: numberOr(w.data.estimatedCostMinor), previousEstimateMinor: numberOr(w.data.previousEstimateMinor), quoteReason: textOr(w.data.quoteReason),
+        contractor: textOr(w.data.assignedReadyName),
         limitMinor: numberOr(form?.repairLimitMinor), anyAmount: form?.fullRepairPermission === true,
       };
     });

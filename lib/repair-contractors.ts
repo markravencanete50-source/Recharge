@@ -27,8 +27,9 @@ export const contractorsSchema = z.array(contractorSchema);
 export type Contractor = z.infer<typeof contractorSchema>;
 export const contractorLabel = (c: Contractor) => c.trade ? `${c.name} · ${c.trade}` : c.name;
 
-// A guest stay on the visit day that overlaps the visit window. The label is ready-made, with no guest name
-// ("Guest stay, check-in 14:00"). A clash warns; it never stops the booking.
+// A guest stay on the visit day that overlaps the visit window, at the stay's own check-in and check-out times from
+// Hostaway (14:00 in and 10:00 out when unknown; migration 20261021700000). The label is ready-made, with that time and
+// no guest name ("Guest stay, check-in 15:00", "Guest stay, check-out 11:00"). A clash warns; it never stops the booking.
 export const clashSchema = z.object({ checkIn: z.string().nullable().optional(), checkOut: z.string().nullable().optional(), label: z.string() });
 export type Clash = z.infer<typeof clashSchema>;
 // On the repair (data.clashes), or in the write's answer (the repair, or its data).
@@ -52,6 +53,9 @@ export function assignedContractor(data: Record<string, unknown>): { id: string;
   const id = str(data[REPAIR_FIELDS.assignedId]);
   return id ? { id, name: str(data[REPAIR_FIELDS.assignedName]) ?? 'Contractor' } : null;
 }
+// The contractor's name alone. Staff read it with the id; owners get the name only, never the id or anything else about
+// the contractor (migration 20261021700000). Null before the job goes to a contractor.
+export const contractorNameOf = (data: Record<string, unknown>) => assignedContractor(data)?.name ?? str(data[REPAIR_FIELDS.assignedName]);
 // Is this person the contractor on the job? Older repairs with nobody named stay open to Ready as before.
 export const assignedTo = (data: Record<string, unknown>, userId: string) => { const a = assignedContractor(data); return !a || a.id === userId; };
 // Approval is complete and the contractor can book: the database stamps bookingApprovedAt, and clears it on a new estimate.
