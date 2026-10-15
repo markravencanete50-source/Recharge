@@ -222,6 +222,7 @@ test('feedback defaults: one constant per assumption, mirroring SQL', () => {
   assert.equal(defaults.guestNameVisible('stays'), true);
   assert.equal(defaults.guestNameVisible('admin'), true);
   assert.equal(defaults.guestNameVisible('cleaning_manager'), false);
+  assert.equal(defaults.guestNameVisible('ready'), false, 'contractors see "Guest stay", never a name (repairs with contractors)');
   for (const role of ['cleans', 'cleaner', 'client', '', null]) assert.equal(defaults.guestNameVisible(role), false, String(role));
   assert.equal(defaults.TEAM_EVENTS_WINDOW_DAYS, 62);
   assert.equal(defaults.REFLECTIONS_WINDOW_DAYS, 31);

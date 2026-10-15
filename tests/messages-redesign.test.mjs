@@ -94,7 +94,7 @@ test('a conversation opens in place, never as a pop-up: list and thread side by 
   assert.match(layout, /if \(!desktop\) return <View style=\{\[ui\.card, \{ backgroundColor: p\.surface, borderColor: p\.border \}\]\}>\{detail \?\? list\}<\/View>;/);
   assert.match(layout, /accessibilityLabel="Back to messages"/);
   assert.match(guests, /<MessagesSplit p=\{p\} desktop=\{desktop\} list=\{list\} detail=\{detail\} \/>/);
-  assert.match(guests, /<GuestThreadPane key=\{openId\} p=\{p\} threadId=\{openId\} properties=\{properties\} onBack=\{desktop \? undefined : \(\) => open\(null\)\}/);
+  assert.match(guests, /<GuestThreadPane key=\{openId\} p=\{p\} threadId=\{openId\} properties=\{properties\} account=\{account\} onBack=\{desktop \? undefined : \(\) => open\(null\)\}/);
   assert.doesNotMatch(guests, /function ThreadSheet|<ThreadSheet/);
   // The only sheet left in the guest inbox is the form for logging a message.
   assert.equal((guests.match(/<Sheet /g) ?? []).length, 1);

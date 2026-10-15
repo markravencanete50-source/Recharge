@@ -42,7 +42,7 @@ const ART_ICON: Record<ToolArt, PanelIcon> = {
 };
 
 // Tools whose picture would repeat another's in the panel (Waiting on you is the clock).
-const TOOL_ICON: Record<string, PanelIcon> = { productivity: 'activity', performance: 'award', month: 'trending-up' };
+const TOOL_ICON: Record<string, PanelIcon> = { productivity: 'activity', performance: 'award', month: 'trending-up', limits: 'sliders' };
 
 // The colour of each link's icon tile: departments in their own colours, everything else in one of
 // the panel hues (lib/design-tokens.ts navHueTokens), so similar places look alike across roles.
@@ -56,7 +56,7 @@ const KEY_HUE: Record<string, PanelHue> = {
   'tool:today': 'forest', 'tool:respond': 'rose', 'tool:month': 'plum', 'tool:restock': 'amber', 'tool:schedule': 'ocean', 'tool:review': 'sage',
   'tool:disputes': 'rose', 'tool:unassigned': 'amber', 'tool:cleaners': 'plum', 'tool:setups': 'sky', 'tool:invoices': 'accounts', 'tool:pipeline': 'ocean',
   'tool:visits': 'sage', 'tool:inspections': 'sky', 'tool:purchases': 'amber', 'tool:furnishing': 'plum', 'tool:expenses': 'rose', 'tool:payouts': 'sage',
-  'tool:budget': 'amber', 'tool:cleaner-invoices': 'cleans', 'tool:mailbox': 'ocean',
+  'tool:budget': 'amber', 'tool:limits': 'amber', 'tool:cleaner-invoices': 'cleans', 'tool:mailbox': 'ocean',
 };
 export const linkHue = (link: PanelLink): PanelHue =>
   link.kind === 'area' ? AREA_HUE[link.view] : link.kind === 'start' ? 'forest' : KEY_HUE[link.key] ?? 'slate';
@@ -72,7 +72,7 @@ const MANAGEMENT_GROUPS: [string, string, string[]][] = [
   ['overview', 'Overview', ['page:home', 'page:favorites', 'page:todo']],
   ['departments', 'Departments', ['area:management=Management centre', 'area:stays', 'area:clients', 'area:cleans', 'area:repairs', 'area:accounts', 'area:all']],
   ['calendar-messages', 'Calendar & messages', ['page:calendar', 'page:inbox', 'page:decisions', 'same:queue']],
-  ['management', 'Management', ['tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'page:moderation', 'tool:training']],
+  ['management', 'Management', ['tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:limits', 'page:moderation', 'tool:training']],
   ['more', 'More', ['tool:enquiries', 'page:analytics', 'page:properties', 'page:statements', 'page:feedback']],
   ['start', 'Start something', ['start']],
 ];

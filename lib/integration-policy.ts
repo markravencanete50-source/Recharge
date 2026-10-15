@@ -35,6 +35,18 @@ export function photoFormat(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
   return null;
 }
 export const MEDIA_PURPOSES = ['cleaning','mailbox','delivery','licence','maintenance','inspection','setup','expense'] as const;
+export type MediaPurpose = (typeof MEDIA_PURPOSES)[number];
+// PDFs (a contractor's quote or invoice on a repair) are stored only for the purposes listed here: the one switch.
+// The database accepts the 'pdf' format for 'maintenance' only (private.integration_commit_upload, migration 20261021200000).
+export const DOCUMENT_PURPOSES: readonly MediaPurpose[] = ['maintenance'];
+export const documentsAllowed = (purpose: string) => (DOCUMENT_PURPOSES as readonly string[]).includes(purpose);
+// A PDF by its first bytes ("%PDF-"), within the same 8 MB limit as photos.
+export function documentFormat(bytes: Uint8Array): 'pdf' | null {
+  return bytes.length >= 12 && bytes.length <= MAX_PHOTO_BYTES && String.fromCharCode(...bytes.slice(0, 5)) === '%PDF-' ? 'pdf' : null;
+}
+// What an upload is for its purpose: a photo always, a PDF only where DOCUMENT_PURPOSES allows it.
+export const mediaFormat = (bytes: Uint8Array, purpose: string) => photoFormat(bytes) ?? (documentsAllowed(purpose) ? documentFormat(bytes) : null);
+export const mediaContentType = (format: string) => format === 'pdf' ? 'application/pdf' : `image/${format === 'jpg' ? 'jpeg' : format}`;
 // A photo belongs to a work item, or (for Accounts' invoice paperwork) to an expense.
 // A clean photo can name the check on the clean's checklist it was taken for.
 export const mediaInputSchema = z.object({ requestId:z.string().uuid(),workId:z.string().uuid().optional(),expenseId:z.string().uuid().optional(),purpose:z.enum(MEDIA_PURPOSES),checklistItem:z.string().min(1).max(200).optional() }).strict()

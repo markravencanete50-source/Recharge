@@ -9,6 +9,8 @@ import { readTeams } from "./backend/client";
 import { monthLabel } from "../../lib/accounts-live";
 import { readyHomeSchema, READY_STAGES, visitDone, visitSummary, type ReadyHome as ReadyHomeData } from "../../lib/repairs-live";
 import { sectionAnchor, type HomeToolTarget } from "../../lib/home-tools";
+import type { PropertyView } from "../../lib/workspace-view";
+import { ContractorJobs } from "./RepairContractors";
 
 // Ready's Home: the repairs at the properties they look after, by stage from Stays' referral to
 // payment by Accounts, and this month's routine visits for each property (done and still due).
@@ -16,7 +18,8 @@ import { sectionAnchor, type HomeToolTarget } from "../../lib/home-tools";
 const ACTS: string[] = ["referred", "booked"];
 const STATUS: Record<string, [string, "good" | "wait" | "bad" | "plain"]> = { waiting: ["To do", "plain"], in_progress: ["In progress", "wait"], in_review: ["Done, to sign off", "good"], approved: ["Signed off", "good"], completed: ["Closed", "good"] };
 
-export function ReadyHome({ palette: p, desktop, onTool }: { palette: Palette; desktop: boolean; onTool: (target: HomeToolTarget) => void }) {
+// userId: the contractor, for "Jobs for you" (repairs given to them by name, grouped by what they do next).
+export function ReadyHome({ palette: p, desktop, onTool, userId, properties }: { palette: Palette; desktop: boolean; onTool: (target: HomeToolTarget) => void; userId?: string; properties?: PropertyView[] }) {
   const [home, setHome] = useState<ReadyHomeData | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -28,6 +31,7 @@ export function ReadyHome({ palette: p, desktop, onTool }: { palette: Palette; d
   const total = home ? READY_STAGES.reduce((n, s) => n + (home.stages[s.phase] ?? 0), 0) : 0;
   return (
     <Entrance sessionKey="live:home:ready" style={{ gap: 20 }}>
+      {!!userId && <ContractorJobs p={p} userId={userId} properties={properties} onOpen={workId => onTool({ kind: "work", view: "repairs", workId })} />}
       <View style={{ gap: 10 }}>
         <View style={ui.between}>
           <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Repairs in progress</Text>

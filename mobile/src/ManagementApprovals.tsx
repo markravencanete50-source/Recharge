@@ -10,6 +10,7 @@ import { ExpenseSheet, NoteSheet, type NoteAsk } from "./LiveAccounts";
 import { TrackerDetailSheet, TrackerList } from "./Tracker";
 import { DisputeSheet } from "./CleanDisputes";
 import { CostDecisionSheet, managementCostDecision, type CostDecision } from "./LiveApprovals";
+import { ContractorReviews } from "./RepairContractors";
 import { HubItemSheet } from "./HubItemSheet";
 import { DecideSheet, useQueueActions, type Pending } from "./LiveOversight";
 import { readFinance, readTeams, writeTeams, WorkspaceApiError } from "./backend/client";
@@ -201,6 +202,8 @@ export function ManagementApprovals({ palette: p, account, properties = NO_PROPE
         )}
       </View>
       {!!actions.error && <Notice text={actions.error} p={p} tone="bad" />}
+      {/* Contractor estimates waiting for management's Review done (Repairs with contractors). */}
+      {admin && <ContractorReviews p={p} role={account.role} properties={properties} refreshKey={now.getTime()} />}
       <TrackerList p={p} items={items} empty={admin ? "Nothing is waiting for a decision." : "You have not flagged or asked anything yet."} loading={loading} error={error} owner={owner} onOpen={open} />
       <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
         <RefreshButton p={p} loading={loading} onPress={() => void load()} />

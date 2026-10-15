@@ -84,11 +84,11 @@ test('a repair moves from report to completion with each role acting only where 
   await as(STAYS);
   [repair] = await repairsFor(property);
   assert.equal(repair.data.phase, 'triage');
-  await step('stays', repair, { troubleshooting: 'Isolated the valve with the guest', guestUpdate: 'A plumber is being arranged' });
+  await step('stays', repair, { troubleshooting: 'Isolated the valve with the guest', guestUpdate: 'A plumber is being arranged', readyUserId: users[READY] });
 
   await as(READY);
   [repair] = await repairsFor(property);
-  await step('ready', repair, { repairOn: day.d, contractor: 'Example Plumbing', guestUpdate: 'The plumber visits today' });
+  await step('ready', repair, { repairOn: day.d, contractor: 'Example Plumbing', guestUpdate: 'The plumber visits today', visitFrom: '09:00', visitTo: '12:00' });
   [repair] = await repairsFor(property);
   assert.equal(repair.data.phase, 'booked');
   await assert.rejects(step('ready', repair, { report: 'Tap replaced and tested', actualCostMinor: poundsToMinor('200'), guestUpdate: 'All fixed' }), /Increased repair cost/);
