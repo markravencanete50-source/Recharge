@@ -10,3 +10,4 @@
 -- 20261022000000_cleaner_invoices (requests for invoice): installed by the lead on 15 October 2026 (no DROP or DELETE).
 -- 20261022050000_clean_outcome_flags: installed by the lead on 15 October 2026 (no DROP or DELETE).
 -- 20261022200000_va_pay: installed by the lead on 15 October 2026 (no DROP or DELETE).
+-- 20261022100000_recharge_invoices: installed by the lead on 15 October 2026 (no DROP or DELETE). Payment details are blank until entered in the app.
