@@ -7,8 +7,9 @@ import { createServer } from 'vite';
 // The invoice maker, the app side (lib/invoice-maker.ts, lib/invoice-maker-server.ts, mobile/src/InvoiceMaker.tsx): the form's
 // maths (quantity times rate, rounded like the database), adding, removing and reordering lines, the defaults (today, due in
 // 7 days, pounds, the terms), the live preview as the branded document (REQUEST FOR INVOICE, "Amount to invoice"), the
-// requests, the list and its search, how a document can be sent (never email to a cleaner), the email itself (from
-// ownerrelations@, the document attached as HTML, recorded once), and where the screens are wired.
+// requests, the list and its search, how a document can be sent (never email to a cleaner), the email itself (a guest from
+// guestrelations@, everyone else from ownerrelations@, never mixed; the document attached as HTML, recorded once; its own
+// switch, not EMAIL_REPLIES_ENABLED), a Receivable invoice by email, the payment details editor, and where the screens are wired.
 const root = fileURLToPath(new URL('..', import.meta.url));
 const state = { env: {}, sent: [], security: [] };
 globalThis.__makerMail = state;
@@ -148,12 +149,14 @@ test('how it can be sent: in the app to an account, email to anyone with an addr
   assert.match(noticeCopy('finance.document_sent').title, /A document from Recharge Group/);
 });
 
-test('the email goes from ownerrelations@ with the document attached as HTML, once, and is recorded; switched off, nothing is asked', async () => {
+test('the email goes from ownerrelations@ to an owner with the document attached as HTML, once, and is recorded; switched off, nothing is asked', async () => {
   const REQUEST = id(20);
   const input = { action: 'sendDocument', requestId: REQUEST, id: id(9), channel: 'email' };
   const calls = [];
-  const context = { request: new Request('https://app.test'), account: { userId: id(30), role: 'accounts' }, client: { rpc: async (name, args) => { calls.push([name, args]); return { data: { send: true, requestId: REQUEST, email: { to: 'olivia@owner.example', name: 'Olivia Owner' }, document: saved() }, error: null }; } } };
-  Object.assign(state.env, { RESEND_API_KEY: 're_test', EMAIL_REPLIES_ENABLED: 'true' }); state.sent = []; state.security = [];
+  const context = { request: new Request('https://app.test'), account: { userId: id(30), role: 'accounts' }, client: { rpc: async (name, args) => { calls.push([name, args]); return { data: { send: true, requestId: REQUEST, mailbox: 'owner', email: { to: 'olivia@owner.example', name: 'Olivia Owner' }, document: saved() }, error: null }; } } };
+  // Only the Resend key: invoice emails do not need EMAIL_REPLIES_ENABLED (which switches replies to guests and owners).
+  for (const k of Object.keys(state.env)) delete state.env[k];
+  Object.assign(state.env, { RESEND_API_KEY: 're_test' }); state.sent = []; state.security = [];
   const res = await server.emailDocument(context, input);
   assert.equal(res.status, 200);
   assert.deepEqual(calls, [['workspace_documents_action', { input }]]);
@@ -180,13 +183,105 @@ test('the email goes from ownerrelations@ with the document attached as HTML, on
   const refused = await server.emailDocument({ ...context, client: { rpc: async () => ({ data: null, error: { code: '42501', message: 'Cleaners are never emailed. Send it in the app instead' } }) } }, input);
   assert.equal(refused.status, 400);
   assert.deepEqual(state.sent, []);
-  // Switched off: the person is told to download it, and the database is not asked.
-  delete state.env.EMAIL_REPLIES_ENABLED;
+  // Switched off (DOCUMENT_EMAIL_ENABLED=false): the person is told to download it, and the database is not asked.
+  state.env.DOCUMENT_EMAIL_ENABLED = 'false';
   let asked = false;
   const off = await server.emailDocument({ ...context, client: { rpc: async () => { asked = true; return { data: null, error: null }; } } }, input);
   assert.equal(off.status, 503);
   assert.match((await off.json()).error, /Download it and share it instead/);
   assert.equal(asked, false);
+  delete state.env.DOCUMENT_EMAIL_ENABLED;
+});
+
+const GUEST_FROM = 'Recharge Group <guestrelations@rechargegroup.co.uk>', OWNER_FROM = 'Recharge Group <ownerrelations@rechargegroup.co.uk>';
+const guestDoc = (over = {}) => saved({ recipient: { userId: null, name: 'Sam Guest', address: '', email: null, role: null, hasEmail: true, kind: 'guest', reservationId: id(40),
+  stay: { reference: 'HM-123', propertyName: '110 Hawk Street', checkIn: '2026-10-01', checkOut: '2026-10-05' } }, ...over });
+const receivable = (over = {}) => ({ itemId: id(41), version: 1, title: 'Late checkout', reference: 'INV-77', details: '', status: 'sent', propertyId: id(42), propertyName: '110 Hawk Street',
+  address: '110 Hawk Street, Edinburgh', amountMinor: 4000, settledMinor: 0, outstandingMinor: 4000, createdAt: '2026-10-10T09:00:00Z', updatedAt: '2026-10-10T09:00:00Z', dueOn: '2026-10-17',
+  overdue: false, ageDays: 0, sentOn: '2026-10-10', link: null, reservationId: id(40), stayReference: 'HM-123', checkIn: '2026-10-01', checkOut: '2026-10-05', clientId: null, clientName: null, ...over });
+
+test('a guest is emailed from guestrelations@ and an owner from ownerrelations@; the two never mix', async () => {
+  for (const k of Object.keys(state.env)) delete state.env[k];
+  Object.assign(state.env, { RESEND_API_KEY: 're_test' });
+  assert.equal(maker.documentMailbox('guest'), 'guest');
+  for (const kind of ['person', undefined, null]) assert.equal(maker.documentMailbox(kind), 'owner');
+  const ctx = data => ({ request: new Request('https://app.test'), account: { userId: id(30), role: 'accounts' }, client: { rpc: async () => ({ data, error: null }) } });
+  const input = n => ({ action: 'sendDocument', requestId: id(n), id: id(9), channel: 'email' });
+  // A maker document for a guest goes from the guest mailbox, and never names the owners' one.
+  state.sent = []; state.security = [];
+  assert.equal((await server.emailDocument(ctx({ send: true, requestId: id(21), mailbox: 'guest', email: { to: 'sam@guest.example', name: 'Sam Guest' }, document: guestDoc() }), input(21))).status, 200);
+  assert.equal(state.sent.length, 1);
+  assert.deepEqual([state.sent[0].from, state.sent[0].reply_to, state.sent[0].to], [GUEST_FROM, 'guestrelations@rechargegroup.co.uk', ['sam@guest.example']]);
+  assert.doesNotMatch(JSON.stringify(state.sent[0]), /ownerrelations@/);
+  assert.match(Buffer.from(state.sent[0].attachments[0].content, 'base64').toString('utf8'), /<dt>Stay<\/dt><dd>HM-123, 110 Hawk Street<\/dd>/);
+  // An owner never gets the guest mailbox, and a guest never the owners' one: when the database's mailbox and who it is
+  // for disagree, nothing is sent and the failure is recorded.
+  for (const [document, mailbox, to] of [[saved(), 'guest', 'olivia@owner.example'], [guestDoc(), 'owner', 'sam@guest.example']]) {
+    state.sent = []; state.security = [];
+    const res = await server.emailDocument(ctx({ send: true, requestId: id(22), mailbox, email: { to, name: 'X' }, document }), input(22));
+    assert.equal(res.status, 502);
+    assert.deepEqual(state.sent, [], `${document.recipient.name} is never sent from the ${mailbox} mailbox`);
+    assert.equal(state.security[0].args.input.ok, false);
+  }
+  // A Receivable invoice for a guest stay: from guestrelations@, with the stay on it.
+  const started = (over = {}) => ({ send: true, status: 'pending', requestId: id(23), mailbox: 'guest', recipientKind: 'guest', email: { to: 'sam@guest.example', name: 'Sam Guest' },
+    receivable: receivable(), paymentDetails: '', ...over });
+  const rInput = { action: 'emailReceivable', requestId: id(23), itemId: id(41) };
+  state.sent = []; state.security = [];
+  assert.equal((await server.emailReceivable(ctx(started()), rInput)).status, 200);
+  assert.deepEqual([state.sent[0].from, state.sent[0].to, state.sent[0].subject], [GUEST_FROM, ['sam@guest.example'], 'Invoice INV-77 from Recharge Group']);
+  assert.match(state.sent[0].text, /^Hello Sam,\n\nPlease find attached invoice INV-77 from Recharge Group for £40\.00, due Sat 17 Oct 2026\./);
+  assert.deepEqual(state.security, [{ name: 'workspace_document_send_result', args: { input: { requestId: id(23), sentBy: id(30), ok: true, messageId: `${id(23)}@rechargegroup.co.uk` } } }]);
+  // To the owner (client) of a Receivable invoice: from ownerrelations@, with How to pay when it is filled in.
+  state.sent = []; state.security = [];
+  assert.equal((await server.emailReceivable(ctx(started({ mailbox: 'owner', recipientKind: 'person', email: { to: 'olivia@owner.example', name: 'Olivia Owner' },
+    receivable: receivable({ reservationId: null, stayReference: null, clientId: id(5), clientName: 'Olivia Owner' }), paymentDetails: 'TEST ONLY pay by transfer' })), rInput)).status, 200);
+  assert.deepEqual([state.sent[0].from, state.sent[0].to], [OWNER_FROM, ['olivia@owner.example']]);
+  assert.doesNotMatch(JSON.stringify(state.sent[0]), /guestrelations@/);
+  assert.match(Buffer.from(state.sent[0].attachments[0].content, 'base64').toString('utf8'), /<h2>How to pay<\/h2><p>TEST ONLY pay by transfer<\/p>/);
+  // Mixed up: nothing goes out.
+  for (const over of [{ mailbox: 'owner', recipientKind: 'guest' }, { mailbox: 'guest', recipientKind: 'person' }]) {
+    state.sent = [];
+    assert.equal((await server.emailReceivable(ctx(started(over)), rInput)).status, 502);
+    assert.deepEqual(state.sent, []);
+  }
+  // The switch for documents is its own: replies switched off does not stop it; DOCUMENT_EMAIL_ENABLED=false does.
+  state.env.EMAIL_REPLIES_ENABLED = 'false'; state.sent = [];
+  assert.equal((await server.emailReceivable(ctx(started()), rInput)).status, 200);
+  state.env.DOCUMENT_EMAIL_ENABLED = 'false';
+  assert.equal((await server.emailReceivable(ctx(started()), rInput)).status, 503);
+  delete state.env.DOCUMENT_EMAIL_ENABLED; delete state.env.EMAIL_REPLIES_ENABLED;
+});
+
+test('a guest in the form: chosen from the stays, saved as a guest, emailed only from guestrelations@; payment details shown on invoices only', () => {
+  const f = { ...maker.emptyForm('2026-10-15'), recipientType: 'guest', reservationId: id(40), recipientName: 'Sam Guest', lines: [maker.newLine({ description: 'Late checkout', rate: '40' })] };
+  const built = maker.formToAction(f, id(1));
+  assert.equal(built.action.recipientType, 'guest');
+  assert.equal(built.action.reservationId, id(40));
+  assert.equal(built.action.recipientId, undefined);
+  assert.ok(maker.documentsActionSchema.safeParse(built.action).success);
+  assert.deepEqual(maker.formToAction({ ...f, reservationId: '' }, id(1)), { error: 'Choose the guest.' });
+  const back = maker.formFromDocument(maker.makerDocumentSchema.parse(guestDoc({ status: 'draft', number: null })));
+  assert.deepEqual([back.recipientType, back.reservationId, back.recipientId], ['guest', id(40), '']);
+  assert.deepEqual(maker.sendChoices(maker.makerDocumentSchema.parse(guestDoc())), ['email', 'download'], 'a guest has no account: email or download');
+  assert.equal(maker.emailLabel('guest'), 'Email it (from guestrelations@)');
+  assert.equal(maker.emailLabel('person'), 'Email it (from ownerrelations@)');
+  assert.equal(maker.guestLabel({ reservationId: id(40), name: 'Sam Guest', reference: 'HM-123', propertyName: '110 Hawk Street', checkIn: '2026-10-01', checkOut: '2026-10-05', hasEmail: true }),
+    'Sam Guest · 110 Hawk Street, 1 to 5 Oct 2026 (HM-123)');
+  // Payment details: in the preview of an invoice, never of a request; from the saved document too.
+  const FAKE = 'TEST ONLY sort code 00-00-00';
+  assert.equal(doc.rechargeInvoiceDoc(maker.formToInvoice(f, FAKE)).payment, FAKE);
+  assert.equal(doc.rechargeInvoiceDoc(maker.formToInvoice(maker.withKind(f, 'request'), FAKE)).payment, '');
+  assert.equal(doc.rechargeInvoiceDoc(maker.fromMakerDocument(maker.makerDocumentSchema.parse(saved({ paymentDetails: FAKE })))).payment, FAKE);
+  assert.ok(maker.documentsActionSchema.safeParse({ action: 'savePaymentDetails', requestId: id(1), version: 0, paymentDetails: '' }).success, 'empty clears it');
+  assert.ok(!maker.documentsActionSchema.safeParse({ action: 'savePaymentDetails', requestId: id(1), version: -1, paymentDetails: 'x' }).success);
+  assert.equal(maker.paymentSavedLine({ version: 0, updatedAt: null, updatedBy: null }), 'Not filled in yet: invoices show no How to pay.');
+  assert.equal(maker.paymentSavedLine({ version: 2, updatedAt: '2026-10-15T09:30:00Z', updatedBy: 'Accounts' }), 'Last saved Thu 15 Oct 2026 09:30 by Accounts.');
+  const screen = read('mobile/src/InvoiceMaker.tsx');
+  assert.match(screen, /<PaymentDetailsEditor p=\{p\} settings=\{payment\} onSaved=\{setPayment\} \/>/);
+  assert.match(screen, /m === "guest" \? "A guest"/);
+  assert.match(screen, /<RechargeInvoicePaper invoice=\{formToInvoice\(asChosen\(f\), paymentDetails\)\} \/>/);
+  assert.match(read('mobile/src/RechargeInvoice.tsx'), /action: "emailReceivable", requestId: request\.get\("email"\), itemId: receivableId/);
 });
 
 test('the route, the requests and where the screens are wired', () => {
@@ -194,8 +289,12 @@ test('the route, the requests and where the screens are wired', () => {
   assert.ok(!maker.documentsReadSchema.safeParse({ section: 'document' }).success, 'a document needs its id');
   assert.ok(!maker.documentsActionSchema.safeParse({ action: 'sendDocument', requestId: id(1), id: id(2), channel: 'fax' }).success);
   assert.ok(!maker.documentsActionSchema.safeParse({ action: 'saveDocumentDraft', requestId: id(1), kind: 'invoice', currency: 'EUR', issueOn: '2026-10-15', dueOn: '2026-10-22', note: '', terms: '', lines: [] }).success);
-  assert.match(read('lib/invoice-maker-server.ts'), /sendMailboxEmail\('owner',/);
-  assert.doesNotMatch(read('lib/invoice-maker-server.ts'), /sendMailboxEmail\('guest'/);
+  // The mailbox is never written into a send: it is worked out from who the email is for, and must match the database's.
+  const serverSource = read('lib/invoice-maker-server.ts');
+  assert.match(serverSource, /sendMailboxEmail\(mailbox, \{/);
+  assert.doesNotMatch(serverSource, /sendMailboxEmail\('(guest|owner)'/);
+  assert.match(serverSource, /state\.data\.mailbox !== mailbox/);
+  assert.doesNotMatch(serverSource, /emailRepliesEnabled/, 'not tied to EMAIL_REPLIES_ENABLED');
   for (const kind of ['mobile', 'workspace']) assert.match(read(`app/api/${kind}/documents/route.ts`), /workspaceDocuments\(request(, true)?\)/);
   assert.match(read('worker/backend-route-policy.ts'), /"\/api\/workspace\/documents", "\/api\/mobile\/documents"/);
   assert.match(read('mobile/src/backend/client.ts'), /\|privacy\|documents\)/);

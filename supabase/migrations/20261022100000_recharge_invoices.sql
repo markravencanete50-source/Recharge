@@ -16,7 +16,8 @@
 -- Part 2. The invoice maker. Accounts, admins and super admins (private.workspace_finance_role(), the same people who
 --   issue the invoices above through the issueInvoice form) make a document from scratch:
 --     kind 'invoice' (Recharge bills someone) or 'request' (a Request for Invoice: Recharge asks someone to invoice us);
---     a recipient picked from the app's people (owners and team) or typed (name, email, address);
+--     a recipient picked from the app's people (owners, clients and team), a guest picked from the stays, or typed (name,
+--     email, address);
 --     lines (description, quantity, rate; the amount is worked out here), GBP or USD, issue and due dates, an optional
 --     period and note, and the terms text.
 --   Drafts are saved and edited; Issue locks the document and numbers it RC-INV-YYYY-NNNN or RC-RFI-YYYY-NNNN from a
@@ -27,11 +28,22 @@
 --   Sending (private.workspace_document_sends, each with who sent it, when and to whom):
 --     in_app    to someone with an account: a notice through the existing notice system (private.workspace_clean_notify,
 --               no property, so never on an owner's property feed); a cleaner's notices are phone only (20261021900000);
---     email     from ownerrelations@ by the server (lib/invoice-maker-server.ts), never to a cleaner (refused here,
---               also when a typed address is a cleaner's sign-in email); the server records the outcome through
+--     email     by the server (lib/invoice-maker-server.ts), from the mailbox this database chooses for the recipient and
+--               records on the send: a guest from guestrelations@, everyone else (owners, clients, team, typed) from
+--               ownerrelations@. The two never mix: a guest's email to an address that belongs to an account is refused,
+--               and so is an owners' mailbox email to an address known only as a guest's. Never to a cleaner (refused here,
+--               also when a typed address is a cleaner's sign-in email). The server records the outcome through
 --               public.workspace_document_send_result (service role only);
 --     download  the document was downloaded to be shared by hand.
 --   The recipient reads an issued document addressed to them ('mine', 'document'); drafts never leave Accounts.
+--   A Receivable invoice (a hub invoice in Accounts, Receivable) is emailed the same way (action emailReceivable): to its
+--   owner or client from ownerrelations@, or for a guest stay to the guest from guestrelations@; recorded in the same sends.
+--
+-- Part 3. Payment details (Lee, 15 October 2026: a blank field management fill in in the app). One free-text field, up to
+--   1,000 characters, in a single-row settings table (private.workspace_finance_settings), empty until someone saves it:
+--   nothing is seeded. Accounts, admins and super admins (private.workspace_finance_role()) read it ('payment') and save it
+--   (savePaymentDetails) against its version; every save is in private.workspace_finance_settings_history with who and
+--   when. An invoice shows it as "How to pay" while it is not empty (lib/recharge-invoice.ts); a request for invoice never.
 --
 -- Tables have RLS on and no grants: everything goes through the private security-definer functions below and their
 -- public security-invoker wrappers. Safe to run twice.
@@ -46,6 +58,9 @@ create table if not exists private.workspace_documents (
  recipient_name text not null check(length(btrim(recipient_name)) between 2 and 200),
  recipient_email text check(recipient_email is null or (length(recipient_email)<=320 and recipient_email ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$')),
  recipient_address text not null default '' check(length(recipient_address)<=500),
+ -- 'guest': a guest of a stay (reservation_id), written to from guestrelations@; 'person': everyone else.
+ recipient_kind text not null default 'person' check(recipient_kind in ('person','guest')),
+ reservation_id uuid references private.workspace_reservations(id),
  currency text not null default 'GBP' check(currency in ('GBP','USD')),
  issue_on date not null,
  due_on date not null,
@@ -73,7 +88,8 @@ create table if not exists private.workspace_documents (
  constraint workspace_documents_due check(due_on>=issue_on),
  constraint workspace_documents_period check((period_start is null)=(period_end is null) and (period_end is null or period_end>=period_start)),
  constraint workspace_documents_numbered check((status='draft' and number is null) or status='void' or (status in ('issued','paid') and number is not null)),
- constraint workspace_documents_paid check((status='paid')=(paid_on is not null))
+ constraint workspace_documents_paid check((status='paid')=(paid_on is not null)),
+ constraint workspace_documents_guest check((recipient_kind='guest')=(reservation_id is not null) and (recipient_kind<>'guest' or recipient_id is null))
 );
 create unique index if not exists workspace_documents_number_idx on private.workspace_documents(number) where number is not null;
 create index if not exists workspace_documents_recipient_idx on private.workspace_documents(recipient_id,issue_on desc) where recipient_id is not null;
@@ -126,9 +142,13 @@ revoke all on private.workspace_document_history from public,anon,authenticated;
 
 create table if not exists private.workspace_document_sends (
  id uuid primary key default gen_random_uuid(),
- document_id uuid not null references private.workspace_documents(id),
+ -- A maker document, or a Receivable invoice (a hub invoice, email only).
+ document_id uuid references private.workspace_documents(id),
+ hub_item_id uuid references private.workspace_hub_items(id),
  request_id uuid not null,
  channel text not null check(channel in ('in_app','email','download')),
+ -- The mailbox an email goes from, chosen here by the recipient: 'guest' (guestrelations@) or 'owner' (ownerrelations@).
+ mailbox text check(mailbox in ('guest','owner')),
  to_user uuid references public.workspace_profiles(user_id),
  to_name text not null,
  to_email text,
@@ -138,11 +158,117 @@ create table if not exists private.workspace_document_sends (
  sent_by uuid not null references public.workspace_profiles(user_id),
  created_at timestamptz not null default now(),
  finished_at timestamptz,
- unique(sent_by,request_id)
+ unique(sent_by,request_id),
+ check(num_nonnulls(document_id,hub_item_id)=1),
+ check((channel='email')=(mailbox is not null)),
+ check(hub_item_id is null or channel='email')
 );
 create index if not exists workspace_document_sends_document_idx on private.workspace_document_sends(document_id,created_at);
+create index if not exists workspace_document_sends_hub_idx on private.workspace_document_sends(hub_item_id,created_at) where hub_item_id is not null;
 alter table private.workspace_document_sends enable row level security;
 revoke all on private.workspace_document_sends from public,anon,authenticated;
+
+-- Payment details: one row at most (id is always true), made by the first save. Nothing is seeded.
+create table if not exists private.workspace_finance_settings (
+ id boolean primary key default true check(id),
+ payment_details text not null default '' check(length(payment_details)<=1000),
+ version integer not null default 1 check(version>0),
+ updated_by uuid not null references public.workspace_profiles(user_id),
+ updated_at timestamptz not null default now()
+);
+alter table private.workspace_finance_settings enable row level security;
+revoke all on private.workspace_finance_settings from public,anon,authenticated;
+create table if not exists private.workspace_finance_settings_history (
+ id bigint generated always as identity primary key,
+ field text not null check(field in ('payment_details')),
+ old_value text not null,
+ new_value text not null,
+ version integer not null check(version>0),
+ actor_id uuid not null references public.workspace_profiles(user_id),
+ at timestamptz not null default now()
+);
+alter table private.workspace_finance_settings_history enable row level security;
+revoke all on private.workspace_finance_settings_history from public,anon,authenticated;
+
+-- Part 3: payment details ------------------------------------------------------------------------------------------
+create or replace function private.workspace_payment_details() returns text language sql stable security definer set search_path='' as $fn$
+ select coalesce((select s.payment_details from private.workspace_finance_settings s where s.id),'')
+$fn$;
+create or replace function private.workspace_payment_settings_json() returns jsonb language sql stable security definer set search_path='' as $fn$
+ select jsonb_build_object('paymentDetails',coalesce(s.payment_details,''),'version',coalesce(s.version,0),'updatedAt',s.updated_at,
+  'updatedBy',(select nullif(btrim(p.full_name),'') from public.workspace_profiles p where p.user_id=s.updated_by),
+  'history',coalesce((select jsonb_agg(jsonb_build_object('at',h.at,'version',h.version,'cleared',h.new_value='',
+    'by',(select nullif(btrim(p.full_name),'') from public.workspace_profiles p where p.user_id=h.actor_id)) order by h.id desc)
+   from (select * from private.workspace_finance_settings_history x where x.field='payment_details' order by x.id desc limit 50) h),'[]'::jsonb))
+ from (select 1) one left join private.workspace_finance_settings s on s.id
+$fn$;
+
+-- Guests ---------------------------------------------------------------------------------------------------------------
+-- A guest's email: the one kept for a direct booking, else the newest email conversation carrying one of the stay's codes.
+create or replace function private.workspace_stay_guest_email(reservation uuid) returns text language plpgsql stable security definer set search_path='' as $fn$
+declare r private.workspace_reservations;codes text[];mail text;
+begin
+ select * into r from private.workspace_reservations x where x.id=reservation;
+ if r.id is null or private.workspace_is_owner_stay(r) then return null;end if;
+ select lower(nullif(btrim(c.email),'')) into mail from private.workspace_stay_contacts c where c.reservation_id=r.id;
+ if mail is not null then return mail;end if;
+ codes:=private.workspace_stay_codes(r.channel_reference,r.reference);
+ if cardinality(codes)=0 then return null;end if;
+ select lower(btrim(t.guest_email)) into mail from private.workspace_guest_threads t
+  where t.source='email' and nullif(btrim(t.guest_email),'') is not null and t.reservation_ref is not null and upper(t.reservation_ref)=any(codes)
+   and (t.property_id is null or t.property_id=r.property_id)
+  order by t.last_message_at desc nulls last,t.created_at desc limit 1;
+ return mail;
+end $fn$;
+-- Somebody's sign-in email (an owner, a client, the team).
+create or replace function private.workspace_account_address(address text) returns boolean language sql stable security definer set search_path='' as $fn$
+ select exists(select 1 from auth.users u where lower(btrim(u.email))=lower(btrim(address)))
+$fn$;
+-- An address we know only as a guest's: kept for a stay, or from a guest's email conversation.
+create or replace function private.workspace_guest_address(address text) returns boolean language sql stable security definer set search_path='' as $fn$
+ select exists(select 1 from private.workspace_stay_contacts c where lower(btrim(c.email))=lower(btrim(address)))
+  or exists(select 1 from private.workspace_guest_threads t where t.source='email' and lower(btrim(t.guest_email))=lower(btrim(address)))
+$fn$;
+create or replace function private.workspace_stay_guest_json(reservation uuid,with_email boolean) returns jsonb language sql stable security definer set search_path='' as $fn$
+ select jsonb_build_object('reservationId',r.id,'name',coalesce(private.workspace_stay_guest_name(r.id),'Guest'),'reference',r.reference,
+  'propertyName',(select pr.name from public.workspace_properties pr where pr.id=r.property_id),'checkIn',r.check_in,'checkOut',r.check_out,
+  'hasEmail',private.workspace_stay_guest_email(r.id) is not null)
+  ||case when with_email then jsonb_build_object('email',private.workspace_stay_guest_email(r.id)) else '{}'::jsonb end
+ from private.workspace_reservations r where r.id=reservation
+$fn$;
+
+-- Receivable invoices (hub invoices) ---------------------------------------------------------------------------------
+-- Who a Receivable invoice goes to: its owner or client (from ownerrelations@), else the guest of its stay (from
+-- guestrelations@), else nobody yet.
+create or replace function private.workspace_receivable_recipient(i private.workspace_hub_items) returns jsonb language sql stable security definer set search_path='' as $fn$
+ select case
+  when i.client_id is not null then jsonb_build_object('kind','person','mailbox','owner','userId',i.client_id,
+   'name',coalesce((select nullif(btrim(p.full_name),'') from public.workspace_profiles p where p.user_id=i.client_id),'Owner'),
+   'role',(select p.role from public.workspace_profiles p where p.user_id=i.client_id),
+   'email',(select nullif(btrim(u.email),'') from auth.users u where u.id=i.client_id))
+  when i.reservation_id is not null then jsonb_build_object('kind','guest','mailbox','guest','reservationId',i.reservation_id,
+   'name',coalesce(private.workspace_stay_guest_name(i.reservation_id),'Guest'),'email',private.workspace_stay_guest_email(i.reservation_id))
+  else jsonb_build_object('kind',null,'mailbox',null) end
+$fn$;
+-- The invoice as the Receivable report shows it (lib/tracker-receivable.ts), without Accounts' own notes and link.
+create or replace function private.workspace_receivable_document(i private.workspace_hub_items) returns jsonb language sql stable security definer set search_path='' as $fn$
+ select jsonb_build_object('itemId',i.id,'version',i.version,'title',i.title,'reference',i.reference,'details','','status',i.status,
+  'propertyId',i.property_id,'propertyName',p.name,'address',p.address,'amountMinor',i.amount_minor,'settledMinor',coalesce(i.settled_minor,0),
+  'outstandingMinor',case i.status when 'sent' then greatest(coalesce(i.amount_minor,0)-coalesce(i.settled_minor,0),0) else coalesce(i.amount_minor,0) end,
+  'createdAt',i.created_at,'updatedAt',i.updated_at,'dueOn',i.due_on,'overdue',false,'ageDays',0,
+  'sentOn',case when i.status='sent' then (coalesce(i.decided_at,i.updated_at) at time zone 'Europe/London')::date end,'link',null,
+  'reservationId',i.reservation_id,'stayReference',r.reference,'checkIn',r.check_in,'checkOut',r.check_out,
+  'clientId',i.client_id,'clientName',(select c.full_name from public.workspace_profiles c where c.user_id=i.client_id))
+ from (select 1) one left join public.workspace_properties p on p.id=i.property_id left join private.workspace_reservations r on r.id=i.reservation_id
+$fn$;
+-- A Receivable email as the server needs it: who, from which mailbox, and the invoice to attach.
+create or replace function private.workspace_receivable_send_json(send private.workspace_document_sends) returns jsonb language sql stable security definer set search_path='' as $fn$
+ select jsonb_build_object('send',send.status='pending','status',send.status,'requestId',send.request_id,'mailbox',send.mailbox,
+  'recipientKind',case when send.mailbox='guest' then 'guest' else 'person' end,
+  'email',jsonb_build_object('to',send.to_email,'name',send.to_name),
+  'receivable',(select private.workspace_receivable_document(h) from private.workspace_hub_items h where h.id=send.hub_item_id),
+  'paymentDetails',private.workspace_payment_details())
+$fn$;
 
 -- Part 1: Recharge's bills in public.workspace_invoices -------------------------------------------------------------
 create or replace function private.workspace_owner_bill_module(module text) returns boolean language sql immutable set search_path='' as $fn$
@@ -165,7 +291,8 @@ create or replace function private.workspace_invoice_document(i public.workspace
   'workTitle',(select w.title from public.workspace_work_items w where w.id=i.work_id),
   'stay',(select jsonb_build_object('reference',r.reference,'checkIn',r.check_in,'checkOut',r.check_out)
    from private.workspace_domain_details d join private.workspace_reservations r on r.id::text=d.data->>'reservationId'
-   where d.work_id=i.work_id and d.kind='direct_booking' limit 1))
+   where d.work_id=i.work_id and d.kind='direct_booking' limit 1),
+  'paymentDetails',private.workspace_payment_details())
 $fn$;
 
 -- Part 2: the maker ------------------------------------------------------------------------------------------------
@@ -180,10 +307,14 @@ $fn$;
 -- the sends (Accounts only).
 create or replace function private.workspace_document_json(d private.workspace_documents,full_view boolean,staff boolean) returns jsonb language sql stable security definer set search_path='' as $fn$
  select jsonb_build_object('source','maker','id',d.id,'kind',d.kind,'status',d.status,'number',d.number,
-  'recipient',jsonb_build_object('userId',d.recipient_id,'name',d.recipient_name,'address',d.recipient_address,
+  'recipient',jsonb_build_object('userId',d.recipient_id,'name',d.recipient_name,'address',d.recipient_address,'kind',d.recipient_kind,
+   'reservationId',case when staff then d.reservation_id end,
+   'stay',case when staff and d.reservation_id is not null then private.workspace_stay_guest_json(d.reservation_id,false) end,
    'email',case when staff then d.recipient_email end,
    'role',(select p.role from public.workspace_profiles p where p.user_id=d.recipient_id),
-   'hasEmail',case when staff then d.recipient_email is not null or exists(select 1 from auth.users u where u.id=d.recipient_id and coalesce(u.email,'')<>'') end),
+   'hasEmail',case when staff then d.recipient_email is not null or exists(select 1 from auth.users u where u.id=d.recipient_id and coalesce(u.email,'')<>'')
+    or (d.reservation_id is not null and private.workspace_stay_guest_email(d.reservation_id) is not null) end),
+  'paymentDetails',case when d.kind='invoice' then private.workspace_payment_details() end,
   'currency',d.currency,'issueOn',d.issue_on,'dueOn',d.due_on,'periodStart',d.period_start,'periodEnd',d.period_end,'note',d.note,'terms',d.terms,
   'totalMinor',d.total_minor,'paidOn',d.paid_on,'voidReason',d.void_reason,'version',d.version,'createdAt',d.created_at,'updatedAt',d.updated_at,'issuedAt',d.issued_at,
   'lineCount',(select count(*) from private.workspace_document_lines l where l.document_id=d.id and l.revision=d.line_revision),
@@ -195,13 +326,13 @@ create or replace function private.workspace_document_json(d private.workspace_d
    'history',coalesce((select jsonb_agg(jsonb_build_object('action',h.action,'fromStatus',h.from_status,'toStatus',h.to_status,'version',h.version,'at',h.at,'detail',h.detail,
      'by',(select nullif(btrim(p.full_name),'') from public.workspace_profiles p where p.user_id=h.actor_id)) order by h.id)
     from private.workspace_document_history h where h.document_id=d.id),'[]'::jsonb),
-   'sends',coalesce((select jsonb_agg(jsonb_build_object('channel',s.channel,'toName',s.to_name,'toEmail',s.to_email,'status',s.status,'at',coalesce(s.finished_at,s.created_at),
+   'sends',coalesce((select jsonb_agg(jsonb_build_object('channel',s.channel,'toName',s.to_name,'toEmail',s.to_email,'status',s.status,'mailbox',s.mailbox,'at',coalesce(s.finished_at,s.created_at),
      'by',(select nullif(btrim(p.full_name),'') from public.workspace_profiles p where p.user_id=s.sent_by)) order by s.created_at)
     from private.workspace_document_sends s where s.document_id=d.id),'[]'::jsonb)) else '{}'::jsonb end
 $fn$;
 
 create or replace function private.workspace_documents_read(section text,target_id uuid default null) returns jsonb language plpgsql stable security definer set search_path='' as $fn$
-declare actor text:=private.workspace_actor_role();staff boolean:=private.workspace_finance_role();d private.workspace_documents;i public.workspace_invoices;
+declare actor text:=private.workspace_actor_role();staff boolean:=private.workspace_finance_role();d private.workspace_documents;i public.workspace_invoices;h private.workspace_hub_items;
 begin
  if actor is null then raise exception 'Active access required' using errcode='42501';end if;
  if section='documents' then
@@ -228,6 +359,25 @@ begin
   return coalesce((select jsonb_agg(jsonb_build_object('userId',p.user_id,'name',coalesce(nullif(btrim(p.full_name),''),'Unnamed'),'role',p.role,
     'canEmail',p.role<>'cleans' and coalesce(u.email,'')<>'') order by p.full_name,p.user_id)
    from public.workspace_profiles p left join auth.users u on u.id=p.user_id where p.status='active'),'[]'::jsonb);
+ elsif section='guests' then
+  -- Guests to choose from: the stays of the last year and the next, newest first (never an owner's own stay).
+  if not staff then raise exception 'Only Accounts and management make documents' using errcode='42501';end if;
+  return coalesce((select jsonb_agg(private.workspace_stay_guest_json(x.id,true) order by x.check_in desc,x.id)
+   from (select r.id,r.check_in from private.workspace_reservations r where r.status<>'cancelled'
+    and r.check_out>=(now() at time zone 'Europe/London')::date-365 and r.check_in<=(now() at time zone 'Europe/London')::date+365
+    and not private.workspace_is_owner_stay(r) order by r.check_in desc,r.id limit 500) x),'[]'::jsonb);
+ elsif section='payment' then
+  if not staff then raise exception 'Only Accounts and management see the payment details' using errcode='42501';end if;
+  return private.workspace_payment_settings_json();
+ elsif section='receivable' then
+  if not staff then raise exception 'Accounts access required' using errcode='42501';end if;
+  select * into h from private.workspace_hub_items x where x.id=target_id and x.kind='invoice';
+  if h.id is null or not (h.property_id is null or private.workspace_can_property(h.property_id,'owner-statements')) then raise exception 'Invoice not found' using errcode='P0002';end if;
+  return jsonb_build_object('recipient',private.workspace_receivable_recipient(h)-'email'||jsonb_build_object('hasEmail',private.workspace_receivable_recipient(h)->>'email' is not null),
+   'paymentDetails',private.workspace_payment_details(),
+   'sends',coalesce((select jsonb_agg(jsonb_build_object('toName',s.to_name,'toEmail',s.to_email,'status',s.status,'mailbox',s.mailbox,'at',coalesce(s.finished_at,s.created_at),
+     'by',(select nullif(btrim(p.full_name),'') from public.workspace_profiles p where p.user_id=s.sent_by)) order by s.created_at)
+    from private.workspace_document_sends s where s.hub_item_id=h.id),'[]'::jsonb));
  end if;
  raise exception 'Unknown documents section' using errcode='22023';
 end $fn$;
@@ -248,12 +398,27 @@ create or replace function private.workspace_document_cleaner_address(address te
  select exists(select 1 from auth.users u join public.workspace_profiles p on p.user_id=u.id where p.role='cleans' and lower(btrim(u.email))=lower(btrim(address)))
 $fn$;
 
+-- The two mailboxes never mix. A guest is written to from guestrelations@, so never at an address that belongs to an
+-- account (an owner, a client or the team, who are written to from ownerrelations@); and ownerrelations@ never writes to
+-- an address we know only as a guest's (choose the guest instead).
+create or replace function private.workspace_document_mailbox_check(box text,address text) returns void language plpgsql stable security definer set search_path='' as $fn$
+begin
+ if box='guest' and private.workspace_account_address(address) then
+  raise exception 'That address belongs to someone with an account, so it is not emailed from the guest mailbox. Choose them under Someone in the app' using errcode='42501';
+ end if;
+ if box='owner' and not private.workspace_account_address(address) and private.workspace_guest_address(address) then
+  raise exception 'That is a guest''s address. Choose the guest, so it goes from the guest mailbox' using errcode='42501';
+ end if;
+ if box is null or box not in ('guest','owner') then raise exception 'No mailbox for this email' using errcode='22023';end if;
+end $fn$;
+
 create or replace function private.workspace_documents_action(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $fn$
 declare actor text:=private.workspace_actor_role();a text;req uuid;prior private.workspace_action_receipts;result jsonb;d private.workspace_documents;
  today date:=(now() at time zone 'Europe/London')::date;
  k text;who uuid;who_name text;email text;address text;cur text;issue date;due date;p_start date;p_end date;note_text text;terms_text text;
  line jsonb;n integer;qty numeric;rate bigint;amount bigint;total bigint;rev integer;descr text;paid date;reason text;num integer;yr integer;pfx text;
- channel text;send private.workspace_document_sends;to_email text;
+ channel text;send private.workspace_document_sends;to_email text;box text;kind_of text;item private.workspace_hub_items;recipient jsonb;
+ setting private.workspace_finance_settings;old_text text;pay_text text;
 begin
  if actor is null then raise exception 'Active access required' using errcode='42501';end if;
  if input is null or jsonb_typeof(input)<>'object' then raise exception 'Unknown or oversized workflow input' using errcode='22023';end if;
@@ -262,25 +427,29 @@ begin
  req:=(input->>'requestId')::uuid;
  if not private.workspace_finance_role() then raise exception 'Only Accounts and management make documents' using errcode='42501';end if;
  if a='saveDocumentDraft' then
-  perform private.workspace_json_keys(input,array['action','requestId','id','version','kind','recipientId','recipientName','recipientEmail','recipientAddress','currency',
-   'issueOn','dueOn','periodStart','periodEnd','note','terms','lines'],120000);
+  perform private.workspace_json_keys(input,array['action','requestId','id','version','kind','recipientType','recipientId','reservationId','recipientName','recipientEmail',
+   'recipientAddress','currency','issueOn','dueOn','periodStart','periodEnd','note','terms','lines'],120000);
  elsif a='issueDocument' then perform private.workspace_json_keys(input,array['action','requestId','id','version'],2000);
  elsif a='markDocumentPaid' then perform private.workspace_json_keys(input,array['action','requestId','id','version','paidOn'],2000);
  elsif a='voidDocument' then perform private.workspace_json_keys(input,array['action','requestId','id','version','reason'],4000);
  elsif a='sendDocument' then perform private.workspace_json_keys(input,array['action','requestId','id','channel'],2000);
+ elsif a='emailReceivable' then perform private.workspace_json_keys(input,array['action','requestId','itemId'],2000);
+ elsif a='savePaymentDetails' then perform private.workspace_json_keys(input,array['action','requestId','version','paymentDetails'],8000);
  else raise exception 'Unknown documents action' using errcode='22023';end if;
  if input ? 'id' and coalesce(input->>'id','')!~'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then raise exception 'Document not found' using errcode='P0002';end if;
- if a<>'saveDocumentDraft' and not (input ? 'id') then raise exception 'Document not found' using errcode='P0002';end if;
+ if a in ('issueDocument','markDocumentPaid','voidDocument','sendDocument') and not (input ? 'id') then raise exception 'Document not found' using errcode='P0002';end if;
  perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text||req::text,0));
 
  -- Sending: the same request is the same send. A pending email may be tried again (the server's idempotency key makes it
  -- the same email); one that went out, or failed, is not sent again under the same request.
- if a='sendDocument' then
+ if a in ('sendDocument','emailReceivable') then
   select * into send from private.workspace_document_sends s where s.sent_by=auth.uid() and s.request_id=req;
   if send.id is not null then
+   if (a='emailReceivable')<>(send.hub_item_id is not null) then raise exception 'Request identifier reused' using errcode='23505';end if;
+   if send.hub_item_id is not null then return private.workspace_receivable_send_json(send);end if;
    select * into d from private.workspace_documents where id=send.document_id;
    if send.channel='email' and send.status='pending' then
-    return jsonb_build_object('send',true,'requestId',req,'email',jsonb_build_object('to',send.to_email,'name',send.to_name),'document',private.workspace_document_json(d,true,true));
+    return jsonb_build_object('send',true,'requestId',req,'mailbox',send.mailbox,'email',jsonb_build_object('to',send.to_email,'name',send.to_name),'document',private.workspace_document_json(d,true,true));
    end if;
    return jsonb_build_object('send',false,'status',send.status,'document',private.workspace_document_json(d,true,true));
   end if;
@@ -305,10 +474,21 @@ begin
   if d.id is not null and d.status<>'draft' then raise exception 'Only a draft can be edited. An issued document is locked' using errcode='42501';end if;
   k:=coalesce(input->>'kind','');
   if k not in ('invoice','request') then raise exception 'Choose Invoice or Request for invoice' using errcode='22023';end if;
-  -- The recipient: someone in the app, or a name typed by hand (with an email and an address when known).
+  -- The recipient: someone in the app, a guest of a stay, or a name typed by hand (with an email and an address when known).
   address:=btrim(coalesce(input->>'recipientAddress',''));
   if length(address)>500 then raise exception 'The address is too long' using errcode='22023';end if;
-  if jsonb_typeof(input->'recipientId')='string' then
+  kind_of:=coalesce(input->>'recipientType','person');
+  if kind_of not in ('person','guest') then raise exception 'Choose who it is for' using errcode='22023';end if;
+  if kind_of='guest' then
+   if coalesce(input->>'reservationId','')!~'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then raise exception 'Choose the guest''s stay' using errcode='22023';end if;
+   select coalesce(nullif(btrim(input->>'recipientName'),''),private.workspace_stay_guest_name(r.id),'Guest') into who_name from private.workspace_reservations r
+    where r.id=(input->>'reservationId')::uuid and not private.workspace_is_owner_stay(r);
+   if not found then raise exception 'Choose the guest''s stay' using errcode='22023';end if;
+   if length(who_name)<2 or length(who_name)>200 then raise exception 'Type who it is for' using errcode='22023';end if;
+   who:=null;
+   email:=nullif(btrim(coalesce(input->>'recipientEmail','')),'');
+   if email is not null and (length(email)>320 or email!~'^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$') then raise exception 'Check the email address' using errcode='22023';end if;
+  elsif jsonb_typeof(input->'recipientId')='string' then
    if input->>'recipientId'!~'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then raise exception 'Choose who it is for' using errcode='22023';end if;
    who:=(input->>'recipientId')::uuid;
    select coalesce(nullif(btrim(p.full_name),''),nullif(btrim(input->>'recipientName'),'')) into who_name from public.workspace_profiles p where p.user_id=who and p.status='active';
@@ -333,12 +513,13 @@ begin
   if input->'lines' is not null and jsonb_typeof(input->'lines')<>'array' then raise exception 'Check the lines' using errcode='22023';end if;
   if jsonb_array_length(coalesce(input->'lines','[]'::jsonb))>100 then raise exception 'A document can have up to 100 lines' using errcode='22023';end if;
   if d.id is null then
-   insert into private.workspace_documents(kind,recipient_id,recipient_name,recipient_email,recipient_address,currency,issue_on,due_on,period_start,period_end,note,terms,created_by,request_id,updated_by)
-    values(k,who,left(who_name,200),email,address,cur,issue,due,p_start,p_end,note_text,terms_text,auth.uid(),req,auth.uid()) returning * into d;
+   insert into private.workspace_documents(kind,recipient_id,recipient_name,recipient_email,recipient_address,recipient_kind,reservation_id,currency,issue_on,due_on,period_start,period_end,note,terms,created_by,request_id,updated_by)
+    values(k,who,left(who_name,200),email,address,kind_of,case when kind_of='guest' then (input->>'reservationId')::uuid end,cur,issue,due,p_start,p_end,note_text,terms_text,auth.uid(),req,auth.uid()) returning * into d;
    rev:=1;
   else
    rev:=d.line_revision+1;
-   update private.workspace_documents set kind=k,recipient_id=who,recipient_name=left(who_name,200),recipient_email=email,recipient_address=address,currency=cur,issue_on=issue,due_on=due,
+   update private.workspace_documents set kind=k,recipient_id=who,recipient_name=left(who_name,200),recipient_email=email,recipient_address=address,recipient_kind=kind_of,
+    reservation_id=case when kind_of='guest' then (input->>'reservationId')::uuid end,currency=cur,issue_on=issue,due_on=due,
     period_start=p_start,period_end=p_end,note=note_text,terms=terms_text,line_revision=rev,version=version+1,updated_by=auth.uid(),updated_at=now() where id=d.id returning * into d;
   end if;
   total:=0;n:=0;
@@ -410,14 +591,54 @@ begin
    if d.recipient_id is not null and exists(select 1 from public.workspace_profiles p where p.user_id=d.recipient_id and p.role='cleans') then
     raise exception 'Cleaners are never emailed. Send it in the app instead' using errcode='42501';
    end if;
-   to_email:=coalesce(d.recipient_email,(select nullif(btrim(u.email),'') from auth.users u where u.id=d.recipient_id));
+   if d.recipient_kind='guest' then
+    box:='guest';to_email:=coalesce(d.recipient_email,private.workspace_stay_guest_email(d.reservation_id));
+   else
+    box:='owner';to_email:=coalesce(d.recipient_email,(select nullif(btrim(u.email),'') from auth.users u where u.id=d.recipient_id));
+   end if;
    if to_email is null then raise exception 'There is no email address for this recipient. Download it and share it instead' using errcode='22023';end if;
    if private.workspace_document_cleaner_address(to_email) then raise exception 'Cleaners are never emailed. Send it in the app instead' using errcode='42501';end if;
-   insert into private.workspace_document_sends(document_id,request_id,channel,to_user,to_name,to_email,status,sent_by) values(d.id,req,'email',d.recipient_id,d.recipient_name,to_email,'pending',auth.uid()) returning * into send;
-   insert into private.workspace_document_history(document_id,actor_id,action,from_status,to_status,version,detail) values(d.id,auth.uid(),'email_started',d.status,d.status,d.version,jsonb_build_object('to',to_email));
-   result:=jsonb_build_object('send',true,'requestId',req,'email',jsonb_build_object('to',to_email,'name',d.recipient_name),'document',private.workspace_document_json(d,true,true));
+   perform private.workspace_document_mailbox_check(box,to_email);
+   insert into private.workspace_document_sends(document_id,request_id,channel,to_user,to_name,to_email,status,sent_by,mailbox) values(d.id,req,'email',d.recipient_id,d.recipient_name,to_email,'pending',auth.uid(),box) returning * into send;
+   insert into private.workspace_document_history(document_id,actor_id,action,from_status,to_status,version,detail) values(d.id,auth.uid(),'email_started',d.status,d.status,d.version,jsonb_build_object('to',to_email,'mailbox',box));
+   result:=jsonb_build_object('send',true,'requestId',req,'mailbox',box,'email',jsonb_build_object('to',to_email,'name',d.recipient_name),'document',private.workspace_document_json(d,true,true));
   end if;
   insert into public.workspace_activity(actor_id,event_type) values(auth.uid(),'finance.document_'||channel);
+  return result;
+ elsif a='emailReceivable' then
+  if coalesce(input->>'itemId','')!~'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then raise exception 'Invoice not found' using errcode='P0002';end if;
+  select * into item from private.workspace_hub_items h where h.id=(input->>'itemId')::uuid and h.kind='invoice' for update;
+  if item.id is null or not (item.property_id is null or private.workspace_can_property(item.property_id,'owner-statements')) then raise exception 'Invoice not found' using errcode='P0002';end if;
+  if item.status not in ('to_send','sent') then raise exception 'Only an invoice to send or sent can be emailed' using errcode='42501';end if;
+  recipient:=private.workspace_receivable_recipient(item);
+  if recipient->>'kind' is null then raise exception 'Link the invoice to an owner or a guest stay to email it, or download it and share it' using errcode='22023';end if;
+  if recipient->>'role'='cleans' then raise exception 'Cleaners are never emailed. Send it in the app instead' using errcode='42501';end if;
+  box:=recipient->>'mailbox';to_email:=recipient->>'email';
+  if to_email is null then raise exception 'There is no email address for this recipient. Download it and share it instead' using errcode='22023';end if;
+  if private.workspace_document_cleaner_address(to_email) then raise exception 'Cleaners are never emailed. Send it in the app instead' using errcode='42501';end if;
+  perform private.workspace_document_mailbox_check(box,to_email);
+  insert into private.workspace_document_sends(hub_item_id,request_id,channel,to_user,to_name,to_email,status,sent_by,mailbox)
+   values(item.id,req,'email',item.client_id,left(recipient->>'name',200),to_email,'pending',auth.uid(),box) returning * into send;
+  insert into public.workspace_activity(actor_id,event_type) values(auth.uid(),'finance.document_email');
+  return private.workspace_receivable_send_json(send);
+ elsif a='savePaymentDetails' then
+  if jsonb_typeof(input->'paymentDetails') is distinct from 'string' then raise exception 'Type the payment details, or leave the box empty' using errcode='22023';end if;
+  pay_text:=btrim(replace(input->>'paymentDetails',E'\r\n',E'\n'),E' \t\n');
+  if length(pay_text)>1000 then raise exception 'The payment details can be up to 1,000 characters' using errcode='22023';end if;
+  select * into setting from private.workspace_finance_settings s where s.id for update;
+  if jsonb_typeof(input->'version') is distinct from 'number' or coalesce(setting.version,0) is distinct from (input->>'version')::integer then
+   raise exception 'The payment details were changed by someone else. Refresh and try again' using errcode='40001';
+  end if;
+  old_text:=coalesce(setting.payment_details,'');
+  if setting.id is null then
+   insert into private.workspace_finance_settings(id,payment_details,version,updated_by,updated_at) values(true,pay_text,1,auth.uid(),now()) returning * into setting;
+  else
+   update private.workspace_finance_settings set payment_details=pay_text,version=version+1,updated_by=auth.uid(),updated_at=now() where id returning * into setting;
+  end if;
+  insert into private.workspace_finance_settings_history(field,old_value,new_value,version,actor_id) values('payment_details',old_text,pay_text,setting.version,auth.uid());
+  insert into public.workspace_activity(actor_id,event_type) values(auth.uid(),'finance.payment_details_saved');
+  result:=private.workspace_payment_settings_json();
+  insert into private.workspace_action_receipts(actor_id,request_id,input,result) values(auth.uid(),req,input,result);
   return result;
  end if;
  -- No property: a document is between Recharge and one person, never on an owner's feed.
@@ -442,9 +663,11 @@ begin
  if send.status<>'pending' then return jsonb_build_object('recorded',false,'status',send.status);end if;
  update private.workspace_document_sends set status=case when ok then 'sent' else 'failed' end,message_id=left(input->>'messageId',300),
   error=case when ok then null else left(coalesce(input->>'error','Not sent'),300) end,finished_at=now() where id=send.id returning * into send;
- select * into d from private.workspace_documents where id=send.document_id;
- insert into private.workspace_document_history(document_id,actor_id,action,from_status,to_status,version,detail)
-  values(d.id,send.sent_by,case when ok then 'emailed' else 'email_failed' end,d.status,d.status,d.version,jsonb_build_object('to',send.to_email)||case when ok then '{}'::jsonb else jsonb_build_object('error',send.error) end);
+ if send.document_id is not null then
+  select * into d from private.workspace_documents where id=send.document_id;
+  insert into private.workspace_document_history(document_id,actor_id,action,from_status,to_status,version,detail)
+   values(d.id,send.sent_by,case when ok then 'emailed' else 'email_failed' end,d.status,d.status,d.version,jsonb_build_object('to',send.to_email,'mailbox',send.mailbox)||case when ok then '{}'::jsonb else jsonb_build_object('error',send.error) end);
+ end if;
  return jsonb_build_object('recorded',true,'status',send.status);
 end $fn$;
 
@@ -456,7 +679,11 @@ create or replace function public.workspace_document_send_result(input jsonb) re
 revoke all on function private.workspace_owner_bill_module(text),private.workspace_invoice_visible(public.workspace_invoices),private.workspace_invoice_document(public.workspace_invoices),
  private.workspace_document_money(bigint,text),private.workspace_document_label(private.workspace_documents),private.workspace_document_json(private.workspace_documents,boolean,boolean),
  private.workspace_documents_read(text,uuid),public.workspace_documents_read(text,uuid),private.workspace_document_day(jsonb,text,text),private.workspace_document_cleaner_address(text),
- private.workspace_documents_action(jsonb),public.workspace_documents_action(jsonb),private.workspace_document_send_result(jsonb),public.workspace_document_send_result(jsonb)
+ private.workspace_documents_action(jsonb),public.workspace_documents_action(jsonb),private.workspace_document_send_result(jsonb),public.workspace_document_send_result(jsonb),
+ private.workspace_payment_details(),private.workspace_payment_settings_json(),private.workspace_stay_guest_email(uuid),private.workspace_account_address(text),
+ private.workspace_guest_address(text),private.workspace_stay_guest_json(uuid,boolean),private.workspace_receivable_recipient(private.workspace_hub_items),
+ private.workspace_receivable_document(private.workspace_hub_items),private.workspace_receivable_send_json(private.workspace_document_sends),
+ private.workspace_document_mailbox_check(text,text)
  from public,anon,authenticated;
 -- The public wrappers run as the caller, so the caller may execute the private function they call.
 grant execute on function private.workspace_documents_read(text,uuid),public.workspace_documents_read(text,uuid),

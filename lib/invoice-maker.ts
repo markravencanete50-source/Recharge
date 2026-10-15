@@ -1,11 +1,12 @@
 import { z } from 'zod';
-import { addDays, DEFAULT_TERMS, INVOICE_DUE_DAYS, type DocCurrency, type DocKind, type RechargeInvoice } from './recharge-invoice';
+import { addDays, DEFAULT_TERMS, docDay, docPeriod, INVOICE_DUE_DAYS, PAYMENT_DETAILS_MAX, type DocCurrency, type DocKind, type RechargeInvoice } from './recharge-invoice';
 
 // The invoice maker (migration 20261022100000): Accounts, admins and super admins make an Invoice (Recharge bills someone) or
 // a Request for Invoice (Recharge asks someone to invoice us) from scratch, save it as a draft, issue it (locked, numbered
 // RC-INV-YYYY-NNNN or RC-RFI-YYYY-NNNN), then mark it paid or void it, and send it: in the app to someone with an account,
-// by email from ownerrelations@ (never to a cleaner), or downloaded to share. This file holds the requests (checked again
-// by the database), the form and its maths, the preview, and the lists. The document is lib/recharge-invoice.ts.
+// by email (a guest from guestrelations@, everyone else from ownerrelations@, never a cleaner), or downloaded to share.
+// This file holds the requests (checked again by the database), the form and its maths, the preview, and the lists. The
+// document is lib/recharge-invoice.ts.
 
 const id = z.string().uuid();
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter the date as year-month-day');
@@ -17,15 +18,22 @@ export type MakerStatus = (typeof MAKER_STATUSES)[number];
 export const SEND_CHANNELS = ['in_app', 'email', 'download'] as const;
 export type SendChannel = (typeof SEND_CHANNELS)[number];
 export const MAX_LINES = 100;
+export const RECIPIENT_TYPES = ['person', 'guest'] as const;
+export type RecipientType = (typeof RECIPIENT_TYPES)[number];
+export type Mailbox = 'guest' | 'owner';
+// The mailbox an email goes from, by who it is for: a guest from guestrelations@, everyone else from ownerrelations@.
+// The database chooses the same and records it on the send; the server sends only when the two agree.
+export const documentMailbox = (kind: RecipientType | null | undefined): Mailbox => kind === 'guest' ? 'guest' : 'owner';
+export const MAILBOX_ADDRESS: Record<Mailbox, string> = { guest: 'guestrelations@', owner: 'ownerrelations@' };
 
 // --- Requests (the Documents route, lib/invoice-maker-server.ts) ---------------------------------------------------
-export const documentsReadSchema = z.object({ section: z.enum(['documents', 'document', 'invoice', 'mine', 'recipients']), id: id.optional() }).strict()
-  .superRefine((v, ctx) => { if ((v.section === 'document' || v.section === 'invoice') !== !!v.id) ctx.addIssue({ code: 'custom', message: 'Choose a document' }); });
+export const documentsReadSchema = z.object({ section: z.enum(['documents', 'document', 'invoice', 'mine', 'recipients', 'guests', 'payment', 'receivable']), id: id.optional() }).strict()
+  .superRefine((v, ctx) => { if ((v.section === 'document' || v.section === 'invoice' || v.section === 'receivable') !== !!v.id) ctx.addIssue({ code: 'custom', message: 'Choose a document' }); });
 const lineInput = z.object({ description: z.string().trim().min(1, 'Describe each line').max(500), quantity: z.string().regex(/^\d{1,6}(\.\d{1,2})?$/, 'Check the quantity'), rateMinor: z.number().int().min(0).max(100000000) }).strict();
 export const documentsActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('saveDocumentDraft'), requestId: id, id: id.optional(), version: version.optional(), kind: z.enum(DOC_KINDS),
-    recipientId: id.optional(), recipientName: z.string().trim().max(200).optional(), recipientEmail: z.string().trim().email('Check the email address').max(320).optional(),
+    recipientType: z.enum(RECIPIENT_TYPES).optional(), recipientId: id.optional(), reservationId: id.optional(), recipientName: z.string().trim().max(200).optional(), recipientEmail: z.string().trim().email('Check the email address').max(320).optional(),
     recipientAddress: z.string().trim().max(500).optional(), currency: z.enum(DOC_CURRENCIES), issueOn: day, dueOn: day,
     periodStart: day.optional(), periodEnd: day.optional(), note: z.string().trim().max(2000), terms: z.string().trim().max(2000), lines: z.array(lineInput).max(MAX_LINES),
   }).strict(),
@@ -33,6 +41,10 @@ export const documentsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('markDocumentPaid'), requestId: id, id, version, paidOn: day }).strict(),
   z.object({ action: z.literal('voidDocument'), requestId: id, id, version, reason: z.string().trim().min(5, 'Say why it is void').max(1000) }).strict(),
   z.object({ action: z.literal('sendDocument'), requestId: id, id, channel: z.enum(SEND_CHANNELS) }).strict(),
+  // A Receivable invoice by email: to its owner or client, or to the guest of its stay.
+  z.object({ action: z.literal('emailReceivable'), requestId: id, itemId: id }).strict(),
+  // The payment details, against the version read (0 before the first save). Empty clears them.
+  z.object({ action: z.literal('savePaymentDetails'), requestId: id, version: z.number().int().min(0), paymentDetails: z.string().max(PAYMENT_DETAILS_MAX + 200) }).strict(),
 ]);
 export type DocumentsAction = z.infer<typeof documentsActionSchema>;
 export const documentsQuery = () => ({ section: 'documents' });
@@ -40,42 +52,68 @@ export const documentQuery = (documentId: string) => ({ section: 'document', id:
 export const ownerInvoiceQuery = (invoiceId: string) => ({ section: 'invoice', id: invoiceId });
 export const mineQuery = () => ({ section: 'mine' });
 export const recipientsQuery = () => ({ section: 'recipients' });
+export const guestsQuery = () => ({ section: 'guests' });
+export const paymentQuery = () => ({ section: 'payment' });
+export const receivableQuery = (itemId: string) => ({ section: 'receivable', id: itemId });
 
 // --- What the database returns -------------------------------------------------------------------------------------
+const sendSchema = z.object({ channel: z.enum(SEND_CHANNELS).default('email'), toName: z.string(), toEmail: z.string().nullable(), status: z.enum(['pending', 'sent', 'failed']), mailbox: z.enum(['guest', 'owner']).nullable().optional(), at: z.string(), by: z.string().nullable() });
+export type DocumentSend = z.infer<typeof sendSchema>;
 export const makerLineSchema = z.object({ position: z.number(), description: z.string(), quantity: z.union([z.number(), z.string()]), rateMinor: z.number(), amountMinor: z.number() });
 export const makerDocumentSchema = z.object({
   source: z.literal('maker'), id, kind: z.enum(DOC_KINDS), status: z.enum(MAKER_STATUSES), number: z.string().nullable(),
-  recipient: z.object({ userId: id.nullable(), name: z.string(), address: z.string(), email: z.string().nullable().optional(), role: z.string().nullable().optional(), hasEmail: z.boolean().nullable().optional() }),
+  recipient: z.object({ userId: id.nullable(), name: z.string(), address: z.string(), email: z.string().nullable().optional(), role: z.string().nullable().optional(), hasEmail: z.boolean().nullable().optional(),
+    kind: z.enum(RECIPIENT_TYPES).optional(), reservationId: id.nullable().optional(),
+    stay: z.object({ reference: z.string().nullable().optional(), propertyName: z.string().nullable().optional(), checkIn: day.nullable().optional(), checkOut: day.nullable().optional() }).passthrough().nullable().optional() }),
   currency: z.enum(DOC_CURRENCIES), issueOn: day, dueOn: day, periodStart: day.nullable(), periodEnd: day.nullable(), note: z.string(), terms: z.string(),
   totalMinor: z.number(), paidOn: day.nullable(), voidReason: z.string().nullable(), version: z.number(), createdAt: z.string(), updatedAt: z.string(), issuedAt: z.string().nullable(),
-  lineCount: z.number(), lastSentAt: z.string().nullable(),
+  lineCount: z.number(), lastSentAt: z.string().nullable(), paymentDetails: z.string().nullable().optional(),
   lines: z.array(makerLineSchema).optional(),
   history: z.array(z.object({ action: z.string(), fromStatus: z.string().nullable(), toStatus: z.string().nullable(), version: z.number(), at: z.string(), by: z.string().nullable(), detail: z.record(z.string(), z.unknown()).optional() })).optional(),
-  sends: z.array(z.object({ channel: z.enum(SEND_CHANNELS), toName: z.string(), toEmail: z.string().nullable(), status: z.enum(['pending', 'sent', 'failed']), at: z.string(), by: z.string().nullable() })).optional(),
+  sends: z.array(sendSchema).optional(),
 });
 export type MakerDocument = z.infer<typeof makerDocumentSchema>;
 export const makerDocumentsSchema = z.array(makerDocumentSchema);
 export const workspaceInvoiceDocSchema = z.object({
   source: z.literal('workspace'), id, module: z.string(), reference: z.string(), status: z.string(), issueOn: day, paidOn: day.nullable(), amountMinor: z.number(), currency: z.string(),
   version: z.number(), recipientName: z.string(), propertyName: z.string().nullable(), propertyAddress: z.string().nullable(), workTitle: z.string().nullable(),
-  stay: z.object({ reference: z.string().nullable(), checkIn: day, checkOut: day }).nullable(),
+  stay: z.object({ reference: z.string().nullable(), checkIn: day, checkOut: day }).nullable(), paymentDetails: z.string().nullable().optional(),
 });
 export const mineSchema = z.object({ documents: makerDocumentsSchema, invoices: z.array(workspaceInvoiceDocSchema) });
 export const recipientSchema = z.object({ userId: id, name: z.string(), role: z.string(), canEmail: z.boolean() });
 export const recipientsSchema = z.array(recipientSchema);
 export type Recipient = z.infer<typeof recipientSchema>;
+// A guest to choose: one stay, its guest's name and whether an email is known (written to from guestrelations@).
+export const guestSchema = z.object({ reservationId: id, name: z.string(), reference: z.string().nullable(), propertyName: z.string().nullable(), checkIn: day, checkOut: day, hasEmail: z.boolean(), email: z.string().nullable().optional() });
+export const guestsSchema = z.array(guestSchema);
+export type Guest = z.infer<typeof guestSchema>;
+export const guestLabel = (g: Guest) => `${g.name} · ${[g.propertyName, docPeriod(g.checkIn, g.checkOut)].filter(Boolean).join(', ')}${g.reference ? ` (${g.reference})` : ''}`;
+// The payment details as Accounts edit them, with who saved them and when.
+export const paymentSettingsSchema = z.object({
+  paymentDetails: z.string(), version: z.number().int().min(0), updatedAt: z.string().nullable(), updatedBy: z.string().nullable(),
+  history: z.array(z.object({ at: z.string(), version: z.number(), by: z.string().nullable(), cleared: z.boolean() })),
+});
+export type PaymentSettings = z.infer<typeof paymentSettingsSchema>;
+export const paymentSavedLine = (s: Pick<PaymentSettings, 'updatedAt' | 'updatedBy' | 'version'>) =>
+  s.version === 0 || !s.updatedAt ? 'Not filled in yet: invoices show no How to pay.' : `Last saved ${docDay(s.updatedAt)} ${s.updatedAt.slice(11, 16)}${s.updatedBy ? ` by ${s.updatedBy}` : ''}.`;
+// A Receivable invoice's email state: who it would go to (and from which mailbox), the payment details, and past sends.
+export const receivableStateSchema = z.object({
+  recipient: z.object({ kind: z.enum(RECIPIENT_TYPES).nullable(), mailbox: z.enum(['guest', 'owner']).nullable(), name: z.string().optional(), hasEmail: z.boolean().optional(), role: z.string().nullable().optional() }).passthrough(),
+  paymentDetails: z.string(), sends: z.array(sendSchema),
+});
+export type ReceivableState = z.infer<typeof receivableStateSchema>;
 
 // --- The form and its maths ------------------------------------------------------------------------------------------
 export type FormLine = { key: string; description: string; quantity: string; rate: string };
 export type MakerForm = {
-  kind: DocKind; recipientId: string; recipientName: string; recipientEmail: string; recipientAddress: string; currency: DocCurrency;
+  kind: DocKind; recipientType: RecipientType; reservationId: string; recipientId: string; recipientName: string; recipientEmail: string; recipientAddress: string; currency: DocCurrency;
   issueOn: string; dueOn: string; periodStart: string; periodEnd: string; note: string; terms: string; termsEdited: boolean; lines: FormLine[];
 };
 let lineSeq = 0;
 export const newLine = (over: Partial<FormLine> = {}): FormLine => ({ key: `line-${++lineSeq}`, description: '', quantity: '1', rate: '', ...over });
 // Issue date today, due 7 days on, pounds, the default terms for the kind, one empty line.
 export function emptyForm(today: string, kind: DocKind = 'invoice'): MakerForm {
-  return { kind, recipientId: '', recipientName: '', recipientEmail: '', recipientAddress: '', currency: 'GBP', issueOn: today, dueOn: addDays(today, INVOICE_DUE_DAYS),
+  return { kind, recipientType: 'person', reservationId: '', recipientId: '', recipientName: '', recipientEmail: '', recipientAddress: '', currency: 'GBP', issueOn: today, dueOn: addDays(today, INVOICE_DUE_DAYS),
     periodStart: '', periodEnd: '', note: '', terms: DEFAULT_TERMS[kind], termsEdited: false, lines: [newLine()] };
 }
 // Changing the kind swaps the default terms, unless they were edited for this document.
@@ -122,9 +160,10 @@ export function formMaths(lines: readonly FormLine[]): FormMaths {
 type SaveAction = Extract<DocumentsAction, { action: 'saveDocumentDraft' }>;
 // The form as a Save draft request, or the first thing to fix. A line left completely empty is dropped.
 export function formToAction(f: MakerForm, requestId: string, editing?: { id: string; version: number }): { action: SaveAction } | { error: string } {
-  const typed = !f.recipientId;
+  const guest = f.recipientType === 'guest', typed = !guest && !f.recipientId;
+  if (guest && !f.reservationId) return { error: 'Choose the guest.' };
   if (typed && f.recipientName.trim().length < 2) return { error: 'Choose who it is for, or type their name.' };
-  if (typed && f.recipientEmail.trim() && !z.string().email().safeParse(f.recipientEmail.trim()).success) return { error: 'Check the email address.' };
+  if ((typed || guest) && f.recipientEmail.trim() && !z.string().email().safeParse(f.recipientEmail.trim()).success) return { error: 'Check the email address.' };
   if (!day.safeParse(f.issueOn).success || !day.safeParse(f.dueOn).success) return { error: 'Choose the issue date and the due date.' };
   if (f.dueOn < f.issueOn) return { error: 'The due date cannot be before the issue date.' };
   if (!!f.periodStart !== !!f.periodEnd || (f.periodStart && f.periodEnd < f.periodStart)) return { error: 'Give the period a start and an end, in order, or leave both empty.' };
@@ -139,7 +178,8 @@ export function formToAction(f: MakerForm, requestId: string, editing?: { id: st
   }
   return { action: {
     action: 'saveDocumentDraft', requestId, ...(editing ? { id: editing.id, version: editing.version } : {}), kind: f.kind,
-    ...(typed ? { recipientName: f.recipientName.trim(), ...(f.recipientEmail.trim() ? { recipientEmail: f.recipientEmail.trim() } : {}) } : { recipientId: f.recipientId, recipientName: f.recipientName.trim() || undefined }),
+    ...(guest ? { recipientType: 'guest' as const, reservationId: f.reservationId, ...(f.recipientName.trim() ? { recipientName: f.recipientName.trim() } : {}), ...(f.recipientEmail.trim() ? { recipientEmail: f.recipientEmail.trim() } : {}) }
+      : typed ? { recipientName: f.recipientName.trim(), ...(f.recipientEmail.trim() ? { recipientEmail: f.recipientEmail.trim() } : {}) } : { recipientId: f.recipientId, recipientName: f.recipientName.trim() || undefined }),
     recipientAddress: f.recipientAddress.trim(), currency: f.currency, issueOn: f.issueOn, dueOn: f.dueOn,
     ...(f.periodStart && f.periodEnd ? { periodStart: f.periodStart, periodEnd: f.periodEnd } : {}), note: f.note.trim(), terms: f.terms.trim(), lines,
   } };
@@ -147,17 +187,18 @@ export function formToAction(f: MakerForm, requestId: string, editing?: { id: st
 // A saved draft back in the form, to edit.
 export function formFromDocument(d: MakerDocument): MakerForm {
   return {
-    kind: d.kind, recipientId: d.recipient.userId ?? '', recipientName: d.recipient.name, recipientEmail: d.recipient.userId ? '' : d.recipient.email ?? '', recipientAddress: d.recipient.address,
+    kind: d.kind, recipientType: d.recipient.kind ?? 'person', reservationId: d.recipient.reservationId ?? '',
+    recipientId: d.recipient.userId ?? '', recipientName: d.recipient.name, recipientEmail: d.recipient.userId ? '' : d.recipient.email ?? '', recipientAddress: d.recipient.address,
     currency: d.currency, issueOn: d.issueOn, dueOn: d.dueOn, periodStart: d.periodStart ?? '', periodEnd: d.periodEnd ?? '', note: d.note, terms: d.terms,
     termsEdited: d.terms !== DEFAULT_TERMS[d.kind], lines: (d.lines ?? []).map(l => newLine({ description: l.description, quantity: String(Number(l.quantity)), rate: (l.rateMinor / 100).toFixed(2) })),
   };
 }
 const addressLines = (address: string) => address.split(/\r?\n|,\s*/).map(s => s.trim()).filter(Boolean);
 // The live preview: the form as the branded document, a draft until issued.
-export function formToInvoice(f: MakerForm): RechargeInvoice {
+export function formToInvoice(f: MakerForm, paymentDetails?: string | null): RechargeInvoice {
   const maths = formMaths(f.lines);
   return {
-    kind: f.kind, number: null, status: 'draft', currency: f.currency,
+    kind: f.kind, number: null, status: 'draft', currency: f.currency, paymentDetails: paymentDetails ?? null,
     billedTo: { name: f.recipientName, lines: [...addressLines(f.recipientAddress), !f.recipientId ? f.recipientEmail.trim() : ''].filter(Boolean) },
     issueOn: f.issueOn || null, dueOn: f.dueOn || null, periodStart: f.periodStart || null, periodEnd: f.periodEnd || null,
     lines: f.lines.filter(l => l.description.trim() || l.rate.trim()).map(l => {
@@ -170,8 +211,9 @@ export function formToInvoice(f: MakerForm): RechargeInvoice {
 // A saved document as the branded document.
 export function fromMakerDocument(d: MakerDocument): RechargeInvoice {
   return {
-    kind: d.kind, number: d.number, status: d.status, currency: d.currency,
+    kind: d.kind, number: d.number, status: d.status, currency: d.currency, paymentDetails: d.paymentDetails ?? null,
     billedTo: { name: d.recipient.name, lines: [...addressLines(d.recipient.address), !d.recipient.userId && d.recipient.email ? d.recipient.email : ''].filter(Boolean) },
+    facts: d.recipient.stay?.reference ? [{ label: 'Stay', value: [d.recipient.stay.reference, d.recipient.stay.propertyName].filter(Boolean).join(', ') }] : [],
     issueOn: d.issueOn, dueOn: d.dueOn, periodStart: d.periodStart, periodEnd: d.periodEnd, paidOn: d.paidOn, voidReason: d.voidReason,
     lines: (d.lines ?? []).map(l => ({ description: l.description, quantity: quantityText(Math.round(Number(l.quantity) * 100)), rateMinor: l.rateMinor, amountMinor: l.amountMinor })),
     note: d.note, terms: d.terms,
@@ -197,6 +239,9 @@ export function sendChoices(d: Pick<MakerDocument, 'status' | 'recipient'>): Sen
   return [...(d.recipient.userId ? ['in_app' as const] : []), ...(!cleaner && (d.recipient.hasEmail || !!d.recipient.email) ? ['email' as const] : []), 'download' as const];
 }
 export const SEND_LABEL: Record<SendChannel, string> = { in_app: 'Send in the app', email: 'Email it', download: 'Download to share' };
+// "Email it (from guestrelations@)", so whoever presses it sees which mailbox it goes from.
+export const emailLabel = (kind: RecipientType | null | undefined) => `Email it (from ${MAILBOX_ADDRESS[documentMailbox(kind)]})`;
+export const sendLine = (s: DocumentSend) => `${SEND_LABEL[s.channel]}${s.mailbox ? ` from ${MAILBOX_ADDRESS[s.mailbox]}` : ''}: ${s.toEmail ?? s.toName}, ${docDay(s.at)}${s.by ? ` by ${s.by}` : ''}${s.status === 'sent' ? '' : ` (${s.status === 'failed' ? 'not sent' : 'sending'})`}`;
 export const HISTORY_LABEL: Record<string, string> = {
   created: 'Draft started', saved: 'Draft saved', issued: 'Issued', paid: 'Marked paid', voided: 'Voided', sent_in_app: 'Sent in the app',
   email_started: 'Email started', emailed: 'Emailed', email_failed: 'Email not sent', downloaded: 'Downloaded to share',

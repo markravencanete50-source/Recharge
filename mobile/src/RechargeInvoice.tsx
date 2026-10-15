@@ -4,11 +4,11 @@ import { Text } from "./Typography";
 import { CompanyLogo } from "./CompanyLogo";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Loading, london, message, Notice } from "./LiveKit";
-import { readDocuments } from "./backend/client";
+import { Button, Loading, london, message, Notice, useRequestId } from "./LiveKit";
+import { readDocuments, writeDocuments } from "./backend/client";
 import { exportReport } from "./exportReport";
 import { fromWorkspaceInvoice, RECHARGE_PAPER, rechargeInvoiceDoc, rechargeInvoiceFileName, rechargeInvoiceHtml, type RechargeInvoice } from "../../lib/recharge-invoice";
-import { ownerInvoiceQuery, workspaceInvoiceDocSchema } from "../../lib/invoice-maker";
+import { emailLabel, ownerInvoiceQuery, receivableQuery, receivableStateSchema, sendLine, workspaceInvoiceDocSchema, type ReceivableState } from "../../lib/invoice-maker";
 
 // Recharge's invoice document on screen (RechargeInvoicePaper) and as the download (lib/recharge-invoice.ts
 // rechargeInvoiceHtml, printed or saved as PDF, or shared from the phone). The same look as the cleaner invoice
@@ -81,7 +81,7 @@ export function RechargeInvoicePaper({ invoice }: { invoice: RechargeInvoice }) 
         </View>
         {!!doc.note && <View style={{ gap: 2 }}><Text style={label}>Note</Text><Text style={{ color: c.ink, fontSize: 13 }}>{doc.note}</Text></View>}
         {!!doc.terms && <View style={{ gap: 2 }}><Text style={label}>Terms</Text><Text style={{ color: c.ink, fontSize: 13 }}>{doc.terms}</Text></View>}
-        {!!doc.payment?.length && <View style={{ gap: 2 }}><Text style={label}>Payment details</Text>{doc.payment.map(d => <Text key={d.label} style={{ color: c.ink, fontSize: 13 }}>{d.label}: {d.value}</Text>)}</View>}
+        {!!doc.payment && <View style={{ gap: 2 }}><Text style={label}>How to pay</Text><Text style={{ color: c.ink, fontSize: 13 }}>{doc.payment}</Text></View>}
         <View style={{ borderTopWidth: 1, borderTopColor: c.rule, paddingTop: 12, marginTop: 8, gap: 2 }}>
           <Text style={{ color: c.muted, fontSize: 13 }}>{doc.thanks}</Text>
           <Text style={{ color: c.muted, fontSize: 11 }}>{doc.footer}</Text>
@@ -105,12 +105,42 @@ export function DocumentView({ p, invoice, children, onDownloaded }: { p: Palett
   );
 }
 
-// A document already in hand (a Receivable row), in a sheet.
-export function RechargeInvoiceSheet({ p, invoice, onClose }: { p: Palette; invoice: RechargeInvoice | null; onClose: () => void }) {
-  const doc = invoice ? rechargeInvoiceDoc(invoice) : null;
+// A document already in hand (a Receivable row), in a sheet. With its hub item id it also reads the payment details and who
+// it would be emailed to: the owner or client from ownerrelations@, or the guest of its stay from guestrelations@.
+export function RechargeInvoiceSheet({ p, invoice, receivableId, onClose }: { p: Palette; invoice: RechargeInvoice | null; receivableId?: string | null; onClose: () => void }) {
+  const [state, setState] = useState<ReceivableState | null>(null), [error, setError] = useState(""), [note, setNote] = useState(""), [busy, setBusy] = useState(false);
+  const request = useRequestId(receivableId ? `receivable:${receivableId}:${state?.sends.length ?? 0}` : null);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { if (active) { setState(null); setError(""); setNote(""); } });
+    if (receivableId) readDocuments(receivableQuery(receivableId)).then(r => { if (active) setState(receivableStateSchema.parse(r.data)); }).catch(e => { if (active) setError(message(e)); });
+    return () => { active = false; };
+  }, [receivableId]);
+  const shown = invoice ? { ...invoice, paymentDetails: state?.paymentDetails ?? invoice.paymentDetails ?? null } : null;
+  const doc = shown ? rechargeInvoiceDoc(shown) : null, who = state?.recipient;
+  async function email() {
+    if (!receivableId || busy) return;
+    setBusy(true); setError(""); setNote("");
+    try {
+      const r = await writeDocuments({ action: "emailReceivable", requestId: request.get("email"), itemId: receivableId });
+      request.done("email");
+      setNote(typeof r?.note === "string" ? r.note : `Emailed to ${who?.name ?? "them"}.`);
+      setState(receivableStateSchema.parse((await readDocuments(receivableQuery(receivableId))).data));
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
   return (
     <Sheet palette={p} visible={!!invoice} onClose={onClose} title={doc ? `${doc.title} ${doc.number}` : "Invoice"} subtitle={doc ? `${doc.to.name} · ${doc.total}` : undefined} icon="receipt">
-      {invoice && <DocumentView p={p} invoice={invoice} />}
+      {shown && <DocumentView p={p} invoice={shown}>
+        {!!error && <Notice text={error} p={p} tone="bad" />}
+        {who?.kind && who.hasEmail && <Button label={busy ? "Sending…" : `${emailLabel(who.kind)} to ${who.name ?? (who.kind === "guest" ? "the guest" : "the owner")}`} icon="mail" p={p} disabled={busy} onPress={() => void email()} />}
+        {state && !who?.kind && <Text style={[ui.small, { color: p.muted }]}>Not linked to an owner or a guest stay: download it and share it.</Text>}
+        {state && who?.kind && !who.hasEmail && <Text style={[ui.small, { color: p.muted }]}>{who.kind === "guest" ? "No email address for this guest: download it and share it." : "No email address for this owner: download it and share it."}</Text>}
+        {!!note && <Notice text={note} p={p} />}
+        {!!state?.sends.length && <View style={{ gap: 4 }}>
+          <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Sent</Text>
+          {state.sends.map((s, n) => <Text key={n} style={[ui.small, { color: s.status === "failed" ? p.danger : p.muted }]}>{sendLine(s)}</Text>)}
+        </View>}
+      </DocumentView>}
     </Sheet>
   );
 }

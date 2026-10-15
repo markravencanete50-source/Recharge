@@ -50,19 +50,27 @@ test('the page: logo band, spaced INVOICE and its number, Billed to, the facts, 
   assert.match(doc.rechargeInvoiceHtml(doc.fromWorkspaceInvoice(bill()), { today: '2026-10-20' }), /<span class="pill">Overdue<\/span>/);
 });
 
-test('the terms are one constant with the 7-day rule; no bank details until Lee gives them', () => {
+test('the terms are one constant with the 7-day rule; How to pay comes from the app, on invoices only, never seeded', () => {
   assert.equal(doc.INVOICE_DUE_DAYS, 7);
   assert.equal(doc.DEFAULT_TERMS.invoice, 'Payment is due within 7 days of the invoice date. Please quote the invoice number with your payment.');
-  assert.equal(doc.PAYMENT_DETAILS, null);
+  assert.equal(doc.PAYMENT_DETAILS, undefined, 'no bank details in code');
+  assert.equal(doc.PAYMENT_DETAILS_MAX, 1000);
   // A request for invoice uses the cleaner requests' words exactly, with its own number; the thanks line asks nothing else.
   assert.equal(doc.DEFAULT_TERMS.request, cleaner.REQUEST_TERMS);
   assert.equal(doc.termsFor(doc.DEFAULT_TERMS.request, 'RC-RFI-2026-0007'), cleaner.requestTerms('RC-RFI-2026-0007'));
   assert.equal(doc.termsFor(doc.DEFAULT_TERMS.request, 'RC-RFI-2026-0007'), 'Please send us your invoice for the amount above, quoting reference RC-RFI-2026-0007. We pay valid invoices within 7 days.');
   assert.equal(cleaner.RECHARGE_PARTY.name, legal.groupTradingName, 'one copy of the trading name');
   const html = doc.rechargeInvoiceHtml(doc.fromWorkspaceInvoice(bill()));
-  assert.doesNotMatch(html, /Payment details|Sort code|IBAN/);
-  const withBank = doc.rechargeInvoiceHtml(doc.fromWorkspaceInvoice(bill()), { payment: [{ label: 'Sort code', value: '00-00-00' }] });
-  assert.match(withBank, /<h2>Payment details<\/h2><dl class="pay"><dt>Sort code<\/dt><dd>00-00-00<\/dd><\/dl>/, 'shown once filled in');
+  assert.doesNotMatch(html, /How to pay|Payment details|Sort code|IBAN/, 'empty by default: nothing shown');
+  // Fake text only: the real details are typed in the app by management.
+  const FAKE = 'TEST ONLY account name\nTEST ONLY 00-00-00 <00000000>';
+  const withBank = doc.rechargeInvoiceHtml(doc.fromWorkspaceInvoice({ ...bill(), paymentDetails: FAKE }));
+  assert.match(withBank, /<h2>How to pay<\/h2><p>TEST ONLY account name<br>TEST ONLY 00-00-00 &lt;00000000&gt;<\/p>/, 'shown once filled in, line by line, escaped');
+  assert.equal(doc.rechargeInvoiceDoc({ ...doc.fromWorkspaceInvoice(bill()), paymentDetails: '  \n ' }).payment, '', 'blank shows nothing');
+  const request = { ...doc.fromWorkspaceInvoice(bill()), kind: 'request', paymentDetails: FAKE };
+  assert.equal(doc.rechargeInvoiceDoc(request).payment, '');
+  assert.doesNotMatch(doc.rechargeInvoiceHtml(request), /How to pay|TEST ONLY/, 'never on a request for invoice');
+  assert.match(read('mobile/src/RechargeInvoice.tsx'), /\{!!doc\.payment && <View style=\{\{ gap: 2 \}\}><Text style=\{label\}>How to pay<\/Text>/);
 });
 
 test('a paid bill has the PAID stamp with its date and a Paid on fact; a void one says VOID', () => {
@@ -105,7 +113,7 @@ test('where the document opens: owner bills on Reports and Accounts, Receivable,
   assert.match(sheet, /exportReport\(rechargeInvoiceHtml\(invoice, \{ today \}\), rechargeInvoiceFileName\(invoice\), \{ mime: "text\/html", uti: "public\.html" \}\)/);
   assert.doesNotMatch(sheet, /expo-print/);
   assert.match(read('mobile/src/LiveWorkspace.tsx'), /isOwnerBill\(invoice\.module_id\) && <MotionPress[^\n]*setBillOpen\(invoice\.id\)/);
-  assert.match(read('mobile/src/AccountsReceivable.tsx'), /<RechargeInvoiceSheet p=\{p\} invoice=\{viewing \? fromReceivable\(viewing\) : null\}/);
+  assert.match(read('mobile/src/AccountsReceivable.tsx'), /<RechargeInvoiceSheet p=\{p\} invoice=\{viewing \? fromReceivable\(viewing\) : null\} receivableId=\{viewing\?\.itemId \?\? null\}/);
   assert.match(read('mobile/src/LiveHome.tsx'), /<DocumentsForYou p=\{p\} \/>/);
   assert.equal(doc.rechargeInvoiceFileName({ number: 'RC-INV-2026-0001', kind: 'invoice' }), 'RC-INV-2026-0001.html');
   // Who may open an owner bill is decided by the database, with the invoice row's own rule (tests/recharge-invoices-database.test.mjs).

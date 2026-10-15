@@ -129,6 +129,12 @@ test('only the known places send through Resend, and each names its own mailbox'
   assert.doesNotMatch(await read('lib/guest-reply-server.ts'), /sendMailboxEmail\('owner'/);
   assert.match(await read('lib/email-inbound-server.ts'), /sendMailboxEmail\('owner',/);
   assert.doesNotMatch(await read('lib/email-inbound-server.ts'), /sendMailboxEmail\('guest'/);
+  // Recharge's invoices and requests for invoice (tests/invoice-maker.test.mjs sends both ways): the mailbox comes from who
+  // the email is for (a guest: 'guest'; everyone else: 'owner') and must match the one the database recorded.
+  const documents = await read('lib/invoice-maker-server.ts');
+  assert.match(documents, /const mailbox = documentMailbox\(state\.data\.recipientKind\)/);
+  assert.match(documents, /sendMailboxEmail\(mailbox, \{/);
+  assert.match(await read('lib/invoice-maker.ts'), /export const documentMailbox = \(kind: RecipientType \| null \| undefined\): Mailbox => kind === 'guest' \? 'guest' : 'owner';/);
   const server = await read('lib/client-enquiry-server.ts');
   assert.match(server, /from: enquirySender\(settings\), replyTo: ENQUIRY_REPLY_TO/);
   // Nothing else in the app or the worker names either address as a sender.

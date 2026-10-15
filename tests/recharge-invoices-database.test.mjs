@@ -252,3 +252,99 @@ test('RC-RFI numbers are shared with the cleaners\' requests: a cleaner request 
   assert.equal(new Set(all).size, all.length, 'never the same number twice');
   assert.equal((await owner("select count(*)::int n from private.workspace_document_numbers where prefix<>'RC-INV'"))[0].n, 0, 'the maker keeps no RC-RFI counter of its own');
 });
+
+// Fake text only: the real payment details are typed in the app by management.
+const FAKE_PAY = 'TEST ONLY account name\nTEST ONLY 00-00-00 00000000';
+test('payment details: empty until saved (nothing seeded), saved by Accounts and management against the version with who and when; shown on invoices only', async () => {
+  assert.equal((await owner('select count(*)::int n from private.workspace_finance_settings'))[0].n, 0, 'nothing seeded');
+  for (const table of ['workspace_finance_settings', 'workspace_finance_settings_history']) {
+    const [row] = await owner("select c.relrowsecurity rls,has_table_privilege('authenticated','private.'||c.relname,'select') auth_select from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='private' and c.relname=$1", [table]);
+    assert.deepEqual(row, { rls: true, auth_select: false }, table);
+  }
+  for (const who of [STAYS, CLEANER, OWNER, MANAGER]) {
+    await as(who);
+    assert.equal(await code(read('payment')), '42501', names[who]);
+    assert.equal(await code(act({ action: 'savePaymentDetails', version: 0, paymentDetails: FAKE_PAY })), '42501', names[who]);
+  }
+  await as(ACCOUNTS);
+  assert.deepEqual(await read('payment'), { paymentDetails: '', version: 0, updatedAt: null, updatedBy: null, history: [] });
+  const inv = await act(draft());
+  assert.equal(inv.paymentDetails, '', 'an invoice has none to show yet');
+  const first = await act({ action: 'savePaymentDetails', version: 0, paymentDetails: '  ' + FAKE_PAY.replace('\n', '\r\n') + '\n ' });
+  assert.deepEqual([first.paymentDetails, first.version, first.updatedBy, first.history.length], [FAKE_PAY, 1, 'Accounts', 1]);
+  assert.equal(await code(act({ action: 'savePaymentDetails', version: 0, paymentDetails: 'TEST ONLY other' })), '40001', 'the version read');
+  assert.equal(await code(act({ action: 'savePaymentDetails', version: 1, paymentDetails: 'x'.repeat(1001) })), '22023', 'up to 1,000 characters');
+  assert.equal(await code(act({ action: 'savePaymentDetails', version: 1, paymentDetails: 7 })), '22023');
+  await as(ADMIN);
+  const second = await act({ action: 'savePaymentDetails', version: 1, paymentDetails: FAKE_PAY + '\nTEST ONLY reference: the invoice number' });
+  assert.deepEqual([second.version, second.updatedBy, second.history.map(h => [h.version, h.by, h.cleared])], [2, 'Admin', [[2, 'Admin', false], [1, 'Accounts', false]]]);
+  assert.deepEqual((await owner('select version,actor_id,old_value,new_value from private.workspace_finance_settings_history order by id')).map(h => [h.version, h.actor_id, h.old_value === '', h.new_value.startsWith('TEST ONLY')]),
+    [[1, users[ACCOUNTS], true, true], [2, users[ADMIN], false, true]]);
+  // On every invoice (the maker's and Recharge's bills to owners), never on a request for invoice.
+  await as(ACCOUNTS);
+  const issued = await act({ action: 'issueDocument', id: inv.id, version: inv.version });
+  assert.equal(issued.paymentDetails, second.paymentDetails);
+  const req = await act(draft({ kind: 'request', recipientId: users[OWNER] }));
+  assert.equal(req.paymentDetails, null);
+  await as(OWNER);
+  assert.equal((await read('document', issued.id)).paymentDetails, second.paymentDetails, 'the owner sees how to pay');
+  // Cleared again: invoices show nothing.
+  await as(ACCOUNTS);
+  const cleared = await act({ action: 'savePaymentDetails', version: 2, paymentDetails: '' });
+  assert.deepEqual([cleared.paymentDetails, cleared.version, cleared.history[0].cleared], ['', 3, true]);
+  assert.equal((await read('document', issued.id)).paymentDetails, '');
+});
+
+test('guests: chosen from the stays, emailed from the guest mailbox; owners from the owners\' one; the two never mix; Receivable invoices too', async () => {
+  const stay = async (ref, channel = 'direct', channelRef = null) => (await owner(`insert into private.workspace_reservations(property_id,reference,check_in,check_out,status,source,channel,channel_reference)
+    values($1,$2,$3::date-3,$3::date-1,'confirmed','hostaway',$4,$5) returning id`, [hawk, ref, today, channel, channelRef]))[0].id;
+  const sam = await stay('GUEST-SAM'), nomail = await stay('GUEST-NONE'), ownStay = await stay('OWNER-OWN', 'other', 'Owner stay');
+  await owner('insert into private.workspace_stay_contacts(reservation_id,first_name,email) values($1,$2,$3)', [sam, 'Sam', 'sam.guest@example.org']);
+  await as(STAYS);
+  assert.equal(await code(read('guests')), '42501');
+  await as(ACCOUNTS);
+  const guests = await read('guests');
+  const g = guests.find(x => x.reservationId === sam);
+  assert.deepEqual([g.hasEmail, g.email, g.reference], [true, 'sam.guest@example.org', 'GUEST-SAM']);
+  assert.equal(guests.find(x => x.reservationId === nomail).hasEmail, false);
+  assert.ok(!guests.some(x => x.reservationId === ownStay), 'never an owner\'s own stay');
+  assert.equal(await code(act(draft({ recipientId: undefined, recipientType: 'guest', reservationId: ownStay }))), '22023');
+  // A maker document for the guest: from guestrelations@ (the database's choice, recorded on the send).
+  const send = doc => act({ action: 'sendDocument', id: doc.id, channel: 'email', requestId: crypto.randomUUID() });
+  const issue = async over => { const d = await act(draft({ recipientId: undefined, ...over })); return act({ action: 'issueDocument', id: d.id, version: d.version }); };
+  const forSam = await issue({ recipientType: 'guest', reservationId: sam, recipientName: 'Sam Guest' });
+  assert.deepEqual([forSam.recipient.kind, forSam.recipient.userId, forSam.recipient.reservationId, forSam.recipient.hasEmail, forSam.recipient.stay.reference], ['guest', null, sam, true, 'GUEST-SAM']);
+  const started = await send(forSam);
+  assert.deepEqual([started.send, started.mailbox, started.email.to], [true, 'guest', 'sam.guest@example.org']);
+  assert.equal(await code(act({ action: 'sendDocument', id: forSam.id, channel: 'in_app', requestId: crypto.randomUUID() })), '22023', 'a guest has no account');
+  // An owner: from ownerrelations@.
+  const forOlivia = await issue({ recipientId: users[OWNER] });
+  assert.equal((await send(forOlivia)).mailbox, 'owner');
+  // Never mixed: a guest document to an account's address, an owners' mailbox email to a guest's address.
+  assert.equal(await code(send(await issue({ recipientType: 'guest', reservationId: nomail, recipientEmail: email(OWNER) }))), '42501', 'an owner never gets the guest mailbox');
+  assert.equal(await code(send(await issue({ recipientName: 'Sam typed by hand', recipientEmail: 'SAM.guest@example.org' }))), '42501', 'a guest never gets the owners\' mailbox');
+  assert.equal(await code(send(await issue({ recipientType: 'guest', reservationId: nomail }))), '22023', 'no address');
+  const boxes = await owner("select s.mailbox,d.recipient_kind from private.workspace_document_sends s join private.workspace_documents d on d.id=s.document_id where s.channel='email'");
+  assert.ok(boxes.length >= 2 && boxes.every(b => b.mailbox === (b.recipient_kind === 'guest' ? 'guest' : 'owner')), 'every email send: a guest from the guest mailbox, everyone else from the owners\' one');
+
+  // Receivable invoices (hub invoices): the guest of the stay from guestrelations@, the owner (client) from ownerrelations@.
+  const hub = async extra => (await rpc('workspace_teams_action', [{ action: 'saveHubItem', requestId: crypto.randomUUID(), kind: 'invoice', title: 'Late checkout', amountMinor: 4000, reference: 'INV-' + Math.random().toString(36).slice(2, 7), ...extra }])).id;
+  await as(ACCOUNTS);
+  const guestBill = await hub({ reservationId: sam }), ownerBill = await hub({ clientId: users[OWNER], propertyId: hawk }), loose = await hub({ propertyId: hawk });
+  const emailHub = (itemId, requestId = crypto.randomUUID()) => act({ action: 'emailReceivable', itemId, requestId });
+  const req = crypto.randomUUID();
+  const viaGuest = await emailHub(guestBill, req);
+  assert.deepEqual([viaGuest.send, viaGuest.mailbox, viaGuest.recipientKind, viaGuest.email.to, viaGuest.receivable.itemId, viaGuest.receivable.stayReference, viaGuest.receivable.details],
+    [true, 'guest', 'guest', 'sam.guest@example.org', guestBill, 'GUEST-SAM', '']);
+  assert.deepEqual(await emailHub(guestBill, req), viaGuest, 'the same request is the same send');
+  await as('backend');
+  await rpc('workspace_document_send_result', [{ requestId: req, sentBy: users[ACCOUNTS], ok: true, messageId: 'm1' }]);
+  await as(ACCOUNTS);
+  assert.equal((await emailHub(guestBill, req)).send, false, 'sent once');
+  const viaOwner = await emailHub(ownerBill);
+  assert.deepEqual([viaOwner.mailbox, viaOwner.recipientKind, viaOwner.email.to], ['owner', 'person', email(OWNER)]);
+  assert.equal(await code(emailHub(loose)), '22023', 'nobody to email');
+  const state = await read('receivable', guestBill);
+  assert.deepEqual([state.recipient.kind, state.recipient.mailbox, state.recipient.hasEmail, state.recipient.email, state.sends.map(s => [s.mailbox, s.status])], ['guest', 'guest', true, undefined, [['guest', 'sent']]]);
+  for (const who of [STAYS, OWNER, CLEANER]) { await as(who); assert.equal(await code(emailHub(guestBill)), '42501', names[who]); assert.equal(await code(read('receivable', guestBill)), '42501', names[who]); }
+});

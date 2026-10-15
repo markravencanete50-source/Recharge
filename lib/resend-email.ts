@@ -9,6 +9,9 @@ const API = 'https://api.resend.com';
 export const resendConfigured = () => Boolean(settings().RESEND_API_KEY);
 // Replies written in Messages go out by email only when this is `true` (a Worker Secret, off by default), like HOSTAWAY_REPLIES_ENABLED.
 export const emailRepliesEnabled = () => resendConfigured() && String(settings().EMAIL_REPLIES_ENABLED || '') === 'true';
+// Recharge's invoices and requests for invoice (lib/invoice-maker-server.ts) have their own switch, apart from replies: ready as
+// soon as RESEND_API_KEY is set, unless DOCUMENT_EMAIL_ENABLED is `false`. It never needs EMAIL_REPLIES_ENABLED.
+export const documentEmailReady = () => resendConfigured() && String(settings().DOCUMENT_EMAIL_ENABLED || '') !== 'false';
 
 export class ResendError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = 'ResendError'; }

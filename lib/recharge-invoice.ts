@@ -33,10 +33,11 @@ export const DEFAULT_TERMS: Record<DocKind, string> = {
 };
 export const NUMBER_PENDING = '(given when issued)';
 export const termsFor = (terms: string, number?: string | null) => terms.split('{number}').join(number?.trim() || NUMBER_PENDING);
-// Bank details for paying Recharge. Deliberately empty: Lee supplies them separately. While this is null the payment block
-// is left off every document. Fill it as label and value pairs, for example [{ label: 'Sort code', value: '00-00-00' }].
-export type PaymentDetail = { label: string; value: string };
-export const PAYMENT_DETAILS: readonly PaymentDetail[] | null = null;
+// How to pay Recharge: not in code. Management type it in the app (Invoice maker, Payment details), the database keeps it
+// (migration 20261022100000, private.workspace_finance_settings, empty until saved) and hands it out with each document
+// as paymentDetails. An invoice shows it as "How to pay" while it is not empty; a request for invoice never does.
+export const PAYMENT_DETAILS_MAX = 1000;
+export const paymentBlock = (i: Pick<RechargeInvoice, 'kind' | 'paymentDetails'>) => i.kind === 'invoice' ? (i.paymentDetails ?? '').trim() : '';
 
 // Who the document is from: the trading name in bold, the registered address, then the legal line. All from lib/legal-details.ts.
 export const FROM_BLOCK = { name: groupTradingName, lines: [legalDetails.registeredAddress, `${legalDetails.legalName} · Company no. ${legalDetails.companyNumber}`] };
@@ -52,6 +53,8 @@ export type RechargeInvoice = {
   // Money already received against it (part payments); the total then shows what is still owed.
   paidSoFarMinor?: number;
   note?: string | null; terms?: string | null; voidReason?: string | null;
+  // The saved payment details (see paymentBlock).
+  paymentDetails?: string | null;
 };
 
 // --- Words for dates and money ----------------------------------------------------------------------------------
@@ -82,11 +85,11 @@ export type RechargeInvoiceDoc = {
   from: { name: string; lines: string[] }; to: { label: 'Billed to' | 'Requested from'; name: string; lines: string[] };
   facts: DocFact[]; showQuantities: boolean; rows: DocRow[]; empty: string;
   subtotal: string; adjustments: { label: string; value: string }[]; total: string; totalLabel: 'Total due' | 'Total paid' | 'Balance due' | 'Amount to invoice' | 'Total';
-  note: string; terms: string; payment: readonly PaymentDetail[] | null; thanks: string; footer: string;
+  note: string; terms: string; payment: string; thanks: string; footer: string;
 };
 const THANKS: Record<DocKind, string> = { invoice: 'Thank you for your business.', request: 'Thank you.' };
 
-export function rechargeInvoiceDoc(i: RechargeInvoice, options: { today?: string; payment?: readonly PaymentDetail[] | null } = {}): RechargeInvoiceDoc {
+export function rechargeInvoiceDoc(i: RechargeInvoice, options: { today?: string } = {}): RechargeInvoiceDoc {
   const request = i.kind === 'request', money = (m: number) => docMoney(m, i.currency);
   const subtotalMinor = i.lines.reduce((t, l) => t + l.amountMinor, 0);
   const paidSoFar = i.status === 'paid' || i.status === 'void' ? 0 : Math.max(0, i.paidSoFarMinor ?? 0);
@@ -117,7 +120,7 @@ export function rechargeInvoiceDoc(i: RechargeInvoice, options: { today?: string
     facts, showQuantities, rows, empty: 'No lines yet.',
     subtotal: money(subtotalMinor), adjustments: paidSoFar > 0 ? [{ label: 'Paid so far', value: money(-paidSoFar) }] : [],
     total: money(subtotalMinor - paidSoFar), totalLabel,
-    note: i.note?.trim() ?? '', terms: termsFor((i.terms ?? DEFAULT_TERMS[i.kind]).trim(), i.number), payment: options.payment === undefined ? PAYMENT_DETAILS : options.payment,
+    note: i.note?.trim() ?? '', terms: termsFor((i.terms ?? DEFAULT_TERMS[i.kind]).trim(), i.number), payment: paymentBlock(i),
     thanks: THANKS[i.kind], footer: `${groupTradingName} · ${legalDetails.legalName} · Company no. ${legalDetails.companyNumber}${i.number ? ' · ' + i.number : ''}`,
   };
 }
@@ -143,7 +146,7 @@ const multiline = (text: string) => text.split(/\r?\n/).map(escape).join('<br>')
 
 // The document as a page: A4 portrait, the table header repeated on a long one, "Page X of Y" in the print footer. `origin`
 // is where the logo and the Montserrat files are served (the app's own site; a file:// folder for the sample).
-export function rechargeInvoiceHtml(i: RechargeInvoice, options: { origin?: string; today?: string; payment?: readonly PaymentDetail[] | null } = {}) {
+export function rechargeInvoiceHtml(i: RechargeInvoice, options: { origin?: string; today?: string } = {}) {
   const doc = rechargeInvoiceDoc(i, options), origin = (options.origin ?? 'https://app.rechargegroup.co.uk').replace(/\/$/, ''), c = RECHARGE_PAPER, logo = rechargeLogoBox(188);
   const tone = c.tone[doc.chip?.tone ?? 'good'], stampInk = doc.stamp?.word === 'VOID' ? c.danger : c.forest;
   const font = (weight: number) => `@font-face{font-family:"Montserrat";font-weight:${weight};font-style:normal;src:url("${origin}/fonts/montserrat-${weight}.ttf") format("truetype")}`;
@@ -153,7 +156,7 @@ export function rechargeInvoiceHtml(i: RechargeInvoice, options: { origin?: stri
   const rows = doc.rows.length ? doc.rows.map(r => `<tr><td>${escape(r.description)}</td>${doc.showQuantities ? `<td class="num">${escape(r.quantity)}</td><td class="num">${escape(r.rate)}</td>` : ''}<td class="num">${escape(r.amount)}</td></tr>`).join('')
     : `<tr><td class="none" colspan="${doc.showQuantities ? 4 : 2}">${escape(doc.empty)}</td></tr>`;
   const adjustments = doc.adjustments.map(a => `<div class="row sub"><span>${escape(a.label)}</span><span class="num">${escape(a.value)}</span></div>`).join('');
-  const payment = doc.payment?.length ? `<section class="block"><h2>Payment details</h2><dl class="pay">${doc.payment.map(p => `<dt>${escape(p.label)}</dt><dd>${escape(p.value)}</dd>`).join('')}</dl></section>` : '';
+  const payment = doc.payment ? `<section class="block"><h2>How to pay</h2><p>${multiline(doc.payment)}</p></section>` : '';
   return `<!doctype html>
 <html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(doc.title)} ${escape(doc.number)} · ${escape(groupTradingName)}</title>
@@ -178,7 +181,7 @@ td{padding:9px 10px;border-bottom:1px solid ${c.rule};vertical-align:top}tbody t
 .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}th.num{text-align:right}
 .totals{margin:22px 0 0 auto;width:min(320px,100%);break-inside:avoid}.totals .row{display:flex;justify-content:space-between;gap:16px;padding:6px 10px}.totals .sub{color:${c.muted};border-bottom:1px solid ${c.rule}}
 .totals .grand{align-items:baseline;padding-top:12px}.totals .grand span:first-child{font-weight:600;letter-spacing:.04em}.totals .grand span:last-child{font-size:18pt;font-weight:600;color:${c.forest}}
-.block{margin:26px 0 0;break-inside:avoid}.block p{margin:0;font-size:9.5pt}.pay{display:grid;grid-template-columns:max-content 1fr;gap:2px 16px;margin:0;font-size:9.5pt}.pay dt{color:${c.muted}}.pay dd{margin:0}
+.block{margin:26px 0 0;break-inside:avoid}.block p{margin:0;font-size:9.5pt}
 .thanks{margin:36px 0 0;padding-top:16px;border-top:1px solid ${c.rule};color:${c.muted};font-size:9.5pt;break-inside:avoid}.thanks p{margin:0}.thanks .who{margin-top:4px;font-size:8.5pt}
 .print{display:block;margin:0 auto 24px;font:600 10pt "Montserrat",Helvetica,Arial,sans-serif;padding:10px 20px;border-radius:999px;border:1px solid ${c.forest};background:${c.page};color:${c.forest};cursor:pointer}
 @media (max-width:600px){.band,.body{padding-left:20px;padding-right:20px}.parties{grid-template-columns:1fr}.facts{grid-template-columns:1fr 1fr}.fact:nth-child(odd){padding-left:0;border-left:0}.stamp{right:16px}}
@@ -210,7 +213,7 @@ ${payment}
 export type WorkspaceInvoiceDoc = {
   source: 'workspace'; id: string; module: string; reference: string; status: string; issueOn: string; paidOn: string | null;
   amountMinor: number; currency: string; version: number; recipientName: string; propertyName: string | null; propertyAddress: string | null;
-  workTitle: string | null; stay: { reference: string | null; checkIn: string; checkOut: string } | null;
+  workTitle: string | null; stay: { reference: string | null; checkIn: string; checkOut: string } | null; paymentDetails?: string | null;
 };
 export const OWNER_BILL_MODULES = ['onboarding-invoices', 'owner-statements', 'maintenance-reconciliation'] as const;
 // Whether an invoice row is one of Recharge's bills to an owner (and so has a document).
@@ -230,10 +233,11 @@ export function fromWorkspaceInvoice(i: WorkspaceInvoiceDoc): RechargeInvoice {
     // The property's address when it already starts with its name ("14 Example Terrace, Edinburgh"), else both.
     facts: [{ label: 'Property', value: i.propertyAddress && i.propertyName && i.propertyAddress.startsWith(i.propertyName) ? i.propertyAddress : [i.propertyName, i.propertyAddress].filter(Boolean).join(', ') }].filter(f => f.value),
     lines: [{ description: (BILL_LINE[i.module] ?? (() => 'Services'))(i), amountMinor: i.amountMinor }],
+    paymentDetails: i.paymentDetails ?? null,
   };
 }
 // A hub invoice in Accounts, Receivable (finance roles only, as the report). To send, sent, part paid; the client, the stay.
-export function fromReceivable(r: ReceivableItem): RechargeInvoice {
+export function fromReceivable(r: ReceivableItem, paymentDetails?: string | null): RechargeInvoice {
   const sent = r.status === 'sent', amount = r.amountMinor ?? 0;
   const stay = r.stayReference ? `Stay ${r.stayReference}` : r.reservationId ? 'Guest stay' : '';
   return {
@@ -243,6 +247,6 @@ export function fromReceivable(r: ReceivableItem): RechargeInvoice {
     facts: [{ label: 'Stay', value: stay }, { label: 'Property', value: r.propertyName ?? r.address ?? '' }].filter(f => f.value),
     lines: [{ description: r.title, amountMinor: amount }],
     // The hub's notes and link are Accounts' own and never printed.
-    paidSoFarMinor: sent ? r.settledMinor : 0,
+    paidSoFarMinor: sent ? r.settledMinor : 0, paymentDetails: paymentDetails ?? null,
   };
 }

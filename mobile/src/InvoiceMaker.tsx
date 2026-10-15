@@ -12,11 +12,12 @@ import { readDocuments, writeDocuments } from "./backend/client";
 import { DocumentView, OwnerBillSheet, RechargeInvoicePaper } from "./RechargeInvoice";
 import { docDay, docMoney } from "../../lib/recharge-invoice";
 import {
-  addLine, documentQuery, documentsQuery, emptyForm, filterDocuments, formFromDocument, formMaths, formToAction, formToInvoice, fromMakerDocument, HISTORY_LABEL,
-  KIND_LABEL, MAKER_STATUSES, makerDocumentSchema, makerDocumentsSchema, mineQuery, mineSchema, moveLine, recipientsQuery, recipientsSchema, removeLine, SEND_LABEL,
-  sendChoices, STATUS_LABEL, statusCounts, withIssueOn, withKind, type MakerDocument, type MakerForm, type MakerStatus, type Recipient, type SendChannel,
+  addLine, documentQuery, documentsQuery, emailLabel, emptyForm, filterDocuments, formFromDocument, formMaths, formToAction, formToInvoice, fromMakerDocument, guestLabel,
+  guestsQuery, guestsSchema, HISTORY_LABEL, KIND_LABEL, MAKER_STATUSES, makerDocumentSchema, makerDocumentsSchema, mineQuery, mineSchema, moveLine, paymentQuery,
+  paymentSavedLine, paymentSettingsSchema, recipientsQuery, recipientsSchema, removeLine, SEND_LABEL, sendChoices, sendLine, STATUS_LABEL, statusCounts, withIssueOn,
+  withKind, type Guest, type MakerDocument, type MakerForm, type MakerStatus, type PaymentSettings, type Recipient, type SendChannel,
 } from "../../lib/invoice-maker";
-import type { DocKind } from "../../lib/recharge-invoice";
+import { PAYMENT_DETAILS_MAX, type DocKind } from "../../lib/recharge-invoice";
 
 // The invoice maker (migration 20261022100000), for Accounts, admins and super admins: every document by status (Drafts,
 // Issued, Paid, Void) with search by recipient or number; the form with its live preview; one document with Issue, Mark
@@ -30,8 +31,10 @@ export function InvoiceMaker({ p }: { p: Palette }) {
   const [docs, setDocs] = useState<MakerDocument[] | null>(null), [error, setError] = useState("");
   const [status, setStatus] = useState<MakerStatus>("draft"), [query, setQuery] = useState("");
   const [form, setForm] = useState<{ kind: DocKind; editing: MakerDocument | null } | null>(null), [open, setOpen] = useState<string | null>(null);
+  const [payment, setPayment] = useState<PaymentSettings | null>(null);
   const load = useCallback(async () => {
     try { setDocs(makerDocumentsSchema.parse((await readDocuments(documentsQuery())).data)); setError(""); } catch (e) { setError(message(e)); }
+    try { setPayment(paymentSettingsSchema.parse((await readDocuments(paymentQuery())).data)); } catch { /* shown in the editor */ }
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const counts = statusCounts(docs ?? []), shown = filterDocuments(docs ?? [], status, query);
@@ -55,36 +58,79 @@ export function InvoiceMaker({ p }: { p: Palette }) {
             detail={rowDetail(d)} amount={docMoney(d.totalMinor, d.currency)} onPress={() => setOpen(d.id)} />)}
         </List>
       </Section>}
-      <MakerFormSheet p={p} open={form} onClose={() => setForm(null)} onSaved={async id => { setForm(null); await load(); setOpen(id); }} />
+      <PaymentDetailsEditor p={p} settings={payment} onSaved={setPayment} />
+      <MakerFormSheet p={p} open={form} paymentDetails={payment?.paymentDetails ?? ""} onClose={() => setForm(null)} onSaved={async id => { setForm(null); await load(); setOpen(id); }} />
       <MakerDocumentSheet p={p} id={open} onClose={() => setOpen(null)} onChanged={load} onEdit={d => { setOpen(null); setForm({ kind: d.kind, editing: d }); }} />
     </View>
   );
 }
 
+// Payment details (Lee: a blank field management fill in in the app). Empty until saved; an invoice shows it as "How to pay"
+// while it is not empty, a request for invoice never. Saved against the version read, with who and when kept.
+function PaymentDetailsEditor({ p, settings, onSaved }: { p: Palette; settings: PaymentSettings | null; onSaved: (s: PaymentSettings) => void }) {
+  const [text, setText] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(""), [note, setNote] = useState("");
+  const request = useRequestId(settings ? `payment:${settings.version}:${text}` : null);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active && settings) setText(settings.paymentDetails); }); return () => { active = false; }; }, [settings]);
+  async function save() {
+    if (!settings || busy) return;
+    if (text.trim().length > PAYMENT_DETAILS_MAX) { setError(`Up to ${PAYMENT_DETAILS_MAX.toLocaleString("en-GB")} characters.`); return; }
+    setBusy(true); setError(""); setNote("");
+    try {
+      const saved = paymentSettingsSchema.parse((await writeDocuments({ action: "savePaymentDetails", requestId: request.get(), version: settings.version, paymentDetails: text })).data);
+      request.done(); onSaved(saved); setNote(saved.paymentDetails ? "Saved. Invoices now show How to pay." : "Cleared. Invoices show no How to pay.");
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  return (
+    <Section title="Payment details" p={p}>
+      <Text style={[ui.small, { color: p.muted }]}>How to pay Recharge, as invoices show it under "How to pay". Requests for invoice never show it. Leave it empty to show nothing.</Text>
+      {!settings && <Loading p={p} rows={1} />}
+      {settings && <>
+        <Field label="Payment details" value={text} onChange={setText} p={p} multiline placeholder="For example the account name, sort code and account number, one per line" />
+        <Text style={[ui.small, { color: text.trim().length > PAYMENT_DETAILS_MAX ? p.danger : p.muted }]}>{`${text.trim().length} of ${PAYMENT_DETAILS_MAX.toLocaleString("en-GB")} characters. ${paymentSavedLine(settings)}`}</Text>
+        {!!error && <Notice text={error} p={p} tone="bad" />}
+        {!!note && <Notice text={note} p={p} />}
+        <Button label={busy ? "Saving…" : "Save payment details"} icon="save" p={p} disabled={busy || text === settings.paymentDetails} onPress={() => void save()} />
+        {settings.history.length > 1 && <View style={{ gap: 2 }}>
+          {settings.history.slice(0, 5).map(h => <Text key={h.version} style={[ui.small, { color: p.muted }]}>{`${h.cleared ? "Cleared" : "Saved"} ${docDay(h.at)} ${h.at.slice(11, 16)}${h.by ? ` by ${h.by}` : ""}`}</Text>)}
+        </View>}
+      </>}
+    </Section>
+  );
+}
+
 // The form: type, recipient, lines (add, remove, reorder), currency, dates, period, note and terms, with the document as it
 // will look underneath. Save draft; Issue saves then issues.
-function MakerFormSheet({ p, open, onClose, onSaved }: { p: Palette; open: { kind: DocKind; editing: MakerDocument | null } | null; onClose: () => void; onSaved: (id: string) => Promise<void> }) {
+function MakerFormSheet({ p, open, paymentDetails, onClose, onSaved }: { p: Palette; open: { kind: DocKind; editing: MakerDocument | null } | null; paymentDetails: string; onClose: () => void; onSaved: (id: string) => Promise<void> }) {
   const today = london(new Date());
   const [f, setF] = useState<MakerForm>(() => emptyForm(today));
-  const [people, setPeople] = useState<Recipient[]>([]), [mode, setMode] = useState<"app" | "typed">("app");
+  const [people, setPeople] = useState<Recipient[]>([]), [guests, setGuests] = useState<Guest[]>([]), [mode, setMode] = useState<"app" | "guest" | "typed">("app");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const request = useRequestId(open ? JSON.stringify([open.editing?.id ?? "new", open.editing?.version ?? 0, f]) : null);
   useEffect(() => {
     if (!open) return;
     let active = true;
-    queueMicrotask(() => { if (!active) return; const next = open.editing ? formFromDocument(open.editing) : emptyForm(today, open.kind); setF(next); setMode(open.editing && !open.editing.recipient.userId ? "typed" : "app"); setError(""); });
+    queueMicrotask(() => {
+      if (!active) return;
+      const next = open.editing ? formFromDocument(open.editing) : emptyForm(today, open.kind);
+      setF(next); setMode(next.recipientType === "guest" ? "guest" : open.editing && !open.editing.recipient.userId ? "typed" : "app"); setError("");
+    });
     readDocuments(recipientsQuery()).then(r => { if (active) setPeople(recipientsSchema.parse(r.data)); }).catch(e => { if (active) setError(message(e)); });
+    readDocuments(guestsQuery()).then(r => { if (active) setGuests(guestsSchema.parse(r.data)); }).catch(e => { if (active) setError(message(e)); });
     return () => { active = false; };
   }, [open, today]);
   const set = <K extends keyof MakerForm>(key: K) => (value: MakerForm[K]) => setF(prev => ({ ...prev, [key]: value }));
   const setLine = (key: string, field: "description" | "quantity" | "rate") => (value: string) => setF(prev => ({ ...prev, lines: prev.lines.map(l => l.key === key ? { ...l, [field]: value } : l) }));
   const maths = formMaths(f.lines), money = (m: number) => docMoney(m, f.currency);
   const options = useMemo(() => people.map(r => ({ id: r.userId, label: `${r.name} · ${ROLE_LABEL(r.role)}`, keywords: ROLE_LABEL(r.role) })), [people]);
-  const chosen = people.find(r => r.userId === f.recipientId);
-  function choose(id: string) { const r = people.find(x => x.userId === id); setF(prev => ({ ...prev, recipientId: id, recipientName: r?.name ?? "", recipientEmail: "" })); }
+  const guestOptions = useMemo(() => guests.map(g => ({ id: g.reservationId, label: guestLabel(g), keywords: [g.reference, g.propertyName, g.hasEmail ? "email" : ""].filter(Boolean).join(" ") })), [guests]);
+  const chosen = people.find(r => r.userId === f.recipientId), chosenGuest = guests.find(g => g.reservationId === f.reservationId);
+  function choose(id: string) { const r = people.find(x => x.userId === id); setF(prev => ({ ...prev, recipientType: "person", reservationId: "", recipientId: id, recipientName: r?.name ?? "", recipientEmail: "" })); }
+  function chooseGuest(id: string) { const g = guests.find(x => x.reservationId === id); setF(prev => ({ ...prev, recipientType: "guest", reservationId: id, recipientId: "", recipientName: g?.name ?? "", recipientEmail: "" })); }
+  // The form as the chosen tab says: someone in the app, a guest, or typed by hand.
+  const asChosen = (x: MakerForm): MakerForm => mode === "guest" ? { ...x, recipientType: "guest", recipientId: "" } : mode === "typed" ? { ...x, recipientType: "person", reservationId: "", recipientId: "" } : { ...x, recipientType: "person", reservationId: "" };
   async function save(issue: boolean) {
     if (busy) return;
-    const built = formToAction(mode === "typed" ? { ...f, recipientId: "" } : f, request.get(), open?.editing ? { id: open.editing.id, version: open.editing.version } : undefined);
+    const built = formToAction(asChosen(f), request.get(), open?.editing ? { id: open.editing.id, version: open.editing.version } : undefined);
     if ("error" in built) { setError(built.error); return; }
     setBusy(true); setError("");
     try {
@@ -100,10 +146,15 @@ function MakerFormSheet({ p, open, onClose, onSaved }: { p: Palette; open: { kin
       <View style={{ gap: 8 }}>{label("Type")}<Pills p={p} title="Type" values={["invoice", "request"] as const} value={f.kind} onChange={k => setF(prev => withKind(prev, k))} label={k => KIND_LABEL[k]} /></View>
       <View style={{ gap: 8 }}>
         {label(f.kind === "request" ? "Who should invoice us" : "Who it is for")}
-        <Pills p={p} title="Recipient" values={["app", "typed"] as const} value={mode} onChange={setMode} label={m => m === "app" ? "Someone in the app" : "Someone else"} />
-        {mode === "app"
-          ? <SearchPicker p={p} options={options} value={f.recipientId} onChange={choose} clearable placeholder="Search owners and team" nouns="people" empty="Nobody to choose yet." />
-          : <><Field label="Name" value={f.recipientName} onChange={set("recipientName")} p={p} placeholder="Maria Santos" /><Field label="Email (optional)" value={f.recipientEmail} onChange={set("recipientEmail")} p={p} email /></>}
+        <Pills p={p} title="Recipient" values={["app", "guest", "typed"] as const} value={mode} onChange={setMode} label={m => m === "app" ? "Someone in the app" : m === "guest" ? "A guest" : "Someone else"} />
+        {mode === "app" && <SearchPicker p={p} options={options} value={f.recipientId} onChange={choose} clearable placeholder="Search owners, clients and team" nouns="people" empty="Nobody to choose yet." />}
+        {mode === "guest" && <>
+          <SearchPicker p={p} options={guestOptions} value={f.reservationId} onChange={chooseGuest} clearable placeholder="Search guests by name, property or booking" nouns="guests" empty="No stays to choose from yet." />
+          {!!f.reservationId && <Field label="Name on the document" value={f.recipientName} onChange={set("recipientName")} p={p} />}
+          {!!f.reservationId && <Field label={chosenGuest?.hasEmail ? "Email (optional: the guest's email on file is used if empty)" : "Email (no email on file for this guest)"} value={f.recipientEmail} onChange={set("recipientEmail")} p={p} email />}
+          <Text style={[ui.small, { color: p.muted }]}>Guests are emailed from guestrelations@, never from ownerrelations@.</Text>
+        </>}
+        {mode === "typed" && <><Field label="Name" value={f.recipientName} onChange={set("recipientName")} p={p} placeholder="Maria Santos" /><Field label="Email (optional)" value={f.recipientEmail} onChange={set("recipientEmail")} p={p} email /></>}
         <Field label="Address (optional)" value={f.recipientAddress} onChange={set("recipientAddress")} p={p} multiline placeholder="One line per row, or separated by commas" />
         {mode === "app" && chosen?.role === "cleans" && <Text style={[ui.small, { color: p.muted }]}>Cleaners use the app on their phone: it is sent to them in the app, never by email.</Text>}
       </View>
@@ -138,7 +189,7 @@ function MakerFormSheet({ p, open, onClose, onSaved }: { p: Palette; open: { kin
       <DateField p={p} label="Period (optional)" value={{ from: f.periodStart, to: f.periodEnd }} onChange={d => setF(prev => ({ ...prev, periodStart: d.from, periodEnd: d.to }))} today={today} empty="No period" clearable />
       <Field label="Note (optional)" value={f.note} onChange={set("note")} p={p} multiline />
       <Field label="Terms" value={f.terms} onChange={v => setF(prev => ({ ...prev, terms: v, termsEdited: true }))} p={p} multiline />
-      <View style={{ gap: 8 }}>{label("Preview")}<RechargeInvoicePaper invoice={formToInvoice(mode === "typed" ? { ...f, recipientId: "" } : f)} /></View>
+      <View style={{ gap: 8 }}>{label("Preview")}<RechargeInvoicePaper invoice={formToInvoice(asChosen(f), paymentDetails)} /></View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
         <Button label={busy ? "Saving…" : "Save draft"} icon="save" p={p} disabled={busy} onPress={() => void save(false)} />
@@ -193,7 +244,7 @@ function MakerDocumentSheet({ p, id, onClose, onChanged, onEdit }: { p: Palette;
         {choices.length > 0 && <View style={{ gap: 8 }}>
           <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Send</Text>
           <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-            {choices.filter(c => c !== "download").map(c => <Button key={c} label={SEND_LABEL[c]} icon={c === "email" ? "mail" : "bell"} p={p} disabled={busy} onPress={() => void send(c)} />)}
+            {choices.filter(c => c !== "download").map(c => <Button key={c} label={c === "email" ? emailLabel(doc.recipient.kind) : SEND_LABEL[c]} icon={c === "email" ? "mail" : "bell"} p={p} disabled={busy} onPress={() => void send(c)} />)}
           </View>
           {doc.recipient.role === "cleans" && <Text style={[ui.small, { color: p.muted }]}>Cleaners are never emailed: they get it in the app on their phone.</Text>}
           {!choices.includes("email") && doc.recipient.role !== "cleans" && <Text style={[ui.small, { color: p.muted }]}>No email address: download it and share it.</Text>}
@@ -201,7 +252,7 @@ function MakerDocumentSheet({ p, id, onClose, onChanged, onEdit }: { p: Palette;
         {!!note && <Notice text={note} p={p} />}
         {!!doc.sends?.length && <View style={{ gap: 4 }}>
           <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Sent</Text>
-          {doc.sends.map((s, n) => <Text key={n} style={[ui.small, { color: s.status === "failed" ? p.danger : p.muted }]}>{`${SEND_LABEL[s.channel]}: ${s.toEmail ?? s.toName}, ${docDay(s.at)}${s.by ? ` by ${s.by}` : ""}${s.status === "sent" ? "" : ` (${s.status === "failed" ? "not sent" : "sending"})`}`}</Text>)}
+          {doc.sends.map((s, n) => <Text key={n} style={[ui.small, { color: s.status === "failed" ? p.danger : p.muted }]}>{sendLine(s)}</Text>)}
         </View>}
         {!!doc.history?.length && <View style={{ gap: 4 }}>
           <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>History</Text>
