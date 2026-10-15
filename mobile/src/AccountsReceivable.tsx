@@ -22,11 +22,16 @@ import type { TeamsAction } from "../../lib/workspace-teams-policy";
 import type { WorkflowForm } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
+import { fromReceivable } from "../../lib/recharge-invoice";
+import { RechargeInvoiceSheet } from "./RechargeInvoice";
 
 // The Receivable tab of Live Accounts: invoices to send, invoices sent and waiting to be paid, and
 // direct bookings that still need an invoice. Invoices are the hub's invoice rows (Record invoice saves
 // one, Mark sent and Record payment move it), read through the 'receivable' finance report.
 type InvoiceForm = { values: InvoiceValues; edit?: { id: string; version: number } };
+// The invoice as Recharge's branded document, to view, print or save as PDF, or share (lib/recharge-invoice.ts).
+const VIEW_DOCUMENT = "viewInvoiceDocument";
+const viewForm = { key: VIEW_DOCUMENT, title: "View invoice document" };
 const EMPTY: InvoiceValues = { title: "", amount: "", reference: "", dueOn: "", propertyId: "", reservationId: "", clientId: "" };
 const stayLabel = (s: ReceivableReport["options"]["stays"][number]) => [s.propertyName, s.stayReference, `${s.checkIn} to ${s.checkOut}`].filter(Boolean).join(" · ");
 
@@ -118,6 +123,7 @@ export function AccountsReceivable({ p, account, properties }: { p: Palette; acc
   const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<InvoiceForm | null>(null);
   const [paying, setPaying] = useState<ReceivableItem | null>(null);
+  const [viewing, setViewing] = useState<ReceivableItem | null>(null);
   const [busy, setBusy] = useState(false);
   const ids = useRef(new Map<string, string>());
   const allowed = isFinanceRole(account.role);
@@ -144,7 +150,8 @@ export function AccountsReceivable({ p, account, properties }: { p: Palette; acc
   function onForm(item: TrackerItem<ReceivableItem> | undefined, f: WorkflowForm) {
     const row = item?.source;
     if (!row) return;
-    if (f.key === MARK_SENT) void markSent(row);
+    if (f.key === VIEW_DOCUMENT) setViewing(row);
+    else if (f.key === MARK_SENT) void markSent(row);
     else if (f.key === RECORD_PAYMENT) setPaying(row);
     else if (f.key === EDIT_INVOICE) setForm({ edit: { id: row.itemId, version: row.version }, values: {
       title: row.title, amount: row.amountMinor !== null ? (row.amountMinor / 100).toFixed(2) : "", reference: row.reference, dueOn: row.dueOn ?? "", propertyId: row.propertyId ?? "",
@@ -186,9 +193,10 @@ export function AccountsReceivable({ p, account, properties }: { p: Palette; acc
           {!report.needsInvoice.length && <Notice text="Every direct booking has an invoice." p={p} />}
         </Section>
       </>}
-      <TrackerDetailSheet p={p} item={open ?? null} forms={open ? receivableForms(open.source) as unknown as WorkflowForm[] : []} onForm={f => onForm(open, f)} onClose={() => setOpenId(null)} />
+      <TrackerDetailSheet p={p} item={open ?? null} forms={open ? [...receivableForms(open.source), viewForm] as unknown as WorkflowForm[] : []} onForm={f => onForm(open, f)} onClose={() => setOpenId(null)} />
       <InvoiceSheet p={p} form={form} report={report} properties={properties} onClose={() => setForm(null)} onDone={load} />
       <PaymentSheet p={p} item={paying} onClose={() => setPaying(null)} onDone={load} />
+      <RechargeInvoiceSheet p={p} invoice={viewing ? fromReceivable(viewing) : null} receivableId={viewing?.itemId ?? null} onClose={() => setViewing(null)} onSent={load} />
     </View>
   );
 }

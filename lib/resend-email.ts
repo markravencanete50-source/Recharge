@@ -9,6 +9,9 @@ const API = 'https://api.resend.com';
 export const resendConfigured = () => Boolean(settings().RESEND_API_KEY);
 // Replies written in Messages go out by email only when this is `true` (a Worker Secret, off by default), like HOSTAWAY_REPLIES_ENABLED.
 export const emailRepliesEnabled = () => resendConfigured() && String(settings().EMAIL_REPLIES_ENABLED || '') === 'true';
+// Recharge's invoices and requests for invoice (lib/invoice-maker-server.ts) have their own switch, apart from replies: ready as
+// soon as RESEND_API_KEY is set, unless DOCUMENT_EMAIL_ENABLED is `false`. It never needs EMAIL_REPLIES_ENABLED.
+export const documentEmailReady = () => resendConfigured() && String(settings().DOCUMENT_EMAIL_ENABLED || '') !== 'false';
 
 export class ResendError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = 'ResendError'; }
@@ -66,7 +69,9 @@ export const newMessageId = (seed: string) => `${seed}@${MAIL_DOMAIN}`;
  * Sends one email as a mailbox, with In-Reply-To and References so the other person's mail app threads it. The idempotency key makes a
  * retried call the same email. Returns the Message-ID it went out under (set by us), and Resend's own id.
  */
-export async function sendMailboxEmail(mailbox: Mailbox, email: { to: string; subject: string; text: string; html?: string; inReplyTo?: string | null; references?: string[]; idempotencyKey: string }) {
+export async function sendMailboxEmail(mailbox: Mailbox, email: { to: string; subject: string; text: string; html?: string; inReplyTo?: string | null; references?: string[]; idempotencyKey: string;
+  // Files sent with it (an invoice document, lib/invoice-maker-server.ts): the name and the content as base64.
+  attachments?: { filename: string; content: string; contentType?: string }[] }) {
   const messageId = newMessageId(email.idempotencyKey.split('/').pop()!);
   const wrap = (id: string) => id.startsWith('<') ? id : `<${id}>`;
   const headers: Record<string, string> = { 'Message-ID': `<${messageId}>` };
@@ -79,7 +84,8 @@ export async function sendMailboxEmail(mailbox: Mailbox, email: { to: string; su
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': email.idempotencyKey },
     // The text goes as written; the HTML part is the same text with a small Recharge signature under it (lib/email-brand.ts),
     // or the caller's own HTML (the survey after a direct stay, lib/stay-reason.ts, which carries the same signature).
-    body: JSON.stringify({ from, to: [email.to], reply_to: address, subject: email.subject, text: email.text, html: email.html ?? replyHtml(email.text, address), headers }),
+    body: JSON.stringify({ from, to: [email.to], reply_to: address, subject: email.subject, text: email.text, html: email.html ?? replyHtml(email.text, address), headers,
+      ...(email.attachments?.length ? { attachments: email.attachments.map(f => ({ filename: f.filename, content: f.content, ...(f.contentType ? { content_type: f.contentType } : {}) })) } : {}) }),
   });
   const result = await response.json() as { id?: string };
   if (typeof result.id !== 'string' || !result.id) throw new ResendError('Resend gave no id', 502);

@@ -21,6 +21,7 @@ import { AccountsPayable, ExpenseSheet, List, NewExpenseSheet, Row, type LimitSt
 import { Pills } from "./Pills";
 import { AccountsStatements, TermsSheet, type StatementRow } from "./AccountsStatements";
 import { AccountsReceivable } from "./AccountsReceivable";
+import { InvoiceMaker } from "./InvoiceMaker";
 import { AccountsPerformance } from "./AccountsPerformance";
 import { AirCoverList } from "./AirCoverList";
 import type { SectionProps } from "./SectionProps";
@@ -38,10 +39,10 @@ import type { z } from "zod";
 // Airbnb, Booking.com and Vrbo and shows, stay by stay, whether the money arrived.
 type Reconciliation = z.infer<typeof reconciliationSchema>;
 type NeedsDetails = Reconciliation["needsDetails"][number];
-type Tab = "expenses" | "payouts" | "statements" | "receivable" | "performance" | "aircover";
+type Tab = "expenses" | "payouts" | "statements" | "receivable" | "maker" | "performance" | "aircover";
 // The summary tiles' labels on a phone, where three share one row.
 const TILE_SHORT: Record<string, string> = { "To approve": "Approve", "To reconcile": "Reconcile", "Statements paid": "Paid" };
-const TAB_LABEL: Record<Tab, string> = { expenses: "Expenses", payouts: "Reconciliation", statements: "Statements", receivable: "Receivable", performance: "Performance", aircover: "AirCover" };
+const TAB_LABEL: Record<Tab, string> = { expenses: "Expenses", payouts: "Reconciliation", statements: "Statements", receivable: "Receivable", maker: "Invoice maker", performance: "Performance", aircover: "AirCover" };
 
 // What the platform calls its reservation code, as staff will see it on the payout report.
 export function platformCode(channel: string): { label: string; placeholder: string } {
@@ -199,7 +200,7 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
   const thisMonth = london(new Date()).slice(0, 7);
   const [period, setPeriod] = useState(thisMonth);
   const focus = useWorkFocus();
-  const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements", "receivable", "performance", "aircover"] as const).find(v => v === focus?.sub && ((v !== "receivable" && v !== "performance" && v !== "aircover") || isFinanceRole(account.role)) && (v !== "aircover" || !!sectionProps)) ?? "expenses");
+  const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements", "receivable", "maker", "performance", "aircover"] as const).find(v => v === focus?.sub && ((v !== "receivable" && v !== "maker" && v !== "performance" && v !== "aircover") || isFinanceRole(account.role)) && (v !== "aircover" || !!sectionProps)) ?? "expenses");
   const [status, setStatus] = useState<Expense["status"]>("to_approve");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [limit, setLimit] = useState<LimitState | null>(null);
@@ -311,9 +312,9 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
 
-      {/* The Accounts sections: pills up to 5, one dropdown past that (finance roles have 6), by the shared rule (Pills.tsx). */}
+      {/* The Accounts sections: pills up to 5, one dropdown past that (finance roles have 7), by the shared rule (Pills.tsx). */}
       <Pills p={p} title="Accounts section" value={view} onChange={setView} label={v => TAB_LABEL[v]}
-        values={(["expenses", "payouts", "statements", "receivable", "performance", "aircover"] as const).filter(v => (v !== "receivable" && v !== "performance" && v !== "aircover") || (isFinanceRole(role) && (v !== "aircover" || !!sectionProps)))} />
+        values={(["expenses", "payouts", "statements", "receivable", "maker", "performance", "aircover"] as const).filter(v => (v !== "receivable" && v !== "maker" && v !== "performance" && v !== "aircover") || (isFinanceRole(role) && (v !== "aircover" || !!sectionProps)))} />
 
       {view === "expenses" && <AccountsPayable p={p} account={account} role={role} management={management} overview={overview} status={status} setStatus={setStatus} expenses={expenses} limit={limit} loading={loading} load={load} setAsk={setAsk} setOpenExpense={setOpenExpense} setCreating={setCreating} properties={properties} />}
 
@@ -360,6 +361,8 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
       {view === "statements" && <AccountsStatements p={p} role={role} management={management} period={period} statements={statements} loading={loading} expanded={expanded} setExpanded={setExpanded} busyStatement={busyStatement} statementAction={statementAction} setTerms={setTerms} setAsk={setAsk} properties={properties} onPeriod={setPeriod} onOpenTab={tab => setView(tab === "payouts" ? "payouts" : "expenses")} />}
 
       {view === "receivable" && <AccountsReceivable p={p} account={account} properties={properties} />}
+      {/* The invoice maker (20261022100000): Accounts, admins and super admins, the same people who issue invoices. */}
+      {view === "maker" && isFinanceRole(role) && <InvoiceMaker p={p} />}
 
       {view === "performance" && <AccountsPerformance p={p} account={account} properties={properties} />}
 
