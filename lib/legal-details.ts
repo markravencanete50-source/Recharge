@@ -20,6 +20,10 @@ export const legalDetails = {
 
 export type LegalDetails = typeof legalDetails;
 
+// The name Recharge trades under on its invoices and emails ("Recharge Group"), above the legal name. Read from here only
+// (lib/recharge-invoice.ts); kept out of legalDetails so the policy pages are unchanged.
+export const groupTradingName = 'Recharge Group';
+
 // True once every detail above is filled in. The pages show a notice until then.
 export const legalDetailsComplete = Object.values(legalDetails).every(value => value.trim() !== '' && value !== TO_BE_CONFIRMED);
 

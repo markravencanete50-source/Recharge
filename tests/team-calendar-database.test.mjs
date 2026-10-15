@@ -17,8 +17,9 @@ create function auth.uid() returns uuid language sql stable as $$select (auth.jw
 const files = await fs.readdir('supabase/migrations');
 // Later migrations that replace this one's functions have their own tests (who may edit, 20261014300000:
 // tests/team-calendar-edits-database.test.mjs; the guest name without the date match, 20261014330000:
-// tests/stay-guest-name-database.test.mjs); this file proves the original migration on its own.
-const REPLACED_BY = ['20261014300000_team_calendar_anyone_edits', '20261014330000_stay_guest_name_dates'];
+// tests/stay-guest-name-database.test.mjs); this file proves the original migration on its own. Later migrations whose SQL
+// functions call this one's (Recharge invoices, 20261022100000: tests/recharge-invoices-database.test.mjs) cannot load before it.
+const REPLACED_BY = ['20261014300000_team_calendar_anyone_edits', '20261014330000_stay_guest_name_dates', '20261022100000_recharge_invoices'];
 for (const file of files.filter(f => f.endsWith('.sql') && !f.startsWith(MINE) && !REPLACED_BY.some(r => f.startsWith(r))).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 const mineFile = files.find(f => f === MINE + '.sql') ?? files.find(f => f === MINE + '.sql.draft');
 assert.ok(mineFile, 'the team calendar migration exists');

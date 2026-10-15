@@ -161,7 +161,7 @@ test('the Receivable tab is wired for finance roles and uses only the existing h
   assert.match(accounts, /import \{ AccountsReceivable \} from "\.\/AccountsReceivable"/);
   assert.match(accounts, /receivable: "Receivable"/);
   // The sections are one Pills row (round 6): Receivable, Performance and AirCover only for finance roles.
-  assert.match(accounts, /\.filter\(v => \(v !== "receivable" && v !== "performance" && v !== "aircover"\) \|\| \(isFinanceRole\(role\)/);
+  assert.match(accounts, /\.filter\(v => \(v !== "receivable" && v !== "maker" && v !== "performance" && v !== "aircover"\) \|\| \(isFinanceRole\(role\)/);
   assert.match(accounts, /view === "receivable" && <AccountsReceivable p=\{p\} account=\{account\} properties=\{properties\} \/>/);
   assert.match(screen, /readFinance\(\{ section: "receivable" \}\)/);
   // Anyone outside finance gets the notice and nothing else: the guard comes before any list is drawn.

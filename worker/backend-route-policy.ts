@@ -22,6 +22,8 @@ const endpoints = new Set([
   "/api/hostaway/webhook", "/api/resend/webhook", "/api/workspace/email-files", "/api/mobile/email-files", "/api/workspace/email-inbox", "/api/mobile/email-inbox", "/api/workspace/client-email", "/api/mobile/client-email", "/api/workspace/account", "/api/workspace/notifications",
   "/api/workspace/oversight", "/api/mobile/oversight",
   "/api/workspace/checklists", "/api/mobile/checklists",
+  // Recharge's invoices and the invoice maker (20261022100000).
+  "/api/workspace/documents", "/api/mobile/documents",
   // Client Enquiries: the landlord's form (no account), and the team opening the files sent with it.
   "/enquiry", "/api/enquiry", "/api/enquiry/upload", "/api/workspace/enquiry-files", "/api/mobile/enquiry-files",
   // The estimate emailed with a private link: the client's page (no account) and the team's Resend / Copy link.

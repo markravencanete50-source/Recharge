@@ -31,6 +31,7 @@ import type { WorkspaceSection } from "../../lib/workspace-map";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { NoticeView, PropertyView } from "../../lib/workspace-view";
 import type { JourneyView, OperationView } from "../../lib/workflow-forms";
+import { DocumentsForYou } from "./InvoiceMaker";
 
 // London time, like every other date in the app, so the greeting is right wherever the phone is set.
 const greeting = () => { const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hourCycle: "h23" }).format(new Date())); return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"; };
@@ -85,6 +86,8 @@ function TeamHome({ palette: p, desktop, account, properties, journeys = [], wor
       {account.role === "ready" && <ReadyHome palette={p} desktop={desktop} onTool={onTool} userId={account.userId} properties={properties} />}
       {/* The places the person starred themselves; the suggestions are in the menu under Favorites. */}
       <HomeFavorites palette={p} account={account} properties={properties} entries={favoriteEntries} onOpenEntry={onOpenEntry} onTool={onTool} onSection={onNavigate} savedOnly />
+      {/* Invoices and requests for invoice Recharge sent this person (20261022100000); nothing shows until there is one. */}
+      <DocumentsForYou p={p} />
       {canSearch && <SearchPanel visible={searching} onClose={() => setSearching(false)} palette={p} entries={favoriteEntries} onOpen={onOpenEntry} />}
     </View>
   );
@@ -109,6 +112,8 @@ function OwnerLiveHome({ palette: p, desktop, account, properties, journeys = []
       <HomeGreeting palette={p} title={`${greeting()}, ${firstName}`} detail={longToday()} />
       <BusinessFigures palette={p} figures={ownerFigures(glance.month, glance.upcoming)} desktop={desktop} loading={glance.loading} onOpen={f => openPlace(f.open)} />
       <NeedsList palette={p} lines={lines} loading={loading} onOpen={l => openPlace(l.open)} />
+      {/* The owner's own invoices from Recharge (20261022100000), as the branded document; nothing shows until there is one. */}
+      <DocumentsForYou p={p} />
       <OwnerHome palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onNavigate={onNavigate} />
       <HomeTools palette={p} account={account} properties={properties} desktop={desktop} onOpen={onTool} onAll={() => onNavigate("help")} />
       <MotionPress accessibilityRole="button" accessibilityLabel="Help and FAQs" onPress={() => onNavigate("help")} style={[ui.button, { backgroundColor: p.wash }]}>

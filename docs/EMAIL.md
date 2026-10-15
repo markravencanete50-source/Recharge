@@ -65,6 +65,15 @@ Client relations, Client enquiries, "Send the enquiry form" now emails the form 
 - The sheet has one button, "Send the form" (and "Send the new link"). The link with Copy and "Open my email app" appears only when email is not ready or the send failed. The enquiry row shows "Email failed" with **Try again**.
 - **Worker secrets to add:** none. To switch the form's email off: `ENQUIRY_EMAIL_ENABLED=false`. Because the key is already set and the domain is verified, enquiry emails start as soon as this is deployed.
 
+## Invoices and requests for invoice are emailed by their own switch
+
+Migration 20261022100000, `lib/invoice-maker-server.ts`. The invoice maker's documents and Accounts, Receivable invoices.
+
+- **Ready** when `RESEND_API_KEY` is set (it is) and `DOCUMENT_EMAIL_ENABLED` is not `false`. It does **not** need `EMAIL_REPLIES_ENABLED` (that switch only gates replies written in Messages to guests and owners, the owner email outbox, client email replies and the after-stay survey) and never needs `EMAIL_ALLOW_UNVERIFIED`.
+- **Who it's from:** the database picks the mailbox by recipient and records it on the send. A guest (a maker document for a guest, a Receivable invoice for a guest stay) goes from `guestrelations@`; owners, clients and anyone else from `ownerrelations@`. The server works the mailbox out again and sends nothing if the two differ. A guest email to an address that belongs to an account is refused, and so is an owners' mailbox email to an address known only as a guest's.
+- **Never to a cleaner:** cleaners get documents in the app only.
+- **Worker secrets to add:** none. To switch these emails off: `DOCUMENT_EMAIL_ENABLED=false`.
+
 ## The estimate is emailed with a private link
 
 Migration 20261019520000, `lib/estimate-link.ts`, `lib/estimate-link-server.ts`, `app/estimate`.
