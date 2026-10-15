@@ -35,10 +35,14 @@ export const teamsReadSchema = z.object({
     // Each role's Home (20261021300000): the caller's own counts and figures; `role` is the role an admin previews.
     'roleHome',
     // Business reports for admins (20261020860000): enquiries, repairs and spend, to-dos, messages, time worked.
-    ...BUSINESS_REPORT_SECTIONS]),
+    ...BUSINESS_REPORT_SECTIONS,
+    // Reports > Guests & stays (20261021600000), admins only: optionally one property and one channel.
+    'stayAnalytics']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(),
+  channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).optional(),
   role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),
 }).strict().superRefine((value, context) => {
+  if (value.channel && value.section !== 'stayAnalytics') context.addIssue({ code: 'custom', message: 'A channel is only for Guests & stays' });
   if (value.section === 'schedule') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the schedule dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
@@ -59,7 +63,7 @@ export const teamsReadSchema = z.object({
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
   }
-  if ((BUSINESS_REPORT_SECTIONS as readonly string[]).includes(value.section)) {
+  if ((BUSINESS_REPORT_SECTIONS as readonly string[]).includes(value.section) || value.section === 'stayAnalytics') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 365 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 366 days' });
   }

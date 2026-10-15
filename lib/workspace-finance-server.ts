@@ -32,6 +32,8 @@ export const workspaceTeams = rpcRoute({
     : input.section === 'roleHome' ? client.rpc('workspace_role_home', { view_role: input.role || null })
     // The business reports (admins only, checked by the database) have their own read.
     : input.section in BUSINESS_REPORT_KIND ? client.rpc('workspace_business_report', { section: BUSINESS_REPORT_KIND[input.section as keyof typeof BUSINESS_REPORT_KIND], start_on: input.from, end_on: input.to })
+    // Reports > Guests & stays (admins only, checked by the database): stays in the dates, optionally one property and one channel.
+    : input.section === 'stayAnalytics' ? client.rpc('workspace_stay_analytics', { start_on: input.from, end_on: input.to, target_property: input.propertyId || null, target_channel: input.channel || null })
     // Client enquiries also say whether the email service is set up (or the team copies the link).
     : input.section === 'clientEnquiries' ? Promise.all([client.rpc('workspace_teams_read', { section: input.section }),
       import('./integration-server').then(m => enquiryEmailReady(m.integrationSettings()), () => false)]).then(([r, email]) => r.error ? r : { ...r, data: { ...(r.data as object), emailReady: email } })

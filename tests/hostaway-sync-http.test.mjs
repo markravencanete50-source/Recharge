@@ -47,7 +47,8 @@ const hook = (body, auth = 'recharge:' + 'a'.repeat(32)) => new Request('https:/
 test('reservations map to the platform, confirmation code, guests and platform payout', () => {
   assert.deepEqual(policy.syncReservation(airbnb), { id: '7001', listingId: '501', checkIn: '2026-11-02', checkOut: '2026-11-05', status: 'confirmed',
     channel: 'airbnb', channelReference: 'HMABC123', guests: 3, payoutMinor: 41250,
-    payoutBreakdown: { source: 'airbnb', grossMinor: 48000, commissionMinor: 6750, guestFeeMinor: null, paymentChargeMinor: null, commissionVatMinor: null, cleaningFeeMinor: null, cityTaxMinor: null } });
+    payoutBreakdown: { source: 'airbnb', grossMinor: 48000, commissionMinor: 6750, guestFeeMinor: null, paymentChargeMinor: null, commissionVatMinor: null, cleaningFeeMinor: null, cityTaxMinor: null },
+    stayDetails: { adults: null, children: null, infants: null, pets: null, guestCountry: null, bookedAt: null } });
   // Booking.com: the guest total less the platform's commission.
   const booking = policy.syncReservation({ ...airbnb, channelName: 'bookingcom', channelReservationId: '4455667788', airbnbExpectedPayoutAmount: null, totalPrice: 300, channelCommissionAmount: 45, hostChannelFee: 0 });
   assert.equal(booking.channel, 'booking_com'); assert.equal(booking.payoutMinor, 25500); assert.equal(booking.channelReference, '4455667788');
@@ -61,6 +62,21 @@ test('reservations map to the platform, confirmation code, guests and platform p
   assert.equal(policy.syncReservation({ ...airbnb, departureDate: '2026-11-02' }), null);
   const owner = policy.syncReservation({ ...airbnb, status: 'ownerStay', numberOfGuests: undefined, adults: 2, children: 1 });
   assert.deepEqual([owner.status, owner.channel, owner.payoutMinor, owner.channelReference, owner.guests], ['confirmed', 'other', 0, 'Owner stay', 3]);
+});
+
+// Guests & stays (20261021600000): the booking detail Hostaway sends, read as policy.HOSTAWAY_STAY_FIELDS names it.
+test('stay details: guest mix, country, when they booked and planned times; anything missing or odd stays null', () => {
+  const full = policy.syncReservation({ ...airbnb, adults: 2, children: '1', infants: 0, pets: 1, guestCountry: ' gb ', reservationDate: '2026-09-20 18:45:10',
+    checkInTime: 16, checkOutTime: '10:30', guestName: 'Alex Kim', guestEmail: 'alex@example.com', phone: '+44 7700 900123', guestAddress: '1 Road', guestCity: 'Leeds', guestZipCode: 'LS1' });
+  assert.deepEqual(full.stayDetails, { adults: 2, children: 1, infants: 0, pets: 1, guestCountry: 'GB', bookedAt: '2026-09-20T18:45:10Z' });
+  assert.deepEqual([full.checkInTime, full.checkOutTime], ['16:00', '10:30'], 'the planned times stay with the cleaner flow (syncClock), not in stayDetails');
+  assert.doesNotMatch(JSON.stringify(full), /Alex Kim|example\.com|7700|Leeds|LS1|1 Road/, 'never a name, email, phone or address');
+  const named = policy.syncReservation({ ...airbnb, numberOfAdults: 3, numberOfChildren: 2, numberOfInfants: 1, guestCountry: 'United Kingdom', insertedOn: '2026-08-01T09:00:00+01:00' }).stayDetails;
+  assert.deepEqual([named.adults, named.children, named.infants, named.guestCountry, named.bookedAt], [3, 2, 1, 'United Kingdom', '2026-08-01T08:00:00Z'], 'the other names, and insertedOn when there is no reservationDate');
+  const odd = policy.syncReservation({ ...airbnb, adults: -1, children: 2.5, infants: 99, pets: 'two', guestCountry: '12 Main St', reservationDate: 'yesterday', checkInTime: 25, checkOutTime: '9:75' }).stayDetails;
+  assert.deepEqual(odd, { adults: null, children: null, infants: null, pets: null, guestCountry: null, bookedAt: null });
+  assert.equal(policy.syncReservation({ ...airbnb, status: 'ownerStay', adults: 2, guestCountry: 'GB' }).stayDetails, null, 'owner stays send no details');
+  assert.deepEqual(Object.keys(policy.HOSTAWAY_STAY_FIELDS), ['adults', 'children', 'infants', 'pets', 'guestCountry', 'bookedAt']);
 });
 
 test('a stay keeps the full Airbnb reference: one booking can sit under two Airbnb accounts', () => {
