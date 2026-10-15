@@ -8,6 +8,7 @@ Start with `README.md`. It describes the parts of the platform and the commands.
 - "KPI" finds Performance.
 - Every email ends with the Recharge signature (`emailSignature` in `lib/email-brand.ts`).
 - **Logo: use only the final thin-line logo (Lee, 15 October 2026).** Every file and where it is used: `docs/BRAND.md`.
+- **The management team is the admin and super_admin roles (Lee and Alex, 15 October 2026).** There is no "management" role: every management approval checks for `admin` or `super_admin` in the database, never just any signed-in user. Owner relations is the `client` (Owner) role. Repair estimates from a contractor: management approves ("Review done"), then the owner, unless it is within the owner's limit.
 - Up to `MAX_COMPARABLES` (20) comparables on an estimate (migration `20261020400000`).
 
 ## Round 10 is live (14 October 2026)
