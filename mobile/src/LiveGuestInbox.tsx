@@ -42,13 +42,13 @@ const GRADE_TONE = { green: "good", amber: "wait", red: "bad" } as const;
 function ChannelBadge({ channel, size = 40 }: { channel: GuestChannel; size?: number }) {
   const s = CHANNEL_STYLE[channel];
   if (channel === "direct") {
-    // The mark sits at 39-164 × 40-165 in the 720 × 240 artwork.
-    const scale = size / 125;
+    // The round mark sits at 39-155 × 44-160 in the 720 × 240 artwork.
+    const scale = size / 116;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const art = require("../assets/brand/recharge-logo-dark.png");
     return (
       <View accessible accessibilityLabel="Direct booking (Recharge)" style={{ width: size, height: size, borderRadius: size / 2, overflow: "hidden", backgroundColor: s.bg }}>
-        <Image accessible={false} source={art} style={{ position: "absolute", width: 720 * scale, height: 240 * scale, left: -39 * scale, top: -40 * scale }} />
+        <Image accessible={false} source={art} style={{ position: "absolute", width: 720 * scale, height: 240 * scale, left: -39 * scale, top: -44 * scale }} />
       </View>
     );
   }

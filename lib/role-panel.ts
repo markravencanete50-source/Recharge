@@ -194,3 +194,17 @@ export function rolePanel(role: string, modules: readonly string[], layout?: Men
   }
   return applyMenuLayout({ title: spec.title, tagline: spec.tagline, icon: spec.icon, groups: groups.filter(g => g.links.length) }, layout, keepEmpty);
 }
+// The desktop left panel (Lee, 15 October 2026): Messages is not listed, because the Messages button
+// sits at the top of every desktop page already, and each section shows its first few links with
+// "See more" for the rest. The phone menu and the Menu order editor keep every link.
+export const PANEL_SHOWN = 3;
+export function desktopPanel(panel: RolePanel): RolePanel {
+  return { ...panel, groups: panel.groups.map(g => ({ ...g, links: g.links.filter(l => l.key !== 'page:inbox') })).filter(g => g.links.length) };
+}
+// The links a section shows: the first few, or all of them when opened or when the place open now is
+// further down (so the highlighted link is never hidden).
+export function shownLinks(links: readonly PanelLink[], selected: string, open: boolean): { links: PanelLink[]; hidden: number; forced: boolean } {
+  if (links.length <= PANEL_SHOWN) return { links: [...links], hidden: 0, forced: false };
+  const forced = links.slice(PANEL_SHOWN).some(l => l.key === selected);
+  return open || forced ? { links: [...links], hidden: 0, forced } : { links: links.slice(0, PANEL_SHOWN), hidden: links.length - PANEL_SHOWN, forced };
+}

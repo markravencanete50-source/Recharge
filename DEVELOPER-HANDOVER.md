@@ -7,6 +7,7 @@ Start with `README.md`. It describes the parts of the platform and the commands.
 - The search panel has a pixel height on computers, so its results never collapse.
 - "KPI" finds Performance.
 - Every email ends with the Recharge signature (`emailSignature` in `lib/email-brand.ts`).
+- **Logo: use only the final thin-line logo (Lee, 15 October 2026).** Every file and where it is used: `docs/BRAND.md`.
 - Up to `MAX_COMPARABLES` (20) comparables on an estimate (migration `20261020400000`).
 
 ## Round 10 is live (14 October 2026)

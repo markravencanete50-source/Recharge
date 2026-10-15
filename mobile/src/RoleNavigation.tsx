@@ -7,7 +7,7 @@ import { Text } from './Typography';
 import { depth, ui, web, type Palette } from './theme';
 import { CompanyLogo } from './CompanyLogo';
 import { HeroWash, heroRule } from './HeroWash';
-import type { PanelGroup, PanelLink, RolePanel } from '../../lib/role-panel';
+import { desktopPanel, shownLinks, type PanelGroup, type PanelLink, type RolePanel } from '../../lib/role-panel';
 
 type Icon = keyof typeof Feather.glyphMap;
 const hover=Platform.OS==='web'?{dataSet:{hover:'tint'}}:{};
@@ -22,13 +22,15 @@ function IconTile({link,on,palette:p}:{link:PanelLink;on:boolean;palette:Palette
 }
 
 // One group of links. The highlight glides from link to link inside the group, and fades across
-// when the selection moves to another group.
+// when the selection moves to another group. A group shows its first few links; "See more" opens the rest.
 function Group({group,selected,palette:p,badges,onOpen}:{group:PanelGroup;selected:string;palette:Palette;badges:Record<string,number>;onOpen:(link:PanelLink)=>void}) {
   const reduced=useReducedMotion();
   const [boxes,setBoxes]=useState<Record<string,{y:number;h:number}>>({});
   const box=boxes[selected];
   const [y]=useState(()=>new Animated.Value(0)),[h]=useState(()=>new Animated.Value(40)),[shown]=useState(()=>new Animated.Value(0));
   const visible=useRef(false);
+  const [open,setOpen]=useState(false);
+  const list=shownLinks(group.links,selected,open);
   useEffect(()=>{
     if(!box){visible.current=false;if(reduced)shown.setValue(0);else Animated.timing(shown,{toValue:0,duration:motionTokens.ui,useNativeDriver:false}).start();return;}
     if(reduced||!visible.current){y.setValue(box.y);h.setValue(box.h);}
@@ -45,7 +47,7 @@ function Group({group,selected,palette:p,badges,onOpen}:{group:PanelGroup;select
       <Animated.View pointerEvents="none" style={{position:'absolute',left:0,right:0,top:y,height:h,borderRadius:12,backgroundColor:p.wash,opacity:shown,...web({boxShadow:`inset 0 1px 0 ${p.surface}`})}}>
         <View style={{position:'absolute',left:-14,top:9,bottom:9,width:4,borderTopRightRadius:4,borderBottomRightRadius:4,backgroundColor:p.primary}}/>
       </Animated.View>
-      {group.links.map(link=>{
+      {list.links.map(link=>{
         const on=link.key===selected,count=badges[link.key]??0,start=link.kind==='start';
         return <MotionPress key={link.key} {...(on?{}:hover)} onLayout={event=>{const {y:top,height}=event.nativeEvent.layout;setBoxes(b=>b[link.key]?.y===top&&b[link.key]?.h===height?b:{...b,[link.key]:{y:top,h:height}});}}
           accessibilityRole="button" accessibilityLabel={link.label+(count?`, ${count} new`:'')} accessibilityState={{selected:on}} onPress={()=>onOpen(link)}
@@ -55,6 +57,11 @@ function Group({group,selected,palette:p,badges,onOpen}:{group:PanelGroup;select
           {count>0&&<View style={{minWidth:22,height:20,paddingHorizontal:6,borderRadius:10,backgroundColor:p.badge,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:11,fontWeight:'800',color:p.onBadge}}>{count>99?'99+':count}</Text></View>}
         </MotionPress>;
       })}
+      {(list.hidden>0||(open&&!list.forced))&&<MotionPress {...hover} accessibilityRole="button" accessibilityState={{expanded:open}} accessibilityLabel={open?`Show fewer in ${group.title}`:`See ${list.hidden} more in ${group.title}`} onPress={()=>setOpen(!open)}
+        style={[ui.row,{minHeight:34,gap:12,paddingHorizontal:12,borderRadius:12}]}>
+        <View style={{width:30,alignItems:'center'}}><Feather name={open?'chevron-up':'chevron-down'} size={15} color={p.muted}/></View>
+        <Text style={{flex:1,fontSize:12,fontWeight:'600',color:p.muted}}>{open?'See less':`See more (${list.hidden})`}</Text>
+      </MotionPress>}
     </View>
   </View>;
 }
@@ -91,7 +98,7 @@ export function RoleNavigation({panel,selected,palette:p,onOpen,onProfile,onColl
     <View testID="sidebar-brand" style={[ui.between,{height:81,paddingHorizontal:16,gap:12,backgroundColor:p.header,borderBottomWidth:1,borderColor:p.isDark?p.border:p.header}]}><CompanyLogo palette={p} width={144}/><MotionPress accessibilityRole="button" accessibilityLabel="Hide left panel" accessibilityState={{expanded:true}} onPress={onCollapse} style={[ui.iconButton,{width:44,height:44,borderRadius:14,backgroundColor:p.headerControl,borderColor:p.headerBorder}]}><Feather name="chevrons-left" size={18} color={p.headerControlText}/></MotionPress></View>
     <ScrollView contentContainerStyle={{paddingHorizontal:14,paddingTop:16,paddingBottom:24}} showsVerticalScrollIndicator={false}>
       <RoleCard panel={panel} palette={p} viewing={viewing} onBack={onBack} backLabel={backLabel}/>
-      {panel.groups.map(group=><Group key={group.title} group={group} selected={selected} palette={p} badges={badges} onOpen={onOpen}/>)}
+      {desktopPanel(panel).groups.map(group=><Group key={group.key} group={group} selected={selected} palette={p} badges={badges} onOpen={onOpen}/>)}
     </ScrollView>
     <MotionPress {...hover} accessibilityRole="button" accessibilityLabel="Open profile and preferences" onPress={onProfile} style={[ui.row,{gap:12,margin:14,padding:12,borderRadius:18,borderWidth:1,borderColor:p.border,backgroundColor:p.surface,...depth.card}]}>
       {me?.photo?<PersonAvatar p={p} name={me.name} userId={me.userId} photo={me.photo} size={38}/>:<View style={{width:38,height:38,borderRadius:12,backgroundColor:p.header,alignItems:'center',justifyContent:'center'}}><Feather name="settings" size={17} color={p.headerText}/></View>}
