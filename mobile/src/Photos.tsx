@@ -14,7 +14,9 @@ import { PURPOSE_LABEL, QueuedPhoto } from "./UploadStatus";
 // Adding photos to a work item, and showing the photos already saved on it. Each photo is kept on
 // this device the moment it is taken and uploads in the background (uploadQueue.ts), so no signal
 // is no problem. Photos are checked and stored by the backend; this only queues them and shows them.
-const mediaSchema = z.array(z.object({ id: z.string().uuid(), purpose: z.string(), verifiedAt: z.string().optional() }));
+const mediaSchema = z.array(z.object({ id: z.string().uuid(), purpose: z.string(), verifiedAt: z.string().optional(), format: z.string().nullable().optional() }));
+// A contractor's quote or invoice can be a PDF: it is shown as a file (RepairContractors RepairFileList), never in a photo strip.
+const photosOnly = <T extends { format?: string | null }>(items: T[]) => items.filter(x => x.format !== "pdf");
 const EXTENSION = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const;
 
 export function PhotoPicker({ p, workId, expenseId, purpose, label = "Photos", hint, onChange, max = 20 }: { p: Palette; workId?: string; expenseId?: string; purpose: PhotoPurpose; label?: string; hint?: string; onChange: (ids: string[], uploading: boolean) => void; max?: number }) {
@@ -113,7 +115,7 @@ export function WorkPhotos({ p, workId, title = "Photos", refreshKey = 0, queued
   const uploaded = mine.filter(x => x.status === "done").map(x => x.id).join();
   useEffect(() => {
     let active = true;
-    readWorkMedia(workId).then(r => { const parsed = mediaSchema.safeParse(r.data); if (active && parsed.success) setItems(parsed.data); }).catch(() => undefined);
+    readWorkMedia(workId).then(r => { const parsed = mediaSchema.safeParse(r.data); if (active && parsed.success) setItems(photosOnly(parsed.data)); }).catch(() => undefined);
     return () => { active = false; };
   }, [workId, refreshKey, uploaded]);
   if (!items.length && !local.length) return null;

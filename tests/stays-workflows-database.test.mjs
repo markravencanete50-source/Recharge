@@ -84,10 +84,10 @@ test('repairs carry type and urgency; Ready hears of the referral, Stays of the 
  await assert.rejects(create('maintenance',{issue:'Boiler not firing',estimatedCostMinor:0,hazard:false,repairType:'boilers'}),/repair type/);
  let repair=await create('maintenance',{issue:'Boiler not firing, no heating',estimatedCostMinor:0,hazard:false,repairType:'heating',urgent:true});
  assert.equal(repair.data.repairType,'heating');assert.equal(repair.data.urgent,true);assert.equal(repair.data.phase,'triage');
- repair=await update(repair,'referReady',{troubleshooting:'Checked thermostat, reset boiler, pressure is fine',guestUpdate:'Engineer being arranged today',urgent:true});
+ repair=await update(repair,'referReady',{troubleshooting:'Checked thermostat, reset boiler, pressure is fine',guestUpdate:'Engineer being arranged today',urgent:true,readyUserId:users[3]});
  assert.equal(repair.data.referredBy,users[2]);assert.equal(repair.data.urgent,true);
  assert.equal(await notified(users[3],repair.workId,'referReady'),1,'Ready on the property is told');
- await as(3);repair=await update(repair,'bookRepair',{repairOn:today,contractor:'Leith Heating',guestUpdate:'Engineer arriving this afternoon'});
+ await as(3);repair=await update(repair,'bookRepair',{repairOn:today,visitFrom:'14:00',visitTo:'16:00',contractor:'Leith Heating',guestUpdate:'Engineer arriving this afternoon'});
  assert.equal(await notified(users[2],repair.workId,'bookRepair'),1,'the Stays person who referred it is told');
  assert.equal(await notified(users[4],repair.workId,'bookRepair'),0,'unassigned Stays are not');
  assert.equal(await notified(users[3],repair.workId,'bookRepair'),0,'Ready, who booked it, is not told about their own action');

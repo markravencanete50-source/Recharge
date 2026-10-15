@@ -84,7 +84,7 @@ export function LiveStays({ palette: p, account, properties, onOpenRepairs, onOp
         <Text style={[ui.body, { color: p.muted }]}>Messages from guests on every platform, the longest wait first.</Text>
       </View>
       {tabs}
-      <GuestInbox palette={p} properties={properties} />
+      <GuestInbox palette={p} properties={properties} account={account} />
     </View>
   );
   return (

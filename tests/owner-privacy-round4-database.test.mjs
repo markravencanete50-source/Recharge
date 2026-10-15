@@ -47,7 +47,7 @@ await rpc('workspace_assign_property', [HOME, users[OWNER], 'client']);
 // Staff work the owner's repair: reported, troubleshot and referred to Ready, flagged for management and as an AirCover claim.
 await as(STAYS);
 let repair = await operation({ action: 'createOperation', propertyId: HOME, kind: 'maintenance', data: { issue: 'Boiler not firing', estimatedCostMinor: 0, hazard: false, repairType: 'heating' } });
-repair = await operation({ action: 'updateOperation', workId: repair.workId, version: repair.version, step: 'referReady', data: { troubleshooting: 'SECRET reset twice, pressure fine', guestUpdate: 'An engineer is coming' } });
+repair = await operation({ action: 'updateOperation', workId: repair.workId, version: repair.version, step: 'referReady', data: { troubleshooting: 'SECRET reset twice, pressure fine', guestUpdate: 'An engineer is coming', readyUserId: users[READY] } });
 await teams({ action: 'flagForManagement', source: 'work', workId: repair.workId, title: 'Owner unhappy', reason: 'SECRET the owner has complained twice' });
 await teams({ action: 'flagAirCover', workId: repair.workId });
 // And internal events of every kind on the same work, as other parts of the app log them.

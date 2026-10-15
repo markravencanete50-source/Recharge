@@ -49,7 +49,13 @@ export const journeyActionSchema=z.discriminatedUnion('action',[
 export type JourneyAction=z.infer<typeof journeyActionSchema>;
 export const journeyReadSchema=z.object({propertyId:id.optional()}).strict();
 // The work list, or one work item by its id (opened from an update, migration 20261017300000).
-export const operationsReadSchema=z.object({propertyId:id.optional(),workId:id.optional()}).strict().refine(v=>!(v.propertyId&&v.workId),{message:'Choose a property or a work item'});
+export const operationsReadSchema=z.union([
+ // The contractors (Ready users) who can take a repair at a property, for "Send to contractor" (lib/repair-contractors.ts).
+ z.object({section:z.literal('repairContractors'),propertyId:id}).strict(),
+ // Every owner's properties and their repair limits, for Limit Changer (admins read, super admins change).
+ z.object({section:z.literal('repairLimits')}).strict(),
+ z.object({propertyId:id.optional(),workId:id.optional()}).strict().refine(v=>!(v.propertyId&&v.workId),{message:'Choose a property or a work item'}),
+]);
 // The journey route's 400 message. A comparable or a listing link is named in plain words ("Comparable 1 link: The link
 // must start with https://"); everything else reads as validationReason has it.
 const ITEM_LABELS:Record<string,[string,Record<string,string>]>={comparables:['Comparable',{name:'name',url:'link',adrMinor:'nightly rate'}],listingLinks:['Listing link',{platform:'platform',url:''}]};

@@ -79,7 +79,7 @@ function TeamHome({ palette: p, desktop, account, properties, journeys = [], wor
       {admin ? <AdminHome palette={p} desktop={desktop} onTool={onTool} onOpen={openLine} onPlace={openPlace} portfolio={portfolio && { live: portfolio.live, onboarding: portfolio.onboarding }} followUps={followUps} />
         : board ? <TodayBoard palette={p} account={account} properties={properties} work={work} desktop={desktop} onTool={onTool} />
         : <NeedsList palette={p} lines={lines} loading={loading} onOpen={openLine} />}
-      {account.role === "ready" && <ReadyHome palette={p} desktop={desktop} onTool={onTool} />}
+      {account.role === "ready" && <ReadyHome palette={p} desktop={desktop} onTool={onTool} userId={account.userId} properties={properties} />}
       {account.role === "cleans" && <CleanerMonthCard palette={p} onOpen={() => onTool({ kind: "work", view: "cleans" })} />}
       {/* The places the person starred themselves; the suggestions are in the menu under Favorites. */}
       <HomeFavorites palette={p} account={account} properties={properties} entries={favoriteEntries} onOpenEntry={onOpenEntry} onTool={onTool} onSection={onNavigate} savedOnly />

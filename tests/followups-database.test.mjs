@@ -31,17 +31,18 @@ await as(0);property=(await db.query('select public.workspace_save_property($1::
 for(const [i,assignment] of [[1,'client'],[2,'staff'],[3,'staff']])await db.query('select public.workspace_assign_property($1,$2,$3)',[property,users[i],assignment]);
 await db.exec('reset role');
 
-test('a higher quote at or over the limit goes to management, then the owner, and the repair carries on once approved',async()=>{
+test('a higher contractor estimate goes to management’s review, then the owner, and the repair carries on once approved',async()=>{
  await as(2);
  let repair=await action({action:'createOperation',propertyId:property,kind:'maintenance',data:{issue:'Dripping kitchen tap',estimatedCostMinor:0,hazard:false,repairType:'leak'}});
  assert.equal(repair.data.phase,'triage');
- repair=await update(repair,'referReady',{troubleshooting:'Isolation valve turned off',guestUpdate:'Plumber being arranged'});
- await as(3);repair=await update(repair,'bookRepair',{repairOn:today,contractor:'Leith Plumbing',guestUpdate:'Plumber booked'});
+ repair=await update(repair,'referReady',{troubleshooting:'Isolation valve turned off',guestUpdate:'Plumber being arranged',readyUserId:users[3]});
+ await as(3);repair=await update(repair,'bookRepair',{repairOn:today,visitFrom:'09:00',visitTo:'11:00',contractor:'Leith Plumbing',guestUpdate:'Plumber booked'});
  assert.equal(repair.data.phase,'booked');
  await assert.rejects(update(repair,'reviseQuote',{quoteMinor:15000,reason:'x'}),/reason/i);
  repair=await update(repair,'reviseQuote',{quoteMinor:15000,reason:'The tap body is cracked and needs replacing'});
- assert.equal(repair.data.phase,'management_approval');assert.equal(repair.data.resumePhase,'booked');
- await as(0);repair=await update(repair,'approveManagement',{});
+ // From 20261021200000 the contractor's estimate is reviewed by management (reviewDone), then goes to the owner.
+ assert.equal(repair.data.phase,'team_review');assert.equal(repair.data.resumePhase,'booked');
+ await as(0);repair=await update(repair,'reviewDone',{});
  assert.equal(repair.data.phase,'owner_approval');assert.equal(repair.data.resumePhase,'booked');
  assert.equal(repair.data.estimatedCostMinor,15000);assert.equal(repair.data.previousEstimateMinor,0);
  await db.exec('reset role');
@@ -50,7 +51,10 @@ test('a higher quote at or over the limit goes to management, then the owner, an
  await as(1);repair=await update(repair,'approveBudget',{consent:true});
  assert.equal(repair.data.phase,'booked','back where it was');assert.equal(repair.data.resumePhase,null);
  await as(3);repair=await update(repair,'reviseQuote',{quoteMinor:12000,reason:'Found the part cheaper'});
- assert.equal(repair.data.phase,'booked','a lower quote needs no new approval');
+ assert.equal(repair.data.phase,'team_review','every contractor estimate is reviewed');
+ await as(0);repair=await update(repair,'reviewDone',{});
+ assert.equal(repair.data.phase,'booked','a lower quote than the owner approved needs no new owner approval');
+ await as(3);
  repair=await update(repair,'completeRepair',{report:'Tap replaced and tested',actualCostMinor:12000,guestUpdate:'All fixed'});
  assert.equal(repair.status,'completed');
  await assert.rejects(update(repair,'reviseQuote',{quoteMinor:1000,reason:'Too late to change'}),/closed/);

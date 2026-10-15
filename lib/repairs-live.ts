@@ -3,6 +3,7 @@ import { z } from "zod";
 // Repair stages and who acts at each one. Mirrors the database checks in
 // workspace_operations_action so the app only offers actions that can succeed.
 export const REPAIR_STAGES = [
+  { phase: "team_review", label: "Team review", detail: "A contractor's estimate: the team checks it, then it is approved or goes to the owner" },
   { phase: "owner_approval", label: "Owner approval", detail: "Waiting for the owner to approve the cost" },
   { phase: "management_approval", label: "Management approval", detail: "At or over the repair limit, or a contractor estimate: an admin approves the cost first" },
   { phase: "owner_declined", label: "Owner declined", detail: "The owner said no to the cost: re-quote or close it" },
@@ -40,7 +41,7 @@ export function visitSummary(items: { dueOn: string | null; status: string }[], 
   const overdue = items.filter(i => !visitDone(i.status) && !!i.dueOn && i.dueOn < today).length;
   return { done, due: items.length - done, overdue };
 }
-export type RepairStep = "approveBudget" | "approveManagement" | "referReady" | "bookRepair" | "completeRepair";
+export type RepairStep = "approveBudget" | "approveManagement" | "reviewDone" | "referReady" | "bookRepair" | "completeRepair";
 
 const STAFF = ["stays", "admin", "super_admin"];
 const DECLINED = ["owner_declined", "management_declined"];
@@ -54,6 +55,9 @@ export const RESOLUTION_MIN = 5, RESOLUTION_MAX = 2000;
 export function repairStep(role: string, phase: string, ownerByTeam = false): RepairStep | null {
   if (phase === "owner_approval") return role === "client" || (ownerByTeam && STAFF.includes(role)) ? "approveBudget" : null;
   if (phase === "management_approval") return role === "admin" || role === "super_admin" ? "approveManagement" : null;
+  // A contractor's estimate: management (admins and super admins) review it and press Review done (migration 20261021200000).
+  // Stays see it waiting for management.
+  if (phase === "team_review") return role === "admin" || role === "super_admin" ? "reviewDone" : null;
   if (phase === "triage") return STAFF.includes(role) ? "referReady" : null;
   if (phase === "referred") return role === "ready" || STAFF.includes(role) ? "bookRepair" : null;
   if (phase === "booked") return role === "ready" || STAFF.includes(role) ? "completeRepair" : null;

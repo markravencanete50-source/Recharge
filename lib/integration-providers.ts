@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_PHOTO_BYTES,photoFormat,isMailboxAddress } from './integration-policy';
+import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_PHOTO_BYTES,photoFormat,documentFormat,mediaContentType,isMailboxAddress } from './integration-policy';
 import { noticeCopyFor } from './notice-details';
 import { noticeHtml } from './email-brand';
 
@@ -101,7 +101,7 @@ function storageBucket(settings:IntegrationSettings) {
   return client.storage.from(MEDIA_BUCKET);
 }
 const storagePath = (publicId:string, format:string) => {
-  if (!/^recharge\/[0-9a-f-]{36}$/.test(publicId) || !['jpg','png','webp'].includes(format)) throw new ProviderFailure('rejected');
+  if (!/^recharge\/[0-9a-f-]{36}$/.test(publicId) || !['jpg','png','webp','pdf'].includes(format)) throw new ProviderFailure('rejected');
   return `${publicId}.${format}`;
 };
 async function readStorage(settings:IntegrationSettings, path:string) {
@@ -114,7 +114,7 @@ async function readStorage(settings:IntegrationSettings, path:string) {
 export async function uploadStoragePhoto(settings:IntegrationSettings,publicId:string,bytes:Uint8Array,format:string) {
   const path = storagePath(publicId, format);
   const asset = { assetId: STORAGE_PREFIX + path, publicId, version: 1, format, bytes: bytes.length };
-  const result = await storageBucket(settings).upload(path, bytes, { contentType: `image/${format==='jpg'?'jpeg':format}`, upsert: false, cacheControl: 'private, max-age=0' });
+  const result = await storageBucket(settings).upload(path, bytes, { contentType: mediaContentType(format), upsert: false, cacheControl: 'private, max-age=0' });
   if (!result.error) return asset;
   // Already there from an earlier attempt: accept it only if it is the same photo.
   const existing = await readStorage(settings, path).catch(() => null);
@@ -123,8 +123,8 @@ export async function uploadStoragePhoto(settings:IntegrationSettings,publicId:s
 }
 export async function downloadStoragePhoto(settings:IntegrationSettings,asset:{providerAssetId:string;format:string;bytes:number}) {
   const path = asset.providerAssetId.slice(STORAGE_PREFIX.length);
-  if (!/^recharge\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(path)) throw new ProviderFailure('rejected');
+  if (!/^recharge\/[0-9a-f-]{36}\.(jpg|png|webp|pdf)$/.test(path)) throw new ProviderFailure('rejected');
   const bytes = await readStorage(settings, path);
-  if (bytes.length !== asset.bytes || photoFormat(bytes) !== asset.format) throw new ProviderFailure('rejected');
+  if (bytes.length !== asset.bytes || (photoFormat(bytes) ?? documentFormat(bytes)) !== asset.format) throw new ProviderFailure('rejected');
   return bytes;
 }

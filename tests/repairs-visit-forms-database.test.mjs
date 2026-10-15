@@ -168,11 +168,11 @@ test('only a repair in triage can be resolved: referred, booked, completed and w
   await assert.rejects(step(requoted, 'resolveRepair', { resolution: 'Looked at it, it is fine now' }), /still in triage/);
   // The normal path still works, and a referred, booked or finished repair cannot be resolved this way.
   const second = await create(HOME, 'maintenance', { issue: 'Front door sticks in the damp', estimatedCostMinor: 0, hazard: false, repairType: 'locks_access' });
-  const referred = await step(second, 'referReady', { troubleshooting: 'Checked the hinges and the frame', guestUpdate: 'Handyman being arranged' });
+  const referred = await step(second, 'referReady', { troubleshooting: 'Checked the hinges and the frame', guestUpdate: 'Handyman being arranged', readyUserId: users[READY] });
   assert.equal(referred.data.phase, 'referred');
   await assert.rejects(step(referred, 'resolveRepair', { resolution: 'Looked at it, it is fine now' }), /still in triage/);
   await as(READY);
-  const booked = await step(referred, 'bookRepair', { repairOn: (await sql('select current_date::text d'))[0].d, contractor: 'Leith Joinery', guestUpdate: 'Joiner arriving this afternoon' });
+  const booked = await step(referred, 'bookRepair', { repairOn: (await sql('select current_date::text d'))[0].d, visitFrom: '13:00', visitTo: '15:00', contractor: 'Leith Joinery', guestUpdate: 'Joiner arriving this afternoon' });
   assert.equal(booked.data.phase, 'booked');
   await as(STAYS);
   await assert.rejects(step(booked, 'resolveRepair', { resolution: 'Looked at it, it is fine now' }), /still in triage/);

@@ -46,6 +46,11 @@ const EXACT: Record<string, NoticeCopy> = {
   'operations.updateOperation.approveManagement': copy('Repair cost approved by management', 'Management has approved the cost of a repair. If the owner needs to approve it too, it is now waiting for them; otherwise the work can go ahead.'),
   'operations.updateOperation.declineManagement': copy('Repair cost declined by management', 'Management has declined the cost of a repair. It can be re-quoted or closed.'),
   'operations.updateOperation.closeRepair': copy('Repair closed', 'A repair has been closed without the work going ahead.'),
+  // Repairs with contractors (migration 20261021200000): the team reviewed a contractor's estimate, the contractor can book,
+  // and an estimate approved because a property's repair limit changed (Limit Changer).
+  'operations.updateOperation.reviewDone': copy('Contractor estimate reviewed', 'Management have checked a contractor’s estimate. Within the owner’s limit it is approved straight away; above it, the owner is asked.'),
+  'operations.updateOperation.approvedToBook': copy('Approved, please book the visit', 'Your estimate is approved. Choose the day and time for the visit.'),
+  'operations.repairLimit.autoApproved': copy('Repair estimate approved', 'A repair estimate is now within the property’s repair limit, so it was approved automatically and the visit can be booked.'),
   'finance.repair_limit_updated': copy('Repair approval limit changed', 'The repair approval limit has changed. Repairs under it are approved automatically; at or over it, management approve first, then the owner.'),
   // Approvals that have waited: the owner is reminded at 48 hours, client relations told at 96.
   'repairs.owner_reminder': copy('A repair is waiting for your approval', 'A repair at your property is waiting for you to approve its cost. Approving it, or asking us about it, lets the work go ahead.'),
