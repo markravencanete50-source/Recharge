@@ -73,6 +73,14 @@ test('the owner reads the repair, its history and its activity, with no staff na
   assert.equal(seen.work.data.issue, 'Boiler not firing');
   assert.equal(seen.work.data.guestUpdate, 'An engineer is coming', 'what the owner is meant to read is still there');
   assert.ok(seen.history.entries.length >= 2, 'and the timeline');
+  // One exception (Lee, 15 October 2026; migration 20261021700000): on a repair (maintenance work data) the owner sees
+  // the contractor's name, assignedReadyName, and nothing else about them. It is taken out here and every check below
+  // runs on the rest, so a staff name anywhere else (another key, the history, the activity) still fails.
+  assert.equal(seen.work.kind, 'maintenance');
+  assert.equal(seen.work.data.assignedReadyName, 'Rhona Readyperson', 'the owner sees who is doing the repair');
+  for (const key of ['assignedReadyId', 'previousReadyId', 'previousReadyName', 'reassignReason', 'reviewNote', 'guestConversationId']) assert.ok(!(key in seen.work.data), `not ${key}`);
+  const { assignedReadyName: _contractor, ...restOfData } = seen.work.data;
+  Object.assign(seen, { work: { ...seen.work, data: restOfData } });
   const text = JSON.stringify(seen);
   for (const name of STAFF_NAMES) assert.ok(!text.includes(name), `no staff name: ${name}`);
   for (const id of staffIds) assert.ok(!JSON.stringify({ work: seen.work, history: seen.history }).includes(id), `no staff id in the work or history: ${id}`);
@@ -97,6 +105,11 @@ test('staff still read everything', async () => {
 test('the owner filter is one function, and the migration runs twice without change', async () => {
   const [f] = await sql("select private.workspace_owner_work_data('{\"issue\":\"x\",\"reportedBy\":\"a\",\"ownerApprovedBy\":\"b\",\"troubleshooting\":\"t\",\"Bypass\":1}'::jsonb) v");
   assert.deepEqual(f.v, { issue: 'x', Bypass: 1 });
+  // The contractor's name passes only as plain text; an object under that key does not.
+  const [named] = await sql("select private.workspace_owner_work_data('{\"issue\":\"x\",\"assignedReadyName\":\"Rhona Readyperson\",\"assignedReadyId\":\"i\",\"assignedBy\":\"b\"}'::jsonb) v");
+  assert.deepEqual(named.v, { issue: 'x', assignedReadyName: 'Rhona Readyperson' });
+  const [odd] = await sql("select private.workspace_owner_work_data('{\"issue\":\"x\",\"assignedReadyName\":{\"email\":\"r@example.com\"}}'::jsonb) v");
+  assert.deepEqual(odd.v, { issue: 'x' });
   assert.equal((await sql("select private.workspace_owner_work_data('null'::jsonb) v"))[0].v, null);
   const definition = async () => (await sql("select pg_get_functiondef('private.workspace_operation_view(uuid)'::regprocedure) d"))[0].d;
   const before = await definition();

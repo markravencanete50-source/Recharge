@@ -294,7 +294,8 @@ test('booking: a time window is required, guests’ stays that day are warned ab
  assert.equal(JSON.stringify(w).includes('Gina'),false,'no guest name');
  assert.equal(w.dueOn,stayDay);assert.equal(w.dueTime,'13:00');assert.equal(w.endTime,'15:00');
  assert.equal(await told(users[STAYS],w.workId,'operations.updateOperation.bookRepair'),1,'Stays are told, to tell the guest');
- // Windows against the same stay.
+ // Windows against the same stay. It has no Hostaway times, so 14:00 in and 10:00 out (20261021700000 uses a stay's own
+ // times when it has them: tests/repair-owner-contractor-times-database.test.mjs).
  await db.exec('reset role');
  const clashes=async(day,from,to)=>(await db.query('select private.workspace_repair_clashes($1,$2::date,$3::time,$4::time) c',[home,day,from,to])).rows[0].c.map(c=>c.label);
  assert.deepEqual(await clashes(stayDay,'09:00','12:00'),[],'done before check-in');

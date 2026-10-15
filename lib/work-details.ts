@@ -15,6 +15,8 @@ export function workDetails(w: OperationView): Detail[] {
   const add = (label: string, value: string, tone?: Detail['tone']) => { if (value) out.push({ label, value, ...(tone ? { tone } : {}) }); };
   if (w.kind === 'maintenance') {
     add('Repair type', typeof d.repairType === 'string' ? repairTypeLabel(d.repairType) : '');
+    // Who is doing it: the contractor on the job (owners are given the name only), else the one named at booking.
+    add('Contractor', text(d.assignedReadyName) || text(d.contractor));
     if (d.urgent === true) add('Priority', 'Urgent', 'bad');
     add('Contact first', text(d.contactFirst));
     add('Warranties', text(d.warrantyDetails));

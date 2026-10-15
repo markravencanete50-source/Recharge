@@ -88,7 +88,8 @@ test('the contractor: send an estimate, wait for approval, book only once approv
 });
 
 test('clashes warn with the ready-made label and never a guest name; Ready sees no guest names', () => {
-  const clashes = [{ checkIn: '2026-10-19', checkOut: '2026-10-22', label: 'Guest stay, check-in 14:00' }];
+  // The label carries the stay's own time from Hostaway (migration 20261021700000), 14:00 / 10:00 when unknown.
+  const clashes = [{ checkIn: '2026-10-19', checkOut: '2026-10-22', label: 'Guest stay, check-in 15:00' }];
   assert.deepEqual(rc.clashesOf({ clashes }), clashes, 'on the repair');
   assert.deepEqual(rc.clashesOf({ data: { clashes } }), clashes, 'in the write\'s answer');
   assert.deepEqual(rc.clashesOf({ data: { clashes: 'nonsense' } }), []);
@@ -264,4 +265,14 @@ test('Limit Changer: every owner and property, super admins change limits, admin
   assert.match(management, /limits: "Limit Changer"/);
   assert.match(source('lib/home-tools.ts'), /tool\('limits', 'Limit Changer', 'Repair spending limits by owner', 'coins', work\('management', \{ sub: 'limits' \}\)\)/);
   assert.match(source('lib/role-panel.ts'), /'tool:access', 'tool:limits'/);
+});
+
+test('the contractor line: staff and owners see the name; owners are given the name without the id (20261021700000)', () => {
+  assert.equal(rc.contractorNameOf({ assignedReadyId: ME, assignedReadyName: 'Sam Pipes' }), 'Sam Pipes');
+  assert.equal(rc.contractorNameOf({ assignedReadyName: 'Sam Pipes' }), 'Sam Pipes', 'the owner\'s copy has no id');
+  assert.equal(rc.assignedContractor({ assignedReadyName: 'Sam Pipes' }), null, 'which never makes the owner the contractor');
+  assert.equal(rc.contractorNameOf({}), null);
+  assert.equal(rc.contractorNameOf({ assignedReadyName: { email: 'x@example.com' } }), null);
+  assert.match(shared, /Contractor: <Text style=\{\{ fontWeight: "600" \}\}>\{name\}<\/Text>/);
+  assert.match(source('mobile/src/LiveApprovals.tsx'), /Contractor: \{r\.contractor\}/, 'on the owner\'s approval list');
 });

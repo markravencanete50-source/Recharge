@@ -19,7 +19,7 @@ import { workItemFrom } from "../../lib/notice-details";
 import { formatMoney } from "../../lib/format";
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import {
-  assignedContractor, assignedTo, clashWarning, contractorLabel, contractorsSchema, contractorStage, CONTRACTOR_STAGES, guestConversationOf,
+  assignedContractor, assignedTo, clashWarning, contractorLabel, contractorNameOf, contractorsSchema, contractorStage, CONTRACTOR_STAGES, guestConversationOf,
   guestSendRoute, ownerLimitLine, quoteFilesOf, reviewData, REVIEW_PHASE, REVIEW_STEP, visitWindowLabel, type Clash, type Contractor, type ContractorStage,
 } from "../../lib/repair-contractors";
 
@@ -167,11 +167,11 @@ export function GuestChatLink({ p, data }: { p: Palette; data: Record<string, un
   return <Button label="Open the guest chat" icon="message-square" p={p} onPress={() => open("guest:" + id)} />;
 }
 
-// Who has the job, on the repair and on Management's approval.
+// Who has the job, on the repair and on the approval (Management's, and the owner's: owners are given the name only).
 export function ContractorLine({ p, data }: { p: Palette; data: Record<string, unknown> }) {
-  const who = assignedContractor(data);
-  if (!who) return null;
-  return <View style={[ui.row, { gap: 8 }]}><Feather name="tool" size={icon.row} color={p.muted} /><Text style={{ color: p.text, fontSize: 14 }}>Contractor: <Text style={{ fontWeight: "600" }}>{who.name}</Text></Text></View>;
+  const name = contractorNameOf(data);
+  if (!name) return null;
+  return <View style={[ui.row, { gap: 8 }]}><Feather name="tool" size={icon.row} color={p.muted} /><Text style={{ color: p.text, fontSize: 14 }}>Contractor: <Text style={{ fontWeight: "600" }}>{name}</Text></Text></View>;
 }
 
 // A contractor's estimate on an approval (the owner's Approvals, and Management for older ones): who sent it, what the
@@ -186,7 +186,7 @@ export function ApprovalContractor({ p, workId, version, showReason = false }: {
   }, [workId, version]);
   if (!data) return null;
   const quote = quoteFilesOf(data);
-  if (!assignedContractor(data) && !quote.length) return null;
+  if (!contractorNameOf(data) && !quote.length) return null;
   return (
     <View style={{ gap: 8 }} {...(Platform.OS === "web" ? { dataSet: { approvalContractor: workId } } : {})}>
       <ContractorLine p={p} data={data} />

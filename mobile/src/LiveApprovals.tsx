@@ -161,6 +161,7 @@ export function LiveApprovals({ palette: p, account, properties, journeys, work,
                 <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
                   <Text numberOfLines={1} style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>{r.propertyName}</Text>
                   <Text numberOfLines={3} style={[ui.small, { color: p.text }]}>{r.issue}</Text>
+                  {!!r.contractor && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>Contractor: {r.contractor}</Text>}
                 </View>
                 <Text style={{ color: p.text, fontSize: 20, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{formatMoney(r.estimateMinor)}</Text>
               </View>

@@ -26,6 +26,9 @@ test('everything waiting for an owner is in one list, and only that', () => {
   assert.deepEqual(items.map(i => i.kind + ':' + (i.kind === 'repair' ? i.issue : i.step)), ['repair:Boiler not firing', 'onboarding:signAgreement']);
   const [r, a] = items;
   assert.equal(r.limitMinor, 10000); assert.equal(r.propertyName, 'Harbour flat'); assert.equal(r.estimateMinor, 45000);
+  assert.equal(r.contractor, null, 'no contractor named yet');
+  const [named] = ownerApprovals(owner, [repair('owner_approval', { assignedReadyName: 'Andy Plumber' })], journeys, properties);
+  assert.equal(named.contractor, 'Andy Plumber', 'the owner sees who will do the repair (20261021700000)');
   assert.match(a.form.description, /The agreed terms/, 'the agreement is shown before signing');
   assert.deepEqual(ownerApprovals({ ...owner, role: 'stays' }, [repair('owner_approval')], journeys, properties), [], 'only owners have approvals');
   assert.deepEqual(ownerApprovals({ ...owner, userId: id(2) }, [], journeys, properties), [], 'another owner\'s onboarding is not theirs');
