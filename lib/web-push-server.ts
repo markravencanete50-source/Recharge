@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { authSecurityConfiguration, requestQuota, securityRpc } from './auth-security';
 import { boundedJson, isSameOrigin } from './auth-security-policy';
@@ -44,4 +45,17 @@ export async function webPushRoute(request: Request) {
     return result.error ? databaseFailure(result.error) : businessResponse({ data: result.data });
   } catch { return businessResponse({ error: 'Notifications are temporarily unavailable' }, 503); }
 }
-export const runWebPush = () => dispatchWebPush(integrationSettings(), securityRpc);
+// A sender's profile photo for a pop-up: a signed link to the private avatars bucket that lasts an hour (a pop-up is shown as it
+// arrives; one that arrives later shows without the photo). The photo path never reaches a device.
+const PHOTO_SECONDS = 3600, AVATAR_BUCKET = 'avatars'; // lib/chat-media-server.ts
+function photoSigner() {
+  const config = authSecurityConfiguration();
+  if (!config) return undefined;
+  const avatars = createClient(config.url, config.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }).storage.from(AVATAR_BUCKET);
+  return async (path: string) => {
+    if (!/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(path)) return null;
+    const signed = await avatars.createSignedUrl(path, PHOTO_SECONDS);
+    return signed.error ? null : signed.data?.signedUrl ?? null;
+  };
+}
+export const runWebPush = () => dispatchWebPush(integrationSettings(), securityRpc, photoSigner());

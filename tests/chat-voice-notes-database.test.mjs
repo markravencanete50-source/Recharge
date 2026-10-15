@@ -97,7 +97,7 @@ test('a voice note: stored privately, sent on its own, read with its length', as
   assert.deepEqual(await rpc('workspace_chat_files', [[id]]), []);
 });
 
-test('the pop-up reads "Alex sent a voice note (0:42)"; photos say "📷 Photo"', async () => {
+test('the pop-up reads "Alex: 🎤 Voice note (0:42)"; photos say "📷 Photo"', async () => {
   await asDatabase();
   const row = (await db.query(`select o.id from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id
     where o.user_id=$1 and a.event_type='chat.message' order by o.id desc limit 1`, [users[ISLA]])).rows[0];
@@ -106,8 +106,9 @@ test('the pop-up reads "Alex sent a voice note (0:42)"; photos say "📷 Photo"'
   const details = (await db.query(`select d.preview from private.workspace_activity_details d join public.workspace_activity a on a.id=d.event_id
     where a.actor_id=$1 order by a.id desc limit 1`, [users[ALEX]])).rows[0];
   assert.equal(details.preview, '🎤 Voice note (0:42)');
+  // Like a phone messenger (Alex; tests/push-copy.test.mjs): the group on top, who sent it and the note's label below.
   assert.deepEqual(pushCopy('chat.message', null, { recipient: 'Isla Kerr', who: 'Alex Coghill', preview: details.preview, context: 'Deep clean Friday' }),
-    { title: 'Isla, Alex Coghill sent a voice note (0:42)', message: 'In Deep clean Friday' });
+    { title: 'Deep clean Friday', message: 'Alex: 🎤 Voice note (0:42)' });
   await as(ALEX);
   const photo = (await act({ action: 'prepareFiles', conversationId: group.id, files: [{ name: 'linen.jpg', mime: 'image/jpeg', bytes: 900_000, width: 1200, height: 900 }] })).files[0].id;
   await send(group.id, '', [photo]);

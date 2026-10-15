@@ -7,11 +7,12 @@ import { MotionPress, Pop } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { Button, Field, Loading, message, Notice } from "./LiveKit";
 import { avatarColors } from "./AccountSetup";
-import { ui, type Palette } from "./theme";
+import { depth, ui, type Palette } from "./theme";
 import { chatFileLinks, profilePhotoSource, readChat, uploadToLink, viewMode, writeChat } from "./backend/client";
 import { useBlocks } from "./ChatSafety";
 import { chatFilesProblem, chatPeopleSchema, conversationSchema, membersSchema, MAX_CHAT_PHOTOS, MAX_CHAT_VIDEOS, preparedFilesSchema, presenceLabel, presenceOf, REACTIONS,
-  type ChatAttachment, type ChatMembers, type ChatReaction, type Conversation } from "../../lib/workspace-chat-policy";
+  type ChatAttachment, type ChatMembers, type ChatMessage, type ChatReaction, type Conversation } from "../../lib/workspace-chat-policy";
+import { mentionParts, type MentionOption } from "../../lib/chat-mentions";
 import { ROLE_LABEL } from "../../lib/admin-live";
 import { SearchBox } from "./SearchPicker";
 import { VoiceNotePlayer } from "./VoiceNotes";
@@ -371,5 +372,44 @@ function AddPeople({ p, exclude, busy, onAdd, onCancel }: { p: Palette; exclude:
         <Button label="Cancel" p={p} onPress={onCancel} />
       </View>
     </View>
+  );
+}
+
+// @mentions (lib/chat-mentions.ts; migration 20261021400000). Typing "@" in a group conversation opens this list above the box:
+// the people in the conversation (photo, name and role), narrowed as you type, and @everyone. Tapping one writes it into the message.
+export function MentionPicker({ p, options, members, onPick }: { p: Palette; options: MentionOption[]; members: ChatMembers["members"]; onPick: (option: MentionOption) => void }) {
+  if (!options.length) return null;
+  return (
+    <View accessibilityRole="menu" accessibilityLabel="Mention someone" {...(Platform.OS === "web" ? { dataSet: { mentionPicker: "true" } } : {})}
+      style={{ padding: 6, borderRadius: 16, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface, maxHeight: 264, ...depth.card }}>
+      <ScrollView keyboardShouldPersistTaps="always" contentContainerStyle={{ gap: 2 }}>
+        {options.map(o => {
+          const person = o.kind === "person" ? members.find(m => m.userId === o.userId) : undefined;
+          return (
+            <MotionPress key={o.kind === "person" ? o.userId : "everyone"} accessibilityRole="menuitem" accessibilityLabel={o.kind === "everyone" ? "Mention everyone in this conversation" : `Mention ${o.label}`}
+              onPress={() => onPick(o)} style={[ui.row, { gap: 10, minHeight: 46, paddingHorizontal: 8, borderRadius: 12 }]}>
+              {o.kind === "everyone" ? <PersonAvatar p={p} name="Everyone" icon="users" size={32} /> : <PersonAvatar p={p} name={o.label} userId={o.userId} photo={person?.photo} size={32} online={presenceOf(person?.seenAt) === "online"} />}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600" }}>{o.kind === "everyone" ? "@everyone" : o.label}</Text>
+                <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{o.kind === "everyone" ? "Tell everyone in this conversation" : person ? roleName(person.role) : ""}</Text>
+              </View>
+            </MotionPress>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+// A message's words, with the people it mentions in bold and the primary colour; your own name stands out most, on a wash.
+export function MessageText({ p, m }: { p: Palette; m: ChatMessage }) {
+  const parts = mentionParts(m.body, m.mentions, m.mentionsEveryone);
+  return (
+    <Text selectable style={{ color: m.mine ? p.onPrimary : p.text, fontSize: 15, lineHeight: 21 }}>
+      {parts.map((part, i) => part.mention
+        ? <Text key={i} {...(Platform.OS === "web" ? { dataSet: { mention: part.mention } } : {})}
+            style={{ fontWeight: "700", color: m.mine ? p.onPrimary : p.primary, ...(part.mention === "you" ? { backgroundColor: m.mine ? "rgba(255,255,255,0.24)" : p.wash, borderRadius: 4 } : m.mine ? { textDecorationLine: "underline" as const } : {}) }}>{part.text}</Text>
+        : part.text)}
+    </Text>
   );
 }
