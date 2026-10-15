@@ -21,6 +21,9 @@ const SIGS = ['private.workspace_chat_action(jsonb)', 'private.workspace_client_
 const definitions = () => Promise.all(SIGS.map(async s => (await db.query('select pg_get_functiondef($1::regprocedure) d', [s])).rows[0].d));
 const firstRun = await definitions();
 await db.exec(await fs.readFile(`supabase/migrations/${MINE}.sql`, 'utf8'));
+// integration_push_details is made whole here and later migrations add to it by anchor (20261021400000, @mentions): run again in
+// order, the chain ends where it started.
+for (const file of files.filter(f => f > MINE + '.sql')) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 const secondRun = await definitions();
 after(() => db.close());
 
@@ -70,7 +73,9 @@ test('team chat carries who wrote, the message and the group name; an owner sees
   await as(MARK);
   const group = (await rpc('workspace_chat_action', [{ action: 'startGroup', title: 'Deep clean Friday', userIds: [users[ALEX]] }])).id;
   await rpc('workspace_chat_action', [{ action: 'send', requestId: crypto.randomUUID(), conversationId: group, body: 'Can you check the linen?' }]);
-  assert.deepEqual(await popup(ALEX, 'chat.message'), { recipient: 'Alex Coghill', who: 'Mark Raven', preview: 'Can you check the linen?', context: 'Deep clean Friday', replied: false, actorName: 'Mark Raven' });
+  // With the conversation, its kind, the unread count and the sender's colour for the picture (migration 20261021400000).
+  assert.deepEqual(await popup(ALEX, 'chat.message'), { recipient: 'Alex Coghill', who: 'Mark Raven', preview: 'Can you check the linen?', context: 'Deep clean Friday', replied: false, actorName: 'Mark Raven',
+    conversationId: group, conversationKind: 'group', unreadCount: 1, senderColour: 'ocean' });
   await as(OWNER);
   const owner = (await rpc('workspace_chat_action', [{ action: 'startOwner' }])).id;
   await rpc('workspace_chat_action', [{ action: 'send', requestId: crypto.randomUUID(), conversationId: owner, body: 'Is the boiler fixed?' }]);

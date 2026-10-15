@@ -1,4 +1,4 @@
-import { pushCopy, type PushDetails } from './push-copy';
+import { pushCopy, pushInitials, pushTarget, type PushDetails } from './push-copy';
 import type { IntegrationSettings } from './integration-policy';
 
 // Web push (RFC 8030), sent straight from the backend with no outside account: the request is
@@ -65,11 +65,21 @@ export type WebPushOutcome = 'sent' | 'gone' | 'failed';
 export type WebPushResult = { outcome: WebPushOutcome; status: number };
 // Sends one notice and keeps the push service's answer. 'gone' means the browser no longer accepts notifications.
 // Urgency high: phones deliver it straight away instead of holding it until they wake up.
-export async function sendWebPushResult(job: WebPushJob, keys: WebPushKeys, copy?: { title: string; message: string }): Promise<WebPushResult> {
+// What the device is sent (mobile/web-static/sw.js shows it): the words (lib/push-copy.ts), where a tap goes, the tag that makes the
+// pop-ups of one conversation replace each other, and the sender's picture: a link to their photo that lasts an hour (signed by the
+// backend; the private path itself never leaves it), or their initials and colour for the device to draw. iPhones always show the
+// app's icon instead.
+export type PushPayload = { title: string; body: string; url: string; tag: string; icon?: string; initials?: string; colour?: string };
+export function pushPayload(job: Pick<WebPushJob, 'eventType' | 'workKind' | 'details'>, copy?: { title: string; message: string }, icon?: string | null): PushPayload {
+  const details = job.details ?? {};
+  const { title, message } = copy ?? pushCopy(job.eventType, job.workKind, details);
+  if (copy) return { title, body: message, url: '/workspace/live', tag: 'recharge' };
+  const { tag, url } = pushTarget(job.eventType, details), drawn = pushInitials(job.eventType, details);
+  return { title, body: message, url, tag, ...(icon && /^https:\/\//.test(icon) ? { icon } : drawn ? { initials: drawn.initials, colour: drawn.colour } : {}) };
+}
+export async function sendWebPushResult(job: WebPushJob, keys: WebPushKeys, copy?: { title: string; message: string }, icon?: string | null): Promise<WebPushResult> {
   if (!PUSH_SERVICE.test(job.endpoint)) return { outcome: 'gone', status: 0 };
-  // Direct (Lee, 14 October): "Mark, new guest message from John" and the start of the message (lib/push-copy.ts).
-  const { title, message } = copy ?? pushCopy(job.eventType, job.workKind, job.details ?? {});
-  const body = await encryptPush(encoder.encode(JSON.stringify({ title, body: message, url: '/workspace/live' })), job.p256dh, job.auth);
+  const body = await encryptPush(encoder.encode(JSON.stringify(pushPayload(job, copy, icon))), job.p256dh, job.auth);
   try {
     const response = await fetch(job.endpoint, {
       method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(10_000), body: bytes(body),
@@ -82,13 +92,21 @@ export async function sendWebPushResult(job: WebPushJob, keys: WebPushKeys, copy
 export const sendWebPush = async (job: WebPushJob, keys: WebPushKeys): Promise<WebPushOutcome> => (await sendWebPushResult(job, keys)).outcome;
 
 // Every minute (worker/index.ts): send the waiting notices to the browsers that allowed them.
-export async function dispatchWebPush(settings: IntegrationSettings, rpc: <T>(name: string, args: Record<string, unknown>) => Promise<T>) {
+// signPhoto turns a sender's private photo path into a link that lasts an hour (lib/web-push-server.ts); each photo is signed once a run.
+export type PhotoSigner = (path: string) => Promise<string | null>;
+export async function dispatchWebPush(settings: IntegrationSettings, rpc: <T>(name: string, args: Record<string, unknown>) => Promise<T>, signPhoto?: PhotoSigner) {
   const keys = webPushKeys(settings);
   if (!keys) return { mode: 'unconfigured', sent: 0 };
   const jobs = await rpc<WebPushJob[]>('integration_claim_web_push', {});
   let sent = 0, failed = 0;
+  const photos = new Map<string, Promise<string | null>>();
+  const photoFor = (path: string | null | undefined) => {
+    if (!path || !signPhoto) return Promise.resolve(null);
+    if (!photos.has(path)) photos.set(path, signPhoto(path).catch(() => null));
+    return photos.get(path)!;
+  };
   for (const job of jobs) {
-    const { outcome, status } = await sendWebPushResult(job, keys);
+    const { outcome, status } = await sendWebPushResult(job, keys, undefined, await photoFor(job.details?.senderPhotoPath));
     if (outcome === 'sent') sent++; else failed++;
     // Kept for each notice and device, so the office can see whether pop-ups really arrive.
     if (job.outboxId !== undefined && job.subscriptionId) await rpc('integration_web_push_result', { outbox: Number(job.outboxId), subscription: job.subscriptionId, outcome, status_code: status }).catch(() => undefined);

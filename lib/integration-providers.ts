@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { DeliveryJob, DeliveryResult, IntegrationSettings, ProviderFailure,MAX_PHOTO_BYTES,photoFormat,isMailboxAddress } from './integration-policy';
 import { noticeCopyFor } from './notice-details';
+import { pushTarget } from './push-copy';
 import { noticeHtml } from './email-brand';
 
 async function jsonRequest(url:string,init:RequestInit,readOnly=false):Promise<Record<string,unknown>> {
@@ -60,8 +61,10 @@ export async function deliverNotification(settings:IntegrationSettings,job:Deliv
     if(typeof result.id!=='string'||!result.id)throw new ProviderFailure('uncertain');
     return {state:'accepted',providerId:result.id};
   }
+  // Phone-app pushes pass through Expo, Apple and Google unencrypted, so they keep the general wording; a tap opens the same
+  // place as a browser pop-up (the conversation, for a message: lib/push-copy.ts pushTarget).
   const headers={Authorization:`Bearer ${settings.EXPO_ACCESS_TOKEN}`,'Content-Type':'application/json'};
-  const result=await jsonRequest(`https://exp.host/--/api/v2/push/${job.state==='accepted'?'getReceipts':'send'}`,{method:'POST',headers,body:JSON.stringify(job.state==='accepted'?{ids:[job.providerId]}:{to:job.destination,title:'Recharge',body:title,data:{screen:'activity'}})},job.state==='accepted');
+  const result=await jsonRequest(`https://exp.host/--/api/v2/push/${job.state==='accepted'?'getReceipts':'send'}`,{method:'POST',headers,body:JSON.stringify(job.state==='accepted'?{ids:[job.providerId]}:{to:job.destination,title:'Recharge',body:title,data:{screen:'activity',url:pushTarget(job.eventType,job.details??{}).url}})},job.state==='accepted');
   const data=(job.state==='accepted'?(result.data as Record<string,unknown>)?.[job.providerId!]:result.data) as Record<string,unknown>|undefined;
   if(job.state==='accepted'&&!data)return {state:'pending'};
   if(data?.status==='ok')return job.state==='accepted'?{state:'delivered'}:typeof data.id==='string'?{state:'accepted',providerId:data.id}:Promise.reject(new ProviderFailure('uncertain'));
