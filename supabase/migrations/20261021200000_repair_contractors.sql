@@ -530,6 +530,8 @@ declare
  definition text;hits integer;
 begin
  for i in 1..array_length(fixes,1) loop
+  -- The guest name rule comes from the team calendar migration; a database built without it (its own test) has no rule to change.
+  if fixes[i][1]='private.workspace_guest_name_visible(text)' and to_regprocedure(fixes[i][1]) is null then continue;end if;
   definition:=pg_get_functiondef(fixes[i][1]::regprocedure);
   if position(fixes[i][4] in definition)=0 then
    hits:=(length(definition)-length(replace(definition,fixes[i][2],'')))/length(fixes[i][2]);
