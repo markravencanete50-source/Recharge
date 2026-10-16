@@ -58,8 +58,9 @@ export async function syncHostawayReservation(id: string): Promise<SyncSummary |
   }
 }
 
-// Guest reviews, for each property's ratings (20261022500000). Hourly from the Worker's cron, straight after that tick's
-// sync (so the two never ask Hostaway at once), and after an admin's "Sync now". Every review Hostaway lists, up to
+// Guest reviews, for each property's ratings (20261022500000). Hourly from the Worker's cron on its own :05 tick, after
+// that tick's messages and never with the sync (so the two never ask Hostaway at once), and after an admin's "Sync now"
+// (an HTTP request that waits for it, so it has no cron time limit). Every review Hostaway lists, up to
 // REVIEW_PAGES pages of 100, mapped by lib/hostaway-reviews-policy.ts and stored in batches through the service-role-only
 // workspace_hostaway_reviews_ingest, which only inserts or updates (never deletes) and links each review to the property
 // with its listing. A review whose listing is not linked to a property is kept, unlinked. A failure is recorded on its own,

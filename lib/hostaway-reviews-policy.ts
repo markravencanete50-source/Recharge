@@ -31,8 +31,10 @@ export type SyncReview = {
   text: string | null; reviewedAt: string | null; url: string | null; status: string | null;
 };
 
-// The most pages of 100 one run asks Hostaway for, and how many reviews go to the database in one call.
-export const REVIEW_PAGES = 20;
+// The most pages of 100 one run asks Hostaway for, and how many reviews go to the database in one call. Ten pages (1,000
+// reviews) keeps a run to about ten sequential Hostaway requests, so it finishes well inside a minute tick; a list longer
+// than that is marked incomplete on the Ratings report rather than slowing every run.
+export const REVIEW_PAGES = 10;
 export const REVIEW_BATCH = 250;
 export const REVIEW_TEXT_MAX = 4000;
 

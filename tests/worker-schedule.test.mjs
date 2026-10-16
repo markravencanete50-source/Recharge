@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'vite';
 
 // The Worker has one trigger, every minute. scheduled() runs the 15-minute jobs on the :00, :15, :30 and :45 ticks
-// (by the tick's scheduled time), the hourly ones on :00 only, and a leftover "*/15 * * * *" trigger does nothing.
+// (by the tick's scheduled time), the hourly ones on :00 only, the guest reviews on their own :05 tick, and a leftover
+// "*/15 * * * *" trigger does nothing.
 // worker/index.ts is loaded for real; every module it imports is replaced by a stub that records what was called.
 const STUB = '/@worker-stub/';
 const names = ['runWebPush', 'runEmailOutbox', 'runHostawayMessages', 'runHostawaySync', 'runHostawayReviews', 'securityRpc',
@@ -16,7 +17,7 @@ const stubs = {
   load(id) {
     if (!id.startsWith(STUB)) return null;
     const from = JSON.stringify(decodeURIComponent(id.slice(STUB.length, -3)));
-    return names.map(name => `export function ${name}(...args) { globalThis.__workerCalls.push(${JSON.stringify(name)} + (args.length ? ' ' + JSON.stringify(args[0]) : '')); return Promise.resolve(); }`).join('\n')
+    return names.map(name => `export function ${name}(...args) { globalThis.__workerCalls.push(${JSON.stringify(name)} + (args.length ? ' ' + JSON.stringify(args[0]) : '')); return globalThis.__workerGate ?? Promise.resolve(); }`).join('\n')
       + `\nexport const DEFAULT_DEVICE_SIZES = [], DEFAULT_IMAGE_SIZES = [];\nexport default { fetch() { throw Error(${from}); } };\n`;
   },
 };
@@ -26,20 +27,21 @@ const worker = (await vite.ssrLoadModule('/worker/index.ts')).default;
 
 const env = { BACKEND_ONLY: 'true', HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k', HOSTAWAY_SYNC_ENABLED: 'true',
   RESEND_API_KEY: 'r', EMAIL_REPLIES_ENABLED: 'true', INTEGRATION_SCHEDULE_ENABLED: 'true' };
-async function run(controller) {
+async function run(controller, environment = env) {
   globalThis.__workerCalls = [];
   const pending = [];
-  await worker.scheduled(controller, env, { waitUntil: promise => pending.push(promise), passThroughOnException() {} });
+  await worker.scheduled(controller, environment, { waitUntil: promise => pending.push(promise), passThroughOnException() {} });
   await Promise.all(pending);
   return globalThis.__workerCalls;
 }
-const at = (iso, cron = '* * * * *') => run({ cron, scheduledTime: Date.parse(iso) });
+const at = (iso, cron = '* * * * *', environment = env) => run({ cron, scheduledTime: Date.parse(iso) }, environment);
 const EVERY_MINUTE = ['runWebPush', 'runEmailOutbox', 'runHostawayMessages "schedule"'];
 const QUARTER = ['runHostawaySync "schedule"', 'securityRpc "workspace_open_pricing_gaps"', 'securityRpc "workspace_routine_auto"',
   'securityRpc "workspace_mid_stay_cleans"', 'securityRpc "workspace_clean_morning_notices"', 'runStayReasonQuestions',
   'runStaySurveys', 'securityRpc "workspace_chase_owner_approvals"', 'securityRpc "workspace_roll_over_signoffs"',
   'securityRpc "workspace_weekly_report_notices"', 'securityRpc "workspace_privacy_retention"', 'dispatchNotifications'];
-const HOURLY = ['runHostawayReviews "schedule"', 'securityRpc "workspace_ensure_daily_todos"', 'securityRpc "workspace_clean_form_sweep"',
+const REVIEWS = 'runHostawayReviews "schedule"';
+const HOURLY = ['securityRpc "workspace_ensure_daily_todos"', 'securityRpc "workspace_clean_form_sweep"',
   'securityRpc "workspace_cleaner_invoice_run"', 'securityRpc "workspace_va_pay_run"'];
 const SIX_HOURLY = ['securityRpc "workspace_direct_booking_sweep"'];
 const sorted = list => [...list].sort();
@@ -52,7 +54,7 @@ test('the minute ticks at :00, :15, :30 and :45 run the 15-minute jobs, each onc
 });
 
 test('every other minute runs only the every-minute jobs', async () => {
-  for (const minute of ['01', '07', '14', '16', '29', '31', '44', '46', '59']) {
+  for (const minute of ['01', '04', '06', '07', '14', '16', '29', '31', '44', '46', '59']) {
     assert.deepEqual(sorted(await at(`2026-10-16T09:${minute}:00Z`)), sorted(EVERY_MINUTE), ':' + minute);
   }
 });
@@ -71,8 +73,48 @@ test('the hourly jobs run only at :00, and the six-hourly sweep only at :00 of e
   }
   const nine = await at('2026-10-16T09:00:00Z');
   assert.ok(HOURLY.every(job => nine.includes(job)) && !nine.includes(SIX_HOURLY[0]), 'hourly but not six-hourly at 09:00');
-  // The reviews come straight after that tick's sync, never at the same time.
-  assert.ok(nine.indexOf('runHostawayReviews "schedule"') > nine.indexOf('runHostawaySync "schedule"'));
+});
+
+test('the guest reviews run hourly on their own :05 tick, after its messages, and never with the sync', async () => {
+  for (const hour of ['00', '09', '20', '23']) {
+    const calls = await at(`2026-10-16T${hour}:05:00Z`);
+    assert.deepEqual(sorted(calls), sorted([...EVERY_MINUTE, REVIEWS]), hour + ':05');
+    assert.ok(calls.indexOf(REVIEWS) > calls.indexOf('runHostawayMessages "schedule"'), 'once the messages are in, never at once');
+    assert.ok(!calls.includes('runHostawaySync "schedule"'));
+  }
+  for (const minute of ['00', '01', '04', '06', '15', '30', '35', '45', '55']) {
+    assert.ok(!(await at(`2026-10-16T20:${minute}:00Z`)).includes(REVIEWS), ':' + minute);
+  }
+});
+
+test('with Hostaway off, neither the reviews nor any other Hostaway job runs', async () => {
+  for (const off of [{ HOSTAWAY_SYNC_ENABLED: 'false' }, { HOSTAWAY_API_KEY: '' }, { HOSTAWAY_ACCOUNT_ID: undefined }]) {
+    for (const minute of ['00', '05']) {
+      const calls = await at(`2026-10-16T20:${minute}:00Z`, '* * * * *', { ...env, ...off });
+      assert.ok(!calls.some(call => /^runHostaway/.test(call)), JSON.stringify(off) + ' :' + minute);
+    }
+  }
+});
+
+test('scheduled() resolves only once every job it started has settled', async () => {
+  let open;
+  globalThis.__workerGate = new Promise(resolve => { open = resolve; });
+  globalThis.__workerCalls = [];
+  let settled = false;
+  const tick = worker.scheduled({ cron: '* * * * *', scheduledTime: Date.parse('2026-10-16T20:00:00Z') }, env,
+    { waitUntil() {}, passThroughOnException() {} }).then(() => { settled = true; });
+  try {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.ok(globalThis.__workerCalls.length > 0, 'the jobs started');
+    assert.equal(settled, false, 'still waiting for the jobs, so the cron time limit applies rather than the waitUntil one');
+  } finally {
+    open(); delete globalThis.__workerGate;
+  }
+  await tick;
+  assert.equal(settled, true);
+  const source = readFileSync('worker/index.ts', 'utf8');
+  assert.match(source, /waitUntil\(job\) \{ jobs\.push\(job\); ctx\.waitUntil\(job\); \}/);
+  assert.match(source, /await Promise\.allSettled\(jobs\);/);
 });
 
 test('the tick is placed by its scheduled time, not the moment it starts, and falls back to the clock', async t => {
