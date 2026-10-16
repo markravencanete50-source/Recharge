@@ -15,10 +15,11 @@ import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
   DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PRIORITY_LABEL, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, deleteEnquiryWarning, duplicateNote, enquiryStep,
-  isPriority, priorityFirst, valuationDraft, valueButtonLabel,
+  OWNER_ENQUIRY_LABEL, OWNER_ENQUIRY_NOTE, isOwnerEnquiry, isPriority, priorityFirst, valuationDraft, valueButtonLabel,
   type ClientEnquiries, type ClientEnquiry, type EnquiryStep,
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { repairLimitText } from "../../lib/journey-policy";
 
 // Client Enquiries: send the New Property Enquiry Form to a landlord (by email, or a link to send
 // yourself), see every answer when it comes back, and start valuing the property from it.
@@ -84,6 +85,7 @@ function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: Cli
   const tags = <>
     <Tag label={STEP_LABEL[step]} tone={STEP_TONE[step]} p={p} />
     {priority && <Tag label={PRIORITY_LABEL} tone="wait" p={p} />}
+    {isOwnerEnquiry(e) && <Tag label={OWNER_ENQUIRY_LABEL} tone="plain" p={p} />}
     {e.delivery === "email" && ["sent", "opened", "expired"].includes(step) && e.emailStatus !== "sent" && <Tag label={e.emailStatus === "failed" ? "Email failed" : "Sending…"} tone={e.emailStatus === "failed" ? "bad" : "plain"} p={p} />}
     {!!e.duplicateReason && step !== "closed" && <Tag label={DUPLICATE_LABEL} tone="bad" p={p} />}
     {e.files.length > 0 && <View style={[ui.row, { gap: 4 }]}><Feather name="image" size={12} color={p.muted} /><Text style={{ color: p.muted, fontSize: 11 }}>{e.files.length}</Text></View>}
@@ -244,17 +246,19 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
     <Sheet palette={p} visible={!!e} onClose={onClose} title={a?.fullName ?? e?.recipientName ?? ""} subtitle={e ? STEP_LABEL[step] + (e.submittedAt ? ` · answered ${ago(e.submittedAt)}` : ` · sent ${ago(e.sentAt)}`) : undefined} icon="building">
       {e && <>
         {!!e.duplicateReason && step !== "closed" && <Notice text={`${DUPLICATE_LABEL}. ${duplicateNote(e)}`} p={p} tone="bad" />}
+        {isOwnerEnquiry(e) && <Notice text={`${OWNER_ENQUIRY_LABEL}. ${OWNER_ENQUIRY_NOTE}`} p={p} />}
         {step === "received" && <Button label={valueButtonLabel(e)} icon="trending-up" primary p={p} onPress={() => setMode("value")} />}
         {e.propertyId && step !== "closed" && <Button label={`Open ${e.propertyName ?? "the property"}`} icon="arrow-right" primary={step !== "received"} p={p} onPress={() => onOpenProperty(e.propertyId!)} />}
         {e.propertyId && step === "received" && <Text style={[ui.small, { color: p.muted }]}>It is already in Properties as a new enquiry. Check the details, then publish the estimate from the property’s onboarding.</Text>}
         {e.propertyId && e.status === "valuing" && <Text style={[ui.small, { color: p.muted }]}>Valuing since {e.valuedAt ? ago(e.valuedAt) : "–"}{e.valuedByName ? `, by ${e.valuedByName}` : ""}. Publish the estimate from the property’s onboarding.</Text>}
+        {!!e.ownerRepairLimit && <Text style={[ui.small, { color: p.text }]}>Repair limit chosen at Proceed: {repairLimitText(e.ownerRepairLimit.limitMinor)}. The limit in use is in Limit Changer.</Text>}
         {e.status === "closed" && <Notice text={`Closed by ${e.closedByName ?? "the team"}: ${e.closeNote}`} p={p} />}
         {a ? <>
           <Group p={p} title="Contact information" icon="user">
             <Line p={p} label="Full name" value={a.fullName} />
             <Line p={p} label="Company" value={a.companyName} />
             <Line p={p} label="Email" value={a.email} onPress={() => void Linking.openURL("mailto:" + a.email)} />
-            <Line p={p} label="Contact number" value={a.phone} onPress={() => void Linking.openURL("tel:" + a.phone.replace(/[^\d+]/g, ""))} />
+            <Line p={p} label="Contact number" value={a.phone} onPress={() => void Linking.openURL("tel:" + (a.phone ?? "").replace(/[^\d+]/g, ""))} />
             {/* Only on forms answered before these two questions were removed. */}
             <Line p={p} label="Correspondence address" value={a.correspondenceAddress} />
             <Line p={p} label="Existing client" value={yes(a.existingClient)} />
@@ -262,7 +266,8 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
           <Group p={p} title="Property information" icon="home">
             <Line p={p} label="Property address" value={a.propertyAddress} />
             <Line p={p} label="Property type" value={a.propertyType} />
-            <Line p={p} label="Rooms" value={`${a.bedrooms} bedroom${a.bedrooms === 1 ? "" : "s"} · ${a.wcs} WC${a.wcs === 1 ? "" : "s"} · ${a.bathrooms} full bathroom${a.bathrooms === 1 ? "" : "s"}`} />
+            {/* An owner's enquiry from the app may leave WCs out. */}
+            <Line p={p} label="Rooms" value={[`${a.bedrooms} bedroom${a.bedrooms === 1 ? "" : "s"}`, typeof a.wcs === "number" ? `${a.wcs} WC${a.wcs === 1 ? "" : "s"}` : null, `${a.bathrooms} full bathroom${a.bathrooms === 1 ? "" : "s"}`].filter(Boolean).join(" · ")} />
             <Line p={p} label="Parking" value={a.parking} />
             <Line p={p} label="Garden" value={a.garden} />
           </Group>

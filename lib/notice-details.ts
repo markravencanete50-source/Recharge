@@ -47,8 +47,12 @@ const place = (n: NoticeDetail) => {
 const named = (n: NoticeDetail) => (n.event_type === 'chat.message' || n.event_type === 'chat.owner_message') && !!n.actor_name?.trim();
 const who = (n: NoticeDetail) => n.event_type === 'guest.message' ? 'Guest' : named(n) ? null : n.automatic ? 'Automatic' : n.actor_name?.trim() || null;
 
-// Where tapping a row goes: the work item, or Messages (chat and guest notices), or nowhere.
-export type NoticeTarget = { kind: 'work'; workId: string } | { kind: 'messages' } | null;
+// Where tapping a row goes: the work item, or Messages (chat and guest notices), or a property's onboarding, or nowhere.
+export type NoticeTarget = { kind: 'work'; workId: string } | { kind: 'messages' } | { kind: 'property'; propertyId: string } | null;
+// A property onboarding notice (an estimate published, an agreement to sign) is about the onboarding itself, whose work item
+// ("Property onboarding") has no task view: it opens the property, where the onboarding, the estimate and its decision are.
+// Opening it as a work item said "That item is no longer available to you" (Lee, 16 October).
+export const isOnboardingNotice = (n: NoticeDetail) => !!n.property_id && (n.event_type.startsWith('journey.') || (n.work_module === 'property-onboarding' && !n.work_kind));
 
 // `line` is the whole second line as text (search, screen readers). On screen the time sits beside the title and `detail` (the place,
 // then who) is the second line, so a narrow screen cuts the place short but never loses the time.
@@ -67,14 +71,16 @@ export const VA_PAY_NOTICES: ReadonlySet<string> = new Set(['vapay.request_appro
 export function noticeRow(n: NoticeDetail): NoticeRow {
   const label = workKindLabel(n.work_kind, n.work_module), title = n.work_title?.trim();
   const fallback = noticeCopy(n.event_type).title;
+  const onboarding = isOnboardingNotice(n);
   const heading = CLEANER_NOTICES.has(n.event_type) || VA_PAY_NOTICES.has(n.event_type) ? fallback
+    : onboarding ? `${label ?? 'Onboarding'}: ${fallback}`
     : n.work_id && title ? `${label ?? 'Task'}: ${title}`
     : (n.event_type === 'chat.message' || n.event_type === 'chat.owner_message') && n.actor_name?.trim() ? `Message from ${n.actor_name.trim()}`
     : n.event_type === 'guest.message' ? (n.property_name?.trim() ? `Guest message · ${n.property_name.trim()}` : 'Guest message')
     : fallback;
   const detail = [n.event_type === 'guest.message' ? null : place(n), who(n)].filter(Boolean).join(' · '), when = noticeTime(n.created_at);
   const line = [detail, when].filter(Boolean).join(' · ');
-  const target: NoticeTarget = n.work_id ? { kind: 'work', workId: n.work_id } : n.event_type.startsWith('chat.') || n.event_type === 'guest.message' ? { kind: 'messages' } : null;
+  const target: NoticeTarget = onboarding ? { kind: 'property', propertyId: n.property_id as string } : n.work_id ? { kind: 'work', workId: n.work_id } : n.event_type.startsWith('chat.') || n.event_type === 'guest.message' ? { kind: 'messages' } : null;
   return { key: String(n.id), title: heading, line, detail, when, clock: noticeClock(n.created_at), target, unread: !n.read_at, notices: [n] };
 }
 

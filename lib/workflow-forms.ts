@@ -3,20 +3,29 @@ import { REPAIR_GUIDES } from './repair-guides';
 import { INSPECTION_CHECKS } from './onboarding-content';
 import { SCOTTISH_REGIONS } from './regions';
 import { workspaceDateKey } from './analytics';
-import { HTTPS_LINK_MESSAGE, MAX_COMPARABLES, isHttpsLink } from './journey-policy';
+import { HTTPS_LINK_MESSAGE, MAX_COMPARABLES, REPAIR_LIMIT_CHOICES, REPAIR_LIMIT_DEFAULT, REPAIR_LIMIT_HELP, REPAIR_LIMIT_QUESTION, estimateRateIssues, isHttpsLink, repairLimitFrom, type FieldIssue } from './journey-policy';
+import { START_WHEN } from './client-enquiry';
 import { ownCostFields, ownCostsFrom } from './own-costs';
 import { agreementTemplateForms } from './agreement-template';
 import { defaultRedoBy } from './cleans-live';
 import { BATHROOM_CHOICES, BEDROOM_CHOICES, GARDEN_CHOICES, PARKING_CHOICES, PROPERTY_TYPES, WC_CHOICES, type Suggestion } from './property-listing';
-export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense';
+// 'uploads' (the owner's enquiry sheet) holds photos and videos chosen on the device; they are sent once the form is saved.
+export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos'|'uploads';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense';
  // Quick picks under a text field (tapping one fills it, and any fields in `also`), and a postcode lookup on an address.
  suggestions?:Suggestion[];lookup?:'postcode';
  // `section` puts a small heading above this field, starting a group ("Comparable 1 (optional)"); `after` keeps the
  // field hidden until the named field has a value, so a second group appears once the first is started. `group` names
  // the group for screen readers ("Comparable 1 name") and drops "(optional)" from a short label the heading already covers.
- section?:string;after?:string;group?:string};
-export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls'|'finance';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string;workId?:string};
-export type JourneyView={propertyId:string;clientId:string|null;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionOn?:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string};propertyType?:string|null;bathrooms?:number|null;enquiry?:EnquiryDetails;ownerAccount?:boolean;invoiceOutsideAt?:string|null;invoiceOutsideNote?:string;estimateDelivery?:import('./estimate-link').EstimateDelivery|null};
+ section?:string;after?:string;group?:string;
+ // `when` shows the field only while each named field has that value (the repair limit once "Proceed" is chosen).
+ when?:{field:string;value:string}[]};
+// `checks` finds problems across fields once each field reads (the estimate's rates in order, a comparable with all three
+// parts), each named by its field. `done` keeps the sheet open after saving, with a confirmation, instead of closing it.
+export type WorkflowForm={key:string;title:string;description?:string;endpoint:'journeys'|'operations'|'workspace'|'portfolio'|'controls'|'finance';fields:WorkflowField[];build:(values:Record<string,unknown>,requestId:string)=>Record<string,unknown>;unavailable?:string;workId?:string;
+ checks?:(values:Record<string,unknown>)=>FieldIssue[];done?:{title:string;message:string}};
+export type JourneyView={propertyId:string;clientId:string|null;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionOn?:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string};propertyType?:string|null;bathrooms?:number|null;enquiry?:EnquiryDetails;ownerAccount?:boolean;invoiceOutsideAt?:string|null;invoiceOutsideNote?:string;estimateDelivery?:import('./estimate-link').EstimateDelivery|null;
+ // The owner's repair limit chosen at Proceed (item 7, migration 20261022300000).
+ ownerRepairLimit?:{limitMinor:number;chosenAt?:string;via?:string}|null};
 export type EnquiryDetails={contactName?:string;companyName?:string;email?:string;phone?:string;existingClient?:boolean;wcs?:number;parking?:string;garden?:string;photoLink?:string;notes?:string};
 export type OperationView={workId:string;propertyId:string;moduleId:string;title:string;kind:string;status:string;version:number;assigneeId:string|null;dueOn?:string|null;dueTime?:string|null;endTime?:string|null;createdAt?:string;updatedAt?:string;updatedBy?:string|null;updatedEvent?:string|null;lastActivityAt?:string|null;data:Record<string,unknown>};
 const field=(name:string,label:string,type:WorkflowField['type']='text',required=true):WorkflowField=>({name,label,type,required});
@@ -27,14 +36,15 @@ const admin=(a:WorkspaceAccount)=>actorIs(a,'admin','super_admin');
 export function workflowValues(fields:WorkflowField[],raw:Record<string,unknown>):Record<string,unknown>{
  const values:Record<string,unknown>={};
  for(const f of fields){
-  // Photos are saved as they are chosen; the form sends the saved photos' ids.
+  // Photos are saved as they are chosen; the form sends the saved photos' ids. Uploads go after the save, from the sheet.
+  if(f.type==='uploads')continue;
   if(f.type==='photos'){const ids=Array.isArray(raw[f.name])?(raw[f.name] as unknown[]).filter((x):x is string=>typeof x==='string'):[];if(f.required&&!ids.length)throw new Error('Add at least one photo: '+f.label);values[f.name]=ids;continue;}
   if(f.type==='checkbox'){values[f.name]=raw[f.name]===true||raw[f.name]==='on';if(f.required&&!values[f.name])throw new Error('Please confirm: '+f.label);continue;}
   const text=String(raw[f.name]??'').trim();if(f.required&&!text)throw new Error('Please enter: '+f.label);
   if(f.type==='date'){values[f.name]=text||null;continue;}
   if(f.type==='money'||f.type==='number'||f.type==='percent'){
    if(!text){values[f.name]=undefined;continue;}
-   const decimal=f.type!=='number',plain=text.replace(/%$/,'').trim();
+   const decimal=f.type!=='number',plain=moneyText(text.replace(/%$/,'').trim(),f.type==='money');
    if(!(decimal?/^\d+(\.\d{1,2})?$/:/^\d+$/).test(plain))throw new Error('Enter a valid '+(f.type==='percent'?'percentage':'amount')+' for '+f.label);
    const [whole,fraction='']=plain.split('.');const value=decimal?Number(whole)*100+Number(fraction.padEnd(2,'0')):Number(whole);
    // Percentages are kept as basis points: 18.5% is 1850.
@@ -46,19 +56,65 @@ export function workflowValues(fields:WorkflowField[],raw:Record<string,unknown>
  }
  return values;
 }
+// "£1,250.50" reads as 1250.50: a pound sign in front and commas between thousands are fine in an amount.
+const moneyText=(text:string,money:boolean)=>money&&/^£?\s*\d{1,3}(,\d{3})*(\.\d{1,2})?$|^£\s*\d+(\.\d{1,2})?$/.test(text)?text.replace(/^£\s*/,'').replace(/,/g,''):text;
+// The short name of a field in a message: "Council tax" for "Council tax, per month, GBP", "Comparable 2 nightly rate" in a group.
+export function fieldName(f:Pick<WorkflowField,'label'|'group'>):string{
+ const base=f.label.split(',')[0].replace(/\s*\([^)]*\)\s*$/,'').trim();
+ return f.group?`${f.group} ${base.toLowerCase()}`:base;
+}
+// Every problem in a form, each with its field, in plain words, before anything is sent: a field that is needed and empty
+// or does not read (an amount, a number, a percentage), then the form's own checks across fields. workflowValues stays the
+// one place values are read; this says where each problem is.
+export function workflowIssues(form:Pick<WorkflowForm,'fields'|'checks'>,raw:Record<string,unknown>,shown:(f:WorkflowField)=>boolean=()=>true):FieldIssue[]{
+ const issues:FieldIssue[]=[];
+ for(const f of form.fields){
+  if(f.type==='uploads'||!shown(f)||!whenMet(f,raw))continue;
+  const name=fieldName(f);
+  try{workflowValues([f],raw);}
+  catch{
+   const text=String(raw[f.name]??'').trim();
+   const message=f.type==='photos'?'Add at least one photo'
+    :f.type==='checkbox'?'Tick this to confirm: '+f.label
+    :!text?(f.type==='select'?'Choose '+name.toLowerCase():'Enter '+name.toLowerCase())
+    :f.type==='money'?name+' must be an amount in pounds, like 150 or 150.50'
+    :f.type==='number'?name+' must be a whole number, like 2'
+    :f.type==='percent'?(/^\d+(\.\d{1,2})?%?$/.test(text)?name+' must be 100% or less':name+' must be a percentage, like 70 or 12.5')
+    :f.type==='select'?'Choose '+name.toLowerCase():'Check '+name.toLowerCase();
+   issues.push({field:f.name,message});
+  }
+ }
+ if(issues.length||!form.checks)return issues;
+ return form.checks(workflowValues(form.fields,raw));
+}
+// Whether a field with `when` is showing: each named field has its value.
+export const whenMet=(f:Pick<WorkflowField,'when'>,values:Record<string,unknown>)=>!f.when||f.when.every(w=>values[w.field]===w.value);
+// The summary under the form: "Check 2 fields: The low nightly rate must be at least £1. Council tax must be an amount in pounds."
+export function issuesSummary(issues:readonly FieldIssue[]):string{
+ if(!issues.length)return '';
+ const end=(m:string)=>/[.!?]$/.test(m)?m:m+'.';
+ return `Check ${issues.length===1?'1 field':issues.length+' fields'}: ${issues.map(i=>end(i.message)).join(' ')}`;
+}
 const ENQUIRY_KEYS=['contactName','companyName','email','phone','wcs','parking','garden','photoLink','notes'] as const;
 // The enquiry form. The team fills it in for someone who has asked for an estimate (by message or
 // phone), so it starts with their contact details; an owner signed in to their account skips those.
 // No "Existing client?" any more (Alex, as on the landlord's form): older enquiries keep their answer (EnquiryDetails).
 export function newEnquiryForm(team=false):WorkflowForm{
  const contact:WorkflowField[]=team?[field('contactName','Full name'),{...field('companyName','Company name','text',false),help:'If the property is owned by a company.'},{...field('email','Email','text',false),help:'An email or phone number is needed.'},field('phone','Contact number','text',false)]:[];
- const property:WorkflowField[]=[{...field('address','Full property address','textarea'),lookup:'postcode',help:'Include the postcode: the area and map position are found from it.'},{...field('name','Property name'),help:'A short name the team will recognise, e.g. "Leith Walk flat".'},{...field('region','Area','select',false),defaultValue:'',options:[{value:'',label:'Work it out from the address'},...SCOTTISH_REGIONS.map(value=>({value,label:value}))]},{...field('propertyType','Property type'),suggestions:PROPERTY_TYPES},{...field('bedrooms','Bedrooms','number'),suggestions:BEDROOM_CHOICES},{...field('wcs','WCs','number',false),suggestions:WC_CHOICES},{...field('bathrooms','Full bathrooms','number'),suggestions:BATHROOM_CHOICES},{...field('parking','Parking','text',false),suggestions:PARKING_CHOICES},{...field('garden','Garden','text',false),suggestions:GARDEN_CHOICES},{...field('photoLink','Link to photos or videos','text',false),help:'An https:// link, e.g. a shared album.'},field('notes','Anything else to know','textarea',false)];
- return {key:'enquiry',title:team?'Add a new property enquiry':'Add a property enquiry',description:team?'From the new property enquiry form: what we need to prepare the free performance estimate.':undefined,endpoint:'journeys',fields:[...contact,...property],build:v=>{
+ const property:WorkflowField[]=[{...field('address','Full property address','textarea'),lookup:'postcode',help:'Include the postcode: the area and map position are found from it.'},{...field('name','Property name'),help:'A short name the team will recognise, e.g. "Leith Walk flat".'},{...field('region','Area','select',false),defaultValue:'',options:[{value:'',label:'Work it out from the address'},...SCOTTISH_REGIONS.map(value=>({value,label:value}))]},{...field('propertyType','Property type'),suggestions:PROPERTY_TYPES},{...field('bedrooms','Bedrooms','number'),suggestions:BEDROOM_CHOICES},{...field('wcs','WCs','number',false),suggestions:WC_CHOICES},{...field('bathrooms','Full bathrooms','number'),suggestions:BATHROOM_CHOICES},{...field('parking','Parking','text',false),suggestions:PARKING_CHOICES},{...field('garden','Garden','text',false),suggestions:GARDEN_CHOICES},{...field('photoLink','Link to photos or videos','text',false),help:team?'An https:// link, e.g. a shared album.':'For a long video or a big album: an https:// link, e.g. a shared album.'},field('notes','Anything else to know','textarea',false)];
+ // An owner adds photos and short videos as on the public form (same limits and storage), and says when they would like
+ // to start, which sets Priority in Client enquiries as a form answer does.
+ const owner:WorkflowField[]=team?[]:[{...field('uploads','Photos and short videos','uploads',false),help:ENQUIRY_FILE_HELP},{...field('startWhen','When would you like to get started?','select',false),defaultValue:'',options:[{value:'',label:'Choose one'},...START_WHEN.map(value=>({value,label:value}))]}];
+ const fields=team?[...contact,...property]:[...property.slice(0,-2),...owner,...property.slice(-2)];
+ return {key:'enquiry',title:team?'Add a new property enquiry':'Add a property enquiry',description:team?'From the new property enquiry form: what we need to prepare the free performance estimate.':undefined,endpoint:'journeys',fields,build:v=>{
   const enquiry=Object.fromEntries(ENQUIRY_KEYS.filter(k=>v[k]!==undefined&&v[k]!=='').map(k=>[k,v[k]]));
-  const rest=Object.fromEntries(Object.entries(v).filter(([k])=>!(ENQUIRY_KEYS as readonly string[]).includes(k)));
+  const rest=Object.fromEntries(Object.entries(v).filter(([k])=>!(ENQUIRY_KEYS as readonly string[]).includes(k)&&!(k==='startWhen'&&!v[k])));
   return {action:'createEnquiry',...rest,...(Object.keys(enquiry).length?{enquiry}:{})};
- }};
+ },...(team?{}:{done:OWNER_ENQUIRY_DONE})};
 }
+// After an owner saves their enquiry. No email is promised: none is sent in this flow (the estimate comes as an update).
+export const OWNER_ENQUIRY_DONE={title:'Thanks, we have your property',message:'Recharge will value it and prepare your estimate. It is in Your properties now, and we will let you know in your updates when the estimate is ready to open.'};
+export const ENQUIRY_FILE_HELP='Photos (JPG, PNG, WebP, HEIC) or short videos (MP4, MOV, WebM), up to 25 MB each and 15 files. They upload when you save.';
 // The estimate's comparables, checked before sending (Lee's live hotfix): each one is all three of the name, an https link
 // and the nightly rate, or left empty. A filled field on its own says which comparable needs the rest.
 export function estimateComparables(v:Record<string,unknown>):{name:string;url:string;adrMinor:number}[]{
@@ -71,6 +127,29 @@ export function estimateComparables(v:Record<string,unknown>):{name:string;url:s
   return [{name,url,adrMinor:rate}];
  });
 }
+// The same check, as problems named by field ("url1" for the second comparable's link), for the form to show by each field.
+export function comparableIssues(v:Record<string,unknown>):FieldIssue[]{
+ return Array.from({length:MAX_COMPARABLES},(_,i)=>i).flatMap(i=>{
+  const name=String(v[`name${i}`]??'').trim(),url=String(v[`url${i}`]??'').trim(),rate=v[`adrMinor${i}`],n='Comparable '+(i+1);
+  if(!name&&!url&&typeof rate!=='number')return [];
+  if(/^(https?:|www\.)/i.test(name))return [{field:`name${i}`,message:n+' name: Put the link in the link field'}];
+  const missing:FieldIssue[]=[];
+  if(!name)missing.push({field:`name${i}`,message:n+': add the name'});
+  if(!url)missing.push({field:`url${i}`,message:n+': add an https:// link'});
+  else if(!isHttpsLink(url))missing.push({field:`url${i}`,message:n+' link: '+HTTPS_LINK_MESSAGE});
+  if(typeof rate!=='number')missing.push({field:`adrMinor${i}`,message:n+': add the nightly rate'});
+  return missing;
+ });
+}
+// The estimate's own checks: the rates in order (the cause of "Invalid estimate", 16 October) and each comparable whole.
+// The estimate decision's own checks: a follow-up date with "I'll be in touch", and a repair limit that reads with Proceed.
+export const decisionChecks=(v:Record<string,unknown>):FieldIssue[]=>{
+ if(v.decision==='review'&&!v.followUpOn)return [{field:'followUpOn',message:'Choose a follow-up date'}];
+ if(v.decision!=='proceed')return [];
+ const limit=repairLimitFrom(String(v.repairLimitMinor||REPAIR_LIMIT_DEFAULT),String(v.repairLimitOther??''));
+ return 'error' in limit?[{field:limit.field,message:limit.error}]:[];
+};
+export const estimateChecks=(v:Record<string,unknown>):FieldIssue[]=>[...estimateRateIssues(v),...comparableIssues(v)];
 export function journeyForms(a:WorkspaceAccount,j:JourneyView,today=workspaceDateKey(Date.now())):WorkflowForm[]{
  if(!admin(a)&&!a.modules.includes('property-onboarding')&&!(a.role==='ready'&&a.modules.includes('new-property-inspection-board')))return [];
  const forms:WorkflowForm[]=[],team=admin(a)||a.role==='stays',noOwner=j.ownerAccount===false||!j.clientId;
@@ -78,7 +157,18 @@ export function journeyForms(a:WorkspaceAccount,j:JourneyView,today=workspaceDat
  const owner=(a.role==='client'&&a.userId===j.clientId)||(team&&noOwner);
  const add=(action:string,title:string,fields:WorkflowField[],transform=(v:Record<string,unknown>)=>v,endpoint:WorkflowForm['endpoint']='journeys')=>forms.push({key:action,title,endpoint,fields,build:v=>({action,propertyId:j.propertyId,version:j.version,...transform(v)})});
  if(team&&['enquiry','estimate','reviewing'].includes(j.stage))add('publishEstimate','Publish the estimate',[field('lowRateMinor','Low nightly rate, GBP','money'),field('mediumRateMinor','Expected nightly rate, GBP','money'),field('highRateMinor','High nightly rate, GBP','money'),field('comments','Estimate notes','textarea',false),{...field('occupancyBps','Expected occupancy, %','percent',false),help:'The owner starts the explorer here, e.g. 70.'},{...field('directBookingBps','Expected direct bookings, %','percent',false),help:'Share of nights booked direct, with no platform fee, e.g. 10.'},{...field('otaFeeBps','Platform fee, %','percent',false),help:'Airbnb or Booking.com fee on platform bookings, e.g. 15.'},{...field('managementFeeBps','Recharge management fee, %','percent',false),help:'Charged on booking income. With the platform fee, this lets the owner see their earnings.'},...Array.from({length:MAX_COMPARABLES},(_,i)=>{const group='Comparable '+(i+1),after=i?{after:`name${i-1}`}:{};return [{...field(`name${i}`,'Name','text',false),group,section:group+' (optional)',...after},{...field(`url${i}`,'Link (https://)','text',false),group,...after},{...field(`adrMinor${i}`,'Nightly rate, GBP','money',false),group,...after}];}).flat(),...ownCostFields(j)],v=>({lowRateMinor:v.lowRateMinor,mediumRateMinor:v.mediumRateMinor,highRateMinor:v.highRateMinor,comments:v.comments||'',...Object.fromEntries(['occupancyBps','directBookingBps','otaFeeBps','managementFeeBps'].filter(k=>typeof v[k]==='number').map(k=>[k,v[k]])),comparables:estimateComparables(v),...ownCostsFrom(j,v)}));
- if(owner&&['estimate','reviewing'].includes(j.stage))add('decideEstimate',noOwner?'Record the owner\'s decision on the estimate':'Review your estimate',[{...field('decision',noOwner?'The owner\'s decision':'Your decision','select'),options:[{value:'proceed',label:'Proceed'},{value:'decline',label:'No, thank you'},{value:'review',label:'Thank you, I’ll be in touch'}]},field('feedback','Questions or feedback','textarea',false),{...field('followUpOn','Follow-up date','date',false),help:'Required with “Thank you, I’ll be in touch”.'}],v=>({...v,followUpOn:v.followUpOn||null}));
+ // The estimate's problems show by their fields before it is sent (rates out of order, a comparable half filled in).
+ for(const f of forms)if(f.key==='publishEstimate')f.checks=estimateChecks;
+ if(owner&&['estimate','reviewing'].includes(j.stage))add('decideEstimate',noOwner?'Record the owner\'s decision on the estimate':'Review your estimate',[{...field('decision',noOwner?'The owner\'s decision':'Your decision','select'),options:[{value:'proceed',label:'Proceed'},{value:'decline',label:'No, thank you'},{value:'review',label:'Thank you, I’ll be in touch'}]},field('feedback','Questions or feedback','textarea',false),{...field('followUpOn','Follow-up date','date',false),help:'Required with “Thank you, I’ll be in touch”.'},
+  // Item 7: with Proceed, the repairs Recharge may approve without asking (saved as the property's limit in Limit Changer).
+  {...field('repairLimitMinor',noOwner?'Repairs Recharge can approve without asking the owner':REPAIR_LIMIT_QUESTION,'select',false),options:REPAIR_LIMIT_CHOICES.map(c=>({...c})),defaultValue:REPAIR_LIMIT_DEFAULT,help:noOwner?'Up to this amount per repair, Recharge goes ahead and tells the owner after. Above it, the owner is asked first.':REPAIR_LIMIT_HELP,when:[{field:'decision',value:'proceed'}]},
+  {...field('repairLimitOther','Another amount, in whole pounds','text',false),when:[{field:'decision',value:'proceed'},{field:'repairLimitMinor',value:'other'}]}],
+  ({repairLimitMinor,repairLimitOther,...v})=>{
+   const limit=v.decision==='proceed'?repairLimitFrom(String(repairLimitMinor||REPAIR_LIMIT_DEFAULT),String(repairLimitOther??'')):null;
+   if(limit&&'error' in limit)throw new Error(limit.error);
+   return {...v,followUpOn:v.followUpOn||null,...(limit?{repairLimitMinor:limit.minor}:{})};
+  });
+ for(const f of forms)if(f.key==='decideEstimate')f.checks=decisionChecks;
  if(team&&j.stage==='agreement')add('publishAgreement','Publish the management agreement',[{...field('agreement','Agreement supplied by Recharge','textarea'),help:'Use the actual approved contract. The app does not generate legal terms.'}]);
  if(owner&&j.stage==='agreement'&&j.agreementRevision>0)add('signAgreement',noOwner?'Record the signed agreement':'Accept the published agreement',noOwner?[field('signedName','Owner\'s full name as signed'),{...field('consent','The owner has signed the management agreement shown above','checkbox'),help:'Keep the signed copy with the property\'s files.'}]:[field('signedName','Your full name'),{...field('consent','I have read and agree to the management agreement shown above','checkbox'),help:'Your acceptance is saved with this exact agreement revision.'}],v=>({...v,agreementRevision:j.agreementRevision}));
  if(owner&&j.stage==='form')add('submitForm',noOwner?'Enter the property onboarding form':'Complete property setup',[

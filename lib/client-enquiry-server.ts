@@ -104,7 +104,7 @@ export async function enquirySubmitRoute(request: Request) {
 // recorded against the form. Removing one forgets it and deletes the stored copy.
 export async function enquiryUploadRoute(request: Request) {
   if (!isSameOrigin(request, authSecurityConfiguration()?.origin)) return businessResponse({ error: 'Invalid request origin' }, 403);
-  const storage = secretClient()?.storage.from(ENQUIRY_BUCKET);
+  const storage = enquiryBucket();
   if (!storage) return businessResponse({ error: 'Uploads are not available just now. Add a link to your photos instead.' }, 503);
   try {
     const quota = await requestQuota(request, 'enquiry-upload', 60, 3600);
@@ -123,26 +123,76 @@ export async function enquiryUploadRoute(request: Request) {
     const hash = await tokenHash(token);
     const opened = await publicRpc<{ state: string; id: string }>({ action: 'open', tokenHash: hash });
     if (opened.state !== 'open') return businessResponse({ error: 'This form can’t take more files.' }, 400);
-    const form = await boundedFormData(request, MAX_ENQUIRY_FILE_BYTES + 65536);
-    if (form === 'too-large') return businessResponse({ error: 'Each file can be up to 25 MB. For longer videos, paste a link below instead.' }, 413);
-    if (!form) return businessResponse({ error: 'Choose a photo or video' }, 400);
-    if ([...form.keys()].some(k => !['token', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return businessResponse({ error: 'Unexpected upload fields' }, 400);
-    const file = form.get('file');
-    if ((form.has('token') && form.get('token') !== token) || !(file instanceof Blob) || file.size > MAX_ENQUIRY_FILE_BYTES) return businessResponse({ error: 'Choose a photo or video' }, 400);
-    // The type is read from the file's first bytes; the file itself goes to storage as it is.
-    const type = enquiryFileType(new Uint8Array(await file.slice(0, 64).arrayBuffer()));
-    if (!type) return businessResponse({ error: 'Add photos (JPG, PNG, WebP, HEIC) or videos (MP4, MOV, WebM) up to 25 MB each.' }, 400);
-    const fileId = crypto.randomUUID(), path = `enquiries/${opened.id}/${fileId}.${type.ext}`;
-    const name = (file instanceof File ? file.name : 'File').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200) || 'File';
-    const stored = await storage.upload(path, file, { contentType: type.mime, upsert: false, cacheControl: 'private, max-age=0' });
-    if (stored.error) return businessResponse({ error: 'The file could not be saved. Please try again.' }, 503);
-    try { await publicRpc({ action: 'addFile', tokenHash: hash, file: { id: fileId, path, name, mime: type.mime, bytes: file.size } }); }
-    catch (error) { await storage.remove([path]).catch(() => undefined); throw error; }
-    return businessResponse({ ok: true, data: { id: fileId, name, mime: type.mime, bytes: file.size } });
+    const received = await receiveEnquiryFile(request, storage, opened.id, ['token', 'file'], form => !form.has('token') || form.get('token') === token);
+    if ('response' in received) return received.response;
+    const { file } = received;
+    try { await publicRpc({ action: 'addFile', tokenHash: hash, file: { id: file.id, path: file.path, name: file.name, mime: file.mime, bytes: file.bytes } }); }
+    catch (error) { await storage.remove([file.path]).catch(() => undefined); throw error; }
+    return businessResponse({ ok: true, data: { id: file.id, name: file.name, mime: file.mime, bytes: file.bytes } });
   } catch (error) {
     if (error instanceof PublicRefusal) return businessResponse({ error: error.message }, 400);
     return businessResponse({ error: 'Uploads are not available just now. Add a link to your photos instead.' }, 503);
   }
+}
+
+// One photo or video from a multipart upload, with the public form's rules (lib/client-enquiry.ts): read with a size cap,
+// only the expected fields, the type read from the file's first bytes, then stored privately in the enquiry's own folder
+// as it is. The caller records it in the database, and removes the stored copy if that fails.
+type EnquiryBucket = NonNullable<ReturnType<typeof enquiryBucket>>;
+const enquiryBucket = () => secretClient()?.storage.from(ENQUIRY_BUCKET);
+type StoredFile = { id: string; path: string; name: string; mime: string; bytes: number };
+async function receiveEnquiryFile(request: Request, storage: EnquiryBucket, enquiryId: string, keys: readonly string[], fieldsOk: (form: FormData) => boolean): Promise<{ file: StoredFile } | { response: Response }> {
+  const refuse = (error: string, status = 400) => ({ response: businessResponse({ error }, status) });
+  const form = await boundedFormData(request, MAX_ENQUIRY_FILE_BYTES + 65536);
+  if (form === 'too-large') return refuse('Each file can be up to 25 MB. For longer videos, paste a link below instead.', 413);
+  if (!form) return refuse('Choose a photo or video');
+  if ([...form.keys()].some(k => !keys.includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return refuse('Unexpected upload fields');
+  const file = form.get('file');
+  if (!fieldsOk(form) || !(file instanceof Blob) || file.size > MAX_ENQUIRY_FILE_BYTES) return refuse('Choose a photo or video');
+  // The type is read from the file's first bytes; the file itself goes to storage as it is.
+  const type = enquiryFileType(new Uint8Array(await file.slice(0, 64).arrayBuffer()));
+  if (!type) return refuse('Add photos (JPG, PNG, WebP, HEIC) or videos (MP4, MOV, WebM) up to 25 MB each.');
+  const id = crypto.randomUUID(), path = `enquiries/${enquiryId}/${id}.${type.ext}`;
+  const name = (file instanceof File ? file.name : 'File').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200) || 'File';
+  const stored = await storage.upload(path, file, { contentType: type.mime, upsert: false, cacheControl: 'private, max-age=0' });
+  if (stored.error) return refuse('The file could not be saved. Please try again.', 503);
+  return { file: { id, path, name, mime: type.mime, bytes: file.size } };
+}
+
+// ---------------------------------------------------------------- an owner: photos on their own enquiry
+// An owner who added a property in the app (migration 20261022300000) sends its photos and short videos here, by the
+// property's id, with the public form's rules and storage. The database checks first that the enquiry is theirs and can
+// still take files, so nobody else can make the site read a large upload. JSON { action: 'remove' } forgets one.
+export async function ownerEnquiryFilesRoute(request: Request, native = false) {
+  if (native ? !isNativeRequest(request) : !isSameOrigin(request, authSecurityConfiguration()?.origin)) return businessResponse({ error: 'Invalid request origin' }, 403);
+  try {
+    const session = await businessContext(request, native);
+    if (!session) return businessResponse({ error: 'Sign in required' }, 401);
+    if (session.account.status !== 'active') return businessResponse({ error: 'Active workspace access required' }, 403);
+    const quota = await requestQuota(request, 'enquiry-upload', 60, 3600, session.account.userId);
+    if (!quota.allowed) return tooMany(quota.retryAfter);
+    const storage = enquiryBucket();
+    if (!storage) return businessResponse({ error: 'Uploads are not available just now. Add a link to your photos instead.' }, 503);
+    const rpc = (input: Record<string, unknown>) => session.client.rpc('workspace_owner_enquiry_files', { input });
+    if (request.headers.get('Content-Type')?.split(';')[0].trim() === 'application/json') {
+      const input = z.object({ action: z.literal('remove'), propertyId: z.string().uuid(), fileId: z.string().uuid() }).strict().safeParse(await boundedJson(request, 1024));
+      if (!input.success) return businessResponse({ error: 'Choose a file' }, 400);
+      const removed = await rpc({ action: 'removeFile', propertyId: input.data.propertyId, fileId: input.data.fileId });
+      if (removed.error) return databaseFailure(removed.error);
+      await storage.remove([String((removed.data as { path?: unknown })?.path ?? '')]).catch(() => undefined);
+      return businessResponse({ ok: true });
+    }
+    const propertyId = z.string().uuid().safeParse(new URL(request.url).searchParams.get('propertyId'));
+    if (!propertyId.success) return businessResponse({ error: 'Choose the property' }, 400);
+    const opened = await rpc({ action: 'open', propertyId: propertyId.data });
+    if (opened.error) return databaseFailure(opened.error);
+    const received = await receiveEnquiryFile(request, storage, String((opened.data as { id: string }).id), ['file'], () => true);
+    if ('response' in received) return received.response;
+    const { file } = received;
+    const added = await rpc({ action: 'addFile', propertyId: propertyId.data, file: { id: file.id, path: file.path, name: file.name, mime: file.mime, bytes: file.bytes } });
+    if (added.error) { await storage.remove([file.path]).catch(() => undefined); return databaseFailure(added.error); }
+    return businessResponse({ ok: true, data: { id: file.id, name: file.name, mime: file.mime, bytes: file.bytes } });
+  } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: 'Uploads are not available just now. Add a link to your photos instead.' }, 503); }
 }
 
 // ---------------------------------------------------------------- the team: open a file

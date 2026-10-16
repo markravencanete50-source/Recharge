@@ -106,7 +106,7 @@ export async function estimateDecideRoute(request: Request) {
     if (!parsed.success) return businessResponse({ error: parsed.error.issues[0]?.message || 'Check your answer', field: parsed.error.issues[0]?.path.at(-1) ?? null }, 400);
     const { token, ...answer } = parsed.data;
     const hash = await tokenHash(token);
-    const result = await publicRpc<EstimatePageState>({ action: 'decide', tokenHash: hash, decision: answer.decision, feedback: answer.feedback.trim(), followUpOn: answer.decision === 'review' ? answer.followUpOn : null });
+    const result = await publicRpc<EstimatePageState>({ action: 'decide', tokenHash: hash, decision: answer.decision, feedback: answer.feedback.trim(), followUpOn: answer.decision === 'review' ? answer.followUpOn : null, ...(answer.decision === 'proceed' && answer.repairLimitMinor !== undefined ? { repairLimitMinor: answer.repairLimitMinor } : {}) });
     // Proceed makes the owner's app account and emails them (lib/owner-account-server.ts). It never fails their answer.
     if (answer.decision === 'proceed' && 'state' in result && result.state === 'proceeding') await import('./owner-account-server').then(m => m.ownerAccountAfterProceed(hash)).catch(() => undefined);
     return businessResponse({ ok: true, data: result });

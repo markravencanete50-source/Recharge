@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { formatMoney } from './format';
 import { readEstimate } from './estimate-projection';
 import { emailSignature } from './email-brand';
-import { MAX_COMPARABLES } from './journey-policy';
+import { MAX_COMPARABLES, repairLimitMinorSchema } from './journey-policy';
 import { ENQUIRY_REPLY_TO } from './integration-policy';
 
 // The estimate, emailed with a private link (Lee, 14 October). Pure: the email, the client's decision and the team's
@@ -34,6 +34,8 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a follow-up date
 export const estimateDecisionSchema = z.object({
   token: z.string().regex(estimateTokenPattern), decision: z.enum(['proceed', 'review', 'decline'], { message: 'Choose how you would like to go ahead' }),
   feedback: z.string().max(5000, 'Feedback can be up to 5,000 characters').default(''), followUpOn: isoDate.nullable().optional(),
+  // Item 7: with Proceed, the repairs Recharge may approve without asking (lib/journey-policy.ts).
+  repairLimitMinor: repairLimitMinorSchema.optional(),
 }).strict().refine(v => v.decision !== 'review' || !!v.followUpOn, { message: 'Choose a follow-up date', path: ['followUpOn'] });
 // The three answers on the page, in this order (Alex, client meeting): go ahead, say no, or take time and come back to us.
 export const DECISION_LABEL = { proceed: 'Proceed', decline: 'No, thank you', review: 'Thank you, I’ll be in touch' } as const;

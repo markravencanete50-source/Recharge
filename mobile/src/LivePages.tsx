@@ -58,12 +58,15 @@ import { SCOTTISH_REGIONS } from "../../lib/regions";
 import { faqsForAccess } from "../../lib/access-faq";
 import { dateKey, parseAnalyticsDate, periodError, periodLabel, presetPeriod, type AnalyticsPeriod } from "../../lib/analytics";
 import { estimateComparables, noticeViewSchema, onboardingProgress, readableStage, unreadNotices, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
-import { createOperationForms, inspectionReportFrom, journeyForms, newEnquiryForm, operationForms, workflowValues, type JourneyView, type OperationView, type WorkflowField, type WorkflowForm } from "../../lib/workflow-forms";
+import { createOperationForms, inspectionReportFrom, issuesSummary, journeyForms, whenMet, newEnquiryForm, operationForms, workflowIssues, workflowValues, type JourneyView, type OperationView, type WorkflowField, type WorkflowForm } from "../../lib/workflow-forms";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { PhotoPicker, WorkPhotos } from "./Photos";
 import { LegalLinks } from "./LivePrivacy";
 import { readableError } from "../../lib/error-copy";
 import { pillBox, pillInk } from "./Pills";
+import { ownerPropertyStatus, type OwnerPropertyStatus } from "../../lib/owner-approvals";
+import { EnquiryUploadPicker, EnquiryUploadStatus, sendEnquiryFiles, type EnquiryFile } from "./EnquiryUploads";
+import { repairLimitText, type FieldIssue } from "../../lib/journey-policy";
 
 export const message = (error: unknown) => readableError(error);
 const money = (n: unknown) => formatMoney(Number(n));
@@ -180,12 +183,19 @@ function PostcodeLookup({ p, text, disabled, onComplete, onFound }: { p: Palette
   );
 }
 
-function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: WorkflowField; value: unknown; onChange: (value: unknown) => void; onAlso?: (values: Record<string, string>, onlyIfEmpty?: boolean) => void; p: Palette; disabled?: boolean }) {
+// A field's problem, under it in the danger colour, read out when it appears.
+function FieldProblem({ p, error }: { p: Palette; error?: string }) {
+  return error ? <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{error}</Text> : null;
+}
+function Field({ field: f, value, onChange, onAlso, p, disabled, error }: { field: WorkflowField; value: unknown; onChange: (value: unknown) => void; onAlso?: (values: Record<string, string>, onlyIfEmpty?: boolean) => void; p: Palette; disabled?: boolean; error?: string }) {
   if (f.type === "checkbox") return (
-    <MotionPress disabled={disabled} accessibilityRole="checkbox" accessibilityState={{ checked: value === true, disabled }} onPress={() => onChange(value !== true)} style={[ui.row, { gap: 12, minHeight: 48, paddingVertical: 10, alignItems: "flex-start" }]}>
-      <View style={{ width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: value === true ? p.primary : p.controlBorder, backgroundColor: value === true ? p.primary : "transparent", alignItems: "center", justifyContent: "center" }}>{value === true && <Feather name="check" size={15} color={p.onPrimary} />}</View>
-      <View style={{ flex: 1 }}><Text style={[ui.body, { color: p.text }]}>{f.label}</Text>{f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}</View>
-    </MotionPress>
+    <View>
+      <MotionPress disabled={disabled} accessibilityRole="checkbox" accessibilityState={{ checked: value === true, disabled }} onPress={() => onChange(value !== true)} style={[ui.row, { gap: 12, minHeight: 48, paddingVertical: 10, alignItems: "flex-start" }]}>
+        <View style={{ width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: value === true ? p.primary : error ? p.danger : p.controlBorder, backgroundColor: value === true ? p.primary : "transparent", alignItems: "center", justifyContent: "center" }}>{value === true && <Feather name="check" size={15} color={p.onPrimary} />}</View>
+        <View style={{ flex: 1 }}><Text style={[ui.body, { color: p.text }]}>{f.label}</Text>{f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}</View>
+      </MotionPress>
+      <FieldProblem p={p} error={error} />
+    </View>
   );
   // In a group ("Comparable 1") the label is short and the heading says whether it is optional; screen readers hear both.
   const label = <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{f.label}{!f.required && !f.group ? " (optional)" : ""}</Text>;
@@ -197,6 +207,7 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
       <View style={{ gap: space.tight }} pointerEvents={disabled ? "none" : "auto"}>
         <DateField p={p} label={f.label + (!f.required ? " (optional)" : "")} mode="single" wholeMonthLink={false} empty="Choose a date" clearable={!f.required} value={{ from: text, to: text }} onChange={next => onChange(next.from)} />
         {f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}
+        <FieldProblem p={p} error={error} />
       </View>
     );
   }
@@ -208,12 +219,13 @@ function Field({ field: f, value, onChange, onAlso, p, disabled }: { field: Work
         <ChoiceField p={p} label={named} value={String(value ?? "")} options={f.options ?? []} onChange={onChange} disabled={disabled} />
       ) : (
         <TextInput accessibilityLabel={named} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
-          style={{ borderWidth: 1, borderRadius: 14, padding: 13, minHeight: f.type === "textarea" ? 110 : 50, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: p.background, color: p.text, borderColor: p.controlBorder, textAlignVertical: "top" }} />
+          style={{ borderWidth: error ? 2 : 1, borderRadius: 14, padding: error ? 12 : 13, minHeight: f.type === "textarea" ? 110 : 50, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: p.background, color: p.text, borderColor: error ? p.danger : p.controlBorder, textAlignVertical: "top" }} />
       )}
       {!!f.suggestions?.length && <Suggestions p={p} label={f.label} items={f.suggestions} value={String(value ?? "")} disabled={disabled} onPick={s => { onChange(s.value); if (s.also) onAlso?.(s.also); }} />}
       {f.lookup === "postcode" && <PostcodeLookup p={p} text={String(value ?? "")} disabled={disabled} onComplete={onChange}
         onFound={place => { if ((SCOTTISH_REGIONS as readonly string[]).includes(place.region)) onAlso?.({ region: place.region }, true); }} />}
       {f.help && <Text style={[ui.small, { color: p.muted }]}>{f.help}</Text>}
+      <FieldProblem p={p} error={error} />
     </View>
   );
 }
@@ -231,35 +243,75 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
   const [values, setValues] = useState<Record<string, unknown>>(() => Object.fromEntries(spec.fields.map(f => [f.name, f.defaultValue ?? (f.type === "checkbox" ? false : "")])));
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [attempt, setAttempt] = useState<{ id: string; key: string } | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Each problem sits by its field (`issues`), with a summary by the button; a form with `done` stays open to confirm.
+  const [issues, setIssues] = useState<FieldIssue[]>([]), [done, setDone] = useState(false);
+  const [files, setFiles] = useState<EnquiryFile[]>([]), [savedProperty, setSavedProperty] = useState<string | null>(null);
   const celebrate = useCelebrate();
   const inFlight = useRef(false); // a second tap in the same instant never saves twice
+  const patchFile = (key: string, change: Partial<EnquiryFile>) => setFiles(list => list.map(x => x.key === key ? { ...x, ...change } : x));
+  const markerId = (field: string) => `workflow-${spec.key}-${field}`;
+  function showIssues(found: FieldIssue[]) {
+    setIssues(found); setError(issuesSummary(found));
+    // On the web the first field with a problem scrolls into view; on a phone the summary by the button names them all.
+    if (found[0] && Platform.OS === "web") (globalThis as { document?: { getElementById: (id: string) => { scrollIntoView: (o: object) => void } | null } }).document?.getElementById(markerId(found[0].field))?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
   async function save() {
     if (busy || uploading || inFlight.current) return;
-    inFlight.current = true; setBusy(true); setError("");
+    const found = workflowIssues(spec, values, f => shown.includes(f));
+    if (found.length) { showIssues(found); return; }
+    inFlight.current = true; setBusy(true); setError(""); setIssues([]);
     try {
       const normalized = workflowValues(spec.fields, values), key = JSON.stringify(normalized), requestId = attempt?.key === key ? attempt.id : Crypto.randomUUID();
       setAttempt({ key, id: requestId });
-      await liveApi(spec.endpoint === "workspace" ? "/workspace" : "/" + spec.endpoint, { ...(spec.endpoint === "workspace" ? {} : { requestId }), ...spec.build(normalized, requestId) });
+      const saved = await liveApi(spec.endpoint === "workspace" ? "/workspace" : "/" + spec.endpoint, { ...(spec.endpoint === "workspace" ? {} : { requestId }), ...spec.build(normalized, requestId) });
       // A successful change is never repeated merely because the following read fails.
-      celebrate("Done"); onClose(); await onSaved();
-    } catch (e) { setError(message(e)); } finally { inFlight.current = false; setBusy(false); }
+      celebrate("Done");
+      if (spec.done) {
+        // The owner's enquiry: say what happens next, show the new property straight away, then send any photos and videos.
+        const propertyId = (saved.data as { propertyId?: unknown } | undefined)?.propertyId;
+        setDone(true);
+        const refreshed = onSaved().catch(() => undefined);
+        if (typeof propertyId === "string" && files.length) { setSavedProperty(propertyId); await sendEnquiryFiles(propertyId, files, patchFile); }
+        await refreshed;
+        return;
+      }
+      onClose(); await onSaved();
+    } catch (e) {
+      // A refusal that names its field ("mediumRateMinor") shows by that field, as the checks above do.
+      const field = e instanceof WorkspaceApiError ? e.field : null;
+      if (field && spec.fields.some(f => f.name === field)) showIssues([{ field, message: message(e) }]);
+      else setError(message(e));
+    } finally { inFlight.current = false; setBusy(false); }
   }
   if (spec.unavailable) return <Text style={[ui.body, { color: p.muted }]}>{spec.unavailable}</Text>;
+  if (done && spec.done) return (
+    <View style={{ gap: space.section }}>
+      <View accessibilityRole="alert" style={{ gap: 8, padding: 16, borderRadius: 16, backgroundColor: p.successWash }}>
+        <View style={[ui.row, { gap: 10 }]}><Feather name="check-circle" size={20} color={p.success} /><Text accessibilityRole="header" style={{ color: p.text, fontSize: 17, fontWeight: "700", flex: 1 }}>{spec.done.title}</Text></View>
+        <Text style={[ui.body, { color: p.text }]}>{spec.done.message}</Text>
+      </View>
+      <EnquiryUploadStatus p={p} files={files} onRetry={() => { if (savedProperty) void sendEnquiryFiles(savedProperty, files, patchFile); }} />
+      <SoftButton label="Close" icon="check" primary disabled={files.some(f => f.status === "uploading")} onPress={onClose} palette={p} />
+    </View>
+  );
+  const problemOf = (name: string) => issues.find(i => i.field === name)?.message;
+  const change = (name: string, v: unknown) => { setValues(current => ({ ...current, [name]: v })); if (problemOf(name)) setIssues(list => list.filter(i => i.field !== name)); };
   // Each label belongs to the field under it: a field and its label sit close (space.tight), and the next label starts
   // a clear step further down (space.section), so a label never reads as a caption of the field above.
   // A group that waits on the one before (`after`) shows once that one is started, and never hides while it has values.
   const filled = (v: unknown) => v !== undefined && v !== null && v !== "";
-  const shown = spec.fields.filter(f => !f.after || filled(values[f.after]) || spec.fields.some(g => g.group === f.group && filled(values[g.name])));
+  const shown = spec.fields.filter(f => (!f.after || filled(values[f.after]) || spec.fields.some(g => g.group === f.group && filled(values[g.name]))) && whenMet(f, values));
   return (
     // The fields, any error and the save button are a section apart too, so the last field never sits against the button.
     <View style={{ gap: space.section }}>
       <View style={{ gap: space.section }}>
       {shown.map((f, n) => <View key={f.name} style={{ gap: space.row }}>
         {!!f.section && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "600", paddingTop: n ? space.field : 0, borderTopWidth: n ? 1 : 0, borderColor: p.border }}>{f.section}</Text>}
-        {f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => setValues(current => ({ ...current, [f.name]: v }))} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} /></Stagger>}
+        <View nativeID={markerId(f.name)} style={{ height: 0 }} />
+        {f.type === "uploads" ? <Stagger key={f.name} index={n}><EnquiryUploadPicker p={p} label={f.label} help={f.help} files={files} onChange={setFiles} disabled={busy} /></Stagger> : f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => change(f.name, v)} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} error={problemOf(f.name)} /></Stagger>}
       </View>)}
       </View>
-      {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: p.cautionWash }}><Text style={[ui.small, { color: p.text }]}>{error}</Text></View>}
+      {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: issues.length ? p.dangerWash : p.cautionWash }}><Text style={[ui.small, { color: p.text, fontWeight: issues.length ? "600" : undefined }]}>{error}</Text></View>}
       <SoftButton label={busy ? "Saving…" : uploading ? "Saving photos…" : "Save and continue"} icon="check" primary disabled={busy || uploading} onPress={() => void save()} palette={p} />
     </View>
   );
@@ -340,6 +392,8 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work, onRefresh }
         {!!j.form?.gasElectricMeters && <Text style={[ui.body, { color: p.text }]}><Text style={{ fontWeight: "700" }}>Gas and electric: </Text>{String(j.form.gasElectricMeters)}</Text>}
         {!!j.form?.operatingStatus && <Text style={[ui.body, { color: p.text }]}><Text style={{ fontWeight: "700" }}>Current operating status: </Text>{String(j.form.operatingStatus)}</Text>}
       </View>}
+      {/* Item 7: the repairs the owner said Recharge may approve without asking, at Proceed. The limit in use is in Limit Changer. */}
+      {!!j.ownerRepairLimit && <Text style={[ui.small, { color: p.text }]}><Text style={{ fontWeight: "700" }}>{account.role === "client" ? "Repairs we can approve without asking you: " : "Owner's repair limit at Proceed: "}</Text>{repairLimitText(j.ownerRepairLimit.limitMinor)}{account.role === "client" ? "" : ". The limit in use is in Limit Changer."}</Text>}
       {!!j.invoiceOutsideAt && <Text style={[ui.small, { color: p.muted }]}>Onboarding invoice handled outside the app: {j.invoiceOutsideNote}</Text>}
       {j.estimate && !readEstimate(j.estimate) && <View style={{ gap: 6 }}><Text style={{ color: p.text, fontWeight: "700" }}>Your estimate</Text>{[["Low nightly rate", "lowRateMinor"], ["Expected nightly rate", "mediumRateMinor"], ["High nightly rate", "highRateMinor"]].map(([label, key]) => <Text key={key} style={{ color: p.text }}>{label}: {money(j.estimate?.[key])}</Text>)}</View>}
       {j.estimate && typeof j.estimate.comments === "string" && !!j.estimate.comments.trim() && <View style={{ gap: 4 }}><Text style={{ color: p.text, fontWeight: "700" }}>{account.role === "client" ? "Notes from Recharge" : "Estimate notes"}</Text><Text style={[ui.body, { color: p.muted }]}>{j.estimate.comments}</Text></View>}
@@ -381,24 +435,27 @@ function EnquiryContact({ palette: p, j }: { palette: Palette; j: JourneyView })
   );
 }
 
-function PropertyCard({ property, index, palette: p, onPress }: { property: PropertyView; index: number; palette: Palette; onPress: () => void }) {
-  const live = property.status === "active";
+// `owner` is the owner's own status for the property (Enquiry sent, Estimate ready, Agreement, Going live, Live).
+function PropertyCard({ property, index, palette: p, onPress, owner }: { property: PropertyView; index: number; palette: Palette; onPress: () => void; owner?: OwnerPropertyStatus }) {
+  const live = owner ? owner.tone === "live" : property.status === "active";
+  const status = owner ? owner.label : live ? "Live" : readableStage(property.status);
   return (
-    <MotionPress {...hoverLift} accessibilityRole="button" accessibilityLabel={"Open " + property.name} onPress={onPress} style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, padding: 0, overflow: "hidden", borderRadius: 26, gap: 0 }]}>
+    <MotionPress {...hoverLift} accessibilityRole="button" accessibilityLabel={owner ? `${owner.openEstimate ? "Open your estimate for" : "Open"} ${property.name}. ${owner.label}: ${owner.detail}` : "Open " + property.name} onPress={onPress} style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, padding: 0, overflow: "hidden", borderRadius: 26, gap: 0 }]}>
       {/* The property's "photo": its building on a soft wash, the status pinned on top. */}
       <View style={[{ minHeight: 140, alignItems: "center", justifyContent: "center", backgroundColor: departmentColor(index % 2 ? "clients" : "stays", p).wash }]}>
         <Float distance={3} duration={3600} delay={(index % 4) * 400}><View style={{ width: 82, height: 90, backgroundColor: p.surface, borderRadius: 22, borderWidth: 1, borderColor: p.border, alignItems: "center", justifyContent: "center", ...web({ boxShadow: "0 16px 28px -18px rgba(21,45,40,.55)" }) }}><BuildingGlyph palette={p} variant={index} /></View></Float>
         <View style={[ui.row, { position: "absolute", left: 14, top: 14, backgroundColor: p.surface, borderRadius: 999, paddingLeft: 9, paddingRight: 11, paddingVertical: 5, gap: 6, ...web({ boxShadow: "0 6px 14px -10px rgba(21,45,40,.5)" }) }]}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: live ? p.success : p.waiting }} />
-          <Text style={[ui.small, { color: p.text, fontWeight: "700", fontSize: 12 }]}>{live ? "Live" : readableStage(property.status)}</Text>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: live ? p.success : owner?.tone === "action" ? p.primary : p.waiting }} />
+          <Text style={[ui.small, { color: p.text, fontWeight: "700", fontSize: 12 }]}>{status}</Text>
         </View>
       </View>
       <View style={{ padding: 18, gap: 10 }}>
         <View style={ui.between}><Text numberOfLines={2} style={[ui.sectionTitle, { color: p.text, flex: 1, fontSize: 17, lineHeight: 23 }]}>{property.name}</Text><Feather name="arrow-up-right" size={19} color={p.primary} /></View>
         {!!(property.region || property.address) && <View style={[ui.row, { gap: 7 }]}><Feather name="map-pin" size={14} color={p.muted} /><Text numberOfLines={1} style={[ui.small, { color: p.muted, flex: 1 }]}>{property.region || property.address}</Text></View>}
+        {owner && owner.tone !== "live" && <Text style={[ui.small, { color: p.text }]}>{owner.detail}</Text>}
         <View style={[ui.between, { borderTopWidth: 1, borderColor: p.border, paddingTop: 10 }]}>
           <Text style={[ui.small, { color: p.muted }]}>{property.bedrooms ? property.bedrooms + (property.bedrooms === 1 ? " bedroom" : " bedrooms") : "Bedrooms not set"}</Text>
-          <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>View</Text>
+          <Text style={[ui.small, { color: p.primary, fontWeight: "600" }]}>{owner?.openEstimate ? "Open your estimate" : "View"}</Text>
         </View>
       </View>
     </MotionPress>
@@ -559,7 +616,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
             {visible.slice(0, shown).map((property, index) => (
               <Entrance key={property.id} sessionKey={"live:property:" + property.id} delay={Math.min(index, 8) * 40} style={{ flexBasis: columns === 3 ? "30%" : "100%", flexGrow: 1, minWidth: 0 }}>
-                <PropertyCard property={property} index={index} palette={p} onPress={() => setSelected(property)} />
+                <PropertyCard property={property} index={index} palette={p} onPress={() => setSelected(property)} owner={account.role === "client" ? ownerPropertyStatus(journeys.find(j => j.propertyId === property.id), property.status) : undefined} />
               </Entrance>
             ))}
           </View>
@@ -569,7 +626,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       {!table && <Sheet palette={p} visible={!!selected} onClose={closeDetail} title={selected?.name ?? ""} subtitle={selected ? [selected.address, selected.region].filter(Boolean).join(" · ") : undefined} icon="house">
         {selected && <>
           <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-            <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: selected.status === "active" ? p.successWash : p.cautionWash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.status === "active" ? "Live" : readableStage(selected.status)}</Text></View>
+            <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: selected.status === "active" ? p.successWash : p.cautionWash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{account.role === "client" ? ownerPropertyStatus(journeys.find(j => j.propertyId === selected.id), selected.status).label : selected.status === "active" ? "Live" : readableStage(selected.status)}</Text></View>
             {!!selected.bedrooms && <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: p.wash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.bedrooms} {selected.bedrooms === 1 ? "bedroom" : "bedrooms"}</Text></View>}
             {account.role !== "client" && <FavoriteButton entryKey={"property:" + selected.id} label={selected.name} palette={p} />}
           </View>
@@ -603,9 +660,11 @@ function dayGroups(rows: readonly NoticeRow[]): [string, NoticeRow[]][] {
 // its list. Opening the feed marks the listed updates read.
 // Round 7: an item that is not in the loaded work list is read on its own and opened (the same rules as the work list, so an
 // item someone may not see is simply "no longer available"), and "Show older updates" pages back 50 at a time.
-export function LiveActivity({ palette: p, notices, loading, onRead, work = [], onOpenWork, onOpenMessages }: {
+export function LiveActivity({ palette: p, notices, loading, onRead, work = [], onOpenWork, onOpenMessages, onOpenProperty }: {
   palette: Palette; notices: NoticeView[]; loading: boolean; onRead?: (ids: number[]) => void;
   work?: readonly OperationView[]; onOpenWork?: (item: OperationView) => void; onOpenMessages?: () => void;
+  // An onboarding update (an estimate ready to open, an agreement to sign) opens its property's onboarding.
+  onOpenProperty?: (propertyId: string) => void;
 }) {
   // Older updates, 50 at a time from the oldest one shown.
   const [older, setOlder] = useState<NoticeView[]>([]);
@@ -665,6 +724,7 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
     const t = row.target;
     if (t?.kind === "work" && onOpenWork) { const item = byId.get(t.workId); return item ? () => onOpenWork(item) : () => void openWork(t.workId); }
     if (t?.kind === "messages" && onOpenMessages) return onOpenMessages;
+    if (t?.kind === "property" && onOpenProperty) return () => onOpenProperty(t.propertyId);
     return undefined;
   };
   return (

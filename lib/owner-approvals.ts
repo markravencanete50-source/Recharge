@@ -88,15 +88,31 @@ const OWNER_NEXT: Record<string, string> = {
   live: 'Live and taking bookings.',
   archived: 'This enquiry is closed.',
 };
+// One status per property in the owner's words, the same on the property card and on Home: Enquiry sent (we are valuing
+// it), Estimate ready (open it), Agreement, Going live, Live. `openEstimate` is set while the estimate waits to be opened.
+export type OwnerPropertyStatus = { label: string; detail: string; tone: 'waiting' | 'action' | 'live' | 'closed'; openEstimate: boolean };
+const GOING_LIVE = ['form', 'invoice', 'inspection_to_book', 'inspection_booked', 'inspection_complete'];
+export function ownerPropertyStatus(j: Pick<JourneyView, 'stage' | 'agreementRevision' | 'signedName'> | null | undefined, propertyStatus: string): OwnerPropertyStatus {
+  const status = (label: string, detail: string, tone: OwnerPropertyStatus['tone'] = 'waiting', openEstimate = false) => ({ label, detail, tone, openEstimate });
+  if (!j) return propertyStatus === 'active' ? status('Live', OWNER_NEXT.live, 'live') : propertyStatus === 'archived' ? status('Closed', OWNER_NEXT.archived, 'closed') : status('Being set up', 'Recharge is setting up your property.');
+  if (j.stage === 'enquiry') return status('Enquiry sent', 'We are valuing it and will let you know when your estimate is ready.');
+  if (j.stage === 'estimate') return status('Estimate ready', 'Open your estimate and choose how to go ahead.', 'action', true);
+  if (j.stage === 'reviewing') return status('Estimate ready', 'Your estimate stays open until you decide. Open it when you are ready.', 'action', true);
+  if (j.stage === 'agreement') return j.agreementRevision > 0 && !j.signedName ? status('Agreement', 'Read and sign your management agreement.', 'action') : status('Agreement', OWNER_NEXT.agreement);
+  if (GOING_LIVE.includes(j.stage)) return status('Going live', OWNER_NEXT[j.stage], j.stage === 'form' ? 'action' : 'waiting');
+  if (j.stage === 'live') return status('Live', OWNER_NEXT.live, 'live');
+  if (j.stage === 'archived') return status('Closed', OWNER_NEXT.archived, 'closed');
+  return status('Being set up', 'Recharge will be in touch with the next step.');
+}
 export type PropertyProgress = { propertyId: string; name: string; live: boolean; phase: string; done: number; total: number; next: string; waitingForYou: boolean };
 export function propertyProgress(properties: readonly PropertyView[], journeys: readonly JourneyView[], approvals: readonly OwnerApproval[]): PropertyProgress[] {
   return properties.map(p => {
     const j = journeys.find(x => x.propertyId === p.id);
     const waitingForYou = approvals.some(a => a.kind === 'onboarding' && a.propertyId === p.id);
-    if (!j) return { propertyId: p.id, name: p.name, live: p.status === 'active', phase: p.status === 'active' ? 'Live' : 'Being set up', done: p.status === 'active' ? 1 : 0, total: 1, next: p.status === 'active' ? OWNER_NEXT.live : 'Recharge is setting up your property.', waitingForYou };
+    if (!j) return { propertyId: p.id, name: p.name, live: p.status === 'active', phase: ownerPropertyStatus(null, p.status).label, done: p.status === 'active' ? 1 : 0, total: 1, next: p.status === 'active' ? OWNER_NEXT.live : 'Recharge is setting up your property.', waitingForYou };
     const steps = onboardingProgress(j.stage).steps, done = steps.filter(s => s.state === 'complete').length;
     const live = j.stage === 'live';
     const next = j.stage === 'agreement' && j.agreementRevision > 0 && !j.signedName ? 'Read and sign your management agreement.' : OWNER_NEXT[j.stage] ?? 'Recharge will be in touch with the next step.';
-    return { propertyId: p.id, name: p.name, live, phase: live ? 'Live' : steps.find(s => s.state === 'current')?.label ?? 'Onboarding', done: live ? steps.length : done, total: steps.length, next, waitingForYou };
+    return { propertyId: p.id, name: p.name, live, phase: ownerPropertyStatus(j, p.status).label, done: live ? steps.length : done, total: steps.length, next, waitingForYou };
   });
 }
