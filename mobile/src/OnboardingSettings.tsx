@@ -8,6 +8,7 @@ import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 import { Button, Field, Loading, message, Notice, Section, Tag } from "./LiveKit";
 import { MotionPress } from "./motion";
+import { useToolTitled } from "./ToolPage";
 import { agreementFileLink, readOnboardingSettings, saveOnboardingSettings, uploadAgreementTemplate } from "./backend/client";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import {
@@ -22,7 +23,7 @@ const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "n
 const KIND = { docx: "Word document", pdf: "PDF" } as const;
 
 export function OnboardingSettings({ p, account }: { p: Palette; account: WorkspaceAccount }) {
-  const allowed = isWorkspaceAdmin(account.role);
+  const allowed = isWorkspaceAdmin(account.role), titled = useToolTitled();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [company, setCompany] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
@@ -68,7 +69,7 @@ export function OnboardingSettings({ p, account }: { p: Palette; account: Worksp
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 4 }}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Onboarding settings</Text>
+        {!titled && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Onboarding settings</Text>}
         <Text style={[ui.small, { color: p.muted }]}>{"The contract new management agreements are made from, Recharge's details, and the owner's own costs on the estimate."}</Text>
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}

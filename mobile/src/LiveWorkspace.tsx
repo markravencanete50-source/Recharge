@@ -41,6 +41,11 @@ import { LiveAccounts } from "./LiveAccounts";
 import { OwnerBillSheet } from "./RechargeInvoice";
 import { isOwnerBill } from "../../lib/recharge-invoice";
 import { LiveManagement } from "./LiveManagement";
+import { ReportsHub, type HubReport } from "./ReportsHub";
+import { LiveProductivity } from "./LiveProductivity";
+import { LiveTeamPerformance } from "./LiveShifts";
+import { DecisionsReport } from "./LiveOversight";
+import { reportAnchor } from "../../lib/business-reports-view";
 import { GuestRelations } from "./GuestRelations";
 import { ClientRelations } from "./ClientRelations";
 import { TodoList } from "./TodoList";
@@ -175,6 +180,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const nav = useMemo(() => orderPhoneBar(liveNavigationFor(account.role), panel), [account.role, panel]);
   const [phoneMenu, setPhoneMenu] = useState(false);
   const [focus, setFocus] = useState<WorkFocus | null>(null);
+  // Counts each visit from the menus, so opening a page again (its link in the left panel) starts it afresh: the
+  // Management centre on its cards, Reports on its hub, rather than on the tool or report last opened there.
+  const [visit, setVisit] = useState(0);
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false), [deleting, setDeleting] = useState(false), [blockedOpen, setBlockedOpen] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
   const [properties, setProperties] = useState<PropertyView[]>([]), [journeys, setJourneys] = useState<JourneyView[]>([]), [work, setWork] = useState<OperationView[]>([]);
@@ -198,7 +206,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   };
   const navigate = (value: WorkspaceSection) => {
     if (value === "activity" && team) { openLink({ section: "inbox", messagesTab: "updates" }); return; }
-    if (account.role === "accounts" && value === "work") { setWorkView("accounts"); setFocus(f => ({ sub: "expenses", nonce: (f?.nonce ?? 0) + 1 })); } else setFocus(null);
+    setVisit(v => v + 1);
+    // Accounts' Work opens the Accounts desk as a whole (its expenses first), not Expenses on a page of its own.
+    if (account.role === "accounts" && value === "work") { setWorkView("accounts"); setFocus(f => ({ nonce: (f?.nonce ?? 0) + 1 })); } else setFocus(null);
     if (value === "inbox") setChatUpdates(null);
     setTab(value);
   };
@@ -511,7 +521,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       // Calendar is a page of its own now; the other areas open inside Work.
       const to = deepLinkFor({ kind: "work", view: link.view });
       if (to && to.section !== "work") { navigate(to.section); setPanelPick({ key: link.key, tab: to.section, view: "" }); return; }
-      setFocus(null); setWorkView(link.view); setTab("work"); setPanelPick({ key: link.key, tab: "work", view: link.view }); return;
+      setFocus(null); setVisit(v => v + 1); setWorkView(link.view); setTab("work"); setPanelPick({ key: link.key, tab: "work", view: link.view }); return;
     }
     openTool(link.target);
     const t = link.target;
@@ -572,12 +582,12 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       {/* The Work areas are listed in the left panel on desktop, so the row of tabs shows only without it (phones, or the panel hidden). */}
       {workViews.length > 1 && !(desktop && !sidebarHidden) && <FilterBar values={orderWorkViews(workViews, panel).map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => { const view = (Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(v => WORK_VIEW_LABEL[v] === label) ?? ""; if (view === "calendar") navigate("calendar"); else setWorkView(view); }} palette={p} />}
       {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} properties={properties} onOpenWork={setOpenWork} onOpenView={openView} />}
-      {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />}
-      {currentView === "stays" && <GuestRelations key={"stays:" + (focus?.nonce ?? "")} {...sectionProps} onRefresh={() => refresh(true)} minimumNights={policy?.minimum_nights} />}
-      {currentView === "clients" && <ClientRelations key={"clients:" + (focus?.nonce ?? "")} {...sectionProps} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} onRefresh={() => refresh(true)} />}
+      {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />}
+      {currentView === "stays" && <GuestRelations key={"stays:" + (focus?.nonce ?? "") + ":" + visit} {...sectionProps} onRefresh={() => refresh(true)} minimumNights={policy?.minimum_nights} />}
+      {currentView === "clients" && <ClientRelations key={"clients:" + (focus?.nonce ?? "") + ":" + visit} {...sectionProps} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} onRefresh={() => refresh(true)} />}
       {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onForm={setForm} />}
       {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} sectionProps={sectionProps} />}
-      {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} sectionProps={sectionProps} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
+      {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} sectionProps={sectionProps} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
       {currentView === "all" && <>
         <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
         {policy && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch", gap: 12 }]}>
@@ -601,18 +611,34 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       </>}
     </>
   );
-  const reportsPage = (
-    <>
-      {snapshot ? <Reports snapshot={snapshot} period={period} role={account.role} account={account} work={work} palette={p} onDates={() => setDates(true)} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} /> : (
-        <><PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." />{reportError ? <View style={{ gap: 12 }}><EmptyState palette={p} icon="activity" title="Reports could not be loaded" detail={reportError} /><SoftButton label="Try again" icon="refresh-cw" palette={p} onPress={() => void loadReport(period)} /></View> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View>}</>
-      )}
-      {(isWorkspaceAdmin(account.role) || account.role === "accounts") && !!invoices.length && invoiceList}
-      {/* Business reports (enquiries, repairs, to-dos, messages, time): admins only, never owners or clients. */}
-      {/* Guests & stays (20261021600000): who stays, for how long and how far ahead they book. Admins only. */}
-      {isWorkspaceAdmin(account.role) && <StayReports p={p} account={account} properties={properties} />}
-      {isWorkspaceAdmin(account.role) && <BusinessReports p={p} account={account} />}
-    </>
-  );
+  // The task trends (and, for the team, their own numbers), or why they are not here yet. `part` splits them for the hub.
+  const trendsReport = (part?: "mine" | "trends", heading = true) => snapshot
+    ? <Reports snapshot={snapshot} period={period} role={account.role} account={account} work={work} palette={p} onDates={() => setDates(true)} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} part={part} />
+    : <>{heading && <PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." />}{reportError ? <View style={{ gap: 12 }}><EmptyState palette={p} icon="activity" title="Reports could not be loaded" detail={reportError} /><SoftButton label="Try again" icon="refresh-cw" palette={p} onPress={() => void loadReport(period)} /></View> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View>}</>;
+  // Admins' Reports is a hub (ReportsHub.tsx, Lee, 16 October 2026): one card per report, each opening on its own page.
+  // Business overview (the trends across the business) comes first. Everything here is admins only, never owners or
+  // clients: the Business reports (enquiries, messages, to-dos, time, repairs), Guests & stays (20261021600000), and
+  // Productivity, Team performance and Decisions as the Management centre shows them. The hub opens afresh for every link.
+  const adminReports: HubReport[] = isWorkspaceAdmin(account.role) ? [
+    { key: "overview", label: "Business overview", detail: "Tasks recorded, completed and waiting across the business, with trends and a CSV download.", icon: "bar-chart-2", page: trendsReport("trends", false) },
+    { key: "enquiries", label: "Client enquiries", detail: "Enquiries received, how many went live and how fast the team replied.", icon: "mail", anchors: [reportAnchor("enquiries")], ownIntro: true, page: <BusinessReports p={p} account={account} kind="enquiries" /> },
+    { key: "stays", label: "Guests and stays", detail: "Who stays, for how long, how far ahead they book and why.", icon: "moon", anchors: ["section-guests-and-stays"], ownIntro: true, page: <StayReports p={p} account={account} properties={properties} /> },
+    { key: "messages", label: "Messages", detail: "Messages received and sent on each channel, and how fast the team replied.", icon: "message-circle", anchors: [reportAnchor("messages")], ownIntro: true, page: <BusinessReports p={p} account={account} kind="messages" /> },
+    { key: "todos", label: "Tasks", detail: "To-dos done, done late and overdue, by department and by person.", icon: "check-square", anchors: [reportAnchor("todos")], ownIntro: true, page: <BusinessReports p={p} account={account} kind="todos" /> },
+    { key: "time", label: "Timesheet", detail: "Hours worked by each person and department, after unpaid pauses.", icon: "clock", anchors: [reportAnchor("time")], ownIntro: true, page: <BusinessReports p={p} account={account} kind="time" /> },
+    { key: "productivity", label: "Productivity", detail: "Every clock in and out, with hours by week and month.", icon: "activity", ownIntro: true, page: <LiveProductivity palette={p} account={account} /> },
+    { key: "performance", label: "Team performance", detail: "KPIs, shifts, guest replies and sign-offs for each team.", icon: "award", page: <LiveTeamPerformance palette={p} role={account.role} /> },
+    { key: "repairs", label: "Repairs and spend", detail: "Repairs raised by stage and by property, what was quoted and the maintenance spend.", icon: "tool", anchors: [reportAnchor("repairs")], ownIntro: true, page: <BusinessReports p={p} account={account} kind="repairs" /> },
+    { key: "decisions", label: "Decisions", detail: "Every approval and decision in the last 90 days, with a spreadsheet.", icon: "check-circle", page: <DecisionsReport palette={p} /> },
+    { key: "invoices", label: "Invoices", detail: "Issued invoices, where each one stands, and recording a payment.", icon: "file-text", anchors: ["section-invoices"], page: invoices.length ? invoiceList : <EmptyState palette={p} icon="inbox" title="No invoices yet" detail="Invoices appear here once they are issued." /> },
+    { key: "mine", label: "My performance", detail: "Your own replies, tasks done, time worked and timesheet.", icon: "user", page: trendsReport("mine", false) },
+  ] : [];
+  const reportsPage = isWorkspaceAdmin(account.role)
+    ? <ReportsHub key={"reports:" + (focus?.nonce ?? "") + ":" + visit} p={p} reports={adminReports} />
+    : <>
+      {trendsReport()}
+      {account.role === "accounts" && !!invoices.length && invoiceList}
+    </>;
   const page = tab === "home"
     ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={section => (section === "activity" ? navigate(section) : setTab(section))} onTool={openTool} favoriteEntries={entries} onOpenEntry={openEntry} />
     : tab === "todo" ? <TodoList {...sectionProps} />
@@ -623,7 +649,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} focusProperty={propertyFocus} />
     : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} mailbox={account.modules.includes("client-mailbox")} /> : reportsPage)
     : tab === "approvals" ? <LiveApprovals palette={p} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onForm={setForm} onRefresh={() => refresh()} onInbox={() => navigate("inbox")} onProperties={() => navigate("properties")} />
-    : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
+    : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
     : tab === "enquiries" ? <LiveEnquiries palette={p} account={account} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} />
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
     : tab === "moderation" ? <LiveModeration palette={p} onOpenConversation={openMessages} />

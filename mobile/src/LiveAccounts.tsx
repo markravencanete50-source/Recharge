@@ -19,6 +19,7 @@ import { PayoutLinesSheet, type LinesStay } from "./PayoutLinesSheet";
 import { PayoutApproveSheet } from "./PayoutApproveSheet";
 import { AccountsPayable, ExpenseSheet, List, NewExpenseSheet, Row, type LimitState, type NoteAsk, type Overview } from "./AccountsPayable";
 import { Pills } from "./Pills";
+import { ToolHeader, ToolTitled } from "./ToolPage";
 import { AccountsStatements, TermsSheet, type StatementRow } from "./AccountsStatements";
 import { AccountsReceivable } from "./AccountsReceivable";
 import { InvoiceMaker } from "./InvoiceMaker";
@@ -201,6 +202,9 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
   const [period, setPeriod] = useState(thisMonth);
   const focus = useWorkFocus();
   const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements", "receivable", "maker", "performance", "aircover"] as const).find(v => v === focus?.sub && ((v !== "receivable" && v !== "maker" && v !== "performance" && v !== "aircover") || isFinanceRole(account.role)) && (v !== "aircover" || !!sectionProps)) ?? "expenses");
+  // A link to one tool (Owner statements, search, a Home card) opens it on its own page with "Accounts" to come back
+  // and no picker (ToolPage.tsx). Opened as a whole, Accounts shows its month, its figures and the labelled picker.
+  const [alone, setAlone] = useState(() => focus?.sub === view);
   const [status, setStatus] = useState<Expense["status"]>("to_approve");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [limit, setLimit] = useState<LimitState | null>(null);
@@ -293,34 +297,37 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
 
   return (
     <View style={{ gap: space.section }}>
-      <View style={{ gap: 4 }}>
+      {alone ? <ToolHeader p={p} back="Accounts" onBack={() => setAlone(false)} title={TAB_LABEL[view]} /> : <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Accounts</Text>
         <Text style={[ui.body, { color: p.muted }]}>Approve costs with evidence, reconcile platform payouts and pay owners.</Text>
-      </View>
+      </View>}
 
-      <View style={[ui.between, { gap: 8 }]}>
+      {/* The month: on a tool's own page only where that tool reads it (expenses, reconciliation and statements). */}
+      {(!alone || view === "expenses" || view === "payouts" || view === "statements") && <View style={[ui.between, { gap: 8 }]}>
         <MotionPress accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => setPeriod(shiftMonth(period, -1))} style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: p.wash }}><Feather name="chevron-left" size={20} color={p.primary} /></MotionPress>
         <Text style={{ color: p.text, fontSize: textSize.heading, fontWeight: "600" }}>{monthLabel(period)}</Text>
         <MotionPress accessibilityRole="button" accessibilityLabel="Next month" accessibilityState={{ disabled: period >= thisMonth }} disabled={period >= thisMonth} onPress={() => setPeriod(shiftMonth(period, 1))} style={{ width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: period >= thisMonth ? p.elevated : p.wash }}><Feather name="chevron-right" size={20} color={period >= thisMonth ? p.muted : p.primary} /></MotionPress>
-      </View>
+      </View>}
 
-      <StatGrid>
+      {!alone && <StatGrid>
         {/* On a phone the three tiles sit side by side: one fill for all (no attention wash) and a short label that fits one line. */}
         {tiles.map(tile => <StatTile key={tile.label} p={p} icon={tile.icon} tone="accounts" label={phone ? TILE_SHORT[tile.label] ?? tile.label : tile.label} value={tile.value} detail={tile.detail} attention={!phone && tile.attention} />)}
-      </StatGrid>
+      </StatGrid>}
 
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
 
-      {/* The Accounts sections: pills up to 5, one dropdown past that (finance roles have 7), by the shared rule (Pills.tsx). */}
-      <Pills p={p} title="Accounts section" value={view} onChange={setView} label={v => TAB_LABEL[v]}
-        values={(["expenses", "payouts", "statements", "receivable", "maker", "performance", "aircover"] as const).filter(v => (v !== "receivable" && v !== "maker" && v !== "performance" && v !== "aircover") || (isFinanceRole(role) && (v !== "aircover" || !!sectionProps)))} />
+      {/* The Accounts sections: pills up to 5, one dropdown past that (finance roles have 7), by the shared rule (Pills.tsx),
+          under a visible label. A tool opened on its own page has no picker (ToolPage.tsx). */}
+      {!alone && <Pills p={p} title="Choose an accounts tool" showTitle value={view} onChange={setView} label={v => TAB_LABEL[v]}
+        values={(["expenses", "payouts", "statements", "receivable", "maker", "performance", "aircover"] as const).filter(v => (v !== "receivable" && v !== "maker" && v !== "performance" && v !== "aircover") || (isFinanceRole(role) && (v !== "aircover" || !!sectionProps)))} />}
+      <ToolTitled.Provider value={alone}>
 
       {view === "expenses" && <AccountsPayable p={p} account={account} role={role} management={management} overview={overview} status={status} setStatus={setStatus} expenses={expenses} limit={limit} loading={loading} load={load} setAsk={setAsk} setOpenExpense={setOpenExpense} setCreating={setCreating} properties={properties} />}
 
       {view === "payouts" && rec && <>
         <View style={{ gap: 4 }}>
-          <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Reconciliation</Text>
+          {!alone && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Reconciliation</Text>}
           <Text style={[ui.small, { color: p.muted }]}>Upload each platform’s payout report, then check stay by stay that the money arrived.</Text>
         </View>
         <Section title="Upload a payout report" p={p}>
@@ -367,6 +374,7 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
       {view === "performance" && <AccountsPerformance p={p} account={account} properties={properties} />}
 
       {view === "aircover" && !!sectionProps && <AirCoverList {...sectionProps} />}
+      </ToolTitled.Provider>
 
       <ExpenseSheet p={p} role={role} id={openExpense} limit={limit?.minor ?? null} onClose={() => setOpenExpense(null)} onAsk={a => { setOpenExpense(null); setAsk(a); }} onDone={saved(load)} />
       <NewExpenseSheet p={p} visible={creating} properties={properties} onClose={() => setCreating(false)} onDone={saved(load)} />

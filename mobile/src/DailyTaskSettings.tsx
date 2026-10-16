@@ -9,6 +9,7 @@ import { Sheet } from "./TeamFlows";
 import { readTeams, writeTeams } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { useToolTitled } from "./ToolPage";
 import { DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { DEPARTMENT_LABEL } from "../../lib/hub";
 import { ALL_WEEKDAYS, WEEKDAYS_ONLY, WEEKDAY_LONG, WEEKDAY_SHORT, dailyTasksSchema, normaliseWeekdays, toggleWeekday, validWeekdays, weekdaysSummary, type DailyTask } from "../../lib/todo";
@@ -19,7 +20,7 @@ type Department = (typeof DEPARTMENTS)[number];
 
 // `only` shows one department's tasks (Management's "Set up the checklist"), with a way back to all of them.
 export function DailyTaskSettings({ p, account, only = null, onShowAll }: { p: Palette; account: WorkspaceAccount; only?: Department | null; onShowAll?: () => void }) {
-  const saved = useSaved();
+  const saved = useSaved(), titled = useToolTitled();
   const admin = account.role === "admin" || account.role === "super_admin";
   const [templates, setTemplates] = useState<DailyTask[] | null>(null);
   const [error, setError] = useState("");
@@ -34,7 +35,7 @@ export function DailyTaskSettings({ p, account, only = null, onShowAll }: { p: P
   return (
     <View style={{ gap: 12 }}>
       <View style={{ gap: 4 }}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Daily tasks</Text>
+        {!titled && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Daily tasks</Text>}
         <Text style={[ui.small, { color: p.muted }]}>Tasks added to a department’s to-do list on the days you choose. Each appears once a day, due that day.</Text>
       </View>
       {!!error && <Notice text={error} p={p} tone="bad" />}
