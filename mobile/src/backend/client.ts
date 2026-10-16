@@ -29,7 +29,8 @@ let account: WorkspaceAccount | null = null;
 let refreshInFlight: Promise<void> | null = null;
 
 export class WorkspaceApiError extends Error {
-  constructor(message: string, readonly status: number, readonly retryAfter = 0) { super(message); this.name = "WorkspaceApiError"; }
+  // `field`: the form field a refusal is about, when the server names one (the property journey does).
+  constructor(message: string, readonly status: number, readonly retryAfter = 0, readonly field: string | null = null) { super(message); this.name = "WorkspaceApiError"; }
 }
 // The same app also runs in the browser, served by the backend at /workspace
 // (scripts/build-workspace-web.mjs). There it uses the web session instead: the cookies
@@ -60,9 +61,9 @@ async function call(path: string, body?: unknown, accessToken?: string, viewAs?:
       ...(body === undefined ? {} : { body: multipart ? body : JSON.stringify(body) }),
     });
     if (!response.ok) {
-      const error = z.object({ error: z.string().max(500).optional() }).safeParse(await response.json().catch(() => ({})));
+      const error = z.object({ error: z.string().max(500).optional(), field: z.string().max(100).nullable().optional() }).safeParse(await response.json().catch(() => ({})));
       const retry = Number(response.headers.get("Retry-After"));
-      throw new WorkspaceApiError(error.success && error.data.error ? error.data.error : "The request could not be completed.", response.status, Number.isFinite(retry) ? retry : 0);
+      throw new WorkspaceApiError(error.success && error.data.error ? error.data.error : "The request could not be completed.", response.status, Number.isFinite(retry) ? retry : 0, error.success ? error.data.field ?? null : null);
     }
     return response;
   } catch (error) {
@@ -289,6 +290,14 @@ export const resendOwnerAccountEmail = async (propertyId: string, requestId: str
 export const removeCourseFile = async (fileId: string) => (await workspaceRequest('/api/mobile/training-files', { action: 'remove', fileId })).json();
 export const courseFileLink = async (fileId: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) }).parse(await (await workspaceRequest('/api/mobile/training-files?fileId=' + encodeURIComponent(fileId))).json()).data;
 // Photos and videos landlords sent with the enquiry form, opened by a short link.
+// An owner's photo or video on the property they just added in the app (migration 20261022300000): the same checks and
+// storage as the public form. The server reads the file's bytes for its type.
+export async function uploadEnquiryFile(propertyId: string, file: { uri: string; name: string; mime: string; file?: File }) {
+  const form = new FormData();
+  if (Platform.OS === 'web') form.append('file', file.file ?? new File([await (await fetch(file.uri)).blob()], file.name, { type: file.mime }));
+  else form.append('file', { uri: file.uri, name: file.name, type: file.mime } as unknown as Blob);
+  return (await workspaceRequest('/api/mobile/enquiry-files?' + new URLSearchParams({ propertyId }), form)).json();
+}
 export const enquiryFileLink = async (enquiryId: string, fileId: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) }).parse(await (await workspaceRequest('/api/mobile/enquiry-files?' + new URLSearchParams({ enquiryId, fileId }))).json()).data;
 export const readInbox = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/guest-inbox?' + new URLSearchParams(query))).json();
 // Owner reports: confirmed bookings, nights and payouts at the owner's properties, and statement figures by month (read only).

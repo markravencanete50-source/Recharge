@@ -2,6 +2,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { ArrowRight, CalendarDays, Check, CheckCircle2, ExternalLink } from "lucide-react";
 import { DECISION_LABEL, estimateComparablesOf, estimateDecisionSchema } from "@/lib/estimate-link";
+import { REPAIR_LIMIT_CHOICES, REPAIR_LIMIT_DEFAULT, REPAIR_LIMIT_HELP, REPAIR_LIMIT_QUESTION, repairLimitFrom } from "@/lib/journey-policy";
 import { AVAILABLE_NIGHTS, DIRECT_RANGE, OCCUPANCY_RANGE, SCENARIOS, hasFees, netProfit, project, readEstimate, startingChoices, type Choices } from "@/lib/estimate-projection";
 import { formatBps, formatMoney, plural } from "@/lib/format";
 
@@ -71,11 +72,15 @@ export function EstimateView({ token, state: initial, estimate, followUpOn }: { 
   const [state, setState] = useState(initial), [decision, setDecision] = useState<Decision | "">(""), [feedback, setFeedback] = useState("");
   const [date, setDate] = useState(""), [error, setError] = useState(""), [field, setField] = useState(""), [sending, setSending] = useState(false);
   const [answered, setAnswered] = useState<{ decision: Decision; followUpOn: string | null } | null>(null);
+  // With Proceed: the repairs we can approve without asking (item 7), £100 unless they choose otherwise.
+  const [repairChoice, setRepairChoice] = useState<string>(REPAIR_LIMIT_DEFAULT), [repairOther, setRepairOther] = useState("");
   const published = readEstimate(estimate), notes = typeof estimate.comments === "string" ? estimate.comments.trim() : "", comparables = estimateComparablesOf(estimate);
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(""); setField("");
-    const parsed = estimateDecisionSchema.safeParse({ token, decision: decision || undefined, feedback, followUpOn: decision === "review" ? date || null : null });
+    const limit = decision === "proceed" ? repairLimitFrom(repairChoice, repairOther) : null;
+    if (limit && "error" in limit) { setError(limit.error); setField(limit.field); return; }
+    const parsed = estimateDecisionSchema.safeParse({ token, decision: decision || undefined, feedback, followUpOn: decision === "review" ? date || null : null, ...(limit ? { repairLimitMinor: limit.minor } : {}) });
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your answer"); setField(String(parsed.error.issues[0]?.path.at(-1) ?? "")); return; }
     setSending(true);
     try {
@@ -124,6 +129,21 @@ export function EstimateView({ token, state: initial, estimate, followUpOn }: { 
           </label>)}
         </div>
       </fieldset>
+      {decision === "proceed" && <fieldset className="auth-field enquiry-field" data-invalid={field === "repairLimitMinor" ? "true" : undefined}>
+        <legend>{REPAIR_LIMIT_QUESTION}</legend>
+        <p className="enquiry-help">{REPAIR_LIMIT_HELP}</p>
+        <div className="enquiry-choice" role="radiogroup" aria-label={REPAIR_LIMIT_QUESTION}>
+          {REPAIR_LIMIT_CHOICES.map(c => <label key={c.value} className="enquiry-pill" data-on={repairChoice === c.value ? "true" : undefined}>
+            <input type="radio" name="repairLimit" value={c.value} checked={repairChoice === c.value} onChange={() => { setRepairChoice(c.value); setError(""); setField(""); }} />
+            {repairChoice === c.value && <Check aria-hidden size={15} />}<span>{c.label}</span>
+          </label>)}
+        </div>
+      </fieldset>}
+      {decision === "proceed" && repairChoice === "other" && <div className="auth-field enquiry-field" data-invalid={field === "repairLimitOther" ? "true" : undefined}>
+        <label htmlFor="estimate-repair-limit">Another amount, in whole pounds</label>
+        <div className="auth-control" data-bare-input="true"><input id="estimate-repair-limit" inputMode="numeric" value={repairOther} onChange={e => { setRepairOther(e.target.value); setField(""); }} placeholder="For example 300" aria-invalid={field === "repairLimitOther" || undefined} /></div>
+        {field === "repairLimitOther" && error && <p className="auth-alert">{error}</p>}
+      </div>}
       {decision === "review" && <div className="auth-field enquiry-field" data-invalid={field === "followUpOn" ? "true" : undefined}>
         <label htmlFor="estimate-date">If we haven’t heard from you, when should we check in?</label>
         <div className="auth-control" data-bare-input="true"><CalendarDays aria-hidden size={17} className="auth-control-icon" />
