@@ -64,7 +64,7 @@ test('admins\' Reports is a hub of cards, Business overview first, each report o
   assert.match(hub, /reports\.find\(r => !!focus\?\.anchor && !!r\.anchors\?\.includes\(focus\.anchor\)\)\?\.key \?\? null/);
   const start = workspace.indexOf('const adminReports'), end = workspace.indexOf('const reportsPage');
   const keys = [...workspace.slice(start, end).matchAll(/\{ key: "([a-z]+)", label: "([^"]+)", detail: "([^"]+)"/g)].map(m => [m[1], m[2], m[3]]);
-  assert.deepEqual(keys.map(k => k[0]), ['overview', 'enquiries', 'stays', 'messages', 'todos', 'time', 'productivity', 'performance', 'repairs', 'decisions', 'invoices', 'mine']);
+  assert.deepEqual(keys.map(k => k[0]), ['overview', 'enquiries', 'stays', 'ratings', 'messages', 'todos', 'time', 'productivity', 'performance', 'repairs', 'decisions', 'invoices', 'mine']);
   assert.equal(keys[0][1], 'Business overview');
   for (const [, label, detail] of keys) { assert.ok(label.length <= 20, label); assert.ok(detail.length <= 100 && /\.$/.test(detail), detail); }
   assert.match(workspace, /\{ key: "invoices", [^}]*anchors: \["section-invoices"\]/);
