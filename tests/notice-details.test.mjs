@@ -100,7 +100,8 @@ test('a row opens its work item, a chat or guest notice opens Messages, and a bu
   // Round 7: an item not in the loaded work list is read on its own (tests/updates-open-older*.test.mjs).
   assert.match(pages, /if \(t\?\.kind === "work" && onOpenWork\) \{ const item = byId\.get\(t\.workId\); return item \? \(\) => onOpenWork\(item\) : \(\) => void openWork\(t\.workId\); \}/);
   assert.match(pages, /if \(t\?\.kind === "messages" && onOpenMessages\) return onOpenMessages;/);
-  assert.equal((workspace.match(/<LiveActivity palette=\{p\} notices=\{notices\} loading=\{loading\} onRead=\{markRead\} work=\{work\} onOpenWork=\{setOpenWork\} onOpenMessages=\{\(\) => openMessages\(""\)\} onOpenProperty=\{openProperty\} \/>/g) ?? []).length, 2);
+  // An enquiry notice opens Client enquiries, in Client relations (tests/client-enquiries-one-place.test.mjs).
+  assert.equal((workspace.match(/<LiveActivity palette=\{p\} notices=\{notices\} loading=\{loading\} onRead=\{markRead\} work=\{work\} onOpenWork=\{setOpenWork\} onOpenMessages=\{\(\) => openMessages\(""\)\} onOpenProperty=\{openProperty\} onOpenEnquiries=\{\(\) => openLink\(CLIENT_ENQUIRIES_LINK\)\} \/>/g) ?? []).length, 2);
   // Thin rows: one line for what it is, one for where, who and when.
   const rows = source('mobile/src/LiveRows.tsx');
   assert.match(rows, /fontWeight: row\.unread \? "600" : "500", flex: 1, minWidth: 0 \}\}>\{row\.title\}<\/Text>/);

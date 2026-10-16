@@ -59,7 +59,7 @@ import { WORK_VIEW_LABEL, workViewsFor, type WorkView } from "../../lib/tool-dir
 import { formatBps, formatMoney } from "../../lib/format";
 import { liveApiOrigin, readChat, readTeams, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import { workspaceAccountSchema, type WorkspaceAccount } from "../../lib/workspace-account-policy";
-import { PAGE_SECTIONS, deepLinkFor, type DeepLink, type WorkspaceSection } from "../../lib/workspace-map";
+import { CLIENT_ENQUIRIES_LINK, PAGE_SECTIONS, deepLinkFor, pageLink, type DeepLink, type WorkspaceSection } from "../../lib/workspace-map";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import { periodError, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot } from "../../lib/analytics";
 import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSchema, propertyViewSchema, readableStage, reportViewSchema, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
@@ -84,7 +84,6 @@ import { DeleteAccountButton, DeleteAccountSheet, PrivacySection } from "./LiveP
 import { ACCOUNT_DELETED } from "../../lib/privacy-policy";
 import { PriceNightsLink, WorkHistory } from "./WorkHistory";
 import { WorkJumpContext } from "./WorkJump";
-import { LiveEnquiries } from "./LiveEnquiries";
 import { LiveFeedback } from "./LiveFeedback";
 import { LiveModeration } from "./LiveModeration";
 import { BlockedPeopleSheet } from "./BlockedPeople";
@@ -263,6 +262,15 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [chatTarget, setChatTarget] = useState<{ id: string; nonce: number } | null>(null);
   // Set when Messages should open on its Updates tab (an old Updates link or a notice).
   const [chatUpdates, setChatUpdates] = useState<number | null>(null);
+  // Client enquiries opens in Client relations, on its Enquiries chip (lib/workspace-map.ts CLIENT_ENQUIRIES_LINK): the old
+  // page's link (?section=enquiries), its menu entry and the enquiry notices all land there, so there is one place.
+  useEffect(() => {
+    if (tab !== "enquiries") return;
+    let active = true;
+    queueMicrotask(() => { if (active) openLink(CLIENT_ENQUIRIES_LINK); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
   const openMessages = (id: string) => { setOpenWork(null); setChatTarget({ id, nonce: Date.now() }); setChatUpdates(null); setFocus(null); router.setParams({ section: "inbox" }); };
   // A tapped pop-up opens what it is about (mobile/web-static/sw.js): the conversation for a message ("chat" in the address when
   // the app opens from it, or a message from the service worker when Recharge is already open), otherwise Messages or Home.
@@ -516,7 +524,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // The panel link last used stays highlighted while its place is open; otherwise the page or Work area open now is.
   const [panelPick, setPanelPick] = useState<{ key: string; tab: WorkspaceSection; view: WorkView | "" } | null>(null);
   const openPanel = (link: PanelLink) => {
-    if (link.kind === "page") { navigate(link.section); setPanelPick({ key: link.key, tab: link.section, view: "" }); return; }
+    // A page that opens elsewhere now (Client enquiries, in Client relations) stays highlighted there.
+    if (link.kind === "page") { const to = pageLink(link.section); navigate(link.section); setPanelPick({ key: link.key, tab: to?.section ?? link.section, view: to?.view ?? "" }); return; }
     if (link.kind === "area") {
       // Calendar is a page of its own now; the other areas open inside Work.
       const to = deepLinkFor({ kind: "work", view: link.view });
@@ -650,12 +659,12 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} mailbox={account.modules.includes("client-mailbox")} /> : reportsPage)
     : tab === "approvals" ? <LiveApprovals palette={p} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onForm={setForm} onRefresh={() => refresh()} onInbox={() => navigate("inbox")} onProperties={() => navigate("properties")} />
     : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
-    : tab === "enquiries" ? <LiveEnquiries palette={p} account={account} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} />
+    : tab === "enquiries" ? null
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
     : tab === "moderation" ? <LiveModeration palette={p} onOpenConversation={openMessages} />
-    : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} />
+    : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} guestEmailWaiting={guestEmailWaiting} openConversation={chatTarget?.id}
-        updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} onLeave={() => navigate("home")} />
+        updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} onLeave={() => navigate("home")} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view, sub) => { setTab(next); if (view) setWorkView(view); setFocus(sub ? { sub, nonce: Date.now() } : null); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;

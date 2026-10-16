@@ -1,4 +1,4 @@
-import { DUPLICATE_LABEL, OWNER_ENQUIRY_LABEL, duplicateNote, enquiryStep, isOwnerEnquiry, STEP_LABEL, STEP_TONE, type ClientEnquiry } from './client-enquiry';
+import { DUPLICATE_LABEL, OWNER_ENQUIRY_LABEL, duplicateNote, enquiryStep, isOwnerEnquiry, isTeamEnquiry, teamEnquiryTag, STEP_LABEL, STEP_TONE, type ClientEnquiry } from './client-enquiry';
 import { formatDay, formatMoney } from './format';
 import { addressOf, lastUpdateOf, nextActionOf, progressOf, type TrackerItem, type TrackerStep, type TrackerTone, type TrackerUpdate } from './tracker';
 import type { TrackerContext } from './tracker-sections';
@@ -145,6 +145,8 @@ export function enquiryTrackerItem(e: ClientEnquiry, ctx: OnboardingContext): Tr
   if (a) { add('Property', `${a.propertyType}, ${a.bedrooms} bed, ${a.bathrooms} bath`); add('Wants to start', text(a.startWhen)); add('Their enquiry', text(a.enquiryType)); }
   // An owner's own enquiry from the app (migration 20261022300000): the property is already on their account.
   if (isOwnerEnquiry(e)) add('From', OWNER_ENQUIRY_LABEL);
+  // One the team added by hand (migration 20261022400000), and who added it.
+  if (isTeamEnquiry(e)) add('From', teamEnquiryTag(e));
   return {
     id: 'enquiry:' + e.id, section: 'onboarding', source: e, propertyId: null, address, propertyName: address, title: 'Enquiry from ' + who,
     status: { label: STEP_LABEL[step], tone: STEP_TONE[step] }, closed: false, nextStep: next, nextAction,

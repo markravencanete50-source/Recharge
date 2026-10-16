@@ -81,10 +81,14 @@ export const isWorkSub = (view: WorkView, sub: string) => { const known = SUBS_B
 // links resolve (they open Messages, Updates).
 export const PAGE_SECTIONS: readonly WorkspaceSection[] = ["home", "todo", "work", "calendar", "inbox", "decisions", "properties", "analytics", "favorites", "approvals", "statements", "enquiries", "feedback", "moderation", "help", "activity"];
 export type DeepLink = { section: WorkspaceSection; view?: WorkView; sub?: string; anchor?: string; open?: string; workId?: string; messagesTab?: "updates"; redirected?: boolean };
+// Client enquiries has one home, the Enquiries chip in Client relations (Lee, 16 October 2026). "Client enquiries" in
+// the menu, its old page links and the enquiry notices open it there; the page itself is no longer a page of its own.
+export const CLIENT_ENQUIRIES_LINK: DeepLink = { section: "work", view: "clients", sub: "enquiries", redirected: true };
 // Resolves a page by name to where it opens now, or null when there is no such page.
 export function pageLink(section: string): DeepLink | null {
   if (!(PAGE_SECTIONS as readonly string[]).includes(section)) return null;
   if (section === "activity") return { section: "inbox", messagesTab: "updates", redirected: true };
+  if (section === "enquiries") return CLIENT_ENQUIRIES_LINK;
   return { section: section as WorkspaceSection };
 }
 // Resolves a Home tool, search result or old link to where it opens now, or null when it names a

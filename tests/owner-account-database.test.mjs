@@ -34,7 +34,9 @@ for (let i = 0; i < users.length; i++) {
   await db.query("update public.workspace_profiles set status='active',role=$2,full_name=$3 where user_id=$1", [id, roles[i], 'Person ' + i]);
   if (i !== OTHER_STAYS) for (const m of ['property-onboarding', 'client-dashboard']) await db.query('insert into public.workspace_module_grants(user_id,module_id) values($1,$2) on conflict do nothing', [id, m]);
 }
-async function as(i) { await db.exec('reset role'); await db.query("select set_config('request.jwt.claims',$1,false)", [JSON.stringify({ sub: users[i], session_id: users[i].replace('33000000', '43000000') })]); await db.exec('set role authenticated'); }
+// Each step starts a fresh minute of the write limit (60 changes a minute per person), as in the other database tests:
+// since 20261022400000 an enquiry the team adds is also a Client enquiries row, which counts too.
+async function as(i) { await db.exec('reset role'); await db.exec('delete from private.workspace_write_limits'); await db.query("select set_config('request.jwt.claims',$1,false)", [JSON.stringify({ sub: users[i], session_id: users[i].replace('33000000', '43000000') })]); await db.exec('set role authenticated'); }
 async function asBackend() { await db.exec('reset role'); await db.query("select set_config('request.jwt.claims','',false)"); await db.exec('set role service_role'); }
 const sql = async (text, args = []) => { await db.exec('reset role'); return (await db.query(text, args)).rows; };
 const journey = async input => (await db.query('select public.workspace_journey_action($1::jsonb) result', [JSON.stringify({ requestId: crypto.randomUUID(), ...input })])).rows[0].result;
