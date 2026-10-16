@@ -111,7 +111,7 @@ in the repository.
    npx wrangler secret put HOSTAWAY_WEBHOOK_SECRET --name recharge-backend
    ```
    Each command asks for the value; paste it there.
-4. **Redeploy the backend** (this also switches on the 15-minute schedule):
+4. **Redeploy the backend** (its every-minute schedule runs the sync at :00, :15, :30 and :45):
    `npm run build && npm run backend:deploy`
 5. **Add the webhook in Hostaway.** In *Settings → Integrations → Webhooks* (unified webhooks), add
    the events `reservation.created`, `reservation.updated` and `message.received` and, as the URL,
@@ -148,7 +148,7 @@ sync state is unpaused (`update private.workspace_hostaway_sync_state set paused
 - Mapping: `lib/hostaway-sync-policy.ts` (reservations, listings), `lib/hostaway-messages-policy.ts`
   (conversations, messages, the message webhook; every Hostaway field name for messages is there).
   Runner and webhook: `lib/hostaway-sync.ts` (`runHostawayMessages`, `syncHostawayConversation`).
-  Schedule: `worker/index.ts` (messages every minute, the rest every 15) and `scripts/build-backend-config.mjs`.
+  Schedule: `worker/index.ts` (messages every minute, the rest on the :00, :15, :30 and :45 minute ticks) and `scripts/build-backend-config.mjs`.
 - App: `mobile/src/HostawaySyncCard.tsx`, `mobile/src/LiveGuestInbox.tsx`.
 - Tests: `tests/hostaway-sync-database.test.mjs`, `tests/hostaway-sync-http.test.mjs`,
   `tests/hostaway-messages-database.test.mjs`, `tests/hostaway-messages-policy.test.mjs`.

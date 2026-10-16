@@ -181,7 +181,7 @@ planned.
   onboarding journey, and post photos (`mailPhotoIds`) on a clean. `mobile/src/Photos.tsx` has the
   picker and viewer; workflow forms take a `photos` field.
 - **Web push** (`lib/web-push.ts`): VAPID-signed, aes128gcm-encrypted, sent from the Worker every
-  minute (second cron). Keys: `npm run push:setup` stores `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` as
+  minute (the Worker's only cron). Keys: `npm run push:setup` stores `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` as
   Worker secrets without printing them. People switch it on in Profile & preferences. The browser
   build adds `mobile/web-static` (service worker, manifest, icons) so the app can be installed.
 - **Messages** (`mobile/src/LiveChat.tsx`, `lib/workspace-chat-*.ts`, migration `20261009110000`):
@@ -960,10 +960,12 @@ All under `mobile/src/` unless stated.
 
 ### Crons added in `worker/index.ts`
 
-All are idempotent and bounded per run, so a late or doubled tick is harmless.
+All are idempotent and bounded per run, so a late or doubled tick is harmless. The Worker has one trigger,
+`* * * * *`; the 15-minute jobs run on its :00, :15, :30 and :45 ticks (by the tick's scheduled time), and a
+leftover `*/15 * * * *` trigger in the dashboard does nothing.
 
 - Every 15 minutes: `workspace_mid_stay_cleans` (also run at the end of each Hostaway sync).
-- Hourly (first tick of each hour, which includes the first tick after midnight London):
+- Hourly (the :00 tick of each hour, which includes the first tick after midnight London):
   `workspace_ensure_daily_todos` and `workspace_clean_form_sweep`.
 - Every six hours: `workspace_direct_booking_sweep`.
 

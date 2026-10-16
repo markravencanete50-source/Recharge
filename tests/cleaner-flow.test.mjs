@@ -142,7 +142,7 @@ test('Hostaway check-in and checkout times come through the sync as HH:MM', () =
 
 test('the worker sends the morning notices every 15 minutes; new cleaners have no Clean invoices tool', () => {
   const worker = read('worker/index.ts');
-  const morning = worker.indexOf("securityRpc('workspace_clean_morning_notices', {})"), quarter = worker.indexOf("if (controller.cron && controller.cron !== '*/15 * * * *') return;"), hourly = worker.indexOf('if (hourly) {');
+  const morning = worker.indexOf("securityRpc('workspace_clean_morning_notices', {})"), quarter = worker.indexOf('if (tick.getUTCMinutes() % 15 !== 0) return;'), hourly = worker.indexOf('if (hourly) {');
   assert.ok(morning > quarter, 'in the 15-minute job');
   assert.ok(!(morning > hourly && morning < worker.indexOf('}', hourly + 200)), 'not only hourly');
   assert.deepEqual([...DEFAULT_ROLE_MODULES.cleans], ['cleaning-schedule', 'cleaner-performance']);

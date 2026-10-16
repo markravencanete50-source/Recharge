@@ -199,10 +199,10 @@ test('the read: its own section, with or without one property, through the teams
 
 test('the sync runs hourly after the reservation sync, and after "Sync now", without failing it', () => {
   const worker = read('worker/index.ts');
-  assert.match(worker, /const reviewsHour = new Date\(\)\.getUTCMinutes\(\) < 15;/);
+  assert.match(worker, /const reviewsHour = tick\.getUTCMinutes\(\) < 15;/);
   const sync = worker.indexOf("await module.runHostawaySync('schedule')"), reviews = worker.indexOf("if (reviewsHour) await module.runHostawayReviews('schedule')");
   assert.ok(sync > 0 && reviews > sync, 'straight after the sync, never at the same time');
-  assert.ok(worker.indexOf('if (hostawayOn) {', worker.indexOf("controller.cron !== '*/15 * * * *') return;")) < sync, 'on the 15-minute tick, only when the sync is on');
+  assert.ok(worker.indexOf('if (hostawayOn) {', worker.indexOf('if (tick.getUTCMinutes() % 15 !== 0) return;')) < sync, 'on the 15-minute tick, only when the sync is on');
   const integration = read('lib/integration-server.ts');
   assert.match(integration, /const summary=await runHostawaySync\('manual'\);\s*\r?\n\s*\/\/[^\n]*\r?\n\s*const reviews=await runHostawayReviews\('manual'\)\.catch\(\(\)=>null\);\s*\r?\n\s*return businessResponse\(\{\.\.\.summary,reviews\}\);/);
   assert.match(read('mobile/src/HostawaySyncCard.tsx'), /s\.reviews\?\.added && plural\(s\.reviews\.added, "new guest review"\)/);
