@@ -88,7 +88,7 @@ test('batches: every review once, in batches, and always one call so the run is 
   const batches = policy.reviewBatches([r(1), r(2), r(1), r(3), r(4), r(5)], 2);
   assert.deepEqual(batches.map(b => b.map(x => x.id)), [['1', '2'], ['3', '4'], ['5']]);
   assert.deepEqual(policy.reviewBatches([]), [[]]);
-  assert.equal(policy.REVIEW_PAGES, 20); assert.equal(policy.REVIEW_BATCH, 250);
+  assert.equal(policy.REVIEW_PAGES, 10); assert.equal(policy.REVIEW_BATCH, 250);
 });
 
 test('the reviews run: off unless the sync is on, batches to the database, the last batch marked, paused stops it', async () => {
@@ -101,7 +101,7 @@ test('the reviews run: off unless the sync is on, batches to the database, the l
   state.pages = [Array.from({ length: 300 }, (_, i) => ({ ...airbnb, id: 90000 + i })), [{ ...airbnb, id: 99999, type: 'host-to-guest' }, { ...airbnb, id: 90000 }]];
   state.complete = false;
   const summary = await runHostawayReviews('manual');
-  assert.deepEqual(state.fetched, ['reviews:20']);
+  assert.deepEqual(state.fetched, ['reviews:10']);
   const ingests = state.calls.filter(c => c.name === 'workspace_hostaway_reviews_ingest');
   assert.deepEqual(ingests.map(c => [c.args.input.trigger, c.args.input.reviews.length, c.args.input.done, c.args.input.complete]), [['manual', 250, false, true], ['manual', 50, true, false]]);
   assert.deepEqual(summary, { added: 300, changed: 0, unchanged: 0, fetched: 302, complete: false, paused: false });
@@ -197,12 +197,16 @@ test('the read: its own section, with or without one property, through the teams
   assert.match(read('lib/workspace-finance-server.ts'), /input\.section === 'propertyRatings' \? client\.rpc\('workspace_property_ratings', \{ target_property: input\.propertyId \|\| null \}\)/);
 });
 
-test('the sync runs hourly after the reservation sync, and after "Sync now", without failing it', () => {
+test('the sync runs hourly on its own :05 tick, never chained to the reservation sync, and after "Sync now", without failing it', () => {
+  // The schedule itself is exercised in tests/worker-schedule.test.mjs; this checks the shape of the source.
   const worker = read('worker/index.ts');
-  assert.match(worker, /const reviewsHour = tick\.getUTCMinutes\(\) < 15;/);
-  const sync = worker.indexOf("await module.runHostawaySync('schedule')"), reviews = worker.indexOf("if (reviewsHour) await module.runHostawayReviews('schedule')");
-  assert.ok(sync > 0 && reviews > sync, 'straight after the sync, never at the same time');
-  assert.ok(worker.indexOf('if (hostawayOn) {', worker.indexOf('if (tick.getUTCMinutes() % 15 !== 0) return;')) < sync, 'on the 15-minute tick, only when the sync is on');
+  assert.match(worker, /const REVIEWS_MINUTE = 5;/);
+  assert.match(worker, /const reviewsTick = tick\.getUTCMinutes\(\) === REVIEWS_MINUTE;/);
+  const on = worker.indexOf('if (hostawayOn) {'), messages = worker.indexOf("await module.runHostawayMessages('schedule')");
+  const reviews = worker.indexOf("if (reviewsTick) await module.runHostawayReviews('schedule')"), quarter = worker.indexOf('if (tick.getUTCMinutes() % 15 !== 0) return;');
+  assert.ok(on > 0 && on < messages && messages < reviews && reviews < quarter, 'after the messages, only when Hostaway is on, before the 15-minute jobs');
+  assert.match(worker, /ctx\.waitUntil\(import\('\.\.\/lib\/hostaway-sync'\)\.then\(module => module\.runHostawaySync\('schedule'\)\)/, 'the sync runs alone');
+  assert.equal(worker.match(/runHostawayReviews/g).length, 1);
   const integration = read('lib/integration-server.ts');
   assert.match(integration, /const summary=await runHostawaySync\('manual'\);\s*\r?\n\s*\/\/[^\n]*\r?\n\s*const reviews=await runHostawayReviews\('manual'\)\.catch\(\(\)=>null\);\s*\r?\n\s*return businessResponse\(\{\.\.\.summary,reviews\}\);/);
   assert.match(read('mobile/src/HostawaySyncCard.tsx'), /s\.reviews\?\.added && plural\(s\.reviews\.added, "new guest review"\)/);
