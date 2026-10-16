@@ -13,7 +13,7 @@ import { readAdmin, readTeams, writeAdmin } from "./backend/client";
 import { presenceOf } from "../../lib/workspace-chat-policy";
 import { contractsSchema, coursesSchema, onboardingFor, type Contract, type Course } from "../../lib/management-live";
 import { accessHistorySchema, accessPeopleSchema, accessState, accessSummary, eventLabel, lastSeen, matchesSearch, presenceText, shiftStatus, ROLE_SUMMARY, roleChange, STATE_LABEL, toolGroups, type AccessEvent, type AccessPerson, type AccessState } from "../../lib/access-control";
-import { ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange } from "../../lib/admin-live";
+import { accessRefusal, ROLE_LABEL, rolesFor, toolsFor, toolsOnRoleChange } from "../../lib/admin-live";
 import { isWorkspaceAdmin, type ModuleId, type WorkspaceRole } from "../../lib/modules";
 import { z } from "zod";
 import { MenuOrderEditor } from "./MenuOrderEditor";
@@ -21,8 +21,9 @@ import { MENU_ROLE_LABEL } from "../../lib/menu-layout";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { SearchBox } from "./SearchPicker";
 
-// Access control, for super admins: every account, its role and tools, and the security actions
-// (sign out everywhere, revoke the password, block, delete). The database checks every change.
+// Access control, for admins and super admins: every account, its role and tools, and the security actions
+// (sign out everywhere, revoke the password, block, delete). Admins act only on accounts below admin and never
+// delete (accessRefusal says why, in plain words); the Menu order is the super admin's. The database checks every change.
 const roleLabel = (role: string) => ROLE_LABEL[role as WorkspaceRole] ?? role;
 const initials = (name: string) => name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
 const FILTERS = ["all", "online", "active", "pending", "blocked", "deleted"] as const;
@@ -78,6 +79,8 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [link, setLink] = useState<{ link: string; minutes: number } | null>(null);
   const self = person.userId === actor.userId, state = accessState(person), admin = isWorkspaceAdmin(role);
+  // An admin opens every account but changes only those below admin; deleting stays with super admins.
+  const refusal = self ? null : accessRefusal(actor.role, person.role), canDelete = !accessRefusal(actor.role, person.role, "delete");
   const allowed = new Set(toolsFor(role).map(t => t.id));
   const changed = role !== person.role || [...modules].sort().join() !== [...person.modules].sort().join();
   const firstName = person.fullName.trim().split(/\s+/)[0] || "This person";
@@ -103,7 +106,7 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   };
   const confirm = (d: Danger) => d === "deleteAccount" ? run({ action: "deleteAccount", userId: person.userId, confirm: true }, DANGER[d].done) : run({ action: d, userId: person.userId }, DANGER[d].done);
-  const actions: Danger[] = state === "blocked" ? ["unblock", "revokePassword", "deleteAccount"] : ["signOut", "revokePassword", "block", "deleteAccount"];
+  const actions = (state === "blocked" ? ["unblock", "revokePassword", "deleteAccount"] as Danger[] : ["signOut", "revokePassword", "block", "deleteAccount"] as Danger[]).filter(d => d !== "deleteAccount" || canDelete);
   const detail = (icon: "mail" | "phone" | "calendar" | "clock" | "monitor" | "home", text: string) => <View style={[ui.row, { gap: 10 }]}><Feather name={icon} size={15} color={p.muted} /><Text selectable style={[ui.small, { color: p.text, flex: 1 }]}>{text}</Text></View>;
   return (
     <Sheet palette={p} visible onClose={onClose} title={person.fullName || "Account"} subtitle={`${roleLabel(person.role)} · ${STATE_LABEL[state][0]}`} icon="people">
@@ -117,12 +120,13 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
         {detail("home", `${person.properties} propert${person.properties === 1 ? "y" : "ies"} assigned`)}
         {detail("calendar", "Joined " + new Date(person.joinedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }))}
       </View>
-      {self && <Notice text="This is your account. Another super admin changes your access, so you can’t lock yourself out." p={p} />}
+      {self && <Notice text={actor.role === "super_admin" ? "This is your account. Another super admin changes your access, so you can’t lock yourself out." : "This is your account. A super admin changes your access."} p={p} />}
       {state === "deleted" && <Notice text="This account has been deleted. Its history stays on record." p={p} />}
-      {!self && state !== "deleted" && <>
+      {!self && state !== "deleted" && !!refusal && <Notice text={`${refusal}.`} p={p} />}
+      {!self && state !== "deleted" && !refusal && <>
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Role</Text>
         <Text style={[ui.small, { color: p.muted }]}>Promote or move {firstName} to another role. They then see exactly what everyone in that role sees: the same Home, Work and tools.</Text>
-        <ChoiceField p={p} label="Role" value={role} options={rolesFor("super_admin").map(r => ({ value: r, label: roleLabel(r) + (r === person.role ? " · now" : "") }))}
+        <ChoiceField p={p} label="Role" value={role} options={rolesFor(actor.role).map(r => ({ value: r, label: roleLabel(r) + (r === person.role ? " · now" : "") }))}
           onChange={r => { setRole(r); setModules(r === person.role ? person.modules as ModuleId[] : toolsOnRoleChange(r)); setError(""); }} />
         <Text style={[ui.small, { color: p.muted }]}>{ROLE_SUMMARY[role]}</Text>
         {!change.same && <SwapIn swapKey={role}><View style={{ gap: 10, padding: 14, borderRadius: 18, backgroundColor: p.background, borderWidth: 1, borderColor: p.primary }}>
@@ -177,6 +181,7 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
           <Button label={busy ? "Working…" : "Set-password link"} icon="link" p={p} disabled={busy} onPress={() => void makeLink()} />
           <Text style={[ui.small, { color: p.muted }]}>{person.lastSignInAt ? "For when they can’t get into their account: a one-time link to choose a new password, to send them yourself." : "They haven’t signed in yet. Make a new one-time link to send them, if the first one ran out."}</Text>
         </>)}
+        {!canDelete && <Text style={[ui.small, { color: p.muted }]}>Only a super admin can delete accounts, or make someone an admin.</Text>}
         {actions.map(d => {
           const open = asking === d, deleting = d === "deleteAccount";
           return (
@@ -227,7 +232,7 @@ function LinkCard({ p, name, link, minutes }: { p: Palette; name: string; link: 
   );
 }
 
-function AddPersonSheet({ p, onClose, onDone }: { p: Palette; onClose: () => void; onDone: () => Promise<void> }) {
+function AddPersonSheet({ p, actorRole, onClose, onDone }: { p: Palette; actorRole: string; onClose: () => void; onDone: () => Promise<void> }) {
   const celebrate = useCelebrate();
   const [name, setName] = useState(""), [email, setEmail] = useState(""), [role, setRole] = useState<WorkspaceRole>("stays");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [made, setMade] = useState<{ link: string | null; minutes: number } | null>(null);
@@ -265,8 +270,9 @@ function AddPersonSheet({ p, onClose, onDone }: { p: Palette; onClose: () => voi
         <Field label="Full name" value={name} onChange={setName} p={p} placeholder="First and last name" />
         <Field label="Email" value={email} onChange={setEmail} p={p} placeholder="name@example.com" email />
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Role</Text>
-        <ChoiceField p={p} label="Role" value={role} options={rolesFor("super_admin").map(r => ({ value: r, label: roleLabel(r) }))} onChange={r => { setRole(r); setError(""); }} />
+        <ChoiceField p={p} label="Role" value={role} options={rolesFor(actorRole).map(r => ({ value: r, label: roleLabel(r) }))} onChange={r => { setRole(r); setError(""); }} />
         <Text style={[ui.small, { color: p.muted }]}>{ROLE_SUMMARY[role]}</Text>
+        {actorRole !== "super_admin" && <Text style={[ui.small, { color: p.muted }]}>Only a super admin can add an admin or super admin.</Text>}
         <Text style={[ui.small, { color: p.muted }]}>They get the usual tools for this role. You can change them afterwards. No email is sent: you get a link to send them yourself.</Text>
         {!!planText && <Notice text={planText} p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
@@ -310,9 +316,11 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   // Who is online changes by the minute, so the list refreshes itself while it is open.
   useEffect(() => { const timer = setInterval(() => void load(), 60_000); return () => clearInterval(timer); }, [load]);
-  if (account.role !== "super_admin") return <Notice text="Access control is for super admins." p={p} />;
-  const tabs = <Pills p={p} values={["people", "menu"] as const} value={tab} onChange={setTab} label={v => v === "people" ? "People" : "Menu order"} />;
-  if (tab === "menu") return <Anchor id="access-control"><View style={{ gap: 18 }}>{tabs}<MenuOrderEditor palette={p} /></View></Anchor>;
+  if (!isWorkspaceAdmin(account.role)) return <Notice text="Access control is for admins." p={p} />;
+  // The Menu order changes every role's menu, so it is the super admin's alone (the database refuses anyone else).
+  const superAdmin = account.role === "super_admin";
+  const tabs = superAdmin ? <Pills p={p} values={["people", "menu"] as const} value={tab} onChange={setTab} label={v => v === "people" ? "People" : "Menu order"} /> : null;
+  if (tab === "menu" && superAdmin) return <Anchor id="access-control"><View style={{ gap: 18 }}>{tabs}<MenuOrderEditor palette={p} /></View></Anchor>;
   const summary = accessSummary(people);
   const shown = people.filter(x => (filter === "all" ? !x.closed : filter === "online" ? !x.closed && presenceOf(x.seenAt) === "online" : accessState(x) === (filter as AccessState)) && matchesSearch(x, query));
   const person = people.find(x => x.userId === openId) ?? null;
@@ -320,7 +328,8 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
     <Anchor id="access-control"><View style={{ gap: 18 }}>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Access control</Text>
-        <Text style={[ui.small, { color: p.muted }]}>Everyone with a Recharge account. Add someone new, or open a person to change their role and tools, sign them out, revoke their password, block or delete them.</Text>
+        <Text style={[ui.small, { color: p.muted }]}>{superAdmin ? "Everyone with a Recharge account. Add someone new, or open a person to change their role and tools, sign them out, revoke their password, block or delete them."
+          : "Everyone with a Recharge account. Add someone new, or open a team member or owner to change their role and tools, sign them out, revoke their password or block them. Only a super admin can change admin accounts."}</Text>
       </View>
       {tabs}
       <View style={{ flexDirection: "row" }}><Button label="Add a person" icon="user-plus" primary p={p} onPress={() => setAdding(true)} /></View>
@@ -343,7 +352,7 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
           {history.slice(0, 20).map((e, i) => <HistoryRow key={e.id} p={p} e={e} first={i === 0} />)}
         </View>
       </Section>}
-      {adding && <AddPersonSheet p={p} onClose={() => setAdding(false)} onDone={load} />}
+      {adding && <AddPersonSheet p={p} actorRole={account.role} onClose={() => setAdding(false)} onDone={load} />}
       {person && <AccessSheet key={person.userId + person.status + person.modules.join() + person.role + String(person.passwordRevoked) + person.activeSessions} p={p} actor={account} person={person} onClose={() => setOpenId(null)} onDone={load} />}
     </View></Anchor>
   );

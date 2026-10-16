@@ -45,6 +45,8 @@ const BY_ROLE: Record<string, Candidate[]> = {
     tool('accounts', 'Accounts', 'Expenses, payouts, statements', 'coins', work('accounts')),
     // Properties is always in the navigation, so its tile makes room for training.
     TRAINING_ADMIN,
+    // Who can sign in and what they can use. Admins manage accounts below admin; super admins every account.
+    tool('access', 'Access control', 'People, tools and security', 'shield', work('management', { sub: 'access', anchor: 'access-control' })),
   ],
   stays: [
     // Guests reply in Messages; the daily checks are listing health and pricing in Client relations,
@@ -112,8 +114,7 @@ const BY_ROLE: Record<string, Candidate[]> = {
     HELP,
   ],
 };
-// Super admins also manage who can sign in and what they can use.
-BY_ROLE.super_admin = [...BY_ROLE.admin, tool('access', 'Access control', 'People, tools and security', 'shield', work('management', { sub: 'access', anchor: 'access-control' }))];
+BY_ROLE.super_admin = BY_ROLE.admin;
 
 // Tools that live in the desktop left panel and in search, not on Home's tiles (Home keeps to three
 // rows). On a phone they open from their own tab inside the Work area.

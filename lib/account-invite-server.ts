@@ -2,11 +2,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { authSecurityConfiguration, requestQuota } from './auth-security';
 import { businessResponse, databaseFailure } from './business-server';
 import { isWorkspaceAdmin, type WorkspaceRole } from './modules';
+import { accessRefusal } from './admin-live';
 import type { RpcContext } from './workspace-rpc-route';
 import type { AdminAction } from './workspace-admin-policy';
 
 // Adding people without an email service. The sign-in service creates the account already
-// verified; the database then gives it its role and tools as the super admin who asked (so every
+// verified; the database then gives it its role and tools as the admin or super admin who asked (so every
 // usual check applies), and the reply carries a one-time link the person opens to choose their
 // own password. Nobody else ever sees or sets that password.
 type AddPerson = Extract<AdminAction, { action: 'addPerson' }>;
@@ -20,8 +21,10 @@ export function signInService() {
   if (!config) return null;
   return { origin: config.origin, admin: createClient(config.url, config.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }) };
 }
+// Admins and super admins (20261022700000). What an admin may do is decided by the database; the role check
+// here only saves a request to the sign-in service that would be refused anyway.
 async function allowed(context: RpcContext, scope: string) {
-  if (context.account.role !== 'super_admin') return refuse('Only a super admin can do this', 403);
+  if (context.account.role !== 'super_admin' && context.account.role !== 'admin') return refuse('Only an admin can do this', 403);
   const quota = await requestQuota(context.request, scope, 30, 3600, context.account.userId);
   if (!quota.allowed) { const r = refuse('Too many accounts at once. Please wait a little.', 429); r.headers.set('Retry-After', String(quota.retryAfter)); return r; }
   return null;
@@ -39,6 +42,8 @@ const record = (admin: SupabaseClient, userId: string, actorId: string, event: s
 
 export async function addPerson(context: RpcContext, input: AddPerson) {
   const refused = await allowed(context, 'add-person'); if (refused) return refused;
+  // Only a super admin adds an admin or super admin; the database would refuse it too, after the sign-in was made.
+  const limit = accessRefusal(context.account.role, input.role, 'add'); if (limit) return refuse(limit, 403);
   const service = signInService(); if (!service) return refuse('Adding people is awaiting configuration', 503);
   const created = await service.admin.auth.admin.createUser({ email: input.email, email_confirm: true, user_metadata: { full_name: input.fullName } });
   const user = created.data?.user;
@@ -64,6 +69,10 @@ export async function addPerson(context: RpcContext, input: AddPerson) {
 export async function passwordLink(context: RpcContext, input: PasswordLink) {
   const refused = await allowed(context, 'password-link'); if (refused) return refused;
   if (input.userId === context.account.userId) return refuse('Use “Forgot password” for your own account.', 403);
+  // The database decides, as the person asking, whether they may act on this account (an admin only on accounts
+  // below admin; a deleted account never). Nothing is changed by the check.
+  const check = await context.client.rpc('workspace_admin_action', { input: { action: 'passwordLinkCheck', userId: input.userId } });
+  if (check.error) return databaseFailure(check.error);
   const service = signInService(); if (!service) return refuse('Set-password links are awaiting configuration', 503);
   const profile = await service.admin.from('workspace_profiles').select('role,status').eq('user_id', input.userId).maybeSingle();
   if (profile.error) return refuse('The workspace connection is temporarily unavailable', 503);

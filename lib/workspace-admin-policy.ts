@@ -13,11 +13,12 @@ export const adminActionSchema = z.discriminatedUnion('action', [
   }).strict(),
   // Every property at once, for team members (Hostaway imports properties with nobody assigned).
   z.object({ action: z.literal('assignAllProperties'), userId: z.string().uuid() }).strict(),
-  // Access control (super admins): role and tools, and the security actions on an account.
+  // Access control (admins and super admins): role and tools, and the security actions on an account. Admins act
+  // only on accounts below admin and never delete; the database decides (20261022700000).
   z.object({ action: z.literal('setAccess'), userId: z.string().uuid(), role: z.enum(ROLES), modules: z.array(z.enum(MODULE_IDS)).max(60) }).strict(),
   z.object({ action: z.enum(['block', 'unblock', 'signOut', 'revokePassword']), userId: z.string().uuid() }).strict(),
   z.object({ action: z.literal('deleteAccount'), userId: z.string().uuid(), confirm: z.literal(true) }).strict(),
-  // Adding a person (super admins): the account is created already verified and active, and the
+  // Adding a person (admins add roles below admin, super admins any role): the account is created already verified and active, and the
   // reply carries a one-time link the person opens to choose their own password. No email is sent.
   z.object({ action: z.literal('addPerson'), fullName: z.string().trim().min(2).max(200), email: emailSchema, role: z.enum(ROLES), modules: z.array(z.enum(MODULE_IDS)).max(60) }).strict(),
   z.object({ action: z.literal('passwordLink'), userId: z.string().uuid() }).strict(),

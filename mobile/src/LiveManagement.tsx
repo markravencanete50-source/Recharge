@@ -86,8 +86,9 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const focus = useWorkFocus();
-  // Who sees which tool: Access control is the super admin's; Onboarding settings and the Limit Changer are workspace admins'.
-  const views = MANAGEMENT_VIEWS.filter(v => (v !== "access" || account.role === "super_admin") && (v !== "onboarding" || isWorkspaceAdmin(account.role)) && (v !== "limits" || isWorkspaceAdmin(account.role)));
+  // Who sees which tool: Access control, Onboarding settings and the Limit Changer are workspace admins' (an admin's
+  // Access control covers accounts below admin; the database enforces it).
+  const views = MANAGEMENT_VIEWS.filter(v => (v !== "access" || isWorkspaceAdmin(account.role)) && (v !== "onboarding" || isWorkspaceAdmin(account.role)) && (v !== "limits" || isWorkspaceAdmin(account.role)));
   // A link to one tool (the left panel, search, Home, a notification) opens that tool on its own page. Without one the
   // centre opens on its cards (null), and each card opens its tool's page, with "Management centre" to come back.
   const [view, setView] = useState<ManagementView | null>(() => views.find(v => v === focus?.sub) ?? null);
