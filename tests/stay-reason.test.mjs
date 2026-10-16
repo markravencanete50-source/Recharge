@@ -138,7 +138,7 @@ test('the survey job: from guestrelations@ only, with the stay\'s own link, the 
 
 test('wiring: the Worker runs both jobs every 15 minutes, the page and its answer are on the backend, the switches are on the report', () => {
   const worker = read('worker/index.ts');
-  const quarter = worker.indexOf("if (controller.cron && controller.cron !== '*/15 * * * *') return;");
+  const quarter = worker.indexOf('if (tick.getUTCMinutes() % 15 !== 0) return;');
   for (const job of ['runStayReasonQuestions()', 'runStaySurveys()']) {
     const at = worker.indexOf(`import('../lib/stay-reason-server').then(module => module.${job})`);
     assert.ok(at > quarter && at < worker.indexOf("if (env.INTEGRATION_SCHEDULE_ENABLED !== 'true') return;"), job);

@@ -130,8 +130,8 @@ test('the three new cron sweeps run next to the mid-stay one, with the same logg
   assert.match(worker, /everySixHours = hourly && tick\.getUTCHours\(\) % 6 === 0/);
   assert.match(worker, /if \(hourly\) \{[^]*workspace_ensure_daily_todos[^]*workspace_clean_form_sweep[^]*\n    \}/);
   assert.match(worker, /if \(everySixHours\) \{[^]*workspace_direct_booking_sweep/);
-  // The schedule itself is unchanged: a 15-minute and a one-minute tick.
-  assert.match(read('scripts/build-backend-config.mjs'), /crons:\['\*\/15 \* \* \* \*','\* \* \* \* \*'\]/);
+  // One trigger, every minute; the 15-minute jobs run on its :00, :15, :30 and :45 ticks.
+  assert.match(read('scripts/build-backend-config.mjs'), /crons:\['\* \* \* \* \*'\]/);
 });
 
 test('the phone bar, management and the routine card use the new names', () => {
