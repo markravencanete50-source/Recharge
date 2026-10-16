@@ -262,7 +262,7 @@ test('Limit Changer: every owner and property, super admins change limits, admin
   assert.match(limiter, /<Notice text=\{autoApprovedText\(approved\.length\)\}/);
   assert.match(limiter, /onOpenWork\(op\)/);
   assert.match(management, /\(v !== "limits" \|\| isWorkspaceAdmin\(account\.role\)\)/);
-  assert.match(management, /limits: "Limit Changer"/);
+  assert.match(management, /limits: \{ key: "limits", label: "Limit Changer", /);
   assert.match(source('lib/home-tools.ts'), /tool\('limits', 'Limit Changer', 'Repair spending limits by owner', 'coins', work\('management', \{ sub: 'limits' \}\)\)/);
   assert.match(source('lib/role-panel.ts'), /'tool:access', 'tool:limits'/);
 });

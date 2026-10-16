@@ -12,8 +12,9 @@ import { filterChoices } from "../../lib/choice-control";
 // `hideLabel` is for forms that already print the field's label above it (the label still names it for screen readers).
 export type DropdownOption<T extends string> = { value: T; label: string };
 
-export function Dropdown<T extends string>({ p, label, value, options, onChange, searchable = false, hideLabel = false, disabled = false }: {
-  p: Palette; label: string; value: T; options: readonly DropdownOption<T>[]; onChange: (v: T) => void; searchable?: boolean; hideLabel?: boolean; disabled?: boolean;
+// `labelledBy` is the id of a label printed above it (Pills with `showTitle`), which the web select is tied to.
+export function Dropdown<T extends string>({ p, label, value, options, onChange, searchable = false, hideLabel = false, disabled = false, labelledBy }: {
+  p: Palette; label: string; value: T; options: readonly DropdownOption<T>[]; onChange: (v: T) => void; searchable?: boolean; hideLabel?: boolean; disabled?: boolean; labelledBy?: string;
 }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState("");
   const current = options.find(o => o.value === value)?.label ?? "";
@@ -24,7 +25,7 @@ export function Dropdown<T extends string>({ p, label, value, options, onChange,
       <View style={{ gap: 6 }}>
         {caption}
         {createElement("select", {
-          "aria-label": label, value, disabled, onChange: (e: { target: { value: string } }) => onChange(e.target.value as T),
+          "aria-label": label, "aria-labelledby": labelledBy, value, disabled, onChange: (e: { target: { value: string } }) => onChange(e.target.value as T),
           style: { minHeight: 48, padding: "0 12px", borderRadius: 12, border: `1px solid ${p.controlBorder}`, background: p.surface, color: p.text, fontSize: 15, fontFamily: "Montserrat_400Regular, system-ui, sans-serif", fontWeight: 400 },
         }, options.map(o => createElement("option", { key: o.value, value: o.value }, o.label)))}
       </View>

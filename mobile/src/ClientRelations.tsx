@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { Text } from "./Typography";
 import { useWorkFocus } from "./LiveKit";
 import { Pills } from "./Pills";
+import { ToolHeader } from "./ToolPage";
 import { LicensingList } from "./LicensingList";
 import { ListingHealthList, PricingList, RelistingList, ReviewsList } from "./ListingsTabs";
 import { LiveEnquiries } from "./LiveEnquiries";
@@ -32,14 +33,19 @@ export function ClientRelations(props: SectionProps & { onOpenProperty: (propert
   const focus = useWorkFocus();
   const subs = clientSubsFor(account.role, account.modules);
   const [sub, setSub] = useState<ClientSub>(() => pickSub(subs, focus?.sub, defaultClientSub(subs)));
+  // A link to one section opens it on its own page with "Client relations" to come back (ToolPage.tsx); opened as a
+  // whole, the labelled dropdown chooses the section.
+  const [alone, setAlone] = useState(() => subs.length > 1 && subs.some(s => s === focus?.sub));
   return (
     <View style={{ gap: space.section }}>
+      {alone ? <ToolHeader p={p} back="Client relations" onBack={() => setAlone(false)} title={CLIENT_SUB_LABEL[sub]} /> : <>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Client relations</Text>
         <Text style={[ui.body, { color: p.muted }]}>Onboarding, enquiries, licensing, listings, pricing, reviews and purchases for your clients’ properties.</Text>
       </View>
       <StaysRoutineCard palette={p} account={account} properties={props.properties} work={props.work} part="clients" />
-      {subs.length > 1 && <Pills p={p} title="Client relations section" values={subs} value={sub} onChange={setSub} label={v => CLIENT_SUB_LABEL[v]} />}
+      {subs.length > 1 && <Pills p={p} title="Choose a client relations tool" showTitle values={subs} value={sub} onChange={setSub} label={v => CLIENT_SUB_LABEL[v]} />}
+      </>}
       {sub === "onboarding" && <OnboardingTracker {...props} />}
       {sub === "enquiries" && <LiveEnquiries palette={p} account={account} onOpenProperty={onOpenProperty} onRefresh={onRefresh} />}
       {sub === "licensing" && <LicensingList {...props} />}

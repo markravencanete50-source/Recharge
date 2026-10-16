@@ -4,6 +4,7 @@ import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
+import { useToolTitled } from "./ToolPage";
 import { Button, Field, Loading, message, Notice, Section, StatGrid, StatTile, useRequestId } from "./LiveKit";
 import { PropertySelect, SearchPicker } from "./SearchPicker";
 import { DateField } from "./CalendarPicker";
@@ -116,6 +117,7 @@ function PaymentSheet({ p, item, onClose, onDone }: { p: Palette; item: Receivab
 }
 
 export function AccountsReceivable({ p, account, properties }: { p: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
+  const titled = useToolTitled();
   const [report, setReport] = useState<ReceivableReport | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [loading, setLoading] = useState(true);
@@ -163,7 +165,7 @@ export function AccountsReceivable({ p, account, properties }: { p: Palette; acc
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 4 }}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Receivable</Text>
+        {!titled && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Receivable</Text>}
         <Text style={[ui.small, { color: p.muted }]}>Invoices to send and invoices waiting to be paid, for a guest stay or a client. Direct bookings that still need an invoice are listed at the end.</Text>
       </View>
       <Button label="Record invoice" icon="plus" primary p={p} onPress={() => setForm({ values: EMPTY })} />

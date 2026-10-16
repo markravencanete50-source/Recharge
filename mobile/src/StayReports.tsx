@@ -5,6 +5,7 @@ import { ui, type Palette } from "./theme";
 import { Anchor, Loading, london, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
 import { List, Row } from "./AccountsPayable";
 import { Pills } from "./Pills";
+import { useToolTitled } from "./ToolPage";
 import { DateField } from "./CalendarPicker";
 import { readTeams, writeTeams } from "./backend/client";
 import { plural } from "../../lib/format";
@@ -31,7 +32,7 @@ async function readStays(range: StayRange, property: string, channel: string) {
 }
 
 export function StayReports({ p, account, properties }: { p: Palette; account: WorkspaceAccount; properties: readonly { id: string; name: string }[] }) {
-  const allowed = isWorkspaceAdmin(account.role);
+  const allowed = isWorkspaceAdmin(account.role), titled = useToolTitled();
   const today = london(new Date());
   const [range, setRange] = useState<StayRange>(() => thisMonth(today));
   const [property, setProperty] = useState<string>(ALL);
@@ -68,7 +69,8 @@ export function StayReports({ p, account, properties }: { p: Palette; account: W
   return (
     <Anchor id="section-guests-and-stays"><View style={{ gap: 20 }}>
       <View style={{ gap: 4 }}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Guests & stays</Text>
+        {/* On its own page in the Reports hub the page heading already names it (ToolPage.tsx). */}
+        {!titled && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Guests & stays</Text>}
         <Text style={[ui.small, { color: p.muted }]}>{STAYS_INTRO}</Text>
       </View>
       <View style={{ gap: 10 }}>
