@@ -120,6 +120,7 @@ BY_ROLE.super_admin = [...BY_ROLE.admin, tool('access', 'Access control', 'Peopl
 const PANEL_ONLY: Record<string, Candidate[]> = {
   admin: [
     tool('productivity', 'Productivity', 'Clock in and out, hours by week and month', 'hourglass', work('management', { sub: 'productivity' })),
+    // A shortcut: the page opens Client relations on its Enquiries chip (lib/workspace-map.ts CLIENT_ENQUIRIES_LINK).
     tool('enquiries', 'Client enquiries', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }),
     // Repair spending limits per owner and property (Limit Changer, Repairs with contractors).
     tool('limits', 'Limit Changer', 'Repair spending limits by owner', 'coins', work('management', { sub: 'limits' })),

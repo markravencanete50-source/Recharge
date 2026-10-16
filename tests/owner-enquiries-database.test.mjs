@@ -112,11 +112,13 @@ test('a start time that is not one of the choices is refused, and nothing is mad
   assert.equal((await sql('select count(*)::int n from public.workspace_properties'))[0].n, before);
 });
 
-test('an enquiry the team adds by hand makes no Client enquiries row', async () => {
+test("an enquiry the team adds by hand is not an owner's (since 20261022400000 it is recorded as the team's)", async () => {
   const before = (await sql('select count(*)::int n from private.workspace_client_enquiries'))[0].n;
   const j = await journey(ADMIN, { action: 'createEnquiry', name: 'Team added', address: '4 Team Road, Glasgow G1 1AA', propertyType: 'Flat', bedrooms: 1, bathrooms: 1, enquiry: { contactName: 'Pat Caller', phone: '07700 900111' } });
   assert.equal(j.clientId, null);
-  assert.equal((await sql('select count(*)::int n from private.workspace_client_enquiries'))[0].n, before);
+  assert.equal((await sql('select count(*)::int n from private.workspace_client_enquiries'))[0].n, before + 1, 'one row, the team\'s');
+  const e = await enquiryOf(j.propertyId);
+  assert.equal(e.source, 'team'); assert.equal(e.ownerId, null); assert.equal(isOwnerEnquiry(e), false);
 });
 
 test('duplicates work as on the form: the same address first, else an open form answer with their email', async () => {

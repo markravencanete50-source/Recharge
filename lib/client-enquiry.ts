@@ -84,7 +84,7 @@ export const enquiryInviteSchema = z.object({
 
 export const ENQUIRY_STATUSES = ['sent', 'opened', 'received', 'valuing', 'closed'] as const;
 export const DUPLICATE_REASONS = ['same_address', 'existing_owner', 'same_contact', 'existing_client'] as const;
-export const ENQUIRY_SOURCES = ['form', 'owner_app'] as const;
+export const ENQUIRY_SOURCES = ['form', 'owner_app', 'team'] as const;
 export type EnquiryStatus = (typeof ENQUIRY_STATUSES)[number];
 const fileSchema = z.object({ id: z.string().uuid(), name: z.string(), mime: z.string(), bytes: z.number() });
 export const clientEnquirySchema = z.object({
@@ -102,7 +102,8 @@ export const clientEnquirySchema = z.object({
   duplicateReason: z.enum(DUPLICATE_REASONS).nullable().default(null),
   // How the estimate reached them (migration 20261019520000); null without an estimate.
   estimateDelivery: estimateDeliverySchema.nullable().default(null),
-  // Where it came from (migration 20261022300000): the public form, or an owner signed in to the app (linked to their account).
+  // Where it came from (migration 20261022300000): the public form, or an owner signed in to the app (linked to their account);
+  // since 20261022400000 also the team, added by hand (sentBy is who added it).
   source: z.enum(ENQUIRY_SOURCES).default('form'), ownerId: z.string().uuid().nullable().default(null),
   // Item 7: the repair limit the owner chose at Proceed, from the onboarding.
   ownerRepairLimit: z.object({ limitMinor: z.number(), chosenAt: z.string().optional(), via: z.string().optional() }).nullable().optional(),
@@ -150,6 +151,11 @@ export const PRIORITY_LABEL = 'Priority';
 export const OWNER_ENQUIRY_LABEL = 'Existing owner';
 export const OWNER_ENQUIRY_NOTE = 'Sent from the Recharge app by an owner who already has an account. The property is already on their account: they see the estimate in the app and choose Proceed there.';
 export const isOwnerEnquiry = (e: Pick<ClientEnquiry, 'source'>) => e.source === 'owner_app';
+// An enquiry the team added by hand (migration 20261022400000): a tag naming who added it, and a line on the enquiry.
+export const TEAM_ENQUIRY_LABEL = 'Added by the team';
+export const TEAM_ENQUIRY_NOTE = 'Added by hand by the team, for example after a phone call. Check the details, then value it as any answered form.';
+export const isTeamEnquiry = (e: Pick<ClientEnquiry, 'source'>) => e.source === 'team';
+export const teamEnquiryTag = (e: Pick<ClientEnquiry, 'sentByName'>) => e.sentByName?.trim() ? `${TEAM_ENQUIRY_LABEL} · ${e.sentByName.trim()}` : TEAM_ENQUIRY_LABEL;
 export const isPriority = (e: Pick<ClientEnquiry, 'answers'>, step?: EnquiryStep) => e.answers?.startWhen === PRIORITY_START && step !== 'closed' && step !== 'declined';
 // The list keeps its order (newest first), except that within each step the priority enquiries take that step's first places.
 export function priorityFirst<T extends Pick<ClientEnquiry, 'answers'>>(items: T[], stepOf: (e: T) => EnquiryStep): T[] {

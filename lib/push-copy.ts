@@ -94,6 +94,8 @@ export function pushTarget(eventType: string | null | undefined, details: PushDe
     const key = [text(details.who), text(details.propertyName)].join(' ').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
     return { tag: key ? 'guest-' + key : 'recharge-guest', url: '/workspace/live?section=inbox' };
   }
+  // An enquiry notice (a form back, a possible duplicate) opens Client enquiries, which the workspace opens in Client relations.
+  if (eventType?.startsWith('enquiry.')) return { tag: 'recharge', url: '/workspace/live?section=enquiries' };
   return { tag: 'recharge', url: '/workspace/live' };
 }
 

@@ -73,7 +73,9 @@ test("the owner's sheet: photos and videos, when to start, the link for big vide
   const form = newEnquiryForm(false), team = newEnquiryForm(true);
   const names = form.fields.map(f => f.name);
   assert.ok(names.includes('uploads') && names.includes('startWhen') && names.includes('photoLink'));
-  assert.ok(!team.fields.some(f => f.name === 'uploads' || f.name === 'startWhen'), 'the team form is unchanged');
+  // The team's form asks when they would like to start too (20261022400000), but takes no uploads.
+  assert.ok(!team.fields.some(f => f.name === 'uploads'), 'no uploads on the team form');
+  assert.equal(team.fields.find(f => f.name === 'startWhen').label, 'When would they like to get started?');
   assert.equal(team.done, undefined);
   assert.deepEqual(form.done, OWNER_ENQUIRY_DONE);
   assert.ok(!/email/i.test(OWNER_ENQUIRY_DONE.title + OWNER_ENQUIRY_DONE.message), 'no email is promised: none is sent');
