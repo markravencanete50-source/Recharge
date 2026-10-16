@@ -44,34 +44,38 @@ interface ExecutionContext {
 // const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
 
 const worker = {
-  async scheduled(controller: { cron?: string }, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(controller: { cron?: string; scheduledTime?: number }, env: Env, ctx: ExecutionContext): Promise<void> {
     if (env.BACKEND_ONLY !== 'true') return;
+    // The Worker has one trigger, every minute (scripts/build-backend-config.mjs). A "*/15 * * * *" trigger left in the
+    // Cloudflare dashboard does nothing at all: the minute ticks at :00, :15, :30 and :45 already do its work.
+    if (controller.cron === '*/15 * * * *') return;
+    // The minute this tick was scheduled for, so a tick that starts a few seconds late still counts as its own minute.
+    const tick = new Date(controller.scheduledTime ?? Date.now());
     // Every minute: notices go out to the browsers and phones that allowed notifications.
     ctx.waitUntil(import('../lib/web-push-server').then(module => module.runWebPush()).catch(() => {
       console.error('Web push batch failed; the next run retries.');
     }));
     // Every minute too: replies to owners who wrote by email are sent through Resend (nothing happens unless EMAIL_REPLIES_ENABLED is true).
-    if (env.RESEND_API_KEY && env.EMAIL_REPLIES_ENABLED === 'true' && controller.cron !== '*/15 * * * *') {
+    if (env.RESEND_API_KEY && env.EMAIL_REPLIES_ENABLED === 'true') {
       ctx.waitUntil(import('../lib/email-inbound-server').then(module => module.runEmailOutbox()).catch(() => {
         console.error('Owner email replies failed; the next run retries.');
       }));
     }
     // Every minute too: guests' messages from Hostaway (one request, plus the conversations that changed),
     // so the reply-time clock starts within about a minute. Off unless switched on, like the sync below.
-    // (The 15-minute tick is also a minute tick; it leaves this to the every-minute cron.)
     const hostawayOn = Boolean(env.HOSTAWAY_ACCOUNT_ID && env.HOSTAWAY_API_KEY && env.HOSTAWAY_SYNC_ENABLED === 'true');
-    if (hostawayOn && controller.cron !== '*/15 * * * *') {
+    if (hostawayOn) {
       ctx.waitUntil(import('../lib/hostaway-sync').then(module => module.runHostawayMessages('schedule')).catch(() => {
         console.error('Hostaway messages failed; the next run retries.');
       }));
     }
-    // The rest runs every 15 minutes (scripts/build-backend-config.mjs). Each job only runs once configured.
-    if (controller.cron && controller.cron !== '*/15 * * * *') return;
+    // The rest runs every 15 minutes: on the minute ticks at :00, :15, :30 and :45. Each job only runs once configured.
+    if (tick.getUTCMinutes() % 15 !== 0) return;
     // Off unless switched on: Recharge starts as a new business and Hostaway is being replaced.
     if (hostawayOn) {
-      // Hourly (the first 15-minute tick of each hour), straight after that tick's sync so the two never ask Hostaway at once:
+      // Hourly (the :00 tick of each hour), straight after that tick's sync so the two never ask Hostaway at once:
       // guest reviews for each property's ratings (20261022500000). A failure is recorded on its own; the next hour retries.
-      const reviewsHour = new Date().getUTCMinutes() < 15;
+      const reviewsHour = tick.getUTCMinutes() < 15;
       ctx.waitUntil(import('../lib/hostaway-sync').then(async module => {
         await module.runHostawaySync('schedule').catch(() => {
           console.error('Hostaway sync failed; the error is recorded and the next run retries.');
@@ -96,9 +100,9 @@ const worker = {
     ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_mid_stay_cleans', {})).catch(() => {
       console.error('Mid-stay cleans failed; the next run retries.');
     }));
-    // Each tick is a 15-minute one, so these sweeps are paced by the clock. All three are idempotent
-    // (a second run finds nothing to do) and bounded per run, so a late or doubled tick is harmless.
-    const tick = new Date(), hourly = tick.getUTCMinutes() < 15, everySixHours = hourly && tick.getUTCHours() % 6 === 0;
+    // Only the :00, :15, :30 and :45 ticks get this far, so these sweeps are paced by the clock: hourly is the :00 tick.
+    // All are idempotent (a second run finds nothing to do) and bounded per run, so a late or doubled tick is harmless.
+    const hourly = tick.getUTCMinutes() < 15, everySixHours = hourly && tick.getUTCHours() % 6 === 0;
     // Hourly, which includes the first tick after midnight London: today's daily and department to-dos are added for each team.
     if (hourly) {
       ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_ensure_daily_todos', {})).catch(() => {
