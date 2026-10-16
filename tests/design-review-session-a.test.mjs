@@ -36,7 +36,7 @@ test('2. the Approve button on a payout row has a visible edge', () => {
 
 test('3. Accounts: its six sections are one dropdown for finance roles, pills for the three others see', () => {
   const accounts = src('LiveAccounts.tsx');
-  assert.match(accounts, /<Pills p=\{p\} title="Accounts section" value=\{view\} onChange=\{setView\} label=\{v => TAB_LABEL\[v\]\}/);
+  assert.match(accounts, /\{!alone && <Pills p=\{p\} title="Choose an accounts tool" showTitle value=\{view\} onChange=\{setView\} label=\{v => TAB_LABEL\[v\]\}/);
   assert.doesNotMatch(accounts, /<Button key="performance"|<Button key="aircover"/);
   assert.equal(pillsMode(6), 'dropdown');
   assert.equal(pillsMode(3), 'pills');
@@ -68,10 +68,11 @@ test('20. the phone Accounts summary tiles: one fill and short one-line labels',
   assert.match(accounts, /attention=\{!phone && tile\.attention\}/);
 });
 
-test('14 and 15. Management (12 or 13 sections) and Client relations (up to 8) go through Pills, so they are dropdowns', async () => {
+test('14 and 15. Client relations (up to 8) goes through Pills, so it is a dropdown; Management lists its tools as cards', async () => {
   const { CLIENT_RELATIONS_SUBS } = await vite.ssrLoadModule('/lib/workspace-map.ts');
-  assert.match(src('ClientRelations.tsx'), /<Pills p=\{p\} title="Client relations section" values=\{subs\}/);
-  assert.match(src('LiveManagement.tsx'), /<Pills p=\{p\} title="Management section"/);
+  assert.match(src('ClientRelations.tsx'), /<Pills p=\{p\} title="Choose a client relations tool" showTitle values=\{subs\}/);
+  // Lee, 16 October 2026: each management tool has its own page, so the centre has cards and no section dropdown.
+  assert.doesNotMatch(src('LiveManagement.tsx'), /<Pills /);
+  assert.match(src('LiveManagement.tsx'), /<ToolCards p=\{p\} title="Choose a management tool"/);
   assert.equal(pillsMode(CLIENT_RELATIONS_SUBS.length), 'dropdown');
-  assert.equal(pillsMode(12), 'search');
 });

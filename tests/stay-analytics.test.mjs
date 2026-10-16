@@ -92,9 +92,11 @@ test('why they stay, the rating and the survey replies (20261021800000), in plai
 
 test('the Reports page shows Guests & stays to admins only, in the calm style, with no guest details', () => {
   const page = read('mobile/src/LiveWorkspace.tsx');
-  assert.match(page, /\{isWorkspaceAdmin\(account\.role\) && <StayReports p=\{p\} account=\{account\} properties=\{properties\} \/>\}/);
-  const start = page.indexOf('const reportsPage');
-  assert.ok(page.indexOf('<StayReports') > start && page.indexOf('<StayReports') < page.indexOf('const page = tab'), 'inside the Reports page');
+  // Its own card and page in the admins' Reports hub (Lee, 16 October 2026); a link to it opens that page.
+  assert.match(page, /\{ key: "stays", label: "Guests and stays", [^}]*anchors: \["section-guests-and-stays"\], ownIntro: true, page: <StayReports p=\{p\} account=\{account\} properties=\{properties\} \/> \}/);
+  assert.match(page, /const adminReports: HubReport\[\] = isWorkspaceAdmin\(account\.role\) \? \[/);
+  const start = page.indexOf('const adminReports');
+  assert.ok(page.indexOf('<StayReports') > start && page.indexOf('<StayReports') < page.indexOf('const reportsPage'), 'in the admins\' Reports hub');
   const screen = read('mobile/src/StayReports.tsx');
   assert.match(screen, /if \(!allowed\) return null;/);
   assert.match(screen, /<StatGrid showZeros>/);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
+import { useToolTitled } from "./ToolPage";
 import { Loading, london, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
 import { PropertySelect } from "./SearchPicker";
 import { List, Row } from "./AccountsPayable";
@@ -34,7 +35,7 @@ const profitLine = (f: PerformanceFigures) => f.invoicedCleanCount
 const summary = (f: PerformanceFigures) => [`Occupancy ${formatOccupancy(f.occupancyBps)}`, rate(f.averageNightlyRateMinor), `cleaning margin ${formatMoney(f.cleaningMarginMinor)}`].join(" · ");
 
 export function AccountsPerformance({ p, account, properties }: { p: Palette; account: WorkspaceAccount; properties: PropertyView[] }) {
-  const allowed = isFinanceRole(account.role);
+  const allowed = isFinanceRole(account.role), titled = useToolTitled();
   const today = london(new Date());
   // One date field opens the calendar (Lee: no row of period buttons); this month until another range is chosen.
   const [range, setRange] = useState<PerformanceRange>(() => periodRange("this_month", today));
@@ -80,7 +81,7 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 4 }}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Performance</Text>
+        {!titled && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Performance</Text>}
         <Text style={[ui.small, { color: p.muted }]}>What management fees and cleaning earned, and how full the properties were, for the dates you choose.</Text>
       </View>
 

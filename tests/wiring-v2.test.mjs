@@ -54,8 +54,8 @@ test('the sub-pages a role gets, and which opens first', () => {
 
 test('the workspace mounts every page and builds the section props once', () => {
   assert.match(workspace, /const sectionProps: SectionProps = \{ palette: p, account, properties, journeys, work,/);
-  assert.match(workspace, /currentView === "stays" && <GuestRelations key=\{"stays:" \+ \(focus\?\.nonce \?\? ""\)\} \{\.\.\.sectionProps\}/);
-  assert.match(workspace, /currentView === "clients" && <ClientRelations key=\{"clients:" \+ \(focus\?\.nonce \?\? ""\)\} \{\.\.\.sectionProps\}/);
+  assert.match(workspace, /currentView === "stays" && <GuestRelations key=\{"stays:" \+ \(focus\?\.nonce \?\? ""\) \+ ":" \+ visit\} \{\.\.\.sectionProps\}/);
+  assert.match(workspace, /currentView === "clients" && <ClientRelations key=\{"clients:" \+ \(focus\?\.nonce \?\? ""\) \+ ":" \+ visit\} \{\.\.\.sectionProps\}/);
   assert.match(workspace, /currentView === "cleans" && <LiveCleans /);
   assert.match(workspace, /currentView === "repairs" && <LiveRepairs /);
   assert.match(workspace, /currentView === "accounts" && <><LiveAccounts /);

@@ -51,9 +51,18 @@ test('messages: received per month across channels, for pricing an AI reply help
 
 test('the Reports page shows Business reports to admins only, with a CSV download and no PDF', () => {
   const page = read('mobile/src/LiveWorkspace.tsx');
-  assert.match(page, /\{isWorkspaceAdmin\(account\.role\) && <BusinessReports p=\{p\} account=\{account\} \/>\}/);
-  assert.ok(page.indexOf('<BusinessReports') > page.indexOf('const reportsPage'), 'inside the Reports page');
+  // Lee, 16 October 2026: the Reports page is a hub of cards for admins, each report on its own page.
+  assert.match(page, /const adminReports: HubReport\[\] = isWorkspaceAdmin\(account\.role\) \? \[/);
+  assert.match(page, /const reportsPage = isWorkspaceAdmin\(account\.role\)\s*\? <ReportsHub key=/);
+  const start = page.indexOf('const adminReports'), end = page.indexOf('const reportsPage');
+  assert.ok(start > 0 && end > start);
+  for (const kind of R.REPORT_KINDS) {
+    assert.match(page.slice(start, end), new RegExp(`anchors: \\[reportAnchor\\("${kind}"\\)\\], ownIntro: true, page: <BusinessReports p=\\{p\\} account=\\{account\\} kind="${kind}" \\/>`), kind + ' has its own card and page');
+  }
+  assert.equal(page.match(/<BusinessReports /g).length, R.REPORT_KINDS.length, 'only inside the admins\' hub');
   const screen = read('mobile/src/BusinessReports.tsx');
+  assert.match(screen, /export function BusinessReports\(\{ p, account, kind \}: \{ p: Palette; account: WorkspaceAccount; kind: ReportKind \}\)/);
+  assert.doesNotMatch(screen, /<Pills /, 'no picker to jump to another report');
   assert.match(screen, /if \(!allowed\) return null;/);
   assert.match(screen, /exportReport\(csvOf\(shown\), reportFilename\(shown\.kind, shown\.report\)\)/);
   assert.doesNotMatch(screen, /pdf/i);
