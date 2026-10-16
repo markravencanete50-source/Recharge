@@ -12,3 +12,4 @@
 -- 20261022200000_va_pay: installed by the lead on 15 October 2026 (no DROP or DELETE).
 -- 20261022100000_recharge_invoices: installed by the lead on 15 October 2026 (no DROP or DELETE). Payment details are blank until entered in the app.
 -- 20261022300000_owner_enquiries: installed by the lead on 16 October 2026 (no DROP or DELETE).
+-- 20261022400000_team_enquiries: installed by the lead on 16 October 2026 (no DROP or DELETE).
