@@ -42,6 +42,7 @@ import { OwnerBillSheet } from "./RechargeInvoice";
 import { isOwnerBill } from "../../lib/recharge-invoice";
 import { LiveManagement } from "./LiveManagement";
 import { ReportsHub, type HubReport } from "./ReportsHub";
+import { RatingsReport } from "./PropertyRatings";
 import { LiveProductivity } from "./LiveProductivity";
 import { LiveTeamPerformance } from "./LiveShifts";
 import { DecisionsReport } from "./LiveOversight";
@@ -632,6 +633,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     { key: "overview", label: "Business overview", detail: "Tasks recorded, completed and waiting across the business, with trends and a CSV download.", icon: "bar-chart-2", page: trendsReport("trends", false) },
     { key: "enquiries", label: "Client enquiries", detail: "Enquiries received, how many went live and how fast the team replied.", icon: "mail", anchors: [reportAnchor("enquiries")], ownIntro: true, page: <BusinessReports p={p} account={account} kind="enquiries" /> },
     { key: "stays", label: "Guests and stays", detail: "Who stays, for how long, how far ahead they book and why.", icon: "moon", anchors: ["section-guests-and-stays"], ownIntro: true, page: <StayReports p={p} account={account} properties={properties} /> },
+    { key: "ratings", label: "Ratings", detail: "Guest review ratings for every property, lowest first, with the latest reviews.", icon: "star", ownIntro: true, page: <RatingsReport p={p} account={account} /> },
     { key: "messages", label: "Messages", detail: "Messages received and sent on each channel, and how fast the team replied.", icon: "message-circle", anchors: [reportAnchor("messages")], ownIntro: true, page: <BusinessReports p={p} account={account} kind="messages" /> },
     { key: "todos", label: "Tasks", detail: "To-dos done, done late and overdue, by department and by person.", icon: "check-square", anchors: [reportAnchor("todos")], ownIntro: true, page: <BusinessReports p={p} account={account} kind="todos" /> },
     { key: "time", label: "Timesheet", detail: "Hours worked by each person and department, after unpaid pauses.", icon: "clock", anchors: [reportAnchor("time")], ownIntro: true, page: <BusinessReports p={p} account={account} kind="time" /> },

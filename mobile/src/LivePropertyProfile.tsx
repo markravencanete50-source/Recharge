@@ -14,6 +14,8 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { JourneyView } from "../../lib/workflow-forms";
 import { plural } from "../../lib/format";
 import { StayEditSheet } from "./StayEditSheet";
+import { PropertyRatingsSummary } from "./PropertyRatings";
+import { canSeeRatings } from "../../lib/property-ratings";
 import { canEditStay, listingLinks, maskAccount, ownersSchema, payoutSchema, profileAccess, reservationsSchema, setupAnswers, stayLines, type Answer, type ListingLink, type Owner, type StayLine } from "../../lib/property-profile";
 
 // Everything about one property in one place: who owns it, where it is listed, who is staying,
@@ -185,6 +187,11 @@ export function PropertyProfile({ palette: p, account, propertyId, journey }: { 
         : stays.length ? stays.map((s, i) => <StayRow key={s.id} p={p} stay={s} first={i === 0} onEdit={canEditStay(account, s) ? () => setEditingStay(s) : undefined} />)
         : <Text style={[ui.small, { color: p.muted }]}>No stays recorded for this property yet.</Text>}
       <StayEditSheet p={p} propertyId={propertyId} stay={editingStay} onClose={() => setEditingStay(null)} onSaved={() => setStaysKey(k => k + 1)} />
+    </Panel>);
+  // Guest ratings from Hostaway and the team's logged reviews (20261022500000), for the team only: owners are not shown them for now.
+  if (canSeeRatings(account)) panels.push(
+    <Panel key="ratings" p={p} icon="star" tone="stays" title="Guest ratings" detail="From guest reviews in Hostaway and the reviews the team logs. Stars out of 5.">
+      <PropertyRatingsSummary p={p} propertyId={propertyId} />
     </Panel>);
   if (answers.length) panels.push(
     <Panel key="setup" p={p} icon="clipboard" tone="ready" title="Property set-up" detail={account.role === "client" ? "What you told us in the set-up form." : "What the owner told us in the set-up form."}>

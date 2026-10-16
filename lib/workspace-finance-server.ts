@@ -40,6 +40,8 @@ export const workspaceTeams = rpcRoute({
     : input.section in BUSINESS_REPORT_KIND ? client.rpc('workspace_business_report', { section: BUSINESS_REPORT_KIND[input.section as keyof typeof BUSINESS_REPORT_KIND], start_on: input.from, end_on: input.to })
     // Reports > Guests & stays (admins only, checked by the database): stays in the dates, optionally one property and one channel.
     : input.section === 'stayAnalytics' ? client.rpc('workspace_stay_analytics', { start_on: input.from, end_on: input.to, target_property: input.propertyId || null, target_channel: input.channel || null })
+    // Property ratings: every visible property, or one in full (the database decides who sees which; owners are refused).
+    : input.section === 'propertyRatings' ? client.rpc('workspace_property_ratings', { target_property: input.propertyId || null })
     // Its two switches (admins only, checked by the database).
     : input.section === 'stayReasonSettings' ? client.rpc('workspace_stay_reason_settings')
     // Client enquiries also say whether the email service is set up (or the team copies the link).

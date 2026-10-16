@@ -69,7 +69,17 @@ const worker = {
     if (controller.cron && controller.cron !== '*/15 * * * *') return;
     // Off unless switched on: Recharge starts as a new business and Hostaway is being replaced.
     if (hostawayOn) {
-      ctx.waitUntil(import('../lib/hostaway-sync').then(module => module.runHostawaySync('schedule')).catch(() => {
+      // Hourly (the first 15-minute tick of each hour), straight after that tick's sync so the two never ask Hostaway at once:
+      // guest reviews for each property's ratings (20261022500000). A failure is recorded on its own; the next hour retries.
+      const reviewsHour = new Date().getUTCMinutes() < 15;
+      ctx.waitUntil(import('../lib/hostaway-sync').then(async module => {
+        await module.runHostawaySync('schedule').catch(() => {
+          console.error('Hostaway sync failed; the error is recorded and the next run retries.');
+        });
+        if (reviewsHour) await module.runHostawayReviews('schedule').catch(() => {
+          console.error('Hostaway reviews failed; the error is recorded and the next hour retries.');
+        });
+      }).catch(() => {
         console.error('Hostaway sync failed; the error is recorded and the next run retries.');
       }));
     }

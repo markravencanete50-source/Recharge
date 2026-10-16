@@ -45,7 +45,10 @@ export const teamsReadSchema = z.object({
     'payInvoices', 'payInvoice', 'payEarnings', 'paySettings',
     // VA pay (20261022200000): who may see it, the requests for invoice (userId: one VA), one request (invoiceId) and the
     // VAs' pay setup. Read through workspace_va_pay_read, which decides who sees what.
-    'vaPayAccess', 'vaPayRequests', 'vaPayRequest', 'vaPaySetup']),
+    'vaPayAccess', 'vaPayRequests', 'vaPayRequest', 'vaPaySetup',
+    // Property ratings (20261022500000): every visible property's guest ratings, or one property's (propertyId) in full.
+    // Read through workspace_property_ratings, which decides who sees which properties (owners are refused for now).
+    'propertyRatings']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(),
   channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).optional(),
   role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),
