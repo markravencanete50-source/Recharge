@@ -34,6 +34,7 @@ import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
 import { propertyPoints } from "../../lib/property-points";
 import { usesPropertyTable } from "../../lib/property-table";
+import { canEditPropertyDetails, propertyEditForm } from "../../lib/property-edit";
 import { formatCount, formatMoney } from "../../lib/format";
 import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveWorkRow, NoticeRowView, isDone, noticeIcon } from "./LiveRows";
@@ -89,7 +90,7 @@ export function PageHeading({ title, subtitle, palette: p, action }: { title: st
     </View>
   );
 }
-export function SoftButton({ label, icon, onPress, palette: p, primary = false, disabled = false }: { label: string; icon?: "plus" | "download" | "refresh-cw" | "arrow-right" | "log-out" | "check" | "external-link" | "calendar"; onPress: () => void; palette: Palette; primary?: boolean; disabled?: boolean }) {
+export function SoftButton({ label, icon, onPress, palette: p, primary = false, disabled = false }: { label: string; icon?: "plus" | "download" | "refresh-cw" | "arrow-right" | "log-out" | "check" | "external-link" | "calendar" | "edit-3"; onPress: () => void; palette: Palette; primary?: boolean; disabled?: boolean }) {
   return (
     <MotionPress {...(Platform.OS === "web" && !disabled ? { dataSet: primary ? { sheen: "" } : { hover: "tint" } } : {})} accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[ui.button, primary ? primaryFill(p) : { backgroundColor: p.wash }, { opacity: disabled ? 0.5 : 1 }]}>
       {!!icon && <Feather name={icon} size={16} color={primary ? p.onPrimary : p.primary} />}
@@ -561,6 +562,8 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   // What follows the profile in a property's detail: new work, work at the property, reports and invoices.
   const moreFor = (property: PropertyView) => (
     <>
+      {/* Admins, and Stays on the property, change its name and address (migration 20261022800000). */}
+      {canEditPropertyDetails(account) && <SoftButton label="Edit name and address" icon="edit-3" palette={p} onPress={() => openForm(propertyEditForm(property))} />}
       {createOperationForms(account, property.id).map(f => <SoftButton key={f.key} label={f.title} icon="plus" palette={p} onPress={() => openForm(f)} />)}
       {!!propertyWork.length && <View style={{ gap: 4 }}>
         <Text style={{ color: p.text, fontWeight: "700" }}>Work at this property · {propertyWork.length}</Text>
