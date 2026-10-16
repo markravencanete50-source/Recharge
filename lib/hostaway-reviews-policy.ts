@@ -32,9 +32,20 @@ export type SyncReview = {
 };
 
 // The most pages of 100 one run asks Hostaway for, and how many reviews go to the database in one call. Ten pages (1,000
-// reviews) keeps a run to about ten sequential Hostaway requests, so it finishes well inside a minute tick; a list longer
-// than that is marked incomplete on the Ratings report rather than slowing every run.
-export const REVIEW_PAGES = 10;
+// reviews) keeps a run to about ten sequential Hostaway requests, so it finishes well inside a minute tick.
+// The pages are split (migration 20261023000000_review_sweep):
+//  * the head: the first REVIEW_HEAD_PAGES pages, every run. Hostaway is asked for guest reviews newest first, so the head
+//    is the newest 300 reviews: new ones, and recent ones whose rating arrives after the stay, are in on the next run.
+//  * the sweep: the next REVIEW_SWEEP_PAGES pages from where the last run stopped (the database keeps the offset). When a
+//    page comes back short the sweep has reached the oldest review: that is a full pass, and the next run starts again
+//    just after the head. So a catalogue of N reviews is read in full every (N - 300) / 700 hours, and every review is
+//    refreshed once a pass. A review a run does not reach is simply not read that run; nothing is removed or hidden.
+// A new review moves every later one down the list, so the sweep may read a few reviews twice but never skips one.
+export const REVIEW_HEAD_PAGES = 3;
+export const REVIEW_SWEEP_PAGES = 7;
+export const REVIEW_PAGES = REVIEW_HEAD_PAGES + REVIEW_SWEEP_PAGES;
+export const REVIEW_PAGE_SIZE = 100;
+export const REVIEW_SWEEP_MAX = 1_000_000;
 export const REVIEW_BATCH = 250;
 export const REVIEW_TEXT_MAX = 4000;
 
@@ -88,8 +99,9 @@ export function syncReview(raw: unknown): SyncReview | null {
   const r = object(raw);
   const id = first(r.id, r.reviewId);
   if (!id || id.length > 100) return null;
+  // Only a guest's review of the stay ("guest-to-host"); a review that says nothing of its direction is kept, as before.
   const type = text(r.type).toLowerCase().replace(/[^a-z]/g, '');
-  if (type === 'hosttoguest') return null;
+  if (type && type !== 'guesttohost') return null;
   const channel = reviewChannel(r);
   const value = number(r.rating ?? r.overallRating ?? r.score);
   const rated = value !== null && value > 0;
@@ -115,4 +127,42 @@ export function reviewBatches(reviews: readonly SyncReview[], size = REVIEW_BATC
   const batches: SyncReview[][] = [];
   for (let i = 0; i < unique.length; i += size) batches.push(unique.slice(i, i + size));
   return batches.length ? batches : [[]];
+}
+
+// One page of Hostaway's guest reviews, newest first (Hostaway's /reviews takes sortBy, sortOrder and type; see
+// docs/HOSTAWAY-SYNC.md). Host-to-guest reviews are also dropped by syncReview, should the filter ever be ignored.
+export const reviewsPath = (offset: number) =>
+  `/reviews?limit=${REVIEW_PAGE_SIZE}&offset=${offset}&sortBy=id&sortOrder=desc&type=guest-to-host`;
+
+// Where this run's sweep starts: the offset the database kept, never inside the head (read anyway) or past the cap.
+export function sweepStart(offset: unknown): number {
+  const head = REVIEW_HEAD_PAGES * REVIEW_PAGE_SIZE;
+  const n = typeof offset === 'number' && Number.isInteger(offset) ? offset : head;
+  return n < head || n > REVIEW_SWEEP_MAX ? head : n;
+}
+
+// Whether Hostaway listed the reviews newest first, judged by the ids on the first page; reported with each run so a
+// change in Hostaway's order shows. 'unknown' with fewer than two numeric ids.
+export function reviewOrder(rows: readonly unknown[]): 'newest' | 'oldest' | 'unknown' {
+  const ids = rows.map(r => number(object(r).id)).filter((n): n is number => n !== null);
+  if (ids.length < 2 || ids[0] === ids[ids.length - 1]) return 'unknown';
+  return ids[0] > ids[ids.length - 1] ? 'newest' : 'oldest';
+}
+
+export type ReviewSweep = { rows: unknown[]; pages: number; wrapped: boolean; from: number; nextOffset: number; order: 'newest' | 'oldest' | 'unknown' };
+// One run's pages: the head, then the sweep from `offset`. `wrapped` is true once a short page shows the end of the list,
+// and the next run then starts just after the head. Always at most REVIEW_PAGES requests, one after another.
+export async function sweepReviews(page: (offset: number) => Promise<unknown[]>, offset: unknown): Promise<ReviewSweep> {
+  const head = REVIEW_HEAD_PAGES * REVIEW_PAGE_SIZE, from = sweepStart(offset), rows: unknown[] = [];
+  let pages = 0, order: ReviewSweep['order'] = 'unknown';
+  const read = async (at: number) => {
+    const batch = await page(at);
+    if (pages++ === 0) order = reviewOrder(batch);
+    rows.push(...batch);
+    return batch.length < REVIEW_PAGE_SIZE;
+  };
+  for (let i = 0; i < REVIEW_HEAD_PAGES; i++) if (await read(i * REVIEW_PAGE_SIZE)) return { rows, pages, wrapped: true, from, nextOffset: head, order };
+  for (let i = 0; i < REVIEW_SWEEP_PAGES; i++) if (await read(from + i * REVIEW_PAGE_SIZE)) return { rows, pages, wrapped: true, from, nextOffset: head, order };
+  const next = from + REVIEW_SWEEP_PAGES * REVIEW_PAGE_SIZE;
+  return { rows, pages, wrapped: false, from, nextOffset: next > REVIEW_SWEEP_MAX ? head : next, order };
 }
