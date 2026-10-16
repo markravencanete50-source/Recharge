@@ -15,3 +15,4 @@
 -- 20261022400000_team_enquiries: installed by the lead on 16 October 2026 (no DROP or DELETE).
 -- 20261022500000_property_ratings: installed by the lead on 16 October 2026 (no DROP or DELETE).
 -- 20261022700000_admin_access_control: installed by the lead on 16 October 2026 (no DROP or DELETE). workspace_access_control_action matches with comments ignored (live lacked two comment lines before).
+-- 20261022800000_property_edit: installed by the lead on 16 October 2026 (no DROP or DELETE).
