@@ -74,7 +74,7 @@ export function syncLine(sync: PropertyRatings['sync']): string {
   const at = (value: string) => `${new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' })} at ${new Date(value).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })}`;
   const parts = [sync.lastSuccessAt ? `Reviews last synced from Hostaway on ${at(sync.lastSuccessAt)}.` : 'Reviews have not synced from Hostaway yet. They sync every hour once the Hostaway sync is on.'];
   if (sync.lastError && sync.lastRunAt && (!sync.lastSuccessAt || sync.lastRunAt > sync.lastSuccessAt)) parts.push(`The last try failed: ${sync.lastError}`);
-  if (sync.lastSuccessAt && !sync.complete) parts.push('Hostaway had more reviews than one sync reads, so the oldest may be missing.');
+  if (sync.lastSuccessAt && !sync.complete) parts.push('The first full read of Hostaway\'s reviews is still under way (a few hours), so older reviews may be missing.');
   if (sync.unlinked) parts.push(`${formatCount(sync.unlinked)} rated ${sync.unlinked === 1 ? 'review is' : 'reviews are'} for Hostaway listings not linked to a property yet.`);
   return parts.join(' ');
 }
