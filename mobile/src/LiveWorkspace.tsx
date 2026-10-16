@@ -436,6 +436,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     return () => { active = false; };
   }, [viewAs, account.role]);
   const entries = useMemo(() => buildSearchIndex({ role: account.role, modules: account.modules, properties, work, invoices }), [account.role, account.modules, properties, work, invoices]);
+  // A property's page, opened from an update (an onboarding notice) as from search.
+  const openProperty = (id: string) => { setPropertyFocus({ id, nonce: Date.now() }); setFocus(null); setTab("properties"); };
   const openEntry = (entry: SearchEntry) => {
     const t = entry.target;
     if (t.kind === "section") navigate(t.section);
@@ -651,9 +653,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "enquiries" ? <LiveEnquiries palette={p} account={account} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} />
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
     : tab === "moderation" ? <LiveModeration palette={p} onOpenConversation={openMessages} />
-    : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} />
+    : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} guestEmailWaiting={guestEmailWaiting} openConversation={chatTarget?.id}
-        updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} onLeave={() => navigate("home")} />
+        updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} onLeave={() => navigate("home")} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view, sub) => { setTab(next); if (view) setWorkView(view); setFocus(sub ? { sub, nonce: Date.now() } : null); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;

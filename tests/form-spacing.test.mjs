@@ -27,8 +27,8 @@ test('workflow sheet forms: fields a section apart, each label close to its own 
 
 test('workflow forms can group fields under a heading and reveal a group once the one before is started', () => {
   const pages = source('mobile/src/LivePages.tsx'), forms = source('lib/workflow-forms.ts');
-  assert.match(forms, /section\?:string;after\?:string;group\?:string\}/);
-  assert.match(pages, /const shown = spec\.fields\.filter\(f => !f\.after \|\| filled\(values\[f\.after\]\) \|\| spec\.fields\.some\(g => g\.group === f\.group && filled\(values\[g\.name\]\)\)\);/);
+  assert.match(forms, /section\?:string;after\?:string;group\?:string;\r?\n[^\n]*\r?\n\s*when\?:\{field:string;value:string\}\[\]\}/);
+  assert.match(pages, /const shown = spec\.fields\.filter\(f => \(!f\.after \|\| filled\(values\[f\.after\]\) \|\| spec\.fields\.some\(g => g\.group === f\.group && filled\(values\[g\.name\]\)\)\) && whenMet\(f, values\)\);/);
   assert.match(pages, /\{!!f\.section && <Text accessibilityRole="header"/);
   // A short label in a group: no "(optional)" (the heading says it) and the group in what screen readers hear.
   assert.match(pages, /\{!f\.required && !f\.group \? " \(optional\)" : ""\}/);

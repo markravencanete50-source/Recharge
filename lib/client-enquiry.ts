@@ -51,7 +51,14 @@ export const enquiryAnswersSchema = z.object({
 }).strict();
 // Forms answered before migration 20261020800000 also have a correspondence address and "Are you an existing client?" (Alex: both
 // questions removed). They still show on the enquiry; new forms never send them.
-export const storedEnquiryAnswersSchema = enquiryAnswersSchema.extend({ correspondenceAddress: text(1000).optional(), existingClient: z.enum(YES_NO).optional() });
+// An owner's enquiry from the app (migration 20261022300000) is stored the same way, with their name and sign-in email as
+// the contact and only the property's answers: no phone, no services questions and no enquiry type. Stored answers are
+// read leniently, so one unusual answer never stops the whole list from reading.
+export const storedEnquiryAnswersSchema = enquiryAnswersSchema.extend({
+  correspondenceAddress: text(1000).optional(), existingClient: z.enum(YES_NO).optional(),
+  fullName: text(200), email: text(320), phone: text(30).optional(), wcs: count('WCs').optional(),
+  shortLet: z.enum(YES_NO).optional(), furnishQuote: z.enum(YES_NO).optional(), compliance: z.enum(YES_NO).optional(), enquiryType: text(200).optional(),
+});
 export type EnquiryAnswers = z.infer<typeof storedEnquiryAnswersSchema>;
 
 // What the team writes when sending the form: who to, and the email (the link is added for them).
@@ -77,6 +84,7 @@ export const enquiryInviteSchema = z.object({
 
 export const ENQUIRY_STATUSES = ['sent', 'opened', 'received', 'valuing', 'closed'] as const;
 export const DUPLICATE_REASONS = ['same_address', 'existing_owner', 'same_contact', 'existing_client'] as const;
+export const ENQUIRY_SOURCES = ['form', 'owner_app'] as const;
 export type EnquiryStatus = (typeof ENQUIRY_STATUSES)[number];
 const fileSchema = z.object({ id: z.string().uuid(), name: z.string(), mime: z.string(), bytes: z.number() });
 export const clientEnquirySchema = z.object({
@@ -94,6 +102,10 @@ export const clientEnquirySchema = z.object({
   duplicateReason: z.enum(DUPLICATE_REASONS).nullable().default(null),
   // How the estimate reached them (migration 20261019520000); null without an estimate.
   estimateDelivery: estimateDeliverySchema.nullable().default(null),
+  // Where it came from (migration 20261022300000): the public form, or an owner signed in to the app (linked to their account).
+  source: z.enum(ENQUIRY_SOURCES).default('form'), ownerId: z.string().uuid().nullable().default(null),
+  // Item 7: the repair limit the owner chose at Proceed, from the onboarding.
+  ownerRepairLimit: z.object({ limitMinor: z.number(), chosenAt: z.string().optional(), via: z.string().optional() }).nullable().optional(),
 });
 export type ClientEnquiry = z.infer<typeof clientEnquirySchema>;
 export const clientEnquiriesSchema = z.object({ canInvite: z.boolean(), emailReady: z.boolean().default(false), items: z.array(clientEnquirySchema) });
@@ -134,6 +146,10 @@ export function duplicateNote(e: Pick<ClientEnquiry, 'duplicateReason' | 'duplic
 // "As soon as possible" (Alex): a Priority tag in the list, and first within its step. Once closed or declined it no longer matters.
 export const PRIORITY_START = START_WHEN[0];
 export const PRIORITY_LABEL = 'Priority';
+// An owner's enquiry from the app (migration 20261022300000): a tag in the list, and a line on the enquiry.
+export const OWNER_ENQUIRY_LABEL = 'Existing owner';
+export const OWNER_ENQUIRY_NOTE = 'Sent from the Recharge app by an owner who already has an account. The property is already on their account: they see the estimate in the app and choose Proceed there.';
+export const isOwnerEnquiry = (e: Pick<ClientEnquiry, 'source'>) => e.source === 'owner_app';
 export const isPriority = (e: Pick<ClientEnquiry, 'answers'>, step?: EnquiryStep) => e.answers?.startWhen === PRIORITY_START && step !== 'closed' && step !== 'declined';
 // The list keeps its order (newest first), except that within each step the priority enquiries take that step's first places.
 export function priorityFirst<T extends Pick<ClientEnquiry, 'answers'>>(items: T[], stepOf: (e: T) => EnquiryStep): T[] {
@@ -151,14 +167,15 @@ export const STEP_TONE: Record<EnquiryStep, 'good' | 'wait' | 'bad' | 'plain'> =
 
 // The property's details for "Start valuing", from the landlord's answers: a short name from the
 // first line of the address, and everything else they told us in the enquiry notes.
-const yes = (v: string) => v === 'yes' ? 'Yes' : 'No';
+const yes = (v?: string) => v === 'yes' ? 'Yes' : v === 'no' ? 'No' : 'Not asked';
 export function valuationDraft(a: EnquiryAnswers) {
   // "3F2, 17 Warrender Park Road, …" reads "17 Warrender Park Road (3F2)": a flat's position alone is no name.
   const parts = a.propertyAddress.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
   const firstLine = parts.length > 1 && parts[0].length <= 10 && /\d/.test(parts[0]) && /[a-z]{3}/i.test(parts[1]) ? `${parts[1]} (${parts[0]})` : parts[0] ?? a.propertyAddress;
+  // An owner's enquiry from the app has no enquiry type or services answers, so those lines are left out.
   const notes = [
-    `Enquiry: ${a.enquiryType}`,
-    `Short-term let now: ${yes(a.shortLet)} · Furnishing quote: ${yes(a.furnishQuote)} · Compliance and licensing: ${yes(a.compliance)}`,
+    a.enquiryType ? `Enquiry: ${a.enquiryType}` : '',
+    a.shortLet || a.furnishQuote || a.compliance ? `Short-term let now: ${yes(a.shortLet)} · Furnishing quote: ${yes(a.furnishQuote)} · Compliance and licensing: ${yes(a.compliance)}` : '',
     a.startWhen ? `Start: ${a.startWhen}` : '',
     a.correspondenceAddress ? `Correspondence address: ${a.correspondenceAddress.replace(/\s*\n\s*/g, ', ')}` : '',
     a.notes ? `They added: ${a.notes}` : '',
@@ -187,6 +204,20 @@ export function enquiryEmail(subject: string, body: string, link: string) {
 // Uploads on the public form: pictures and short videos, checked from their bytes.
 export const MAX_ENQUIRY_FILE_BYTES = 25 * 1024 * 1024;
 export const MAX_ENQUIRY_FILES = 15;
+// The database's ceiling for one enquiry (private.workspace_enquiry_public and private.workspace_owner_enquiry_files).
+export const MAX_ENQUIRY_TOTAL_BYTES = 250 * 1024 * 1024;
+export const ENQUIRY_FILE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'video/mp4', 'video/quicktime', 'video/webm'] as const;
+export const ENQUIRY_FILE_RULE = 'Photos (JPG, PNG, WebP, HEIC) or videos (MP4, MOV, WebM), up to 25 MB each and 15 files. For a longer video, paste a link instead.';
+// The owner's sheet checks what they chose before anything is sent (the server checks the bytes again): null when all can go.
+export function enquiryFilesProblem(files: readonly { bytes: number; mime: string; name: string }[]): string | null {
+  if (files.length > MAX_ENQUIRY_FILES) return `Up to ${MAX_ENQUIRY_FILES} photos or videos. For more, paste a link to an album.`;
+  const odd = files.find(f => !(ENQUIRY_FILE_MIMES as readonly string[]).includes(f.mime));
+  if (odd) return `${odd.name} is not a photo or video we can take. ${ENQUIRY_FILE_RULE}`;
+  const big = files.find(f => f.bytes > MAX_ENQUIRY_FILE_BYTES);
+  if (big) return `${big.name} is over 25 MB. For a longer video, paste a link instead.`;
+  if (files.reduce((sum, f) => sum + f.bytes, 0) > MAX_ENQUIRY_TOTAL_BYTES) return 'That is more than we can take in one enquiry. Add a link to an album instead.';
+  return null;
+}
 const starts = (b: Uint8Array, sig: number[]) => sig.every((x, i) => b[i] === x);
 const ascii = (b: Uint8Array, from: number, to: number) => String.fromCharCode(...b.slice(from, to));
 export function enquiryFileType(bytes: Uint8Array): { mime: string; ext: string } | null {
