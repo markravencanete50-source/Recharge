@@ -31,27 +31,38 @@ test('the dropdown lists every choice with the pill\'s own words, counts include
   assert.deepEqual(P.pillOptions(values, label), values.map(v => ({ value: v, label: label(v) })));
   assert.deepEqual(P.pillOptions(values, label).map(o => o.label).slice(0, 2), ['Waiting (3)', 'Online (12)']);
   // The same onChange and value go straight through; the pills call it with the value too.
-  assert.match(pills, /<Dropdown p=\{p\} label=\{title\} hideLabel searchable=\{mode === "search"\} value=\{value\} options=\{pillOptions\(values, text\)\} onChange=\{onChange\} \/>/);
+  assert.match(pills, /<Dropdown p=\{p\} label=\{title\} hideLabel labelledBy=\{labelledBy\} searchable=\{mode === "search"\} value=\{value\} options=\{pillOptions\(values, text\)\} onChange=\{onChange\} \/>/);
   assert.match(pills, /onPress=\{\(\) => onChange\(v\)\}/);
   // Accessible: the pills are a radiogroup of radios; the dropdown is a select (web) or a combobox (phone) named by `title`.
   assert.match(pills, /accessibilityRole="radio" accessibilityState=\{\{ selected: on \}\}/);
   const dropdown = source('Dropdown.tsx');
-  assert.match(dropdown, /createElement\("select", \{\s*"aria-label": label/);
+  assert.match(dropdown, /createElement\("select", \{\s*"aria-label": label, "aria-labelledby": labelledBy/);
   assert.match(dropdown, /accessibilityRole="combobox"/);
   assert.match(dropdown, /const caption = hideLabel \? null : <Text/);
   assert.match(dropdown, /fontFamily: "Montserrat_400Regular/);
 });
 
-test('Management uses it: its 12 or 13 sections are one dropdown (with search) named "Management section"', () => {
+test('with showTitle the title is a visible label above the control, tied to it (Lee: a title on top of the picker)', () => {
+  assert.match(pills, /const id = useId\(\);/);
+  assert.match(pills, /labelledBy=\{showTitle \? id : undefined\}/);
+  assert.match(pills, /<Text nativeID=\{id\} style=\{\{ color: p\.text, fontSize: 14, fontWeight: "600" \}\}>\{title\}<\/Text>/);
+  assert.match(pills, /accessibilityRole="radiogroup" aria-labelledby=\{labelledBy\}/);
+  // Every section picker left on a department page carries one, in plain words.
+  assert.match(source('GuestRelations.tsx'), /<Pills p=\{p\} title="Choose a guest relations tool" showTitle /);
+  assert.match(source('ClientRelations.tsx'), /<Pills p=\{p\} title="Choose a client relations tool" showTitle /);
+  assert.match(source('LiveAccounts.tsx'), /<Pills p=\{p\} title="Choose an accounts tool" showTitle /);
+});
+
+test('Management no longer has a section dropdown: the centre lists its tools as cards and each tool has its own page', () => {
   const management = source('LiveManagement.tsx');
-  assert.match(management, /import \{ Pills \} from "\.\/Pills";/);
-  assert.match(management, /<Pills p=\{p\} title="Management section" values=\{MANAGEMENT_VIEWS\.filter/);
+  assert.doesNotMatch(management, /<Pills /, 'no picker to jump from one tool to another (Lee, 16 October 2026)');
+  assert.match(management, /<ToolCards p=\{p\} title="Choose a management tool" cards=\{views\.map\(v => TOOL\[v\]\)\} onOpen=\{setView\} \/>/);
   const views = management.match(/const MANAGEMENT_VIEWS = \[([^\]]*)\]/)[1].split(',').length;
-  assert.equal(P.pillsMode(views - 1), 'search', 'even without Access control it is a dropdown, with a search box past 10');
+  assert.equal(views, 16, 'every tool is still there');
 });
 
 test('Pills lives in its own file; AccountsPayable re-exports it; every screen imports it from Pills.tsx', () => {
-  assert.match(pills, /export function Pills<T extends string>\(\{ p, values, value, onChange, label, title = "Choose" \}: \{ p: Palette; values: readonly T\[\]; value: T; onChange: \(v: T\) => void; label\?: \(v: T\) => string; wrap\?: boolean; title\?: string \}\)/);
+  assert.match(pills, /export function Pills<T extends string>\(\{ p, values, value, onChange, label, title = "Choose", showTitle = false \}: \{ p: Palette; values: readonly T\[\]; value: T; onChange: \(v: T\) => void; label\?: \(v: T\) => string; wrap\?: boolean; title\?: string; showTitle\?: boolean \}\)/);
   const payable = source('AccountsPayable.tsx');
   assert.match(payable, /export \{ Pills \} from "\.\/Pills";/);
   assert.doesNotMatch(payable, /export function Pills/);

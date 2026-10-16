@@ -4,6 +4,7 @@ import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { Button, useWorkFocus } from "./LiveKit";
 import { Pills } from "./Pills";
+import { ToolHeader } from "./ToolPage";
 import { AirCoverList } from "./AirCoverList";
 import { DirectBookings } from "./DirectBookings";
 import { LiveCleans } from "./LiveCleans";
@@ -34,9 +35,13 @@ export function GuestRelations(props: SectionProps & { onRefresh?: () => void | 
   const saved = useSaved();
   const subs = guestSubsFor(account.role, account.modules);
   const [sub, setSub] = useState<GuestSub>(() => pickSub(subs, focus?.sub, defaultGuestSub(account.role, subs)));
+  // A link to one section (search, a Home card, a notification) opens it on its own page, with no chips to jump to the
+  // others and "Guest relations" to come back (ToolPage.tsx). Opened as a whole, the labelled chips choose the section.
+  const [alone, setAlone] = useState(() => subs.length > 1 && subs.some(s => s === focus?.sub));
   const [recording, setRecording] = useState(() => focus?.open === "record-stay" && canStart(account, "record-stay"));
   return (
     <View style={{ gap: space.section }}>
+      {alone ? <ToolHeader p={p} back="Guest relations" onBack={() => setAlone(false)} title={GUEST_SUB_LABEL[sub]} /> : <>
       {/* The title keeps its width; on a phone "Record a stay" wraps under it instead of squeezing it. */}
       <View style={[ui.between, { gap: 12, alignItems: "flex-start", flexWrap: "wrap" }]}>
         <View style={{ flex: 1, minWidth: 220, gap: 4 }}>
@@ -46,7 +51,8 @@ export function GuestRelations(props: SectionProps & { onRefresh?: () => void | 
         {canStart(account, "record-stay") && <Button label="Record a stay" icon="plus" primary p={p} onPress={() => setRecording(true)} />}
       </View>
       <StaysRoutineCard palette={p} account={account} properties={properties} work={props.work} part="guests" />
-      {subs.length > 1 && <Pills p={p} values={subs} value={sub} onChange={setSub} label={v => GUEST_SUB_LABEL[v]} wrap={false} />}
+      {subs.length > 1 && <Pills p={p} title="Choose a guest relations tool" showTitle values={subs} value={sub} onChange={setSub} label={v => GUEST_SUB_LABEL[v]} wrap={false} />}
+      </>}
       {sub === "cleans" && <LiveCleans palette={p} account={account} properties={properties} onForm={props.onForm} />}
       {sub === "bookings" && <DirectBookings {...props} />}
       {sub === "aircover" && <AirCoverList {...props} />}

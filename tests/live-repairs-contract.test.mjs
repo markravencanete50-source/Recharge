@@ -47,7 +47,8 @@ const step = (role, repair, data) => {
   assert.ok(name, `${role} should act at ${repair.data.phase}`);
   return operation({ action: 'updateOperation', requestId: crypto.randomUUID(), workId: repair.workId, version: repair.version, step: name, data });
 };
-const day = (await db.query("select current_date::text d,to_char(current_date,'YYYY-MM') m,(current_date+45)::text later,(current_date-14)::text earlier")).rows[0];
+// Monthly routine visits fall on day 1 of the month, so the schedule window starts there (a window from 14 days back missed it from the 15th).
+const day = (await db.query("select current_date::text d,to_char(current_date,'YYYY-MM') m,(date_trunc('month',current_date)::date+45)::text later,date_trunc('month',current_date)::date::text earlier")).rows[0];
 
 test('pounds are converted exactly and ambiguous amounts refused', () => {
   assert.equal(poundsToMinor('£1,240.5'), 124050); assert.equal(poundsToMinor('95'), 9500);

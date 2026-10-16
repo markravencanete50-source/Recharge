@@ -4,6 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { ChoiceField } from "./ChoiceField";
 import { useCelebrate } from "./Celebrate";
+import { useToolTitled } from "./ToolPage";
 import { Button, Field, Loading, message, Notice, useRequestId } from "./LiveKit";
 import { icon, radius, space, ui, type Palette } from "./theme";
 import { readRepairLimits, writeRepairLimit } from "./backend/client";
@@ -50,7 +51,7 @@ function PropertyLimit({ p, row, first, canEdit, onEdit }: { p: Palette; row: Li
 }
 
 export function LimitChanger({ p, work, onOpenWork }: { p: Palette } & Partial<Pick<SectionProps, "work" | "onOpenWork">>) {
-  const celebrate = useCelebrate();
+  const celebrate = useCelebrate(), titled = useToolTitled();
   const [limits, setLimits] = useState<Limits | null>(null), [error, setError] = useState(""), [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Editing | null>(null), [busy, setBusy] = useState(false), [saveError, setSaveError] = useState("");
   // The repairs approved automatically by the last change, with links to them.
@@ -83,7 +84,8 @@ export function LimitChanger({ p, work, onOpenWork }: { p: Palette } & Partial<P
   return (
     <View style={{ gap: space.section }} {...(Platform.OS === "web" ? { dataSet: { limitChanger: "page" } } : {})}>
       <View style={{ gap: 4 }}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Limit Changer</Text>
+        {/* On its own page the page heading already says Limit Changer (ToolPage.tsx). */}
+        {!titled && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Limit Changer</Text>}
         <Text style={[ui.body, { color: p.muted }]}>How much Recharge can spend on a repair at each property without asking the owner. A contractor’s estimate within the limit is approved once the team has reviewed it; above it, the owner is asked.</Text>
       </View>
       {limits && limits.companyLimitMinor !== null && <View style={[ui.row, { gap: 10, padding: 12, borderRadius: radius.control, backgroundColor: p.wash }]}>

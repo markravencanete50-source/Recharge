@@ -4,7 +4,6 @@ import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 import { Anchor, Button, Loading, london, message, Notice, Section, StatGrid, StatTile, useWorkFocus } from "./LiveKit";
 import { List, Row } from "./AccountsPayable";
-import { Pills } from "./Pills";
 import { DateField } from "./CalendarPicker";
 import { readTeams } from "./backend/client";
 import { exportReport } from "./exportReport";
@@ -12,7 +11,7 @@ import { formatDuration, formatMoney, plural } from "../../lib/format";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import {
   channelName, channelOrder, defaultReportRange, departmentName, funnelSteps, monthName, monthSoFar, PRIORITY_LABEL, receivedByMonth, repairStageName, REPORT_CSV, reportAnchor, reportFromAnchor,
-  REPORT_INTRO, REPORT_KINDS, REPORT_LABEL, REPORT_NOTES, REPORT_SCHEMA, REPORT_SECTION, reportFilename, reportRangeError, SOURCE_LABEL, startWhenName,
+  REPORT_INTRO, REPORT_NOTES, REPORT_SCHEMA, REPORT_SECTION, reportFilename, reportRangeError, SOURCE_LABEL, startWhenName,
   waitLabel, weekName, weekTotals,
   type AnyReport, type EnquiriesReport, type MessagesReport, type RepairsReport, type ReportKind, type TimeReport, type TodosReport,
 } from "../../lib/business-reports-view";
@@ -21,6 +20,7 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 // Business reports (Alex's meeting): client enquiries, repairs and spend, to-dos, messages and time worked, each for a
 // date range (the last 30 days to start, up to 366 days) with a CSV download. Admins only: the database refuses everyone
 // else (workspace_business_report), and this section is not drawn for them. Every figure comes from the database.
+// Each report has its own card and page in the Reports hub (ReportsHub.tsx, Lee, 16 October 2026).
 type Loaded = { [K in ReportKind]: { key: string; kind: K; report: AnyReport[K] } }[ReportKind];
 
 function csvOf(loaded: Loaded) {
@@ -33,15 +33,14 @@ function csvOf(loaded: Loaded) {
   }
 }
 
-export function BusinessReports({ p, account }: { p: Palette; account: WorkspaceAccount }) {
+// Each report is a page of its own in the Reports hub (ReportsHub.tsx), which gives it its heading: `kind` is the report.
+export function BusinessReports({ p, account, kind }: { p: Palette; account: WorkspaceAccount; kind: ReportKind }) {
   const allowed = isWorkspaceAdmin(account.role);
   const today = london(new Date());
-  // Opened from Home ("Guest replies on time"): that report, for this month so far, as the figure counts it.
-  const focus = useWorkFocus(), asked = reportFromAnchor(focus?.anchor);
-  const [kind, setKind] = useState<ReportKind>(() => asked ?? "enquiries");
+  // Opened from Home ("Guest replies on time"): this report, for this month so far, as the figure counts it. (The hub
+  // opens again for every link, so a second link starts here afresh.)
+  const focus = useWorkFocus(), asked = reportFromAnchor(focus?.anchor) === kind;
   const [range, setRange] = useState(() => (asked ? monthSoFar(today) : defaultReportRange(today)));
-  const [seen, setSeen] = useState(focus?.nonce);
-  if (asked && focus?.nonce !== seen) { setSeen(focus?.nonce); setKind(asked); setRange(monthSoFar(today)); }
   const [dateError, setDateError] = useState("");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loading, setLoading] = useState(false);
@@ -81,11 +80,9 @@ export function BusinessReports({ p, account }: { p: Palette; account: Workspace
     // Named for its report once that has loaded, so a link from Home scrolls here after the page above has settled.
     <Anchor id={shown ? reportAnchor(kind) : "section-business-reports"}><View style={{ gap: 20 }}>
       <View style={{ gap: 4 }}>
-        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Business reports</Text>
-        <Text style={[ui.small, { color: p.muted }]}>For management only. Choose a report and the dates, then download it as a spreadsheet (CSV).</Text>
+        <Text style={[ui.body, { color: p.text }]}>{REPORT_INTRO[kind]}</Text>
+        <Text style={[ui.small, { color: p.muted }]}>For management only. Choose the dates, then download it as a spreadsheet (CSV).</Text>
       </View>
-      <Pills p={p} title="Report" values={REPORT_KINDS} value={kind} onChange={setKind} label={k => REPORT_LABEL[k]} />
-      <Text style={[ui.small, { color: p.muted }]}>{REPORT_INTRO[kind]}</Text>
       <View style={{ gap: 10 }}>
         <DateField p={p} label="Dates" value={range} onChange={chooseDates} today={today} />
         {!!dateError && <Notice text={dateError} p={p} tone="bad" />}
