@@ -416,6 +416,20 @@ export async function listHostawayCalendarRates(listingId: string, startDate: st
   }).filter((day) => Boolean(day.date));
 }
 
+// Raw guest reviews for the ratings sync (mapped in lib/hostaway-reviews-policy.ts), up to `maxPages` pages of 100.
+// `complete` is false when there were more than that, so the run can say it stopped short.
+export async function fetchHostawayReviews(maxPages: number): Promise<{ rows: unknown[]; complete: boolean }> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  const rows: unknown[] = [];
+  for (let page = 0; page < Math.min(50, Math.max(1, maxPages)); page++) {
+    const batch = await hostawayRequest<unknown[]>(`/reviews?limit=100&offset=${page * 100}`);
+    if (!Array.isArray(batch)) throw new HostawayApiError("Hostaway returned an invalid review list", 502);
+    rows.push(...batch);
+    if (batch.length < 100) return { rows, complete: true };
+  }
+  return { rows, complete: false };
+}
+
 export async function listHostawayReviews(): Promise<HostawayReview[]> {
   if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
   const reviews: HostawayReview[] = [];

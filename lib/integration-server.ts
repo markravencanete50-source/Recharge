@@ -7,7 +7,7 @@ import { integrationActionSchema,integrationConfiguration,IntegrationSettings,De
 import { deliverNotification } from './integration-providers';
 import { cancelHostawayReservation,hostawayCancelErrorMessage,isHostawayConfigured,listHostawayReservations } from './hostaway';
 import { cancelElsewhereMessage,CANCEL_ON_CHANNEL } from './hostaway-sync-policy';
-import { hostawaySyncConfigured,runHostawaySync } from './hostaway-sync';
+import { hostawaySyncConfigured,runHostawayReviews,runHostawaySync } from './hostaway-sync';
 
 export function integrationSettings():IntegrationSettings {
   return {...process.env,...env as unknown as IntegrationSettings};
@@ -57,7 +57,12 @@ export async function integrationRoute(request:Request,native=false) {
     if(parsed.data.action==='syncHostaway') {
       if(!['admin','super_admin'].includes(session.account.role))return businessResponse({error:'Admin access required'},403);
       if(!hostawaySyncConfigured())return businessResponse({error:'The Hostaway sync is switched off',mode:'unconfigured'},503);
-      try {return businessResponse(await runHostawaySync('manual'));}
+      try {
+        const summary=await runHostawaySync('manual');
+        // Then the guest reviews for the property ratings (20261022500000). A problem there never fails the sync; it is recorded and shown on the Ratings report.
+        const reviews=await runHostawayReviews('manual').catch(()=>null);
+        return businessResponse({...summary,reviews});
+      }
       catch {return businessResponse({error:'Hostaway could not be synced just now. The error is shown on the sync card.'},502);}
     }
     if(parsed.data.action==='cancelHostawayReservation') {

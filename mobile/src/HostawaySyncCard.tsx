@@ -43,6 +43,8 @@ export function HostawaySyncCard({ p, onSynced }: { p: Palette; onSynced?: () =>
         s.newReservations && plural(s.newReservations, "new stay"), s.changedReservations && plural(s.changedReservations, "changed stay"),
         s.newCleans && plural(s.newCleans, "new clean"), s.movedCleans && plural(s.movedCleans, "clean moved", "cleans moved"),
         s.cancelledCleans && plural(s.cancelledCleans, "clean cancelled", "cleans cancelled"),
+        // Guest reviews for the property ratings (20261022500000), read after the stays.
+        s.reviews?.added && plural(s.reviews.added, "new guest review"),
       ].filter(Boolean);
       setResult(parts.length ? `Synced: ${parts.join(", ")}.` : "Synced. Everything was already up to date.");
       onSynced?.();
