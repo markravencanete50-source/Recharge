@@ -8,7 +8,7 @@ import {
 } from './hostaway';
 import { syncConversation, syncMessage, webhookConversationId, type SyncConversation, type SyncMessage } from './hostaway-messages-policy';
 import { syncListing, syncReservation, webhookReservationId, type SyncListing, type SyncReservation } from './hostaway-sync-policy';
-import { REVIEW_PAGES, reviewBatches, syncReview } from './hostaway-reviews-policy';
+import { reviewBatches, syncReview } from './hostaway-reviews-policy';
 
 // Hostaway -> Recharge. Runs every 15 minutes from the Worker's cron, on each Hostaway
 // webhook (one reservation), and when an admin presses "Sync now". Writes go through the
@@ -60,26 +60,36 @@ export async function syncHostawayReservation(id: string): Promise<SyncSummary |
 
 // Guest reviews, for each property's ratings (20261022500000). Hourly from the Worker's cron on its own :05 tick, after
 // that tick's messages and never with the sync (so the two never ask Hostaway at once), and after an admin's "Sync now"
-// (an HTTP request that waits for it, so it has no cron time limit). Every review Hostaway lists, up to
-// REVIEW_PAGES pages of 100, mapped by lib/hostaway-reviews-policy.ts and stored in batches through the service-role-only
+// (an HTTP request that waits for it, so it has no cron time limit). Guest reviews, REVIEW_PAGES pages of 100 a run, mapped by lib/hostaway-reviews-policy.ts and stored in batches through the service-role-only
 // workspace_hostaway_reviews_ingest, which only inserts or updates (never deletes) and links each review to the property
 // with its listing. A review whose listing is not linked to a property is kept, unlinked. A failure is recorded on its own,
 // so it never overwrites the reservation sync's last error, and the next run retries.
-export type ReviewsSummary = { added: number; changed: number; unchanged: number; fetched: number; complete: boolean; paused: boolean };
+// Each run reads the newest reviews and the next stretch of the sweep (lib/hostaway-reviews-policy.ts), from the offset
+// workspace_hostaway_reviews_sweep keeps (20261023000000). The offset moves on only after every batch is stored, so a
+// failed run reads the same stretch again. `complete` (shown on the Ratings report) is true once a full pass has read to
+// the oldest review, in this run or an earlier one.
+export type ReviewsSummary = {
+  added: number; changed: number; unchanged: number; fetched: number; complete: boolean; paused: boolean;
+  from: number; next: number; wrapped: boolean; order: 'newest' | 'oldest' | 'unknown';
+};
 type ReviewBatchResult = { added: number; changed: number; unchanged: number; paused: boolean };
+type ReviewSweepState = { offset: number; passes: number; lastPassAt: string | null };
 
 export async function runHostawayReviews(trigger: 'schedule' | 'manual'): Promise<ReviewsSummary | null> {
   if (!hostawaySyncConfigured()) return null;
   try {
-    const { rows, complete } = await fetchHostawayReviews(REVIEW_PAGES);
+    const state = await securityRpc<ReviewSweepState>('workspace_hostaway_reviews_sweep', { input: {} });
+    const { rows, wrapped, from, nextOffset, order } = await fetchHostawayReviews(state.offset);
+    const complete = wrapped || state.passes > 0;
     const batches = reviewBatches(rows.map(syncReview).filter(present));
-    const summary: ReviewsSummary = { added: 0, changed: 0, unchanged: 0, fetched: rows.length, complete, paused: false };
+    const summary: ReviewsSummary = { added: 0, changed: 0, unchanged: 0, fetched: rows.length, complete, paused: false, from, next: nextOffset, wrapped, order };
     for (let i = 0; i < batches.length; i++) {
       const done = i === batches.length - 1;
       const result = await securityRpc<ReviewBatchResult>('workspace_hostaway_reviews_ingest', { input: { trigger, reviews: batches[i], done, complete: done ? complete : true } });
       if (result.paused) return { ...summary, paused: true };
       summary.added += result.added; summary.changed += result.changed; summary.unchanged += result.unchanged;
     }
+    await securityRpc('workspace_hostaway_reviews_sweep', { input: { nextOffset, wrapped } });
     return summary;
   } catch (error) {
     try { await securityRpc('workspace_hostaway_reviews_failed', { input: { trigger, error: hostawaySyncErrorMessage(error) } }); } catch { /* the next run retries */ }

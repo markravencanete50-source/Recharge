@@ -10,12 +10,12 @@ const state = { env: {}, calls: [], pages: [], fetched: [], rpc: {}, fail: null 
 globalThis.__ratings = state;
 const mocks = {
   'cloudflare:workers': `export const env=globalThis.__ratings.env;`,
-  'auth-security': `const s=globalThis.__ratings;export const securityRpc=async(name,args)=>{s.calls.push({name,args});if(s.rpc[name])return s.rpc[name](args);return {added:args?.input?.reviews?.length??0,changed:0,unchanged:0,paused:false};};`,
+  'auth-security': `const s=globalThis.__ratings;export const securityRpc=async(name,args)=>{s.calls.push({name,args});if(s.rpc[name])return s.rpc[name](args);if(name==='workspace_hostaway_reviews_sweep')return s.sweep;return {added:args?.input?.reviews?.length??0,changed:0,unchanged:0,paused:false};};`,
   'business-server': `export const businessResponse=(body,status=200)=>Response.json(body,{status});`,
   'hostaway': `const s=globalThis.__ratings;
     export const isHostawayConfigured=()=>Boolean(s.env.HOSTAWAY_ACCOUNT_ID&&s.env.HOSTAWAY_API_KEY);
     export const hostawaySyncErrorMessage=()=>'Hostaway could not be reached. The next sync will try again.';
-    export const fetchHostawayReviews=async(pages)=>{s.fetched.push('reviews:'+pages);if(s.fail)throw s.fail;return {rows:s.pages.flat(),complete:s.complete??true};};`,
+    export const fetchHostawayReviews=async(offset)=>{s.fetched.push('reviews:'+offset);if(s.fail)throw s.fail;return {rows:s.pages.flat(),pages:s.pages.length,wrapped:s.wrapped,from:Math.max(300,offset),nextOffset:s.wrapped?300:Math.max(300,offset)+700,order:'newest'};};`,
 };
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, plugins: [{
   name: 'isolated-hostaway-reviews', enforce: 'pre',
@@ -41,7 +41,7 @@ const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8'
 function reset(env = { HOSTAWAY_ACCOUNT_ID: '1', HOSTAWAY_API_KEY: 'k', HOSTAWAY_SYNC_ENABLED: 'true' }) {
   for (const k of Object.keys(state.env)) delete state.env[k];
   Object.assign(state.env, env);
-  Object.assign(state, { calls: [], pages: [], fetched: [], rpc: {}, fail: null, complete: true });
+  Object.assign(state, { calls: [], pages: [], fetched: [], rpc: {}, fail: null, wrapped: true, sweep: { offset: 300, passes: 0, lastPassAt: null } });
 }
 
 // Shapes as Hostaway's /reviews sends them.
@@ -99,36 +99,49 @@ test('the reviews run: off unless the sync is on, batches to the database, the l
 
   reset();
   state.pages = [Array.from({ length: 300 }, (_, i) => ({ ...airbnb, id: 90000 + i })), [{ ...airbnb, id: 99999, type: 'host-to-guest' }, { ...airbnb, id: 90000 }]];
-  state.complete = false;
+  state.wrapped = false; state.sweep = { offset: 1700, passes: 0, lastPassAt: null };
   const summary = await runHostawayReviews('manual');
-  assert.deepEqual(state.fetched, ['reviews:10']);
+  assert.deepEqual(state.fetched, ['reviews:1700'], 'the sweep carries on from the offset the database kept');
+  assert.deepEqual(state.calls.map(c => c.name), ['workspace_hostaway_reviews_sweep', 'workspace_hostaway_reviews_ingest', 'workspace_hostaway_reviews_ingest', 'workspace_hostaway_reviews_sweep']);
   const ingests = state.calls.filter(c => c.name === 'workspace_hostaway_reviews_ingest');
-  assert.deepEqual(ingests.map(c => [c.args.input.trigger, c.args.input.reviews.length, c.args.input.done, c.args.input.complete]), [['manual', 250, false, true], ['manual', 50, true, false]]);
-  assert.deepEqual(summary, { added: 300, changed: 0, unchanged: 0, fetched: 302, complete: false, paused: false });
+  assert.deepEqual(ingests.map(c => [c.args.input.trigger, c.args.input.reviews.length, c.args.input.done, c.args.input.complete]), [['manual', 250, false, true], ['manual', 50, true, false]],
+    'not complete: no full pass yet');
+  assert.deepEqual(summary, { added: 300, changed: 0, unchanged: 0, fetched: 302, complete: false, paused: false, from: 1700, next: 2400, wrapped: false, order: 'newest' });
   assert.deepEqual(Object.keys(ingests[0].args.input.reviews[0]).sort(), ['channel', 'channelName', 'id', 'listingId', 'rating', 'reviewedAt', 'scale', 'status', 'text', 'url']);
+  assert.deepEqual(state.calls[0].args, { input: {} }, 'first the offset is read');
+  assert.deepEqual(state.calls.at(-1).args, { input: { nextOffset: 2400, wrapped: false } }, 'then moved on, after every batch is stored');
+
+  reset();
+  state.pages = [[airbnb]]; state.wrapped = false; state.sweep = { offset: 300, passes: 2, lastPassAt: '2026-10-16T20:05:00Z' };
+  await runHostawayReviews('schedule');
+  assert.equal(state.calls.find(c => c.name === 'workspace_hostaway_reviews_ingest').args.input.complete, true, 'complete once an earlier run finished a full pass');
 
   reset();
   state.pages = [[airbnb]]; state.rpc.workspace_hostaway_reviews_ingest = () => ({ added: 0, changed: 0, unchanged: 0, paused: true });
   assert.equal((await runHostawayReviews('schedule')).paused, true);
+  assert.equal(state.calls.filter(c => c.name === 'workspace_hostaway_reviews_sweep').length, 1, 'paused: the offset is not moved');
 
   reset();
-  assert.deepEqual((await runHostawayReviews('schedule')), { added: 0, changed: 0, unchanged: 0, fetched: 0, complete: true, paused: false });
-  assert.deepEqual(state.calls.map(c => [c.name, c.args.input.reviews.length, c.args.input.done]), [['workspace_hostaway_reviews_ingest', 0, true]], 'no reviews still records the run');
+  assert.deepEqual((await runHostawayReviews('schedule')), { added: 0, changed: 0, unchanged: 0, fetched: 0, complete: true, paused: false, from: 300, next: 300, wrapped: true, order: 'newest' });
+  assert.deepEqual(state.calls.filter(c => c.name === 'workspace_hostaway_reviews_ingest').map(c => [c.args.input.reviews.length, c.args.input.done]), [[0, true]], 'no reviews still records the run');
+  assert.deepEqual(state.calls.at(-1).args, { input: { nextOffset: 300, wrapped: true } }, 'a full pass is recorded');
 });
 
 test('a failed reviews run is recorded on its own and thrown, so the cron logs it and retries next hour', async () => {
   reset(); state.fail = new Error('rate limited');
   await assert.rejects(runHostawayReviews('schedule'), /rate limited/);
-  assert.deepEqual(state.calls, [{ name: 'workspace_hostaway_reviews_failed', args: { input: { trigger: 'schedule', error: 'Hostaway could not be reached. The next sync will try again.' } } }]);
+  assert.deepEqual(state.calls, [{ name: 'workspace_hostaway_reviews_sweep', args: { input: {} } }, { name: 'workspace_hostaway_reviews_failed', args: { input: { trigger: 'schedule', error: 'Hostaway could not be reached. The next sync will try again.' } } }]);
   reset(); state.pages = [[airbnb]]; state.rpc.workspace_hostaway_reviews_ingest = () => { throw new Error('database down'); };
   await assert.rejects(runHostawayReviews('manual'), /database down/);
   assert.equal(state.calls.at(-1).name, 'workspace_hostaway_reviews_failed');
+  assert.equal(state.calls.filter(c => c.name === 'workspace_hostaway_reviews_sweep').length, 1, 'a failed run does not move the offset, so the next run reads the same pages');
 });
 
-test('paging against a fake Hostaway: pages of 100 until a short page, and at most the pages asked for', async () => {
+test('paging against a fake Hostaway: guest reviews newest first, the head every run, then the sweep from the kept offset', async () => {
   reset();
   const asked = [];
   let total = 250;
+  // Hostaway's ids, newest first: offset 0 is the newest review.
   globalThis.fetch = async (url, init) => {
     const u = new URL(String(url));
     asked.push(u.pathname + u.search);
@@ -136,17 +149,54 @@ test('paging against a fake Hostaway: pages of 100 until a short page, and at mo
     if (u.pathname.endsWith('/accessTokens')) return Response.json({ access_token: 'fake-token', expires_in: 3600 });
     assert.equal(new Headers(init.headers).get('authorization'), 'Bearer fake-token');
     const offset = Number(u.searchParams.get('offset'));
-    return Response.json({ status: 'success', result: Array.from({ length: Math.max(0, Math.min(100, total - offset)) }, (_, i) => ({ id: offset + i + 1 })) });
+    return Response.json({ status: 'success', result: Array.from({ length: Math.max(0, Math.min(100, total - offset)) }, (_, i) => ({ id: total - offset - i })) });
   };
-  const all = await hostaway.fetchHostawayReviews(20);
-  assert.deepEqual([all.rows.length, all.complete], [250, true]);
-  assert.deepEqual(asked.filter(a => a.includes('/reviews')), ['/v1/reviews?limit=100&offset=0', '/v1/reviews?limit=100&offset=100', '/v1/reviews?limit=100&offset=200']);
-  asked.length = 0; total = 10_000;
-  const capped = await hostaway.fetchHostawayReviews(2);
-  assert.deepEqual([capped.rows.length, capped.complete, asked.length], [200, false, 2], 'stops at the page limit and says so');
+  const reviews = () => asked.filter(a => a.includes('/reviews')).map(a => Number(new URL('https://x' + a).searchParams.get('offset')));
+  const small = await hostaway.fetchHostawayReviews(0);
+  assert.deepEqual([small.rows.length, small.wrapped, small.nextOffset, small.order], [250, true, 300, 'newest'], 'a short list ends inside the head: a full pass');
+  assert.deepEqual(asked.filter(a => a.includes('/reviews')), ['/v1/reviews?limit=100&offset=0&sortBy=id&sortOrder=desc&type=guest-to-host',
+    '/v1/reviews?limit=100&offset=100&sortBy=id&sortOrder=desc&type=guest-to-host', '/v1/reviews?limit=100&offset=200&sortBy=id&sortOrder=desc&type=guest-to-host']);
+
+  asked.length = 0; total = 2_350;
+  const first = await hostaway.fetchHostawayReviews(0);
+  assert.deepEqual(reviews(), [0, 100, 200, 300, 400, 500, 600, 700, 800, 900], 'ten requests: the head, then the sweep from just after it');
+  assert.deepEqual([first.rows.length, first.wrapped, first.from, first.nextOffset], [1000, false, 300, 1000]);
+  asked.length = 0;
+  const second = await hostaway.fetchHostawayReviews(first.nextOffset);
+  assert.deepEqual(reviews(), [0, 100, 200, 1000, 1100, 1200, 1300, 1400, 1500, 1600], 'the newest pages again, then on from where the last run stopped');
+  assert.deepEqual([second.wrapped, second.nextOffset], [false, 1700]);
+  asked.length = 0; total = 2_360; // ten new reviews arrive between runs
+  const third = await hostaway.fetchHostawayReviews(second.nextOffset);
+  assert.deepEqual(reviews(), [0, 100, 200, 1700, 1800, 1900, 2000, 2100, 2200, 2300], 'the last page is short');
+  assert.deepEqual([third.wrapped, third.nextOffset, third.rows.length], [true, 300, 960], 'a full pass; the next run starts after the head');
+  assert.ok(third.rows.some(r => r.id === 2360), 'the newest review is read in the head');
+  // Every review was read in the pass, newest included, although the list grew while it ran.
+  const seen = new Set([...first.rows, ...second.rows, ...third.rows].map(r => r.id));
+  for (let id = 1; id <= 2_360; id++) assert.ok(seen.has(id), 'review ' + id + ' read in the pass');
+
+  for (const bad of [-100, 50, 'x', null, 2_000_000]) {
+    asked.length = 0; await hostaway.fetchHostawayReviews(bad);
+    assert.equal(reviews()[3], 300, 'an unreadable offset starts the sweep after the head: ' + bad);
+  }
   globalThis.fetch = async () => Response.json({ status: 'success', result: { not: 'a list' } });
-  await assert.rejects(hostaway.fetchHostawayReviews(1), /invalid review list/);
+  await assert.rejects(hostaway.fetchHostawayReviews(300), /invalid review list/);
   globalThis.fetch = realFetch;
+});
+
+test('the sweep: never more than ten requests, the order reported, and an offset past the cap starts again', async () => {
+  assert.deepEqual([policy.REVIEW_HEAD_PAGES, policy.REVIEW_SWEEP_PAGES, policy.REVIEW_PAGES, policy.REVIEW_PAGE_SIZE], [3, 7, 10, 100]);
+  const full = async offset => Array.from({ length: 100 }, (_, i) => ({ id: 1_000_000 - offset - i }));
+  let calls = 0;
+  const counted = async offset => { calls++; return full(offset); };
+  const run = await policy.sweepReviews(counted, 999_900);
+  assert.deepEqual([calls, run.pages, run.wrapped, run.nextOffset], [10, 10, false, 300], 'past the cap, the next run starts after the head (not a full pass)');
+  assert.equal(policy.reviewOrder([{ id: 9 }, { id: 3 }]), 'newest');
+  assert.equal(policy.reviewOrder([{ id: '3' }, { id: '9' }]), 'oldest', 'Hostaway ignoring the order shows in the run summary');
+  assert.equal(policy.reviewOrder([{ id: 3 }]), 'unknown');
+  assert.equal(policy.reviewsPath(700), '/reviews?limit=100&offset=700&sortBy=id&sortOrder=desc&type=guest-to-host');
+  // Hostaway still sends host-to-guest reviews (filter ignored): they are never stored.
+  for (const type of ['host-to-guest', 'HOST_TO_GUEST', 'hostToGuest', 'something-else']) assert.equal(policy.syncReview({ ...airbnb, type }), null, type);
+  for (const type of ['guest-to-host', 'GUEST_TO_HOST', '', undefined]) assert.ok(policy.syncReview({ ...airbnb, type }), String(type));
 });
 
 test('the plain words: stars from reviews, the last 90 days, the sources, and the empty states', () => {
@@ -171,7 +221,7 @@ test('the plain words: stars from reviews, the last 90 days, the sources, and th
   assert.match(R.syncLine(never.sync), /have not synced from Hostaway yet/);
   assert.equal(R.syncLine(synced.sync), 'Reviews last synced from Hostaway on 22 October 2026 at 09:15.');
   assert.match(R.syncLine({ ...synced.sync, lastRunAt: '2026-10-22T09:15:00Z', lastError: 'Hostaway is limiting requests.', complete: false, unlinked: 3 }),
-    /The last try failed: Hostaway is limiting requests\. Hostaway had more reviews than one sync reads, so the oldest may be missing\. 3 rated reviews are for Hostaway listings not linked to a property yet\./);
+    /The last try failed: Hostaway is limiting requests\. The first full read of Hostaway's reviews is still under way \(a few hours\), so older reviews may be missing\. 3 rated reviews are for Hostaway listings not linked to a property yet\./);
   assert.equal(R.canSeeRatings({ role: 'client' }), false, 'owners are not shown ratings for now');
   for (const role of ['super_admin', 'admin', 'stays', 'ready', 'cleans', 'cleaning_manager', 'accounts']) assert.equal(R.canSeeRatings({ role }), true, role);
 });

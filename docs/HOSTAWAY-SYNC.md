@@ -71,6 +71,28 @@ Replies can be sent from the app too, once switched on (see "Replying to guests"
 - **If something goes wrong,** the error is logged and the next minute retries. It doesn't change
   the Hostaway card's "last error", which belongs to the reservation sync.
 
+## Guest reviews (property ratings)
+
+Hourly on the Worker's :05 tick, and after "Sync now" (`runHostawayReviews` in `lib/hostaway-sync.ts`).
+
+- **What is asked for:** `GET /v1/reviews?limit=100&offset=N&sortBy=id&sortOrder=desc&type=guest-to-host`.
+  Hostaway's public reference (github.com/Hostaway/api, "Get reviews list") documents `sortBy`
+  (including `id`, `submittedAt`, `departureDate`), `sortOrder` (asc or desc), `type` (guest-to-host or
+  host-to-guest), `statuses` and date filters such as `submittedAtStart`. Without `sortBy` the first
+  live run came back oldest first, so the order is always asked for.
+- **Ten requests a run:** the first three pages every run (the newest 300 reviews), then seven pages
+  of a sweep through the rest from where the last run stopped (kept in the database,
+  `workspace_hostaway_reviews_sweep`, migration 20261023000000). A short page means the sweep reached
+  the oldest review: a full pass, and the next run starts again after the first three pages. A
+  catalogue of N reviews is read in full every (N - 300) / 700 hours.
+- **Nothing is removed:** reviews are only inserted or updated. A review a run does not reach stays as
+  it was. Until the first full pass finishes the Ratings report says older reviews may be missing.
+- **What counts:** only guests' reviews of the stay. The host's reviews of guests are never stored, and
+  a review without a rating (still awaiting, or expired) is stored but not counted.
+- **Each run's summary** says where the sweep started and stops (`from`, `next`), whether it wrapped,
+  and whether Hostaway listed the first page newest first (`order`), so a change in Hostaway's
+  ordering shows.
+
 ## Replying to guests (off by default)
 
 With sending switched on, staff write the reply in the Guest inbox and press **Send**. Recharge
