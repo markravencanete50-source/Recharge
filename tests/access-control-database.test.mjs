@@ -32,8 +32,10 @@ const read=async section=>(await db.query('select public.workspace_admin_read($1
 const act=async input=>(await db.query('select public.workspace_admin_action($1::jsonb) r',[JSON.stringify(input)])).rows[0].r;
 const sessions=async user=>(await db.exec('reset role'),(await db.query('select count(*)::int n from private.workspace_approved_sessions where user_id=$1',[user])).rows[0].n);
 
-test('only a super admin sees access control, with every account',async()=>{
- await as(1);await assert.rejects(read('accessControl'),/Super admin/);await assert.rejects(act({action:'block',userId:users[2]}),/Super admin/);
+test('admins and super admins see access control, with every account; other roles do not',async()=>{
+ // Admins open it too (20261022700000), but never act on a super admin; the rest is in admin-access-control-database.
+ await as(1);assert.equal((await read('accessControl')).length,users.length);await assert.rejects(act({action:'block',userId:users[0]}),/Only a super admin/);
+ await as(2);await assert.rejects(read('accessControl'),/Admin access required/);await assert.rejects(act({action:'block',userId:users[3]}),/Admin access required/);
  await as(0);const people=await read('accessControl');
  assert.equal(people.length,users.length);
  const stays=people.find(p=>p.userId===users[2]);

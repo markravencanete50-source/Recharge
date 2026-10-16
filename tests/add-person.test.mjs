@@ -45,9 +45,13 @@ test('the set-password page is served and the link is only used on a button pres
  assert.match(page,/fetch\("\/auth\/recovery", \{ method: "POST"/);
 });
 
-test('the server creates accounts as the super admin and never with a chosen password',()=>{
+test('the server creates accounts as the admin or super admin and never with a chosen password',()=>{
  const server=readFileSync('lib/account-invite-server.ts','utf8');
- assert.match(server,/context\.account\.role !== 'super_admin'/);
+ assert.match(server,/context\.account\.role !== 'super_admin' && context\.account\.role !== 'admin'\) return refuse/);
+ // An admin is refused an admin account before any sign-in is made (the database refuses it too).
+ assert.match(server,/const limit = accessRefusal\(context\.account\.role, input\.role, 'add'\); if \(limit\) return refuse\(limit, 403\);\s*const service = signInService\(\)/);
+ // A set-password link is made only after the database agrees, as the person asking, that they may act on the account.
+ assert.match(server,/rpc\('workspace_admin_action', \{ input: \{ action: 'passwordLinkCheck', userId: input\.userId \} \}\);\s*if \(check\.error\) return databaseFailure\(check\.error\);\s*const service = signInService\(\)/);
  assert.match(server,/createUser\(\{ email: input\.email, email_confirm: true, user_metadata: \{ full_name: input\.fullName \} \}\)/);
  assert.doesNotMatch(server,/password:/);
  // Access is saved through the database as the signed-in super admin, and undone if refused.
