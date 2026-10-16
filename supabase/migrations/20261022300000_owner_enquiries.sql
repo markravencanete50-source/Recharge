@@ -20,6 +20,7 @@
 --  * "Invalid estimate": the estimate was refused with that message alone when the expected nightly rate was below the
 --    low rate, or the high rate below the expected one (the app did not check the order). Each now says which rate.
 --    Every other check and its wording is unchanged.
+-- source 'team' is allowed for enquiries the team adds by hand (recorded by 20261022400000).
 -- New: columns private.workspace_client_enquiries.source and owner_id; functions private.workspace_owner_enquiry_record
 -- (internal) and private.workspace_owner_enquiry_files with its public wrapper (authenticated only).
 -- Patched by anchor (sentinel, an anchor that must occur once): private.workspace_journey_action (createEnquiry takes
@@ -46,7 +47,7 @@ do $$
 begin
  if not exists(select 1 from pg_constraint where conrelid='private.workspace_client_enquiries'::regclass and conname='workspace_client_enquiries_source') then
   alter table private.workspace_client_enquiries add constraint workspace_client_enquiries_source
-   check(source in ('form','owner_app') and (source='owner_app')=(owner_id is not null));
+   check(source in ('form','owner_app','team') and (source='owner_app')=(owner_id is not null));
  end if;
 end $$;
 
