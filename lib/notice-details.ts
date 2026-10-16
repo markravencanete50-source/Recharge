@@ -47,8 +47,10 @@ const place = (n: NoticeDetail) => {
 const named = (n: NoticeDetail) => (n.event_type === 'chat.message' || n.event_type === 'chat.owner_message') && !!n.actor_name?.trim();
 const who = (n: NoticeDetail) => n.event_type === 'guest.message' ? 'Guest' : named(n) ? null : n.automatic ? 'Automatic' : n.actor_name?.trim() || null;
 
-// Where tapping a row goes: the work item, or Messages (chat and guest notices), or a property's onboarding, or nowhere.
-export type NoticeTarget = { kind: 'work'; workId: string } | { kind: 'messages' } | { kind: 'property'; propertyId: string } | null;
+// Where tapping a row goes: the work item, or Messages (chat and guest notices), or a property's onboarding, or Client
+// enquiries (an enquiry notice: a form back, a possible duplicate; in Client relations since 20261022400000), or nowhere.
+export type NoticeTarget = { kind: 'work'; workId: string } | { kind: 'messages' } | { kind: 'property'; propertyId: string } | { kind: 'enquiries' } | null;
+export const isEnquiryNotice = (n: Pick<NoticeDetail, 'event_type'>) => n.event_type.startsWith('enquiry.');
 // A property onboarding notice (an estimate published, an agreement to sign) is about the onboarding itself, whose work item
 // ("Property onboarding") has no task view: it opens the property, where the onboarding, the estimate and its decision are.
 // Opening it as a work item said "That item is no longer available to you" (Lee, 16 October).
@@ -80,7 +82,7 @@ export function noticeRow(n: NoticeDetail): NoticeRow {
     : fallback;
   const detail = [n.event_type === 'guest.message' ? null : place(n), who(n)].filter(Boolean).join(' · '), when = noticeTime(n.created_at);
   const line = [detail, when].filter(Boolean).join(' · ');
-  const target: NoticeTarget = onboarding ? { kind: 'property', propertyId: n.property_id as string } : n.work_id ? { kind: 'work', workId: n.work_id } : n.event_type.startsWith('chat.') || n.event_type === 'guest.message' ? { kind: 'messages' } : null;
+  const target: NoticeTarget = onboarding ? { kind: 'property', propertyId: n.property_id as string } : n.work_id ? { kind: 'work', workId: n.work_id } : n.event_type.startsWith('chat.') || n.event_type === 'guest.message' ? { kind: 'messages' } : isEnquiryNotice(n) ? { kind: 'enquiries' } : null;
   return { key: String(n.id), title: heading, line, detail, when, clock: noticeClock(n.created_at), target, unread: !n.read_at, notices: [n] };
 }
 

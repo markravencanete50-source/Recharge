@@ -200,7 +200,9 @@ test('deep links resolve for every page, sub-page and old link', () => {
   assert.deepEqual(map.deepLinkFor({ kind: 'work', view: 'stays', open: 'record-stay' }), { section: 'work', view: 'stays', open: 'record-stay' }, 'the record-stay focus');
   for (const sub of map.MANAGEMENT_SUBS) assert.ok(map.deepLinkFor({ kind: 'work', view: 'management', sub }), 'management ' + sub);
   for (const sub of map.ACCOUNTS_SUBS) assert.ok(map.deepLinkFor({ kind: 'work', view: 'accounts', sub }), 'accounts ' + sub);
-  for (const section of ['home', 'todo', 'calendar', 'inbox', 'decisions', 'analytics', 'favorites', 'properties', 'approvals', 'statements', 'enquiries', 'feedback', 'moderation', 'help']) assert.deepEqual(map.pageLink(section), { section }, section);
+  for (const section of ['home', 'todo', 'calendar', 'inbox', 'decisions', 'analytics', 'favorites', 'properties', 'approvals', 'statements', 'feedback', 'moderation', 'help']) assert.deepEqual(map.pageLink(section), { section }, section);
+  // Client enquiries has one home, the Enquiries chip in Client relations: its page link opens there.
+  assert.deepEqual(map.pageLink('enquiries'), { section: 'work', view: 'clients', sub: 'enquiries', redirected: true });
   assert.equal(map.pageLink('nowhere'), null);
   // Old links keep working: Updates opens Messages, the Hub opens To-do, Work → Calendar is the Calendar.
   assert.deepEqual(map.pageLink('activity'), { section: 'inbox', messagesTab: 'updates', redirected: true });

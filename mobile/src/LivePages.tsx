@@ -660,11 +660,13 @@ function dayGroups(rows: readonly NoticeRow[]): [string, NoticeRow[]][] {
 // its list. Opening the feed marks the listed updates read.
 // Round 7: an item that is not in the loaded work list is read on its own and opened (the same rules as the work list, so an
 // item someone may not see is simply "no longer available"), and "Show older updates" pages back 50 at a time.
-export function LiveActivity({ palette: p, notices, loading, onRead, work = [], onOpenWork, onOpenMessages, onOpenProperty }: {
+export function LiveActivity({ palette: p, notices, loading, onRead, work = [], onOpenWork, onOpenMessages, onOpenProperty, onOpenEnquiries }: {
   palette: Palette; notices: NoticeView[]; loading: boolean; onRead?: (ids: number[]) => void;
   work?: readonly OperationView[]; onOpenWork?: (item: OperationView) => void; onOpenMessages?: () => void;
   // An onboarding update (an estimate ready to open, an agreement to sign) opens its property's onboarding.
   onOpenProperty?: (propertyId: string) => void;
+  // An enquiry update (a form back, a possible duplicate) opens Client enquiries, in Client relations.
+  onOpenEnquiries?: () => void;
 }) {
   // Older updates, 50 at a time from the oldest one shown.
   const [older, setOlder] = useState<NoticeView[]>([]);
@@ -725,6 +727,7 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
     if (t?.kind === "work" && onOpenWork) { const item = byId.get(t.workId); return item ? () => onOpenWork(item) : () => void openWork(t.workId); }
     if (t?.kind === "messages" && onOpenMessages) return onOpenMessages;
     if (t?.kind === "property" && onOpenProperty) return () => onOpenProperty(t.propertyId);
+    if (t?.kind === "enquiries" && onOpenEnquiries) return onOpenEnquiries;
     return undefined;
   };
   return (

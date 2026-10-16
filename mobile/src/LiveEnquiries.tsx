@@ -15,7 +15,7 @@ import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
   DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PRIORITY_LABEL, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, deleteEnquiryWarning, duplicateNote, enquiryStep,
-  OWNER_ENQUIRY_LABEL, OWNER_ENQUIRY_NOTE, isOwnerEnquiry, isPriority, priorityFirst, valuationDraft, valueButtonLabel,
+  OWNER_ENQUIRY_LABEL, OWNER_ENQUIRY_NOTE, TEAM_ENQUIRY_NOTE, isOwnerEnquiry, isPriority, isTeamEnquiry, teamEnquiryTag, priorityFirst, valuationDraft, valueButtonLabel,
   type ClientEnquiries, type ClientEnquiry, type EnquiryStep,
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -86,12 +86,13 @@ function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: Cli
     <Tag label={STEP_LABEL[step]} tone={STEP_TONE[step]} p={p} />
     {priority && <Tag label={PRIORITY_LABEL} tone="wait" p={p} />}
     {isOwnerEnquiry(e) && <Tag label={OWNER_ENQUIRY_LABEL} tone="plain" p={p} />}
+    {isTeamEnquiry(e) && <Tag label={teamEnquiryTag(e)} tone="plain" p={p} />}
     {e.delivery === "email" && ["sent", "opened", "expired"].includes(step) && e.emailStatus !== "sent" && <Tag label={e.emailStatus === "failed" ? "Email failed" : "Sending…"} tone={e.emailStatus === "failed" ? "bad" : "plain"} p={p} />}
     {!!e.duplicateReason && step !== "closed" && <Tag label={DUPLICATE_LABEL} tone="bad" p={p} />}
     {e.files.length > 0 && <View style={[ui.row, { gap: 4 }]}><Feather name="image" size={12} color={p.muted} /><Text style={{ color: p.muted, fontSize: 11 }}>{e.files.length}</Text></View>}
   </>;
   return (
-    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={`${a?.fullName ?? e.recipientName}, ${STEP_LABEL[step]}${priority ? ", " + PRIORITY_LABEL : ""}${e.duplicateReason ? ", " + DUPLICATE_LABEL : ""}`} onPress={onPress}
+    <MotionPress {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={`${a?.fullName ?? e.recipientName}, ${STEP_LABEL[step]}${priority ? ", " + PRIORITY_LABEL : ""}${e.duplicateReason ? ", " + DUPLICATE_LABEL : ""}${isTeamEnquiry(e) ? ", " + teamEnquiryTag(e) : ""}`} onPress={onPress}
       style={[ui.row, { gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: step === "received" ? p.waiting : p.border, backgroundColor: p.surface, ...depth.card }]}>
       <Initials p={p} name={a?.fullName ?? e.recipientName} tone="clients" size={44} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
@@ -247,6 +248,7 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
       {e && <>
         {!!e.duplicateReason && step !== "closed" && <Notice text={`${DUPLICATE_LABEL}. ${duplicateNote(e)}`} p={p} tone="bad" />}
         {isOwnerEnquiry(e) && <Notice text={`${OWNER_ENQUIRY_LABEL}. ${OWNER_ENQUIRY_NOTE}`} p={p} />}
+        {isTeamEnquiry(e) && <Notice text={`${teamEnquiryTag(e)}. ${TEAM_ENQUIRY_NOTE}`} p={p} />}
         {step === "received" && <Button label={valueButtonLabel(e)} icon="trending-up" primary p={p} onPress={() => setMode("value")} />}
         {e.propertyId && step !== "closed" && <Button label={`Open ${e.propertyName ?? "the property"}`} icon="arrow-right" primary={step !== "received"} p={p} onPress={() => onOpenProperty(e.propertyId!)} />}
         {e.propertyId && step === "received" && <Text style={[ui.small, { color: p.muted }]}>It is already in Properties as a new enquiry. Check the details, then publish the estimate from the property’s onboarding.</Text>}
