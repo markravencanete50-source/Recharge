@@ -45,6 +45,17 @@ export const rolesFor = (actorRole: string): WorkspaceRole[] => actorRole === "s
   ? ["super_admin", "admin", "stays", "cleaning_manager", "cleans", "ready", "accounts", "client"]
   : ["stays", "cleaning_manager", "cleans", "ready", "accounts", "client"];
 export const canEdit = (actorRole: string, target: Pick<Person, "role">) => actorRole === "super_admin" || (actorRole === "admin" && !isWorkspaceAdmin(target.role));
+// Access control (20261022700000): why someone may not act on an account, in plain words, or null when they may.
+// Super admins may do everything; admins act only on accounts below admin, add only roles below admin and never
+// delete; nobody else uses Access control. The database refuses the same things with the same words.
+export type AccessAct = "change" | "add" | "delete";
+export function accessRefusal(actorRole: string, targetRole: string, act: AccessAct = "change"): string | null {
+  if (actorRole === "super_admin") return null;
+  if (actorRole !== "admin") return "Access control is for admins";
+  if (act === "delete") return "Only a super admin can delete accounts";
+  if (isWorkspaceAdmin(targetRole)) return act === "add" ? "Only a super admin can add admin accounts" : "Only a super admin can change admin accounts";
+  return null;
+}
 // Tools a role may hold: cleaners are limited to their own jobs, performance and invoices.
 export const toolsFor = (role: WorkspaceRole): { id: ModuleId; name: string }[] =>
   (role === "cleans" ? defaultModulesForRole("cleans") : [...MODULE_IDS]).map(id => ({ id, name: MODULES.find(m => m.id === id)?.shortName ?? id }));

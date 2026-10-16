@@ -26,7 +26,7 @@ test('the Management centre opens on its cards; a link to one tool opens that to
   assert.match(management, /Management centre<\/Text>/);
   assert.match(management, /<ToolHeader p=\{p\} back="Management centre" onBack=\{\(\) => \{ setView\(null\); setDailyOnly\(null\); \}\} title=\{TOOL\[view\]\.label\}/);
   // Who sees which tool is unchanged: Access control for super admins, Onboarding settings and Limit Changer for workspace admins.
-  assert.match(management, /const views = MANAGEMENT_VIEWS\.filter\(v => \(v !== "access" \|\| account\.role === "super_admin"\) && \(v !== "onboarding" \|\| isWorkspaceAdmin\(account\.role\)\) && \(v !== "limits" \|\| isWorkspaceAdmin\(account\.role\)\)\);/);
+  assert.match(management, /const views = MANAGEMENT_VIEWS\.filter\(v => \(v !== "access" \|\| isWorkspaceAdmin\(account\.role\)\) && \(v !== "onboarding" \|\| isWorkspaceAdmin\(account\.role\)\) && \(v !== "limits" \|\| isWorkspaceAdmin\(account\.role\)\)\);/);
   assert.match(management, /view === "limits" && isWorkspaceAdmin\(account\.role\) && <LimitChanger /);
   // Every tool has a card with a name and a line.
   const list = management.match(/const MANAGEMENT_VIEWS = \[([^\]]*)\]/)[1].split(',').map(s => s.trim().replace(/"/g, ''));

@@ -32,8 +32,10 @@ test('every role has its own panel: its own heading and its own set of links', (
     for (const g of panel.groups) assert.ok(g.links.length, role + ': no empty groups');
   }
   assert.equal(titles.size, roles.length, 'each role is named for itself');
-  // Admin and super admin share the management layout; super admin adds Access control.
-  assert.equal(sets.size, roles.length);
+  // Admin and super admin share the management layout, Access control included (20261022700000); every other role
+  // has a set of its own.
+  assert.equal(sets.size, roles.length - 1);
+  assert.equal(keys(rolePanel('admin', DEFAULT_ROLE_MODULES.admin)), keys(rolePanel('super_admin', DEFAULT_ROLE_MODULES.super_admin)));
 });
 
 test('every Work area, Home tool and quick start of a role is in its panel, and only those', () => {
@@ -51,8 +53,9 @@ test('every Work area, Home tool and quick start of a role is in its panel, and 
 
 test('team-only, owner-only and admin-only places stay with their roles', () => {
   const has = (role, key, modules = DEFAULT_ROLE_MODULES[role]) => links(rolePanel(role, modules)).some(l => l.key === key);
-  assert.ok(has('super_admin', 'tool:access'));
-  for (const role of roles.filter(r => r !== 'super_admin')) assert.ok(!has(role, 'tool:access'), role + ' has no Access control');
+  // Admins have Access control too (20261022700000), limited to accounts below admin.
+  assert.ok(has('super_admin', 'tool:access') && has('admin', 'tool:access'));
+  for (const role of roles.filter(r => !['admin', 'super_admin'].includes(r))) assert.ok(!has(role, 'tool:access'), role + ' has no Access control');
   for (const role of roles.filter(r => !['admin', 'super_admin'].includes(r))) assert.ok(!has(role, 'area:management'), role + ' has no Management');
   // Round 6: owners have Favorites too (Lee: "regardless of which role").
   assert.ok(has('client', 'page:approvals') && has('client', 'page:favorites'));

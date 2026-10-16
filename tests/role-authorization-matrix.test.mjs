@@ -38,11 +38,12 @@ const who=async sql=>{const out=[];for(const r of roles)if(await allowed(r,sql))
 const teams=s=>`select public.workspace_teams_read('${s}',null,null,null,null)`;
 const ADMINS=['super_admin','admin'], TEAM=roles.filter(r=>r!=='client');
 
-test('administration is for admins, and Access control for super admins alone',async()=>{
+test('administration and Access control are for admins (super admins keep the menu order and View as)',async()=>{
  assert.deepEqual(await who("select public.workspace_admin_read('people')"),ADMINS);
  assert.deepEqual(await who("select public.workspace_admin_read('properties')"),ADMINS);
- assert.deepEqual(await who("select public.workspace_admin_read('accessControl')"),['super_admin']);
- assert.deepEqual(await who("select public.workspace_admin_read('accessHistory')"),['super_admin']);
+ assert.deepEqual(await who("select public.workspace_admin_read('accessControl')"),ADMINS);
+ assert.deepEqual(await who("select public.workspace_admin_read('accessHistory')"),ADMINS);
+ assert.deepEqual(await who(teams('menuLayouts')),['super_admin']);
  assert.deepEqual(await who('select public.workspace_view_as_people()'),['super_admin']);
  assert.deepEqual(await who(teams('management')),ADMINS);
  assert.deepEqual(await who(teams('contracts')),ADMINS);

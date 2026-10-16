@@ -7,7 +7,7 @@ import { presenceLabel, presenceOf } from './workspace-chat-policy';
 import { londonClock } from './team-time';
 import { PAUSE_LABEL, shiftSchema, type Shift } from './management-live';
 
-// Access control (super admins): the shapes read from the database, and the plain-English labels
+// Access control (admins and super admins): the shapes read from the database, and the plain-English labels
 // and groups the screen uses. The database decides what is allowed.
 export const accessPersonSchema = z.object({
   userId: z.string().uuid(), fullName: z.string(), email: z.string().nullable(), phone: z.string().nullable(), role: z.string(),
@@ -35,8 +35,8 @@ export const eventLabel = (event: string) => EVENT_LABEL[event] ?? event.replace
 
 // What each role gives, in one line, for the role picker.
 export const ROLE_SUMMARY: Record<WorkspaceRole, string> = {
-  super_admin: 'Everything an admin has, plus Access control and admin accounts',
-  admin: 'Every tool and every property, with Management and Accounts',
+  super_admin: 'Everything an admin has, plus admin accounts, deleting accounts and the menu order',
+  admin: 'Every tool and every property, with Management, Accounts and Access control for everyone below admin',
   stays: 'Bookings, guests, pricing and listings for their properties',
   cleaning_manager: 'Runs the cleaning team: schedule, checks and cleaner performance',
   cleans: 'Their own cleaning jobs, performance and invoices',
