@@ -330,7 +330,7 @@ test('the route, the requests and where the screens are wired', () => {
   assert.doesNotMatch(serverSource, /emailRepliesEnabled/, 'not tied to EMAIL_REPLIES_ENABLED');
   for (const kind of ['mobile', 'workspace']) assert.match(read(`app/api/${kind}/documents/route.ts`), /workspaceDocuments\(request(, true)?\)/);
   assert.match(read('worker/backend-route-policy.ts'), /"\/api\/workspace\/documents", "\/api\/mobile\/documents"/);
-  assert.match(read('mobile/src/backend/client.ts'), /\|privacy\|documents\)/);
+  assert.match(read('mobile/src/backend/client.ts'), /\|privacy\|documents(\|[a-z-]+)*\)/);
   assert.match(read('mobile/src/LiveAccounts.tsx'), /\{view === "maker" && isFinanceRole\(role\) && <InvoiceMaker p=\{p\} \/>\}/);
   const screen = read('mobile/src/InvoiceMaker.tsx');
   assert.match(screen, /<RechargeInvoicePaper invoice=\{formToInvoice\(/, 'the live preview');

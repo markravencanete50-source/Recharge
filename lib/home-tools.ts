@@ -125,8 +125,13 @@ const PANEL_ONLY: Record<string, Candidate[]> = {
     tool('enquiries', 'Client enquiries', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }),
     // Repair spending limits per owner and property (Limit Changer, Repairs with contractors).
     tool('limits', 'Limit Changer', 'Repair spending limits by owner', 'coins', work('management', { sub: 'limits' })),
+    // Furnishing Studio: catalogue, client quotes and shopping lists (Client relations; Stays team and management only).
+    tool('studio', 'Furnishing Studio', 'Catalogue, client quotes, shopping lists', 'sofa', work('clients', { sub: 'furnishing' })),
   ],
-  stays: [tool('enquiries', 'Client enquiries', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }, ['property-onboarding'])],
+  stays: [
+    tool('enquiries', 'Client enquiries', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }, ['property-onboarding']),
+    tool('studio', 'Furnishing Studio', 'Catalogue, client quotes, shopping lists', 'sofa', work('clients', { sub: 'furnishing' })),
+  ],
 };
 PANEL_ONLY.super_admin = PANEL_ONLY.admin;
 

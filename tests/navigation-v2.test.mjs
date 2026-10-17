@@ -108,12 +108,12 @@ test('cleaners never see Management, Accounts or Client relations', () => {
 
 test('the Guest relations and Client relations sub-pages are named exactly, for admin and Guest relations staff only', () => {
   assert.deepEqual([...map.GUEST_RELATIONS_SUBS], ['cleans', 'bookings', 'aircover', 'reactive', 'preventative']);
-  assert.deepEqual([...map.CLIENT_RELATIONS_SUBS], ['onboarding', 'enquiries', 'licensing', 'listings', 'pricing', 'reviews', 'relisting', 'purchases']);
+  assert.deepEqual([...map.CLIENT_RELATIONS_SUBS], ['onboarding', 'enquiries', 'licensing', 'listings', 'pricing', 'reviews', 'relisting', 'purchases', 'furnishing']);
   for (const x of map.WORK_SUBS) {
     assert.ok(map.isWorkSub(x.view, x.sub), x.sub);
     assert.ok((x.view === 'stays' ? map.GUEST_RELATIONS_SUBS : map.CLIENT_RELATIONS_SUBS).includes(x.sub), x.sub);
   }
-  assert.equal(map.WORK_SUBS.length, 13);
+  assert.equal(map.WORK_SUBS.length, 14);
   for (const role of ['admin', 'super_admin', 'stays']) {
     const entries = indexOf(role);
     for (const x of map.WORK_SUBS) assert.ok(hits(entries, x.label).some(e => e.target.kind === 'tool' && e.target.target.view === x.view && e.target.target.sub === x.sub), `${role} finds ${x.view}/${x.sub}`);

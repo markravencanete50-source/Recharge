@@ -50,7 +50,7 @@ export const WORKSPACE_MAP: Record<ModuleId, Destination> = {
 // Where the Work areas open inside (the sub-pages INT-B builds: Guest relations and Client relations),
 // with the words people use for each so search finds them. Names are exact: they travel in deep links.
 export const GUEST_RELATIONS_SUBS = ["cleans", "bookings", "aircover", "reactive", "preventative"] as const;
-export const CLIENT_RELATIONS_SUBS = ["onboarding", "enquiries", "licensing", "listings", "pricing", "reviews", "relisting", "purchases"] as const;
+export const CLIENT_RELATIONS_SUBS = ["onboarding", "enquiries", "licensing", "listings", "pricing", "reviews", "relisting", "purchases", "furnishing"] as const;
 // Management's own tabs and Accounts' tabs, as the screens know them today.
 export const MANAGEMENT_SUBS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "limits", "decisions", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
 export const ACCOUNTS_SUBS = ["expenses", "payouts", "statements", "receivable", "performance", "aircover"] as const;
@@ -69,6 +69,7 @@ export const WORK_SUBS: readonly WorkSub[] = [
   { view: "clients", sub: "reviews", label: "Guest reviews", words: "reviews ratings guest feedback scores" },
   { view: "clients", sub: "relisting", label: "Re-listing", words: "relisting re-listing relist hidden listing" },
   { view: "clients", sub: "purchases", label: "Purchase orders", words: "purchase orders purchases furnishing supplies ordering" },
+  { view: "clients", sub: "furnishing", label: "Furnishing Studio", words: "furnishing studio catalogue client quotes shopping list furniture estimate" },
 ];
 const SUBS_BY_VIEW: Partial<Record<WorkView, readonly string[]>> = {
   stays: GUEST_RELATIONS_SUBS, clients: CLIENT_RELATIONS_SUBS, management: MANAGEMENT_SUBS, accounts: ACCOUNTS_SUBS,
