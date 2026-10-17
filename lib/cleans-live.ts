@@ -56,14 +56,15 @@ export function disputeFor(clean: { workId: string; data: Record<string, unknown
 }
 
 // Problems a cleaner reported from a clean; each became a repair for the Stays team.
-export type CleanProblem = { repairWorkId: string; issue: string; repairType: string; urgent: boolean; photos: number; reportedAt: string };
+export type CleanProblem = { repairWorkId: string; issue: string; repairType: string; urgent: boolean; hazard?: boolean; photos: number; reportedAt: string };
 export const problemsOf = (data: Record<string, unknown>): CleanProblem[] => Array.isArray(data.problems)
   ? data.problems.filter((x): x is CleanProblem => !!x && typeof x === "object" && typeof (x as CleanProblem).issue === "string") : [];
 
 // The exact requests the screens send, built in one place so the tests check the same payloads.
-export const cleanProblemAction = (input: { requestId: string; workId: string; version: number; issue: string; urgent: boolean; repairType: RepairType; photoIds: string[] }) => ({
+// A safety hazard is always urgent, as on the team's own repair form; hazard is sent only when ticked.
+export const cleanProblemAction = (input: { requestId: string; workId: string; version: number; issue: string; urgent: boolean; hazard?: boolean; repairType: RepairType; photoIds: string[] }) => ({
   action: "updateOperation" as const, requestId: input.requestId, workId: input.workId, version: input.version, step: "reportCleanProblem" as const,
-  data: { issue: input.issue.trim(), urgent: input.urgent, repairType: input.repairType, ...(input.photoIds.length ? { photoIds: input.photoIds } : {}) },
+  data: { issue: input.issue.trim(), urgent: input.urgent || !!input.hazard, repairType: input.repairType, ...(input.hazard ? { hazard: true } : {}), ...(input.photoIds.length ? { photoIds: input.photoIds } : {}) },
 });
 export const cleanerRateAction = (input: { requestId: string; cleanerId: string; rateMinor: number; version: number }) =>
   ({ action: "setCleanerRate" as const, requestId: input.requestId, cleanerId: input.cleanerId, rateMinor: input.rateMinor, version: input.version });

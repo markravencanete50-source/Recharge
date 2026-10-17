@@ -16,7 +16,7 @@ import { PhotoPicker } from "./Photos";
 import { DisputeSheet, type DisputeTarget } from "./CleanDisputes";
 import { RateSheet } from "./CleanerPay";
 import { CleanerPay, CleanerRequestsForManager, PayPeriodSheet } from "./CleanerInvoices";
-import { ProblemForm } from "./CleanProblem";
+import { CleanRepairs } from "./CleanProblem";
 import { PropertyTeamChatButton } from "./PropertyTeamChat";
 import { CleanChecklist, ChecklistReview, type ChecklistState } from "./CleanChecklist";
 import { ChecklistTemplatesSheet, useChecklistTemplates } from "./ChecklistTemplates";
@@ -24,7 +24,9 @@ import { DefaultCleanersSheet, FormStateTag, WhoIsCleaning } from "./DefaultClea
 import { CleanCheckForm, CleanCheckSummary, conditionOf, unanswered, type ItemRow } from "./CleanReport";
 import { DateField } from "./CalendarPicker";
 import { radius, space, textSize, ui, type Palette } from "./theme";
-import { readControls, readOperations, readTeams, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
+import { readCleanerRepairs, readControls, readOperations, readTeams, writeOperation, writeTeams, writeWorkspace, WorkspaceApiError } from "./backend/client";
+import { CLEANER_REPAIR_STATUS, cleanerRepairOpen, readCleanerRepairList, type CleanerRepair } from "../../lib/cleaner-repairs";
+import { londonDayOf } from "../../lib/repairs-live";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
 import { candidatesSchema, cleanTimesLine, defaultRedoBy, disputeFor, guestLine, hoursLine, hoursProblem, monthPay, performanceSchema, problemsOf, redoByFrom, redoByLabel, redoParts, scheduleSchema, type CleanerMonth } from "../../lib/cleans-live";
 import { repairTypeLabel } from "../../lib/repair-guides";
@@ -70,6 +72,8 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   const [periodFor, setPeriodFor] = useState<CleanerMonth | null>(null);
   const [payTick, setPayTick] = useState(0);
   const [performance, setPerformance] = useState<Performance>([]);
+  // Cleaners: the repairs they reported and where each is up to (migration 20261023100000).
+  const [repairs, setRepairs] = useState<CleanerRepair[]>([]);
   const [day, setDay] = useState(today);
   const [cleaner, setCleaner] = useState("everyone");
   const [loading, setLoading] = useState(true);
@@ -97,8 +101,9 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
     const from = addDays(today, -7), to = addDays(today, 28);
     const query: Record<string, string> = { section: "schedule", from, to };
     if (!manager) query.userId = account.userId;
-    const [s, o, perf, flagged] = await Promise.allSettled([readTeams(query), readOperations(), readTeams({ section: "performance" }), readTeams({ section: "flags" })]);
+    const [s, o, perf, flagged, raised] = await Promise.allSettled([readTeams(query), readOperations(), readTeams({ section: "performance" }), readTeams({ section: "flags" }), manager ? Promise.resolve({ data: [] }) : readCleanerRepairs()]);
     setNow(new Date());
+    setRepairs(raised.status === "fulfilled" ? readCleanerRepairList(raised.value.data) : []);
     setFlags(flagged.status === "fulfilled" ? parseFlags(flagged.value.data) : []);
     try {
       if (s.status === "fulfilled") setSchedule(scheduleSchema.parse(s.value.data)); else throw s.reason;
@@ -323,6 +328,12 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
           {account.role === "cleaning_manager" && <CleanerRequestsForManager p={p} />}
         </>
       )}
+      {!manager && (
+        <Section title="Repairs you reported" count={repairs.filter(r => cleanerRepairOpen(r.status)).length} p={p}>
+          {repairs.length ? repairs.map(r => <ReportedRepair key={r.workId} p={p} repair={r} />)
+            : !loading && <Notice text="Anything broken or not working at a property? Open the clean and report it as a repair. It shows here with where it is up to." p={p} />}
+        </Section>
+      )}
       {!manager && mine && (
         <Section title="Your month" p={p}>
           <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
@@ -338,7 +349,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
       {!manager && <CleanerPay p={p} tick={payTick} />}
       {!manager && <RefreshButton p={p} loading={loading} onPress={() => void load()} />}
 
-      <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} flags={flags} now={now} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
+      <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} repairs={repairs} flags={flags} now={now} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
         onRespond={id => { setOpenJob(null); setStatementFor(id); }} onChanged={load} onForm={onForm && (f => { setOpenJob(null); onForm(f); })} />
       <CreateSheet p={p} visible={creating} properties={properties} templates={templates.data?.templates ?? []} onClose={() => setCreating(false)} onDone={saved(async () => { setCreating(false); await load(); })} today={today} />
       <DefaultCleanersSheet p={p} visible={editingCleaners} admin={["admin", "super_admin"].includes(account.role)} onClose={() => setEditingCleaners(false)} onChanged={load} />
@@ -430,16 +441,39 @@ function followUp(account: WorkspaceAccount, propertyId: string, workId: string,
   return { ...form, key: `${kind}-from-clean-${workId}`, fields: form.fields.map(f => f.name === field ? { ...f, defaultValue: text } : f) };
 }
 
-function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onClose, onDone, onRespond, onChanged, onForm }: { p: Palette; account: WorkspaceAccount; manager: boolean; op?: Operation; mine?: CleanerMonth; flags: Flag[]; now: Date; propertyName: string; onClose: () => void; onDone: () => Promise<void>; onRespond: (complaintWorkId: string) => void; onChanged: () => Promise<void>; onForm?: (form: WorkflowForm) => void }) {
+// One repair the cleaner reported: what they said, where it is up to, and the visit day once booked. Never a cost,
+// the owner or the contractor (the database sends none of them).
+function ReportedRepair({ p, repair }: { p: Palette; repair: CleanerRepair }) {
+  const status = CLEANER_REPAIR_STATUS[repair.status];
+  return (
+    <View style={[ui.card, { gap: 6, backgroundColor: p.surface, borderColor: p.border }]}>
+      <View style={[ui.between, { gap: 8 }]}>
+        <Text numberOfLines={1} style={{ color: p.text, fontWeight: "700", flex: 1, minWidth: 0 }}>{repair.propertyName}</Text>
+        <Tag label={status.label} tone={status.tone} p={p} />
+      </View>
+      <Text style={{ color: p.text }}>{repair.issue}</Text>
+      <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+        <Tag label={repairTypeLabel(repair.repairType)} tone="plain" p={p} />
+        {repair.urgent && <Tag label="Urgent" tone="bad" p={p} />}
+        {repair.hazard && <Tag label="Safety hazard" tone="bad" p={p} />}
+      </View>
+      <Text style={[ui.small, { color: p.muted }]}>{repair.status === "booked" && repair.visitOn ? `Visit booked for ${formatDay(repair.visitOn)}. ` : status.detail + " "}Reported {formatDay(londonDayOf(repair.reportedAt) ?? repair.reportedAt.slice(0, 10))}.</Text>
+    </View>
+  );
+}
+
+function JobSheet({ p, account, manager, op, mine, repairs = [], flags, now, propertyName, onClose, onDone, onRespond, onChanged, onForm }: { p: Palette; account: WorkspaceAccount; manager: boolean; op?: Operation; mine?: CleanerMonth; repairs?: CleanerRepair[]; flags: Flag[]; now: Date; propertyName: string; onClose: () => void; onDone: () => Promise<void>; onRespond: (complaintWorkId: string) => void; onChanged: () => Promise<void>; onForm?: (form: WorkflowForm) => void }) {
   const checklist = checklistOf(op), phase = String(op?.data.phase ?? "");
   // The last review's reason when it was a rejection, where its dispute is up to, and problems reported.
   const rejection = op?.data.accepted === false && typeof op.data.reviewNote === "string" ? op.data.reviewNote : null;
   const feedback = op && typeof op.data.guestFeedback === "string" ? op.data.guestFeedback : null;
   const dispute = disputeFor(op, mine);
   const problems = op ? problemsOf(op.data) : [];
+  // Where each repair the cleaner reported from this clean is up to (their own list; the team read the repair itself).
+  const statusOf = (workId: string) => repairs.find(r => r.workId === workId)?.status ?? null;
   const mineToDo = !manager && !!op && op.assigneeId === account.userId && !["completed", "cancelled"].includes(op.status);
-  const [reporting, setReporting] = useState(false);
   const celebrate = useCelebrate();
+  const reported = async () => { celebrate("Sent to the Stays team"); await onChanged(); };
   const [ticked, setTicked] = useState<string[]>([]);
   const [report, setReport] = useState("");
   const [answers, setAnswers] = useState<Partial<CleanCondition>>({});
@@ -482,7 +516,7 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
   const workId = op?.workId;
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setAnswers({}); setItems([]); setList(null); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setFormChecked(false); setGuestFeedback(""); setReviewNote(""); setReporting(false); setStartedAt(""); setFinishedAt(""); setRedoDay(""); setRedoTime(""); });
+    queueMicrotask(() => { if (!active) return; setTicked([]); setReport(""); setAnswers({}); setItems([]); setList(null); setMailPhotos({ ids: [], uploading: false }); setError(""); setAccepted(null); setFormChecked(false); setGuestFeedback(""); setReviewNote(""); setStartedAt(""); setFinishedAt(""); setRedoDay(""); setRedoTime(""); });
     return () => { active = false; };
   }, [workId]);
   useEffect(() => {
@@ -552,6 +586,8 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
               <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
                 <Tag label={repairTypeLabel(x.repairType)} tone="plain" p={p} />
                 {x.urgent && <Tag label="Urgent" tone="bad" p={p} />}
+                {x.hazard === true && <Tag label="Safety hazard" tone="bad" p={p} />}
+                {!!statusOf(x.repairWorkId) && <Tag label={CLEANER_REPAIR_STATUS[statusOf(x.repairWorkId)!].label} tone={CLEANER_REPAIR_STATUS[statusOf(x.repairWorkId)!].tone} p={p} />}
               </View>
               <Text style={{ color: p.text }}>{x.issue}</Text>
               <Text style={[ui.small, { color: p.muted }]}>Sent to the Stays team{x.photos ? ` with ${x.photos} photo${x.photos === 1 ? "" : "s"}` : ""} · {formatDay(x.reportedAt.slice(0, 10))}</Text>
@@ -563,7 +599,8 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
             onToggle={item => setTicked(current => current.includes(item) ? current.filter(x => x !== item) : [...current, item])} />
           <PhotoPicker key={"photos:" + op.workId} p={p} workId={op.workId} purpose="cleaning" label="Photos" max={30} onChange={onCleanPhotos} />
           <Field label="Report" value={report} onChange={setReport} p={p} multiline placeholder="What you cleaned, anything broken or missing, Wi-Fi checked" />
-          <CleanCheckForm p={p} answers={answers} items={items} onAnswers={setAnswers} onItems={setItems} />
+          <CleanCheckForm p={p} answers={answers} items={items} onAnswers={setAnswers} onItems={setItems}
+            repairs={<CleanRepairs p={p} clean={{ workId: op.workId, version: op.version }} answers={answers} reported={problems} onSent={reported} />} />
           <View style={[ui.row, { gap: 8 }]}>
             <View style={{ flex: 1 }}><Field label="Started (optional)" value={startedAt} onChange={setStartedAt} p={p} placeholder="10:30" /></View>
             <View style={{ flex: 1 }}><Field label="Finished (optional)" value={finishedAt} onChange={setFinishedAt} p={p} placeholder="13:15" /></View>
@@ -624,9 +661,8 @@ function JobSheet({ p, account, manager, op, mine, flags, now, propertyName, onC
 
         {!canSubmit && !canReview && !canAssign && <Notice text={phase === "accepted" ? "This clean has been accepted." : phase === "review" ? "Submitted. Waiting for the cleaning manager's review." : "Nothing to do on this clean right now."} p={p} />}
         {checklist.length > 0 && !canSubmit && <Text style={[ui.small, { color: p.muted }]}>Checklist: {checklist.join(" · ")}</Text>}
-        {mineToDo && (reporting
-          ? <ProblemForm p={p} clean={{ workId: op.workId, version: op.version }} onCancel={() => setReporting(false)} onSent={async () => { setReporting(false); celebrate("Sent to the Stays team"); await onChanged(); }} />
-          : <Button label="Report a problem" icon="alert-triangle" p={p} onPress={() => setReporting(true)} />)}
+        {/* Waiting for review: the cleaner can still report a repair from this clean (in the form while it is to do). */}
+        {mineToDo && !canSubmit && <CleanRepairs p={p} clean={{ workId: op.workId, version: op.version }} reported={problems} onSent={reported} />}
         <PropertyTeamChatButton palette={p} propertyId={op.propertyId} workId={op.workId} />
         {openFlag ? <Notice text={openFlag.source === "clean_form" ? "Sent to management because no form came in." : "Flagged for management. They will decide."} p={p} />
           : <FlagButton p={p} role={account.role} target={{ workId: op.workId, propertyId: op.propertyId, title: `Clean at ${propertyName}` }} onDone={() => void onChanged()} />}
