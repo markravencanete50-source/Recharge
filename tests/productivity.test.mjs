@@ -58,7 +58,9 @@ test('Productivity is a management tool in the left panel and search, not a Home
     const management = rolePanel(role, []).groups.find(g => g.title === 'Management');
     assert.ok(management.links.some(l => l.key === 'tool:productivity'), role);
   }
-  for (const role of ['stays', 'cleans', 'accounts', 'client']) assert.deepEqual(panelToolsFor(role, []), [], role);
+  // The Stays team's panel-only tool is Furnishing Studio (role-gated, no module); everyone else has none.
+  assert.deepEqual(panelToolsFor('stays', []).map(t => t.key), ['studio']);
+  for (const role of ['cleans', 'accounts', 'client']) assert.deepEqual(panelToolsFor(role, []), [], role);
 });
 
 test('the calendar: whole weeks, and each day\'s hours, people, missed days and changes waiting', () => {

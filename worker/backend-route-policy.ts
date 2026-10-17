@@ -24,6 +24,8 @@ const endpoints = new Set([
   "/api/workspace/checklists", "/api/mobile/checklists",
   // Recharge's invoices and the invoice maker (20261022100000).
   "/api/workspace/documents", "/api/mobile/documents",
+  // Furnishing Studio: catalogue, client quotes, shopping lists and analytics (20261023200000).
+  "/api/workspace/furnishing", "/api/mobile/furnishing",
   // Client Enquiries: the landlord's form (no account), and the team opening the files sent with it.
   "/enquiry", "/api/enquiry", "/api/enquiry/upload", "/api/workspace/enquiry-files", "/api/mobile/enquiry-files",
   // The estimate emailed with a private link: the client's page (no account) and the team's Resend / Copy link.

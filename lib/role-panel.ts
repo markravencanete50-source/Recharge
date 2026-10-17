@@ -56,7 +56,7 @@ const KEY_HUE: Record<string, PanelHue> = {
   'tool:today': 'forest', 'tool:respond': 'rose', 'tool:month': 'plum', 'tool:restock': 'amber', 'tool:schedule': 'ocean', 'tool:review': 'sage',
   'tool:disputes': 'rose', 'tool:unassigned': 'amber', 'tool:cleaners': 'plum', 'tool:setups': 'sky', 'tool:invoices': 'accounts', 'tool:pipeline': 'ocean',
   'tool:visits': 'sage', 'tool:inspections': 'sky', 'tool:purchases': 'amber', 'tool:furnishing': 'plum', 'tool:expenses': 'rose', 'tool:payouts': 'sage',
-  'tool:budget': 'amber', 'tool:limits': 'amber', 'tool:cleaner-invoices': 'cleans', 'tool:mailbox': 'ocean',
+  'tool:budget': 'amber', 'tool:limits': 'amber', 'tool:studio': 'plum', 'tool:cleaner-invoices': 'cleans', 'tool:mailbox': 'ocean',
 };
 export const linkHue = (link: PanelLink): PanelHue =>
   link.kind === 'area' ? AREA_HUE[link.view] : link.kind === 'start' ? 'forest' : KEY_HUE[link.key] ?? 'slate';
@@ -73,7 +73,7 @@ const MANAGEMENT_GROUPS: [string, string, string[]][] = [
   ['departments', 'Departments', ['area:management=Management centre', 'area:stays', 'area:clients', 'area:cleans', 'area:repairs', 'area:accounts', 'area:all']],
   ['calendar-messages', 'Calendar & messages', ['page:calendar', 'page:inbox', 'page:decisions', 'same:queue']],
   ['management', 'Management', ['tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:limits', 'page:moderation', 'tool:training']],
-  ['more', 'More', ['tool:enquiries', 'page:analytics', 'page:properties', 'page:statements', 'page:feedback']],
+  ['more', 'More', ['tool:enquiries', 'tool:studio', 'page:analytics', 'page:properties', 'page:statements', 'page:feedback']],
   ['start', 'Start something', ['start']],
 ];
 const LAYOUTS: Record<string, Layout> = {
@@ -84,7 +84,7 @@ const LAYOUTS: Record<string, Layout> = {
       ['today', 'Today', ['page:home', 'page:favorites', 'page:todo']],
       ['work', 'Work', ['area:stays', 'area:clients', 'area:cleans', 'area:repairs=Reactive maintenance', 'area:all']],
       ['calendar-messages', 'Calendar & messages', ['page:calendar', 'page:inbox']],
-      ['guests-listings', 'Guests & listings', ['tool:enquiries', 'tool:bookings', 'tool:aircover', 'tool:licensing', 'tool:checks', 'tool:pricing', 'page:properties']],
+      ['guests-listings', 'Guests & listings', ['tool:enquiries', 'tool:bookings', 'tool:aircover', 'tool:licensing', 'tool:checks', 'tool:pricing', 'tool:studio', 'page:properties']],
       ['more', 'More', ['page:analytics', 'page:decisions', 'tool:training', 'page:feedback=Send feedback']],
       ['start', 'Start something', ['start']],
     ],

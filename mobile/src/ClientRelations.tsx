@@ -9,6 +9,7 @@ import { ListingHealthList, PricingList, RelistingList, ReviewsList } from "./Li
 import { LiveEnquiries } from "./LiveEnquiries";
 import { OnboardingTracker } from "./OnboardingTracker";
 import { PurchaseOrdersList } from "./PurchaseOrdersList";
+import { FurnishingStudio } from "./FurnishingStudio";
 import { StaysRoutineCard } from "./StaysRoutineCard";
 import type { SectionProps } from "./SectionProps";
 import { space, ui } from "./theme";
@@ -24,6 +25,7 @@ import { CLIENT_SUB_LABEL, clientSubsFor, defaultClientSub, pickSub, type Client
 //   reviews      guest reviews to log and answer (ReviewsList)
 //   relisting    properties that need re-listing (RelistingList)
 //   purchases    purchase orders (PurchaseOrdersList)
+//   furnishing   Furnishing Studio: catalogue, client quotes, shopping lists, analytics (FurnishingStudio; Stays team and management only)
 // Guest relations staff and admins see Today's routine above the chips: the listing checks and the empty
 // nights to price (StaysRoutineCard, part "clients"). A link's `sub` picks the section; otherwise Onboarding opens. The host builds the SectionProps once
 // and passes them in; `onOpenProperty` is where a won enquiry goes (the property's page), and `onRefresh` reloads the
@@ -54,6 +56,7 @@ export function ClientRelations(props: SectionProps & { onOpenProperty: (propert
       {sub === "reviews" && <ReviewsList {...props} />}
       {sub === "relisting" && <RelistingList {...props} />}
       {sub === "purchases" && <PurchaseOrdersList {...props} />}
+      {sub === "furnishing" && <FurnishingStudio p={p} account={account} />}
     </View>
   );
 }

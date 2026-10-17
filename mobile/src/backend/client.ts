@@ -14,6 +14,7 @@ import type { OversightAction } from '../../../lib/oversight-policy';
 import type { ChecklistAction } from '../../../lib/clean-checklist-policy';
 import type { ControlsAction } from '../../../lib/workspace-controls-policy';
 import type { DocumentsAction } from '../../../lib/invoice-maker';
+import type { FurnishingAction } from '../../../lib/furnishing-studio';
 import type { DeleteAccountInput } from '../../../lib/privacy-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 import { VIEW_AS_ENDED, VIEW_AS_HEADER, viewAsPeopleSchema } from '../../../lib/view-as';
@@ -128,7 +129,7 @@ export function setViewOnly(message: string, person?: { userId: string; onEnded:
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
 export const viewMode = () => ({ readOnly: viewOnly !== "", person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|onboarding-settings|owner-account|profile|owner|oversight|checklists|privacy|documents)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|onboarding-settings|owner-account|profile|owner|oversight|checklists|privacy|documents|furnishing)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   // While a super admin views the app as someone else nothing is saved (this device's own
   // notification link aside), so trying the screens never changes the business's records.
   if (viewOnly && body !== undefined && !options.asSelf && !path.startsWith("/api/mobile/devices")) throw new WorkspaceApiError(viewOnly, 423);
@@ -165,6 +166,9 @@ export const writeFinance = async (action: FinanceAction) => (await workspaceReq
 // Recharge's invoices and the invoice maker (lib/invoice-maker.ts, migration 20261022100000).
 export const readDocuments = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/documents?'+new URLSearchParams(query))).json();
 export const writeDocuments = async (action: DocumentsAction) => (await workspaceRequest('/api/mobile/documents',action)).json();
+// Furnishing Studio (Stays team and management): catalogue, projects, shopping list and analytics.
+export const readFurnishing = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/furnishing?'+new URLSearchParams(query))).json();
+export const writeFurnishing = async (action: FurnishingAction) => (await workspaceRequest('/api/mobile/furnishing',action)).json();
 export const readTeams = async (query: Record<string,string>) => (await workspaceRequest('/api/mobile/teams?'+new URLSearchParams(query))).json();
 export const writeTeams = async (action: TeamsAction) => (await workspaceRequest('/api/mobile/teams',action)).json();
 // Administration: people and properties (admins only).
