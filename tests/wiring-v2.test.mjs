@@ -30,7 +30,7 @@ test('Guest relations mounts each of its five sub-pages and the record-a-stay sh
 test('Client relations mounts each of its eight sub-pages', () => {
   for (const [sub, tag] of [['onboarding', 'OnboardingTracker'], ['enquiries', 'LiveEnquiries'], ['licensing', 'LicensingList'], ['listings', 'ListingHealthList'], ['pricing', 'PricingList'], ['reviews', 'ReviewsList'], ['relisting', 'RelistingList'], ['purchases', 'PurchaseOrdersList']])
     assert.match(client, new RegExp(`sub === "${sub}" && <${tag} `), sub);
-  assert.deepEqual([...map.CLIENT_RELATIONS_SUBS], ['onboarding', 'enquiries', 'licensing', 'listings', 'pricing', 'reviews', 'relisting', 'purchases']);
+  assert.deepEqual([...map.CLIENT_RELATIONS_SUBS], ['onboarding', 'enquiries', 'licensing', 'listings', 'pricing', 'reviews', 'relisting', 'purchases', 'furnishing']);
   assert.match(client, /pickSub\(subs, focus\?\.sub,/);
 });
 
@@ -44,7 +44,7 @@ test('the sub-pages a role gets, and which opens first', () => {
   assert.equal(subs.defaultGuestSub('admin', all), 'bookings');
   assert.equal(subs.defaultGuestSub('stays', ['aircover']), 'aircover');
   assert.deepEqual(subs.clientSubsFor('admin', []), [...map.CLIENT_RELATIONS_SUBS]);
-  assert.deepEqual(subs.clientSubsFor('stays', ['licensing']), ['onboarding', 'enquiries', 'licensing']);
+  assert.deepEqual(subs.clientSubsFor('stays', ['licensing']), ['onboarding', 'enquiries', 'licensing', 'furnishing']);
   assert.equal(subs.defaultClientSub(subs.clientSubsFor('stays', [])), 'onboarding');
   assert.equal(subs.pickSub(['a', 'b'], 'b', 'a'), 'b');
   assert.equal(subs.pickSub(['a', 'b'], 'zzz', 'a'), 'a');

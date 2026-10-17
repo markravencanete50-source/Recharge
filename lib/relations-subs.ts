@@ -1,5 +1,6 @@
 import type { ModuleId } from './modules';
 import { CLIENT_RELATIONS_SUBS, GUEST_RELATIONS_SUBS } from './workspace-map';
+import { canUseFurnishingStudio } from './furnishing-studio';
 
 // The sub-pages inside the two relations areas of Work (mobile/src/GuestRelations.tsx and
 // ClientRelations.tsx): which a person gets, what each is called, and which opens first. The names
@@ -12,7 +13,7 @@ export const GUEST_SUB_LABEL: Record<GuestSub, string> = {
 };
 export const CLIENT_SUB_LABEL: Record<ClientSub, string> = {
   onboarding: 'Onboarding', enquiries: 'Enquiries', licensing: 'Licensing', listings: 'Listing health', pricing: 'Pricing',
-  reviews: 'Reviews', relisting: 'Re-listing', purchases: 'Purchase orders',
+  reviews: 'Reviews', relisting: 'Re-listing', purchases: 'Purchase orders', furnishing: 'Furnishing Studio',
 };
 
 // The tools that open each sub-page. Admins get every one; anyone else gets the ones whose tool they
@@ -42,9 +43,12 @@ export function guestSubsFor(role: string, modules: readonly string[]): GuestSub
   const subs = GUEST_RELATIONS_SUBS.filter(sub => isAdmin(role) || holds(modules, GUEST_TOOLS[sub]));
   return subs.length ? subs : [...GUEST_RELATIONS_SUBS];
 }
+// Furnishing Studio is not a module: it is for the Stays team and management only (the database checks
+// the same roles), so it never appears for anyone else, not even in the whole-area fallback.
 export function clientSubsFor(role: string, modules: readonly string[]): ClientSub[] {
-  const subs = CLIENT_RELATIONS_SUBS.filter(sub => isAdmin(role) || holds(modules, CLIENT_TOOLS[sub]));
-  return subs.length ? subs : [...CLIENT_RELATIONS_SUBS];
+  const area = CLIENT_RELATIONS_SUBS.filter(sub => sub !== 'furnishing');
+  const subs = area.filter(sub => isAdmin(role) || holds(modules, CLIENT_TOOLS[sub]));
+  return [...(subs.length ? subs : area), ...(canUseFurnishingStudio(role) ? ['furnishing' as const] : [])];
 }
 
 // Where each area opens by default. Guest relations staff start with the cleans; management starts with
