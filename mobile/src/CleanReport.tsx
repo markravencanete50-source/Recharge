@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
@@ -25,7 +26,9 @@ export function conditionOf(answers: Partial<CleanCondition>, items: ItemRow[]):
 }
 export const unanswered = (answers: Partial<CleanCondition>) => CLEAN_QUESTIONS.filter(q => !answers[q.key]).length;
 
-export function CleanCheckForm({ p, answers, items, onAnswers, onItems }: { p: Palette; answers: Partial<CleanCondition>; items: ItemRow[]; onAnswers: (a: Partial<CleanCondition>) => void; onItems: (rows: ItemRow[]) => void }) {
+// repairs: where the cleaner reports repairs themselves (CleanRepairs, migration 20261023100000), in place of the
+// "Repairs or replacements needed" box the team then had to raise as a repair. Without it the box is shown as before.
+export function CleanCheckForm({ p, answers, items, onAnswers, onItems, repairs }: { p: Palette; answers: Partial<CleanCondition>; items: ItemRow[]; onAnswers: (a: Partial<CleanCondition>) => void; onItems: (rows: ItemRow[]) => void; repairs?: ReactNode }) {
   return (
     <View style={{ gap: 12 }}>
       <Text accessibilityRole="header" style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Property check</Text>
@@ -45,7 +48,7 @@ export function CleanCheckForm({ p, answers, items, onAnswers, onItems }: { p: P
           </View>
         </View>
       ))}
-      <Field label="Repairs or replacements needed (optional)" value={answers.repairs ?? ""} onChange={v => onAnswers({ ...answers, repairs: v })} p={p} multiline placeholder="For example, the shower head is cracked" />
+      {repairs ?? <Field label="Repairs or replacements needed (optional)" value={answers.repairs ?? ""} onChange={v => onAnswers({ ...answers, repairs: v })} p={p} multiline placeholder="For example, the shower head is cracked" />}
       <View style={{ gap: 8 }}>
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Items to order (optional)</Text>
         {items.map((row, i) => (

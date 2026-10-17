@@ -17,7 +17,8 @@ import { DateField } from "./CalendarPicker";
 import { Dropdown } from "./Dropdown";
 import { icon, radius, space, textSize, ui, type Palette } from "./theme";
 import { addDays, Anchor, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading } from "./LiveKit";
-import { formatMoney } from "../../lib/format";
+import { formatDay, formatMoney } from "../../lib/format";
+import { raisedByLine } from "../../lib/cleaner-repairs";
 import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeInbox, writeOperation, writeTeams } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { PropertyAccess } from "./LiveTools";
@@ -39,6 +40,9 @@ import {
   invoiceFilesOf, matchStay, quoteFilesOf, reassignData, referData, REASSIGN_STEP, reviewData, seesGuestChat, VISIT_TIMES, visitGuestUpdate, type ChatPrefill, type Clash,
 } from "../../lib/repair-contractors";
 import { ClashNotice, ContractorLine, ContractorPicker, EstimatePreview, GuestChatLink, RepairFileList, RepairFiles, REVIEW_CAPTION, useGuestSend, VisitDetails } from "./RepairContractors";
+
+// The London day a cleaner reported a repair, for "Reported by".
+const reportedDay = (iso: string) => formatDay(londonDayOf(iso) ?? iso.slice(0, 10));
 
 // Live repairs: the maintenance pipeline from report to completed repair, and
 // Ready's routine visits. Every action here is checked again by the database.
@@ -146,6 +150,8 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
             const problem = typeof r.data.issue === "string" && r.data.issue ? r.data.issue : r.title;
             const updated = londonDayOf(r.lastActivityAt ?? r.updatedAt);
             const flags = [r.data.urgent === true && "Urgent", r.data.hazard === true && "Safety hazard"].filter(Boolean).join(" · ");
+            // The team see when a cleaner raised it (migration 20261023100000); owners and contractors never do.
+            const fromCleaner = !["client", "ready"].includes(account.role) && !!raisedByLine(r.data, reportedDay);
             const next = step ? (step === "bookRepair" && account.role === "ready" ? "Approved, please book" : STEP_TITLE[step]) : contractorEstimates(account, r.data) ? "Send an estimate" : followUp ? "Update the quote or close the repair" : "";
             return (
               // One thin row a repair: property and problem, then status, cost and when it last moved.
@@ -159,6 +165,7 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
                     {` · ${estimateText(r.data)}${updated ? ` · updated ${daysFromNow(updated, today)}` : ""}`}
                   </Text>
                   {!!flags && <Text style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{flags}</Text>}
+                  {fromCleaner && <Text style={[ui.small, { color: p.muted }]}>Reported by a cleaner</Text>}
                   {!!declined && <Text numberOfLines={1} style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{declined}</Text>}
                   {!!next && <Text numberOfLines={1} style={[ui.small, { color: p.primary, fontWeight: "600" }]}>Next for you: {next}</Text>}
                 </View>
@@ -368,6 +375,7 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
     <Sheet palette={p} visible={!!repair} onClose={onClose} title={propertyName} subtitle={label ? `${label.label} · ${label.detail}` : ""} icon="hardhat">
       {repair && <>
         <Detail label="Issue" value={repair.data.issue} p={p} />
+        {!["client", "ready"].includes(role) && <Detail label="Reported by" value={raisedByLine(repair.data, reportedDay)} p={p} />}
         <ContractorLine p={p} data={repair.data} />
         {seesGuestChat(role) && phase !== "triage" && <GuestChatLink p={p} data={repair.data} />}
         {!!declined && <Notice text={declined} p={p} tone="bad" />}

@@ -18,6 +18,7 @@ import type { DeleteAccountInput } from '../../../lib/privacy-policy';
 import { webWorkspacePath } from '../../../lib/workspace-web-path';
 import { VIEW_AS_ENDED, VIEW_AS_HEADER, viewAsPeopleSchema } from '../../../lib/view-as';
 import { contractorsQuery, limitsQuery, type RepairLimitAction } from '../../../lib/repair-contractors';
+import { cleanerRepairsQuery } from '../../../lib/cleaner-repairs';
 
 const storedRefreshKey = "recharge.live.refresh.v1";
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -196,6 +197,8 @@ export async function uploadWorkPhoto(input: {requestId: string;workId?: string;
 export const readRepairContractors = async (propertyId: string) => (await workspaceRequest('/api/mobile/operations' + contractorsQuery(propertyId))).json();
 // Limit Changer: every owner's properties and their repair limits; a super admin changes one or several.
 export const readRepairLimits = async () => (await workspaceRequest('/api/mobile/operations' + limitsQuery())).json();
+// The repairs a cleaner reported and where each is up to (lib/cleaner-repairs.ts; cleaners only).
+export const readCleanerRepairs = async () => (await workspaceRequest('/api/mobile/operations' + cleanerRepairsQuery())).json();
 export const writeRepairLimit = async (action: RepairLimitAction) => (await workspaceRequest('/api/mobile/operations', action)).json();
 export async function uploadWorkFile(input: { requestId: string; workId: string; purpose: PhotoPurpose }, file: { uri: string; name: string; file?: File }) {
   const form = new FormData();

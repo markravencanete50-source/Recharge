@@ -43,6 +43,17 @@ export function purchaseFromClean(c: CleanCondition): string {
   if (c.cutlery === 'short' && !lines.some(l => /cutlery/i.test(l))) lines.push('Cutlery to replace what is missing');
   return lines.length ? 'From the clean report:\n' + lines.join('\n') : '';
 }
+// Property check answers that need a repair, which the cleaner can report as one straight away (migration
+// 20261023100000), unless a repair of that kind is already reported from the clean. The wording matches repairFromClean.
+export type RepairPrompt = { key: 'heating' | 'wifi'; label: string; issue: string; type: 'heating' | 'wifi'; urgent: boolean };
+export function repairPrompts(c: Partial<CleanCondition>, reportedTypes: readonly string[] = []): RepairPrompt[] {
+  const prompts: RepairPrompt[] = [];
+  if (c.heatingHotWater === 'not_working' && !reportedTypes.some(t => t === 'heating' || t === 'hot_water'))
+    prompts.push({ key: 'heating', label: 'heating or hot water not working', issue: 'The heating or hot water is not working.', type: 'heating', urgent: true });
+  if (c.broadband === 'not_working' && !reportedTypes.includes('wifi'))
+    prompts.push({ key: 'wifi', label: 'broadband not working', issue: 'The broadband is not working.', type: 'wifi', urgent: false });
+  return prompts;
+}
 // What a reactive maintenance job raised from the clean starts with.
 export function repairFromClean(c: CleanCondition): string {
   const lines = [

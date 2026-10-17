@@ -5,6 +5,7 @@ import { businessContext,businessResponse,databaseFailure,viewAsFailure } from '
 import { estimateRateIssues,journeyReadSchema,journeyActionSchema,journeyValidationField,journeyValidationReason,operationsReadSchema } from './journey-policy';
 import { operationsActionSchema, validationReason } from './operations-policy';
 import { CONTRACTORS_READ,LIMITS_ACTION,LIMITS_READ,repairLimitActionSchema } from './repair-contractors';
+import { CLEANER_REPAIRS_READ } from './cleaner-repairs';
 export const journeyRoute=(request:Request,native=false)=>workflowRoute(request,native,'journey');
 export const operationsRoute=(request:Request,native=false)=>workflowRoute(request,native,'operations');
 async function workflowRoute(request:Request,native:boolean,kind:'journey'|'operations'){
@@ -19,7 +20,9 @@ async function workflowRoute(request:Request,native:boolean,kind:'journey'|'oper
    if(!parsed.success)return businessResponse({error:'Check your property filter'},400);
    if('section' in parsed.data){
     // Repairs with contractors (lib/repair-contractors.ts): the contractors for a property, or every owner's repair limits.
+    // A cleaner's own repairs (lib/cleaner-repairs.ts).
     const result=parsed.data.section===LIMITS_READ.section?await session.client.rpc(LIMITS_READ.rpc)
+     :parsed.data.section===CLEANER_REPAIRS_READ.section?await session.client.rpc(CLEANER_REPAIRS_READ.rpc)
      :await session.client.rpc(CONTRACTORS_READ.rpc,{[CONTRACTORS_READ.arg]:parsed.data.propertyId});
     return result.error?databaseFailure(result.error):businessResponse({data:result.data,account:session.account,mode:'live'});
    }
