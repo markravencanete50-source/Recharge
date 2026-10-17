@@ -77,6 +77,8 @@ export const operationsReadSchema=z.union([
  z.object({section:z.literal('repairContractors'),propertyId:id}).strict(),
  // Every owner's properties and their repair limits, for Limit Changer (admins read, super admins change).
  z.object({section:z.literal('repairLimits')}).strict(),
+ // The repairs a cleaner reported and where each is up to (lib/cleaner-repairs.ts; cleaners only, the database checks).
+ z.object({section:z.literal('cleanerRepairs')}).strict(),
  z.object({propertyId:id.optional(),workId:id.optional()}).strict().refine(v=>!(v.propertyId&&v.workId),{message:'Choose a property or a work item'}),
 ]);
 // The journey route's 400 message. A comparable or a listing link is named in plain words ("Comparable 1 link: The link
