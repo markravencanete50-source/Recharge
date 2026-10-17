@@ -17,3 +17,4 @@
 -- 20261022700000_admin_access_control: installed by the lead on 16 October 2026 (no DROP or DELETE). workspace_access_control_action matches with comments ignored (live lacked two comment lines before).
 -- 20261022800000_property_edit: installed by the lead on 16 October 2026 (no DROP or DELETE).
 -- 20261023000000_review_sweep: installed by the lead on 16 October 2026 (no DROP or DELETE; adds three columns to the review state).
+-- 20261023100000_cleaner_repairs: installed by the lead on 17 October 2026 (no DROP or DELETE).
