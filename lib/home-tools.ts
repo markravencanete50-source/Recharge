@@ -10,7 +10,7 @@ export type ToolArt =
 export type HomeToolTarget =
   | { kind: 'work'; view: WorkView; sub?: string; anchor?: string; open?: HomeForm; workId?: string }
   // 'activity' stays a valid deep-link target so old links work; it opens Messages → Updates now.
-  | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals' | 'enquiries'; anchor?: string }
+  | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals' | 'enquiries' | 'mailbox'; anchor?: string }
   | { kind: 'tracker'; module: ModuleId }
   | { kind: 'calculator' };
 // Forms a Home shortcut can open straight away, inside their Work view.
@@ -105,10 +105,11 @@ const BY_ROLE: Record<string, Candidate[]> = {
   ],
   client: [
     // Stays, earnings and statements live in Reports; decisions waiting for the owner in Approvals.
-    tool('stays', 'Stays & statements', 'Bookings, earnings, money', 'calendar', tab('analytics')),
+    tool('stays', 'Portfolio', 'Stays, earnings and statements', 'calendar', tab('analytics')),
     tool('approvals', 'Approvals', 'Costs and steps to decide', 'hourglass', tab('approvals')),
     tool('repairs', 'Reactive maintenance', 'Request and approve', 'toolbox', work('repairs')),
-    tool('mailbox', 'Mailbox', 'Post at your properties', 'mail', { kind: 'tab', tab: 'analytics', anchor: sectionAnchor('Mailbox') }, ['client-mailbox']),
+    // Mailbox is a page of its own: what Recharge sent (the agreement) for every owner, and the post with the mailbox service.
+    tool('mailbox', 'Mailbox', 'Agreements and post', 'mail', { kind: 'tab', tab: 'mailbox' }),
     tool('furnishing', 'Furnishing calculator', 'What each room needs', 'sofa', { kind: 'calculator' }, ['client-furnishing']),
     { ...PROPERTIES, label: 'My properties', detail: 'Onboarding and details' },
     HELP,

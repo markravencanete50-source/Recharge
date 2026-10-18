@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { parseAnalyticsDate } from './analytics';
 import { validationReason } from './operations-policy';
 import { ownCostsSchema } from './estimate-projection';
+import { MAX_SIGNATURE_LENGTH, SIGNATURE_PATTERN } from './signature-png';
 const id=z.string().uuid(), text=(max:number)=>z.string().trim().max(max), money=z.number().int().min(0).max(10000000);
 const date=z.string().refine(v=>Boolean(parseAnalyticsDate(v)),'Choose a valid date');
 // A link that does not parse ("Test") must fail validation, never throw: new URL throws, which used to surface as a 503.
@@ -58,8 +59,8 @@ export const journeyActionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('publishEstimate'),...base,lowRateMinor:money.min(100),mediumRateMinor:money.min(100),highRateMinor:money.min(100),comparables:z.array(comparable).max(MAX_COMPARABLES,`Up to ${MAX_COMPARABLES} comparables`),comments:text(5000).default(''),occupancyBps:z.number().int().min(0).max(10000).optional(),directBookingBps:z.number().int().min(0).max(10000).optional(),otaFeeBps:z.number().int().min(0).max(10000).optional(),managementFeeBps:z.number().int().min(0).max(10000).optional(),ownCosts:ownCostsSchema.optional()}).strict(),
  z.object({action:z.literal('decideEstimate'),...base,decision:z.enum(['proceed','review','decline']),feedback:text(5000).default(''),followUpOn:date.nullable().optional(),repairLimitMinor:repairLimit.optional()}).strict(),
  // The agreement typed in, or made from the contract in use (templateId, migration 20261020870000; the database fills it in).
- z.object({action:z.literal('publishAgreement'),...base,agreement:text(10000).min(20).optional(),templateId:id.optional()}).strict(),
- z.object({action:z.literal('signAgreement'),...base,agreementRevision:z.number().int().positive(),signedName:text(200).min(2),consent:z.literal(true)}).strict(),
+ z.object({action:z.literal('publishAgreement'),...base,agreement:text(200000).min(20).optional(),templateId:id.optional(),format:z.enum(['text','outline']).optional()}).strict(),
+ z.object({action:z.literal('signAgreement'),...base,agreementRevision:z.number().int().positive(),signedName:text(200).min(2),signatureImage:z.string().max(MAX_SIGNATURE_LENGTH).regex(SIGNATURE_PATTERN,'Draw your signature again').optional(),consent:z.literal(true)}).strict(),
  z.object({action:z.literal('submitForm'),...base,form:onboardingFormSchema}).strict(),
  z.object({action:z.literal('linkInvoice'),...base,invoiceId:id}).strict(),
  z.object({action:z.literal('recordInvoiceOutside'),...base,note:text(500).min(3)}).strict(),

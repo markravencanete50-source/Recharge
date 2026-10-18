@@ -6,7 +6,7 @@ import { businessContext, businessResponse, databaseFailure, viewAsFailure } fro
 import { isNativeRequest } from './native-request-policy';
 import { boundedFormData } from './bounded-form';
 import { DocxError, docxOutline } from './docx-text';
-import { MAX_AGREEMENT_BYTES, agreementFileProblem, agreementFileType, onboardingSettingsActionSchema } from './agreement-template';
+import { MAX_AGREEMENT_BYTES, MAX_AGREEMENT_CHARACTERS, PDF_WORDING_MESSAGE, agreementFileProblem, agreementFileType, onboardingSettingsActionSchema } from './agreement-template';
 
 // Onboarding settings (Management centre): the contract uploaded as the agreement template, Recharge's details for the
 // agreement and the "Your own costs" categories (migration 20261020870000). Admins upload a Word document or a PDF; a Word
@@ -49,10 +49,13 @@ export async function onboardingSettingsRoute(request: Request, native = false) 
       return read.error ? databaseFailure(read.error) : businessResponse({ data: read.data });
     }
     if (request.method !== 'POST') return businessResponse({ error: 'Method not allowed' }, 405);
-    if (session.account.role !== 'admin' && session.account.role !== 'super_admin') return businessResponse({ error: 'Management access required' }, 403);
+    const admin = session.account.role === 'admin' || session.account.role === 'super_admin';
+    // Stays may read a Word agreement's wording at the agreement step (below); everything else here is for admins.
+    if (!admin && session.account.role !== 'stays') return businessResponse({ error: 'Management access required' }, 403);
     const quota = await requestQuota(request, 'onboarding-settings-user', 30, 600, session.account.userId);
     if (!quota.allowed) { const r = businessResponse({ error: 'Too many changes. Please wait.' }, 429); r.headers.set('Retry-After', String(quota.retryAfter || 60)); return r; }
     if (request.headers.get('Content-Type')?.split(';')[0].trim() === 'application/json') {
+      if (!admin) return businessResponse({ error: 'Management access required' }, 403);
       const parsed = onboardingSettingsActionSchema.safeParse(await boundedJson(request, 8192));
       if (!parsed.success) return businessResponse({ error: parsed.error.issues[0]?.message || 'Check the settings' }, 400);
       const saved = await session.client.rpc('workspace_onboarding_settings_action', { input: parsed.data });
@@ -62,6 +65,25 @@ export async function onboardingSettingsRoute(request: Request, native = false) 
     const form = await boundedFormData(request, MAX_AGREEMENT_BYTES + 65536);
     if (form === 'too-large') return businessResponse({ error: SIZE_MESSAGE }, 413);
     if (!form) return businessResponse({ error: 'Choose the contract to upload' }, 400);
+    // Reading an agreement's wording at the agreement step: { read: '1', file }. Nothing is kept; the text comes back to
+    // edit before the agreement is published (the database keeps only what is published).
+    if (form.has('read')) {
+      if ([...form.keys()].some(k => !['read', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1) || form.get('read') !== '1') return businessResponse({ error: 'Unexpected upload fields' }, 400);
+      const upload = form.get('file');
+      if (!(upload instanceof Blob)) return businessResponse({ error: 'Choose the agreement to upload' }, 400);
+      const bytes = new Uint8Array(await upload.arrayBuffer());
+      if (bytes.length > MAX_AGREEMENT_BYTES) return businessResponse({ error: SIZE_MESSAGE }, 413);
+      const type = agreementFileType(bytes);
+      if (!type) return businessResponse({ error: agreementFileProblem(bytes) ?? TYPE_MESSAGE }, 400);
+      if (type.kind === 'pdf') return businessResponse({ error: PDF_WORDING_MESSAGE }, 400);
+      let text = '';
+      try { text = await docxOutline(bytes); }
+      catch (error) { return businessResponse({ error: error instanceof DocxError ? error.message : 'This Word document could not be read. Save it again as a Word Document (.docx).' }, 400); }
+      if (text.trim().length < 20) return businessResponse({ error: 'No text was found in this document' }, 400);
+      if (text.length > MAX_AGREEMENT_CHARACTERS) return businessResponse({ error: 'This agreement is too long. Keep it under 200,000 characters.' }, 400);
+      return businessResponse({ ok: true, data: { text, format: 'outline' } });
+    }
+    if (!admin) return businessResponse({ error: 'Management access required' }, 403);
     if ([...form.keys()].some(k => !['requestId', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return businessResponse({ error: 'Unexpected upload fields' }, 400);
     const requestId = id.safeParse(form.get('requestId')), file = form.get('file');
     if (!requestId.success || !(file instanceof Blob)) return businessResponse({ error: 'Choose the contract to upload' }, 400);

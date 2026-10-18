@@ -6,6 +6,8 @@ import { estimateRateIssues,journeyReadSchema,journeyActionSchema,journeyValidat
 import { operationsActionSchema, validationReason } from './operations-policy';
 import { CONTRACTORS_READ,LIMITS_ACTION,LIMITS_READ,repairLimitActionSchema } from './repair-contractors';
 import { CLEANER_REPAIRS_READ } from './cleaner-repairs';
+// Two bytes a character in the worst case for the longest agreement, with room for the rest of the request.
+const JOURNEY_BODY_LIMIT=600_000;
 export const journeyRoute=(request:Request,native=false)=>workflowRoute(request,native,'journey');
 export const operationsRoute=(request:Request,native=false)=>workflowRoute(request,native,'operations');
 async function workflowRoute(request:Request,native:boolean,kind:'journey'|'operations'){
@@ -33,7 +35,8 @@ async function workflowRoute(request:Request,native:boolean,kind:'journey'|'oper
   }
   const quota=await requestQuota(request,'business-user',60,60,session.account.userId);
   if(!quota.allowed){const response=businessResponse({error:'Too many updates. Please wait.'},429);response.headers.set('Retry-After',String(quota.retryAfter));return response;}
-  const body=await boundedJson(request);
+  // A journey can carry a whole agreement (up to 200,000 characters) or a drawn signature (migration 20261024100000).
+  const body=await boundedJson(request,kind==='journey'?JOURNEY_BODY_LIMIT:16_384);
   // Limit Changer: a property's repair limit has its own database call (super admins only; the database checks).
   if(kind==='operations'&&body&&typeof body==='object'&&(body as {action?:unknown}).action===LIMITS_ACTION.action){
    const limit=repairLimitActionSchema.safeParse(body);

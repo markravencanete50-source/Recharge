@@ -81,6 +81,7 @@ import { LiveCalendar } from "./LiveCalendar";
 import { OpenMessagesContext } from "./PropertyTeamChat";
 import { LiveApprovals } from "./LiveApprovals";
 import { LiveClientReports } from "./LiveClientReports";
+import { OwnerMailbox } from "./OwnerMailbox";
 import { OwnerActions } from "./LiveOwnerHome";
 import { DeleteAccountButton, DeleteAccountSheet, PrivacySection } from "./LivePrivacy";
 import { ACCOUNT_DELETED } from "../../lib/privacy-policy";
@@ -109,7 +110,7 @@ type IconName = ComponentProps<typeof Feather>["name"];
 const SECTIONS: readonly WorkspaceSection[] = PAGE_SECTIONS;
 const TEAM_ROLES: Role[] = ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"];
 // Pages only some roles have.
-const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES };
+const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], mailbox: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES };
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
 type BookingPolicy = z.infer<typeof bookingPolicySchema>;
 // Direct-booking offers use this discount policy; only a super admin can set and confirm it.
@@ -660,7 +661,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "favorites" ? <FavoritesPage palette={p} desktop={desktop} entries={entries} onOpen={openEntry} onSearch={() => setSearchOpen(true)} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} focusProperty={propertyFocus} />
-    : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} mailbox={account.modules.includes("client-mailbox")} /> : reportsPage)
+    : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} /> : reportsPage)
+    : tab === "mailbox" ? <OwnerMailbox palette={p} account={account} journeys={journeys} properties={properties} onOpenProperty={openProperty} onSign={() => navigate("approvals")} />
     : tab === "approvals" ? <LiveApprovals palette={p} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onForm={setForm} onRefresh={() => refresh()} onInbox={() => navigate("inbox")} onProperties={() => navigate("properties")} />
     : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
     : tab === "enquiries" ? null

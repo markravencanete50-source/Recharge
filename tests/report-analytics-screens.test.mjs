@@ -23,7 +23,12 @@ test('the kit: one section with the period, headline figures with their change, 
   assert.match(kit, /strokeWidth=\{2\} strokeLinecap="round"/, '2px lines');
   assert.match(kit, /stroke=\{p\.surface\} strokeWidth=\{2\}/, 'points ringed in the surface colour');
   assert.match(kit, /gap: 2, borderRadius: 4/, 'a 2px gap between the parts of a stacked bar');
-  assert.doesNotMatch(kit, /Pie|donut|arc\(/i, 'no pies');
+  // Lee, 18 October 2026: "different colors different type of graphs not a very basic analytics": a ring with the
+  // total in the middle for shares (never a full pie), progress rings for rates, areas and columns for trends.
+  assert.doesNotMatch(kit, /\bPie\b/, 'a donut, never a pie');
+  assert.match(kit, /case "donut": return <DonutView/); assert.match(kit, /case "rings": return <RingsView/);
+  assert.match(kit, /style === "area" && c\.series\.map\(s => <Path key=\{"a" \+ s\.key\}/, 'a shaded area under a trend, flat (no gradients)'); assert.match(kit, /columns && c\.series\.map/, 'or columns per period');
+  assert.match(kit, /c\.palette \? seriesAt\(i\)/, 'many-coloured bars and columns');
   assert.doesNotMatch(kit, /#[0-9a-fA-F]{6}\b/, 'colours from the tokens only');
   assert.match(kit, /flexBasis: wide \? "46%" : "100%"/, 'one chart across a phone, two on a wide screen');
   assert.match(kit, /minWidth: 0/, 'nothing pushes the page wider than the screen');

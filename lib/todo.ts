@@ -39,6 +39,7 @@ export const TODO_TARGETS = {
   onboarding: { kind: 'work', view: LISTING_HEALTH_VIEW, sub: 'onboarding' },
   licensing: { kind: 'work', view: LISTING_HEALTH_VIEW, sub: 'licensing' },
   repairs: { kind: 'work', view: 'repairs' },
+  approvals: { kind: 'work', view: 'hub', sub: 'approvals' },
 } as const satisfies Record<string, HomeToolTarget>;
 
 // One update on a to-do (round 6): what was said, who said it and when. "Marked done" and "Reopened" are
@@ -59,7 +60,8 @@ export const todoHubSchema = hubSchema.extend({ items: z.array(todoHubItemSchema
 export type TodoHubItem = z.infer<typeof todoHubItemSchema>;
 export type TodoHub = z.infer<typeof todoHubSchema>;
 
-export type DerivedKind = 'repair_update' | 'listing_check' | 'pricing_gap' | 'guest_reply' | 'onboarding' | 'licensing';
+// 'approval' rows come from Management approvals, on the super admins' list only (lib/owner-todo.ts).
+export type DerivedKind = 'repair_update' | 'listing_check' | 'pricing_gap' | 'guest_reply' | 'onboarding' | 'licensing' | 'approval';
 export type TodoOpen = { workId?: string; target?: HomeToolTarget };
 export type TodoLatest = { text: string; by: string | null; at: string };
 export type TodoRow = {
@@ -383,7 +385,7 @@ export function shortDay(day: string, today: string): string {
 
 export type TodoCells = {
   property: string; task: string; detail: string; update: string; by: string; when: string;
-  due: string; dueTone: 'overdue' | 'today' | 'plain'; status: 'Done' | 'Automatic' | 'To do'; statusTone: 'good' | 'plain' | 'wait';
+  due: string; dueTone: 'overdue' | 'today' | 'plain'; status: 'Done' | 'Automatic' | 'To do' | 'Approval'; statusTone: 'good' | 'plain' | 'wait';
 };
 // What each column shows for a row. Empty cells read "–". The person is the one who wrote the latest update.
 export function todoCells(row: TodoRow, today: string, now: Date = new Date()): TodoCells {
@@ -396,7 +398,7 @@ export function todoCells(row: TodoRow, today: string, now: Date = new Date()): 
     when: latest ? timeAgo(latest.at, now) || EMPTY_CELL : EMPTY_CELL,
     due: !row.dueOn ? EMPTY_CELL : state === 'today' ? 'Today' : shortDay(row.dueOn, today),
     dueTone: row.done ? 'plain' : state === 'overdue' ? 'overdue' : state === 'today' ? 'today' : 'plain',
-    status: row.done ? 'Done' : row.automatic ? 'Automatic' : 'To do',
+    status: row.done ? 'Done' : row.derived === 'approval' ? 'Approval' : row.automatic ? 'Automatic' : 'To do',
     statusTone: row.done ? 'good' : row.automatic ? 'plain' : 'wait',
   };
 }

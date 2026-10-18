@@ -2,7 +2,7 @@ import { MODULES, type ModuleId, type WorkspaceRole } from "./modules";
 import type { WorkView } from "./tool-directory";
 import type { HomeToolTarget } from "./home-tools";
 
-export type WorkspaceSection = "home" | "work" | "properties" | "inbox" | "more" | "workspace" | "analytics" | "calendar" | "approvals" | "help" | "activity" | "training" | "statements" | "favorites" | "enquiries" | "feedback" | "moderation" | "todo" | "decisions";
+export type WorkspaceSection = "home" | "work" | "properties" | "inbox" | "more" | "workspace" | "analytics" | "calendar" | "approvals" | "help" | "activity" | "training" | "statements" | "favorites" | "enquiries" | "feedback" | "moderation" | "todo" | "decisions" | "mailbox";
 export type DepartmentTone = "cleans" | "ready" | "stays" | "clients" | "accounts";
 type Destination = { area: string; tone: DepartmentTone; icon: string; service: string };
 
@@ -80,7 +80,7 @@ export const isWorkSub = (view: WorkView, sub: string) => { const known = SUBS_B
 
 // Every top-level page a deep link can name. "activity" is no longer a menu entry; it stays here so old
 // links resolve (they open Messages, Updates).
-export const PAGE_SECTIONS: readonly WorkspaceSection[] = ["home", "todo", "work", "calendar", "inbox", "decisions", "properties", "analytics", "favorites", "approvals", "statements", "enquiries", "feedback", "moderation", "help", "activity"];
+export const PAGE_SECTIONS: readonly WorkspaceSection[] = ["home", "mailbox", "todo", "work", "calendar", "inbox", "decisions", "properties", "analytics", "favorites", "approvals", "statements", "enquiries", "feedback", "moderation", "help", "activity"];
 export type DeepLink = { section: WorkspaceSection; view?: WorkView; sub?: string; anchor?: string; open?: string; workId?: string; messagesTab?: "updates"; redirected?: boolean };
 // Client enquiries has one home, the Enquiries chip in Client relations (Lee, 16 October 2026). "Client enquiries" in
 // the menu, its old page links and the enquiry notices open it there; the page itself is no longer a page of its own.

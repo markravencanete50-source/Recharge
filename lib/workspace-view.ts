@@ -14,7 +14,7 @@ export const journeyViewSchema=z.object({propertyId:z.string().uuid(),clientId:z
  estimateDelivery:estimateDeliverySchema.nullable().optional(),
  // The agreement made from an uploaded contract (migration 20261020870000): its format and contract, and for the team at
  // the agreement step, the agreement the contract in use would make.
- agreementFormat:z.enum(['text','outline']).optional(),agreementTemplate:agreementTemplateRefSchema.nullable().optional(),agreementDraft:agreementDraftSchema.nullable().optional(),
+ agreementFormat:z.enum(['text','outline']).optional(),signatureImage:z.string().nullable().optional(),agreementSentAt:z.string().nullable().optional(),agreementTemplate:agreementTemplateRefSchema.nullable().optional(),agreementDraft:agreementDraftSchema.nullable().optional(),
  // The owner's app account made on Proceed and its email (migration 20261020880000), for the team.
  ownerAccountEmail:ownerAccountEmailSchema.nullable().optional(),
  // The categories for the owner's own costs on the estimate (migration 20261020890000), for the team's form.

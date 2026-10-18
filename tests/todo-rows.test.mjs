@@ -167,7 +167,8 @@ test('the To-do page: thin table on a computer, two-line cards on a phone, 44 px
   assert.match(list, /minHeight: 44, justifyContent: "center"/, 'the phone card is at least 44 px');
   assert.match(list, /todoCardLines\(row, today\)/);
   // Every section uses the same rows: the headings (automatic ones too) and the done list.
-  assert.equal((list.match(/<TodoRows p=\{p\} rows=/g) ?? []).length, 2);
+  // The headings and Done, plus the super admins' Needs you and employees' to-dos (lib/owner-todo.ts).
+  assert.equal((list.match(/<TodoRows p=\{p\} rows=/g) ?? []).length, 4);
   assert.match(list, /showAllLabel\(openRows\.length, expanded\)/);
   assert.doesNotMatch(list, /TodoRowView/);
   assert.match(list, /onRow=\{onOpen\}/, 'clicking a row opens it');

@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Platform, TextInput, View, useWindowDimensions } from "react-native";
+import { Image, Platform, TextInput, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Crypto from "expo-crypto";
@@ -28,7 +28,9 @@ import { ScotlandMap } from "./ScotlandMap";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
 import { readEstimate } from "../../lib/estimate-projection";
 import { agreementDocument, agreementFileName, agreementReadable } from "../../lib/agreement-copy";
-import { agreementTemplateForms, journeyAgreement } from "../../lib/agreement-template";
+import { MAX_AGREEMENT_BYTES, MAX_AGREEMENT_CHARACTERS, agreementTemplateForms, journeyAgreement } from "../../lib/agreement-template";
+import * as DocumentPicker from "expo-document-picker";
+import { SignaturePad } from "./SignaturePad";
 import type { BudgetItem } from "../../lib/accounts-work";
 import type { WorkView } from "../../lib/tool-directory";
 import { portfolioSummary, type PortfolioSummary } from "../../lib/portfolio-overview";
@@ -48,7 +50,7 @@ import { StateGraphic } from "./StateGraphic";
 import { Entrance, ExpandChevron, Float, GrowBar, MotionPress, Stagger, SwapIn } from "./motion";
 import { departmentColor, primaryFill, space, ui, web, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
-import { WorkspaceApiError, agreementFileLink, readOlderNotices, readWorkItem, workspaceRequest, writeControls } from "./backend/client";
+import { WorkspaceApiError, agreementFileLink, readAgreementText, readOlderNotices, readWorkItem, workspaceRequest, writeControls } from "./backend/client";
 import { exportReport } from "./exportReport";
 import { weeklyReportDocument, weeklyReportFileName } from "../../lib/weekly-report";
 import { isWorkspaceAdmin } from "../../lib/modules";
@@ -185,6 +187,27 @@ function PostcodeLookup({ p, text, disabled, onComplete, onFound }: { p: Palette
 }
 
 // A field's problem, under it in the danger colour, read out when it appears.
+// "Upload the agreement" on a document field: a Word document's wording, read on the server (nothing is kept), fills the
+// box below to edit before publishing. A PDF can't be edited word by word, so the server says to use the Word version.
+function DocumentText({ p, disabled, onText }: { p: Palette; disabled?: boolean; onText: (text: string) => void }) {
+  const [busy, setBusy] = useState(false), [note, setNote] = useState(""), [bad, setBad] = useState(false);
+  async function pick() {
+    setNote(""); setBad(false);
+    const picked = await DocumentPicker.getDocumentAsync({ type: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/pdf"], copyToCacheDirectory: true, multiple: false });
+    if (picked.canceled || !picked.assets?.length) return;
+    const asset = picked.assets[0];
+    if (asset.size && asset.size > MAX_AGREEMENT_BYTES) { setBad(true); setNote("Agreements can be up to 5 MB."); return; }
+    setBusy(true);
+    try {
+      const read = await readAgreementText({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType ?? undefined, file: (asset as { file?: File }).file });
+      onText(read.text); setNote(`${asset.name} is in the box below. Change any words, then publish.`);
+    } catch (e) { setBad(true); setNote(message(e)); } finally { setBusy(false); }
+  }
+  return <View style={{ gap: 6 }}>
+    <SoftButton label={busy ? "Reading the agreement…" : "Upload the agreement (Word document)"} icon="download" palette={p} disabled={disabled || busy} onPress={() => void pick()} />
+    {!!note && <Text accessibilityLiveRegion="polite" style={[ui.small, { color: bad ? p.danger : p.muted }]}>{note}</Text>}
+  </View>;
+}
 function FieldProblem({ p, error }: { p: Palette; error?: string }) {
   return error ? <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.danger, fontWeight: "600" }]}>{error}</Text> : null;
 }
@@ -219,8 +242,11 @@ function Field({ field: f, value, onChange, onAlso, p, disabled, error }: { fiel
         // Few options as radio choices, more as a dropdown, a long list with a search box (ChoiceField).
         <ChoiceField p={p} label={named} value={String(value ?? "")} options={f.options ?? []} onChange={onChange} disabled={disabled} />
       ) : (
-        <TextInput accessibilityLabel={named} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"} maxLength={f.type === "textarea" ? 10000 : 1000}
-          style={{ borderWidth: error ? 2 : 1, borderRadius: 14, padding: error ? 12 : 13, minHeight: f.type === "textarea" ? 110 : 50, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: p.background, color: p.text, borderColor: error ? p.danger : p.controlBorder, textAlignVertical: "top" }} />
+        <>{f.type === "document" && <DocumentText p={p} disabled={disabled} onText={onChange} />}
+        <TextInput accessibilityLabel={named} editable={!disabled} value={String(value ?? "")} onChangeText={onChange} placeholderTextColor={p.muted} multiline={f.type === "textarea" || f.type === "document"} keyboardType={f.type === "money" || f.type === "percent" ? "decimal-pad" : f.type === "number" ? "number-pad" : "default"}
+          // An agreement can be as long as a contract (MAX_AGREEMENT_CHARACTERS); other notes stay short.
+          maxLength={f.type === "document" || f.name === "agreement" ? MAX_AGREEMENT_CHARACTERS : f.type === "textarea" ? 10000 : 1000}
+          style={{ borderWidth: error ? 2 : 1, borderRadius: 14, padding: error ? 12 : 13, minHeight: f.type === "document" || f.name === "agreement" ? 320 : f.type === "textarea" ? 110 : 50, maxHeight: f.type === "document" || f.name === "agreement" ? 560 : undefined, fontSize: 15, fontFamily: "Montserrat_500Medium", backgroundColor: p.background, color: p.text, borderColor: error ? p.danger : p.controlBorder, textAlignVertical: "top" }} /></>
       )}
       {!!f.suggestions?.length && <Suggestions p={p} label={f.label} items={f.suggestions} value={String(value ?? "")} disabled={disabled} onPick={s => { onChange(s.value); if (s.also) onAlso?.(s.also); }} />}
       {f.lookup === "postcode" && <PostcodeLookup p={p} text={String(value ?? "")} disabled={disabled} onComplete={onChange}
@@ -309,7 +335,7 @@ function WorkflowEditor({ spec, invoices, budget, p, onClose, onSaved }: { spec:
       {shown.map((f, n) => <View key={f.name} style={{ gap: space.row }}>
         {!!f.section && <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "600", paddingTop: n ? space.field : 0, borderTopWidth: n ? 1 : 0, borderColor: p.border }}>{f.section}</Text>}
         <View nativeID={markerId(f.name)} style={{ height: 0 }} />
-        {f.type === "uploads" ? <Stagger key={f.name} index={n}><EnquiryUploadPicker p={p} label={f.label} help={f.help} files={files} onChange={setFiles} disabled={busy} /></Stagger> : f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => change(f.name, v)} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} error={problemOf(f.name)} /></Stagger>}
+        {f.type === "signature" ? <Stagger key={f.name} index={n}><SignaturePad p={p} label={f.label} help={f.help} error={problemOf(f.name)} disabled={busy} onChange={png => change(f.name, png)} /></Stagger> : f.type === "uploads" ? <Stagger key={f.name} index={n}><EnquiryUploadPicker p={p} label={f.label} help={f.help} files={files} onChange={setFiles} disabled={busy} /></Stagger> : f.type === "photos" ? (spec.workId && f.purpose ? <Stagger key={f.name} index={n}><PhotoPicker p={p} workId={spec.workId} purpose={f.purpose} label={f.label} hint={f.help} onChange={(ids, loading) => { setValues(v => ({ ...v, [f.name]: ids })); setUploading(loading); }} /></Stagger> : null) : <Stagger key={f.name} index={n}><Field field={f.name === "budgetItemId" ? { ...f, options: [{ value: "", label: "Not from the chart" }, ...budget.map(b => ({ value: b.id, label: `${b.item}, up to ${money(b.maxUnitMinor)} each` }))] } : f.name === "invoiceId" ? { ...f, options: invoices.filter(i => !spec.workId || i.work_id === spec.workId).map(i => ({ value: i.id, label: i.reference + ", " + money(i.amount_minor) + ", " + i.status })) } : f} value={values[f.name]} onChange={v => change(f.name, v)} onAlso={(also, onlyIfEmpty) => setValues(current => fillAlso(current, also, onlyIfEmpty))} p={p} disabled={busy} error={problemOf(f.name)} /></Stagger>}
       </View>)}
       </View>
       {!!error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: issues.length ? p.dangerWash : p.cautionWash }}><Text style={[ui.small, { color: p.text, fontWeight: issues.length ? "600" : undefined }]}>{error}</Text></View>}
@@ -361,7 +387,7 @@ function AgreementCopy({ j, p, propertyName }: { j: JourneyView; p: Palette; pro
   const save = async () => {
     try {
       await exportReport(agreementDocument({ propertyName, agreement: j.agreement, revision: j.signedName ? j.signedRevision ?? j.agreementRevision : j.agreementRevision, signedName: j.signedName ?? null, signedAt: j.signedAt ?? null,
-        format: a.agreementFormat ?? "text", attachment: pdf ? { fileName: pdf.fileName, sha256: pdf.sha256 } : null }), agreementFileName(propertyName), { mime: "text/html", uti: "public.html" });
+        format: a.agreementFormat ?? "text", attachment: pdf ? { fileName: pdf.fileName, sha256: pdf.sha256 } : null, signatureImage: a.signatureImage ?? null }), agreementFileName(propertyName), { mime: "text/html", uti: "public.html" });
       setNote(Platform.OS === "web" ? "Saved. Open it and choose Print or save as PDF." : "Ready to save or share. Open it and choose Print or save as PDF.");
     } catch (e) { setNote(message(e)); }
   };
@@ -403,7 +429,7 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work, onRefresh }
       {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
       {j.estimate && account.role === "client" && ["estimate", "reviewing"].includes(j.stage) && <EstimateGuide palette={p} />}
       {!!comparables.length && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Comparable properties</Text>{comparables.map(c => <SoftButton key={c.url} label={c.name + " · " + money(c.adrMinor) + " a night"} icon="external-link" palette={p} onPress={() => void Linking.openURL(c.url).catch(() => setLinkError("The comparable link could not be opened."))} />)}{!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}</View>}
-      {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{agreementReadable(j.agreement, journeyAgreement(j).agreementFormat)}</Text>{j.signedName && <Text style={{ color: p.success }}>Accepted by {j.signedName}{j.signedAt ? " on " + new Date(j.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }) : ""}.</Text>}<AgreementCopy j={j} p={p} propertyName={propertyName} /></View>}
+      {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{agreementReadable(j.agreement, journeyAgreement(j).agreementFormat)}</Text>{j.signedName && !!journeyAgreement(j).signatureImage && <View style={{ alignSelf: "flex-start", padding: 6, borderRadius: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: p.border }}><Image accessibilityLabel={"Signature of " + j.signedName} source={{ uri: journeyAgreement(j).signatureImage! }} style={{ width: 210, height: 70 }} resizeMode="contain" /></View>}{j.signedName && <Text style={{ color: p.success }}>{journeyAgreement(j).signatureImage ? "Signed" : "Accepted"} by {j.signedName}{j.signedAt ? " on " + new Date(j.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }) : ""}.</Text>}<AgreementCopy j={j} p={p} propertyName={propertyName} /></View>}
       {j.inspectionReport && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Inspection findings</Text><InspectionResult palette={p} j={j} /><Text selectable style={[ui.body, { color: p.text }]}>{j.inspectionReport}</Text></View>}
       <JourneyQuestions palette={p} j={j} owner={account.role === "client"} />
       <JourneyPhotos j={j} p={p} account={account} />
@@ -774,7 +800,7 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
   );
 }
 
-export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy, onOpen }: { palette: Palette; account: WorkspaceAccount; properties?: PropertyView[]; onSignOut: () => void; busy: boolean; onOpen?: (tab: "home" | "work" | "properties" | "analytics", view?: WorkView, sub?: string) => void }) {
+export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy, onOpen }: { palette: Palette; account: WorkspaceAccount; properties?: PropertyView[]; onSignOut: () => void; busy: boolean; onOpen?: (tab: "home" | "work" | "properties" | "analytics" | "mailbox", view?: WorkView, sub?: string) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const faq = faqsForAccess(account.role, account.modules).filter(f => f.id !== "communication-centre");
   const search = useListSearch(faq, f => [f.question, f.answer]);

@@ -23,12 +23,12 @@ export type PanelLink =
 export type PanelGroup = { key: string; title: string; links: PanelLink[] };
 export type RolePanel = { title: string; tagline: string; icon: PanelIcon; groups: PanelGroup[] };
 
-type Page = 'home' | 'todo' | 'calendar' | 'decisions' | 'favorites' | 'properties' | 'analytics' | 'inbox' | 'help' | 'approvals' | 'statements' | 'enquiries' | 'feedback' | 'moderation';
+type Page = 'home' | 'todo' | 'calendar' | 'decisions' | 'favorites' | 'properties' | 'analytics' | 'inbox' | 'help' | 'approvals' | 'statements' | 'enquiries' | 'feedback' | 'moderation' | 'mailbox';
 const PAGE: Record<Page, [string, PanelIcon]> = {
   home: ['Home', 'home'], todo: ['To-do', 'clipboard'], calendar: ['Calendar', 'calendar'], decisions: ['My requests', 'check-circle'],
   favorites: ['Favorites', 'star'], properties: ['Properties', 'key'], analytics: ['Reports', 'bar-chart-2'],
   inbox: ['Messages', 'message-circle'], help: ['Help & training', 'help-circle'],
-  approvals: ['Approvals', 'check-circle'], statements: ['Owner statements', 'pie-chart'], enquiries: ['Client enquiries', 'mail'],
+  approvals: ['Approvals', 'check-circle'], mailbox: ['Mailbox', 'mail'], statements: ['Owner statements', 'pie-chart'], enquiries: ['Client enquiries', 'mail'],
   feedback: ['Feedback', 'message-square'], moderation: ['Reported messages', 'flag'],
 };
 const AREA_ICON: Record<WorkView, PanelIcon> = {
@@ -50,7 +50,7 @@ export type PanelHue = 'forest' | 'ocean' | 'plum' | 'amber' | 'rose' | 'sky' | 
 const AREA_HUE: Record<WorkView, PanelHue> = { management: 'forest', hub: 'sky', calendar: 'ocean', stays: 'stays', clients: 'clients', cleans: 'cleans', repairs: 'ready', accounts: 'accounts', all: 'slate' };
 const KEY_HUE: Record<string, PanelHue> = {
   'page:home': 'forest', 'page:todo': 'sage', 'page:calendar': 'ocean', 'page:decisions': 'rose', 'page:favorites': 'amber', 'page:inbox': 'ocean', 'page:analytics': 'plum', 'page:help': 'slate',
-  'page:properties': 'forest', 'page:approvals': 'rose', 'page:statements': 'accounts', 'page:enquiries': 'sky', 'page:feedback': 'plum', 'page:moderation': 'rose',
+  'page:properties': 'forest', 'page:approvals': 'rose', 'page:mailbox': 'ocean', 'page:statements': 'accounts', 'page:enquiries': 'sky', 'page:feedback': 'plum', 'page:moderation': 'rose',
   'tool:queue': 'rose', 'tool:people': 'ocean', 'tool:productivity': 'sage', 'tool:performance': 'amber', 'tool:access': 'rose', 'tool:training': 'plum',
   'tool:inbox': 'ocean', 'tool:checks': 'sage', 'tool:pricing': 'amber', 'tool:signoff': 'plum', 'tool:bookings': 'ocean', 'tool:aircover': 'rose',
   'tool:today': 'forest', 'tool:respond': 'rose', 'tool:month': 'plum', 'tool:restock': 'amber', 'tool:schedule': 'ocean', 'tool:review': 'sage',
@@ -131,7 +131,7 @@ const LAYOUTS: Record<string, Layout> = {
   },
   client: {
     title: 'Owner', tagline: 'Your properties, stays and earnings', icon: 'home', groups: [
-      ['your-properties', 'Your properties', ['page:home', 'page:favorites', 'page:properties=My properties', 'page:approvals', 'page:analytics=Stays & statements', 'page:inbox']],
+      ['your-properties', 'Your properties', ['page:home', 'page:favorites', 'page:properties=My properties', 'page:approvals', 'page:analytics=Portfolio', 'page:inbox']],
       ['requests', 'Requests', ['area:repairs=Repairs', 'area:all=All requests', 'tool:mailbox', 'tool:furnishing']],
       ['more', 'More', ['page:help=Tools & help']],
       ['start', 'Start something', ['start']],
@@ -142,7 +142,7 @@ const LAYOUTS: Record<string, Layout> = {
 const TEAM = ['super_admin', 'admin', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts'];
 const PAGE_ROLES: Partial<Record<Page, string[]>> = {
   todo: TEAM, calendar: TEAM, decisions: TEAM,
-  approvals: ['client'], statements: ['accounts', 'admin', 'super_admin'], enquiries: ['admin', 'super_admin', 'stays'],
+  approvals: ['client'], mailbox: ['client'], statements: ['accounts', 'admin', 'super_admin'], enquiries: ['admin', 'super_admin', 'stays'],
   feedback: ['admin', 'super_admin', 'stays'], moderation: ['admin', 'super_admin'],
 };
 

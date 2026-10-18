@@ -1,5 +1,5 @@
 import {
-  averageSeries, buckets, compare, formatFixed, grainFor, percentOf, rangeDays, roundTo, stackParts, sumSeries,
+  averageSeries, buckets, compare, formatFixed, grainFor, percentOf, rangeDays, roundTo, seriesAt, stackParts, sumSeries, toneOf,
   type AnalyticsModel, type BarRow, type ChartColour, type ChartSpec, type Grain, type Kpi, type Range, SERIES,
 } from './report-analytics';
 import { formatCount, formatDuration, formatMoney, formatMoneyShort, plural } from './format';
@@ -33,6 +33,8 @@ const lineBits = (r: Range, g: Grain = grainFor(r)) => { const b = buckets(r, g)
 // --- Ratings ------------------------------------------------------------------------------------------------------------
 
 export const RATINGS_MIN_REVIEWS = 3;
+// One to five stars from red through amber to green, so the mix reads at a glance.
+const STAR_COLOUR: readonly ChartColour[] = ['bad', 'bad', 'warn', 'series3', 'good'];
 export type RatingPoint = { propertyId: string; day: string; stars: number; n: number; sum: number };
 // The database's compact points ({ propertyId: [[day, star 1 to 5, reviews, sum of stars], ...] }) as rows.
 export function ratingPoints(points: Record<string, [string, number, number, number][]> | null | undefined): RatingPoint[] {
@@ -80,7 +82,7 @@ export function ratingsModel(data: PropertyRatings, range: Range, previous: Rang
   const series = averageSeries(now.map(x => ({ day: x.day, sum: x.sum, n: x.n })), range, g);
   const withData = series.values.filter(v => v !== null).length;
   const charts: ChartSpec[] = [{
-    kind: 'line', id: 'rating-trend', title: 'Portfolio rating over time', subtitle: `${grainWord(g)} average of every review, with the number of reviews behind each point.`,
+    kind: 'line', style: 'area', id: 'rating-trend', title: 'Portfolio rating over time', subtitle: `${grainWord(g)} average of every review, with the number of reviews behind each point.`,
     unit: 'Average stars out of 5', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n, 1), decimals: 1,
     series: [{ key: 'average', label: 'Average rating', colour: 'series1', values: series.values.map(v => (v === null ? null : roundTo(v, 2))) }],
     extras: [{ label: 'Reviews', values: series.counts }],
@@ -91,16 +93,16 @@ export function ratingsModel(data: PropertyRatings, range: Range, previous: Rang
   const mix = [1, 2, 3, 4, 5].map(s => now.filter(x => x.stars === s).reduce((t, x) => t + x.n, 0));
   charts.push({
     kind: 'columns', id: 'star-mix', title: 'Star mix', subtitle: 'How many reviews gave each number of stars, rounded to the nearest star.', unit: 'Reviews in these dates',
-    rows: mix.map((n, i) => ({ key: String(i + 1), label: `${i + 1} ${i ? 'stars' : 'star'}`, value: n, display: formatCount(n), colour: 'series1' as ChartColour })),
+    rows: mix.map((n, i) => ({ key: String(i + 1), label: `${i + 1} ${i ? 'stars' : 'star'}`, value: n, display: formatCount(n), colour: STAR_COLOUR[i] })),
     state: cur.n ? 'ok' : 'empty', emptyText: 'No reviews in these dates.',
   });
   const rows: BarRow[] = [...period].filter(([, x]) => x.n > 0).map(([id, x]) => ({
-    key: id, label: names.get(id) ?? 'Property', value: roundTo(x.average ?? 0, 2), display: `${stars(x.average)} (${formatCount(x.n)})`, muted: x.n < RATINGS_MIN_REVIEWS,
+    key: id, label: names.get(id) ?? 'Property', value: roundTo(x.average ?? 0, 2), display: `${stars(x.average)} (${formatCount(x.n)})`, muted: x.n < RATINGS_MIN_REVIEWS, colour: toneOf(roundTo(x.average ?? 0, 2), 4.5, 4),
   }));
   const quiet = data.properties.length - rows.length;
   charts.push({
     kind: 'bars', id: 'by-property', title: 'Properties by rating', order: 'asc', limit: 10, max: 5, unit: 'Average stars out of 5 in these dates, reviews in brackets',
-    subtitle: `Lowest first. Paler bars rest on fewer than ${RATINGS_MIN_REVIEWS} reviews.${quiet > 0 ? ` ${counted(quiet, 'property', 'properties')} had no reviews in these dates.` : ''}`,
+    subtitle: `Lowest first: green from 4.5, amber from 4.0, red under 4.0. Paler bars rest on fewer than ${RATINGS_MIN_REVIEWS} reviews.${quiet > 0 ? ` ${counted(quiet, 'property', 'properties')} had no reviews in these dates.` : ''}`,
     rows, reference: cur.n ? { value: roundTo(cur.average ?? 0, 2), label: 'Portfolio average' } : undefined,
     state: rows.length ? 'ok' : 'empty', emptyText: 'No reviews in these dates.',
   });
@@ -133,15 +135,15 @@ export function enquiriesModel(now: EnquiriesReport, before: EnquiriesReport | n
   const values = sumSeries(now.rows.map(r => ({ day: workspaceDateKey(Date.parse(r.receivedAt)), value: 1 })), range, bits.grain);
   const steps = funnelSteps(now.funnel);
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'enquiries-trend', title: 'Enquiries received over time', subtitle: `${grainWord(bits.grain)} count of enquiries that came in.`, unit: 'Enquiries', labels: bits.labels, partial: bits.partial,
+    { kind: 'line', style: 'columns', id: 'enquiries-trend', title: 'Enquiries received over time', subtitle: `${grainWord(bits.grain)} count of enquiries that came in.`, unit: 'Enquiries', labels: bits.labels, partial: bits.partial,
       format: n => formatFixed(n), series: [{ key: 'received', label: 'Enquiries', colour: 'series1', values }], state: lineState(values, now.received), emptyText: 'No enquiries in these dates.', lowText: lowLine(bits.grain) },
-    { kind: 'columns', id: 'funnel', title: 'From enquiry to live', subtitle: 'How many reached each step, with the share of all enquiries.', unit: 'Enquiries',
+    { kind: 'columns', id: 'funnel', title: 'From enquiry to live', subtitle: 'How many reached each step, with the share of all enquiries.', unit: 'Enquiries', palette: true,
       rows: steps.map(s => ({ key: s.key, label: s.label, value: s.count, display: `${formatCount(s.count)}${s.ofReceived === null ? '' : ` (${s.ofReceived}%)`}` })), state: now.received ? 'ok' : 'empty', emptyText: 'No enquiries in these dates.' },
-    { kind: 'stack', id: 'sources', title: 'Where enquiries came from', unit: 'Share of enquiries', total: formatCount(now.received),
+    { kind: 'donut', id: 'sources', title: 'Where enquiries came from', unit: 'Share of enquiries', total: formatCount(now.received),
       parts: stackParts([{ key: 'form', label: SOURCE_LABEL.form, value: now.bySource.form, colour: 'series1' }, { key: 'app', label: SOURCE_LABEL.app, value: now.bySource.app, colour: 'series2' }]),
       state: now.received ? 'ok' : 'empty', emptyText: 'No enquiries in these dates.' },
   ];
-  if (now.byStart.length) charts.push({ kind: 'bars', id: 'start-when', title: 'When they want to start', order: 'desc', unit: 'Enquiry forms',
+  if (now.byStart.length) charts.push({ kind: 'bars', id: 'start-when', title: 'When they want to start', order: 'desc', unit: 'Enquiry forms', palette: true,
     rows: now.byStart.map(s => ({ key: s.startWhen || 'none', label: startWhenName(s.startWhen), value: s.count, display: formatCount(s.count) })), state: 'ok' });
   return { kpis, charts, source: BUSINESS_SOURCE };
 }
@@ -161,16 +163,16 @@ export function repairsModel(now: RepairsReport & { byDay?: { day: string; raise
   const stages = [...now.byStage].sort((a, b) => stageOrder(a.stage) - stageOrder(b.stage) || a.stage.localeCompare(b.stage));
   const shown = stages.slice(0, 5), rest = stages.slice(5).reduce((n, s) => n + s.count, 0);
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'repairs-trend', title: 'Repairs raised and finished', subtitle: `${grainWord(bits.grain)} count.`, unit: 'Repairs', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
+    { kind: 'line', style: 'columns', id: 'repairs-trend', title: 'Repairs raised and finished', subtitle: `${grainWord(bits.grain)} count.`, unit: 'Repairs', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
       series: [{ key: 'raised', label: 'Raised', colour: 'series1', values: raised }, { key: 'completed', label: 'Finished', colour: 'series2', values: done }],
       state: !now.byDay ? 'empty' : lineState(raised.map((v, i) => v + done[i]), now.raised + now.completed), emptyText: now.byDay ? 'No repairs in these dates.' : 'The trend appears once the report analytics update is installed on the database.', lowText: lowLine(bits.grain) },
-    { kind: 'stack', id: 'stages', title: 'Where the repairs raised stand now', unit: 'Share of repairs raised in these dates', total: formatCount(now.raised),
+    { kind: 'donut', id: 'stages', title: 'Where the repairs raised stand now', unit: 'Share of repairs raised in these dates', total: formatCount(now.raised),
       parts: stackParts([...shown.map((s, i) => ({ key: s.stage, label: repairStageName(s.stage), value: s.count, colour: SERIES[i] })), ...(rest ? [{ key: 'other', label: 'Other stages', value: rest, colour: 'neutral' as ChartColour }] : [])]),
       state: now.raised ? 'ok' : 'empty', emptyText: 'No repairs raised in these dates.' },
-    { kind: 'bars', id: 'by-property', title: 'Repairs by property', order: 'desc', limit: 10, unit: 'Repairs raised in these dates',
+    { kind: 'bars', id: 'by-property', title: 'Repairs by property', order: 'desc', limit: 10, unit: 'Repairs raised in these dates', palette: true,
       rows: now.byProperty.filter(x => x.raised > 0).map(x => ({ key: x.propertyId, label: x.propertyName, value: x.raised, display: formatCount(x.raised), detail: `${x.completed} finished · quoted ${formatMoney(x.quotedMinor)}` })),
       state: now.byProperty.some(x => x.raised > 0) ? 'ok' : 'empty', emptyText: 'No repairs raised in these dates.' },
-    { kind: 'bars', id: 'spend-by-property', title: 'Maintenance spend by property', order: 'desc', limit: 10, unit: 'Spend approved in these dates', colour: 'series2',
+    { kind: 'bars', id: 'spend-by-property', title: 'Maintenance spend by property', order: 'desc', limit: 10, unit: 'Spend approved in these dates', colour: 'series4',
       rows: now.byProperty.filter(x => x.approvedMinor > 0).map(x => ({ key: x.propertyId, label: x.propertyName, value: x.approvedMinor, display: formatMoneyShort(x.approvedMinor), detail: x.waitingMinor ? `${formatMoneyShort(x.waitingMinor)} waiting` : undefined })),
       state: now.byProperty.some(x => x.approvedMinor > 0) ? 'ok' : 'empty', emptyText: 'No maintenance spend approved in these dates.' },
   ];
@@ -191,16 +193,22 @@ export function todosModel(now: TodosReport & { byDay?: { day: string; total: nu
   const done = now.byDay ? sumSeries(now.byDay.map(d => ({ day: d.day, value: d.done })), range, bits.grain) : [];
   const onTime = Math.max(0, now.done - now.doneLate), waiting = Math.max(0, now.open - now.overdue);
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'todos-trend', title: 'To-dos due and done', subtitle: `${grainWord(bits.grain)}, by the day each to-do was due. To-dos with no due day are left out of this chart.`, unit: 'To-dos', labels: bits.labels, partial: bits.partial,
+    { kind: 'line', style: 'area', id: 'todos-trend', title: 'To-dos due and done', subtitle: `${grainWord(bits.grain)}, by the day each to-do was due. To-dos with no due day are left out of this chart.`, unit: 'To-dos', labels: bits.labels, partial: bits.partial,
       format: n => formatFixed(n), series: [{ key: 'due', label: 'Due', colour: 'series1', values: due }, { key: 'done', label: 'Done', colour: 'series2', values: done }],
       state: !now.byDay ? 'empty' : lineState(due, due.reduce((a, b) => a + b, 0)), emptyText: now.byDay ? 'No to-dos with a due day in these dates.' : 'The trend appears once the report analytics update is installed on the database.', lowText: lowLine(bits.grain) },
     { kind: 'stack', id: 'status', title: 'Where the to-dos stand', unit: 'Share of to-dos due in these dates', total: formatCount(now.total),
       parts: stackParts([{ key: 'onTime', label: 'Done on time', value: onTime, colour: 'good' }, { key: 'late', label: 'Done late', value: now.doneLate, colour: 'warn' }, { key: 'overdue', label: 'Overdue', value: now.overdue, colour: 'bad' }, { key: 'open', label: 'Open, not yet due', value: waiting, colour: 'neutral' }]),
       state: now.total ? 'ok' : 'empty', emptyText: 'No to-dos due in these dates.' },
-    { kind: 'bars', id: 'by-department', title: 'Completion by department', order: 'asc', unit: 'Share of each department’s to-dos done, lowest first', max: 100,
-      rows: now.byDepartment.filter(d => d.total > 0).map(d => ({ key: d.department || 'person', label: departmentName(d.department), value: percentOf(d.done, d.total), display: `${pct(percentOf(d.done, d.total))} (${d.done} of ${d.total})`, detail: d.overdue ? `${d.overdue} overdue` : undefined })),
+    { kind: 'rings', id: 'rates', title: 'How the to-dos are going', subtitle: 'Each ring is a share out of 100.',
+      rows: [
+        { key: 'done', label: 'Done', value: percentOf(now.done, now.total), display: pct(percentOf(now.done, now.total)), detail: `${now.done} of ${now.total} due`, colour: 'series1' },
+        { key: 'onTime', label: 'Done on time', value: percentOf(onTime, now.done), display: pct(percentOf(onTime, now.done)), detail: `${onTime} of ${now.done} done`, colour: 'good' },
+        { key: 'overdue', label: 'Overdue', value: percentOf(now.overdue, now.total), display: pct(percentOf(now.overdue, now.total)), detail: `${now.overdue} of ${now.total} due`, colour: 'bad' },
+      ], state: now.total ? 'ok' : 'empty', emptyText: 'No to-dos due in these dates.' },
+    { kind: 'bars', id: 'by-department', title: 'Completion by department', subtitle: 'Green from 80%, amber from 50%, red under 50%.', order: 'asc', unit: 'Share of each department’s to-dos done, lowest first', max: 100,
+      rows: now.byDepartment.filter(d => d.total > 0).map(d => ({ key: d.department || 'person', label: departmentName(d.department), value: percentOf(d.done, d.total), colour: toneOf(percentOf(d.done, d.total), 80, 50), display: `${pct(percentOf(d.done, d.total))} (${d.done} of ${d.total})`, detail: d.overdue ? `${d.overdue} overdue` : undefined })),
       state: now.byDepartment.some(d => d.total > 0) ? 'ok' : 'empty', emptyText: 'No to-dos due in these dates.' },
-    { kind: 'bars', id: 'by-person', title: 'Done by person', order: 'desc', limit: 10, unit: 'To-dos ticked off in these dates', colour: 'series2',
+    { kind: 'bars', id: 'by-person', title: 'Done by person', order: 'desc', limit: 10, unit: 'To-dos ticked off in these dates', colour: 'series5',
       rows: now.byPerson.filter(x => x.done > 0 || x.assigned > 0).map(x => ({ key: x.userId, label: x.fullName ?? 'Team member', value: x.done, display: formatCount(x.done), detail: [`${x.assigned} given to them`, x.overdue ? `${x.overdue} overdue` : ''].filter(Boolean).join(' · ') })),
       state: now.byPerson.length ? 'ok' : 'empty', emptyText: 'Nobody has to-dos in these dates.' },
   ];
@@ -228,14 +236,14 @@ export function messagesModel(now: MessagesReport, before: MessagesReport | null
   const channels = [...now.byChannel].sort((a, b) => channelOrder(a.channel, b.channel));
   const coloured = channels.filter(c => CHANNEL_COLOUR[c.channel]), other = channels.filter(c => !CHANNEL_COLOUR[c.channel]).reduce((n, c) => n + c.received, 0);
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'messages-trend', title: 'Messages received and sent', subtitle: `${grainWord(g)} totals across every channel.`, unit: 'Messages', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
+    { kind: 'line', style: 'area', id: 'messages-trend', title: 'Messages received and sent', subtitle: `${grainWord(g)} totals across every channel.`, unit: 'Messages', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
       series: [{ key: 'received', label: 'Received', colour: 'series1', values: received }, { key: 'sent', label: 'Sent', colour: 'series2', values: sent }],
       state: lineState(received.map((v, i) => v + sent[i]), total(now, 'received') + total(now, 'sent')), emptyText: 'No messages in these dates.', lowText: lowLine(g) },
     { kind: 'bars', id: 'reply-times', title: 'Median reply time by channel', order: 'desc', unit: 'Median minutes to reply, slowest first',
-      rows: now.replyTimes.filter(t => t.medianMinutes !== null).map(t => ({ key: t.channel, label: channelName(t.channel), value: t.medianMinutes, display: waitLabel(t.medianMinutes), detail: `${counted(t.count, 'reply', 'replies')} · slowest ${waitLabel(t.slowestMinutes)}` })),
+      rows: now.replyTimes.filter(t => t.medianMinutes !== null).map(t => ({ key: t.channel, label: channelName(t.channel), value: t.medianMinutes, colour: now.amberMinutes === null ? undefined : toneOf(t.medianMinutes, now.amberMinutes, now.amberMinutes * 2, 'down'), display: waitLabel(t.medianMinutes), detail: `${counted(t.count, 'reply', 'replies')} · slowest ${waitLabel(t.slowestMinutes)}` })),
       reference: now.amberMinutes === null ? undefined : { value: now.amberMinutes, label: 'Target (amber), minutes' }, colour: 'series3',
       state: now.replyTimes.some(t => t.medianMinutes !== null) ? 'ok' : 'empty', emptyText: 'No replies to time in these dates.' },
-    { kind: 'stack', id: 'channel-share', title: 'Messages received by channel', unit: 'Share of messages received', total: formatCount(total(now, 'received')),
+    { kind: 'donut', id: 'channel-share', title: 'Messages received by channel', unit: 'Share of messages received', total: formatCount(total(now, 'received')),
       parts: stackParts([...coloured.map(c => ({ key: c.channel, label: channelName(c.channel), value: c.received, colour: CHANNEL_COLOUR[c.channel] })), ...(other ? [{ key: 'other', label: 'Other channels', value: other, colour: 'neutral' as ChartColour }] : [])]),
       state: total(now, 'received') ? 'ok' : 'empty', emptyText: 'No messages received in these dates.' },
   ];
@@ -255,12 +263,12 @@ export function timeModel(now: TimeReport & { byDay?: { day: string; minutes: nu
   const hours = now.byDay ? sumSeries(now.byDay.map(d => ({ day: d.day, value: d.minutes / 60 })), range, bits.grain).map(v => roundTo(v, 1)) : [];
   const departments = [...now.byDepartment].sort((a, b) => b.minutes - a.minutes);
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'hours-trend', title: 'Hours worked over time', subtitle: `${grainWord(bits.grain)} total, by the day each shift started.`, unit: 'Hours', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n, n < 10 && n % 1 ? 1 : 0),
+    { kind: 'line', style: 'columns', id: 'hours-trend', title: 'Hours worked over time', subtitle: `${grainWord(bits.grain)} total, by the day each shift started.`, unit: 'Hours', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n, n < 10 && n % 1 ? 1 : 0),
       series: [{ key: 'hours', label: 'Hours', colour: 'series1', values: hours }], state: !now.byDay ? 'empty' : lineState(hours, now.shifts), emptyText: now.byDay ? 'No shifts in these dates.' : 'The trend appears once the report analytics update is installed on the database.', lowText: lowLine(bits.grain) },
-    { kind: 'bars', id: 'by-person', title: 'Hours by person', order: 'desc', limit: 10, unit: 'Hours worked in these dates',
+    { kind: 'bars', id: 'by-person', title: 'Hours by person', order: 'desc', limit: 10, unit: 'Hours worked in these dates', palette: true,
       rows: now.byPerson.map(x => ({ key: x.userId, label: x.fullName ?? 'Team member', value: hoursOf(x.minutes), display: `${hoursText(hoursOf(x.minutes))}h`, detail: [x.department ? departmentName(x.department) : '', counted(x.days, 'day')].filter(Boolean).join(' · ') })),
       state: now.byPerson.length ? 'ok' : 'empty', emptyText: 'No shifts in these dates.' },
-    { kind: 'stack', id: 'by-department', title: 'Share of hours by department', unit: 'Share of hours worked', total: `${hoursText(hoursOf(now.minutes))} hours`,
+    { kind: 'donut', id: 'by-department', title: 'Share of hours by department', unit: 'Share of hours worked', total: `${hoursText(hoursOf(now.minutes))} hours`,
       parts: stackParts([...departments.slice(0, 5).map((d, i) => ({ key: d.department, label: departmentName(d.department), value: d.minutes, display: `${hoursText(hoursOf(d.minutes))}h`, colour: SERIES[i] })),
         ...(departments.length > 5 ? [{ key: 'other', label: 'Other departments', value: departments.slice(5).reduce((n, d) => n + d.minutes, 0), colour: 'neutral' as ChartColour }] : [])]),
       state: now.minutes > 0 ? 'ok' : 'empty', emptyText: 'No hours in these dates.' },
@@ -285,18 +293,18 @@ export function staysModel(now: StayAnalytics, before: StayAnalytics | null, ran
   const months = [...now.byMonth].sort((a, b) => a.month.localeCompare(b.month));
   const labelOf = (m: string) => `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(m.slice(5, 7)) - 1]} ${m.slice(2, 4)}`;
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'stays-trend', title: 'Stays and nights by month', subtitle: 'A stay with nights in two months counts in both.', unit: 'Stays and nights', labels: months.map(m => labelOf(m.month)),
+    { kind: 'line', style: 'columns', id: 'stays-trend', title: 'Stays and nights by month', subtitle: 'A stay with nights in two months counts in both.', unit: 'Stays and nights', labels: months.map(m => labelOf(m.month)),
       partial: months.map(m => m.month + '-01' < range.from || m.month === range.to.slice(0, 7) && range.to.slice(8) < '28'),
       format: n => formatFixed(n), series: [{ key: 'stays', label: 'Stays', colour: 'series1', values: months.map(m => m.stays) }, { key: 'nights', label: 'Nights', colour: 'series2', values: months.map(m => m.nights) }],
       state: now.stays === 0 ? 'empty' : months.length < 2 ? 'low' : 'ok', emptyText: 'No confirmed stays in these dates.', lowText: 'The trend is by month, so it needs dates across two months or more. Choose 90 days or 12 months.' },
-    { kind: 'stack', id: 'channels', title: 'Stays by channel', unit: 'Share of stays', total: formatCount(now.stays),
+    { kind: 'donut', id: 'channels', title: 'Stays by channel', unit: 'Share of stays', total: formatCount(now.stays),
       parts: stackParts([...now.channels].sort((a, b) => (STAY_COLOUR[a.channel] ?? 'z').localeCompare(STAY_COLOUR[b.channel] ?? 'z')).map(c => ({ key: c.channel, label: stayChannelName(c.channel), value: c.stays, colour: STAY_COLOUR[c.channel] ?? 'neutral' }))),
       state: now.stays ? 'ok' : 'empty', emptyText: 'No confirmed stays in these dates.' },
-    { kind: 'columns', id: 'lengths', title: 'How long they stay', unit: 'Stays', rows: now.lengths.map(b => ({ key: b.bucket, label: LENGTH_LABEL[b.bucket] ?? b.bucket, value: b.stays, display: formatCount(b.stays) })), state: now.stays ? 'ok' : 'empty', emptyText: 'No confirmed stays in these dates.' },
-    { kind: 'columns', id: 'arrivals', title: 'Day they arrive', unit: 'Stays', rows: [...now.arrivalDays].sort((a, b) => a.day - b.day).map(d => ({ key: String(d.day), label: arrivalDayName(d.day).slice(0, 3), value: d.stays, display: formatCount(d.stays) })), state: now.stays ? 'ok' : 'empty', emptyText: 'No confirmed stays in these dates.' },
-    { kind: 'columns', id: 'lead', title: 'How far ahead they book', subtitle: now.leadTime.known < now.stays ? `Known for ${now.leadTime.known} of ${now.stays} stays.` : undefined, unit: 'Stays',
+    { kind: 'columns', id: 'lengths', title: 'How long they stay', unit: 'Stays', palette: true, rows: now.lengths.map(b => ({ key: b.bucket, label: LENGTH_LABEL[b.bucket] ?? b.bucket, value: b.stays, display: formatCount(b.stays) })), state: now.stays ? 'ok' : 'empty', emptyText: 'No confirmed stays in these dates.' },
+    { kind: 'columns', id: 'arrivals', title: 'Day they arrive', unit: 'Stays', palette: true, rows: [...now.arrivalDays].sort((a, b) => a.day - b.day).map(d => ({ key: String(d.day), label: arrivalDayName(d.day).slice(0, 3), value: d.stays, display: formatCount(d.stays) })), state: now.stays ? 'ok' : 'empty', emptyText: 'No confirmed stays in these dates.' },
+    { kind: 'columns', id: 'lead', palette: true, title: 'How far ahead they book', subtitle: now.leadTime.known < now.stays ? `Known for ${now.leadTime.known} of ${now.stays} stays.` : undefined, unit: 'Stays',
       rows: now.leadTime.buckets.map(b => ({ key: b.bucket, label: (LEAD_LABEL[b.bucket] ?? b.bucket).replace(' ahead', ''), value: b.stays, display: formatCount(b.stays) })), state: now.leadTime.known ? 'ok' : 'empty', emptyText: 'Not known for any of these stays. Hostaway has not sent when they booked.' },
-    { kind: 'bars', id: 'countries', title: 'Where guests come from', order: 'desc', limit: 8, unit: 'Stays where the country is known',
+    { kind: 'bars', id: 'countries', title: 'Where guests come from', order: 'desc', limit: 8, unit: 'Stays where the country is known', palette: true,
       rows: [...now.countries.top.map(c => ({ key: c.country, label: countryName(c.country), value: c.stays, display: formatCount(c.stays) })), ...(now.countries.others ? [{ key: 'others', label: 'Other countries', value: now.countries.others, display: formatCount(now.countries.others) }] : [])],
       state: now.countries.known ? 'ok' : 'empty', emptyText: 'Not known for any of these stays. Hostaway has not sent the guests’ countries.' },
     { kind: 'bars', id: 'by-home', title: 'Stays by home', order: 'desc', limit: 10, unit: 'Stays in these dates', colour: 'series2',
@@ -323,12 +331,12 @@ export function overviewModel(now: Overview, before: Overview, available: boolea
   const recorded = sumSeries(now.trend.map(t => ({ day: t.key, value: t.recorded })), range, bits.grain), completed = sumSeries(now.trend.map(t => ({ day: t.key, value: t.completed })), range, bits.grain);
   const tone: Record<string, ChartColour> = { complete: 'good', waiting: 'warn', progress: 'series3', other: 'bad' };
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'tasks-trend', title: 'Tasks recorded and completed', subtitle: `${grainWord(bits.grain)} count, by the day each task was recorded.`, unit: 'Tasks', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
+    { kind: 'line', style: 'area', id: 'tasks-trend', title: 'Tasks recorded and completed', subtitle: `${grainWord(bits.grain)} count, by the day each task was recorded.`, unit: 'Tasks', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
       series: [{ key: 'recorded', label: 'Recorded', colour: 'series1', values: recorded }, { key: 'completed', label: 'Completed', colour: 'series2', values: completed }],
       state: lineState(recorded, now.total), emptyText: 'No tasks in these dates.', lowText: lowLine(bits.grain) },
     { kind: 'stack', id: 'status', title: 'Tasks by status', unit: 'Share of tasks recorded in these dates', total: formatCount(now.total),
       parts: stackParts(now.status.map(s => ({ key: s.kind, label: s.name, value: s.value, colour: tone[s.kind] ?? 'neutral' }))), state: now.total ? 'ok' : 'empty', emptyText: 'No tasks in these dates.' },
-    { kind: 'bars', id: 'by-type', title: 'Tasks by type', order: 'desc', unit: 'Tasks recorded in these dates', rows: now.queues.map(q => ({ key: q.name, label: q.name, value: q.value, display: formatCount(q.value) })), state: now.total ? 'ok' : 'empty', emptyText: 'No tasks in these dates.' },
+    { kind: 'bars', id: 'by-type', title: 'Tasks by type', order: 'desc', unit: 'Tasks recorded in these dates', palette: true, rows: now.queues.map(q => ({ key: q.name, label: q.name, value: q.value, display: formatCount(q.value) })), state: now.total ? 'ok' : 'empty', emptyText: 'No tasks in these dates.' },
   ];
   return { kpis, charts, source: 'Source: the work records within your access (workflows, maintenance, cleans and more), by UK day.' };
 }
@@ -354,11 +362,11 @@ export function productivityModel(now: ProductivityLike, before: ProductivityLik
   for (const x of now.people) if (x.minutes > 0) byDept.set(x.department ?? '', (byDept.get(x.department ?? '') ?? 0) + x.minutes);
   const depts = [...byDept].sort((a, b) => b[1] - a[1]);
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'hours-trend', title: 'Team hours over time', subtitle: `${grainWord(g)} total.${g === 'week' ? ' A week that starts before these dates shows in full.' : ''}`, unit: 'Hours', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
+    { kind: 'line', style: 'area', id: 'hours-trend', title: 'Team hours over time', subtitle: `${grainWord(g)} total.${g === 'week' ? ' A week that starts before these dates shows in full.' : ''}`, unit: 'Hours', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
       series: [{ key: 'hours', label: 'Hours', colour: 'series1', values: hours }], state: lineState(hours, sum(now, 'minutes')), emptyText: 'Nobody clocked in during these dates.', lowText: lowLine(g) },
-    { kind: 'bars', id: 'by-person', title: 'Hours by person', order: 'desc', limit: 10, unit: 'Hours in these dates', rows: now.people.filter(x => x.minutes > 0).map(x => ({ key: x.userId, label: x.fullName || 'Team member', value: hoursOf(x.minutes), display: `${hoursText(hoursOf(x.minutes))}h`, detail: `${counted(x.shifts, 'shift')} · ${counted(x.days, 'day')}` })),
+    { kind: 'bars', id: 'by-person', title: 'Hours by person', order: 'desc', limit: 10, unit: 'Hours in these dates', palette: true, rows: now.people.filter(x => x.minutes > 0).map(x => ({ key: x.userId, label: x.fullName || 'Team member', value: hoursOf(x.minutes), display: `${hoursText(hoursOf(x.minutes))}h`, detail: `${counted(x.shifts, 'shift')} · ${counted(x.days, 'day')}` })),
       state: clocked(now) ? 'ok' : 'empty', emptyText: 'Nobody clocked in during these dates.' },
-    { kind: 'stack', id: 'by-department', title: 'Share of hours by department', unit: 'Share of team hours', total: `${hoursText(hoursOf(sum(now, 'minutes')))} hours`,
+    { kind: 'donut', id: 'by-department', title: 'Share of hours by department', unit: 'Share of team hours', total: `${hoursText(hoursOf(sum(now, 'minutes')))} hours`,
       parts: stackParts([...depts.slice(0, 5).map(([d, m], i) => ({ key: d || 'none', label: d ? departmentLabel(d) : 'No department', value: m, display: `${hoursText(hoursOf(m))}h`, colour: SERIES[i] })), ...(depts.length > 5 ? [{ key: 'other', label: 'Other departments', value: depts.slice(5).reduce((n, [, m]) => n + m, 0), colour: 'neutral' as ChartColour }] : [])]),
       state: sum(now, 'minutes') ? 'ok' : 'empty', emptyText: 'Nobody clocked in during these dates.' },
   ];
@@ -385,10 +393,16 @@ export function teamPerformanceModel(now: PerfLike, before: PerfLike | null, ran
     { kind: 'stack', id: 'reply-mix', title: 'Guest replies by speed', subtitle: 'Including messages that arrived while nobody was clocked in to guest relations.', unit: 'Share of guest replies', total: formatCount(x.all),
       parts: stackParts([{ key: 'green', label: 'Green (on time)', value: x.g, colour: 'good' }, { key: 'amber', label: 'Amber', value: x.a, colour: 'warn' }, { key: 'red', label: `Red (over ${now.targets.amberMinutes} minutes)`, value: x.r, colour: 'bad' }]),
       state: x.all ? 'ok' : 'empty', emptyText: 'No guest replies in these dates.' },
+    { kind: 'rings', id: 'reply-rates', title: 'Guest reply speed', subtitle: 'Each ring is a share of the guest replies out of 100.',
+      rows: [
+        { key: 'green', label: 'On time (green)', value: percentOf(x.g, x.all), display: pct(percentOf(x.g, x.all)), detail: counted(x.g, 'reply', 'replies'), colour: 'good' },
+        { key: 'amber', label: 'Amber', value: percentOf(x.a, x.all), display: pct(percentOf(x.a, x.all)), detail: counted(x.a, 'reply', 'replies'), colour: 'warn' },
+        { key: 'red', label: `Late (over ${now.targets.amberMinutes} minutes)`, value: percentOf(x.r, x.all), display: pct(percentOf(x.r, x.all)), detail: counted(x.r, 'reply', 'replies'), colour: 'bad' },
+      ], state: x.all ? 'ok' : 'empty', emptyText: 'No guest replies in these dates.' },
     { kind: 'bars', id: 'scores', title: 'Scores by person', order: 'desc', unit: 'Score, %', max: 100, reference: { value: now.targets.passPercent, label: 'On track from' },
-      rows: scored(now).map(p => ({ key: p.userId, label: p.fullName || 'Team member', value: p.score, display: `${p.score}%`, detail: p.onTrack ? 'On track' : 'Off track' })),
+      rows: scored(now).map(p => ({ key: p.userId, label: p.fullName || 'Team member', value: p.score, colour: (p.onTrack ? 'good' : 'bad') as ChartColour, display: `${p.score}%`, detail: p.onTrack ? 'On track' : 'Off track' })),
       state: scored(now).length ? 'ok' : 'empty', emptyText: 'Nothing to score in these dates.' },
-    { kind: 'bars', id: 'hours', title: 'Hours by person', order: 'desc', limit: 10, unit: 'Hours worked in these dates', colour: 'series2',
+    { kind: 'bars', id: 'hours', title: 'Hours by person', order: 'desc', limit: 10, unit: 'Hours worked in these dates', palette: true,
       rows: now.people.filter(p => p.minutes > 0).map(p => ({ key: p.userId, label: p.fullName || 'Team member', value: hoursOf(p.minutes), display: `${hoursText(hoursOf(p.minutes))}h`, detail: counted(p.shifts, 'shift') })),
       state: minutes(now) ? 'ok' : 'empty', emptyText: 'Nobody clocked in during these dates.' },
   ];
@@ -406,7 +420,7 @@ export function myPerformanceModel(now: Own, before: Own | null, against: string
     { key: 'time', label: 'Time worked', value: formatDuration(now.minutes), note: counted(now.shifts, 'shift'), delta: compare(now.minutes, before?.minutes ?? null, { better: 'none', format: n => formatDuration(n), against }) },
   ];
   const amber = now.amber ?? 0, red = now.red ?? Math.max(0, now.replies - now.repliesGreen - amber);
-  const charts: ChartSpec[] = now.replies ? [{ kind: 'stack', id: 'my-replies', title: 'My guest replies by speed', unit: 'Share of my replies', total: formatCount(now.replies),
+  const charts: ChartSpec[] = now.replies ? [{ kind: 'donut', id: 'my-replies', title: 'My guest replies by speed', unit: 'Share of my replies', total: formatCount(now.replies),
     parts: stackParts([{ key: 'green', label: 'Green (on time)', value: now.repliesGreen, colour: 'good' }, { key: 'amber', label: 'Amber', value: amber, colour: 'warn' }, { key: 'red', label: 'Red', value: red, colour: 'bad' }]), state: 'ok' }] : [];
   return { kpis, charts, source: 'Source: your own replies, clock-ins and finished work. Only you and management see these.' };
 }
@@ -433,14 +447,14 @@ export function decisionsModel(rows: readonly Decision[], range: Range, previous
   const people = new Map<string, number>();
   for (const d of now) people.set(d.by ?? 'Unknown', (people.get(d.by ?? 'Unknown') ?? 0) + 1);
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'decisions-trend', title: 'Decisions over time', subtitle: `${grainWord(bits.grain)} count.`, unit: 'Decisions', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
+    { kind: 'line', style: 'columns', id: 'decisions-trend', title: 'Decisions over time', subtitle: `${grainWord(bits.grain)} count.`, unit: 'Decisions', labels: bits.labels, partial: bits.partial, format: n => formatFixed(n),
       series: [{ key: 'decisions', label: 'Decisions', colour: 'series1', values: trend }], state: lineState(trend, now.length), emptyText: 'No decisions in these dates.', lowText: lowLine(bits.grain) },
     { kind: 'stack', id: 'outcomes', title: 'Outcomes', unit: 'Share of decisions', total: formatCount(now.length),
       parts: stackParts([{ key: 'good', label: 'Approved or allowed', value: now.filter(d => outcome(d) === 'good').length, colour: 'good' }, { key: 'bad', label: 'Declined, rejected or upheld', value: now.filter(d => outcome(d) === 'bad').length, colour: 'bad' }, { key: 'other', label: 'Other outcomes', value: now.filter(d => outcome(d) === 'other').length, colour: 'neutral' }]),
       state: now.length ? 'ok' : 'empty', emptyText: 'No decisions in these dates.' },
-    { kind: 'stack', id: 'areas', title: 'Decisions by area', unit: 'Share of decisions', total: formatCount(now.length),
-      parts: stackParts(areas.map((a, i) => ({ key: a, label: areaLabel(a), value: now.filter(d => d.area === a).length, colour: SERIES[i % SERIES.length] }))), state: now.length ? 'ok' : 'empty', emptyText: 'No decisions in these dates.' },
-    { kind: 'bars', id: 'by-person', title: 'Decisions by person', order: 'desc', limit: 10, unit: 'Decisions made in these dates', colour: 'series2',
+    { kind: 'donut', id: 'areas', title: 'Decisions by area', unit: 'Share of decisions', total: formatCount(now.length),
+      parts: stackParts(areas.map((a, i) => ({ key: a, label: areaLabel(a), value: now.filter(d => d.area === a).length, colour: seriesAt(i) }))), state: now.length ? 'ok' : 'empty', emptyText: 'No decisions in these dates.' },
+    { kind: 'bars', id: 'by-person', title: 'Decisions by person', order: 'desc', limit: 10, unit: 'Decisions made in these dates', palette: true,
       rows: [...people].map(([name, n]) => ({ key: name, label: name, value: n, display: formatCount(n) })), state: now.length ? 'ok' : 'empty', emptyText: 'No decisions in these dates.' },
   ];
   return { kpis, charts, source: 'Source: every approval and decision recorded in the last 90 days.', note: kept ? undefined : 'Decisions are read for the last 90 days only, so these dates have nothing earlier to compare with.' };
@@ -466,9 +480,9 @@ export function invoicesModel(all: readonly InvoiceLike[], range: Range, previou
   const statuses = [...new Set(gbp.map(i => i.status))].sort();
   const tone = (s: string): ChartColour => (s === 'paid' ? 'good' : s === 'issued' ? 'warn' : s === 'void' || s === 'cancelled' ? 'neutral' : 'series3');
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'invoiced-trend', title: 'Invoiced over time', subtitle: `${grainWord(bits.grain)} value of invoices issued, in pounds.`, unit: 'Pounds invoiced', labels: bits.labels, partial: bits.partial, format: n => formatMoneyShort(roundTo(n * 100)),
+    { kind: 'line', style: 'area', id: 'invoiced-trend', title: 'Invoiced over time', subtitle: `${grainWord(bits.grain)} value of invoices issued, in pounds.`, unit: 'Pounds invoiced', labels: bits.labels, partial: bits.partial, format: n => formatMoneyShort(roundTo(n * 100)),
       series: [{ key: 'invoiced', label: 'Invoiced', colour: 'series1', values: trend }], state: lineState(trend, now.length), emptyText: 'No invoices issued in these dates.', lowText: lowLine(bits.grain) },
-    { kind: 'stack', id: 'status', title: 'Every invoice by status', unit: 'Share of all invoices by value, whatever their date', total: formatMoneyShort(value(gbp)),
+    { kind: 'donut', id: 'status', title: 'Every invoice by status', unit: 'Share of all invoices by value, whatever their date', total: formatMoneyShort(value(gbp)),
       parts: stackParts(statuses.map(s => ({ key: s, label: statusLabel(s), value: value(gbp.filter(i => i.status === s)), display: formatMoneyShort(value(gbp.filter(i => i.status === s))), colour: tone(s) }))),
       state: gbp.length ? 'ok' : 'empty', emptyText: 'No invoices yet.' },
   ];
@@ -491,11 +505,11 @@ export function performanceModel(now: PerfReport, before: PerfReport | null, aga
   const months = [...now.byMonth].sort((a, c) => a.period.localeCompare(c.period));
   const fees = months.map(m => roundTo(m.managementFeeMinor / 100, 2));
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'fees-trend', title: 'Management fees by month', unit: 'Pounds', labels: months.map(m => monthLabel(m.period)), format: n => formatMoneyShort(roundTo(n * 100)),
+    { kind: 'line', style: 'columns', id: 'fees-trend', title: 'Management fees by month', unit: 'Pounds', labels: months.map(m => monthLabel(m.period)), format: n => formatMoneyShort(roundTo(n * 100)),
       series: [{ key: 'fees', label: 'Management fees', colour: 'series1', values: fees }], state: months.length < 2 ? (t.managementFeeMinor ? 'low' : 'empty') : fees.some(v => v) ? 'ok' : 'empty', emptyText: 'No management fees in these dates.', lowText: 'The trend is by month, so it needs dates across two months or more.' },
-    { kind: 'bars', id: 'fees-by-property', title: 'Management fees by property', order: 'desc', limit: 10, unit: 'Fees in these dates',
+    { kind: 'bars', id: 'fees-by-property', title: 'Management fees by property', order: 'desc', limit: 10, unit: 'Fees in these dates', palette: true,
       rows: now.byProperty.filter(x => x.managementFeeMinor).map(x => ({ key: x.propertyId, label: x.propertyName, value: x.managementFeeMinor, display: formatMoneyShort(x.managementFeeMinor) })), state: now.byProperty.some(x => x.managementFeeMinor) ? 'ok' : 'empty', emptyText: 'No management fees in these dates.' },
-    { kind: 'stack', id: 'channels', title: 'Nights booked by channel', unit: 'Share of nights booked', total: formatCount(now.byChannel.reduce((n, c) => n + c.nightsBooked, 0)),
+    { kind: 'donut', id: 'channels', title: 'Nights booked by channel', unit: 'Share of nights booked', total: formatCount(now.byChannel.reduce((n, c) => n + c.nightsBooked, 0)),
       parts: stackParts(now.byChannel.slice(0, 6).map((c, i) => ({ key: c.channel, label: channelLabel(c.channel), value: c.nightsBooked, colour: SERIES[i] }))), state: now.byChannel.some(c => c.nightsBooked) ? 'ok' : 'empty', emptyText: 'No nights booked in these dates.' },
   ];
   return { kpis, charts, source: 'Source: owner statements and confirmed stays, worked out by the database (see the notes below).' };
@@ -513,12 +527,12 @@ export function furnishingModel(now: Furnishing, before: Furnishing | null, agai
   ];
   const months = [...now.byMonth].sort((a, b) => a.month.localeCompare(b.month));
   const charts: ChartSpec[] = [
-    { kind: 'line', id: 'quotes-trend', title: 'Quotes sent and accepted by month', unit: 'Quotes', labels: months.map(m => monthLabel(m.month)), format: n => formatFixed(n),
+    { kind: 'line', style: 'columns', id: 'quotes-trend', title: 'Quotes sent and accepted by month', unit: 'Quotes', labels: months.map(m => monthLabel(m.month)), format: n => formatFixed(n),
       series: [{ key: 'sent', label: 'Sent', colour: 'series1', values: months.map(m => m.sent) }, { key: 'accepted', label: 'Accepted', colour: 'series2', values: months.map(m => m.accepted) }],
       state: !now.sent && !now.projects ? 'empty' : months.length < 2 ? 'low' : 'ok', emptyText: 'No quotes in these dates.', lowText: 'The trend is by month, so it needs dates across two months or more.' },
-    { kind: 'stack', id: 'status', title: 'Projects by status', unit: 'Share of projects', total: formatCount(now.projects),
-      parts: stackParts(now.byStatus.map((s, i) => ({ key: s.status, label: statusLabel(s.status), value: s.projects, colour: SERIES[i % SERIES.length] }))), state: now.projects ? 'ok' : 'empty', emptyText: 'No projects in these dates.' },
-    { kind: 'bars', id: 'top-spend', title: 'Top items by spend', order: 'desc', limit: 8, unit: 'Spend on accepted quotes', colour: 'series2',
+    { kind: 'donut', id: 'status', title: 'Projects by status', unit: 'Share of projects', total: formatCount(now.projects),
+      parts: stackParts(now.byStatus.map((s, i) => ({ key: s.status, label: statusLabel(s.status), value: s.projects, colour: seriesAt(i) }))), state: now.projects ? 'ok' : 'empty', emptyText: 'No projects in these dates.' },
+    { kind: 'bars', id: 'top-spend', title: 'Top items by spend', order: 'desc', limit: 8, unit: 'Spend on accepted quotes', palette: true,
       rows: now.topBySpend.map(x => ({ key: x.itemId, label: x.name, value: x.spendPence, display: formatMoneyShort(x.spendPence) })), state: now.topBySpend.length ? 'ok' : 'empty', emptyText: 'No accepted quotes in these dates.' },
   ];
   return { kpis, charts, source: 'Source: Furnishing Studio projects and quotes, dated by the quote.' };

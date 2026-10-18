@@ -220,6 +220,32 @@ test('upload: a PDF is kept as it is; other files, macros, 5 MB and non-admins a
   assert.equal(response.status, 403);
 });
 
+// The agreement step (20261024100000): stays and admins read a Word agreement's wording to edit; nothing is stored or saved.
+test('reading an agreement to edit: Word wording comes back as an outline; a PDF says to use Word; owners are refused', async () => {
+  const read = async (bytes, name = 'Agreement.docx') => {
+    const form = new FormData();
+    form.append('read', '1');
+    form.append('file', new File([bytes], name));
+    return server.onboardingSettingsRoute(new Request('https://app.test/api/workspace/onboarding-settings', { method: 'POST', headers: { origin: 'https://app.test' }, body: form }));
+  };
+  for (const role of ['stays', 'admin', 'super_admin']) {
+    reset(role);
+    const response = await read(await docx(CONTRACT));
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.data.format, 'outline');
+    assert.match(body.data.text, /^# Management agreement\n\nThis agreement is between Recharge & \{\{Owner name\}\}/);
+    assert.deepEqual([state.uploads, state.rpc], [[], []], 'nothing is stored or saved');
+  }
+  reset('stays');
+  let response = await read(new TextEncoder().encode('%PDF-1.7\n1 0 obj'), 'Signed.pdf');
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, T.PDF_WORDING_MESSAGE);
+  assert.equal((await upload(await docx(CONTRACT))).status, 403, 'stays still cannot change the contract in use');
+  reset('client');
+  assert.equal((await read(await docx(CONTRACT))).status, 403);
+});
+
 test('opening a contract: a 10-minute download link for the file the database allows', async () => {
   reset('client');
   const response = await server.onboardingSettingsRoute(new Request('https://app.test/api/workspace/onboarding-settings?templateId=5b0a8c62-56f4-4a62-9a39-6b0e4b8b2a01&propertyId=6b0a8c62-56f4-4a62-9a39-6b0e4b8b2a02'));
@@ -243,7 +269,8 @@ test('the onboarding ticket offers "Publish the agreement from the contract" whe
   assert.equal(keys[0], 'publishAgreementTemplate');
   assert.ok(keys.includes('publishAgreement'), 'typing an agreement in stays possible');
   const form = wf.workItemForms(admin, ticket, [journey], [ticket])[0];
-  assert.match(form.description, /Management \| 20%/, 'the fee table reads as rows before publishing');
+  assert.match(String(form.fields[0].defaultValue), /Management \| 20%/, 'the fee table is in the box to edit before publishing');
+  assert.equal(form.fields[0].name, 'agreement');
   assert.deepEqual(form.build({ checked: true }), { action: 'publishAgreement', propertyId: journey.propertyId, version: 3, templateId: draft.templateId });
   assert.ok(!wf.workItemForms({ ...admin, role: 'client' }, ticket, [journey], [ticket]).some(f => f.key === 'publishAgreementTemplate'), 'never for the owner');
   assert.ok(!wf.workItemForms(admin, ticket, [{ ...journey, agreementDraft: null }], [ticket]).some(f => f.key === 'publishAgreementTemplate'), 'only with a contract in use');

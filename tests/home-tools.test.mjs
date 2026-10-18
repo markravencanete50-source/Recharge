@@ -40,7 +40,8 @@ test('every role has tools on Home, each opening a place that role can reach', (
 test('tools that need a module only show to people who hold it', () => {
   assert.ok(!homeToolsFor('stays', []).some(t => t.key === 'aircover'));
   assert.ok(homeToolsFor('stays', ['aircover-reporting']).some(t => t.key === 'aircover'));
-  assert.ok(!homeToolsFor('client', ['client-dashboard']).some(t => t.key === 'mailbox'));
+  // Every owner has the Mailbox page: what Recharge sent them; the post is shown only with the mailbox service.
+  assert.ok(homeToolsFor('client', ['client-dashboard']).some(t => t.key === 'mailbox'));
   assert.deepEqual(homeToolsFor('unknown-role', MODULE_IDS), []);
   // Management and Accounts tools open a named tab inside the view.
   assert.deepEqual(homeToolsFor('admin', MODULE_IDS).find(t => t.key === 'people').target, { kind: 'work', view: 'management', sub: 'people' });

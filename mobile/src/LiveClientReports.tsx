@@ -10,7 +10,6 @@ import { ui, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
 import { addDays, Loading, london, message, Notice, Section } from "./LiveKit";
 import { StatementCard } from "./LiveOwner";
-import { MailboxSection } from "./LiveTools";
 import { readFinance, readOwner } from "./backend/client";
 import { formatCount, formatMoney, formatMoneyShort } from "../../lib/format";
 import { statementSchema, type Statement } from "../../lib/accounts-live";
@@ -21,7 +20,7 @@ import { addMonths, CHANNEL_LABEL, monthEnd, monthlyEarnings, monthName, monthSt
 
 // An owner's Reports, from their live bookings: earnings, occupancy and nightly rate for a month,
 // a month calendar of every stay, who is staying now and next, earnings by property and over the
-// last twelve months, their statements and their mailbox. Nothing here is sample data.
+// last twelve months, their statements (the Mailbox is a page of its own). Nothing here is sample data.
 const COLOURS = [
   { light: "#1F5F55", dark: "#8FD3C2" }, { light: "#B4512F", dark: "#F2AE8C" }, { light: "#3B5866", dark: "#A9C6D2" },
   { light: "#6B4768", dark: "#D9B5D5" }, { light: "#7A6A1F", dark: "#E3D38C" }, { light: "#2D4F8B", dark: "#A8C0EE" },
@@ -37,7 +36,7 @@ function monthGrid(month: string) {
 }
 const read = async (from: string, to: string) => ownerBookingsSchema.parse((await readOwner({ section: "bookings", from, to })).data);
 
-export function LiveClientReports({ palette: p, mailbox = false }: { palette: Palette; mailbox?: boolean }) {
+export function LiveClientReports({ palette: p }: { palette: Palette }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
   const [today] = useState(() => london(new Date()));
@@ -210,9 +209,6 @@ export function LiveClientReports({ palette: p, mailbox = false }: { palette: Pa
         {myStatements.map(s => <StatementCard key={s.id} p={p} s={s} />)}
         {!myStatements.length && !loading && <Notice text="Your first statement appears here once the month is reconciled and issued." p={p} />}
       </Section>
-
-      {/* Post handled at the owner's properties (Home's Mailbox tile scrolls here). */}
-      {mailbox && <MailboxSection palette={p} />}
 
       <Sheet palette={p} visible={!!open} onClose={() => setOpen(null)} title={open?.propertyName ?? ""} subtitle={open ? `${shortDate(open.checkIn)} to ${shortDate(open.checkOut)}` : ""} icon="calendar">
         {open && ([

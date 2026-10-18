@@ -87,12 +87,13 @@ test('owners reach every destination once: no separate stays and statements view
   assert.deepEqual(workViewsFor('client'), ['repairs', 'all']);
   const places = Object.fromEntries(toolsFor('client', DEFAULT_ROLE_MODULES.client.concat('client-mailbox')).map(t => [t.id, t.place]));
   assert.equal(places['client-dashboard'].tab, 'analytics');
-  assert.equal(places['client-mailbox'].tab, 'analytics');
+  assert.equal(places['client-mailbox'].tab, 'mailbox');
   const mailbox = homeToolsFor('client', ['client-mailbox']).find(t => t.key === 'mailbox');
-  assert.deepEqual(mailbox.target, { kind: 'tab', tab: 'analytics', anchor: 'section-mailbox' });
-  // Reports holds the mailbox and statements; the owner's old Work view is gone.
+  assert.deepEqual(mailbox.target, { kind: 'tab', tab: 'mailbox' });
+  // Portfolio holds the stays and statements; the Mailbox is a page of its own (Lee); the owner's old Work view is gone.
   const reports = await fs.readFile('mobile/src/LiveClientReports.tsx', 'utf8');
-  assert.match(reports, /<MailboxSection /); assert.match(reports, /<StatementCard /);
+  assert.doesNotMatch(reports, /<MailboxSection /); assert.match(reports, /<StatementCard /);
+  assert.match(await fs.readFile('mobile/src/OwnerMailbox.tsx', 'utf8'), /\{account\.modules\.includes\("client-mailbox"\) && <MailboxSection palette=\{p\} \/>\}/);
   const workspace = await fs.readFile('mobile/src/LiveWorkspace.tsx', 'utf8');
   assert.doesNotMatch(workspace, /currentView === "owner"/);
 });

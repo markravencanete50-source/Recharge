@@ -1,10 +1,12 @@
 import { z } from 'zod';
-import { agreementReadable } from './agreement-copy';
 import type { WorkflowForm } from './workflow-forms';
 
 // The contract uploaded as the agreement template (migration 20261020870000) and the other onboarding settings: what the
 // app reads and sends. The database fills the contract in; this file only names things and checks shapes.
 export const MAX_AGREEMENT_BYTES = 5 * 1024 * 1024;
+// An agreement's wording, typed, uploaded or edited from the contract (migration 20261024100000).
+export const MAX_AGREEMENT_CHARACTERS = 200000;
+export const PDF_WORDING_MESSAGE = "A PDF can't be edited word by word. Upload the Word version (.docx) to edit its wording, or add the PDF as the contract in Onboarding settings.";
 // The placeholders a Word contract can use, in this order (the database's private.workspace_agreement_placeholders()).
 export const AGREEMENT_PLACEHOLDERS = ['Owner name', 'Owner email', 'Company name', 'Property name', 'Property address', 'Management fee', 'Start date'] as const;
 export const PLACEHOLDER_HELP: Record<(typeof AGREEMENT_PLACEHOLDERS)[number], string> = {
@@ -61,7 +63,7 @@ export const agreementTemplateRefSchema = z.object({ id: z.string().uuid(), vers
 export const agreementDraftSchema = z.object({ templateId: z.string().uuid(), version: z.number(), kind: z.enum(['docx', 'pdf']), fileName: z.string(), text: z.string().nullable(), missing: z.array(z.string()) });
 export type AgreementTemplateRef = z.infer<typeof agreementTemplateRefSchema>;
 export type AgreementDraft = z.infer<typeof agreementDraftSchema>;
-export type JourneyAgreement = { agreementFormat?: 'text' | 'outline'; agreementTemplate?: AgreementTemplateRef | null; agreementDraft?: AgreementDraft | null };
+export type JourneyAgreement = { agreementFormat?: 'text' | 'outline'; signatureImage?: string | null; agreementSentAt?: string | null; agreementTemplate?: AgreementTemplateRef | null; agreementDraft?: AgreementDraft | null };
 export const journeyAgreement = (j: object): JourneyAgreement => j as JourneyAgreement;
 
 export const onboardingSettingsActionSchema = z.discriminatedUnion('action', [
@@ -74,17 +76,25 @@ export const onboardingSettingsActionSchema = z.discriminatedUnion('action', [
 });
 export type OnboardingSettingsAction = z.infer<typeof onboardingSettingsActionSchema>;
 
+// How the wording is written when it is edited in the app: the outline format of lib/agreement-copy.ts.
+export const OUTLINE_HELP = 'Change any words. A line starting # is a heading, ## a smaller heading, - a bullet point and 1. a numbered point; a blank line starts a new paragraph.';
 // The team's "Publish the agreement from the contract" at the agreement step: the agreement the contract in use makes
 // for this property, to read before publishing. The database fills it in again when it is published, from the same
 // contract (a contract replaced in the meantime is refused), so the owner signs exactly what was shown.
 export function agreementTemplateForms(a: { role: string }, j: { propertyId: string; version: number; stage: string; signedName: string | null }): WorkflowForm[] {
   const d = journeyAgreement(j).agreementDraft;
   if (!d?.text || j.stage !== 'agreement' || j.signedName || !['admin', 'super_admin', 'stays'].includes(a.role)) return [];
+  const drafted = d.text;
   const made = `Made from ${d.fileName} (contract ${d.version})` + (d.kind === 'pdf' ? '. The PDF is the agreement; this page goes with it as its cover.' : '.');
   return [{
     key: 'publishAgreementTemplate', title: 'Publish the agreement from the contract', endpoint: 'journeys',
-    description: [made, d.missing.length ? `Not recorded yet, so left blank: ${d.missing.join(', ')}.` : '', 'Read it before publishing. The owner signs exactly this wording.', agreementReadable(d.text, 'outline')].filter(Boolean).join('\n\n'),
-    fields: [{ name: 'checked', label: 'I have read the agreement above', type: 'checkbox', required: true }],
-    build: () => ({ action: 'publishAgreement', propertyId: j.propertyId, version: j.version, templateId: d.templateId }),
+    description: [made, d.missing.length ? `Not recorded yet, so left blank: ${d.missing.join(', ')}.` : '', 'Read it and change any wording before publishing. The owner signs exactly the wording below.'].filter(Boolean).join('\n\n'),
+    fields: [
+      { name: 'agreement', label: 'The agreement', type: 'textarea', required: true, defaultValue: drafted, help: OUTLINE_HELP },
+      { name: 'checked', label: 'I have read the agreement above', type: 'checkbox', required: true },
+    ],
+    // Only changed wording is sent; otherwise the database fills the agreement in from the contract again.
+    build: v => ({ action: 'publishAgreement', propertyId: j.propertyId, version: j.version, templateId: d.templateId,
+      ...(typeof v.agreement === 'string' && v.agreement.trim() !== drafted.trim() ? { agreement: v.agreement } : {}) }),
   }];
 }

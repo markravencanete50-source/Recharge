@@ -11,6 +11,9 @@ import { Chip } from "./LivePortfolio";
 import { useSaved } from "./Celebrate";
 import { HubItemSheet } from "./HubItemSheet";
 import { readInbox, readTeams, writeTeams } from "./backend/client";
+import { managementSchema, type Management } from "../../lib/management-live";
+import { approvalItems, parseApprovalFlags, type ApprovalFlag } from "../../lib/tracker-approvals";
+import { OWNER_TODO_LABEL, OWNER_TODO_VIEWS, approvalTodoRows, hasOwnerTodo, ownerNeeds, teamTodoGroups, type OwnerTodoView } from "../../lib/owner-todo";
 import { ui, type Palette } from "./theme";
 import type { SectionProps } from "./SectionProps";
 import { formatDay } from "../../lib/format";
@@ -72,6 +75,26 @@ function useTodoRows({ account, properties, journeys, work }: Pick<SectionProps,
   ], [hub, userId, properties, role, today, work, journeys, waiting]);
   const reload = useCallback(() => load(false), [load]);
   return { rows, hub, loading, error, today, reload };
+}
+
+// The super admins' approvals (Management approvals), as rows for "Needs you". Read with the list and again
+// after each change; a failure leaves the approvals out and says so.
+function useOwnerApprovals(on: boolean, hub: TodoHub | null, account: SectionProps["account"], properties: SectionProps["properties"]) {
+  const [flags, setFlags] = useState<ApprovalFlag[]>([]);
+  const [queue, setQueue] = useState<Management | null>(null);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    if (!on) return;
+    const [f, q] = await Promise.allSettled([readTeams({ section: "flags" }), readTeams({ section: "management" })]);
+    if (f.status === "fulfilled") setFlags(parseApprovalFlags(f.value.data).flags);
+    const parsed = q.status === "fulfilled" ? managementSchema.safeParse(q.value.data) : null;
+    if (parsed?.success) setQueue(parsed.data);
+    setError(f.status === "rejected" || !parsed?.success ? "Some approvals could not be loaded. Open Management approvals to see them all." : "");
+  }, [on]);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load, hub]);
+  const rows = useMemo(() => on ? approvalTodoRows(approvalItems({ flags, hub: hub?.items, queue }, { now: new Date(), owner: false, canDecide: true, userId: account.userId, property: id => properties.find(x => x.id === id) })) : [],
+    [on, flags, hub, queue, account.userId, properties]);
+  return { rows, error };
 }
 
 // Ticking a to-do moves it to Done (or back to To do). A repeat after a lost reply replays the same request.
@@ -255,6 +278,13 @@ export function TodoList(props: SectionProps) {
   const table = todoLayout(useWindowDimensions().width) === "table";
   const onTick = (row: TodoRow) => void tick(row);
 
+  // Super admins open on what needs them; buttons switch to their employees' to-dos and the whole company's list.
+  const ownerTodo = hasOwnerTodo(account.role);
+  const [view, setView] = useState<OwnerTodoView>(ownerTodo ? "mine" : "company");
+  const approvals = useOwnerApprovals(ownerTodo, hub, account, properties);
+  const needs = useMemo(() => ownerTodo ? ownerNeeds(rows, approvals.rows, account.userId, today) : [], [ownerTodo, rows, approvals.rows, account.userId, today]);
+  const team = useMemo(() => ownerTodo ? teamTodoGroups(rows, account.userId, today) : [], [ownerTodo, rows, account.userId, today]);
+  const company = !ownerTodo || view === "company";
   const groups = useMemo(() => groupTodo(rows, account.role, today), [rows, account.role, today]);
   const counts = useMemo(() => todoCounts(rows, today), [rows, today]);
   const done = useMemo(() => sortTodoRows(rows.filter(r => r.done), today), [rows, today]);
@@ -278,9 +308,30 @@ export function TodoList(props: SectionProps) {
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!!tickError && <Notice text={tickError} p={p} tone="bad" />}
       {loading && !rows.length && <Loading p={p} />}
-      {(!loading || !!rows.length) && <Text accessibilityLiveRegion="polite" style={small(p, { fontVariant: ["tabular-nums"] })}>{summary}</Text>}
+      {ownerTodo && (
+        <View accessibilityRole="radiogroup" accessibilityLabel="Whose to-dos" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {OWNER_TODO_VIEWS.map(v => <Chip key={v} p={p} label={OWNER_TODO_LABEL[v]} count={v === "mine" ? needs.length : v === "team" ? team.reduce((n, g) => n + g.rows.length, 0) : counts.open} on={view === v} onPress={() => setView(v)} />)}
+        </View>
+      )}
+      {ownerTodo && view === "mine" && <View style={{ gap: 8 }}>
+        <Text accessibilityRole="header" style={headingStyle(p)}>What the company needs from you{needs.length ? ` · ${needs.length}` : ""}</Text>
+        <Text style={small(p)}>Approvals waiting for you and the to-dos given to you, the most important first: overdue, due today, then approvals.</Text>
+        {!!approvals.error && <Notice text={approvals.error} p={p} />}
+        {needs.length
+          ? <TodoRows p={p} rows={needs} today={today} table={table} busy={busy} onTick={onTick} onOpen={open} />
+          : !loading && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, paddingHorizontal: 8 }]}><Text style={[ui.small, { color: p.muted, paddingVertical: 10, paddingHorizontal: 8 }]}>Nothing needs you right now.</Text></View>}
+      </View>}
+      {ownerTodo && view === "team" && <View style={{ gap: 16 }}>
+        <Text style={small(p)}>{"Your employees' open to-dos, person by person. The people with the most overdue come first."}</Text>
+        {!team.length && !loading && <Notice text="No one has an open to-do right now." p={p} />}
+        {team.map(g => <View key={g.who} style={{ gap: 8 }}>
+          <Text accessibilityRole="header" style={headingStyle(p)}>{g.who} · {g.rows.length}{g.overdue ? ` · ${g.overdue} overdue` : ""}{g.dueToday ? ` · ${g.dueToday} due today` : ""}</Text>
+          <TodoRows p={p} rows={g.rows} today={today} table={table} busy={busy} onTick={onTick} onOpen={open} />
+        </View>)}
+      </View>}
+      {company && (!loading || !!rows.length) && <Text accessibilityLiveRegion="polite" style={small(p, { fontVariant: ["tabular-nums"] })}>{summary}</Text>}
 
-      {(!loading || !!rows.length) && groups.filter(g => g.rows.some(r => !r.done) || g.always).map(g => {
+      {company && (!loading || !!rows.length) && groups.filter(g => g.rows.some(r => !r.done) || g.always).map(g => {
         // Client relations has its chips while it has open rows; the chosen one filters only that heading.
         const chipCounts = g.heading === "client_relations" ? clientFilterCounts(g.rows) : null, filter = chipCounts?.all ? clientFilter : "all";
         const openRows = g.rows.filter(r => !r.done && matchesClientFilter(r, filter)), expanded = more.has(g.heading), shown = expanded ? openRows : openRows.slice(0, ROWS_PER_HEADING);
@@ -309,7 +360,7 @@ export function TodoList(props: SectionProps) {
         );
       })}
 
-      {!!done.length && (
+      {company && !!done.length && (
         <View style={{ gap: 10 }}>
           <MotionPress accessibilityRole="button" accessibilityState={{ expanded: doneOpen }} accessibilityLabel={`Done, ${done.length}`} onPress={() => setDoneOpen(v => !v)} style={[ui.row, { gap: 6, minHeight: 44, alignSelf: "flex-start" }]}>
             <Text style={{ color: p.muted, fontSize: 13, fontWeight: "600" }}>Done · {done.length}</Text>

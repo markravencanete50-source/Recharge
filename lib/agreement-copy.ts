@@ -1,3 +1,4 @@
+import { SIGNATURE_PATTERN } from './signature-png';
 // A copy of the management agreement that owners and the team can keep: the exact wording published, the revision, and
 // who signed and when. Saved as a web page, so it opens anywhere; its "Print or save as PDF" button (or the browser's
 // print) makes the PDF. An agreement made from an uploaded contract (migration 20261020870000) is in the outline format
@@ -10,7 +11,7 @@ export type AgreementFormat = 'text' | 'outline';
 export type AgreementAttachment = { fileName: string; sha256: string };
 export type SignedAgreement = {
   propertyName: string; agreement: string; revision: number; signedName: string | null; signedAt: string | null;
-  format?: AgreementFormat; attachment?: AgreementAttachment | null;
+  format?: AgreementFormat; attachment?: AgreementAttachment | null; signatureImage?: string | null;
 };
 export function agreementFileName(propertyName: string) {
   const slug = propertyName.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'property';
@@ -45,10 +46,12 @@ function agreementBody(agreement: string, format: AgreementFormat) {
     : `<p>${b.lines.map(escape).join('<br>')}</p>`).join('\n');
 }
 
-export function agreementDocument({ propertyName, agreement, revision, signedName, signedAt, format = 'text', attachment = null }: SignedAgreement) {
+export function agreementDocument({ propertyName, agreement, revision, signedName, signedAt, format = 'text', attachment = null, signatureImage = null }: SignedAgreement) {
   const when = signedAt ? longDate(signedAt) + ' (UK time)' : 'date not recorded';
+  // The drawn signature (migration 20261024100000): only a PNG data URL is ever put in the page.
+  const drawn = signedName && signatureImage && SIGNATURE_PATTERN.test(signatureImage) ? `<img class="signature" alt="Signature of ${escape(signedName)}" src="${signatureImage}">` : '';
   const signed = signedName
-    ? `<div class="signed"><b>Accepted electronically by ${escape(signedName)}</b>On ${escape(when)}, in the Recharge app, against revision ${revision} of this agreement.</div>`
+    ? `<div class="signed"><b>${drawn ? 'Signed' : 'Accepted'} electronically by ${escape(signedName)}</b>${drawn}On ${escape(when)}, in the Recharge app, against revision ${revision} of this agreement.</div>`
     : `<div class="signed"><b>Not signed yet</b>This is revision ${revision} of the agreement, published for signing in the Recharge app.</div>`;
   const attached = attachment
     ? `<div class="signed"><b>The attached contract</b>${escape(attachment.fileName)}, downloaded with this page. Its SHA-256 fingerprint is <span class="hash">${escape(attachment.sha256)}</span>, so anyone can check it is the exact file.</div>`
@@ -60,7 +63,7 @@ export function agreementDocument({ propertyName, agreement, revision, signedNam
 h1{font-family:Helvetica,Arial,sans-serif;font-size:22px;margin:0 0 4px}h2{font-family:Helvetica,Arial,sans-serif;font-size:18px;margin:28px 0 8px}h3{font-family:Helvetica,Arial,sans-serif;font-size:16px;margin:22px 0 6px}
 .meta{font-family:Helvetica,Arial,sans-serif;color:#5B6B65;font-size:14px;margin:0 0 28px}
 .signed{margin-top:32px;padding:16px 18px;border:1px solid #DDD5C6;border-radius:10px;font-family:Helvetica,Arial,sans-serif;font-size:14px}
-.signed b{display:block;font-size:16px;margin-bottom:4px}.hash{word-break:break-all;font-family:monospace;font-size:12px}
+.signed b{display:block;font-size:16px;margin-bottom:4px}.signature{display:block;width:240px;max-width:100%;height:auto;margin:6px 0 8px;border-bottom:1px solid #DDD5C6}.hash{word-break:break-all;font-family:monospace;font-size:12px}
 .print{font-family:Helvetica,Arial,sans-serif;font-size:14px;padding:10px 18px;border-radius:999px;border:1px solid #17302A;background:#fff;color:#17302A;cursor:pointer;margin:0 0 24px}
 @media print{.print{display:none}body{margin:0 auto}h2,h3{break-after:avoid}.signed{break-inside:avoid}}</style></head>
 <body>

@@ -20,3 +20,5 @@
 -- 20261023100000_cleaner_repairs: installed by the lead on 17 October 2026 (no DROP or DELETE).
 -- 20261023200000_furnishing_studio: installed by the lead on 17 October 2026 (no DROP or DELETE; six new tables, 97 catalogue items).
 -- 20261023300000_report_analytics: installed by the lead on 18 October 2026 (no DROP or DELETE; patches the ratings and business report reads).
+-- 20261024100000_agreement_signature: installed by the lead on 18 October 2026 (no DROP or DELETE; adds the drawn signature column and lets the team edit the contract wording).
+-- 20261024200000_enquiry_delete_repair_limits: NOT installed yet. It adds two DELETE lines to the enquiry delete function (repair limits and their history), so it waits for Lee's approval.

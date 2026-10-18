@@ -21,7 +21,7 @@ import { HOLDER_LABEL, storedOtaAccountsSchema } from "../../lib/ota-accounts";
 import { PhotoStrip } from "./Photos";
 
 // Every tool a person holds, and where it lives in the live app.
-export function ToolDirectory({ palette: p, account, properties, onOpen }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpen: (tab: "home" | "work" | "properties" | "analytics", view?: WorkView, sub?: string) => void }) {
+export function ToolDirectory({ palette: p, account, properties, onOpen }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpen: (tab: "home" | "work" | "properties" | "analytics" | "mailbox", view?: WorkView, sub?: string) => void }) {
   const tools = toolsFor(account.role, account.modules);
   const [tracker, setTracker] = useState<Tool | null>(null);
   const [calculator, setCalculator] = useState(false);

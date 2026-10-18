@@ -126,7 +126,6 @@ test('the team sees the filled-in agreement before publishing; it is kept exactl
   assert.deepEqual(j.agreementTemplate, { id: draft.templateId, version: 1, kind: 'docx', fileName: 'Management agreement 2026.docx', bytes: 2048, sha256: j.agreementTemplate.sha256 });
   const published = await stored(prop);
   assert.equal(published.agreement_revision, 1);
-  await refused(journey(ADMIN, prop, { action: 'publishAgreement', templateId: draft.templateId, agreement: 'My own wording for this one.' }), /not both/);
 
   // A new contract: the published agreement keeps every byte; publishing from the old contract is refused.
   const s = await addTemplate('# New terms\n\n{{Owner name}} agrees to the new terms for {{Property name}}.', 'docx', 'Agreement v2.docx');
@@ -145,6 +144,66 @@ test('the team sees the filled-in agreement before publishing; it is kept exactl
   assert.equal(signed.agreement_template_id, draft.templateId, 'it remembers the contract it came from');
   const [history] = await owner('select count(*)::int n from private.workspace_agreement_templates');
   assert.equal(history.n, 3, 'every contract is kept');
+});
+
+test('the team edits the contract\'s wording before publishing, and the owner signs with a drawn signature (20261024100000)', async () => {
+  const prop = await atAgreement(OWNER);
+  const draft = (await view(STAYS, prop)).agreementDraft;
+  const edited = draft.text + '\n\nAn extra clause the team added for this property.';
+  const form = T.agreementTemplateForms({ role: 'stays' }, await view(STAYS, prop))[0];
+  assert.equal(form.fields[0].defaultValue, draft.text, 'the form starts from the filled-in contract');
+  assert.equal(form.build({ agreement: draft.text }, 'r').agreement, undefined, 'unchanged wording is filled in again by the database');
+  assert.equal(form.build({ agreement: edited }, 'r').agreement, edited);
+  let j = await journey(STAYS, prop, form.build({ agreement: edited }, 'r'));
+  assert.equal(j.agreement, edited);
+  assert.equal(j.agreementFormat, 'outline');
+  assert.equal(j.agreementTemplate.id, draft.templateId, 'still recorded against the contract it came from');
+  assert.ok(Date.parse(j.agreementSentAt) > Date.now() - 60000, 'when Recharge sent it, for the owner\'s Mailbox');
+  await refused(journey(STAYS, prop, { action: 'publishAgreement', templateId: draft.templateId, agreement: 'short' }), /./);
+
+  // A typed or uploaded agreement in the outline format, longer than the old 10,000 characters.
+  const long = '# Terms\n\n' + Array.from({ length: 400 }, (_, i) => `${i + 1}. Clause ${i + 1} of the agreement, in full.`).join('\n');
+  assert.ok(long.length > 10000);
+  assert.equal(journeyActionSchema.safeParse({ action: 'publishAgreement', requestId: crypto.randomUUID(), propertyId: prop, version: 1, agreement: long, format: 'outline' }).success, true);
+  j = await journey(ADMIN, prop, { action: 'publishAgreement', agreement: long, format: 'outline' });
+  assert.equal(j.agreementFormat, 'outline');
+  assert.equal(j.agreement, long);
+  assert.equal(j.agreementTemplate, null);
+
+  // The owner signs with their name and a drawing; a bad image is refused, with or without the app's checks.
+  const { signaturePng } = await vite.ssrLoadModule('/lib/signature-png.ts');
+  const png = signaturePng([[{ x: 10, y: 40 }, { x: 120, y: 20 }, { x: 220, y: 60 }]], 240, 80);
+  const sign = extra => ({ action: 'signAgreement', agreementRevision: j.agreementRevision, signedName: 'Olive Owner', consent: true, ...extra });
+  assert.equal(journeyActionSchema.safeParse({ ...sign({ signatureImage: 'data:image/svg+xml;base64,PHN2Zz4=' }), requestId: crypto.randomUUID(), propertyId: prop, version: 1 }).success, false);
+  await refused(journey(OWNER, prop, sign({ signatureImage: 'data:image/svg+xml;base64,PHN2Zz4=' })), /Draw your signature again/);
+  await as(OWNER);
+  await refused(rpc('workspace_journey_action', [{ ...sign({ signatureImage: 42 }), requestId: crypto.randomUUID(), propertyId: prop, version: await versionOf(prop) }]), /Draw your signature again/);
+  j = await journey(OWNER, prop, sign({ signatureImage: png }));
+  assert.equal(j.signedName, 'Olive Owner');
+  assert.equal(j.signatureImage, png);
+  assert.equal((await view(ADMIN, prop)).signatureImage, png, 'the team sees it on the signed agreement');
+  const copy = await vite.ssrLoadModule('/lib/agreement-copy.ts');
+  const html = copy.agreementDocument({ propertyName: 'Flat', agreement: j.agreement, revision: j.signedRevision, signedName: j.signedName, signedAt: j.signedAt, format: 'outline', signatureImage: png });
+  assert.match(html, /Signed electronically by Olive Owner/);
+  assert.ok(html.includes(`<img class="signature" alt="Signature of Olive Owner" src="${png}">`));
+  assert.doesNotMatch(copy.agreementDocument({ propertyName: 'Flat', agreement: 'x', revision: 1, signedName: 'A', signedAt: null, signatureImage: 'javascript:alert(1)' }), /<img/);
+
+  // Signing with the name alone still works.
+  const plain = await atAgreement(OTHER);
+  const published = await journey(ADMIN, plain, { action: 'publishAgreement', agreement: 'Our own wording for this property, agreed by phone.' });
+  const signed = await journey(OTHER, plain, { action: 'signAgreement', agreementRevision: published.agreementRevision, signedName: 'Other Owner', consent: true });
+  assert.equal(signed.signatureImage, null);
+});
+
+test('the editing and signature migration runs twice, and the contract migration after it', async () => {
+  const defs = async () => (await owner(`select string_agg(pg_get_functiondef(p.oid),'' order by p.oid::regprocedure::text) d from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='private' and p.proname in ('workspace_journey_action','workspace_journey_view','workspace_agreement_signature')`))[0].d;
+  const before = await defs();
+  const mine = await fs.readFile('supabase/migrations/20261024100000_agreement_signature.sql', 'utf8');
+  await db.exec('reset role'); await db.exec(mine); await db.exec(await fs.readFile(MIGRATION, 'utf8'));
+  assert.equal(await defs(), before);
+  assert.doesNotMatch(mine, /—/);
+  assert.doesNotMatch(mine.replace(/^--.*$/gm, ''), /\b(drop|delete)\b/i);
 });
 
 test('no placeholders, or a PDF: the owner\'s, the property\'s and Recharge\'s details in a block at the top', async () => {
