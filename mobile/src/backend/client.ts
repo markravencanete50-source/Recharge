@@ -289,6 +289,14 @@ export async function uploadAgreementTemplate(requestId: string, file: { uri: st
   else form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/octet-stream' } as unknown as Blob);
   return (await workspaceRequest('/api/mobile/onboarding-settings', form)).json();
 }
+// An agreement's wording read from a Word document, to edit before publishing (stays and admins; nothing is kept).
+export async function readAgreementText(file: { uri: string; name: string; mimeType?: string; file?: File }) {
+  const form = new FormData();
+  form.append('read', '1');
+  if (Platform.OS === 'web') form.append('file', file.file ?? new File([await (await fetch(file.uri)).blob()], file.name, { type: file.mimeType ?? 'application/octet-stream' }));
+  else form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/octet-stream' } as unknown as Blob);
+  return z.object({ data: z.object({ text: z.string(), format: z.literal('outline') }) }).parse(await (await workspaceRequest('/api/mobile/onboarding-settings', form)).json()).data;
+}
 // A contract's file by a short link: admins any; an owner the one their own agreement was made from.
 export const agreementFileLink = async (templateId: string, propertyId?: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) })
   .parse(await (await workspaceRequest('/api/mobile/onboarding-settings?' + new URLSearchParams(propertyId ? { templateId, propertyId } : { templateId }))).json()).data;

@@ -10,7 +10,7 @@ import { agreementTemplateForms } from './agreement-template';
 import { defaultRedoBy } from './cleans-live';
 import { BATHROOM_CHOICES, BEDROOM_CHOICES, GARDEN_CHOICES, PARKING_CHOICES, PROPERTY_TYPES, WC_CHOICES, type Suggestion } from './property-listing';
 // 'uploads' (the owner's enquiry sheet) holds photos and videos chosen on the device; they are sent once the form is saved.
-export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos'|'uploads';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense';
+export type WorkflowField={name:string;label:string;type?:'text'|'textarea'|'number'|'money'|'percent'|'date'|'checkbox'|'select'|'photos'|'uploads'|'signature'|'document';options?:{value:string;label:string}[];required?:boolean;defaultValue?:string|boolean;help?:string;purpose?:'delivery'|'maintenance'|'licence'|'expense';
  // Quick picks under a text field (tapping one fills it, and any fields in `also`), and a postcode lookup on an address.
  suggestions?:Suggestion[];lookup?:'postcode';
  // `section` puts a small heading above this field, starting a group ("Comparable 1 (optional)"); `after` keeps the
@@ -39,6 +39,8 @@ export function workflowValues(fields:WorkflowField[],raw:Record<string,unknown>
   // Photos are saved as they are chosen; the form sends the saved photos' ids. Uploads go after the save, from the sheet.
   if(f.type==='uploads')continue;
   if(f.type==='photos'){const ids=Array.isArray(raw[f.name])?(raw[f.name] as unknown[]).filter((x):x is string=>typeof x==='string'):[];if(f.required&&!ids.length)throw new Error('Add at least one photo: '+f.label);values[f.name]=ids;continue;}
+  // A drawn signature is a PNG data URL (lib/signature-png.ts), sent only when there is one.
+  if(f.type==='signature'){const png=typeof raw[f.name]==='string'?raw[f.name] as string:'';if(f.required&&!png)throw new Error('Please sign: '+f.label);if(png)values[f.name]=png;continue;}
   if(f.type==='checkbox'){values[f.name]=raw[f.name]===true||raw[f.name]==='on';if(f.required&&!values[f.name])throw new Error('Please confirm: '+f.label);continue;}
   const text=String(raw[f.name]??'').trim();if(f.required&&!text)throw new Error('Please enter: '+f.label);
   if(f.type==='date'){values[f.name]=text||null;continue;}
@@ -75,6 +77,7 @@ export function workflowIssues(form:Pick<WorkflowForm,'fields'|'checks'>,raw:Rec
   catch{
    const text=String(raw[f.name]??'').trim();
    const message=f.type==='photos'?'Add at least one photo'
+    :f.type==='signature'?'Draw your signature in the box'
     :f.type==='checkbox'?'Tick this to confirm: '+f.label
     :!text?(f.type==='select'?'Choose '+name.toLowerCase():'Enter '+name.toLowerCase())
     :f.type==='money'?name+' must be an amount in pounds, like 150 or 150.50'
@@ -172,8 +175,9 @@ export function journeyForms(a:WorkspaceAccount,j:JourneyView,today=workspaceDat
    return {...v,followUpOn:v.followUpOn||null,...(limit?{repairLimitMinor:limit.minor}:{})};
   });
  for(const f of forms)if(f.key==='decideEstimate')f.checks=decisionChecks;
- if(team&&j.stage==='agreement')add('publishAgreement','Publish the management agreement',[{...field('agreement','Agreement supplied by Recharge','textarea'),help:'Use the actual approved contract. The app does not generate legal terms.'}]);
- if(owner&&j.stage==='agreement'&&j.agreementRevision>0)add('signAgreement',noOwner?'Record the signed agreement':'Accept the published agreement',noOwner?[field('signedName','Owner\'s full name as signed'),{...field('consent','The owner has signed the management agreement shown above','checkbox'),help:'Keep the signed copy with the property\'s files.'}]:[field('signedName','Your full name'),{...field('consent','I have read and agree to the management agreement shown above','checkbox'),help:'Your acceptance is saved with this exact agreement revision.'}],v=>({...v,agreementRevision:j.agreementRevision}));
+ // Typed, or uploaded from a Word document and edited (field type 'document'); kept in the outline format (20261024100000).
+ if(team&&j.stage==='agreement')add('publishAgreement','Publish the management agreement',[{...field('agreement','Agreement supplied by Recharge','document'),help:'Upload the approved contract as a Word document, or paste it, then change any words. Lines starting # are headings and - bullet points. The app does not generate legal terms.'}],v=>({agreement:v.agreement,format:'outline'}));
+ if(owner&&j.stage==='agreement'&&j.agreementRevision>0)add('signAgreement',noOwner?'Record the signed agreement':'Accept the published agreement',noOwner?[field('signedName','Owner\'s full name as signed'),{...field('signatureImage','The owner\'s signature (optional)','signature',false),help:'When the owner is with you, they can sign here on your phone or tablet.'},{...field('consent','The owner has signed the management agreement shown above','checkbox'),help:'Keep the signed copy with the property\'s files.'}]:[field('signedName','Your full name'),{...field('signatureImage','Your signature','signature',false),help:'Draw it as you would on paper. It is kept with the signed agreement, beside your name.'},{...field('consent','I have read and agree to the management agreement shown above','checkbox'),help:'Your acceptance is saved with this exact agreement revision.'}],v=>({...v,agreementRevision:j.agreementRevision}));
  if(owner&&j.stage==='form')add('submitForm',noOwner?'Enter the property onboarding form':'Complete property setup',[
   field('businessName','Business or owner name'),{...field('bankAccountName','Bank account holder'),help:'Payout details: the account the owner wants payouts paid into.'},field('bankAccountNumber','UK account number, 8 digits'),field('bankSortCode','UK sort code'),{...field('accessDate','First access date','date'),help:'From when we can access the property for the first inspection.'},{...field('accessInfo','Access instructions','textarea'),help:'Is there a keybox? Where it is and its codes, or how we get keys. Kept private.'},
   {...field('gasElectricMeters','Gas and electric','textarea',false),help:'Connected? What meters (prepayment, smart)?'},{...field('operatingStatus','Current operating status','textarea',false),help:'Any current bookings, and their dates, so we can plan.'},
