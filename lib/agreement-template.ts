@@ -63,7 +63,7 @@ export const agreementTemplateRefSchema = z.object({ id: z.string().uuid(), vers
 export const agreementDraftSchema = z.object({ templateId: z.string().uuid(), version: z.number(), kind: z.enum(['docx', 'pdf']), fileName: z.string(), text: z.string().nullable(), missing: z.array(z.string()) });
 export type AgreementTemplateRef = z.infer<typeof agreementTemplateRefSchema>;
 export type AgreementDraft = z.infer<typeof agreementDraftSchema>;
-export type JourneyAgreement = { agreementFormat?: 'text' | 'outline'; signatureImage?: string | null; agreementTemplate?: AgreementTemplateRef | null; agreementDraft?: AgreementDraft | null };
+export type JourneyAgreement = { agreementFormat?: 'text' | 'outline'; signatureImage?: string | null; agreementSentAt?: string | null; agreementTemplate?: AgreementTemplateRef | null; agreementDraft?: AgreementDraft | null };
 export const journeyAgreement = (j: object): JourneyAgreement => j as JourneyAgreement;
 
 export const onboardingSettingsActionSchema = z.discriminatedUnion('action', [

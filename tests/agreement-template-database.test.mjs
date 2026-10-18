@@ -158,6 +158,7 @@ test('the team edits the contract\'s wording before publishing, and the owner si
   assert.equal(j.agreement, edited);
   assert.equal(j.agreementFormat, 'outline');
   assert.equal(j.agreementTemplate.id, draft.templateId, 'still recorded against the contract it came from');
+  assert.ok(Date.parse(j.agreementSentAt) > Date.now() - 60000, 'when Recharge sent it, for the owner\'s Mailbox');
   await refused(journey(STAYS, prop, { action: 'publishAgreement', templateId: draft.templateId, agreement: 'short' }), /./);
 
   // A typed or uploaded agreement in the outline format, longer than the old 10,000 characters.

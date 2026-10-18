@@ -65,3 +65,19 @@ test('wiring: the pad in the form, the drawing on the agreement, the Word upload
   assert.match(await fs.readFile('lib/journey-server.ts', 'utf8'), /boundedJson\(request,kind==='journey'\?JOURNEY_BODY_LIMIT:16_384\)/);
   for (const f of ['lib/signature-png.ts', 'mobile/src/SignaturePad.tsx', 'supabase/migrations/20261024100000_agreement_signature.sql']) assert.doesNotMatch(await fs.readFile(f, 'utf8'), /—/);
 });
+
+test('the owner\'s Mailbox: "Recharge sent the management agreement", waiting ones first, with when it was sent and signed', async () => {
+  const { ownerMailboxDocuments } = await vite.ssrLoadModule('/lib/owner-approvals.ts');
+  const base = { clientId: 'c1', workId: 'w', version: 1, agreement: 'Terms.', agreementRevision: 1, signedName: null };
+  const journeys = [
+    { ...base, propertyId: 'p1', stage: 'form', signedName: 'Olive Owner', signedAt: '2026-10-10T10:00:00Z', agreementSentAt: '2026-10-08T09:00:00Z' },
+    { ...base, propertyId: 'p2', stage: 'agreement', agreementRevision: 2, agreementSentAt: '2026-10-17T15:00:00Z' },
+    { ...base, propertyId: 'p3', stage: 'estimate', agreement: '', agreementRevision: 0 },
+    { ...base, propertyId: 'p4', clientId: 'someone-else', stage: 'agreement' },
+  ];
+  const docs = ownerMailboxDocuments({ userId: 'c1' }, journeys, [{ id: 'p1', name: 'Harbour Flat' }, { id: 'p2', name: 'Shore Road' }]);
+  assert.deepEqual(docs.map(d => [d.propertyId, d.title, d.detail, d.toSign]), [
+    ['p2', 'Recharge sent the management agreement for Shore Road', 'Sent 17 October 2026 · revision 2 · Waiting for your signature', true],
+    ['p1', 'Recharge sent the management agreement for Harbour Flat', 'Sent 8 October 2026 · revision 1 · Signed by Olive Owner on 10 October 2026', false],
+  ]);
+});

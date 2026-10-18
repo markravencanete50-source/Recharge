@@ -4,7 +4,7 @@ import { MODULES, type ModuleId } from './modules';
 export type WorkView = 'management' | 'hub' | 'calendar' | 'stays' | 'clients' | 'cleans' | 'repairs' | 'accounts' | 'all';
 export type ToolPlace =
   | { kind: 'work'; view: WorkView; where: string; sub?: string }
-  | { kind: 'tab'; tab: 'home' | 'properties' | 'analytics'; where: string }
+  | { kind: 'tab'; tab: 'home' | 'properties' | 'analytics' | 'mailbox'; where: string }
   | { kind: 'tracker'; where: string }
   | { kind: 'calculator'; where: string };
 
@@ -61,8 +61,8 @@ const PLACES: Record<ModuleId, ToolPlace> = {
   'onboarding-invoices': work('all', 'Work → All work (onboarding invoices); payments in Reports'),
   'purchase-order-invoices': work('all', 'Work → All work (purchases); payments in Reports'),
   'purchase-order-accounts': work('all', 'Work → All work (purchases); payments in Reports'),
-  'client-dashboard': { kind: 'tab', tab: 'analytics', where: 'Reports → stays, earnings and statements' },
-  'client-mailbox': { kind: 'tab', tab: 'analytics', where: 'Reports → Mailbox' },
+  'client-dashboard': { kind: 'tab', tab: 'analytics', where: 'Portfolio → stays, earnings and statements' },
+  'client-mailbox': { kind: 'tab', tab: 'mailbox', where: 'Mailbox → post at your properties' },
   'aircover-reporting': work('stays', 'Work → Guest relations → AirCover claims', 'aircover'),
   'replenishment-requests': { kind: 'tracker', where: 'A simple tracker: add and close restock requests' },
 };

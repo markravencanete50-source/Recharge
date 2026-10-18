@@ -116,3 +116,21 @@ export function propertyProgress(properties: readonly PropertyView[], journeys: 
     return { propertyId: p.id, name: p.name, live, phase: ownerPropertyStatus(j, p.status).label, done: live ? steps.length : done, total: steps.length, next, waitingForYou };
   });
 }
+
+// The owner's Mailbox, "From Recharge" (Lee: "the agreement should show in the mailbox of the owner saying recharge sent the
+// agreement for your property"): each management agreement Recharge published to the owner, newest first, saying whether
+// it waits for their signature or when they signed it.
+export type OwnerMailboxDocument = { key: string; propertyId: string; propertyName: string; title: string; detail: string; sentAt: string | null; toSign: boolean };
+const mailDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
+export function ownerMailboxDocuments(account: Pick<WorkspaceAccount, 'userId'>, journeys: JourneyView[], properties: Pick<PropertyView, 'id' | 'name'>[]): OwnerMailboxDocument[] {
+  const names = new Map(properties.map(p => [p.id, p.name]));
+  return journeys.filter(j => j.clientId === account.userId && j.agreementRevision > 0 && !!j.agreement).map(j => {
+    const sentAt = journeyAgreement(j).agreementSentAt ?? null, propertyName = names.get(j.propertyId) ?? 'your property';
+    const toSign = j.stage === 'agreement' && !j.signedName;
+    const status = j.signedName ? `Signed by ${j.signedName}${j.signedAt ? ' on ' + mailDay(j.signedAt) : ''}` : toSign ? 'Waiting for your signature' : 'Not signed';
+    return { key: 'agreement:' + j.propertyId, propertyId: j.propertyId, propertyName, sentAt, toSign,
+      title: `Recharge sent the management agreement for ${propertyName}`,
+      detail: [sentAt ? 'Sent ' + mailDay(sentAt) : '', 'revision ' + j.agreementRevision, status].filter(Boolean).join(' · ') };
+  }).sort((a, b) => Number(b.toSign) - Number(a.toSign) || (b.sentAt ?? '').localeCompare(a.sentAt ?? ''));
+}
+

@@ -800,7 +800,7 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
   );
 }
 
-export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy, onOpen }: { palette: Palette; account: WorkspaceAccount; properties?: PropertyView[]; onSignOut: () => void; busy: boolean; onOpen?: (tab: "home" | "work" | "properties" | "analytics", view?: WorkView, sub?: string) => void }) {
+export function LiveHelp({ palette: p, account, properties = [], onSignOut, busy, onOpen }: { palette: Palette; account: WorkspaceAccount; properties?: PropertyView[]; onSignOut: () => void; busy: boolean; onOpen?: (tab: "home" | "work" | "properties" | "analytics" | "mailbox", view?: WorkView, sub?: string) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const faq = faqsForAccess(account.role, account.modules).filter(f => f.id !== "communication-centre");
   const search = useListSearch(faq, f => [f.question, f.answer]);

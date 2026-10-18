@@ -9,6 +9,8 @@
 --  * signAgreement may carry signatureImage: the owner's drawn signature, a PNG data URL of up to 200,000 characters,
 --    kept on the journey beside the typed name (private.workspace_journeys.signed_signature) and shown on the journey
 --    as signatureImage, so the signed copy carries it.
+--  * The journey also shows agreementSentAt, when Recharge last published the agreement (from the activity), so the
+--    owner's Mailbox can say "Recharge sent the management agreement for your property" with its date.
 --  * Both actions check their keys with the larger limit (private.workspace_json_keys with 450,000 bytes), since a whole
 --    agreement or a drawing is far bigger than the usual 16 KB request.
 -- Patched by anchor (sentinel, an anchor that must occur once): private.workspace_journey_action (publishAgreement and
@@ -69,7 +71,8 @@ declare
   -- The journey shows it.
   ['private.workspace_journey_view(private.workspace_journeys)',
    $q$'agreementFormat',j.agreement_format,$q$,
-   $q$'agreementFormat',j.agreement_format,'signatureImage',j.signed_signature/* agreement signature view: 20261024100000 */,$q$,
+   $q$'agreementFormat',j.agreement_format,'signatureImage',j.signed_signature/* agreement signature view: 20261024100000 */,
+ 'agreementSentAt',(select max(a.created_at) from public.workspace_activity a where a.property_id=j.property_id and a.event_type='journey.publishAgreement'),$q$,
    $q$/* agreement signature view: 20261024100000 */$q$]
  ];
  definition text;hits integer;

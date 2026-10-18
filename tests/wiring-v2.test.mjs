@@ -166,7 +166,8 @@ test('owners keep their own path: no team pages, no Updates tab, their own bar',
   assert.match(workspace, /todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES/);
   assert.ok(!/TEAM_ROLES: Role\[\] = [^;]*"client"/.test(workspace));
   assert.match(workspace, /updates=\{team \?/);
-  assert.match(workspace, /<LiveClientReports palette=\{p\} mailbox=/, 'owners still get their own reports');
+  assert.match(workspace, /<LiveClientReports palette=\{p\} \/>/, 'owners still get their own reports');
+  assert.match(workspace, /tab === "mailbox" \? <OwnerMailbox /, 'and their own Mailbox page');
   assert.match(workspace, /tab === "approvals" \? <LiveApprovals /);
   assert.deepEqual(map.phoneBarFor('client'), map.ownerNavigation());
   assert.doesNotMatch(workspace, /currentView === "owner"/);
