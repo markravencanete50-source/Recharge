@@ -27,7 +27,7 @@ test('the kit: one section with the period, headline figures with their change, 
   // total in the middle for shares (never a full pie), progress rings for rates, areas and columns for trends.
   assert.doesNotMatch(kit, /\bPie\b/, 'a donut, never a pie');
   assert.match(kit, /case "donut": return <DonutView/); assert.match(kit, /case "rings": return <RingsView/);
-  assert.match(kit, /style === "area" && <Defs>/, 'a shaded area under a trend'); assert.match(kit, /columns && c\.series\.map/, 'or columns per period');
+  assert.match(kit, /style === "area" && c\.series\.map\(s => <Path key=\{"a" \+ s\.key\}/, 'a shaded area under a trend, flat (no gradients)'); assert.match(kit, /columns && c\.series\.map/, 'or columns per period');
   assert.match(kit, /c\.palette \? seriesAt\(i\)/, 'many-coloured bars and columns');
   assert.doesNotMatch(kit, /#[0-9a-fA-F]{6}\b/, 'colours from the tokens only');
   assert.match(kit, /flexBasis: wide \? "46%" : "100%"/, 'one chart across a phone, two on a wide screen');

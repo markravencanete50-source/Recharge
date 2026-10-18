@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { View, useWindowDimensions } from "react-native";
-import Svg, { Circle, Defs, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
@@ -242,7 +242,6 @@ function LineView({ p, c }: { p: Palette; c: LineChartSpec }) {
     return d + (start ? `M${x(i).toFixed(1)} ${base.toFixed(1)} ` : "") + `L${x(i).toFixed(1)} ${y(v).toFixed(1)} ` + (end ? `L${x(i).toFixed(1)} ${base.toFixed(1)} Z ` : "");
   }, "");
   const slot = Math.min(28, (band * 0.72) / Math.max(1, c.series.length));
-  const gradient = (key: string) => `area-${c.id}-${key}`;
   const tickLabels = [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, list) => v >= 0 && list.indexOf(v) === i);
   const anchor = (i: number) => (n === 1 || columns ? "middle" : i === 0 ? "start" : i === n - 1 ? "end" : "middle");
   const shown = focus.focus;
@@ -252,15 +251,11 @@ function LineView({ p, c }: { p: Palette; c: LineChartSpec }) {
       {c.series.length === 1 && c.reference && <Legend p={p} items={[{ key: "ref", label: `${c.reference.label} ${c.format(c.reference.value)}`, colour: p.muted, dashed: true }]} />}
       <View onLayout={e => setWidth(Math.max(160, e.nativeEvent.layout.width))} style={{ position: "relative" }}>
         <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
-          {style === "area" && <Defs>{c.series.map(s => <LinearGradient key={s.key} id={gradient(s.key)} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={chartColour(p, s.colour)} stopOpacity={c.series.length > 1 ? 0.22 : 0.32} />
-            <Stop offset="1" stopColor={chartColour(p, s.colour)} stopOpacity={0.02} />
-          </LinearGradient>)}</Defs>}
           {scale.ticks.map(t => <Line key={"g" + t} x1={left} x2={width - right} y1={y(t)} y2={y(t)} stroke={p.border} strokeWidth={1} />)}
           {scale.ticks.map(t => <SvgText key={"t" + t} x={left - 6} y={y(t) + 4} textAnchor="end" fill={p.muted} fontFamily="Montserrat_500Medium" fontSize={11}>{c.format(t)}</SvgText>)}
           {c.reference && <Line x1={left} x2={width - right} y1={y(c.reference.value)} y2={y(c.reference.value)} stroke={p.muted} strokeWidth={1.5} strokeDasharray="5 4" />}
           {shown !== null && <Line x1={x(shown)} x2={x(shown)} y1={top} y2={bottom} stroke={p.controlBorder} strokeWidth={1} />}
-          {style === "area" && c.series.map(s => <Path key={"a" + s.key} d={area(s.values)} fill={`url(#${gradient(s.key)})`} stroke="none" />)}
+          {style === "area" && c.series.map(s => <Path key={"a" + s.key} d={area(s.values)} fill={chartColour(p, s.colour)} fillOpacity={c.series.length > 1 ? 0.12 : 0.18} stroke="none" />)}
           {columns && c.series.map((s, k) => s.values.map((v, i) => v === null ? null : <Rect key={s.key + i} x={x(i) - (slot * c.series.length) / 2 + slot * k + 1} width={Math.max(2, slot - 2)}
             y={Math.min(y(v), base - (v ? 2 : 0))} height={Math.max(v ? 2 : 0, Math.abs(base - y(v)))} rx={3} fill={chartColour(p, s.colour)} opacity={shown === null || shown === i ? 1 : 0.55} />))}
           {!columns && c.series.map(s => <Path key={s.key} d={path(s.values)} fill="none" stroke={chartColour(p, s.colour)} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />)}
