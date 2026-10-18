@@ -332,3 +332,25 @@ test('the kit files keep CRLF and no em dashes, and the ratings model never reac
   }
   assert.doesNotMatch(readFileSync('mobile/src/LiveClientReports.tsx', 'utf8'), /rating/i, 'the owner reports never show ratings');
 });
+
+test('richer charts (Lee: "different colors different type of graphs"): donuts for shares, rings for rates, areas and columns for trends, colours by meaning', () => {
+  assert.equal(K.seriesAt(0), 'series1'); assert.equal(K.seriesAt(7), 'series2');
+  assert.deepEqual([K.toneOf(4.6, 4.5, 4), K.toneOf(4.2, 4.5, 4), K.toneOf(3.9, 4.5, 4), K.toneOf(null, 1, 0)], ['good', 'warn', 'bad', 'neutral']);
+  assert.deepEqual([K.toneOf(10, 15, 30, 'down'), K.toneOf(20, 15, 30, 'down'), K.toneOf(45, 15, 30, 'down')], ['good', 'warn', 'bad'], 'a slower reply is worse');
+  const donut = { kind: 'donut', id: 'd', title: 'Sources', unit: 'Share', total: '4', state: 'ok', parts: K.stackParts([{ key: 'a', label: 'Form', value: 3, colour: 'series1' }, { key: 'b', label: 'App', value: 1, colour: 'series2' }]) };
+  assert.equal(K.chartSummary(donut), 'Sources. Total 4. Form 3, 75%, App 1, 25%.');
+  assert.equal(K.chartSummary({ kind: 'rings', id: 'r', title: 'Rates', state: 'ok', rows: [{ key: 'x', label: 'Done', value: 60, display: '60%', colour: 'good' }] }), 'Rates. Done 60%.');
+
+  const todos = { from: r30.from, to: r30.to, total: 10, done: 6, doneLate: 2, overdue: 3, open: 4,
+    byDepartment: [{ department: 'cleaning', total: 4, done: 1, doneLate: 0, overdue: 2 }, { department: 'guest_relations', total: 6, done: 5, doneLate: 2, overdue: 1 }], byPerson: [], byDay: [] };
+  const m = M.todosModel(todos, null, r30, '');
+  assert.equal(chart(m, 'todos-trend').style, 'area');
+  assert.deepEqual(chart(m, 'rates').rows.map(r => [r.key, r.value, r.colour]), [['done', 60, 'series1'], ['onTime', 67, 'good'], ['overdue', 30, 'bad']]);
+  assert.deepEqual(chart(m, 'by-department').rows.map(r => r.colour), ['bad', 'good'], 'each department coloured by how it is doing');
+
+  const kinds = new Set();
+  const ratings = M.ratingsModel({ properties: [{ propertyId: 'p', propertyName: 'Flat' }], points: { p: [['2026-10-01', 5, 2, 10], ['2026-10-08', 3, 1, 3]] } }, r30, { from: '2026-08-20', to: '2026-09-18' }, '');
+  for (const c of [...ratings.charts, ...m.charts]) kinds.add(c.kind === 'line' ? 'line-' + (c.style ?? 'line') : c.kind);
+  assert.deepEqual(chart(ratings, 'star-mix').rows.map(r => r.colour), ['bad', 'bad', 'warn', 'series3', 'good'], 'one to five stars from red to green');
+  assert.ok(kinds.size >= 5, 'several kinds of chart on one report pair: ' + [...kinds].join(', '));
+});

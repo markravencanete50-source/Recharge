@@ -4,11 +4,16 @@
 // Each report page opens with the same analytics section, drawn by mobile/src/AnalyticsKit.tsx from a model this file
 // describes: a period picker, a row of three to five headline figures (each with its change against the previous period
 // of the same length, coloured by whether that change is good for that figure), then charts chosen by the question:
-//   trend over time            -> 'line'    (points, a light grid, units, an optional dashed reference line)
-//   comparison across things   -> 'bars'    (sorted horizontal bars with value labels, top N and "Show all")
+//   trend over time            -> 'line'    (points, a light grid, units, an optional dashed reference line), drawn as a
+//                                            line, a shaded area or columns per period (`style`)
+//   comparison across things   -> 'bars'    (sorted horizontal bars with value labels, top N and "Show all"), one colour,
+//                                            a colour per row (`palette`) or a colour per row by meaning (row `colour`)
 //   distribution               -> 'columns' (a histogram in the categories' own order, e.g. 1 to 5 stars)
-//   share of a whole / status  -> 'stack'   (one 100% bar; never a pie)
+//   share of a whole           -> 'donut'   (a ring with the total in the middle, for a handful of parts)
+//   status of a whole          -> 'stack'   (one 100% bar, read left to right)
+//   rates out of 100           -> 'rings'   (up to four progress rings, e.g. completed, on time, overdue)
 //   biggest changes            -> 'movers'
+// Lee, 18 October 2026: "it should have different colors different type of graphs not a very basic analytics".
 // Everything here is plain maths with no React, so the tests can check it. Nothing is ever invented: a figure with no data
 // is null and says so, a chart with too little data shows why instead of a line, and every rounding goes through roundTo.
 
@@ -194,7 +199,7 @@ export const sampleState = (n: number, minimum: number): SampleState => (n <= 0 
 
 // --- Sorted bars ------------------------------------------------------------------------------------------------------
 
-export type BarRow = { key: string; label: string; value: number | null; display: string; detail?: string; muted?: boolean };
+export type BarRow = { key: string; label: string; value: number | null; display: string; detail?: string; muted?: boolean; colour?: ChartColour };
 // Highest first (or lowest first, for "where are the problems"), rows with no value always last, ties by name; `limit`
 // keeps the top N and says how many are hidden behind "Show all".
 export function rankBars(rows: readonly BarRow[], order: 'desc' | 'asc' = 'desc', limit?: number) {
@@ -214,21 +219,32 @@ export function rankBars(rows: readonly BarRow[], order: 'desc' | 'asc' = 'desc'
 // chartTokens): series1 to series6 for identity in a fixed order, good / warn / bad / neutral for status, never mixed.
 export type ChartColour = 'series1' | 'series2' | 'series3' | 'series4' | 'series5' | 'series6' | 'good' | 'warn' | 'bad' | 'neutral';
 export const SERIES: readonly ChartColour[] = ['series1', 'series2', 'series3', 'series4', 'series5', 'series6'];
+// The colour for the nth row of a many-coloured chart, round the six series colours.
+export const seriesAt = (i: number): ChartColour => SERIES[((i % SERIES.length) + SERIES.length) % SERIES.length];
+// A status colour for a figure against two thresholds: good at or past `good`, warn at or past `warn`, bad beyond. With
+// `better: 'down'` lower is good (a reply time); with 'up' higher is good (a rating, a completion rate).
+export function toneOf(value: number | null, good: number, warn: number, better: 'up' | 'down' = 'up'): ChartColour {
+  if (value === null) return 'neutral';
+  if (better === 'up') return value >= good ? 'good' : value >= warn ? 'warn' : 'bad';
+  return value <= good ? 'good' : value <= warn ? 'warn' : 'bad';
+}
 
 export type Kpi = { key: string; label: string; value: string; unit?: string; delta?: Delta; note?: string; empty?: boolean };
 type ChartBase = { id: string; title: string; subtitle?: string; state: SampleState; emptyText?: string; lowText?: string };
 export type LineSeries = { key: string; label: string; colour: ChartColour; values: (number | null)[] };
 export type LineChartSpec = ChartBase & {
-  kind: 'line'; unit: string; labels: string[]; partial?: boolean[]; series: LineSeries[]; format: (n: number) => string; decimals?: number;
+  kind: 'line'; unit: string; style?: 'line' | 'area' | 'columns'; labels: string[]; partial?: boolean[]; series: LineSeries[]; format: (n: number) => string; decimals?: number;
   // Extra rows for each point's tooltip and table (e.g. "Reviews 12").
   extras?: { label: string; values: (string | number)[] }[];
   reference?: { value: number; label: string }; yMin?: number; yMax?: number;
 };
-export type BarsSpec = ChartBase & { kind: 'bars'; unit: string; rows: BarRow[]; order: 'desc' | 'asc'; limit?: number; reference?: { value: number; label: string }; colour?: ChartColour; max?: number };
-export type ColumnsSpec = ChartBase & { kind: 'columns'; unit: string; rows: { key: string; label: string; value: number; display: string; colour?: ChartColour }[] };
+export type BarsSpec = ChartBase & { kind: 'bars'; unit: string; rows: BarRow[]; order: 'desc' | 'asc'; limit?: number; reference?: { value: number; label: string }; colour?: ChartColour; palette?: boolean; max?: number };
+export type ColumnsSpec = ChartBase & { kind: 'columns'; unit: string; palette?: boolean; rows: { key: string; label: string; value: number; display: string; colour?: ChartColour }[] };
 export type StackSpec = ChartBase & { kind: 'stack'; unit: string; parts: { key: string; label: string; value: number; display: string; share: number; colour: ChartColour }[]; total: string };
+export type DonutSpec = Omit<StackSpec, 'kind'> & { kind: 'donut' };
+export type RingsSpec = ChartBase & { kind: 'rings'; rows: { key: string; label: string; value: number | null; display: string; detail?: string; colour: ChartColour }[] };
 export type MoversSpec = ChartBase & { kind: 'movers'; rows: { key: string; label: string; before: string; after: string; change: string; tone: 'good' | 'bad' | 'neutral'; direction: 'up' | 'down' }[] };
-export type ChartSpec = LineChartSpec | BarsSpec | ColumnsSpec | StackSpec | MoversSpec;
+export type ChartSpec = LineChartSpec | BarsSpec | ColumnsSpec | StackSpec | DonutSpec | RingsSpec | MoversSpec;
 export type AnalyticsModel = { kpis: Kpi[]; charts: ChartSpec[]; source: string; note?: string };
 
 // A stacked bar's parts with shares that add up to 100, zero parts kept (so the legend still names them).
@@ -250,7 +266,8 @@ export function chartSummary(c: ChartSpec): string {
     }
     case 'bars': { const r = rankBars(c.rows, c.order); return `${c.title}, ${c.unit}. ` + r.all.slice(0, 5).map(x => `${x.label} ${x.display}`).join(', ') + (r.all.length > 5 ? `, and ${r.all.length - 5} more.` : '.'); }
     case 'columns': return `${c.title}, ${c.unit}. ` + c.rows.map(x => `${x.label} ${x.display}`).join(', ') + '.';
-    case 'stack': return `${c.title}. Total ${c.total}. ` + c.parts.map(x => `${x.label} ${x.display}, ${x.share}%`).join(', ') + '.';
+    case 'stack': case 'donut': return `${c.title}. Total ${c.total}. ` + c.parts.map(x => `${x.label} ${x.display}, ${x.share}%`).join(', ') + '.';
+    case 'rings': return `${c.title}. ` + c.rows.map(x => `${x.label} ${x.display}`).join(', ') + '.';
     case 'movers': return `${c.title}. ` + c.rows.map(x => `${x.label} ${x.before} to ${x.after}`).join(', ') + '.';
   }
 }
