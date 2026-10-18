@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Platform, Switch, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import Svg, { Circle, Path, Text as SvgText } from "react-native-svg";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
@@ -17,16 +16,18 @@ import { readFurnishing, writeFurnishing } from "./backend/client";
 import { space, ui, type Palette } from "./theme";
 import { formatCount, formatMoney, formatMoneyShort } from "../../lib/format";
 import { matchesSearch } from "../../lib/search-options";
-import { graphGeometry, smoothArea, smoothPath } from "../../lib/report-graphs";
+import { AnalyticsPanel, PeriodBar, usePeriod, usePeriodData } from "./AnalyticsKit";
+import { STANDARD_PERIODS } from "../../lib/report-analytics";
+import { furnishingModel } from "../../lib/report-analytics-models";
 import { quoteFileName, quoteHtml, shoppingListHtml } from "../../lib/furnishing-documents";
 import {
   analyticsQuery, analyticsSchema, BASIS_LABEL, buying, canUseFurnishingStudio, catalogueQuery, catalogueSchema, categoryName, COOKER_LABEL, COOKERS, COUNT_INPUTS,
   COVERING_LABEL, editable, emptyItemForm, emptyProjectForm, estimateLines, estimateTotals, formFromProject, FURNISHING_CATEGORIES, FURNISHING_INTRO, FURNISHING_TITLE,
-  headerStats, itemToForm, lastTwelveMonths, monthName, MOVE_LABEL, NEXT_STATUS, normaliseInputs, OPTION_KEYS, OPTION_LABEL, penceToPounds, percentLine, poundsToPence,
+  headerStats, itemToForm, monthName, MOVE_LABEL, NEXT_STATUS, normaliseInputs, OPTION_KEYS, OPTION_LABEL, penceToPounds, poundsToPence,
   projectFormError, projectQuery, projectSchema, projectsQuery, projectsSchema, propertiesQuery, propertyChoiceSchema, PROPERTY_TYPE_LABEL, PROPERTY_TYPES, RULE_BASES,
   RULE_WHEN, ruleLine, saveProjectAction, savedLines, shoppingGroups, spendSummary, STATUS_LABEL, STATUS_TONE, TV_LABEL, TV_SETUPS, varianceLine, WHEN_LABEL,
   WINDOW_COVERINGS, ZIP_SETUP_LABEL, ZIP_SETUPS,
-  type CatalogueItem, type CountGroup, type EstimateLine, type FurnishingAnalytics, type FurnishingCategory, type ItemForm, type Project, type ProjectForm,
+  type CatalogueItem, type CountGroup, type EstimateLine, type FurnishingCategory, type ItemForm, type Project, type ProjectForm,
   type ProjectStatus, type ProjectSummary, type PropertyChoice, type RuleBasis, type RuleWhen, type StudioInputs,
 } from "../../lib/furnishing-studio";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -498,43 +499,18 @@ function Bars({ p, rows }: { p: Palette; rows: { key: string; label: string; val
   );
 }
 
-// Quotes per month: a smooth line of quotes sent, drawn with the reports' shared geometry (lib/report-graphs.ts).
-function MonthTrend({ p, months }: { p: Palette; months: FurnishingAnalytics["byMonth"] }) {
-  const [width, setWidth] = useState(300), values = months.map(m => m.sent), top = 16, bottom = 120;
-  const g = graphGeometry(values, width, top, bottom), pts = values.map((v, i) => ({ x: g.x(i), y: g.y(v) }));
-  return (
-    <View onLayout={e => setWidth(e.nativeEvent.layout.width)} accessible accessibilityLabel={`Quotes sent per month: ${months.map(m => `${monthName(m.month)} ${m.sent}`).join(", ")}`}
-      style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>
-      <Svg width="100%" height={146} viewBox={`0 0 ${width} 146`}>
-        <Path d={smoothArea(pts, bottom)} fill={p.primary} fillOpacity={0.12} />
-        <Path d={smoothPath(pts)} fill="none" stroke={p.primary} strokeWidth={2.4} strokeLinecap="round" />
-        {pts.map((pt, i) => <Circle key={i} cx={pt.x} cy={pt.y} r={3} fill={p.primary} />)}
-        {[0, months.length - 1].filter((i, n, list) => list.indexOf(i) === n && i >= 0).map(i => <SvgText key={i} x={g.x(i)} y={142} textAnchor={i === 0 ? "start" : "end"} fill={p.muted} fontFamily="Montserrat_500Medium" fontSize={11}>{monthName(months[i].month)}</SvgText>)}
-      </Svg>
-    </View>
-  );
-}
-
+// The analytics read for a period, and the same read for the period before (for the comparison).
+const readAnalytics = async (r: { from: string; to: string }) => analyticsSchema.parse((await readFurnishing(analyticsQuery(r.from, r.to))).data);
 function Analytics({ p }: { p: Palette }) {
-  const [range, setRange] = useState(() => lastTwelveMonths(london(new Date())));
-  const [data, setData] = useState<FurnishingAnalytics | null>(null), [error, setError] = useState("");
-  useEffect(() => {
-    let active = true;
-    queueMicrotask(() => { if (active) { setData(null); setError(""); } });
-    readFurnishing(analyticsQuery(range.from, range.to)).then(r => { if (active) setData(analyticsSchema.parse(r.data)); }).catch(e => { if (active) setError(message(e)); });
-    return () => { active = false; };
-  }, [range]);
+  // The last 12 months to start, quotes dated in the period, compared with the 12 months before.
+  const period = usePeriod(STANDARD_PERIODS, "12m", london(new Date()));
+  const { now: data, before, loading, error } = usePeriodData(readAnalytics, period);
+  const model = useMemo(() => (data ? furnishingModel(data, before, period.against, monthName, s => STATUS_LABEL[s as keyof typeof STATUS_LABEL] ?? s) : null), [data, before, period.against]);
   return (
     <View style={{ gap: space.section }}>
-      <DateField p={p} label="Quotes dated" value={range} onChange={v => v.from && v.to && setRange({ from: v.from, to: v.to })} />
-      {!!error && <Notice p={p} text={error} tone="bad" />}
-      {!data && !error && <Loading p={p} rows={4} />}
+      <AnalyticsPanel p={p} model={model} loading={loading} error={error} controls={<PeriodBar p={p} period={period} />} caption={`Quotes dated ${period.label}, ${period.against}.`} />
       {data && <>
         <StatGrid showZeros>
-          <StatTile p={p} icon="send" label="Quotes sent" value={data.sent} detail={`${formatCount(data.projects)} projects in these dates`} />
-          <StatTile p={p} icon="check-circle" label="Conversion" value={percentLine(data.conversionPercent)} detail={`${formatCount(data.accepted)} accepted, ${formatCount(data.declined)} declined`} />
-          <StatTile p={p} icon="file-text" label="Quoted value" value={formatMoneyShort(data.quotedPence)} detail={data.averageQuotePence != null ? `${formatMoney(data.averageQuotePence)} on average` : "No quotes sent yet"} />
-          <StatTile p={p} icon="award" label="Accepted value" value={formatMoneyShort(data.acceptedPence)} detail="Quotes the client accepted" />
           <StatTile p={p} icon="home" label="Per bedroom" value={data.averagePerBedroomPence != null ? formatMoneyShort(data.averagePerBedroomPence) : "–"} detail="Average quote per bedroom" />
           <StatTile p={p} icon="trending-up" label="Spend variance" value={data.spend.recordedLines ? formatMoneyShort(data.spend.variancePence) : "–"}
             detail={data.spend.recordedLines ? `Actual ${formatMoney(data.spend.actualPence)} against ${formatMoney(data.spend.estimatePence)} estimated` : "No actual spend recorded yet"} />
@@ -543,7 +519,6 @@ function Analytics({ p }: { p: Palette }) {
           <Bars p={p} rows={data.byStatus.map(s => ({ key: s.status, label: STATUS_LABEL[s.status], value: s.projects, detail: `${formatCount(s.projects)} · ${formatMoney(s.quotePence)}` }))} />
         </Section>
         {data.byMonth.length > 1 && <Section title="Quotes per month" p={p}>
-          <MonthTrend p={p} months={data.byMonth} />
           <List p={p} search={false} empty="">
             {[...data.byMonth].reverse().map((m, n) => <Row key={m.month} p={p} first={n === 0} title={monthName(m.month)} detail={`${formatCount(m.projects)} projects · ${formatCount(m.sent)} sent · ${formatCount(m.accepted)} accepted`} amount={formatMoney(m.quotedPence)} />)}
           </List>

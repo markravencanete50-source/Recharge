@@ -43,6 +43,7 @@ import { isOwnerBill } from "../../lib/recharge-invoice";
 import { LiveManagement } from "./LiveManagement";
 import { ReportsHub, type HubReport } from "./ReportsHub";
 import { RatingsReport } from "./PropertyRatings";
+import { InvoiceAnalytics } from "./InvoiceAnalytics";
 import { LiveProductivity } from "./LiveProductivity";
 import { LiveTeamPerformance } from "./LiveShifts";
 import { DecisionsReport } from "./LiveOversight";
@@ -573,6 +574,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const invoiceSearch = useListSearch(invoices, invoice => [invoice.reference, names.get(invoice.property_id), readableStage(invoice.status), formatMoney(invoice.amount_minor)]);
   const invoiceList = (
     <Anchor id="section-invoices"><View style={{ gap: 10 }}>
+      <InvoiceAnalytics p={p} invoices={invoices} />
       <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Invoices</Text>
       <ListSearchBox p={p} search={invoiceSearch} nouns="invoices" />
       {!invoiceSearch.missed && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
@@ -623,7 +625,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   );
   // The task trends (and, for the team, their own numbers), or why they are not here yet. `part` splits them for the hub.
   const trendsReport = (part?: "mine" | "trends", heading = true) => snapshot
-    ? <Reports snapshot={snapshot} period={period} role={account.role} account={account} work={work} palette={p} onDates={() => setDates(true)} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} part={part} />
+    ? <Reports snapshot={snapshot} period={period} role={account.role} account={account} work={work} palette={p} onDates={() => setDates(true)} onPeriod={range => { setPeriod(range); setSnapshot(null); }} onExport={() => void exportCsv()} exporting={exporting} exportMessage={exportMessage} part={part} />
     : <>{heading && <PageHeading palette={p} title="Reports" subtitle="Trends across the records within your access." />}{reportError ? <View style={{ gap: 12 }}><EmptyState palette={p} icon="activity" title="Reports could not be loaded" detail={reportError} /><SoftButton label="Try again" icon="refresh-cw" palette={p} onPress={() => void loadReport(period)} /></View> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, alignItems: "center", paddingVertical: 30 }]}><ActivityIndicator color={p.primary} /><Text style={[ui.small, { color: p.muted }]}>Loading your reports…</Text></View>}</>;
   // Admins' Reports is a hub (ReportsHub.tsx, Lee, 16 October 2026): one card per report, each opening on its own page.
   // Business overview (the trends across the business) comes first. Everything here is admins only, never owners or

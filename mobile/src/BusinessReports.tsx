@@ -1,27 +1,40 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
-import { Anchor, Button, Loading, london, message, Notice, Section, StatGrid, StatTile, useWorkFocus } from "./LiveKit";
+import { Anchor, Button, london, message, Notice, Section, StatGrid, StatTile, useWorkFocus } from "./LiveKit";
 import { List, Row } from "./AccountsPayable";
-import { DateField } from "./CalendarPicker";
+import { AnalyticsPanel, PeriodBar, usePeriod } from "./AnalyticsKit";
 import { readTeams } from "./backend/client";
 import { exportReport } from "./exportReport";
 import { formatDuration, formatMoney, plural } from "../../lib/format";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import {
-  channelName, channelOrder, defaultReportRange, departmentName, funnelSteps, monthName, monthSoFar, PRIORITY_LABEL, receivedByMonth, repairStageName, REPORT_CSV, reportAnchor, reportFromAnchor,
-  REPORT_INTRO, REPORT_NOTES, REPORT_SCHEMA, REPORT_SECTION, reportFilename, reportRangeError, SOURCE_LABEL, startWhenName,
+  channelName, channelOrder, departmentName, funnelSteps, monthName, monthSoFar, PRIORITY_LABEL, receivedByMonth, repairStageName, REPORT_CSV, reportAnchor, reportFromAnchor,
+  REPORT_INTRO, REPORT_MAX_DAYS, REPORT_NOTES, REPORT_SCHEMA, REPORT_SECTION, reportFilename, SOURCE_LABEL, startWhenName,
   waitLabel, weekName, weekTotals,
   type AnyReport, type EnquiriesReport, type MessagesReport, type RepairsReport, type ReportKind, type TimeReport, type TodosReport,
 } from "../../lib/business-reports-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { STANDARD_PERIODS, type Range } from "../../lib/report-analytics";
+import { enquiriesModel, messagesModel, repairsModel, timeModel, todosModel } from "../../lib/report-analytics-models";
 
 // Business reports (Alex's meeting): client enquiries, repairs and spend, to-dos, messages and time worked, each for a
 // date range (the last 30 days to start, up to 366 days) with a CSV download. Admins only: the database refuses everyone
 // else (workspace_business_report), and this section is not drawn for them. Every figure comes from the database.
 // Each report has its own card and page in the Reports hub (ReportsHub.tsx, Lee, 16 October 2026).
-type Loaded = { [K in ReportKind]: { key: string; kind: K; report: AnyReport[K] } }[ReportKind];
+type Loaded = { [K in ReportKind]: { key: string; kind: K; report: AnyReport[K]; before: AnyReport[K] | null } }[ReportKind];
+
+// The analytics for a report: its headline figures against the previous period of the same length, and its charts.
+function modelOf(loaded: Loaded, range: Range, against: string) {
+  switch (loaded.kind) {
+    case "enquiries": return enquiriesModel(loaded.report, loaded.before, range, against);
+    case "repairs": return repairsModel(loaded.report, loaded.before, range, against);
+    case "todos": return todosModel(loaded.report, loaded.before, range, against);
+    case "messages": return messagesModel(loaded.report, loaded.before, range, against);
+    case "time": return timeModel(loaded.report, loaded.before, range, against);
+  }
+}
 
 function csvOf(loaded: Loaded) {
   switch (loaded.kind) {
@@ -40,8 +53,10 @@ export function BusinessReports({ p, account, kind }: { p: Palette; account: Wor
   // Opened from Home ("Guest replies on time"): this report, for this month so far, as the figure counts it. (The hub
   // opens again for every link, so a second link starts here afresh.)
   const focus = useWorkFocus(), asked = reportFromAnchor(focus?.anchor) === kind;
-  const [range, setRange] = useState(() => (asked ? monthSoFar(today) : defaultReportRange(today)));
-  const [dateError, setDateError] = useState("");
+  // The period drives the analytics and the figures below alike: the last 30 days to start (as before), or this month so
+  // far when opened from Home, compared with the same number of days just before.
+  const period = usePeriod(STANDARD_PERIODS, asked ? "custom" : "30d", today, { custom: asked ? monthSoFar(today) : undefined, maxDays: REPORT_MAX_DAYS });
+  const range = period.range;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -50,24 +65,23 @@ export function BusinessReports({ p, account, kind }: { p: Palette; account: Wor
   const key = `${kind}:${range.from}:${range.to}`;
   // A report is kept with the question it answers, so changing the dates never shows the previous answer.
   const shown = loaded?.key === key ? loaded : null;
+  const model = useMemo(() => (shown ? modelOf(shown, range, period.against) : null), [shown, range, period.against]);
 
   const load = useCallback(async () => {
     const mine = ++latest.current;
     setLoading(true); setError(""); setExportNote("");
     try {
-      const data = (await readTeams({ section: REPORT_SECTION[kind], from: range.from, to: range.to })).data;
-      const next = { key, kind, report: REPORT_SCHEMA[kind].parse(data) } as Loaded;
+      const [data, before] = await Promise.all([
+        readTeams({ section: REPORT_SECTION[kind], from: range.from, to: range.to }).then(r => r.data),
+        readTeams({ section: REPORT_SECTION[kind], from: period.previous.from, to: period.previous.to }).then(r => REPORT_SCHEMA[kind].parse(r.data)).catch(() => null),
+      ]);
+      const next = { key, kind, report: REPORT_SCHEMA[kind].parse(data), before } as Loaded;
       if (mine === latest.current) setLoaded(next);
     } catch (e) { if (mine === latest.current) { setLoaded(null); setError(message(e)); } }
     finally { if (mine === latest.current) setLoading(false); }
-  }, [key, kind, range.from, range.to]);
+  }, [key, kind, range.from, range.to, period.previous.from, period.previous.to]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active && allowed) void load(); }); return () => { active = false; }; }, [load, allowed]);
 
-  function chooseDates(next: { from: string; to: string }) {
-    const problem = reportRangeError(next.from, next.to);
-    if (problem) { setDateError(problem); return; }
-    setDateError(""); setRange(next);
-  }
   async function download() {
     if (!shown) return;
     setExportNote("");
@@ -83,14 +97,10 @@ export function BusinessReports({ p, account, kind }: { p: Palette; account: Wor
         <Text style={[ui.body, { color: p.text }]}>{REPORT_INTRO[kind]}</Text>
         <Text style={[ui.small, { color: p.muted }]}>For management only. Choose the dates, then download it as a spreadsheet (CSV).</Text>
       </View>
-      <View style={{ gap: 10 }}>
-        <DateField p={p} label="Dates" value={range} onChange={chooseDates} today={today} />
-        {!!dateError && <Notice text={dateError} p={p} tone="bad" />}
-      </View>
+      <AnalyticsPanel p={p} model={model} loading={loading} error={error} controls={<PeriodBar p={p} period={period} />} caption={`${period.label}, ${period.against}.`} />
       <Button p={p} icon="download" label="Download CSV" disabled={!shown} onPress={() => void download()} />
       {!!exportNote && <Notice text={exportNote} p={p} tone="bad" />}
-      {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && !shown && <Loading p={p} />}
+      {!!shown && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>The figures</Text>}
       {shown?.kind === "enquiries" && <EnquiriesView p={p} r={shown.report} />}
       {shown?.kind === "repairs" && <RepairsView p={p} r={shown.report} />}
       {shown?.kind === "todos" && <TodosView p={p} r={shown.report} />}

@@ -8,6 +8,8 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, Loading, Notice, Section, london, message, useRequestId } from "./LiveKit";
 import { List } from "./LiveAccounts";
 import { Pills } from "./Pills";
+import { AnalyticsPanel, PeriodBar, usePeriod } from "./AnalyticsKit";
+import { decisionsModel } from "../../lib/report-analytics-models";
 import { exportReport } from "./exportReport";
 import { readFinance, readOversight, readTeams, writeFinance, writeOversight, writeTeams, WorkspaceApiError } from "./backend/client";
 import { DECISION_OUTCOMES, decisionAction, managementSchema, queueCount, type Decision, type Management } from "../../lib/management-live";
@@ -194,6 +196,11 @@ export function DecisionsReport({ palette: p }: { palette: Palette }) {
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const shown = (rows ?? []).filter(r => area === "all" || r.area === area);
+  // The analytics over the decisions already read (the last 90 days), for the chosen area: 30 days to start, compared with
+  // the 30 before; 90 days has nothing earlier to compare with, and says so.
+  const today = london(new Date());
+  const period = usePeriod(["7d", "30d", "90d"], "30d", today);
+  const model = rows ? decisionsModel(shown, period.range, period.previous, period.against, today, a => AREA_LABEL[a as keyof typeof AREA_LABEL] ?? a) : null;
   async function download() {
     if (!rows || busy) return;
     setBusy(true); setNote("");
@@ -206,6 +213,7 @@ export function DecisionsReport({ palette: p }: { palette: Palette }) {
     <Section title="Decisions" count={rows ? shown.length : undefined} p={p}>
       <Text style={[ui.small, { color: p.muted }]}>Approvals and decisions from the last 90 days: who decided, when and why.</Text>
       <Pills p={p} values={AREAS} value={area} onChange={setArea} label={v => v === "all" ? "All" : AREA_LABEL[v]} />
+      <AnalyticsPanel p={p} model={model} controls={<PeriodBar p={p} period={period} />} caption={`${period.label}${area === "all" ? "" : ", " + AREA_LABEL[area]}, ${period.against}.`} />
       {!rows && !error && <Loading p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {rows && <List p={p} empty="No decisions in the last 90 days.">

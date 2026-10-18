@@ -30,6 +30,9 @@ export const propertyRatingsSchema = z.object({
     channels: z.array(z.object({ channel: z.string(), reviews: count, average })),
     latest: z.array(ratingReviewSchema),
   }).nullable(),
+  // Every review as [day, stars rounded 1 to 5, reviews, sum of stars] per property, for the analytics (20261023300000).
+  // Only on the portfolio read (null on a property's); optional so an older server's answer still reads.
+  points: z.record(z.string(), z.array(z.tuple([z.string(), z.number().int().min(1).max(5), count, z.number()]))).nullish(),
 });
 export type PropertyRating = z.infer<typeof propertyRatingSchema>;
 export type RatingReview = z.infer<typeof ratingReviewSchema>;
