@@ -16,6 +16,9 @@ import { useCelebrate } from "./Celebrate";
 import { exportReport } from "./exportReport";
 import { depth, primaryFill, ui, web, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
+import { AnalyticsPanel, PeriodBar, usePeriod, usePeriodData } from "./AnalyticsKit";
+import { STANDARD_PERIODS, type Range } from "../../lib/report-analytics";
+import { productivityModel } from "../../lib/report-analytics-models";
 import { readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL } from "../../lib/hub";
 import { ROLE_LABEL } from "../../lib/admin-live";
@@ -73,6 +76,7 @@ export function LiveProductivity({ palette: p, account, initial = "days" }: { pa
   return (
     <View style={{ gap: 18 }}>
       <LockedHero p={p} onShift={onShift} direct={account.role === "super_admin"} />
+      <ProductivityAnalytics p={p} today={today} />
       <StatGrid showZeros>
         {current
           ? [
@@ -104,6 +108,17 @@ export function LiveProductivity({ palette: p, account, initial = "days" }: { pa
       <PersonSheet p={p} person={person} data={data} today={today} onClose={() => setPerson(null)} />
     </View>
   );
+}
+
+// The analytics: team hours for the chosen period against the period before, the trend, hours by person and the share by
+// department. Read on its own (the same productivity read, for these dates), so the views below keep their own months.
+const readProductivity = async (r: Range) => productivitySchema.parse((await readTeams({ section: "productivity", from: r.from, to: r.to })).data);
+const departmentLabel = (d: string) => DEPARTMENT_LABEL[d as keyof typeof DEPARTMENT_LABEL] ?? d;
+function ProductivityAnalytics({ p, today }: { p: Palette; today: string }) {
+  const period = usePeriod(STANDARD_PERIODS, "30d", today);
+  const { now, before, loading, error } = usePeriodData(readProductivity, period);
+  const model = useMemo(() => (now ? productivityModel(now, before, period.range, period.against, departmentLabel) : null), [now, before, period.range, period.against]);
+  return <AnalyticsPanel p={p} model={model} loading={loading} error={error} controls={<PeriodBar p={p} period={period} />} caption={`${period.label}, ${period.against}.`} />;
 }
 
 // The forest card at the top: hours are locked, and who is clocked in right now.

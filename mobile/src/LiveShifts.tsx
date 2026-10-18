@@ -12,6 +12,8 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
 import { Pills } from "./Pills";
+import { AnalyticsPanel, PeriodBar, usePeriod } from "./AnalyticsKit";
+import { teamPerformanceModel } from "../../lib/report-analytics-models";
 import { readChat, readTeams, writeTeams } from "./backend/client";
 import { DEPARTMENT_LABEL, departmentFor, hoursLabel, myShiftSchema, PAUSE_LABEL, PAUSE_START_KINDS, pausePolicySchema, type PauseKind, type PausePolicy, type PauseStartKind, rotaListSchema, SHIFTS, shiftName, signoffSchema, teamPerformanceSchema, type Shift, type Signoff, type TeamPerformance } from "../../lib/management-live";
 import { DAILY_WORK, DEPARTMENTS } from "../../lib/workspace-teams-policy";
@@ -235,8 +237,10 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
   const saved = useSaved(), celebrate = useCelebrate();
   // Hours are locked: a super admin's change applies at once, an admin's waits for a super admin.
   const direct = role === "super_admin";
-  const [range, setRange] = useState<"today" | "week" | "month">("week");
+  // The period drives the analytics and everything below: the last 7 days to start, up to 92 days (the database's limit).
+  const period = usePeriod(["today", "7d", "30d", "90d", "custom"], "7d", londonDay(), { maxDays: 92 });
   const [data, setData] = useState<TeamPerformance | null>(null);
+  const [before, setBefore] = useState<TeamPerformance | null>(null);
   const [signoffs, setSignoffs] = useState<Signoff["recent"]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -249,18 +253,23 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
   const request = useRequestId(closing ? ["close", closing.id, stopped, why].join(":") : null);
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    const from = londonDay(range === "today" ? 0 : range === "week" ? -6 : -29);
+    const { from, to } = period.range;
     try {
-      setData(teamPerformanceSchema.parse((await readTeams({ section: "teamPerformance", from, to: londonDay() })).data));
+      // The previous period of the same length, for the comparison only; the figures still show without it.
+      const [now, prior] = await Promise.all([
+        readTeams({ section: "teamPerformance", from, to }).then(r => teamPerformanceSchema.parse(r.data)),
+        readTeams({ section: "teamPerformance", from: period.previous.from, to: period.previous.to }).then(r => teamPerformanceSchema.parse(r.data)).catch(() => null),
+      ]);
+      setData(now); setBefore(prior);
       // Only Stays and admins have sign-offs; anyone else simply sees none.
       setSignoffs(await readTeams({ section: "signoff" }).then(r => signoffSchema.parse(r.data).recent).catch(() => []));
       // Client relations: owner messages in the app, timed the same way.
-      setClients(await readChat({ section: "clientRelations", from, to: londonDay() }).then(r => clientRelationsSchema.parse(r.data)).catch(() => null));
+      setClients(await readChat({ section: "clientRelations", from, to }).then(r => clientRelationsSchema.parse(r.data)).catch(() => null));
       // The KPI tracker: each person's bonus KPI, and the admin's list of KPIs.
-      setKpis(await readTeams({ section: "kpis", from, to: londonDay() }).then(r => kpiReadSchema.parse(r.data)).catch(() => null));
+      setKpis(await readTeams({ section: "kpis", from, to }).then(r => kpiReadSchema.parse(r.data)).catch(() => null));
     } catch (e) { setError(message(e)); }
     setLoading(false);
-  }, [range]);
+  }, [period.range, period.previous]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const openClose = (s: Shift) => { setClosing(s); setStopped(time(new Date().toISOString())); setWhy(""); setCloseError(""); };
   async function close() {
@@ -279,10 +288,9 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
   const t = data?.targets;
   return (
     <View style={{ gap: 20 }}>
-      <Pills p={p} values={["today", "week", "month"] as const} value={range} onChange={setRange} label={v => ({ today: "Today", week: "Last 7 days", month: "Last 30 days" })[v]} />
+      <AnalyticsPanel p={p} model={data ? teamPerformanceModel(data, before, period.range, period.against) : null} loading={loading} error={error}
+        controls={<PeriodBar p={p} period={period} />} caption={`${period.label}, ${period.against}.`} />
       <RotaSection p={p} />
-      {loading && <Loading p={p} />}
-      {!!error && <Notice text={error} p={p} tone="bad" />}
       {data && t && <>
         <Section title="On shift now" count={data.onShift.length} p={p}>
           <List p={p} empty="Nobody is clocked in.">

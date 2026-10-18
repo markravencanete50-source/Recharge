@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import * as Linking from "expo-linking";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 import { MotionPress } from "./motion";
-import { Loading, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
+import { Loading, london, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
+import { AnalyticsPanel, PeriodBar, usePeriod } from "./AnalyticsKit";
+import { ratingsModel } from "../../lib/report-analytics-models";
+import { STANDARD_PERIODS } from "../../lib/report-analytics";
 import { List, Row } from "./AccountsPayable";
 import { Pills } from "./Pills";
 import { SearchBox } from "./SearchPicker";
@@ -121,6 +124,9 @@ export function RatingsReport({ p, account }: { p: Palette; account: WorkspaceAc
   const [data, setData] = useState<PropertyRatings | null>(null);
   const [error, setError] = useState(""), [sort, setSort] = useState<RatingSort>("lowest"), [query, setQuery] = useState("");
   const [open, setOpen] = useState<{ id: string; name: string } | null>(null);
+  // The analytics: the last 90 days against the 90 before to start, worked out from the same answer (no second read).
+  const period = usePeriod(STANDARD_PERIODS, "90d", london(new Date()));
+  const model = useMemo(() => (data ? ratingsModel(data, period.range, period.previous, period.against) : null), [data, period.range, period.previous, period.against]);
   const load = useCallback(async () => {
     setError("");
     try { setData(await readRatings()); } catch (e) { setError(message(e)); }
@@ -140,6 +146,8 @@ export function RatingsReport({ p, account }: { p: Palette; account: WorkspaceAc
       {!data && !error && <Loading p={p} />}
       {data && <>
         <Text style={[ui.small, { color: p.muted }]}>{syncLine(data.sync)}</Text>
+        <AnalyticsPanel p={p} model={model} controls={<PeriodBar p={p} period={period} />} caption={`${period.label}, ${period.against}.`} />
+        <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Every property</Text>
         {!rated.length && <Notice p={p} text={data.properties.length ? emptyRatingsLine(data) : "No properties to show yet."} />}
         {!!data.properties.length && <View style={{ gap: 10 }}>
           <SearchBox p={p} value={query} onChange={setQuery} placeholder="Search properties by name" />

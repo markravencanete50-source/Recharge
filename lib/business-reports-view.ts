@@ -57,11 +57,14 @@ export const repairsReportSchema = z.object({
   byStage: z.array(z.object({ stage: z.string(), count })),
   spend: z.object({ approvedMinor: z.number(), waitingMinor: z.number(), rejectedMinor: z.number(), expenses: count }),
   byProperty: z.array(z.object({ propertyId: z.string().uuid(), propertyName: z.string(), raised: count, completed: count, quotedMinor: z.number(), finalMinor: z.number(), approvedMinor: z.number(), waitingMinor: z.number() })),
+  // Day by day, for the analytics trend (20261023300000). Optional so an older server's report still reads.
+  byDay: z.array(z.object({ day: z.string(), raised: count, completed: count })).optional(),
 });
 export const todosReportSchema = z.object({
   ...range, total: count, done: count, doneLate: count, overdue: count, open: count,
   byDepartment: z.array(z.object({ department: z.string(), total: count, done: count, doneLate: count, overdue: count })),
   byPerson: z.array(z.object({ userId: z.string().uuid(), fullName: z.string().nullable(), role: z.string(), assigned: count, done: count, doneLate: count, overdue: count })),
+  byDay: z.array(z.object({ day: z.string(), total: count, done: count, doneLate: count, overdue: count })).optional(),
 });
 const volume = { channel: z.string(), received: count, sent: count };
 export const messagesReportSchema = z.object({
@@ -73,6 +76,7 @@ export const timeReportSchema = z.object({
   ...range, ...hours, running: count,
   byPerson: z.array(z.object({ userId: z.string().uuid(), fullName: z.string().nullable(), role: z.string(), department: z.string().nullable(), ...hours, days: count })),
   byDepartment: z.array(z.object({ department: z.string(), ...hours, people: count })),
+  byDay: z.array(z.object({ day: z.string(), minutes: z.number().int(), people: count, shifts: count })).optional(),
 });
 export type EnquiriesReport = z.infer<typeof enquiriesReportSchema>;
 export type RepairsReport = z.infer<typeof repairsReportSchema>;

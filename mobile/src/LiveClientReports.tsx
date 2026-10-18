@@ -15,6 +15,8 @@ import { readFinance, readOwner } from "./backend/client";
 import { formatCount, formatMoney, formatMoneyShort } from "../../lib/format";
 import { statementSchema, type Statement } from "../../lib/accounts-live";
 import { ownerBookingsSchema, type OwnerBookings, type OwnerStay } from "../../lib/owner-policy";
+import { compare, type Delta } from "../../lib/report-analytics";
+import { DeltaLine } from "./AnalyticsKit";
 import { addMonths, CHANNEL_LABEL, monthEnd, monthlyEarnings, monthName, monthStart, monthStats, propertyMonth } from "../../lib/owner-reports";
 
 // An owner's Reports, from their live bookings: earnings, occupancy and nightly rate for a month,
@@ -86,10 +88,16 @@ export function LiveClientReports({ palette: p, mailbox = false }: { palette: Pa
       {!!detail && <Text style={[ui.small, { color: p.muted }]}>{detail}</Text>}
     </View>
   );
-  const kpis: { key: string; icon: DimensionalName; value: number | null; format: (n: number) => string; label: string }[] = [
-    { key: "earnings", icon: "coins", value: stats.earningsMinor, format: formatMoneyShort, label: "Earnings in " + monthName(month, false) },
-    { key: "occupancy", icon: "chart", value: stats.occupancy === null ? null : Math.round(stats.occupancy * 100), format: n => n + "%", label: "Occupancy" },
-    { key: "rate", icon: "key", value: stats.averageNightlyMinor, format: formatMoneyShort, label: "Average nightly rate" },
+  // Each month's figures against the month before (from the last twelve months already read), so an owner sees which way
+  // things moved: earnings, occupancy and the nightly rate are better up. Upcoming bookings are a count from today, with
+  // nothing to compare.
+  const before = year && month > addMonths(thisMonth, -11) ? monthStats(visible(year.stays), addMonths(month, -1), included.length) : null;
+  const against = `vs ${monthName(addMonths(month, -1), false)}`;
+  const occupancyOf = (x: { occupancy: number | null } | null) => (x && x.occupancy !== null ? Math.round(x.occupancy * 100) : null);
+  const kpis: { key: string; icon: DimensionalName; value: number | null; format: (n: number) => string; label: string; delta?: Delta }[] = [
+    { key: "earnings", icon: "coins", value: stats.earningsMinor, format: formatMoneyShort, label: "Earnings in " + monthName(month, false), delta: before ? compare(stats.earningsMinor, before.earningsMinor, { better: "up", format: n => formatMoneyShort(n), against }) : undefined },
+    { key: "occupancy", icon: "chart", value: occupancyOf(stats), format: n => n + "%", label: "Occupancy", delta: before ? compare(occupancyOf(stats), occupancyOf(before), { better: "up", kind: "percent", against }) : undefined },
+    { key: "rate", icon: "key", value: stats.averageNightlyMinor, format: formatMoneyShort, label: "Average nightly rate", delta: before ? compare(stats.averageNightlyMinor, before.averageNightlyMinor, { better: "up", format: n => formatMoneyShort(n), against }) : undefined },
     { key: "upcoming", icon: "calendar", value: upcoming.length, format: formatCount, label: "Upcoming bookings" },
   ];
   const stayRow = (s: OwnerStay, now: boolean) => (
@@ -140,11 +148,12 @@ export function LiveClientReports({ palette: p, mailbox = false }: { palette: Pa
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {kpis.map(kpi => (
-          <View key={kpi.key} accessibilityLabel={`${kpi.label}: ${kpi.value === null ? "not available" : kpi.format(kpi.value)}`} style={[card, { flexBasis: desktop ? "23%" : "46%", flexGrow: 1, minWidth: 0, gap: 12, padding: 16 }]}>
+          <View key={kpi.key} accessibilityLabel={`${kpi.label}: ${kpi.value === null ? "not available" : kpi.format(kpi.value)}${kpi.delta ? ". " + kpi.delta.text : ""}`} style={[card, { flexBasis: desktop ? "23%" : "46%", flexGrow: 1, minWidth: 0, gap: 12, padding: 16 }]}>
             <View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={kpi.icon} size={38} color={p.primary} /></View>
             {kpi.value === null ? <Text style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700" }}>–</Text>
               : <TweenNumber value={kpi.value} format={kpi.format} numberOfLines={1} adjustsFontSizeToFit style={{ color: p.text, fontSize: 28, lineHeight: 34, fontWeight: "700", letterSpacing: -1, fontVariant: ["tabular-nums"] }} />}
             <Text numberOfLines={2} style={[ui.small, { color: p.muted }]}>{kpi.label}</Text>
+            {!!kpi.delta && <DeltaLine p={p} delta={kpi.delta} />}
           </View>
         ))}
       </View>

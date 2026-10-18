@@ -227,7 +227,28 @@ test('the migration runs twice without changing anything', async () => {
   const definition = async () => (await owner("select pg_get_functiondef('private.workspace_business_report(text,date,date)'::regprocedure) d"))[0].d;
   const before = await definition();
   await db.exec('reset role'); await db.exec(await fs.readFile(MIGRATION, 'utf8'));
+  // The report analytics patch (20261023300000) sits on top of this function, so it is run again after it.
+  await db.exec(await fs.readFile('supabase/migrations/20261023300000_report_analytics.sql', 'utf8'));
   assert.equal(await definition(), before);
   await as(ADMIN);
   assert.equal(R.todosReportSchema.parse(await report('todos')).total, 4);
+});
+
+test('report analytics (20261023300000): repairs, to-dos and time worked carry day-by-day figures that add up to the totals', async () => {
+  await as(ADMIN);
+  const sum = (rows, key) => rows.reduce((n, x) => n + x[key], 0);
+  const inDates = rows => rows.every(x => x.day >= FROM && x.day <= TO);
+  const repairs = R.repairsReportSchema.parse(await report('repairs'));
+  assert.ok(repairs.byDay?.length && inDates(repairs.byDay));
+  assert.equal(sum(repairs.byDay, 'raised'), repairs.raised); assert.equal(sum(repairs.byDay, 'completed'), repairs.completed);
+  const todos = R.todosReportSchema.parse(await report('todos'));
+  assert.ok(todos.byDay?.length && inDates(todos.byDay));
+  assert.equal(sum(todos.byDay, 'total'), todos.total - 1, 'the to-do with no due day is left out of byDay only');
+  assert.equal(sum(todos.byDay, 'done'), todos.done); assert.equal(sum(todos.byDay, 'overdue'), todos.overdue);
+  const time = R.timeReportSchema.parse(await report('time'));
+  assert.ok(time.byDay?.length && inDates(time.byDay));
+  assert.equal(sum(time.byDay, 'shifts'), time.shifts);
+  assert.ok(Math.abs(sum(time.byDay, 'minutes') - time.minutes) <= time.byDay.length, 'minutes agree to the rounding of each day');
+  // Still management only.
+  await as(DAN); await assert.rejects(db.query('select public.workspace_business_report($1,$2,$3)', ['todos', FROM, TO]), /Management access required/);
 });

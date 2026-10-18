@@ -183,6 +183,14 @@ export const navHueTokens = {
   },
 };
 export type NavHue = keyof typeof navHueTokens.light;
+// Chart colours for the report analytics (lib/report-analytics.ts, mobile/src/AnalyticsKit.tsx). Six identity colours in a
+// fixed order (a seventh thing folds into "Other"), checked for colour-blind separation, chroma and 3:1 contrast against
+// the card in each theme (tests/report-analytics.test.mjs keeps the light and dark values apart); the status colours are
+// the theme's own success, waiting and danger, and grid, axis and reference lines use the theme's border and muted ink.
+export const chartTokens = {
+  light: { series1: "#008A72", series2: "#B45309", series3: "#2F63A8", series4: "#B0405A", series5: "#7C4DB8", series6: "#4D7C0F" },
+  dark: { series1: "#1FA088", series2: "#CC7A1E", series3: "#5A8BE0", series4: "#D85C7E", series5: "#9670DB", series6: "#76A52E" },
+};
 const variables = (mode: "light" | "dark") =>
   Object.entries(designTokens[mode])
     .map(([key, value]) => `--rc-${key}:${value};`)

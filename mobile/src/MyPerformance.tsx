@@ -7,7 +7,10 @@ import { readTeams } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import { teamPerformanceSchema, hoursLabel, type TeamPerformance } from "../../lib/management-live";
 import { Tag } from "./LiveKit";
-import { PERFORMANCE_RANGES, RANGE_LABEL, bonusPartsLine, myKpis, performanceWindow, shapeOwnNumbers, type BonusProgress, type MyKpis, type OwnNumbers, type PerformanceRange } from "../../lib/my-performance";
+import { PERFORMANCE_RANGES, RANGE_LABEL, bonusPartsLine, myKpis, ownPerson, performanceWindow, shapeOwnNumbers, type BonusProgress, type MyKpis, type OwnNumbers, type PerformanceRange } from "../../lib/my-performance";
+import { AnalyticsPanel } from "./AnalyticsKit";
+import { previousRange, rangeDays } from "../../lib/report-analytics";
+import { myPerformanceModel } from "../../lib/report-analytics-models";
 import { kpiReadSchema, type KpiRead } from "../../lib/kpis";
 import { formatCount } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -88,21 +91,35 @@ function KpiRows({ p, k }: { p: Palette; k: MyKpis }) {
 // the compact card on Home, which opens the page through `onOpen`.
 export function MyPerformance({ palette: p, account, work = [], page = false, onOpen }: { palette: Palette; account: WorkspaceAccount; work?: OperationView[]; page?: boolean; onOpen?: () => void }) {
   const [range, setRange] = useState<PerformanceRange>("week");
-  const [read, setRead] = useState<{ data: TeamPerformance; from: string; kpis: KpiRead | null } | null>(null);
+  const [read, setRead] = useState<{ data: TeamPerformance; from: string; to: string; kpis: KpiRead | null; before: TeamPerformance | null } | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   useEffect(() => {
     let active = true;
     const { from, to } = performanceWindow(range, londonToday());
-    // The KPIs (bonus bar and tracked rows) read alongside; without them the numbers still show.
-    Promise.all([readTeams({ section: "teamPerformance", from, to }), readTeams({ section: "kpis", from, to }).then(r => kpiReadSchema.parse(r.data)).catch(() => null)])
-      .then(([r, kpis]) => { if (!active) return; setRead({ data: teamPerformanceSchema.parse(r.data), from, kpis }); setState("ready"); })
+    // The KPIs (bonus bar and tracked rows) read alongside; without them the numbers still show. On the page, the same
+    // number of days just before as well, for the comparison only.
+    const prior = previousRange({ from, to });
+    Promise.all([readTeams({ section: "teamPerformance", from, to }), readTeams({ section: "kpis", from, to }).then(r => kpiReadSchema.parse(r.data)).catch(() => null),
+      page ? readTeams({ section: "teamPerformance", from: prior.from, to: prior.to }).then(r => teamPerformanceSchema.parse(r.data)).catch(() => null) : Promise.resolve(null)])
+      .then(([r, kpis, before]) => { if (!active) return; setRead({ data: teamPerformanceSchema.parse(r.data), from, to, kpis, before }); setState("ready"); })
       .catch(() => { if (active) setState("failed"); });
     return () => { active = false; };
-  }, [range]);
+  }, [range, page]);
   // Shaped here, so a refreshed work list updates the finished-job count without another read.
   const n: OwnNumbers | null = useMemo(() => read ? shapeOwnNumbers(read.data, account.userId, work, read.from) : null, [read, work, account.userId]);
   const kpis = useMemo(() => read?.kpis ? myKpis(read.kpis, account.userId) : null, [read, account.userId]);
   const bonus: BonusProgress | null = kpis?.bonus ?? null;
+  // The page's analytics: these numbers against the same number of days just before, and the replies by speed.
+  const model = useMemo(() => {
+    if (!page || !read || !n) return null;
+    const row = ownPerson(read.data.people, account.userId), days = rangeDays({ from: read.from, to: read.to });
+    const prior = read.before ? previousRange({ from: read.from, to: read.to }) : null;
+    const was = read.before && prior ? shapeOwnNumbers(read.before, account.userId, work, prior.from) : null;
+    // Finished jobs are counted from the work list up to now, so the earlier period's are those finished from its first day
+    // less those finished since this period began.
+    const before = was ? { ...was, tasksDone: was.tasksDone - n.workCompleted } : null;
+    return myPerformanceModel({ ...n, amber: row?.amber, red: row?.red }, before, `vs the previous ${days === 1 ? "day" : days + " days"}`);
+  }, [page, read, n, work, account.userId]);
   return (
     <View testID="my-performance" style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 14 }]}>
       <View style={[ui.between, { gap: 12 }]}>
@@ -123,12 +140,13 @@ export function MyPerformance({ palette: p, account, work = [], page = false, on
       {state === "failed" && <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>Your numbers could not be loaded just now.</Text>}
       {state !== "failed" && !n && state === "ready" && <Text style={[ui.body, { color: p.muted }]}>Nothing to show yet. Your numbers appear once you have clocked in or replied to a guest.</Text>}
       {!!n && state !== "failed" && <>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 16, rowGap: 8 }}>
+        {page && model && <AnalyticsPanel p={p} model={model} title="At a glance" />}
+        {!page && <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 16, rowGap: 8 }}>
           {n.score !== null && <Stat p={p} label="Score" value={`${n.score}%`} hint={n.onTrack === null ? undefined : n.onTrack ? "On track" : "Off track"} />}
           {n.replies > 0 && <Stat p={p} label="Guest replies on time" value={n.repliesGreenPercent === null ? "–" : `${n.repliesGreenPercent}%`} hint={`${formatCount(n.replies)} replies`} />}
           <Stat p={p} label="Tasks done" value={formatCount(n.tasksDone)} />
           <Stat p={p} label="Time worked" value={hoursLabel(n.minutes)} hint={`${formatCount(n.shifts)} ${n.shifts === 1 ? "shift" : "shifts"}`} />
-        </View>
+        </View>}
         {!!bonus && <BonusBar p={p} b={bonus} />}
         {!!kpis && <KpiRows p={p} k={kpis} />}
         {page && <View style={{ gap: 4, paddingTop: 10, borderTopWidth: 1, borderColor: p.border }}>
