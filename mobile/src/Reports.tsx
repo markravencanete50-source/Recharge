@@ -2,10 +2,13 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, View, useWindowDimensions } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { reportPresentation } from '../../lib/report-presentation';
-import { periodLabel, type AnalyticsPeriod, type AnalyticsSnapshot } from '../../lib/analytics';
+import { periodLabel, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot } from '../../lib/analytics';
+import { PERIOD_LABEL, periodRange, type PeriodKey } from '../../lib/report-analytics';
+import { overviewModel } from '../../lib/report-analytics-models';
+import { AnalyticsPanel } from './AnalyticsKit';
+import { Pills } from "./Pills";
 import { isWorkspaceAdmin, type WorkspaceRole } from '../../lib/modules';
-import { LineChart, StatusChart, QueueChart, MetricSparkline, ReportSymbol } from './Charts';
-import { CountUp, Entrance, MotionPress } from './motion';
+import { Entrance, MotionPress } from './motion';
 import { Text } from './Typography';
 import { primaryFill, ui, type Palette } from './theme';
 import { MyPerformance } from './MyPerformance';
@@ -18,17 +21,15 @@ import type { OperationView } from '../../lib/workflow-forms';
 // task trends within their access (admins can still export them). Without `account` it is the plain reports page.
 // In the admins' Reports hub (ReportsHub.tsx) each half is a report of its own: `part` "mine" is My performance and
 // "trends" the Business overview, and the hub's page heading stands in for this one's.
-export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporting,exportMessage,account:person,work,part='all'}:{snapshot:AnalyticsSnapshot;period:AnalyticsPeriod;role:WorkspaceRole;palette:Palette;onDates:()=>void;onExport:()=>void;exporting:boolean;exportMessage:string;account?:WorkspaceAccount;work?:OperationView[];part?:'all'|'mine'|'trends'}) {
+const OVERVIEW_PERIODS:readonly PeriodKey[]=['30d','90d','12m','custom'];
+export function Reports({snapshot,period,role,palette:p,onDates,onPeriod,onExport,exporting,exportMessage,account:person,work,part='all'}:{snapshot:AnalyticsSnapshot;period:AnalyticsPeriod;role:WorkspaceRole;palette:Palette;onDates:()=>void;onPeriod?:(period:AnalyticsPeriod)=>void;onExport:()=>void;exporting:boolean;exportMessage:string;account?:WorkspaceAccount;work?:OperationView[];part?:'all'|'mine'|'trends'}) {
   const titled=useToolTitled(),account=part==='trends'?undefined:person,trends=part!=='mine';
   const report=useMemo(()=>reportPresentation(snapshot,period),[snapshot,period]);
   const {width}=useWindowDimensions(),desktop=width>=1024;
   const [table,setTable]=useState(false),metrics=report.current,card={backgroundColor:p.surface,borderColor:p.border};
-  const summary=[
-    {label:'Tasks',metric:'total' as const,kind:'tasks',value:report.available?metrics.total:null,color:p.primary},
-    {label:'Completed',metric:'complete' as const,kind:'complete',value:report.available?metrics.complete:null,color:p.success},
-    {label:'Waiting',metric:'waiting' as const,kind:'waiting',value:report.available?metrics.waiting:null,color:p.waiting},
-    {label:'Properties',metric:'property' as const,kind:'property',value:metrics.properties,color:p.primary},
-  ];
+  const today=presetPeriod(1).to;
+  const chosen=OVERVIEW_PERIODS.find(k=>k!=='custom'&&periodRange(k,today).from===period.from&&periodRange(k,today).to===period.to)??'custom';
+  const model=overviewModel(report.current,report.previous,report.available,period,`vs the previous ${report.duration} ${report.duration===1?'day':'days'}`,snapshot.propertyLabel||'Properties');
   return <View style={{gap:24}}>
     {!titled&&<Entrance sessionKey={'reports:'+role+':heading'}><View style={{gap:8}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>{account?'My performance':snapshot.title}</Text><Text style={[ui.body,{color:p.muted}]}>{account?'Your own numbers: replies, tasks done, time worked and your bonus tier.':snapshot.description}</Text></View></Entrance>}
     {account&&<MyPerformance palette={p} account={account} work={work} page/>}
@@ -42,27 +43,12 @@ export function Reports({snapshot,period,role,palette:p,onDates,onExport,exporti
       {isWorkspaceAdmin(role)&&<MotionPress accessibilityRole="button" accessibilityLabel="Export analytics CSV" accessibilityState={{busy:exporting,disabled:exporting}} disabled={exporting} onPress={onExport} {...(Platform.OS==='web'?{dataSet:{sheen:''}}:{})} style={[ui.button,primaryFill(p),{flexGrow:desktop?0:1}]}>{exporting?<ActivityIndicator color={p.onPrimary}/>:<Feather name="download" size={18} color={p.onPrimary}/>}<Text style={[ui.buttonText,{color:p.onPrimary}]}>{exporting?'Preparing report...':'Export CSV report'}</Text></MotionPress>}
     </View>
     {!!exportMessage&&isWorkspaceAdmin(role)&&<Text accessibilityLiveRegion="polite" style={[ui.small,{color:p.text}]}>{exportMessage}</Text>}
-    <Entrance sessionKey={'reports:'+role+':summary'} delay={55}><View style={{gap:18}}>
-      <View style={{gap:5}}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{report.headline}</Text><Text style={[ui.small,{color:p.muted}]}>Counts include the first and last day.</Text></View>
-      <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>{summary.map(item=><View key={item.label} {...(Platform.OS==='web'?{dataSet:{hover:'lift'}}:{})} style={[ui.card,card,{flexBasis:desktop?'22%':'45%',flexGrow:1,minWidth:0,minHeight:desktop?190:210,padding:desktop?18:14}]}>
-        <View style={[ui.row,{gap:6}]}><View style={{width:26,height:26,backgroundColor:p.wash,borderRadius:8,alignItems:'center',justifyContent:'center'}}><ReportSymbol kind={item.kind} color={item.color}/></View><Text style={[ui.small,{color:p.muted,fontWeight:'600',flexShrink:1}]}>{item.label}</Text></View>
-        {item.value===null?<Text style={[ui.statValue,{color:p.text}]}>-</Text>:<CountUp value={item.value} sessionKey={'reports:'+role+':'+item.label} style={[ui.statValue,{color:p.text}]}/>}
-        {item.metric==='property'?<Text style={[ui.small,{color:p.muted}]}>{report.propertyAvailable?'As of today':'Property data unavailable'}</Text>:<>
-          <MetricSparkline report={report} metric={item.metric} color={item.color} palette={p} motionKey={'reports:'+role+':spark:'+item.metric}/>
-          {(()=>{
-            // Up is good for completed work, bad for waiting work, and neither for the total.
-            const direction=report.comparisons[item.metric].direction,good=item.metric==='complete'?direction==='up':item.metric==='waiting'?direction==='down':null;
-            const tone=direction==='same'||good===null?{ink:p.muted,wash:p.elevated}:good?{ink:p.success,wash:p.successWash}:{ink:p.danger,wash:p.dangerWash};
-            return <View style={[ui.row,{gap:8,alignItems:'flex-start'}]}>
-              <View style={{width:22,height:22,borderRadius:11,alignItems:'center',justifyContent:'center',backgroundColor:tone.wash}}><Feather name={direction==='up'?'trending-up':direction==='down'?'trending-down':'minus'} size={13} color={tone.ink}/></View>
-              <Text style={[ui.small,{color:p.muted,flex:1}]}>{report.deltas[item.metric]}</Text>
-            </View>;
-          })()}
-        </>}
-      </View>)}</View>
-    </View></Entrance>
+    {/* The analytics (Lee: "Every reporting should have an analytics"): headline figures against the previous period of the
+        same length, the trend, the status mix and the work by type, drawn by the shared kit (AnalyticsKit.tsx). */}
+    <AnalyticsPanel p={p} model={model} title={report.headline} caption={`${periodLabel(period)}. Counts include the first and last day. ${report.comparisonNote}`}
+      controls={onPeriod?<Pills p={p} title="Period" values={OVERVIEW_PERIODS} value={chosen} onChange={k=>k==='custom'?onDates():onPeriod(periodRange(k,today))} label={k=>PERIOD_LABEL[k]}/>:undefined}/>
     {report.partial&&<Text style={[ui.small,{color:p.muted}]}>Some task data is unavailable. Totals include available tasks.</Text>}
-    {!table?<View style={{gap:20,flexDirection:'row',flexWrap:'wrap'}}>{([['Tasks by status','',StatusChart],['Work per day','Tasks recorded each day',LineChart],['Work by type','Number of tasks in each type',QueueChart]] as const).map(([title,note,Chart],i)=><Entrance key={title} sessionKey={'reports:'+role+':'+title} delay={i*55} style={[ui.card,card,{flexBasis:desktop&&i>0?'45%':'100%',flexGrow:1,minWidth:0,padding:desktop?24:16}]}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{title}</Text>{!!note&&<Text style={[ui.small,{color:p.muted}]}>{note}</Text>}{report.available||title==='Work by type'?<Chart report={report} palette={p} motionKey={'reports:'+role+':chart:'+i}/>:<Text style={[ui.body,{color:p.muted}]}>- Task data unavailable.</Text>}</Entrance>)}</View>:<View style={[ui.card,card]}>
+    {table&&<View style={[ui.card,card]}>
       <Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>Tasks in this period</Text>
       <Text style={[ui.small,{color:p.muted}]}>Same numbers as the charts and CSV. Scroll sideways for all columns.</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator><View style={{minWidth:Math.max(540,430+metrics.sources.length*125)}}>

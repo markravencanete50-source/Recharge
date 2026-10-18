@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Switch, View } from "react-native";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
@@ -6,13 +6,14 @@ import { Anchor, Loading, london, message, Notice, Section, StatGrid, StatTile }
 import { List, Row } from "./AccountsPayable";
 import { Pills } from "./Pills";
 import { useToolTitled } from "./ToolPage";
-import { DateField } from "./CalendarPicker";
+import { AnalyticsPanel, PeriodBar, usePeriod } from "./AnalyticsKit";
+import { staysModel } from "../../lib/report-analytics-models";
 import { readTeams, writeTeams } from "./backend/client";
 import { plural } from "../../lib/format";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import {
   arrivalDayName, compareLine, comparisonLabel, comparisonRange, countryName, guestMix, LEAD_LABEL, LENGTH_LABEL, notKnownLine, oneDecimal, percent, plainDays,
-  ratingLine, reasonRows, surveyReplyLine, STAY_CHANNELS, STAYS_INTRO, STAYS_NOTES, STAYS_SECTION, stayAnalyticsSchema, stayChannelName, stayMonthName, stayRangeError, thisMonth,
+  ratingLine, reasonRows, surveyReplyLine, STAY_CHANNELS, STAYS_INTRO, STAYS_MAX_DAYS, STAYS_NOTES, STAYS_SECTION, stayAnalyticsSchema, stayChannelName, stayMonthName,
   type StayAnalytics, type StayChannel, type StayRange,
 } from "../../lib/stay-analytics-view";
 import { STAY_SWITCHES, STAY_SWITCH_HELP, STAY_SWITCHES_SECTION, staySwitchesSchema, type StaySwitches } from "../../lib/stay-reason";
@@ -34,10 +35,12 @@ async function readStays(range: StayRange, property: string, channel: string) {
 export function StayReports({ p, account, properties }: { p: Palette; account: WorkspaceAccount; properties: readonly { id: string; name: string }[] }) {
   const allowed = isWorkspaceAdmin(account.role), titled = useToolTitled();
   const today = london(new Date());
-  const [range, setRange] = useState<StayRange>(() => thisMonth(today));
+  // This month to start, compared with last month (whole months compare with as many whole months before); the period
+  // drives the analytics and the figures below alike.
+  const period = usePeriod(["month", "30d", "90d", "12m", "custom"], "month", today, { maxDays: STAYS_MAX_DAYS });
+  const range: StayRange = period.range;
   const [property, setProperty] = useState<string>(ALL);
   const [channel, setChannel] = useState<StayChannel | typeof ALL>(ALL);
-  const [dateError, setDateError] = useState("");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -45,6 +48,7 @@ export function StayReports({ p, account, properties }: { p: Palette; account: W
   const key = `${range.from}:${range.to}:${property}:${channel}`;
   // Kept with the question it answers, so changing a filter never shows the previous answer.
   const shown = loaded?.key === key ? loaded : null;
+  const model = useMemo(() => (shown ? staysModel(shown.now, shown.before, range, `vs ${comparisonLabel(range, today)}`) : null), [shown, range, today]);
 
   const load = useCallback(async () => {
     const mine = ++latest.current;
@@ -57,12 +61,6 @@ export function StayReports({ p, account, properties }: { p: Palette; account: W
   }, [key, range, property, channel]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active && allowed) void load(); }); return () => { active = false; }; }, [load, allowed]);
 
-  function chooseDates(next: StayRange) {
-    const problem = stayRangeError(next.from, next.to);
-    if (problem) { setDateError(problem); return; }
-    setDateError(""); setRange(next);
-  }
-
   if (!allowed) return null;
   const homes = [ALL, ...properties.map(x => x.id)];
   const homeName = (id: string) => id === ALL ? "All homes" : properties.find(x => x.id === id)?.name ?? "Home";
@@ -74,13 +72,12 @@ export function StayReports({ p, account, properties }: { p: Palette; account: W
         <Text style={[ui.small, { color: p.muted }]}>{STAYS_INTRO}</Text>
       </View>
       <View style={{ gap: 10 }}>
-        <DateField p={p} label="Dates" value={range} onChange={chooseDates} today={today} />
-        {!!dateError && <Notice text={dateError} p={p} tone="bad" />}
+        <PeriodBar p={p} period={period} />
         <Pills p={p} title="Home" values={homes} value={property} onChange={setProperty} label={homeName} />
         <Pills p={p} title="Channel" values={[ALL, ...STAY_CHANNELS] as const} value={channel} onChange={setChannel} label={c => c === ALL ? "All channels" : stayChannelName(c)} />
       </View>
-      {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && !shown && <Loading p={p} />}
+      <AnalyticsPanel p={p} model={model} loading={loading} error={error} caption={`${period.label}, compared with ${comparisonLabel(range, today)}.`} />
+      {shown && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>The figures</Text>}
       {shown && <StaysView p={p} r={shown.now} before={shown.before} against={comparisonLabel(range, today)} />}
       {!!shown && <View style={{ gap: 6 }}>
         <Text style={[ui.small, { color: p.text, fontWeight: "600" }]}>What this report cannot show</Text>

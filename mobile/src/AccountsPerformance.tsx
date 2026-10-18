@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
 import { useToolTitled } from "./ToolPage";
-import { Loading, london, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
+import { london, message, Notice, Section, StatGrid, StatTile } from "./LiveKit";
 import { PropertySelect } from "./SearchPicker";
 import { List, Row } from "./AccountsPayable";
 import { Pills } from "./Pills";
@@ -18,6 +18,9 @@ import {
   type PerformanceChannel, type PerformanceFigures, type PerformanceRange, type PerformanceReport,
 } from "../../lib/performance";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { AnalyticsPanel } from "./AnalyticsKit";
+import { previousRange, rangeLabel, shiftDay } from "../../lib/report-analytics";
+import { performanceModel } from "../../lib/report-analytics-models";
 import type { PropertyView } from "../../lib/workspace-view";
 
 // The Performance tab of Live Accounts: what the business earned from management fees and cleaning, and how
@@ -44,7 +47,7 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
   const [region, setRegion] = useState(ALL);
   const [channel, setChannel] = useState<PerformanceChannel | typeof ALL>(ALL);
   // The report is kept with the question it answers, so a changed filter or date never shows the previous answer.
-  const [loaded, setLoaded] = useState<{ key: string; report: PerformanceReport } | null>(null);
+  const [loaded, setLoaded] = useState<{ key: string; report: PerformanceReport; before: PerformanceReport | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const latest = useRef(0);
@@ -60,8 +63,15 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
     const mine = ++latest.current;
     setLoading(true); setError("");
     try {
-      const next = performanceReportSchema.parse((await readFinance(JSON.parse(queryKey) as Record<string, string>)).data);
-      if (mine === latest.current) setLoaded({ key: queryKey, report: next });
+      // The same filters for the period just before (whole months against as many months before, other dates against as
+      // many days before), for the analytics' comparison only; the figures still show without it.
+      const asked = JSON.parse(queryKey) as Record<string, string>;
+      const prior = previousRange({ from: asked.from, to: shiftDay(asked.to, -1) });
+      const [next, before] = await Promise.all([
+        readFinance(asked).then(r => performanceReportSchema.parse(r.data)),
+        readFinance({ ...asked, from: prior.from, to: shiftDay(prior.to, 1) }).then(r => performanceReportSchema.parse(r.data)).catch(() => null),
+      ]);
+      if (mine === latest.current) setLoaded({ key: queryKey, report: next, before });
     } catch (e) { if (mine === latest.current) { setLoaded(null); setError(message(e)); } }
     finally { if (mine === latest.current) setLoading(false); }
   }, [queryKey]);
@@ -76,6 +86,8 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
 
   if (!allowed) return <Notice text="Performance is for Accounts and management." p={p} />;
   const totals = report?.totals;
+  const shownRange = { from: range.from, to: lastDayOfRange(range) };
+  const model = report && loaded ? performanceModel(report, loaded.before, `vs ${rangeLabel(previousRange(shownRange))}`, performanceMonthLabel, c => CHANNEL_LABEL[c] ?? c) : null;
   const propertyName = (id: string) => properties.find(x => x.id === id)?.name ?? "Property";
 
   return (
@@ -101,8 +113,7 @@ export function AccountsPerformance({ p, account, properties }: { p: Palette; ac
         </View>
       </Section>
 
-      {!!error && <Notice text={error} p={p} tone="bad" />}
-      {loading && !report && <Loading p={p} />}
+      <AnalyticsPanel p={p} model={model} loading={loading} error={error} caption={`${rangeLabel(shownRange)}, compared with ${rangeLabel(previousRange(shownRange))}. The filters above apply to both.`} />
 
       {!!report && !!totals && <>
         <StatGrid showZeros>

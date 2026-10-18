@@ -26,6 +26,8 @@ const SIGS = ['private.workspace_hostaway_reviews_ingest(jsonb)', 'private.works
 const definitions = () => Promise.all(SIGS.map(async s => (await db.query('select pg_get_functiondef($1::regprocedure) d', [s])).rows[0].d));
 const firstRun = await definitions();
 await db.exec(await fs.readFile('supabase/migrations/' + MINE, 'utf8'));
+// The report analytics patch (20261023300000) sits on top of this function, so it is run again after it.
+await db.exec(await fs.readFile('supabase/migrations/20261023300000_report_analytics.sql', 'utf8'));
 const secondRun = await definitions();
 await db.exec('update private.workspace_hostaway_sync_state set paused=false where singleton');
 after(async () => { await db.close(); await vite.close(); });
@@ -185,4 +187,20 @@ test('who sees which ratings: admins and Guest relations everything, the team it
   await as(OWNER); await assert.rejects(db.query('select public.workspace_property_ratings($1)', [COTTAGE]), /not shown to owners/);
   await db.exec('reset role'); await db.exec('set role anon');
   await assert.rejects(db.query('select public.workspace_property_ratings(null)'), /permission denied/);
+});
+
+test('report analytics (20261023300000): the portfolio read carries each day\'s review points, for the same properties, and owners are still refused', async () => {
+  const all = await ratings(ADMIN);
+  assert.ok(all.points, 'the portfolio read has points');
+  for (const p of all.properties) {
+    const pts = all.points[p.propertyId] ?? [];
+    assert.equal(pts.reduce((n, x) => n + x[2], 0), p.reviews, `${p.propertyName}: every dated review once`);
+    if (p.reviews) assert.equal(Math.round(pts.reduce((n, x) => n + x[3], 0) / p.reviews * 100) / 100, p.average, `${p.propertyName}: the same average`);
+    for (const [day, star] of pts) { assert.match(day, /^\d{4}-\d{2}-\d{2}$/); assert.ok(star >= 1 && star <= 5); }
+  }
+  assert.deepEqual(Object.keys(all.points).filter(id => !all.properties.some(p => p.propertyId === id)), [], 'no points for a property not in view');
+  const ready = await ratings(READY);
+  assert.deepEqual(Object.keys(ready.points), [COTTAGE], 'the team sees points for its own properties only');
+  assert.equal((await ratings(ADMIN, COTTAGE)).points, null, 'a property read is unchanged');
+  await as(OWNER); await assert.rejects(db.query('select public.workspace_property_ratings(null)'), /not shown to owners/);
 });
