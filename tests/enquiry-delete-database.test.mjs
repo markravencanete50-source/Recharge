@@ -250,6 +250,26 @@ test('refused once signed or live, or when it has money or bookings, and nothing
   }
 });
 
+// Lee (20261024200000): an enquiry at "Estimate sent" said "This property has other records recorded": the property had a
+// repair spending limit (Limit Changer). The limit and its history now go with it; a furnishing quote says what it is.
+test('a property with a repair spending limit can be deleted while onboarding is ongoing; a furnishing quote is named', async () => {
+  const e = await enquiry();
+  await journey(e.prop, ESTIMATE);
+  assert.equal(await stageOf(e.prop), 'estimate');
+  await owner('insert into private.workspace_repair_limits(property_id,limit_minor,updated_by) values($1,25000,$2)', [e.prop, users[SUPER]]);
+  await owner(`insert into private.workspace_repair_limit_history(property_id,changed_by,before,after,request_id) values($1,$2,null,'{"limitMinor":25000}',gen_random_uuid())`, [e.prop, users[SUPER]]);
+  const done = await del(ADMIN, e.id);
+  assert.equal(done.deleted, true);
+  assert.deepEqual(await gone(e), NONE);
+  const [left] = await owner('select (select count(*) from private.workspace_repair_limits where property_id=$1)::int limits,(select count(*) from private.workspace_repair_limit_history where property_id=$1)::int history', [e.prop]);
+  assert.deepEqual(left, { limits: 0, history: 0 });
+
+  const quoted = await enquiry();
+  await owner(`insert into private.workspace_furnishing_projects(number,client_name,property_id,estimate_on,created_by,updated_by,request_id) values('RC-FQ-2026-0999','Mark Raven Canete',$1,current_date,$2,$2,gen_random_uuid())`, [quoted.prop, users[ADMIN]]);
+  await assert.rejects(del(ADMIN, quoted.id), /This property has a furnishing quote recorded, so this enquiry can no longer be deleted\. Archive it instead\./);
+  assert.equal((await gone(quoted)).property, 1);
+});
+
 test('owners, staff and everyone else are refused', async () => {
   const e = await enquiry();
   for (const i of [STAYS, CLEANER, OWNER, ACCOUNTS, READY, MANAGER]) await assert.rejects(del(i, e.id), /Only management can delete an enquiry/, roles[i]);
@@ -307,6 +327,9 @@ test('the migration runs twice without change', async () => {
   const before = await defs();
   await db.exec('reset role');
   await db.exec(sql);
+  // The later fix (20261024200000) patches the same functions: run again after it, nothing changes either.
+  await db.exec(await fs.readFile('supabase/migrations/20261024200000_enquiry_delete_repair_limits.sql', 'utf8'));
+  await db.exec(await fs.readFile('supabase/migrations/20261024200000_enquiry_delete_repair_limits.sql', 'utf8'));
   assert.equal(await defs(), before);
   assert.equal(before.split('private.workspace_client_enquiry_delete(input)').length, 2, 'routed once');
 });
