@@ -81,20 +81,34 @@ export const OUTLINE_HELP = 'Change any words. A line starting # is a heading, #
 // The team's "Publish the agreement from the contract" at the agreement step: the agreement the contract in use makes
 // for this property, to read before publishing. The database fills it in again when it is published, from the same
 // contract (a contract replaced in the meantime is refused), so the owner signs exactly what was shown.
-export function agreementTemplateForms(a: { role: string }, j: { propertyId: string; version: number; stage: string; signedName: string | null }): WorkflowForm[] {
+// {{Start date}} is filled in with the day it is drafted (London). The team can pick another start date: it replaces
+// that date wherever the wording shows it.
+export const agreementDate = (iso: string) => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
+export const londonToday = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+export function withStartDate(text: string, from: string, to: string): string {
+  return from === to ? text : text.split(agreementDate(from)).join(agreementDate(to));
+}
+export function agreementTemplateForms(a: { role: string }, j: { propertyId: string; version: number; stage: string; signedName: string | null }, now = new Date()): WorkflowForm[] {
   const d = journeyAgreement(j).agreementDraft;
   if (!d?.text || j.stage !== 'agreement' || j.signedName || !['admin', 'super_admin', 'stays'].includes(a.role)) return [];
-  const drafted = d.text;
+  const drafted = d.text, today = londonToday(now), dated = drafted.includes(agreementDate(today));
   const made = `Made from ${d.fileName} (contract ${d.version})` + (d.kind === 'pdf' ? '. The PDF is the agreement; this page goes with it as its cover.' : '.');
   return [{
     key: 'publishAgreementTemplate', title: 'Publish the agreement from the contract', endpoint: 'journeys',
     description: [made, d.missing.length ? `Not recorded yet, so left blank: ${d.missing.join(', ')}.` : '', 'Read it and change any wording before publishing. The owner signs exactly the wording below.'].filter(Boolean).join('\n\n'),
     fields: [
+      ...(dated ? [{ name: 'startOn', label: 'Start date', type: 'date' as const, required: true, defaultValue: today,
+        help: `The agreement shows ${agreementDate(today)} as the start date. Pick another day and it replaces that date wherever it appears.` }] : []),
       { name: 'agreement', label: 'The agreement', type: 'textarea', required: true, defaultValue: drafted, help: OUTLINE_HELP },
       { name: 'checked', label: 'I have read the agreement above', type: 'checkbox', required: true },
     ],
-    // Only changed wording is sent; otherwise the database fills the agreement in from the contract again.
-    build: v => ({ action: 'publishAgreement', propertyId: j.propertyId, version: j.version, templateId: d.templateId,
-      ...(typeof v.agreement === 'string' && v.agreement.trim() !== drafted.trim() ? { agreement: v.agreement } : {}) }),
+    // Only changed wording (or another start date) is sent; otherwise the database fills the agreement in from the contract again.
+    build: v => {
+      const typed = typeof v.agreement === 'string' ? v.agreement : drafted;
+      const startOn = dated && typeof v.startOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.startOn) ? v.startOn : today;
+      const agreement = withStartDate(typed, today, startOn);
+      return { action: 'publishAgreement', propertyId: j.propertyId, version: j.version, templateId: d.templateId,
+        ...(agreement.trim() !== drafted.trim() ? { agreement } : {}) };
+    },
   }];
 }
