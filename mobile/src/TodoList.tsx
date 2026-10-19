@@ -21,7 +21,7 @@ import { inboxListSchema } from "../../lib/guest-inbox-policy";
 import type { HubItem } from "../../lib/workspace-teams-policy";
 import {
   CLIENT_FILTERS, CLIENT_FILTER_LABEL, ROWS_PER_HEADING, SUMMARY_ROWS, TODO_COLUMNS, TODO_HEADINGS, TODO_HEADING_LABEL, deriveTasks, derivedKindsFor, dueState, ensureKey, groupTodo, hubRows, lastUpdateWords, matchesClientFilter, needsEnsure, nextRows,
-  clientFilterCounts, showAllLabel, sortTodoRows, todoCardLines, todoCells, todoCounts, todoHubSchema, todoLayout, updateTotal,
+  clientFilterCounts, showAllLabel, sortTodoRows, TODO_SORTS, TODO_SORT_LABEL, type TodoSort, todoCardLines, todoCells, todoCounts, todoHubSchema, todoLayout, updateTotal,
   type ClientFilter, type TodoColumnKey, type TodoHeading, type TodoHub, type TodoRow,
 } from "../../lib/todo";
 import { timeAgo, updateStamp } from "../../lib/tracker";
@@ -270,6 +270,7 @@ export function TodoList(props: SectionProps) {
   const [defaults, setDefaults] = useState<{ assign?: "me" | "person" | "department"; department?: string } | undefined>();
   const [more, setMore] = useState<ReadonlySet<TodoHeading>>(new Set());
   const [doneOpen, setDoneOpen] = useState(false);
+  const [sort, setSort] = useState<TodoSort>("due");
   // The chip chosen under Client relations: All, Pricing, Enquiries or Onboarding.
   const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
   // The open detail, by id, so it shows the fresh row (and its updates) after every reload.
@@ -285,7 +286,7 @@ export function TodoList(props: SectionProps) {
   const needs = useMemo(() => ownerTodo ? ownerNeeds(rows, approvals.rows, account.userId, today) : [], [ownerTodo, rows, approvals.rows, account.userId, today]);
   const team = useMemo(() => ownerTodo ? teamTodoGroups(rows, account.userId, today) : [], [ownerTodo, rows, account.userId, today]);
   const company = !ownerTodo || view === "company";
-  const groups = useMemo(() => groupTodo(rows, account.role, today), [rows, account.role, today]);
+  const groups = useMemo(() => groupTodo(rows, account.role, today, sort), [rows, account.role, today, sort]);
   const counts = useMemo(() => todoCounts(rows, today), [rows, today]);
   const done = useMemo(() => sortTodoRows(rows.filter(r => r.done), today), [rows, today]);
 
@@ -330,6 +331,12 @@ export function TodoList(props: SectionProps) {
         </View>)}
       </View>}
       {company && (!loading || !!rows.length) && <Text accessibilityLiveRegion="polite" style={small(p, { fontVariant: ["tabular-nums"] })}>{summary}</Text>}
+      {company && counts.open > 1 && (
+        <View accessibilityRole="radiogroup" accessibilityLabel="Order the to-do list by" style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <Text style={small(p)}>Order by</Text>
+          {TODO_SORTS.map(s => <Chip key={s} p={p} label={TODO_SORT_LABEL[s]} on={sort === s} onPress={() => setSort(s)} />)}
+        </View>
+      )}
 
       {company && (!loading || !!rows.length) && groups.filter(g => g.rows.some(r => !r.done) || g.always).map(g => {
         // Client relations has its chips while it has open rows; the chosen one filters only that heading.
