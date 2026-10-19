@@ -307,19 +307,27 @@ export function clientFilterCounts(rows: readonly TodoRow[]): Record<ClientFilte
 // Open first. Among open rows: due today first, then overdue, then due later, then no date; within
 // each, the earlier due date, then the oldest. Done rows follow, the latest finished first.
 const dueRank = (r: TodoRow, today: string) => !r.dueOn ? 3 : r.dueOn === today ? 0 : r.dueOn < today ? 1 : 2;
-export function sortTodoRows(rows: readonly TodoRow[], today: string): TodoRow[] {
+// The person can re-order the list: by due date (the default), newest first, oldest first or A to Z.
+export const TODO_SORTS = ['due', 'newest', 'oldest', 'title'] as const;
+export type TodoSort = (typeof TODO_SORTS)[number];
+export const TODO_SORT_LABEL: Record<TodoSort, string> = { due: 'Due date', newest: 'Newest', oldest: 'Oldest', title: 'A to Z' };
+export function sortTodoRows(rows: readonly TodoRow[], today: string, sort: TodoSort = 'due'): TodoRow[] {
   const age = (r: TodoRow) => r.since || '9999';
+  const open = (a: TodoRow, b: TodoRow) => sort === 'newest' ? (b.since || '').localeCompare(a.since || '')
+    : sort === 'oldest' ? age(a).localeCompare(age(b))
+    : sort === 'title' ? 0
+    : dueRank(a, today) - dueRank(b, today) || (a.dueOn ?? '9999').localeCompare(b.dueOn ?? '9999') || age(a).localeCompare(age(b));
   return [...rows].sort((a, b) =>
     Number(a.done) - Number(b.done)
-    || (a.done ? b.touched.localeCompare(a.touched) : dueRank(a, today) - dueRank(b, today) || (a.dueOn ?? '9999').localeCompare(b.dueOn ?? '9999') || age(a).localeCompare(age(b)))
+    || (a.done ? b.touched.localeCompare(a.touched) : open(a, b))
     || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
 }
 
 export type TodoGroup = { heading: TodoHeading; label: string; rows: TodoRow[]; open: number; always: boolean };
 // Guest and client relations are always shown to the people who work them; the others always.
 const WORKS_BOTH_SIDES = (role: string) => role === 'stays' || ADMIN_ROLES.includes(role);
-export function groupTodo(rows: readonly TodoRow[], role: string, today: string): TodoGroup[] {
-  const sorted = sortTodoRows(rows, today);
+export function groupTodo(rows: readonly TodoRow[], role: string, today: string, sort: TodoSort = 'due'): TodoGroup[] {
+  const sorted = sortTodoRows(rows, today, sort);
   return TODO_HEADINGS.map(heading => {
     const mine = sorted.filter(r => r.heading === heading);
     return { heading, label: TODO_HEADING_LABEL[heading], rows: mine, open: mine.filter(r => !r.done).length, always: heading === 'team' || heading === 'personal' || WORKS_BOTH_SIDES(role) };
