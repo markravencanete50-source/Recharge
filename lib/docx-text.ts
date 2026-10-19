@@ -100,7 +100,7 @@ function words(xml: string) {
   let text = '';
   for (const r of xml.replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/, '').matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:(tab|br|cr|noBreakHyphen)\b[^>]*\/>/g))
     text += r[1] !== undefined ? decode(r[1]) : r[2] === 'tab' ? ' ' : r[2] === 'noBreakHyphen' ? '-' : '\n';
-  return text.replace(/[\u00a0 ]+/g, ' ').split('\n').map(l => l.trim()).join('\n').replace(/\n{2,}/g, '\n').trim();
+  return text.replace(/[\u00a0 \t]+/g, ' ').split('\n').map(l => l.trim()).join('\n').replace(/\n{2,}/g, '\n').trim();
 }
 const paragraphs = (xml: string) => [...xml.matchAll(/<w:p\b[^>]*?(?:\/>|>([\s\S]*?)<\/w:p>)/g)].map(p => p[1] ?? '');
 // A table's rows, each "cell | cell" (empty and merged-away cells left out); a cell's paragraphs are joined by spaces, and a
