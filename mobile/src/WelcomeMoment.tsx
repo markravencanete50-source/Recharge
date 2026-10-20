@@ -19,7 +19,7 @@ export function momentFor(hour: number): Moment {
 
 // The greeting card that follows sign-in: who you are, the time of day and a
 // short summary, then straight into the workspace.
-export function GreetingCard({ palette: p, profile, openTasks, waiting, onClose, onWork }: { palette: Palette; profile: Profile; openTasks: number; waiting: number; onClose: () => void; onWork: () => void }) {
+export function GreetingCard({ palette: p, profile, openTasks, waiting, onClose, onWork }: { palette: Palette; profile: Profile; openTasks: number | null; waiting: number | null; onClose: () => void; onWork: () => void }) {
   const reduced = useReducedMotion();
   const { width } = useWindowDimensions();
   const [enter] = useState(() => new Animated.Value(reduced ? 1 : 0));
@@ -72,7 +72,7 @@ export function GreetingCard({ palette: p, profile, openTasks, waiting, onClose,
                 <View key={String(label)} style={[ui.row, { flex: 1, gap: 10, padding: 12, borderRadius: 18, backgroundColor: p.background, borderWidth: 1, borderColor: p.border }]}>
                   <DimensionalIcon name={icon as DimensionalName} size={34} color={p.primary} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: p.text, fontSize: 20, fontWeight: "700", letterSpacing: -0.5 }}>{value}</Text>
+                    <Text style={{ color: p.text, fontSize: 20, fontWeight: "700", letterSpacing: -0.5, opacity: value === null ? 0.4 : 1 }}>{value === null ? "..." : value}</Text>
                     <Text numberOfLines={1} style={{ color: p.muted, fontSize: 12 }}>{label}</Text>
                   </View>
                 </View>
