@@ -184,18 +184,18 @@ test('the menu\'s calendars open the Calendar on one team, for the teams the rol
   assert.equal(sectionOf('stays', 'tool:calendar-stays'), 'Listing Management');
   assert.equal(linkOf('cleans', 'tool:calendar-cleans').label, 'Calendar');
   assert.equal(sectionOf('cleans', 'tool:calendar-cleans'), 'Housekeeping');
-  // The workspace hands the team to the Calendar, whose Team filter starts on it (and can be changed).
+  // The workspace hands the team or preset to the Calendar, which is then that type's calendar alone (Lee, 20 October 2026:
+  // no team switcher, no All teams, nothing to clear; tests/tool-focus-pages.test.mjs).
   const workspace = readFileSync('mobile/src/LiveWorkspace.tsx', 'utf8'), calendar = readFileSync('mobile/src/LiveCalendar.tsx', 'utf8');
   assert.match(workspace, /setCalendarTeam\(link\.team \? \{ team: link\.team, nonce: freshNonce\(\) \} : link\.preset \? \{ preset: link\.preset, nonce: freshNonce\(\) \} : null\);/);
-  assert.match(workspace, /<LiveCalendar key=\{"calendar:" \+ \(calendarTeam\?\.nonce \?\? ""\)\}[^>]*focusTeam=\{calendarTeam\?\.team\} focusPreset=\{calendarTeam\?\.preset\}/);
-  assert.match(calendar, /useState<Team \| "all">\(\(\) => focusTeam && calendarTeamsFor\(account\.role\)\.includes\(focusTeam\) \? focusTeam : "all"\)/);
+  assert.match(workspace, /<LiveCalendar key=\{"calendar:" \+ \(calendarTeam\?\.nonce \?\? ""\)\}[^>]*locked=\{calendarTeam\?\.team \?\? calendarTeam\?\.preset \?\? null\}/);
+  assert.match(calendar, /const teams = locked \? \[\] : calendarTeamsFor\(account\.role\);/);
   // A team that is not a calendar team is no link at all; the plain Calendar link has no team.
   assert.equal(deepLinkFor({ kind: 'work', view: 'calendar', sub: 'nobody' }), null);
   assert.deepEqual(deepLinkFor({ kind: 'work', view: 'calendar' }), { section: 'calendar' });
-  // The preset starts the Calendar on that kind of work, shown as a filter the person can clear.
-  assert.match(calendar, /useState<CalendarFocus \| null>\(\(\) => focusPreset \?\? null\)/);
-  assert.match(calendar, /filterFocus\(filterProperty\(entries, propertyId \|\| null\), preset\)/);
-  assert.match(calendar, /onPress=\{\(\) => setPreset\(null\)\}/);
+  // The preset keeps the Calendar on that kind of work, with nothing to clear.
+  assert.match(calendar, /filterLock\(calendarEntries\(schedule\), locked\)/);
+  assert.doesNotMatch(calendar, /setPreset\(null\)/);
 });
 
 test('the safety calendar keeps routine safety visits and licensing, never garden or bins; onboarding keeps inspections', async () => {
@@ -253,7 +253,7 @@ test('the owner menu: Home, Favourites, Inbox, My Portfolio, My Statements, Cale
   // My Statements and Calendar open the Statements and Booking calendar parts of the Portfolio page.
   assert.deepEqual(deepLinkFor(panel.groups[0].links[4].target), { section: 'analytics', anchor: 'section-statements' });
   assert.deepEqual(deepLinkFor(panel.groups[0].links[5].target), { section: 'analytics', anchor: 'section-booking-calendar' });
-  assert.match(readFileSync('mobile/src/LiveClientReports.tsx', 'utf8'), /<Anchor id=\{sectionAnchor\("Booking calendar"\)\}><View style=\{\[card, \{ gap: 14 \}\]\}>\s*\{heading\("Booking calendar"/);
+  assert.match(readFileSync('mobile/src/LiveClientReports.tsx', 'utf8'), /<Anchor id=\{sectionAnchor\("Booking calendar"\)\}><View style=\{\[card, \{ gap: 14 \}\]\}>\s*\{all && heading\("Booking calendar"/);
   // Their repairs, requests and furnishing stay one section down, then Start something.
   assert.deepEqual(panel.groups.map(g => g.key), ['your-properties', 'requests', 'start']);
   assert.deepEqual(panel.groups[1].links.map(l => l.key), ['area:repairs', 'area:all', 'tool:furnishing', 'page:help']);

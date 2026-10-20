@@ -10,6 +10,8 @@ import { ui, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
 import { addDays, Anchor, Loading, london, message, Notice, Section } from "./LiveKit";
 import { sectionAnchor } from "../../lib/home-tools";
+import type { ToolPageInfo } from "../../lib/tool-focus";
+import { ToolHeader } from "./ToolPage";
 import { StatementCard } from "./LiveOwner";
 import { readFinance, readOwner } from "./backend/client";
 import { formatCount, formatMoney, formatMoneyShort } from "../../lib/format";
@@ -37,7 +39,10 @@ function monthGrid(month: string) {
 }
 const read = async (from: string, to: string) => ownerBookingsSchema.parse((await readOwner({ section: "bookings", from, to })).data);
 
-export function LiveClientReports({ palette: p }: { palette: Palette }) {
+// `tool` opens one part on a page of its own (the owner menu's My Statements and Calendar: lib/tool-focus.ts), with
+// "Portfolio" to come back (`onBack`) and nothing else of the page but the property chips that filter it.
+export function LiveClientReports({ palette: p, tool = null, onBack }: { palette: Palette; tool?: ToolPageInfo | null; onBack?: () => void }) {
+  const solo = tool?.only ?? null, all = !solo;
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
   const [today] = useState(() => london(new Date()));
@@ -125,11 +130,11 @@ export function LiveClientReports({ palette: p }: { palette: Palette }) {
 
   return (
     <View style={{ gap: 24 }}>
-      <Entrance sessionKey="owner-reports:heading" style={{ gap: 6 }}>
+      {tool ? <ToolHeader p={p} back="Portfolio" onBack={() => onBack?.()} title={tool.title} detail={tool.detail} /> : <Entrance sessionKey="owner-reports:heading" style={{ gap: 6 }}>
         <Text style={{ color: p.muted, fontSize: 12, fontWeight: "600", letterSpacing: 1.4, textTransform: "uppercase" }}>{monthName(month)}</Text>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Your portfolio</Text>
         <Text style={[ui.body, { color: p.muted }]}>How your properties are doing, who is staying and what is booked next.</Text>
-      </Entrance>
+      </Entrance>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && !year && <Loading p={p} />}
 
@@ -146,7 +151,7 @@ export function LiveClientReports({ palette: p }: { palette: Palette }) {
         })}
       </ScrollView>}
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+      {all && <><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {kpis.map(kpi => (
           <View key={kpi.key} accessibilityLabel={`${kpi.label}: ${kpi.value === null ? "not available" : kpi.format(kpi.value)}${kpi.delta ? ". " + kpi.delta.text : ""}`} style={[card, { flexBasis: desktop ? "23%" : "46%", flexGrow: 1, minWidth: 0, gap: 12, padding: 16 }]}>
             <View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: p.wash, alignItems: "center", justifyContent: "center" }}><DimensionalIcon name={kpi.icon} size={38} color={p.primary} /></View>
@@ -159,13 +164,15 @@ export function LiveClientReports({ palette: p }: { palette: Palette }) {
       </View>
       <Text style={[ui.small, { color: p.muted, marginTop: -12 }]}>Earnings count when a stay checks out. Occupancy is nights booked out of {formatCount(stats.available)} available in {monthName(month, false)}{stats.averageNightlyMinor !== null ? "; the nightly rate is your payout per night booked." : "."}</Text>
 
-      {/* The owner menu's Calendar opens here (lib/home-tools.ts client "booking-calendar"). */}
-      <Anchor id={sectionAnchor("Booking calendar")}><View style={[card, { gap: 14 }]}>
-        {heading("Booking calendar", "Every stay across your properties. Tap a stay or a day for details.")}
-        <BookingCalendar p={p} month={month} today={today} stays={monthStays} colourOf={colourOf} onMonth={setMonth} onStay={setOpen} />
-      </View></Anchor>
+      </>}
 
-      <View style={{ flexDirection: desktop ? "row" : "column", gap: 16, alignItems: "flex-start" }}>
+      {/* The owner menu's Calendar opens here (lib/home-tools.ts client "booking-calendar"). */}
+      {(all || solo === sectionAnchor("Booking calendar")) && <Anchor id={sectionAnchor("Booking calendar")}><View style={[card, { gap: 14 }]}>
+        {all && heading("Booking calendar", "Every stay across your properties. Tap a stay or a day for details.")}
+        <BookingCalendar p={p} month={month} today={today} stays={monthStays} colourOf={colourOf} onMonth={setMonth} onStay={setOpen} />
+      </View></Anchor>}
+
+      {all && <><View style={{ flexDirection: desktop ? "row" : "column", gap: 16, alignItems: "flex-start" }}>
         <View style={[card, { flex: desktop ? 1 : undefined, alignSelf: "stretch", gap: 4 }]}>
           {heading("Guests staying now", inHouse.length ? `${inHouse.length} ${inHouse.length === 1 ? "stay" : "stays"} in progress` : "No guests in residence today")}
           {inHouse.map(s => stayRow(s, true))}
@@ -207,10 +214,12 @@ export function LiveClientReports({ palette: p }: { palette: Palette }) {
         </View>
       </View>
 
-      <Section title="Statements" count={myStatements.length} p={p}>
+      </>}
+
+      {(all || solo === sectionAnchor("Statements")) && <Section title="Statements" count={myStatements.length} p={p}>
         {myStatements.map(s => <StatementCard key={s.id} p={p} s={s} />)}
         {!myStatements.length && !loading && <Notice text="Your first statement appears here once the month is reconciled and issued." p={p} />}
-      </Section>
+      </Section>}
 
       <Sheet palette={p} visible={!!open} onClose={() => setOpen(null)} title={open?.propertyName ?? ""} subtitle={open ? `${shortDate(open.checkIn)} to ${shortDate(open.checkOut)}` : ""} icon="calendar">
         {open && ([

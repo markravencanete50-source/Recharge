@@ -5,7 +5,8 @@ import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
-import { Button, Field, Loading, message, Notice, Section, useRequestId } from "./LiveKit";
+import { Button, Field, Loading, message, Notice, OnlySection, Section, useOnlySection, useRequestId } from "./LiveKit";
+import { sectionAnchor } from "../../lib/home-tools";
 import { List, Row } from "./LiveAccounts";
 import { RecordCleanerInvoiceSheet } from "./AccountsPayable";
 import { AccountsCleanerPay } from "./CleanerInvoices";
@@ -55,6 +56,9 @@ function BudgetSheet({ p, item, visible, onClose, onDone }: { p: Palette; item: 
 
 export function AccountsWork({ palette: p, account, properties, onOpenWork }: { palette: Palette; account: WorkspaceAccount; properties: PropertyView[]; onOpenWork: (item: Operation) => void }) {
   const saved = useSaved();
+  // On a tool page (Purchases, Cleaner invoices, Budget chart: lib/tool-focus.ts) only that section shows; Payable
+  // invoices (Cleaner invoices) brings the requests for invoice with it.
+  const only = useOnlySection();
   const [work, setWork] = useState<Operation[]>([]), [budget, setBudget] = useState<BudgetItem[]>([]), [rates, setRates] = useState<ReadonlyMap<string, number>>(new Map());
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [recordFor, setRecordFor] = useState<string | null>(null), [editing, setEditing] = useState<BudgetItem | null>(null), [adding, setAdding] = useState(false);
@@ -91,7 +95,7 @@ export function AccountsWork({ palette: p, account, properties, onOpenWork }: { 
           onOpen={item => { const w = purchases.find(x => x.workId === item.workId); if (w) onOpenWork(w); }} />
       </Section>
       {/* Requests for invoice made at the end of each pay period (20261022000000): approve or query, then pay. */}
-      {canPayCleaners && <AccountsCleanerPay p={p} canSetOutcome={["admin", "super_admin"].includes(account.role)} />}
+      {canPayCleaners && (!only || only === sectionAnchor("Cleaner invoices")) && <OnlySection.Provider value={null}><AccountsCleanerPay p={p} canSetOutcome={["admin", "super_admin"].includes(account.role)} /></OnlySection.Provider>}
       <Section title="Cleaner invoices" count={groups.length} p={p}>
         <Text style={[ui.small, { color: p.muted }]}>Accepted cleans waiting to be invoiced, by cleaner. Tap a cleaner to record their invoice.</Text>
         <List p={p} empty="No accepted cleans waiting to be invoiced.">

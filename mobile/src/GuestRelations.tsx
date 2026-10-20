@@ -37,11 +37,12 @@ export function GuestRelations(props: SectionProps & { onRefresh?: () => void | 
   const [sub, setSub] = useState<GuestSub>(() => pickSub(subs, focus?.sub, defaultGuestSub(account.role, subs)));
   // A link to one section (search, a Home card, a notification) opens it on its own page, with no chips to jump to the
   // others and "Guest relations" to come back (ToolPage.tsx). Opened as a whole, the labelled chips choose the section.
-  const [alone, setAlone] = useState(() => subs.length > 1 && subs.some(s => s === focus?.sub));
+  // A menu link or search result opened as a tool page (lib/tool-focus.ts) is headed by the Work area, which brings it back.
+  const [alone, setAlone] = useState(() => !!focus?.tool || (subs.length > 1 && subs.some(s => s === focus?.sub)));
   const [recording, setRecording] = useState(() => focus?.open === "record-stay" && canStart(account, "record-stay"));
   return (
     <View style={{ gap: space.section }}>
-      {alone ? <ToolHeader p={p} back="Guest relations" onBack={() => setAlone(false)} title={GUEST_SUB_LABEL[sub]} /> : <>
+      {alone ? !focus?.tool && <ToolHeader p={p} back="Guest relations" onBack={() => setAlone(false)} title={GUEST_SUB_LABEL[sub]} /> : <>
       {/* The title keeps its width; on a phone "Record a stay" wraps under it instead of squeezing it. */}
       <View style={[ui.between, { gap: 12, alignItems: "flex-start", flexWrap: "wrap" }]}>
         <View style={{ flex: 1, minWidth: 220, gap: 4 }}>

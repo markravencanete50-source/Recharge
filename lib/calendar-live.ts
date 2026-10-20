@@ -135,6 +135,31 @@ export function inFocus(e: CalendarEntry, focus: CalendarFocus | null | undefine
   return !!e.work && (!!rule.workKinds?.includes(e.work.kind ?? '') || !!rule.modules?.includes(e.work.moduleId ?? ''));
 }
 export const filterFocus = (entries: CalendarEntry[], focus: CalendarFocus | null | undefined) => focus ? entries.filter(e => inFocus(e, focus)) : entries;
+// Each filtered calendar in the menu is a calendar of its own that shows only its type (Lee, 20 October 2026): Booking
+// calendar the stays (arrivals and departures), Maintenance calendar the repairs, routine visits and inspections,
+// Housekeeping calendar the cleans, Accounts' the payment runs and their invoices, and Safety & Compliance and Onboarding
+// their presets' kinds. There is no team filter on them, no way back to all teams and no team events (absences,
+// meetings), and they cannot be cleared; the plain Calendar (page:calendar) stays the all-teams calendar.
+export const CALENDAR_LOCKS = ['stays', 'ready', 'cleans', 'accounts', ...CALENDAR_FOCUSES] as const;
+export type CalendarLock = (typeof CALENDAR_LOCKS)[number];
+export const isCalendarLock = (value: unknown): value is CalendarLock => (CALENDAR_LOCKS as readonly unknown[]).includes(value);
+export const CALENDAR_LOCK_PAGE: Record<CalendarLock, { title: string; detail: string }> = {
+  stays: { title: 'Booking calendar', detail: 'Stays, arrivals and departures by day' },
+  ready: { title: 'Maintenance calendar', detail: 'Repairs, visits and inspections by day' },
+  cleans: { title: 'Housekeeping calendar', detail: 'Cleans and changeovers by day' },
+  accounts: { title: 'Accounts calendar', detail: 'Owner payment runs and invoices by day' },
+  safety: { title: 'Safety and compliance calendar', detail: 'Safety visits and licensing by day' },
+  onboarding: { title: 'Onboarding calendar', detail: 'New property inspections and set-ups by day' },
+};
+const LOCK_KINDS: Partial<Record<CalendarLock, readonly EntryKind[]>> = {
+  stays: ['check-in', 'check-out'], ready: ['repair', 'routine', 'inspection'], cleans: ['clean'],
+};
+export function inLock(e: CalendarEntry, lock: CalendarLock): boolean {
+  if (lock === 'safety' || lock === 'onboarding') return inFocus(e, lock);
+  if (lock === 'accounts') return e.team === 'accounts';
+  return LOCK_KINDS[lock]!.includes(e.kind);
+}
+export const filterLock = (entries: CalendarEntry[], lock: CalendarLock | null | undefined) => lock ? entries.filter(e => inLock(e, lock)) : entries;
 // People with work in the schedule, for the person picker.
 export function calendarPeople(entries: CalendarEntry[]) {
   return Array.from(new Map(entries.filter(e => e.personId).map(e => [e.personId!, e.personName || 'Team member'])).entries()).sort((a, b) => a[1].localeCompare(b[1]));
