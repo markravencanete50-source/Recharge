@@ -110,6 +110,8 @@ test('the backend claim hands each pop-up its details; details go after 3 days; 
   const job = jobs.find(j => j.details?.preview === 'Is parking free?');
   assert.ok(job, 'the new guest message is claimed with its details');
   assert.deepEqual([job.details.recipient, job.details.who], ['Mark Raven', 'John Smith']);
+  // The time the message was written (20261024300000), so the pop-up shows it and keeps a conversation's messages in order.
+  assert.ok(Math.abs(Date.parse(job.createdAt) - Date.now()) < 60_000, 'the notice time travels with the pop-up');
   await as(MARK);
   await assert.rejects(db.query('select * from private.workspace_activity_details'), /permission denied/);
   await assert.rejects(db.query('select private.integration_push_details(1)'), /permission denied/);

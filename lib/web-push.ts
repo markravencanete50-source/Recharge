@@ -1,4 +1,4 @@
-import { pushCopy, pushInitials, pushTarget, type PushDetails } from './push-copy';
+import { pushCopy, pushInitials, pushTarget, pushThread, type PushDetails } from './push-copy';
 import type { IntegrationSettings } from './integration-policy';
 
 // Web push (RFC 8030), sent straight from the backend with no outside account: the request is
@@ -59,7 +59,7 @@ export async function encryptPush(payload: Uint8Array, p256dh: string, authSecre
 // Only the browsers' own push services: Chrome, Edge and Android (Google), Firefox, Windows and Safari.
 // Any other address would make the backend post to a server of someone's choosing.
 export const PUSH_SERVICE = /^https:\/\/(fcm\.googleapis\.com|android\.googleapis\.com|[a-z0-9-]+(\.[a-z0-9-]+)*\.push\.services\.mozilla\.com|[a-z0-9-]+(\.[a-z0-9-]+)*\.notify\.windows\.com|web\.push\.apple\.com)\//;
-export type WebPushJob = { endpoint: string; p256dh: string; auth: string; eventType?: string | null; workKind?: string | null; outboxId?: number | string; subscriptionId?: string; details?: PushDetails | null };
+export type WebPushJob = { endpoint: string; p256dh: string; auth: string; eventType?: string | null; workKind?: string | null; outboxId?: number | string; subscriptionId?: string; details?: PushDetails | null; createdAt?: string | null };
 export type WebPushOutcome = 'sent' | 'gone' | 'failed';
 // What the push service answered: its HTTP status, or 0 when it could not be reached at all.
 export type WebPushResult = { outcome: WebPushOutcome; status: number };
@@ -68,14 +68,23 @@ export type WebPushResult = { outcome: WebPushOutcome; status: number };
 // What the device is sent (mobile/web-static/sw.js shows it): the words (lib/push-copy.ts), where a tap goes, the tag that makes the
 // pop-ups of one conversation replace each other, and the sender's picture: a link to their photo that lasts an hour (signed by the
 // backend; the private path itself never leaves it), or their initials and colour for the device to draw. iPhones always show the
-// app's icon instead.
-export type PushPayload = { title: string; body: string; url: string; tag: string; icon?: string; initials?: string; colour?: string };
-export function pushPayload(job: Pick<WebPushJob, 'eventType' | 'workKind' | 'details'>, copy?: { title: string; message: string }, icon?: string | null): PushPayload {
+// app's icon instead. Like WhatsApp, a message also carries its conversation (pushThread) so the device gathers a conversation's
+// messages into one pop-up, the notice's id so the same message never alerts twice, and the time it was written.
+export type PushPayload = {
+  title: string; body: string; url: string; tag: string; icon?: string; initials?: string; colour?: string;
+  id?: string; time?: number; thread?: string; count?: number; conversation?: string;
+};
+export function pushPayload(job: Pick<WebPushJob, 'eventType' | 'workKind' | 'details' | 'outboxId' | 'createdAt'>, copy?: { title: string; message: string }, icon?: string | null): PushPayload {
   const details = job.details ?? {};
   const { title, message } = copy ?? pushCopy(job.eventType, job.workKind, details);
   if (copy) return { title, body: message, url: '/workspace/live', tag: 'recharge' };
   const { tag, url } = pushTarget(job.eventType, details), drawn = pushInitials(job.eventType, details);
-  return { title, body: message, url, tag, ...(icon && /^https:\/\//.test(icon) ? { icon } : drawn ? { initials: drawn.initials, colour: drawn.colour } : {}) };
+  const outbox = Number(job.outboxId), time = Date.parse(job.createdAt ?? '');
+  return {
+    title, body: message, url, tag, ...(icon && /^https:\/\//.test(icon) ? { icon } : drawn ? { initials: drawn.initials, colour: drawn.colour } : {}),
+    ...(Number.isSafeInteger(outbox) && outbox > 0 ? { id: 'n' + outbox } : {}), ...(Number.isFinite(time) ? { time } : {}),
+    ...pushThread(job.eventType, details),
+  };
 }
 export async function sendWebPushResult(job: WebPushJob, keys: WebPushKeys, copy?: { title: string; message: string }, icon?: string | null): Promise<WebPushResult> {
   if (!PUSH_SERVICE.test(job.endpoint)) return { outcome: 'gone', status: 0 };

@@ -8,7 +8,7 @@ import { createServer } from 'vite';
 // Lee's earlier rule (14 October: the pop-up names the person it is for) stays for everything else: "Mark, new to-do for you".
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 after(() => vite.close());
-const { pushCopy, pushTarget, pushInitials } = await vite.ssrLoadModule('/lib/push-copy.ts');
+const { pushCopy, pushTarget, pushInitials, pushThread } = await vite.ssrLoadModule('/lib/push-copy.ts');
 const { pushPayload } = await vite.ssrLoadModule('/lib/web-push.ts');
 const CONV = '5a1e0000-0000-4000-8000-000000000001';
 
@@ -31,12 +31,12 @@ test('a group: its name on top, "Erika: …" below; a mention says so', () => {
   assert.equal(pushCopy('chat.message', null, { who: 'Alex', preview: '🎤 Voice note (4:59)', context: 'Deep clean Friday' }).message, 'Alex: 🎤 Voice note (4:59)');
 });
 
-test('several unread messages in one conversation: "(3 new messages)" after the title', () => {
-  assert.equal(pushCopy('chat.message', null, { who: 'Erika Smith', preview: 'And another', context: 'Guest relations', unreadCount: 3 }).title, 'Guest relations (3 new messages)');
+test('several unread messages in one conversation: "(3 messages)" after the title', () => {
+  assert.equal(pushCopy('chat.message', null, { who: 'Erika Smith', preview: 'And another', context: 'Guest relations', unreadCount: 3 }).title, 'Guest relations (3 messages)');
   assert.equal(pushCopy('chat.message', null, { who: 'Alex', preview: 'Hi', unreadCount: 1 }).title, 'Alex');
-  assert.equal(pushCopy('chat.message', null, { who: 'Alex', preview: 'Hi', unreadCount: 250 }).title, 'Alex (99+ new messages)');
+  assert.equal(pushCopy('chat.message', null, { who: 'Alex', preview: 'Hi', unreadCount: 250 }).title, 'Alex (99+ messages)');
   const long = pushCopy('chat.message', null, { who: 'Alex', preview: 'Hi', context: 'x'.repeat(200), unreadCount: 4 }).title;
-  assert.ok(long.length <= 80 && long.endsWith('… (4 new messages)'), 'the name is cut, never the count');
+  assert.ok(long.length <= 80 && long.endsWith('… (4 messages)'), 'the name is cut, never the count');
 });
 
 test('owners and guests: "Sarah Jones (owner)", "Sam (guest) · 110 Hawk"; an owner hears from "Recharge"', () => {
@@ -87,27 +87,57 @@ test('one pop-up per conversation (the tag), and a tap opens that conversation',
 test('the picture: a signed link to the sender\'s photo, otherwise their initials and colour; the private path is never sent', () => {
   const job = { eventType: 'chat.message', details: { who: 'Erika Smith', preview: 'Hi', context: 'Guest relations', conversationId: CONV, senderPhotoPath: 'u/p.jpg', senderColour: 'plum' } };
   const withPhoto = pushPayload(job, undefined, 'https://project.supabase.co/storage/v1/object/sign/avatars/u/p.jpg?token=abc');
-  assert.deepEqual(withPhoto, { title: 'Guest relations', body: 'Erika: Hi', url: `/workspace/live?section=inbox&chat=${CONV}`, tag: 'chat-' + CONV, icon: 'https://project.supabase.co/storage/v1/object/sign/avatars/u/p.jpg?token=abc' });
+  assert.deepEqual(withPhoto, { title: 'Guest relations', body: 'Erika: Hi', url: `/workspace/live?section=inbox&chat=${CONV}`, tag: 'chat-' + CONV, icon: 'https://project.supabase.co/storage/v1/object/sign/avatars/u/p.jpg?token=abc', thread: 'Guest relations', conversation: CONV });
   assert.doesNotMatch(JSON.stringify(withPhoto), /u\/p\.jpg"|senderPhotoPath/);
-  assert.deepEqual(pushPayload(job), { title: 'Guest relations', body: 'Erika: Hi', url: `/workspace/live?section=inbox&chat=${CONV}`, tag: 'chat-' + CONV, initials: 'ES', colour: '#5B4A5E' });
+  assert.deepEqual(pushPayload(job), { title: 'Guest relations', body: 'Erika: Hi', url: `/workspace/live?section=inbox&chat=${CONV}`, tag: 'chat-' + CONV, initials: 'ES', colour: '#5B4A5E', thread: 'Guest relations', conversation: CONV });
   assert.equal(pushPayload(job, undefined, 'http://insecure.example/x.jpg').icon, undefined);
   assert.equal(pushInitials('chat.message', { who: 'Recharge' }), null, 'an owner sees the app\'s own icon');
   assert.equal(pushInitials('hub.todo_added', { who: 'Alex' }), null);
-  assert.deepEqual(pushInitials('guest.message', { who: 'sam' }), { initials: 'S', colour: '#3B5866' });
+  // A guest has no profile colour: one is picked from the name, the same every time (WhatsApp's coloured circles).
+  assert.deepEqual(pushInitials('guest.message', { who: 'sam' }), { initials: 'S', colour: '#8E3F38' });
+  assert.deepEqual(pushInitials('guest.message', { who: 'Sam' }), pushInitials('guest.message', { who: 'sam' }));
+  assert.deepEqual(pushInitials('guest.message', { who: 'Jack' }), { initials: 'J', colour: '#3B5866' });
   // A test notification keeps its words and the general tag.
   assert.deepEqual(pushPayload(job, { title: 'Recharge', message: 'Test' }), { title: 'Recharge', body: 'Test', url: '/workspace/live', tag: 'recharge' });
+});
+
+test('like WhatsApp, a message carries its conversation, its id and its time, so the phone shows one pop-up per conversation', () => {
+  // The client's example: a guest at 2 Panmure.
+  const guest = pushPayload({ eventType: 'guest.message', outboxId: 42, createdAt: '2026-10-20T09:15:00Z', details: { recipient: 'Mark Raven', who: 'Jack', propertyName: '2 Panmure', preview: 'Is there a hairdryer?' } });
+  assert.deepEqual(guest, { title: 'Jack (guest) · 2 Panmure', body: 'Is there a hairdryer?', url: '/workspace/live?section=inbox', tag: 'guest-jack-2-panmure',
+    initials: 'J', colour: '#3B5866', id: 'n42', time: Date.parse('2026-10-20T09:15:00Z'), thread: 'Jack (guest) · 2 Panmure' });
+  // A team chat: the conversation without its count (the phone adds "(3 messages)"), the unread count, and the conversation to mark read.
+  assert.deepEqual(pushThread('chat.message', { who: 'Erika Smith', preview: 'Hi', context: 'Guest relations', conversationKind: 'group', conversationId: CONV.toUpperCase(), unreadCount: 3 }),
+    { thread: 'Guest relations', count: 3, conversation: CONV });
+  assert.deepEqual(pushThread('chat.message', { who: 'Alex', preview: 'Hi', conversationId: 'nope' }), { thread: 'Alex' });
+  // Everything else is a plain notice: no thread, so it is never merged and has no Reply button.
+  assert.deepEqual(pushThread('hub.todo_added', { who: 'Alex', recipient: 'Mark' }), {});
+  const todo = pushPayload({ eventType: 'hub.todo_added', outboxId: '7', details: { recipient: 'Mark', actorName: 'Alex', workTitle: 'Call the plumber' } });
+  assert.equal(todo.thread, undefined);assert.equal(todo.id, 'n7');assert.equal(todo.time, undefined, 'no time: the phone uses when it arrived');
+  assert.equal(pushPayload({ eventType: 'hub.todo_added', outboxId: 'x', createdAt: 'later' }).id, undefined);
+  // Copy rules: no em dash and no emoji in what Recharge itself writes.
+  for (const payload of [guest, todo, pushPayload({ eventType: 'chat.message', details: { who: 'Alex', unreadCount: 4 } })]) {
+    assert.doesNotMatch(payload.title + payload.body + (payload.thread ?? ''), /\u2014|\p{Extended_Pictographic}/u);
+  }
 });
 
 test('the browser shows it: the tag, the picture, and a tap that opens the conversation in the open window', async () => {
   const sw = await fs.readFile('mobile/web-static/sw.js', 'utf8');
   assert.match(sw, /tag, renotify: true, requireInteraction: true/);
+  assert.match(sw, /badge: BADGE/, 'the white mark on transparent, never the colour icon (a white square on Android)');
   assert.match(sw, /data\.icon\.startsWith\("https:\/\/"\) \? Promise\.resolve\(data\.icon\) : initialsIcon\(data\.initials, data\.colour\)/);
   assert.match(sw, /icon: icon \|\| APP_ICON/, 'the app icon otherwise (an iPhone always shows it)');
+  assert.match(sw, /getNotifications\(\{ tag \}\)/, 'a new message joins the pop-up of its conversation (tests/web-push-sw.test.mjs)');
   assert.match(sw, /open\.postMessage\(\{ type: "recharge-open", url \}\);\s*return open\.focus\(\);/);
   assert.match(sw, /return self\.clients\.openWindow\(url\);/);
   const page = await fs.readFile('mobile/src/LiveWorkspace.tsx', 'utf8');
   assert.match(page, /data\?\.type !== "recharge-open"/);
-  assert.match(page, /const \{ chat: chatLink \} = useLocalSearchParams<\{ chat\?: string \}>\(\);/);
+  assert.match(page, /const \{ chat: chatLink, reply: replyLink \} = useLocalSearchParams<\{ chat\?: string; reply\?: string \}>\(\);/);
+  assert.match(page, /openMessages\(chat, params\.get\("reply"\) === "1"\)/, 'Reply with Recharge already open');
+  assert.match(page, /focusReply=\{!!chatTarget\?\.reply\}/);
+  const chat = await fs.readFile('mobile/src/LiveChat.tsx', 'utf8');
+  assert.match(chat, /setTimeout\(\(\) => input\.current\?\.focus\(\), 80\)/, 'the message box is ready to type in');
+  assert.match(chat, /clearConversationNotices\(id\);/, 'reading a conversation takes its pop-up away');
   // The phone app keeps the general words (its pushes are not end-to-end encrypted) but opens the same place.
   const native = await fs.readFile('lib/integration-providers.ts', 'utf8');
   assert.match(native, /data:\{screen:'activity',url:pushTarget\(job\.eventType,job\.details\?\?\{\}\)\.url\}/);
