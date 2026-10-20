@@ -15,7 +15,7 @@ import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
   DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PRIORITY_LABEL, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, deleteEnquiryWarning, duplicateNote, enquiryStep,
-  OWNER_ENQUIRY_LABEL, OWNER_ENQUIRY_NOTE, TEAM_ENQUIRY_NOTE, isOwnerEnquiry, isPriority, isTeamEnquiry, teamEnquiryTag, priorityFirst, valuationDraft, valueButtonLabel,
+  OWNER_ENQUIRY_LABEL, OWNER_ENQUIRY_NOTE, PUBLIC_ENQUIRY_LABEL, PUBLIC_ENQUIRY_NOTE, REFERRAL_LABEL, STAGE_LABEL, isPublicEnquiry, TEAM_ENQUIRY_NOTE, isOwnerEnquiry, isPriority, isTeamEnquiry, teamEnquiryTag, priorityFirst, valuationDraft, valueButtonLabel,
   type ClientEnquiries, type ClientEnquiry, type EnquiryStep,
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -86,6 +86,7 @@ function EnquiryRow({ p, enquiry: e, step, onPress }: { p: Palette; enquiry: Cli
     <Tag label={STEP_LABEL[step]} tone={STEP_TONE[step]} p={p} />
     {priority && <Tag label={PRIORITY_LABEL} tone="wait" p={p} />}
     {isOwnerEnquiry(e) && <Tag label={OWNER_ENQUIRY_LABEL} tone="plain" p={p} />}
+    {isPublicEnquiry(e) && <Tag label={PUBLIC_ENQUIRY_LABEL} tone="plain" p={p} />}
     {isTeamEnquiry(e) && <Tag label={teamEnquiryTag(e)} tone="plain" p={p} />}
     {e.delivery === "email" && ["sent", "opened", "expired"].includes(step) && e.emailStatus !== "sent" && <Tag label={e.emailStatus === "failed" ? "Email failed" : "Sending…"} tone={e.emailStatus === "failed" ? "bad" : "plain"} p={p} />}
     {!!e.duplicateReason && step !== "closed" && <Tag label={DUPLICATE_LABEL} tone="bad" p={p} />}
@@ -248,6 +249,7 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
       {e && <>
         {!!e.duplicateReason && step !== "closed" && <Notice text={`${DUPLICATE_LABEL}. ${duplicateNote(e)}`} p={p} tone="bad" />}
         {isOwnerEnquiry(e) && <Notice text={`${OWNER_ENQUIRY_LABEL}. ${OWNER_ENQUIRY_NOTE}`} p={p} />}
+        {isPublicEnquiry(e) && <Notice text={`${PUBLIC_ENQUIRY_LABEL}. ${PUBLIC_ENQUIRY_NOTE}`} p={p} />}
         {isTeamEnquiry(e) && <Notice text={`${teamEnquiryTag(e)}. ${TEAM_ENQUIRY_NOTE}`} p={p} />}
         {step === "received" && <Button label={valueButtonLabel(e)} icon="trending-up" primary p={p} onPress={() => setMode("value")} />}
         {e.propertyId && step !== "closed" && <Button label={`Open ${e.propertyName ?? "the property"}`} icon="arrow-right" primary={step !== "received"} p={p} onPress={() => onOpenProperty(e.propertyId!)} />}
@@ -294,14 +296,16 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
             <Line p={p} label="Furnishing quote" value={yes(a.furnishQuote)} />
             <Line p={p} label="Compliance & licensing" value={yes(a.compliance)} />
             <Line p={p} label="Start" value={a.startWhen} />
-            <Line p={p} label="Their enquiry" value={a.enquiryType} />
+            <Line p={p} label={STAGE_LABEL} value={a.enquiryType} />
+            <Line p={p} label="Heard about us" value={a.heardFrom} />
+            <Line p={p} label={REFERRAL_LABEL} value={a.referral} />
             <Line p={p} label="Anything else" value={a.notes} />
           </Group>
         </> : <Group p={p} title="The email" icon="mail">
           <Line p={p} label="To" value={`${e.recipientName} · ${e.recipientEmail}`} />
           <Line p={p} label="Subject" value={e.subject} />
           <Line p={p} label="How" value={e.delivery === "email" ? (e.emailStatus === "sent" ? "Sent by Recharge's email" : e.emailStatus === "failed" ? "The email failed: press Try again" : "Sending…") : "Link copied to send yourself"} />
-          <Line p={p} label="Sent" value={`${ago(e.sentAt)}${e.sentByName ? ` by ${e.sentByName}` : ""}`} />
+          <Line p={p} label="Sent" value={isPublicEnquiry(e) ? PUBLIC_ENQUIRY_LABEL : `${ago(e.sentAt)}${e.sentByName ? ` by ${e.sentByName}` : ""}`} />
           <Line p={p} label="Opened" value={e.openedAt ? ago(e.openedAt) : "Not yet"} />
           <Line p={p} label="Link works until" value={new Date(e.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} />
         </Group>}

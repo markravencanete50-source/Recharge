@@ -151,8 +151,10 @@ export function EstimateView({ token, state: initial, estimate, followUpOn }: { 
         </div>
       </div>}
       <div className="auth-field enquiry-field">
-        <label htmlFor="estimate-feedback">Questions or feedback <span className="enquiry-help">(optional)</span></label>
-        <div className="auth-control" data-bare-input="true"><textarea id="estimate-feedback" rows={4} maxLength={5000} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Anything you’d like us to know" /></div>
+        {/* Not going ahead needs a reason (migration 20261025200000); otherwise feedback is optional. */}
+        {decision === "decline" ? <label htmlFor="estimate-feedback">Why are you not going ahead?<span className="enquiry-required" aria-hidden> *</span></label>
+          : <label htmlFor="estimate-feedback">Questions or feedback <span className="enquiry-help">(optional)</span></label>}
+        <div className="auth-control" data-bare-input="true"><textarea id="estimate-feedback" rows={4} maxLength={5000} value={feedback} onChange={e => setFeedback(e.target.value)} required={decision === "decline"} placeholder={decision === "decline" ? "A few words help us improve" : "Anything you’d like us to know"} /></div>
       </div>
       {error && <p role="alert" className="auth-alert">{error}</p>}
       <button className="auth-submit" disabled={sending}><span>{sending ? "Sending…" : "Send my answer"}</span><ArrowRight aria-hidden size={18} /></button>

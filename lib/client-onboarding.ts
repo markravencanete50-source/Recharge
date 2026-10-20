@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isOnboardingVideoLink } from './video-embed';
 import { readEstimate } from './estimate-projection';
 import { repairLimitText } from './journey-policy';
+import type { WorkflowField, WorkflowForm } from './workflow-forms';
 
 // The owner's onboarding checklist (Alex's framework, migration 20261025200000). On the owner's property in onboarding:
 // the property information they gave on the left ("TBC" until we have it), and on the right the checklist, then the
@@ -145,3 +146,27 @@ export const APP_ENTRY_NOTICE = {
 // The open form's thank-you (Alex's words).
 export const ENQUIRY_THANKS = 'Thanks, we have your details. A member of the team will be in touch with your estimate by email, usually within 48 hours.';
 export const ENQUIRY_ACCOUNT_PROMPT = 'Create your account to track your estimate in real time';
+
+// ---------------------------------------------------------------- the estimate's three buttons
+// The estimate step's answers, each a form of its own made from the app's "Review your estimate" form (lib/workflow-forms.ts),
+// so the same checks and the same request go to the database: Proceed (the repair limit, as at Proceed today), Still
+// reviewing (a follow-up date, required) and Not proceeding (a reason, required).
+export type Decision = 'proceed' | 'review' | 'decline';
+export const DECISION_BUTTON: Record<Decision, string> = { proceed: 'Proceed to onboarding', review: 'Still reviewing', decline: 'Not proceeding' };
+export function decisionForms(decide: WorkflowForm | undefined): Record<Decision, WorkflowForm> | null {
+  if (!decide || decide.key !== 'decideEstimate') return null;
+  const field = (name: string) => decide.fields.find(f => f.name === name);
+  const only = (names: string[]) => names.map(field).filter((f): f is WorkflowField => !!f)
+    .map(f => ({ ...f, when: f.when?.filter(w => w.field !== 'decision') }));
+  const make = (decision: Decision, title: string, description: string, fields: WorkflowField[]): WorkflowForm => ({
+    ...decide, key: 'decideEstimate:' + decision, title, description, fields,
+    build: (values, requestId) => decide.build({ ...values, decision, feedback: values.feedback ?? '' }, requestId),
+    checks: values => decide.checks?.({ ...values, decision }) ?? [],
+  });
+  const feedback = field('feedback');
+  return {
+    proceed: make('proceed', 'Proceed to onboarding', 'Great. Tell us which repairs we can approve without asking you, and we will send the management agreement next.', only(['repairLimitMinor', 'repairLimitOther', 'feedback'])),
+    review: make('review', 'Still reviewing', 'Take your time. Choose a date for us to check in with you.', only(['followUpOn', 'feedback']).map(f => f.name === 'followUpOn' ? { ...f, required: true, help: undefined } : f)),
+    decline: make('decline', 'Not proceeding', 'Thank you for considering Recharge.', feedback ? [{ ...feedback, label: 'Why are you not going ahead?', required: true, help: 'A few words help us improve.' }] : []),
+  };
+}

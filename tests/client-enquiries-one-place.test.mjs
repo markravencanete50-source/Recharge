@@ -82,7 +82,7 @@ test('an enquiry the team added shows "Added by the team" and who, in the list, 
   assert.equal(enquiry.isOwnerEnquiry(base), false);
   assert.equal(enquiry.teamEnquiryTag(base), 'Added by the team · Morag');
   assert.equal(enquiry.teamEnquiryTag({ sentByName: null }), 'Added by the team');
-  assert.deepEqual([...enquiry.ENQUIRY_SOURCES], ['form', 'owner_app', 'team']);
+  assert.deepEqual([...enquiry.ENQUIRY_SOURCES], ['form', 'owner_app', 'team', 'public']);
   const list = source('LiveEnquiries.tsx');
   assert.match(list, /\{isTeamEnquiry\(e\) && <Tag label=\{teamEnquiryTag\(e\)\} tone="plain" p=\{p\} \/>\}/);
   assert.match(list, /\{isTeamEnquiry\(e\) && <Notice text=\{`\$\{teamEnquiryTag\(e\)\}\. \$\{TEAM_ENQUIRY_NOTE\}`\} p=\{p\} \/>\}/);

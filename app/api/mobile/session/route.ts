@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     const scoped = nativeProvider(token)!;
     // A landlord who enquired with this (verified) email gets their property on their account (migration 20261025200000).
     // Never stops the sign-in.
-    await scoped.rpc("workspace_enquiry_owner_claim").then(() => undefined, () => undefined);
+    try { await scoped.rpc("workspace_enquiry_owner_claim"); } catch { /* the sign-in still succeeds */ }
     const account = await scoped.rpc("workspace_account");
     const parsedAccount = workspaceAccountSchema.safeParse(account.data);
     if (account.error || !parsedAccount.success) { await client.auth.signOut({ scope: "local" }); return respond({ error: "Workspace connection unavailable" }, 503); }

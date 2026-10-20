@@ -162,7 +162,8 @@ test('the client page: a bad link never reaches the database; the answer goes wi
   assert.equal((await decide({ decision: 'maybe' })).status, 400);
   assert.equal((await decide({ decision: 'proceed', extra: 1 })).status, 400);
   state.publicAnswer = () => ({ data: null, error: { code: '22023', message: 'This estimate can no longer be answered here. Reply to the email from Recharge.' } });
-  r = await decide({ decision: 'decline' });
+  assert.equal((await decide({ decision: 'decline' })).status, 400, 'not going ahead needs a reason');
+  r = await decide({ decision: 'decline', feedback: 'Selling instead' });
   assert.equal(r.status, 400);
   assert.match((await r.json()).error, /can no longer be answered/);
   const foreign = new Request('https://app.test/api/estimate', { method: 'POST', headers: { origin: 'https://evil.test', 'content-type': 'application/json' }, body: JSON.stringify({ token, decision: 'proceed' }) });

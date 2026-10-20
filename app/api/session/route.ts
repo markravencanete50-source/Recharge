@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     if (result.ok) {
       // A landlord who enquired with this (verified) email gets their property on their account (migration 20261025200000).
       // Never stops the sign-in.
-      await client.rpc("workspace_enquiry_owner_claim").then(() => undefined, () => undefined);
+      try { await client.rpc("workspace_enquiry_owner_claim"); } catch { /* the sign-in still succeeds */ }
       return NextResponse.json({ ok: true }, { headers: securityHeaders });
     }
     return refused(result);

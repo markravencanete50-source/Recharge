@@ -188,7 +188,7 @@ test('deletes at every stage up to the agreement, with everything onboarding add
       await journey(e.prop, ESTIMATE); await journey(e.prop, { action: 'decideEstimate', decision: 'proceed' });
       await journey(e.prop, { action: 'publishAgreement', agreement: 'The management agreement supplied by Recharge.' });
     },
-    'declined (closed)': async e => { await journey(e.prop, ESTIMATE); await journey(e.prop, { action: 'decideEstimate', decision: 'decline' }); },
+    'declined (closed)': async e => { await journey(e.prop, ESTIMATE); await journey(e.prop, { action: 'decideEstimate', decision: 'decline', feedback: 'Selling instead' }); },
     'an owner is linked': async e => { await journey(e.prop, ESTIMATE); await owner("insert into public.workspace_property_assignments(property_id,user_id,assignment,granted_by) values($1,$2,'client',$3)", [e.prop, users[OWNER], users[ADMIN]]); },
   };
   const expected = { 'estimate sent': 'estimate', 'owner reviewing': 'reviewing', 'agreement, published and unsigned': 'agreement', 'declined (closed)': 'archived', 'an owner is linked': 'estimate' };

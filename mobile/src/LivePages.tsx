@@ -22,6 +22,7 @@ import { PropertyProfile } from "./LivePropertyProfile";
 import { OnboardingPipeline, PortfolioInsights, type PropertyFilter } from "./LivePortfolio";
 import { PropertiesTable } from "./PropertiesTable";
 import { EstimateExplorer } from "./LiveEstimate";
+import { OwnerOnboarding } from "./OwnerOnboarding";
 import { EstimateDeliveryCard } from "./EstimateDelivery";
 import { OwnerAccountCard, ownerAccountEmailOf } from "./OwnerAccountCard";
 import { ScotlandMap } from "./ScotlandMap";
@@ -401,7 +402,9 @@ function AgreementCopy({ j, p, propertyName }: { j: JourneyView; p: Palette; pro
   </View>;
 }
 
-function JourneyDetails({ j, p, account, propertyName, onForm, work, onRefresh }: { j: JourneyView; p: Palette; account: WorkspaceAccount; propertyName: string; onForm: (f: WorkflowForm) => void; work: OperationView[]; onRefresh?: () => void }) {
+// `ticket`: inside the owner's onboarding ticket (OwnerOnboarding.tsx), whose checklist already shows the estimate and
+// its three answers, so they are left out here. Everything else (the agreement and signing) is as it was.
+function JourneyDetails({ j, p, account, propertyName, onForm, work, onRefresh, ticket = false }: { j: JourneyView; p: Palette; account: WorkspaceAccount; propertyName: string; onForm: (f: WorkflowForm) => void; work: OperationView[]; onRefresh?: () => void; ticket?: boolean }) {
   const comparables = estimateComparables(j.estimate), [linkError, setLinkError] = useState("");
   const progress = onboardingProgress(j.stage), linked = work.filter(w => w.propertyId === j.propertyId && w.workId !== j.workId), reportFrom = inspectionReportFrom(account, j);
   return (
@@ -426,15 +429,15 @@ function JourneyDetails({ j, p, account, propertyName, onForm, work, onRefresh }
       {j.estimate && typeof j.estimate.comments === "string" && !!j.estimate.comments.trim() && <View style={{ gap: 4 }}><Text style={{ color: p.text, fontWeight: "700" }}>{account.role === "client" ? "Notes from Recharge" : "Estimate notes"}</Text><Text style={[ui.body, { color: p.muted }]}>{j.estimate.comments}</Text></View>}
       {account.role !== "client" && !!j.estimateDelivery && ["estimate", "reviewing"].includes(j.stage) && <EstimateDeliveryCard key={j.version} p={p} propertyId={j.propertyId} delivery={j.estimateDelivery} />}
       {["stays", "admin", "super_admin"].includes(account.role) && !["enquiry", "estimate", "reviewing", "archived"].includes(j.stage) && (!!ownerAccountEmailOf(j) || (!j.ownerAccount && j.stage !== "live")) && <OwnerAccountCard key={"owner" + j.version} p={p} propertyId={j.propertyId} email={ownerAccountEmailOf(j)} hasAccount={!!j.ownerAccount} onDone={() => onRefresh?.()} />}
-      {j.estimate && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
-      {j.estimate && account.role === "client" && ["estimate", "reviewing"].includes(j.stage) && <EstimateGuide palette={p} />}
+      {j.estimate && !ticket && <EstimateExplorer palette={p} estimate={j.estimate} owner={account.role === "client"} />}
+      {j.estimate && !ticket && account.role === "client" && ["estimate", "reviewing"].includes(j.stage) && <EstimateGuide palette={p} />}
       {!!comparables.length && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Comparable properties</Text>{comparables.map(c => <SoftButton key={c.url} label={c.name + " · " + money(c.adrMinor) + " a night"} icon="external-link" palette={p} onPress={() => void Linking.openURL(c.url).catch(() => setLinkError("The comparable link could not be opened."))} />)}{!!linkError && <Text accessibilityRole="alert" style={{ color: p.danger }}>{linkError}</Text>}</View>}
       {!!j.agreement && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Management agreement, revision {j.agreementRevision}</Text><Text selectable style={[ui.body, { color: p.text }]}>{agreementReadable(j.agreement, journeyAgreement(j).agreementFormat)}</Text>{j.signedName && !!journeyAgreement(j).signatureImage && <View style={{ alignSelf: "flex-start", padding: 6, borderRadius: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: p.border }}><Image accessibilityLabel={"Signature of " + j.signedName} source={{ uri: journeyAgreement(j).signatureImage! }} style={{ width: 210, height: 70 }} resizeMode="contain" /></View>}{j.signedName && <Text style={{ color: p.success }}>{journeyAgreement(j).signatureImage ? "Signed" : "Accepted"} by {j.signedName}{j.signedAt ? " on " + new Date(j.signedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }) : ""}.</Text>}<AgreementCopy j={j} p={p} propertyName={propertyName} /></View>}
       {j.inspectionReport && <View style={{ gap: 8 }}><Text style={{ color: p.text, fontWeight: "700" }}>Inspection findings</Text><InspectionResult palette={p} j={j} /><Text selectable style={[ui.body, { color: p.text }]}>{j.inspectionReport}</Text></View>}
       <JourneyQuestions palette={p} j={j} owner={account.role === "client"} />
       <JourneyPhotos j={j} p={p} account={account} />
       {account.role !== "client" && !!journeyAgreement(j).agreementDraft?.missing.length && j.stage === "agreement" && !j.signedName && <Text style={[ui.small, { color: p.muted }]}>The contract in use leaves these blank for this property: {journeyAgreement(j).agreementDraft!.missing.join(", ")}.</Text>}
-      {[...agreementTemplateForms(account, j), ...journeyForms(account, j)].map(f => <SoftButton key={f.key} label={f.title} icon={f.key === "askQuestion" ? "plus" : "arrow-right"} palette={p} onPress={() => onForm(f)} />)}
+      {[...agreementTemplateForms(account, j), ...journeyForms(account, j)].filter(f => !ticket || f.key !== "decideEstimate").map(f => <SoftButton key={f.key} label={f.title} icon={f.key === "askQuestion" ? "plus" : "arrow-right"} palette={p} onPress={() => onForm(f)} />)}
       {!!reportFrom && <Text style={[ui.small, { color: p.muted }]}>Report from {dayLabel(reportFrom)}</Text>}
       {!!linked.length && <Text style={[ui.small, { color: p.muted }]}>{linked.length} connected team {linked.length === 1 ? "handover" : "handovers"}</Text>}
     </View>
@@ -585,6 +588,8 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
   const openForm = (form: WorkflowForm) => { setSelected(null); onForm(form); };
   const closeDetail = () => { setSelected(null); setExportMessage(""); };
   const journeyBlock = (property: PropertyView) => journey ? <JourneyDetails j={journey} p={p} account={account} propertyName={property.name} onForm={openForm} work={work} onRefresh={onRefresh} /> : null;
+  // The owner's property in onboarding opens as the two-pane onboarding ticket (Alex's framework, 20261025200000).
+  const ticket = !!selected && !!journey && account.role === "client" && selected.status !== "active";
   // What follows the profile in a property's detail: new work, work at the property, reports and invoices.
   const moreFor = (property: PropertyView) => (
     <>
@@ -652,14 +657,15 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
         ) : !loading && <EmptyState palette={p} icon="home" title={query ? "No matching properties" : "No properties yet"} detail={query ? "Try another name or area." : account.role === "client" ? "Start an enquiry to begin your property journey." : "Properties appear here once they are added or onboarded."} />}
         {visible.length > shown && <SoftButton label={`Show more (${visible.length - shown} more)`} icon="arrow-right" palette={p} onPress={() => setShown(shown + 24)} />}
       </>}
-      {!table && <Sheet palette={p} visible={!!selected} onClose={closeDetail} title={selected?.name ?? ""} subtitle={selected ? [selected.address, selected.region].filter(Boolean).join(" · ") : undefined} icon="house">
+      {!table && <Sheet palette={p} visible={!!selected} onClose={closeDetail} title={selected?.name ?? ""} subtitle={selected ? [selected.address, selected.region].filter(Boolean).join(" · ") : undefined} icon="house" maxWidth={ticket ? 1100 : undefined}>
         {selected && <>
           <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
             <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: selected.status === "active" ? p.successWash : p.cautionWash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{account.role === "client" ? ownerPropertyStatus(journeys.find(j => j.propertyId === selected.id), selected.status).label : selected.status === "active" ? "Live" : readableStage(selected.status)}</Text></View>
             {!!selected.bedrooms && <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: p.wash }}><Text style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{selected.bedrooms} {selected.bedrooms === 1 ? "bedroom" : "bedrooms"}</Text></View>}
             {account.role !== "client" && <FavoriteButton entryKey={"property:" + selected.id} label={selected.name} palette={p} />}
           </View>
-          {journey && selected.status !== "active" && journeyBlock(selected)}
+          {ticket && journey ? <OwnerOnboarding p={p} account={account} j={journey} property={selected} onForm={openForm} details={<JourneyDetails j={journey} p={p} account={account} propertyName={selected.name} onForm={openForm} work={work} onRefresh={onRefresh} ticket />} />
+            : journey && selected.status !== "active" && journeyBlock(selected)}
           <PropertyProfile palette={p} account={account} propertyId={selected.id} journey={journey} />
           <PropertyAccess palette={p} account={account} propertyId={selected.id} />
           {journey && selected.status === "active" && journeyBlock(selected)}

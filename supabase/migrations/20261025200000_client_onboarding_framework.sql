@@ -83,11 +83,12 @@ declare
    $q$'parking','garden','mediaLink','shortLet','furnishQuote','compliance','startWhen','notes','enquiryType']);$q$,
    $q$'parking','garden','mediaLink','shortLet','furnishQuote','compliance','startWhen','notes','enquiryType','heardFrom','referral']);/* open form keys: 20261025200000 */$q$,
    $q$/* open form keys: 20261025200000 */$q$],
-  -- The phone number and the services questions are optional now.
+  -- The phone number and the services questions are optional now. The comment keeps the words 20261020800000 looks for
+  -- (its own sentinel), so running the earlier migrations again still finds its change made.
   ['private.workspace_enquiry_public(jsonb)',
    $q$foreach k in array array['fullName','email','phone','propertyAddress','propertyType','shortLet','furnishQuote','compliance','enquiryType'] loop$q$,
-   $q$foreach k in array array['fullName','email','propertyAddress','propertyType','enquiryType']/* open form required: 20261025200000 */ loop$q$,
-   $q$/* open form required: 20261025200000 */$q$],
+   $q$foreach k in array array['fullName','email','propertyAddress','propertyType','enquiryType']/* open form required: 20261025200000; was array['fullName','email','phone','propertyAddress', and the services questions */ loop$q$,
+   $q$/* open form required: 20261025200000;$q$],
   -- How they heard about us is one of the choices.
   ['private.workspace_enquiry_public(jsonb)',
    $q$or ans->>'email'!~'^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'$q$,

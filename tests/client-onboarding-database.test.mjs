@@ -86,7 +86,7 @@ async function websiteEnquiry(n, over = {}) {
 test('the migration runs twice without changing anything', () => {
   assert.deepEqual(secondRun, firstRun);
   assert.match(firstRun.at(-2), /'public'/);
-  for (const d of firstRun.slice(0, -1)) assert.ok(!String(d).includes('—'), 'no em dash');
+  for (const d of firstRun.slice(0, -1)) assert.ok(!String(d).includes('\u2014'), 'no em dash');
 });
 
 test('who may call what: the claim, the checklist and the videos are for people signed in; the form start is internal', async () => {

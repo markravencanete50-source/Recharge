@@ -266,7 +266,7 @@ test('item 7: an amount that is not whole pounds, or over the maximum, is refuse
   assert.equal((await proceed(j, undefined)).stage, 'agreement');
   assert.equal(await limitOf(j.propertyId), null);
   const declined = await atEstimate();
-  await journey(OWNER, { action: 'decideEstimate', propertyId: declined.propertyId, version: declined.version, decision: 'decline', repairLimitMinor: 25000 });
+  await journey(OWNER, { action: 'decideEstimate', propertyId: declined.propertyId, version: declined.version, decision: 'decline', feedback: 'Selling instead', repairLimitMinor: 25000 });
   assert.equal(await limitOf(declined.propertyId), null);
 });
 

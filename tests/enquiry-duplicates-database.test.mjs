@@ -84,8 +84,9 @@ test('a form without a correspondence address or "existing client" is taken; the
   await as(ADMIN);
   await rpc('workspace_teams_action', [{ ...teamsActionSchema.parse({ action: 'inviteEnquiry', requestId: crypto.randomUUID(), name: 'X', email: 'x@example.com', subject: 'S', body: 'B', delivery: 'link' }), tokenHash: hash(t) }]);
   await asServer();
-  const { phone: _phone, ...noPhone } = ANSWERS; void _phone;
-  await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: noPhone }), /marked with \*/);
+  // The phone number is optional since the open form (20261025200000); the property type is still required.
+  const { propertyType: _type, ...noType } = ANSWERS; void _type;
+  await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: noType }), /marked with \*/);
   await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: { ...ANSWERS, admin: true } }), /./, 'no other keys');
 });
 
