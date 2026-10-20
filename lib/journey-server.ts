@@ -2,7 +2,7 @@ import { authSecurityConfiguration,requestQuota } from './auth-security';
 import { boundedJson,isSameOrigin } from './auth-security-policy';
 import { isNativeRequest } from './native-request-policy';
 import { businessContext,businessResponse,databaseFailure,viewAsFailure } from './business-server';
-import { estimateRateIssues,journeyReadSchema,journeyActionSchema,journeyValidationField,journeyValidationReason,operationsReadSchema } from './journey-policy';
+import { DECLINE_REASON_MESSAGE,declineReasonMissing,estimateRateIssues,journeyReadSchema,journeyActionSchema,journeyValidationField,journeyValidationReason,operationsReadSchema } from './journey-policy';
 import { operationsActionSchema, validationReason } from './operations-policy';
 import { CONTRACTORS_READ,LIMITS_ACTION,LIMITS_READ,repairLimitActionSchema } from './repair-contractors';
 import { CLEANER_REPAIRS_READ } from './cleaner-repairs';
@@ -48,6 +48,7 @@ async function workflowRoute(request:Request,native:boolean,kind:'journey'|'oper
   // A journey refusal names its field too (`field`), so the form can show the message next to it.
   if(!parsed.success)return businessResponse({error:kind==='journey'?journeyValidationReason(parsed.error):validationReason(parsed.error),...(kind==='journey'?{field:journeyValidationField(parsed.error)}:{})},400);
   if(kind==='journey'&&parsed.data.action==='publishEstimate'){const issue=estimateRateIssues(parsed.data)[0];if(issue)return businessResponse({error:issue.message,field:issue.field},400);}
+  if(kind==='journey'&&parsed.data.action==='decideEstimate'&&declineReasonMissing(parsed.data))return businessResponse({error:DECLINE_REASON_MESSAGE,field:'feedback'},400);
   const result=await session.client.rpc(kind==='journey'?'workspace_journey_action':'workspace_operations_action',{input:parsed.data});
   if(result.error)return databaseFailure(result.error);
   // A published estimate without an owner account is emailed to the enquiry with a private link (migration 20261019520000).

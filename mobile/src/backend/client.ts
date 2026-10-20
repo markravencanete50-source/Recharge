@@ -129,7 +129,7 @@ export function setViewOnly(message: string, person?: { userId: string; onEnded:
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
 export const viewMode = () => ({ readOnly: viewOnly !== "", person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|onboarding-settings|owner-account|profile|owner|oversight|checklists|privacy|documents|furnishing)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|onboarding-settings|owner-account|profile|owner|oversight|checklists|privacy|documents|furnishing|client-onboarding)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   // While a super admin views the app as someone else nothing is saved (this device's own
   // notification link aside), so trying the screens never changes the business's records.
   if (viewOnly && body !== undefined && !options.asSelf && !path.startsWith("/api/mobile/devices")) throw new WorkspaceApiError(viewOnly, 423);
@@ -282,6 +282,9 @@ export async function uploadCourseFile(courseId: string, file: { uri: string; na
 // Onboarding settings (admins): the contract used as the agreement template, Recharge's details and the own-cost categories.
 export const readOnboardingSettings = async () => (await workspaceRequest('/api/mobile/onboarding-settings')).json();
 export const saveOnboardingSettings = async (action: Record<string, unknown>) => (await workspaceRequest('/api/mobile/onboarding-settings', action)).json();
+// The owner's onboarding checklist and the onboarding videos (migration 20261025200000).
+export const readClientOnboarding = async (propertyId?: string) => (await workspaceRequest('/api/mobile/client-onboarding' + (propertyId ? '?' + new URLSearchParams({ propertyId }) : ''))).json();
+export const saveClientOnboarding = async (action: Record<string, unknown>) => (await workspaceRequest('/api/mobile/client-onboarding', action)).json();
 export async function uploadAgreementTemplate(requestId: string, file: { uri: string; name: string; mimeType?: string; file?: File }) {
   const form = new FormData();
   form.append('requestId', requestId);

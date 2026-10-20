@@ -55,7 +55,7 @@ test('a published estimate can carry the team assumptions the owner explores',as
 test('owner decline archives the shared property and enquiry in both views',async()=>{
  await as(1);let archived=await action({action:'createEnquiry',name:'Declined property',address:'Example declined address',propertyType:'Flat',bedrooms:1,bathrooms:1});
  await as(0);archived=await action({action:'publishEstimate',propertyId:archived.propertyId,version:archived.version,lowRateMinor:10000,mediumRateMinor:12000,highRateMinor:15000,comparables:[]});
- await as(1);archived=await action({action:'decideEstimate',propertyId:archived.propertyId,version:archived.version,decision:'decline'});assert.equal(archived.stage,'archived');
+ await as(1);archived=await action({action:'decideEstimate',propertyId:archived.propertyId,version:archived.version,decision:'decline',feedback:'Selling instead'});assert.equal(archived.stage,'archived');
  assert.equal((await db.query('select status from public.workspace_properties where id=$1',[archived.propertyId])).rows[0].status,'archived');
  await as(0);assert.equal((await read(archived.propertyId))[0].stage,'archived');assert.equal((await db.query('select status from public.workspace_work_items where id=$1',[archived.workId])).rows[0].status,'declined');
 });

@@ -8,7 +8,7 @@ import { boundedFormData } from './bounded-form';
 import { ENQUIRY_REPLY_TO, enquiryEmailReady, enquirySender } from './integration-policy';
 import { integrationSettings } from './integration-server';
 import { sendEmail } from './integration-providers';
-import { enquiryAnswersSchema, enquiryEmail, enquiryFileType, MAX_ENQUIRY_FILE_BYTES, tokenHash, tokenPattern } from './client-enquiry';
+import { formAnswersSchema, enquiryEmail, enquiryFileType, MAX_ENQUIRY_FILE_BYTES, tokenHash, tokenPattern } from './client-enquiry';
 import type { RpcContext } from './workspace-rpc-route';
 import type { TeamsAction } from './workspace-teams-policy';
 
@@ -82,14 +82,31 @@ export async function openEnquiryForm(token: string | undefined): Promise<Enquir
   catch (error) { return error instanceof PublicRefusal ? { state: 'invalid' } : { state: 'unavailable' }; }
 }
 
-const submitSchema = z.object({ token: z.string().regex(tokenPattern), answers: enquiryAnswersSchema }).strict();
+const submitSchema = z.object({ token: z.string().regex(tokenPattern), answers: formAnswersSchema }).strict();
+// The open form (migration 20261025200000): anyone can open /enquiry. The first upload or the submit asks for a form of
+// its own here ({ action: 'start' }): a fresh private token for this browser, kept by the database as a hash like a
+// link the team sends, and good for two days. Then uploads and the submit work exactly as with a link.
+// Abuse: 10 new forms an hour from one address on top of the form's 20 requests an hour, 5 sent forms a day per email
+// address, the upload limits as before, and a cap on new forms an hour across the site in the database.
+const startSchema = z.object({ action: z.literal('start') }).strict();
+const newToken = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
 export async function enquirySubmitRoute(request: Request) {
   if (!isSameOrigin(request, authSecurityConfiguration()?.origin)) return businessResponse({ error: 'Invalid request origin' }, 403);
   try {
     const quota = await requestQuota(request, 'enquiry-submit', 20, 3600);
     if (!quota.allowed) return tooMany(quota.retryAfter);
-    const parsed = submitSchema.safeParse(await boundedJson(request, 32_768));
+    const body = await boundedJson(request, 32_768);
+    if (startSchema.safeParse(body).success) {
+      const started = await requestQuota(request, 'enquiry-start', 10, 3600);
+      if (!started.allowed) return tooMany(started.retryAfter);
+      const token = newToken();
+      await publicRpc({ action: 'start', tokenHash: await tokenHash(token) });
+      return businessResponse({ ok: true, data: { token } });
+    }
+    const parsed = submitSchema.safeParse(body);
     if (!parsed.success) return businessResponse({ error: parsed.error.issues[0]?.message || 'Check your answers', field: parsed.error.issues[0]?.path.at(-1) ?? null }, 400);
+    const perEmail = await requestQuota(request, 'enquiry-email', 5, 86400, 'email:' + parsed.data.answers.email.trim().toLowerCase());
+    if (!perEmail.allowed) return tooMany(perEmail.retryAfter, 'We already have several forms from this email today. Please reply to our email, or try again tomorrow.');
     // Blank optional answers are left out.
     const answers = Object.fromEntries(Object.entries(parsed.data.answers).filter(([, v]) => v !== '' && v !== undefined));
     await publicRpc({ action: 'submit', tokenHash: await tokenHash(parsed.data.token), answers });

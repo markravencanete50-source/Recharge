@@ -34,6 +34,8 @@ const endpoints = new Set([
   "/stay-survey", "/api/stay-survey",
   // Onboarding settings (the contract used as the agreement template) and the owner's account made on Proceed.
   "/api/workspace/onboarding-settings", "/api/mobile/onboarding-settings", "/api/workspace/owner-account", "/api/mobile/owner-account",
+  // The owner's onboarding checklist and the onboarding videos (migration 20261025200000).
+  "/api/workspace/client-onboarding", "/api/mobile/client-onboarding",
   // Messages photos and videos, and profile photos.
   "/api/workspace/chat-files", "/api/mobile/chat-files", "/api/workspace/profile", "/api/mobile/profile",
   "/privacy", "/terms", "/delete-account", "/api/session/delete-account", "/api/workspace/privacy", "/api/mobile/privacy",

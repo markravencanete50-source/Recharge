@@ -194,15 +194,15 @@ function CourseEditor({ p, course, visible, onClose, onDone, onRequiredFailed }:
 }
 
 // The course video plays inside the app on the web; the phone app opens it until an in-app
-// player is added to the store build.
-function CourseVideo({ p, url, onError }: { p: Palette; url: string; onError: (text: string) => void }) {
+// player is added to the store build. Also the owner's onboarding checklist videos (OwnerOnboarding.tsx).
+export function CourseVideo({ p, url, onError, title = "Course video" }: { p: Palette; url: string; onError: (text: string) => void; title?: string }) {
   const embed = videoEmbed(url);
   if (Platform.OS === "web" && embed) {
     const frame = { width: "100%", aspectRatio: "16 / 9", border: 0, borderRadius: 16, background: "#000", display: "block" } as const;
     return (
       <View style={{ borderRadius: 16, overflow: "hidden", backgroundColor: "#000" }}>
         {embed.kind === "frame"
-          ? createElement("iframe", { src: embed.src, title: "Course video", style: frame, allow: "accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen", allowFullScreen: true, loading: "lazy", referrerPolicy: "strict-origin-when-cross-origin" })
+          ? createElement("iframe", { src: embed.src, title, style: frame, allow: "accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen", allowFullScreen: true, loading: "lazy", referrerPolicy: "strict-origin-when-cross-origin" })
           : createElement("video", { src: embed.src, controls: true, playsInline: true, preload: "metadata", style: frame })}
       </View>
     );

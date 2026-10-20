@@ -1,10 +1,13 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowRight, Building2, Check, CheckCircle2, Film, ImageIcon, Link2, Mail, MapPin, Phone, Trash2, UploadCloud, User } from "lucide-react";
-import { ENQUIRY_TYPES, MAX_ENQUIRY_FILES, PROPERTY_TYPES, START_WHEN, enquiryAnswersSchema } from "@/lib/client-enquiry";
+import { ArrowRight, CheckCircle2, Film, ImageIcon, Link2, Mail, MapPin, Phone, Trash2, UploadCloud, User, UserPlus } from "lucide-react";
+import { ENQUIRY_TYPES, HEARD_FROM, HEARD_FROM_LABEL, MAX_ENQUIRY_FILES, PROPERTY_TYPES, REFERRAL_HELP, REFERRAL_LABEL, STAGE_LABEL, START_WHEN, formAnswersSchema } from "@/lib/client-enquiry";
+import { ENQUIRY_ACCOUNT_PROMPT, ENQUIRY_THANKS, appSignUpLink } from "@/lib/client-onboarding";
 
-// The landlord's form: contact details, the property, photos or videos, and the services they
-// want. Answers are checked here and again on the server; files upload as they are chosen.
+// The landlord's form: contact details, the property, photos or videos, and a little about them (the stage they are at,
+// how they heard about us). Answers are checked here and again on the server; files upload as they are chosen.
+// Opened from a link the team sent (token), or by anyone at /enquiry (no token): then the first upload or the submit
+// asks the server for a form of its own (migration 20261025200000), and everything after works as with a link.
 type Upload = { key: string; id?: string; name: string; mime: string; bytes: number; progress: number; error?: string; preview?: string };
 type Values = Record<string, string>;
 const ROOMS = Array.from({ length: 16 }, (_, i) => String(i));
@@ -19,66 +22,71 @@ function Field({ id, label, help, required, error, icon, children }: { id: strin
     {error && <p className="enquiry-error" role="alert">{error}</p>}
   </div>;
 }
-function Choice({ id, label, help, value, onChange, error, options = [["yes", "Yes"], ["no", "No"]] }: { id: string; label: string; help?: string; value: string; onChange: (v: string) => void; error?: string; options?: [string, string][] }) {
-  return <fieldset className="auth-field enquiry-field" data-invalid={error ? "true" : undefined}>
-    <legend>{label}<span className="enquiry-required" aria-hidden> *</span></legend>
-    {help && <p className="enquiry-help">{help}</p>}
-    <div className="enquiry-choice" role="radiogroup" aria-label={label}>
-      {options.map(([key, text]) => <label key={key} className="enquiry-pill" data-on={value === key ? "true" : undefined}>
-        <input type="radio" name={id} value={key} checked={value === key} onChange={() => onChange(key)} />
-        {value === key && <Check aria-hidden size={15} />}<span>{text}</span>
-      </label>)}
-    </div>
-    {error && <p className="enquiry-error" role="alert">{error}</p>}
-  </fieldset>;
-}
 
-export function EnquiryForm({ token, name, email, files }: { token: string; name: string; email: string; files: { id: string; name: string; mime: string; bytes: number }[] }) {
-  const [values, setValues] = useState<Values>({ fullName: name, email, shortLet: "", furnishQuote: "", compliance: "", bedrooms: "", wcs: "", bathrooms: "", propertyType: "", startWhen: "", enquiryType: "" });
+export function EnquiryForm({ token, name, email, files }: { token: string | null; name: string; email: string; files: { id: string; name: string; mime: string; bytes: number }[] }) {
+  const [values, setValues] = useState<Values>({ fullName: name, email, bedrooms: "", wcs: "", bathrooms: "", propertyType: "", startWhen: "", enquiryType: "", heardFrom: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploads, setUploads] = useState<Upload[]>(() => files.map(f => ({ key: f.id, ...f, progress: 1 })));
   const [error, setError] = useState(""), [sending, setSending] = useState(false), [done, setDone] = useState(false);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+  // This form's private token: the link's, or one the server makes for the open form (asked for once).
+  const formToken = useRef<string | null>(token), starting = useRef<Promise<string> | null>(null);
   const set = (key: string) => (value: string) => { setValues(v => ({ ...v, [key]: value })); setErrors(e => { const { [key]: _gone, ...rest } = e; void _gone; return rest; }); };
   const input = (key: string) => ({ id: "enquiry-" + key, name: key, value: values[key] ?? "", onChange: (e: { target: { value: string } }) => set(key)(e.target.value) });
   useEffect(() => () => uploads.forEach(u => u.preview && URL.revokeObjectURL(u.preview)), []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function ensureToken(): Promise<string> {
+    if (formToken.current) return formToken.current;
+    starting.current ??= (async () => {
+      const response = await fetch("/api/enquiry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "start" }) });
+      const body = (await response.json().catch(() => ({}))) as { data?: { token?: string }; error?: string };
+      if (!response.ok || !body.data?.token) throw new Error(body.error || "The form could not be started. Please try again in a minute.");
+      formToken.current = body.data.token;
+      return body.data.token;
+    })().finally(() => { starting.current = null; });
+    return starting.current;
+  }
+
   // Each file uploads on its own, with progress; a file that fails says why and can be removed.
-  function upload(file: File) {
+  async function upload(file: File) {
     const key = crypto.randomUUID();
     setUploads(list => [...list, { key, name: file.name, mime: file.type, bytes: file.size, progress: 0, preview: file.type.startsWith("image/") && file.type !== "image/heic" ? URL.createObjectURL(file) : undefined }]);
-    const form = new FormData(); form.append("token", token); form.append("file", file);
+    const failed = (message: string) => setUploads(list => list.map(u => u.key === key ? { ...u, progress: 1, error: message } : u));
+    let link: string;
+    try { link = await ensureToken(); } catch (e) { failed(e instanceof Error ? e.message : "This file could not be added."); return; }
+    const form = new FormData(); form.append("token", link); form.append("file", file);
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/enquiry/upload");
     // The link goes in a header too, so the site checks it before reading the file.
-    xhr.setRequestHeader("X-Enquiry-Token", token);
+    xhr.setRequestHeader("X-Enquiry-Token", link);
     xhr.upload.onprogress = e => { if (e.lengthComputable) setUploads(list => list.map(u => u.key === key ? { ...u, progress: Math.min(0.97, e.loaded / e.total) } : u)); };
     xhr.onload = () => {
       let body: { data?: { id: string }; error?: string } = {};
       try { body = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
-      setUploads(list => list.map(u => u.key === key ? (xhr.status < 300 && body.data ? { ...u, id: body.data.id, progress: 1 } : { ...u, progress: 1, error: body.error || "This file could not be added." }) : u));
+      if (xhr.status < 300 && body.data) { const saved = body.data.id; setUploads(list => list.map(u => u.key === key ? { ...u, id: saved, progress: 1 } : u)); }
+      else failed(body.error || "This file could not be added.");
     };
-    xhr.onerror = () => setUploads(list => list.map(u => u.key === key ? { ...u, progress: 1, error: "Could not connect. Check your connection and try again." } : u));
+    xhr.onerror = () => failed("Could not connect. Check your connection and try again.");
     xhr.send(form);
   }
   function choose(list: FileList | null) {
     if (!list) return;
     const room = MAX_ENQUIRY_FILES - uploads.filter(u => !u.error).length;
-    Array.from(list).slice(0, Math.max(0, room)).forEach(upload);
+    Array.from(list).slice(0, Math.max(0, room)).forEach(file => void upload(file));
     if (list.length > room) setError(`Up to ${MAX_ENQUIRY_FILES} photos or videos. For more, paste a link to an album below.`);
   }
   async function remove(u: Upload) {
     setUploads(list => list.filter(x => x.key !== u.key));
     if (u.preview) URL.revokeObjectURL(u.preview);
-    if (u.id) await fetch("/api/enquiry/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "remove", token, fileId: u.id }) }).catch(() => undefined);
+    if (u.id && formToken.current) await fetch("/api/enquiry/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "remove", token: formToken.current, fileId: u.id }) }).catch(() => undefined);
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError("");
     const raw = { ...values, bedrooms: values.bedrooms === "" ? undefined : Number(values.bedrooms), wcs: values.wcs === "" ? undefined : Number(values.wcs), bathrooms: values.bathrooms === "" ? undefined : Number(values.bathrooms) };
     const answers = Object.fromEntries(Object.entries(raw as Record<string, unknown>).filter(([, v]) => v !== "" && v !== undefined));
-    const parsed = enquiryAnswersSchema.safeParse(answers);
+    const parsed = formAnswersSchema.safeParse(answers);
     if (!parsed.success) {
       const found: Record<string, string> = {};
       for (const issue of parsed.error.issues) { const key = String(issue.path[0] ?? ""); if (key && !found[key]) found[key] = issue.message.startsWith("Required") || issue.message.startsWith("Expected") ? "Please answer this question" : issue.message; }
@@ -90,18 +98,22 @@ export function EnquiryForm({ token, name, email, files }: { token: string; name
     if (uploads.some(u => u.progress < 1)) { setError("Please wait for your photos and videos to finish uploading."); return; }
     setSending(true);
     try {
-      const response = await fetch("/api/enquiry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, answers: parsed.data }) });
+      const link = await ensureToken();
+      const response = await fetch("/api/enquiry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: link, answers: parsed.data }) });
       const body = (await response.json().catch(() => ({}))) as { error?: string; field?: string };
       if (!response.ok) { setError(body.error || "The form could not be sent. Please try again."); const field = body.field; if (field) setErrors(e => ({ ...e, [field]: body.error ?? "" })); return; }
       setDone(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch { setError("Could not connect. Please try again."); } finally { setSending(false); }
+    } catch (e) { setError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Could not connect. Please try again."); } finally { setSending(false); }
   }
 
+  // Thank you (Alex's words), and the way into the app: an account with the same email follows the estimate.
   if (done) return <div className="enquiry-done" role="status">
     <span className="enquiry-done-mark"><CheckCircle2 aria-hidden size={34} /></span>
     <h2>Thank you, {values.fullName.split(" ")[0] || "we have your details"}!</h2>
-    <p>We have your enquiry{uploads.some(u => u.id) ? " and your photos" : ""}. A member of the team shall be in touch with your FREE performance estimate.</p>
+    <p>{ENQUIRY_THANKS}</p>
+    <a className="auth-submit" style={{ textDecoration: "none", alignSelf: "stretch" }} href={appSignUpLink("", values.email)}><span>{ENQUIRY_ACCOUNT_PROMPT}</span><UserPlus aria-hidden size={18} /></a>
+    <p className="enquiry-help">Use {values.email.trim()} so your property is added to your account.</p>
   </div>;
 
   const pending = uploads.filter(u => u.progress < 1).length;
@@ -111,14 +123,11 @@ export function EnquiryForm({ token, name, email, files }: { token: string; name
       <Field id="enquiry-fullName" label="Full name" help="This is your name, not a company name." required error={errors.fullName} icon={<User aria-hidden size={17} className="auth-control-icon" />}>
         <input {...input("fullName")} autoComplete="name" maxLength={200} />
       </Field>
-      <Field id="enquiry-companyName" label="Company name" help="If the property is owned in a company." error={errors.companyName} icon={<Building2 aria-hidden size={17} className="auth-control-icon" />}>
-        <input {...input("companyName")} autoComplete="organization" maxLength={200} />
-      </Field>
       <div className="enquiry-pair">
-        <Field id="enquiry-email" label="Email" required error={errors.email} icon={<Mail aria-hidden size={17} className="auth-control-icon" />}>
+        <Field id="enquiry-email" label="Email" help="We send your estimate here." required error={errors.email} icon={<Mail aria-hidden size={17} className="auth-control-icon" />}>
           <input {...input("email")} type="email" autoComplete="email" maxLength={320} spellCheck={false} autoCapitalize="none" />
         </Field>
-        <Field id="enquiry-phone" label="Contact number" required error={errors.phone} icon={<Phone aria-hidden size={17} className="auth-control-icon" />}>
+        <Field id="enquiry-phone" label="Contact number" help="Optional." error={errors.phone} icon={<Phone aria-hidden size={17} className="auth-control-icon" />}>
           <input {...input("phone")} type="tel" autoComplete="tel" maxLength={30} placeholder="07700 900123" />
         </Field>
       </div>
@@ -136,10 +145,6 @@ export function EnquiryForm({ token, name, email, files }: { token: string; name
         <Field id="enquiry-bedrooms" label="No. of bedrooms" required error={errors.bedrooms}><select {...input("bedrooms")}><option value="">–</option>{ROOMS.map(n => <option key={n}>{n}</option>)}</select></Field>
         <Field id="enquiry-wcs" label="No. of WCs" required error={errors.wcs}><select {...input("wcs")}><option value="">–</option>{ROOMS.map(n => <option key={n}>{n}</option>)}</select></Field>
         <Field id="enquiry-bathrooms" label="No. of full bathrooms" required error={errors.bathrooms}><select {...input("bathrooms")}><option value="">–</option>{ROOMS.map(n => <option key={n}>{n}</option>)}</select></Field>
-      </div>
-      <div className="enquiry-pair">
-        <Field id="enquiry-parking" label="Parking" help="Please specify if this is free, public or private." error={errors.parking}><input {...input("parking")} maxLength={300} /></Field>
-        <Field id="enquiry-garden" label="Garden" help="Please specify if this is private, public or shared." error={errors.garden}><input {...input("garden")} maxLength={300} /></Field>
       </div>
       <div className="auth-field enquiry-field">
         <label htmlFor="enquiry-files">Please upload any photos/videos of the property below</label>
@@ -167,17 +172,18 @@ export function EnquiryForm({ token, name, email, files }: { token: string; name
     </section>
 
     <section className="enquiry-section">
-      <h2><span>3</span>Services</h2>
-      <Choice id="shortLet" label="Is the property currently operating as a short-term let?" value={values.shortLet} onChange={set("shortLet")} error={errors.shortLet} />
-      <Choice id="furnishQuote" label="Would you like us to provide a quote to furnish the property?" value={values.furnishQuote} onChange={set("furnishQuote")} error={errors.furnishQuote} />
-      <Choice id="compliance" label="Would you like us to handle your compliance and licensing?" value={values.compliance} onChange={set("compliance")} error={errors.compliance} />
+      <h2><span>3</span>About you</h2>
+      <Field id="enquiry-enquiryType" label={STAGE_LABEL} help="There is no wrong answer!" required error={errors.enquiryType}>
+        <select {...input("enquiryType")}><option value="">Choose…</option>{ENQUIRY_TYPES.map(t => <option key={t}>{t}</option>)}</select>
+      </Field>
       <Field id="enquiry-startWhen" label="When would you like to get started?" error={errors.startWhen}>
         <select {...input("startWhen")}><option value="">Choose…</option>{START_WHEN.map(t => <option key={t}>{t}</option>)}</select>
       </Field>
-      <Field id="enquiry-notes" label="Is there anything else you'd like us to know?" error={errors.notes}><textarea {...input("notes")} rows={4} maxLength={3000} /></Field>
-      <Field id="enquiry-enquiryType" label="How would you best describe your enquiry? (There is no wrong answer!)" required error={errors.enquiryType}>
-        <select {...input("enquiryType")}><option value="">Choose…</option>{ENQUIRY_TYPES.map(t => <option key={t}>{t}</option>)}</select>
+      <Field id="enquiry-heardFrom" label={HEARD_FROM_LABEL} required error={errors.heardFrom}>
+        <select {...input("heardFrom")}><option value="">Choose…</option>{HEARD_FROM.map(t => <option key={t}>{t}</option>)}</select>
       </Field>
+      <Field id="enquiry-referral" label={REFERRAL_LABEL} help={REFERRAL_HELP} error={errors.referral}><input {...input("referral")} maxLength={300} /></Field>
+      <Field id="enquiry-notes" label="Is there anything else you'd like us to know?" error={errors.notes}><textarea {...input("notes")} rows={4} maxLength={3000} /></Field>
     </section>
 
     {error && <p role="alert" className="auth-alert">{error}</p>}

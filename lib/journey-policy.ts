@@ -71,6 +71,11 @@ export const journeyActionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('makeLive'),...base,listingLinks:z.array(z.object({platform:z.enum(['Airbnb','Booking.com','Direct','Comfy Workers']),url:https}).strict()).min(1).max(10)}).strict(),
 ]);
 export type JourneyAction=z.infer<typeof journeyActionSchema>;
+// Not proceeding needs a reason (Alex's onboarding framework): the app, the estimate page, the server and the database
+// (migration 20261025200000) all refuse a decline without one, with these words.
+export const DECLINE_REASON_MESSAGE='Tell us why you are not going ahead';
+export const DECLINE_REASON_MIN=3;
+export const declineReasonMissing=(v:{decision?:unknown;feedback?:unknown})=>v.decision==='decline'&&String(v.feedback??'').trim().length<DECLINE_REASON_MIN;
 export const journeyReadSchema=z.object({propertyId:id.optional()}).strict();
 // The work list, or one work item by its id (opened from an update, migration 20261017300000).
 export const operationsReadSchema=z.union([

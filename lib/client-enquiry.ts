@@ -20,6 +20,13 @@ export const ENQUIRY_TYPES = [
   'Something else',
 ] as const;
 export const YES_NO = ['yes', 'no'] as const;
+// The open form (Alex's onboarding framework, migration 20261025200000): how they heard about us, and who referred them.
+export const HEARD_FROM = ['Google', 'Social media', 'Airbnb or Booking.com', 'Referral from a friend or client', 'Other'] as const;
+export const HEARD_FROM_LABEL = 'How did you hear about us?';
+export const REFERRAL_LABEL = 'Referral';
+export const REFERRAL_HELP = 'If someone referred you, who was it? (optional)';
+// enquiryType is shown as "Stage you're at": the same stored answer and choices, so older forms read as before.
+export const STAGE_LABEL = 'Stage you’re at';
 
 const text = (max: number) => z.string().trim().max(max);
 const required = (label: string, max: number) => z.string().trim().min(1, `Add ${label}`).max(max);
@@ -33,7 +40,8 @@ export const enquiryAnswersSchema = z.object({
   fullName: required('your name', 200).refine(v => v.length >= 2, 'Add your name'),
   companyName: text(200).optional(),
   email: z.string().trim().email('Enter a valid email address').max(320),
-  phone: ukPhone,
+  // Optional since the open form (20261025200000): a number helps, but the email is how we reach them.
+  phone: z.union([z.literal(''), ukPhone]).optional(),
   propertyAddress: required('the property address', 1000).refine(v => v.length >= 5, 'Add the full property address'),
   propertyType: required('the property type', 120),
   bedrooms: count('bedrooms'),
@@ -42,13 +50,19 @@ export const enquiryAnswersSchema = z.object({
   parking: text(300).optional(),
   garden: text(300).optional(),
   mediaLink: z.union([z.literal(''), https]).optional(),
-  shortLet: yesNo('Is the property currently operating as a short-term let?'),
-  furnishQuote: yesNo('Would you like us to provide a quote to furnish the property?'),
-  compliance: yesNo('Would you like us to handle your compliance and licensing?'),
+  // The services questions are no longer on the open form; answers from older forms are still taken.
+  shortLet: yesNo('Is the property currently operating as a short-term let?').optional(),
+  furnishQuote: yesNo('Would you like us to provide a quote to furnish the property?').optional(),
+  compliance: yesNo('Would you like us to handle your compliance and licensing?').optional(),
   startWhen: text(200).optional(),
   notes: text(3000).optional(),
-  enquiryType: required('how you would describe your enquiry', 200),
+  enquiryType: required('the stage you’re at', 200),
+  heardFrom: z.enum(HEARD_FROM, { errorMap: () => ({ message: 'Tell us how you heard about us' }) }).optional(),
+  referral: text(300).optional(),
 }).strict();
+// What the form sends now: "How did you hear about us?" is required there (the database takes answers without it, from
+// forms opened before the change).
+export const formAnswersSchema = enquiryAnswersSchema.extend({ heardFrom: z.enum(HEARD_FROM, { errorMap: () => ({ message: 'Tell us how you heard about us' }) }) });
 // Forms answered before migration 20261020800000 also have a correspondence address and "Are you an existing client?" (Alex: both
 // questions removed). They still show on the enquiry; new forms never send them.
 // An owner's enquiry from the app (migration 20261022300000) is stored the same way, with their name and sign-in email as
@@ -58,6 +72,7 @@ export const storedEnquiryAnswersSchema = enquiryAnswersSchema.extend({
   correspondenceAddress: text(1000).optional(), existingClient: z.enum(YES_NO).optional(),
   fullName: text(200), email: text(320), phone: text(30).optional(), wcs: count('WCs').optional(),
   shortLet: z.enum(YES_NO).optional(), furnishQuote: z.enum(YES_NO).optional(), compliance: z.enum(YES_NO).optional(), enquiryType: text(200).optional(),
+  heardFrom: text(200).optional(),
 });
 export type EnquiryAnswers = z.infer<typeof storedEnquiryAnswersSchema>;
 
@@ -84,7 +99,8 @@ export const enquiryInviteSchema = z.object({
 
 export const ENQUIRY_STATUSES = ['sent', 'opened', 'received', 'valuing', 'closed'] as const;
 export const DUPLICATE_REASONS = ['same_address', 'existing_owner', 'same_contact', 'existing_client'] as const;
-export const ENQUIRY_SOURCES = ['form', 'owner_app', 'team'] as const;
+// 'public': the open form on the website, with no link from the team (migration 20261025200000).
+export const ENQUIRY_SOURCES = ['form', 'owner_app', 'team', 'public'] as const;
 export type EnquiryStatus = (typeof ENQUIRY_STATUSES)[number];
 const fileSchema = z.object({ id: z.string().uuid(), name: z.string(), mime: z.string(), bytes: z.number() });
 export const clientEnquirySchema = z.object({
@@ -155,7 +171,11 @@ export const isOwnerEnquiry = (e: Pick<ClientEnquiry, 'source'>) => e.source ===
 export const TEAM_ENQUIRY_LABEL = 'Added by the team';
 export const TEAM_ENQUIRY_NOTE = 'Added by hand by the team, for example after a phone call. Check the details, then value it as any answered form.';
 export const isTeamEnquiry = (e: Pick<ClientEnquiry, 'source'>) => e.source === 'team';
-export const teamEnquiryTag = (e: Pick<ClientEnquiry, 'sentByName'>) => e.sentByName?.trim() ? `${TEAM_ENQUIRY_LABEL} · ${e.sentByName.trim()}` : TEAM_ENQUIRY_LABEL;
+// An enquiry from the open form on the website (migration 20261025200000): nobody sent it, so no sender's name.
+export const PUBLIC_ENQUIRY_LABEL = 'From the website';
+export const PUBLIC_ENQUIRY_NOTE = 'Sent from the enquiry form on the website, with no link from the team. When they create an account with the same email, the property moves onto it.';
+export const isPublicEnquiry = (e: Pick<ClientEnquiry, 'source'>) => e.source === 'public';
+export const teamEnquiryTag =(e: Pick<ClientEnquiry, 'sentByName'>) => e.sentByName?.trim() ? `${TEAM_ENQUIRY_LABEL} · ${e.sentByName.trim()}` : TEAM_ENQUIRY_LABEL;
 export const isPriority = (e: Pick<ClientEnquiry, 'answers'>, step?: EnquiryStep) => e.answers?.startWhen === PRIORITY_START && step !== 'closed' && step !== 'declined';
 // The list keeps its order (newest first), except that within each step the priority enquiries take that step's first places.
 export function priorityFirst<T extends Pick<ClientEnquiry, 'answers'>>(items: T[], stepOf: (e: T) => EnquiryStep): T[] {
@@ -180,7 +200,8 @@ export function valuationDraft(a: EnquiryAnswers) {
   const firstLine = parts.length > 1 && parts[0].length <= 10 && /\d/.test(parts[0]) && /[a-z]{3}/i.test(parts[1]) ? `${parts[1]} (${parts[0]})` : parts[0] ?? a.propertyAddress;
   // An owner's enquiry from the app has no enquiry type or services answers, so those lines are left out.
   const notes = [
-    a.enquiryType ? `Enquiry: ${a.enquiryType}` : '',
+    a.enquiryType ? `Stage: ${a.enquiryType}` : '',
+    a.heardFrom ? `Heard about us: ${a.heardFrom}${a.referral ? `, referred by ${a.referral}` : ''}` : '',
     a.shortLet || a.furnishQuote || a.compliance ? `Short-term let now: ${yes(a.shortLet)} · Furnishing quote: ${yes(a.furnishQuote)} · Compliance and licensing: ${yes(a.compliance)}` : '',
     a.startWhen ? `Start: ${a.startWhen}` : '',
     a.correspondenceAddress ? `Correspondence address: ${a.correspondenceAddress.replace(/\s*\n\s*/g, ', ')}` : '',
