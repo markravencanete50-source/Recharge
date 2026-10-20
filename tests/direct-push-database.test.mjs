@@ -140,3 +140,48 @@ test('the backend claim hands each pop-up its details; details go after 3 days; 
   await asDatabase();
   assert.equal((await db.query('select count(*)::int n from private.workspace_activity_details')).rows[0].n, 0);
 });
+
+// Lee: notices name people, not labels (20261025500000). The feed said "Guest message · 64/2 Rannoch" with "Guest" below it.
+test('the guest is named in the feed and the pop-up, from the conversation or its stay, and the name outlasts the pop-up details', async () => {
+  await asDatabase();
+  const prop = (await db.query("insert into public.workspace_properties(name,address,region,created_by,request_id) values('64/2 Rannoch','64/2 Rannoch Road, Edinburgh','Edinburgh',$1,gen_random_uuid()) returning id", [users[MARK]])).rows[0].id;
+  await db.query("insert into public.workspace_property_assignments(property_id,user_id,assignment,granted_by) values($1,$2,'staff',$3)", [prop, users[ALEX], users[MARK]]);
+  const stay = (await db.query(`insert into private.workspace_reservations(property_id,reference,check_in,check_out,status,source,created_by,channel,channel_reference)
+    values($1,'HA-NAMED-1','2026-11-12','2026-11-15','confirmed','manual',$2,'airbnb','HMNAMED1') returning id`, [prop, users[MARK]])).rows[0].id;
+  await db.query("insert into private.workspace_stay_contacts(reservation_id,first_name) values($1,'Priya')", [stay]);
+  const ingest = (threadRef, extra) => db.query('select private.workspace_guest_messages_ingest($1)', [{ source: 'feed', messages: [
+    { externalId: 'named-' + ++n, threadRef, channel: 'airbnb', direction: 'guest', sentAt: new Date(Date.now() - 30000 + n * 1000).toISOString(), body: 'Hello there', propertyId: prop, ...extra }] }]);
+  // The conversation has no name of its own: the first name on its stay, by the booking code.
+  await ingest('named-by-stay', { reservationRef: 'hmnamed1', checkIn: '2026-11-12', checkOut: '2026-11-15' });
+  assert.equal((await popup(MARK, 'guest.message')).who, 'Priya', 'the pop-up is titled with the stay\'s first name');
+  // The conversation's own name comes first.
+  await ingest('named-by-thread', { guestName: 'Rebecca Hall', checkIn: '2026-11-12', checkOut: '2026-11-15' });
+  assert.equal((await popup(MARK, 'guest.message')).who, 'Rebecca Hall');
+  // Neither: no name, and the app says "Guest".
+  await ingest('named-nobody', {});
+  assert.equal((await popup(MARK, 'guest.message')).who, undefined);
+  await asDatabase();
+  const kept = (await db.query(`select g.guest_name from private.workspace_guest_notices g join private.workspace_guest_threads t on t.id=g.guest_thread_id
+    where t.thread_ref=any($1) order by t.thread_ref`, [['named-by-stay', 'named-by-thread', 'named-nobody']])).rows.map(r => r.guest_name);
+  assert.deepEqual(kept, ['Priya', 'Rebecca Hall', null]);
+  // The pop-up details go after 3 days; the feed still names the guest.
+  await db.exec("update private.workspace_activity_details set created_at=now()-interval '4 days'");
+  await db.exec("delete from private.workspace_activity_details where created_at<now()-interval '3 days'");
+  await as(MARK);
+  const feed = (await db.query('select public.workspace_notifications_read(null) r')).rows[0].r.filter(x => x.event_type === 'guest.message' && x.property_id === prop);
+  assert.deepEqual(feed.map(x => [x.guest_name ?? null, x.guest_channel, x.guest_check_in, x.guest_check_out, x.property_name]), [
+    [null, 'airbnb', null, null, '64/2 Rannoch'],
+    ['Rebecca Hall', 'airbnb', '2026-11-12', '2026-11-15', '64/2 Rannoch'],
+    ['Priya', 'airbnb', '2026-11-12', '2026-11-15', '64/2 Rannoch']]);
+  // Each row names its conversation, so a tap opens it.
+  const threads = (await db.query("select public.workspace_notifications_read(null) r")).rows[0].r.filter(x => x.event_type === 'guest.message' && x.property_id === prop).map(x => x.guest_thread_id);
+  await asDatabase();
+  assert.deepEqual(threads, (await db.query("select id from private.workspace_guest_threads where thread_ref=any($1) order by array_position($1,thread_ref)", [['named-nobody', 'named-by-thread', 'named-by-stay']])).rows.map(r => r.id));
+  // A Stays person on the property sees the name too (guest names are for admins, Stays and Accounts).
+  await as(ALEX);
+  const stays = (await db.query('select public.workspace_notifications_read(null) r')).rows[0].r.filter(x => x.event_type === 'guest.message' && x.property_id === prop);
+  assert.deepEqual(stays.map(x => x.guest_name ?? null), [null, 'Rebecca Hall', 'Priya']);
+  // Nobody signed in reads the kept names directly.
+  await assert.rejects(db.query('select * from private.workspace_guest_notices'), /permission denied/);
+  await assert.rejects(db.query('select private.workspace_guest_thread_name(gen_random_uuid())'), /permission denied/);
+});

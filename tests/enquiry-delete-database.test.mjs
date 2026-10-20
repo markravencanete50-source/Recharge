@@ -429,7 +429,7 @@ test('the screen asks first, for admins only, and the server removes the stored 
 
 test('the migration runs twice without change', async () => {
   const sql = await fs.readFile('supabase/migrations/' + MIGRATION, 'utf8');
-  const defs = async () => (await owner("select pg_get_functiondef('private.workspace_teams_action(jsonb)'::regprocedure)||pg_get_functiondef('private.workspace_client_enquiry_delete(jsonb)'::regprocedure)||pg_get_functiondef('private.workspace_enquiry_blocker(uuid,uuid[],uuid)'::regprocedure)||pg_get_functiondef('private.workspace_guest_message_notices()'::regprocedure)||pg_get_functiondef('private.integration_push_details(bigint)'::regprocedure) t"))[0].t;
+  const defs = async () => (await owner("select pg_get_functiondef('private.workspace_teams_action(jsonb)'::regprocedure)||pg_get_functiondef('private.workspace_client_enquiry_delete(jsonb)'::regprocedure)||pg_get_functiondef('private.workspace_enquiry_blocker(uuid,uuid[],uuid)'::regprocedure)||pg_get_functiondef('private.workspace_guest_message_notices()'::regprocedure)||pg_get_functiondef('private.integration_push_details(bigint)'::regprocedure)||pg_get_functiondef('private.workspace_notifications_read(bigint)'::regprocedure)||pg_get_functiondef('private.workspace_guest_thread_name(uuid)'::regprocedure) t"))[0].t;
   const before = await defs();
   await db.exec('reset role');
   await db.exec(sql);
@@ -444,4 +444,7 @@ test('the migration runs twice without change', async () => {
   assert.equal(before.split('/* lead files queued: 20261025500000 */').length, 2, 'lead files queued once');
   assert.equal(before.split('/* guest push thread: 20261025500000 */').length, 2, 'guest conversation kept once');
   assert.equal(before.split('/* guest push details: 20261025500000 */').length, 2, 'guest conversation handed on once');
+  // The guest's name (Lee: notices name people): the pop-up's sender, kept on the notice, and in the feed read, each once.
+  for (const mark of ['guest notice sender', 'guest notice kept', 'guest notice feed']) assert.equal(before.split(`/* ${mark}: 20261025500000 */`).length, 2, mark + ' once');
+  assert.equal((await owner("select count(*)::int n from private.workspace_guest_notices g group by g.event_id order by n desc limit 1"))[0]?.n ?? 1, 1, 'one kept name per notice');
 });

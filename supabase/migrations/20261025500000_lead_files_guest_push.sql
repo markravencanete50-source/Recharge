@@ -27,17 +27,61 @@
 --    furnishing quote, or completed work that is not part of onboarding (a clean, a repair, a routine visit done).
 --    Past the agreement (signed, a set-up form, an invoice, or an inspection stage) the request must carry
 --    confirm: 'DELETE' (the person types it in the app). The access history records whether it was signed and invoiced.
+-- 4. Lee: notices name people, not labels. The Updates feed said "Guest message, 64/2 Rannoch" with "Guest" below it.
+--  * Each guest message notice now keeps, for good, its guest conversation and the guest's name as it was when the message
+--    came in (new table private.workspace_guest_notices; private.workspace_activity_details is cleared after 3 days). The
+--    name is the conversation's guest name (Hostaway's), else the first name on the stay the conversation is about
+--    (private.workspace_stay_contacts, matched by the booking code or the property and dates): private.workspace_guest_thread_name.
+--  * The pop-up's sender (activity_details.who) uses the same name, so the pop-up and the feed agree.
+--  * The feed read (private.workspace_notifications_read) returns guest_name (the conversation's current name, else the one
+--    kept), guest_channel, guest_check_in and guest_check_out for a guest message, and guest_name only to those who may see
+--    guest names (private.workspace_guest_name_visible), and guest_thread_id, so a tap on the row opens that conversation. The app titles the row "<guest>, <property>" with "Guest message,
+--    Airbnb, 12 to 15 Oct" below (lib/notice-details.ts); a notice from before this, with no name, says "Guest".
+--  * Guest message notices of the last 3 days are filled in from their pop-up details, once.
 -- Patched by anchor (sentinel, an anchor that must occur once): private.workspace_client_enquiry_delete(jsonb),
--- private.workspace_enquiry_blocker(uuid,uuid[],uuid), private.workspace_guest_message_notices() and
--- private.integration_push_details(bigint). The bucket check is replaced by name with the wider one; one nullable column
--- is added. No DROP of a table; the only rows deleted are the deleted property's own, inside the admin's delete. Safe to
--- run twice.
+-- private.workspace_enquiry_blocker(uuid,uuid[],uuid), private.workspace_guest_message_notices(),
+-- private.integration_push_details(bigint) and private.workspace_notifications_read(bigint). The bucket check is replaced
+-- by name with the wider one; one nullable column and one table are added. No DROP of a table; the only rows deleted are
+-- the deleted property's own, inside the admin's delete. Safe to run twice.
 
 alter table private.workspace_storage_removals drop constraint if exists workspace_storage_removals_bucket_check;
 alter table private.workspace_storage_removals add constraint workspace_storage_removals_bucket_check check(bucket in ('enquiry-files','lead-files'));
 
 alter table private.workspace_activity_details add column if not exists guest_thread_id uuid references private.workspace_guest_threads(id) on delete set null;
 create index if not exists workspace_activity_details_guest_thread_idx on private.workspace_activity_details(guest_thread_id);
+
+-- 4. Who wrote a guest message notice, kept as long as the notice.
+create table if not exists private.workspace_guest_notices (
+ event_id bigint primary key references public.workspace_activity(id) on delete cascade,
+ guest_thread_id uuid references private.workspace_guest_threads(id) on delete set null,
+ guest_name text check(guest_name is null or char_length(guest_name) between 1 and 120),
+ created_at timestamptz not null default now()
+);
+create index if not exists workspace_guest_notices_thread_idx on private.workspace_guest_notices(guest_thread_id);
+alter table private.workspace_guest_notices enable row level security;
+revoke all on private.workspace_guest_notices from public,anon,authenticated,service_role;
+
+-- The guest's name for a conversation: its own (from Hostaway or the channel), else the first name on its stay, matched by the
+-- booking code, else by the property and the dates. Null when neither is known.
+create or replace function private.workspace_guest_thread_name(guest_thread uuid) returns text language sql stable security definer set search_path='' as $fn$
+ select coalesce(
+  (select nullif(btrim(t.guest_name),'') from private.workspace_guest_threads t where t.id=guest_thread),
+  (select nullif(btrim(c.first_name),'') from private.workspace_guest_threads t
+    join private.workspace_reservations r on (t.property_id is null or r.property_id=t.property_id)
+     and ((t.reservation_ref is not null and upper(btrim(t.reservation_ref))=any(private.workspace_stay_codes(r.channel_reference,r.reference)))
+      or (t.property_id is not null and t.check_in is not null and r.check_in=t.check_in and r.check_out=t.check_out))
+    join private.workspace_stay_contacts c on c.reservation_id=r.id
+   where t.id=guest_thread and nullif(btrim(c.first_name),'') is not null
+   order by (t.reservation_ref is not null and upper(btrim(t.reservation_ref))=any(private.workspace_stay_codes(r.channel_reference,r.reference))) desc,c.updated_at desc
+   limit 1))
+$fn$;
+
+-- Guest message notices still within their 3 days of pop-up details, filled in once.
+insert into private.workspace_guest_notices(event_id,guest_thread_id,guest_name,created_at)
+ select d.event_id,d.guest_thread_id,left(nullif(btrim(coalesce(d.who,private.workspace_guest_thread_name(d.guest_thread_id))),''),120),a.created_at
+ from private.workspace_activity_details d join public.workspace_activity a on a.id=d.event_id
+ where a.event_type='guest.message'
+on conflict(event_id) do nothing;
 
 do $patch$
 declare
@@ -134,7 +178,31 @@ declare
   continue when r.conrelid=any(array['private.workspace_bank_details','private.workspace_routine_plans','private.workspace_routine_visits']::regclass[]);
   continue when r.conrelid='public.workspace_invoices'::regclass and r.confrelid='public.workspace_properties'::regclass
    and not exists(select 1 from public.workspace_invoices i where i.property_id=prop and i.module_id<>'onboarding-invoices');$q$,
-   $q$/* onboarding delete blockers: 20261025500000 */$q$]
+   $q$/* onboarding delete blockers: 20261025500000 */$q$],
+  -- 4. The pop-up's sender is the guest's name, from the conversation or its stay.
+  ['private.workspace_guest_message_notices()',
+   $q$(select left(t.guest_name,200) from private.workspace_guest_threads t where t.source=m.source and t.thread_ref=m.thread_ref)$q$,
+   $q$left(private.workspace_guest_thread_name((select t.id from private.workspace_guest_threads t where t.source=m.source and t.thread_ref=m.thread_ref)),200)/* guest notice sender: 20261025500000 */$q$,
+   $q$/* guest notice sender: 20261025500000 */$q$],
+  -- The notice keeps its conversation and the guest's name for good.
+  ['private.workspace_guest_message_notices()',
+   $q$insert into private.workspace_notification_outbox(user_id,event_id)$q$,
+   $q$/* guest notice kept: 20261025500000 */ insert into private.workspace_guest_notices(event_id,guest_thread_id,guest_name)
+    values(ev,(select t.id from private.workspace_guest_threads t where t.source=m.source and t.thread_ref=m.thread_ref),
+     left(private.workspace_guest_thread_name((select t.id from private.workspace_guest_threads t where t.source=m.source and t.thread_ref=m.thread_ref)),120))
+    on conflict do nothing;
+   insert into private.workspace_notification_outbox(user_id,event_id)$q$,
+   $q$/* guest notice kept: 20261025500000 */$q$],
+  -- The feed read names the guest (to those who may see guest names), with the channel and the stay's dates.
+  ['private.workspace_notifications_read(bigint)',
+   $q$'available_in_app' as status from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id$q$,
+   $q$case when a.event_type='guest.message' and private.workspace_guest_name_visible(actor) then coalesce(nullif(btrim(gt.guest_name),''),gn.guest_name) end as guest_name,
+  case when a.event_type='guest.message' then gt.channel end as guest_channel,case when a.event_type='guest.message' then gt.check_in end as guest_check_in,
+  case when a.event_type='guest.message' then gt.check_out end as guest_check_out,case when a.event_type='guest.message' then gn.guest_thread_id end as guest_thread_id,
+  /* guest notice feed: 20261025500000 */
+  'available_in_app' as status from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id
+  left join private.workspace_guest_notices gn on gn.event_id=a.id left join private.workspace_guest_threads gt on gt.id=gn.guest_thread_id$q$,
+   $q$/* guest notice feed: 20261025500000 */$q$]
  ];
  definition text;hits integer;
 begin
@@ -149,5 +217,6 @@ begin
  end loop;
 end $patch$;
 
-revoke all on function private.workspace_client_enquiry_delete(jsonb),private.workspace_guest_message_notices(),private.integration_push_details(bigint)
+revoke all on function private.workspace_client_enquiry_delete(jsonb),private.workspace_guest_message_notices(),private.integration_push_details(bigint),
+ private.workspace_guest_thread_name(uuid)
  from public,anon,authenticated,service_role;
