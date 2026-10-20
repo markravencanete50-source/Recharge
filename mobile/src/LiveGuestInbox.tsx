@@ -24,6 +24,7 @@ import type { PropertyView } from "../../lib/workspace-view";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { canReportRepair } from "../../lib/repairs-live";
 import { ReportSheet } from "./LiveRepairs";
+import { clearGuestNotices, onGuestRead, takeGuestReads } from "./Notifications";
 
 // The guest inbox (the Guests tab of Messages): every conversation with guests, the longest wait first, filtered
 // by Needs a reply, Engaged or Closed and by one search box. A conversation opens in place: beside the
@@ -136,7 +137,7 @@ function LogMessageSheet({ p, properties, onClose, onDone }: { p: Palette; prope
 type Loaded = ReturnType<typeof inboxThreadSchema.parse>;
 // One guest conversation, open in place. `onBack` (phones) puts the list back.
 // account: who is reading, for "Report a repair" (Stays and admins), which opens the report sheet prefilled from the conversation.
-function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged }: { p: Palette; threadId: string; properties: PropertyView[]; account?: WorkspaceAccount; onBack?: () => void; onChanged: () => void }) {
+function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, focusReply = false }: { p: Palette; threadId: string; properties: PropertyView[]; account?: WorkspaceAccount; onBack?: () => void; onChanged: () => void; focusReply?: boolean }) {
   const celebrate = useCelebrate();
   const [data, setData] = useState<Loaded | null>(null);
   const [reply, setReply] = useState(""), [guestText, setGuestText] = useState("");
@@ -199,6 +200,13 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged }
     if (sent) sendId.current = null;
   }
   const wait = t && t.status === "open" && data ? waitGrade(t.waitingSince, data.targets) : null;
+  // Opened from a pop-up's Reply: the reply box is ready to type in once the conversation has loaded.
+  const replyBox = useRef<TextInput>(null), replied = useRef(false), canReply = t?.status === "open";
+  useEffect(() => {
+    if (!focusReply || !canReply || replied.current) return;
+    replied.current = true;
+    setTimeout(() => replyBox.current?.focus(), 80);
+  }, [focusReply, canReply]);
   return (
     <View style={{ gap: 12 }}>
       <ThreadHeader p={p} onBack={onBack}>
@@ -244,7 +252,7 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged }
           <View style={{ gap: 6 }}>
             <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Your reply</Text>
             <SavedReplies p={p} audience="guest" fill={{ name: t.guestName, property: t.propertyName }} onInsert={text => setReply(current => current.trim() ? current.trimEnd() + "\n\n" + text : text)} />
-            <TextInput value={reply} onChangeText={setReply} multiline placeholder={t.source === "manual" ? `Write it here, then send it on ${CHANNEL_LABEL[t.channel]}` : "Write your reply"} placeholderTextColor={p.muted} accessibilityLabel="Your reply"
+            <TextInput ref={replyBox} value={reply} onChangeText={setReply} multiline placeholder={t.source === "manual" ? `Write it here, then send it on ${CHANNEL_LABEL[t.channel]}` : "Write your reply"} placeholderTextColor={p.muted} accessibilityLabel="Your reply"
               style={{ minHeight: 88, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, color: p.text, backgroundColor: p.background, textAlignVertical: "top", fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
           </View>
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
@@ -290,32 +298,47 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged }
 // most recent few hundred; nothing is sent to the server.
 const SEEN_KEY = "rc-guest-inbox-seen";
 function useSeenThreads() {
-  const [seen, setSeen] = useState<Record<string, string>>({});
+  const [seen, setSeen] = useState<Record<string, string>>({}), [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let active = true;
     AsyncStorage.getItem(SEEN_KEY).then(value => {
       if (!active || !value) return;
       try { const parsed = JSON.parse(value) as unknown; if (parsed && typeof parsed === "object") setSeen(parsed as Record<string, string>); } catch { /* start afresh */ }
-    }).catch(() => undefined);
+    }).catch(() => undefined).finally(() => { if (active) setLoaded(true); });
     return () => { active = false; };
   }, []);
-  const mark = useCallback((id: string) => setSeen(current => {
-    const next = Object.fromEntries(Object.entries({ ...current, [id]: new Date().toISOString() }).sort((a, b) => b[1].localeCompare(a[1])).slice(0, 400));
+  // `at`: when it was read (a pop-up's Mark as read, which can come in later); an earlier time never replaces a later one.
+  const mark = useCallback((id: string, at = new Date().toISOString()) => setSeen(current => {
+    if (current[id] && current[id] >= at) return current;
+    const next = Object.fromEntries(Object.entries({ ...current, [id]: at }).sort((a, b) => b[1].localeCompare(a[1])).slice(0, 400));
     void AsyncStorage.setItem(SEEN_KEY, JSON.stringify(next)).catch(() => undefined);
     return next;
   }), []);
-  return { seen, mark };
+  // Conversations marked read from a pop-up on this browser (mobile/web-static/sw.js): kept by the browser until the inbox opens,
+  // and passed on straight away while it is open. Applied once the saved times have loaded, so they are not overwritten.
+  useEffect(() => {
+    if (!loaded) return;
+    let active = true;
+    void takeGuestReads().then(read => { if (active) for (const [id, at] of Object.entries(read)) mark(id, at); });
+    const stop = onGuestRead((id, at) => { mark(id, at); void takeGuestReads(); });
+    return () => { active = false; stop(); };
+  }, [loaded, mark]);
+  return { seen, mark, loaded };
 }
 
 // emails: Messages > Guest emails (guestrelations@) shows only email conversations; Guests shows the rest (Lee, 14 October).
-export function GuestInbox({ palette: p, properties, desktop = false, onChanged, openThread, emails = false, account }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void; openThread?: string; emails?: boolean; account?: WorkspaceAccount }) {
+// openThread: the conversation to open (a pop-up's tap); focusReply: its Reply button, so the reply box is ready to type in.
+export function GuestInbox({ palette: p, properties, desktop = false, onChanged, openThread, focusReply = false, emails = false, account }: { palette: Palette; properties: PropertyView[]; desktop?: boolean; onChanged?: () => void; openThread?: string; focusReply?: boolean; emails?: boolean; account?: WorkspaceAccount }) {
   // Every recent conversation is read once; the status and the search filter it here. Newest message first (byLatest).
   const [status, setStatus] = useState<MessageStatus>("reply"), [query, setQuery] = useState("");
   const [data, setData] = useState<ReturnType<typeof inboxListSchema.parse> | null>(null);
   const [error, setError] = useState(""), [logging, setLogging] = useState(false), [openId, setOpenId] = useState<string | null>(openThread ?? null);
   const [, setTick] = useState(0);
-  const { seen, mark } = useSeenThreads();
-  const open = (id: string | null) => { if (id) mark(id); else if (openId) mark(openId); setOpenId(id); };
+  const { seen, mark, loaded: seenLoaded } = useSeenThreads();
+  const open = (id: string | null) => { if (id) { mark(id); clearGuestNotices(id); } else if (openId) mark(openId); setOpenId(id); };
+  // Opened from a pop-up: it counts as read (once the saved times have loaded), and its pop-up goes.
+  useEffect(() => { if (openThread) clearGuestNotices(openThread); }, [openThread]);
+  useEffect(() => { if (openThread && seenLoaded) mark(openThread); }, [openThread, seenLoaded, mark]);
   const load = useCallback(async () => {
     try { setData(inboxListSchema.parse((await readInbox({ section: "list", status: "all" })).data)); setError(""); }
     catch (e) { setError(message(e)); }
@@ -351,7 +374,7 @@ export function GuestInbox({ palette: p, properties, desktop = false, onChanged,
       )}
     </View>
   );
-  const detail = openId ? <GuestThreadPane key={openId} p={p} threadId={openId} properties={properties} account={account} onBack={desktop ? undefined : () => open(null)} onChanged={() => { void load(); onChanged?.(); }} /> : null;
+  const detail = openId ? <GuestThreadPane key={openId} p={p} threadId={openId} properties={properties} account={account} focusReply={focusReply && openId === openThread} onBack={desktop ? undefined : () => open(null)} onChanged={() => { void load(); onChanged?.(); }} /> : null;
   return (
     <>
       <MessagesSplit p={p} desktop={desktop} list={list} detail={detail} />

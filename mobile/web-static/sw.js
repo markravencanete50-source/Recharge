@@ -54,11 +54,12 @@ function noticeFor(data, shown, now) {
   lines = lines.slice(-MAX_LINES);
   total = Math.max(total, lines.length);
   const conversation = typeof data.conversation === "string" && CONVERSATION.test(data.conversation) ? data.conversation : null;
+  const guest = typeof data.guest === "string" && CONVERSATION.test(data.guest) ? data.guest : null;
   return {
     title: total > 1 ? `${thread} (${total > 99 ? "99+" : total} messages)` : thread,
     options: {
       ...options, body: lines.map(l => l.text).join("\n"), timestamp: Math.max(...lines.map(l => l.time || 0), time),
-      data: { url, tag, id, thread, lines, total, conversation },
+      data: { url, tag, id, thread, lines, total, conversation, guest },
       actions: [{ action: "reply", title: "Reply" }, { action: "read", title: "Mark as read" }],
     },
   };
@@ -90,8 +91,7 @@ self.addEventListener("push", event => {
   }));
 });
 // Mark as read: the conversation is marked read for the person signed in on this browser (the same call the app makes when it
-// opens a conversation, with the browser's own sign-in), and the pop-up goes without opening anything. A guest conversation is
-// read on the device that opens it, so there it only closes the pop-up.
+// opens a conversation, with the browser's own sign-in), and the pop-up goes without opening anything.
 function markRead(conversation) {
   if (!conversation) return Promise.resolve();
   return fetch("/api/workspace/chat", {
@@ -99,6 +99,24 @@ function markRead(conversation) {
     body: JSON.stringify({ action: "markRead", conversationId: conversation }),
   }).catch(() => undefined).then(() => self.clients.matchAll({ type: "window", includeUncontrolled: true })).then(list => {
     for (const client of list) client.postMessage({ type: "recharge-push" });
+  });
+}
+// A guest conversation is read on the device (the guest inbox keeps when each was last opened, in this browser's storage), so
+// Mark as read leaves a note here for the app: it is written to this browser's cache storage, which the app reads and clears
+// when its guest inbox next opens, and any open Recharge window is told straight away (mobile/src/LiveGuestInbox.tsx).
+const GUEST_READ_CACHE = "recharge-guest-read", GUEST_READ_KEY = "/workspace/guest-read";
+function markGuestRead(guest, now) {
+  if (!guest) return Promise.resolve();
+  const at = new Date(now).toISOString();
+  const saved = typeof caches === "undefined" ? Promise.resolve() : caches.open(GUEST_READ_CACHE).then(cache => cache.match(GUEST_READ_KEY)
+    .then(found => found ? found.json() : {}).catch(() => ({}))
+    .then(read => {
+      const next = { ...(read && typeof read === "object" && !Array.isArray(read) ? read : {}), [guest]: at };
+      const kept = Object.fromEntries(Object.entries(next).filter(([k, v]) => CONVERSATION.test(k) && typeof v === "string").sort((a, b) => b[1].localeCompare(a[1])).slice(0, 200));
+      return cache.put(GUEST_READ_KEY, new Response(JSON.stringify(kept), { headers: { "Content-Type": "application/json" } }));
+    })).catch(() => undefined);
+  return saved.then(() => self.clients.matchAll({ type: "window", includeUncontrolled: true })).then(list => {
+    for (const client of list) { client.postMessage({ type: "recharge-guest-read", thread: guest, at }); client.postMessage({ type: "recharge-push" }); }
   });
 }
 // Where a tap goes: the place the pop-up is about (the conversation, for a message). Reply opens it with the message box ready.
@@ -110,7 +128,7 @@ function openUrl(data, action) {
 self.addEventListener("notificationclick", event => {
   event.notification.close();
   const data = event.notification.data || {};
-  if (event.action === "read") { event.waitUntil(markRead(data.conversation)); return; }
+  if (event.action === "read") { event.waitUntil(data.guest ? markGuestRead(data.guest, Date.now()) : markRead(data.conversation)); return; }
   const url = openUrl(data, event.action);
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
     const open = list.find(c => new URL(c.url).pathname.startsWith("/workspace"));

@@ -11,7 +11,7 @@ const CONV = '5a1e0000-0000-4000-8000-000000000001';
 const plain = value => JSON.parse(JSON.stringify(value));
 
 // A pretend phone: the notifications on screen (one per tag, as the browser keeps them), the open windows, and what was fetched.
-function phone({ windows = [] } = {}) {
+function phone({ windows = [], caches } = {}) {
   const handlers = {}, screen = new Map(), shown = [], fetched = [], opened = [], messages = [];
   const registration = {
     showNotification: async (title, options) => { const n = { title, ...options, close: () => screen.delete(options.tag) }; screen.set(options.tag, n); shown.push(n); },
@@ -22,7 +22,7 @@ function phone({ windows = [] } = {}) {
     openWindow: async url => { opened.push(url); }, claim: async () => undefined,
   };
   const self = { addEventListener: (type, fn) => { handlers[type] = fn; }, skipWaiting: () => undefined, registration, clients };
-  const context = vm.createContext({ self, URL, Promise, JSON, Math, Number, Array, String, Date, fetch: async (url, init) => { fetched.push([url, init]); return { ok: true }; } });
+  const context = vm.createContext({ self, URL, Promise, JSON, Math, Number, Array, String, Date, Object, Response, ...(caches ? { caches } : {}), fetch: async (url, init) => { fetched.push([url, init]); return { ok: true }; } });
   vm.runInContext(source, context);
   const run = async (type, event) => { let work; handlers[type]({ ...event, waitUntil: p => { work = p; } }); await work; };
   const push = data => run('push', { data: { json: () => data, text: () => JSON.stringify(data) } });
@@ -122,10 +122,58 @@ test('Reply opens the conversation with the message box ready; Mark as read mark
   const [url, init] = p.fetched[0];
   assert.equal(url, '/api/workspace/chat');assert.equal(init.method, 'POST');assert.equal(init.credentials, 'same-origin');
   assert.deepEqual(JSON.parse(init.body), { action: 'markRead', conversationId: CONV });
-  // A guest conversation is read on the device that opens it: the pop-up just goes.
+  // A guest message from before the conversation was sent: the pop-up just goes.
   await p.push(guest('n3', 'Hi', 3));
   await p.click('guest-jack-2-panmure', 'read');
   assert.equal(p.fetched.length, 1);assert.equal(p.screen.size, 0);
+});
+
+// A pretend cache storage, as the browser keeps it for the worker and the page.
+function fakeCaches() {
+  const stores = new Map();
+  return {
+    stores,
+    open: async name => {
+      if (!stores.has(name)) stores.set(name, new Map());
+      const store = stores.get(name);
+      return { match: async key => store.has(key) ? new Response(store.get(key)) : undefined, put: async (key, response) => { store.set(key, await response.text()); }, delete: async key => store.delete(key) };
+    },
+  };
+}
+const GUEST = '6b2f0000-0000-4000-8000-000000000002';
+const guestIn = (id, body, time) => ({ ...guest(id, body, time), url: `/workspace/live?section=inbox&guest=${GUEST}`, tag: 'guest-' + GUEST, guest: GUEST });
+
+test('a guest message opens that guest conversation; Reply readies the reply box; Mark as read marks it read on this device', async () => {
+  const win = { url: 'https://app.example/workspace/live' }, caches = fakeCaches();
+  const p = phone({ caches });
+  await p.push(guestIn('g1', 'Is there a hairdryer?', 1));
+  assert.equal(p.screen.get('guest-' + GUEST).data.guest, GUEST, 'the pop-up keeps its guest conversation');
+  await p.click('guest-' + GUEST);
+  assert.deepEqual(p.opened, [`/workspace/live?section=inbox&guest=${GUEST}`]);
+  await p.push(guestIn('g2', 'And the wifi?', 2));
+  await p.click('guest-' + GUEST, 'reply');
+  assert.deepEqual(p.opened.at(-1), `/workspace/live?section=inbox&guest=${GUEST}&reply=1`);
+  // Mark as read: nothing opens and no team call is made; the browser keeps a note for the guest inbox, and an open window hears now.
+  const q = phone({ caches, windows: [win] });
+  await q.push(guestIn('g3', 'Thanks', 3));
+  await q.click('guest-' + GUEST, 'read');
+  assert.deepEqual(q.opened, []);assert.equal(q.fetched.length, 0);assert.equal(q.screen.size, 0);
+  const note = JSON.parse(caches.stores.get('recharge-guest-read').get('/workspace/guest-read'));
+  assert.deepEqual(Object.keys(note), [GUEST]);
+  assert.ok(Math.abs(Date.parse(note[GUEST]) - Date.now()) < 60_000);
+  const told = plain(q.messages).filter(m => m.type === 'recharge-guest-read');
+  assert.deepEqual(told, [{ type: 'recharge-guest-read', thread: GUEST, at: note[GUEST] }]);
+  // A second conversation joins the note; an id that is not a conversation is ignored.
+  const OTHER = '6b2f0000-0000-4000-8000-000000000003';
+  await q.push({ ...guestIn('g4', 'Hello', 4), tag: 'guest-' + OTHER, guest: OTHER, url: `/workspace/live?section=inbox&guest=${OTHER}` });
+  await q.click('guest-' + OTHER, 'read');
+  assert.deepEqual(Object.keys(JSON.parse(caches.stores.get('recharge-guest-read').get('/workspace/guest-read'))).sort(), [GUEST, OTHER]);
+  assert.equal(q.context.noticeFor({ ...guestIn('g5', 'x', 5), guest: 'not-an-id' }, null, 0).options.data.guest, null);
+  // Without cache storage the window is still told.
+  const r = phone({ windows: [win] });
+  await r.push(guestIn('g6', 'Hi', 6));
+  await r.click('guest-' + GUEST, 'read');
+  assert.equal(plain(r.messages).filter(m => m.type === 'recharge-guest-read').length, 1);
 });
 
 test('a tap opens the conversation in the open Recharge window, or a new one', async () => {

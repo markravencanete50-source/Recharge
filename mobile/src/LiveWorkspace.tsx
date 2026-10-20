@@ -282,20 +282,24 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const openMessages = (id: string, reply = false) => { setOpenWork(null); setChatTarget({ id, nonce: Date.now(), reply }); setChatUpdates(null); setFocus(null); router.setParams({ section: "inbox" }); };
   // A tapped pop-up opens what it is about (mobile/web-static/sw.js): the conversation for a message ("chat" in the address when
   // the app opens from it, or a message from the service worker when Recharge is already open), otherwise Messages or Home.
-  // Its Reply button adds "reply=1": the conversation opens with the message box ready to type in.
-  const { chat: chatLink, reply: replyLink } = useLocalSearchParams<{ chat?: string; reply?: string }>();
+  // Its Reply button adds "reply=1": the conversation opens with the message box ready to type in. A guest message carries its
+  // guest conversation ("guest" in the address), which opens in Messages > Guests.
+  const { chat: chatLink, reply: replyLink, guest: guestLink } = useLocalSearchParams<{ chat?: string; reply?: string; guest?: string }>();
   const popupOpen = useRef({ openMessages, navigate });
   useEffect(() => { popupOpen.current = { openMessages, navigate }; });
   useEffect(() => {
     if (typeof chatLink === "string" && CHAT_LINK.test(chatLink)) queueMicrotask(() => popupOpen.current.openMessages(chatLink, replyLink === "1"));
-  }, [chatLink, replyLink]);
+    else if (typeof guestLink === "string" && CHAT_LINK.test(guestLink)) queueMicrotask(() => popupOpen.current.openMessages("guest:" + guestLink.toLowerCase(), replyLink === "1"));
+  }, [chatLink, guestLink, replyLink]);
   useEffect(() => {
     if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.serviceWorker) return;
     const onOpen = (event: MessageEvent) => {
       const data = event.data as { type?: string; url?: string } | null;
       if (data?.type !== "recharge-open" || typeof data.url !== "string" || !data.url.startsWith("/workspace")) return;
-      const params = new URL(data.url, "https://recharge.invalid").searchParams, chat = params.get("chat") ?? "";
-      if (CHAT_LINK.test(chat)) popupOpen.current.openMessages(chat, params.get("reply") === "1"); else if (params.get("section") === "inbox") popupOpen.current.navigate("inbox");
+      const params = new URL(data.url, "https://recharge.invalid").searchParams, chat = params.get("chat") ?? "", guest = params.get("guest") ?? "";
+      if (CHAT_LINK.test(chat)) popupOpen.current.openMessages(chat, params.get("reply") === "1");
+      else if (CHAT_LINK.test(guest)) popupOpen.current.openMessages("guest:" + guest.toLowerCase(), params.get("reply") === "1");
+      else if (params.get("section") === "inbox") popupOpen.current.navigate("inbox");
     };
     navigator.serviceWorker.addEventListener("message", onOpen);
     return () => navigator.serviceWorker.removeEventListener("message", onOpen);

@@ -64,9 +64,16 @@ test('the migration runs twice without change', () => assert.deepEqual(secondRun
 test('a guest message carries the guest, the start of the message, and whether it is a reply', async () => {
   await asDatabase();
   await guest('What time\n\nis   check-in?');
-  assert.deepEqual(await popup(MARK, 'guest.message'), { recipient: 'Mark Raven', who: 'John Smith', preview: 'What time is check-in?', replied: false });
+  // The guest conversation (20261025500000), so a tap opens it and Mark as read marks it read.
+  const [thread] = (await db.query("select id from private.workspace_guest_threads where source='feed' and thread_ref='push-thread'")).rows;
+  assert.deepEqual(await popup(MARK, 'guest.message'), { recipient: 'Mark Raven', who: 'John Smith', preview: 'What time is check-in?', replied: false, guestThreadId: thread.id });
   await guest('Thanks!');
   assert.equal((await popup(MARK, 'guest.message')).replied, true, 'the second message in the conversation is a reply');
+  assert.equal((await popup(MARK, 'guest.message')).guestThreadId, thread.id);
+  await guest('Another guest', 'push-thread-other');
+  const [other] = (await db.query("select id from private.workspace_guest_threads where source='feed' and thread_ref='push-thread-other'")).rows;
+  assert.equal((await popup(MARK, 'guest.message')).guestThreadId, other.id, 'each conversation its own');
+  assert.notEqual(other.id, thread.id);
 });
 
 test('team chat carries who wrote, the message and the group name; an owner sees "Recharge", never a staff name', async () => {
@@ -110,6 +117,7 @@ test('the backend claim hands each pop-up its details; details go after 3 days; 
   const job = jobs.find(j => j.details?.preview === 'Is parking free?');
   assert.ok(job, 'the new guest message is claimed with its details');
   assert.deepEqual([job.details.recipient, job.details.who], ['Mark Raven', 'John Smith']);
+  assert.match(job.details.guestThreadId, /^[0-9a-f-]{36}$/, 'the guest conversation travels with the pop-up');
   // The time the message was written (20261025400000), so the pop-up shows it and keeps a conversation's messages in order.
   assert.ok(Math.abs(Date.parse(job.createdAt) - Date.now()) < 60_000, 'the notice time travels with the pop-up');
   await as(MARK);

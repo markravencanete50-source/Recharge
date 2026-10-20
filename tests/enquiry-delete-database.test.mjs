@@ -344,7 +344,7 @@ test('the screen asks first, for admins only, and the server removes the stored 
 
 test('the migration runs twice without change', async () => {
   const sql = await fs.readFile('supabase/migrations/' + MIGRATION, 'utf8');
-  const defs = async () => (await owner("select pg_get_functiondef('private.workspace_teams_action(jsonb)'::regprocedure)||pg_get_functiondef('private.workspace_client_enquiry_delete(jsonb)'::regprocedure)||pg_get_functiondef('private.workspace_enquiry_blocker(uuid,uuid[],uuid)'::regprocedure) t"))[0].t;
+  const defs = async () => (await owner("select pg_get_functiondef('private.workspace_teams_action(jsonb)'::regprocedure)||pg_get_functiondef('private.workspace_client_enquiry_delete(jsonb)'::regprocedure)||pg_get_functiondef('private.workspace_enquiry_blocker(uuid,uuid[],uuid)'::regprocedure)||pg_get_functiondef('private.workspace_guest_message_notices()'::regprocedure)||pg_get_functiondef('private.integration_push_details(bigint)'::regprocedure) t"))[0].t;
   const before = await defs();
   await db.exec('reset role');
   await db.exec(sql);
@@ -352,9 +352,11 @@ test('the migration runs twice without change', async () => {
   await db.exec(await fs.readFile('supabase/migrations/20261024200000_enquiry_delete_repair_limits.sql', 'utf8'));
   await db.exec(await fs.readFile('supabase/migrations/20261024200000_enquiry_delete_repair_limits.sql', 'utf8'));
   // And the lead files fix (20261025500000), twice.
-  await db.exec(await fs.readFile('supabase/migrations/20261025500000_lead_files_on_delete.sql', 'utf8'));
-  await db.exec(await fs.readFile('supabase/migrations/20261025500000_lead_files_on_delete.sql', 'utf8'));
+  await db.exec(await fs.readFile('supabase/migrations/20261025500000_lead_files_guest_push.sql', 'utf8'));
+  await db.exec(await fs.readFile('supabase/migrations/20261025500000_lead_files_guest_push.sql', 'utf8'));
   assert.equal(await defs(), before);
   assert.equal(before.split('private.workspace_client_enquiry_delete(input)').length, 2, 'routed once');
   assert.equal(before.split('/* lead files queued: 20261025500000 */').length, 2, 'lead files queued once');
+  assert.equal(before.split('/* guest push thread: 20261025500000 */').length, 2, 'guest conversation kept once');
+  assert.equal(before.split('/* guest push details: 20261025500000 */').length, 2, 'guest conversation handed on once');
 });

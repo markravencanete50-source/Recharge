@@ -11,6 +11,7 @@ after(() => vite.close());
 const { pushCopy, pushTarget, pushInitials, pushThread } = await vite.ssrLoadModule('/lib/push-copy.ts');
 const { pushPayload } = await vite.ssrLoadModule('/lib/web-push.ts');
 const CONV = '5a1e0000-0000-4000-8000-000000000001';
+const GUEST = '6b2f0000-0000-4000-8000-000000000002';
 
 test('a 1-to-1 chat: the sender on top, the message below; a voice note and a photo say what they are', () => {
   assert.deepEqual(pushCopy('chat.message', null, { recipient: 'Mark Raven', who: 'Alex Coghill', preview: 'Can you call the owner?', conversationKind: 'direct' }),
@@ -81,6 +82,10 @@ test('one pop-up per conversation (the tag), and a tap opens that conversation',
   assert.equal(pushTarget('chat.owner_message', { conversationId: CONV }).tag, 'chat-' + CONV);
   assert.deepEqual(pushTarget('chat.message', { conversationId: 'not-an-id' }), { tag: 'recharge-chat', url: '/workspace/live?section=inbox' });
   assert.deepEqual(pushTarget('guest.message', { who: 'Sam', propertyName: '110 Hawk' }), { tag: 'guest-sam-110-hawk', url: '/workspace/live?section=inbox' });
+  // A guest message with its conversation (20261025500000): one pop-up per guest conversation, and a tap opens it.
+  assert.deepEqual(pushTarget('guest.message', { who: 'Sam', propertyName: '110 Hawk', guestThreadId: GUEST.toUpperCase() }), { tag: 'guest-' + GUEST, url: `/workspace/live?section=inbox&guest=${GUEST}` });
+  assert.deepEqual(pushTarget('guest.message', { who: 'Sam', propertyName: '110 Hawk', guestThreadId: 'nope' }), { tag: 'guest-sam-110-hawk', url: '/workspace/live?section=inbox' });
+  assert.equal(pushTarget('chat.message', { guestThreadId: GUEST }).tag, 'recharge-chat', 'only a guest message uses it');
   assert.deepEqual(pushTarget('hub.todo_added', {}), { tag: 'recharge', url: '/workspace/live' });
 });
 
@@ -110,6 +115,11 @@ test('like WhatsApp, a message carries its conversation, its id and its time, so
   assert.deepEqual(pushThread('chat.message', { who: 'Erika Smith', preview: 'Hi', context: 'Guest relations', conversationKind: 'group', conversationId: CONV.toUpperCase(), unreadCount: 3 }),
     { thread: 'Guest relations', count: 3, conversation: CONV });
   assert.deepEqual(pushThread('chat.message', { who: 'Alex', preview: 'Hi', conversationId: 'nope' }), { thread: 'Alex' });
+  // A guest conversation: the guest's conversation to open and mark read, never a team conversation.
+  assert.deepEqual(pushThread('guest.message', { who: 'Jack', propertyName: '2 Panmure', guestThreadId: GUEST, conversationId: CONV }), { thread: 'Jack (guest) · 2 Panmure', guest: GUEST });
+  assert.deepEqual(pushThread('chat.message', { who: 'Alex', guestThreadId: GUEST }), { thread: 'Alex' });
+  assert.deepEqual(pushPayload({ eventType: 'guest.message', outboxId: 43, details: { who: 'Jack', propertyName: '2 Panmure', preview: 'Thanks', guestThreadId: GUEST } }),
+    { title: 'Jack (guest) · 2 Panmure', body: 'Thanks', url: `/workspace/live?section=inbox&guest=${GUEST}`, tag: 'guest-' + GUEST, initials: 'J', colour: '#3B5866', id: 'n43', thread: 'Jack (guest) · 2 Panmure', guest: GUEST });
   // Everything else is a plain notice: no thread, so it is never merged and has no Reply button.
   assert.deepEqual(pushThread('hub.todo_added', { who: 'Alex', recipient: 'Mark' }), {});
   const todo = pushPayload({ eventType: 'hub.todo_added', outboxId: '7', details: { recipient: 'Mark', actorName: 'Alex', workTitle: 'Call the plumber' } });
@@ -132,7 +142,16 @@ test('the browser shows it: the tag, the picture, and a tap that opens the conve
   assert.match(sw, /return self\.clients\.openWindow\(url\);/);
   const page = await fs.readFile('mobile/src/LiveWorkspace.tsx', 'utf8');
   assert.match(page, /data\?\.type !== "recharge-open"/);
-  assert.match(page, /const \{ chat: chatLink, reply: replyLink \} = useLocalSearchParams<\{ chat\?: string; reply\?: string \}>\(\);/);
+  assert.match(page, /const \{ chat: chatLink, reply: replyLink, guest: guestLink \} = useLocalSearchParams<\{ chat\?: string; reply\?: string; guest\?: string \}>\(\);/);
+  // A guest message opens its guest conversation in Messages > Guests, from the address or from the open window.
+  assert.match(page, /openMessages\("guest:" \+ guestLink\.toLowerCase\(\), replyLink === "1"\)/);
+  assert.match(page, /else if \(CHAT_LINK\.test\(guest\)\) popupOpen\.current\.openMessages\("guest:" \+ guest\.toLowerCase\(\), params\.get\("reply"\) === "1"\);/);
+  const guests = await fs.readFile('mobile/src/LiveGuestInbox.tsx', 'utf8');
+  assert.match(guests, /focusReply=\{focusReply && openId === openThread\}/);
+  assert.match(guests, /setTimeout\(\(\) => replyBox\.current\?\.focus\(\), 80\)/, 'Reply readies the reply box');
+  assert.match(guests, /takeGuestReads\(\)\.then\(read => \{ if \(active\) for \(const \[id, at\] of Object\.entries\(read\)\) mark\(id, at\); \}\)/, 'Mark as read from a pop-up reaches the inbox');
+  assert.match(guests, /clearGuestNotices\(id\);/, 'reading a guest conversation takes its pop-up away');
+  assert.match(await fs.readFile('mobile/src/LiveChat.tsx', 'utf8'), /openThread=\{guestLink\} focusReply=\{focusReply && !!guestLink\}/);
   assert.match(page, /openMessages\(chat, params\.get\("reply"\) === "1"\)/, 'Reply with Recharge already open');
   assert.match(page, /focusReply=\{!!chatTarget\?\.reply\}/);
   const chat = await fs.readFile('mobile/src/LiveChat.tsx', 'utf8');

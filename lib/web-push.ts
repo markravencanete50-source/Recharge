@@ -72,7 +72,7 @@ export type WebPushResult = { outcome: WebPushOutcome; status: number };
 // messages into one pop-up, the notice's id so the same message never alerts twice, and the time it was written.
 export type PushPayload = {
   title: string; body: string; url: string; tag: string; icon?: string; initials?: string; colour?: string;
-  id?: string; time?: number; thread?: string; count?: number; conversation?: string;
+  id?: string; time?: number; thread?: string; count?: number; conversation?: string; guest?: string;
 };
 export function pushPayload(job: Pick<WebPushJob, 'eventType' | 'workKind' | 'details' | 'outboxId' | 'createdAt'>, copy?: { title: string; message: string }, icon?: string | null): PushPayload {
   const details = job.details ?? {};

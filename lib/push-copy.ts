@@ -19,6 +19,9 @@ export type PushDetails = {
   // messages they have not read there, and the sender's photo (a private path the backend signs; never sent to a device) and colour.
   conversationId?: string | null; conversationKind?: string | null; ownerName?: string | null; mention?: 'you' | 'everyone' | string | null; unreadCount?: number | null;
   senderPhotoPath?: string | null; senderColour?: string | null;
+  // A guest message (20261025500000): the guest conversation it came in (private.workspace_guest_threads), so a tap opens it,
+  // Mark as read marks it read and its pop-ups group together.
+  guestThreadId?: string | null;
 };
 
 const TITLE_MAX = 80, MESSAGE_MAX = 180;
@@ -92,6 +95,9 @@ export function pushTarget(eventType: string | null | undefined, details: PushDe
     return { tag: 'chat-' + conversation.toLowerCase(), url: `/workspace/live?section=inbox&chat=${conversation.toLowerCase()}` };
   if (eventType === 'chat.message' || eventType === 'chat.owner_message') return { tag: 'recharge-chat', url: '/workspace/live?section=inbox' };
   if (eventType === 'guest.message') {
+    const guest = text(details.guestThreadId).toLowerCase();
+    if (UUID.test(guest)) return { tag: 'guest-' + guest, url: `/workspace/live?section=inbox&guest=${guest}` };
+    // A notice from before the conversation was sent: one pop-up per guest and property, opening Messages.
     const key = [text(details.who), text(details.propertyName)].join(' ').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
     return { tag: key ? 'guest-' + key : 'recharge-guest', url: '/workspace/live?section=inbox' };
   }
@@ -102,15 +108,17 @@ export function pushTarget(eventType: string | null | undefined, details: PushDe
 
 // A message pop-up's conversation, for the browser to gather its messages into one pop-up as WhatsApp does: the conversation's
 // title without the count (the browser adds "(3 messages)"), how many are unread there (team chats; a guest conversation counts
-// the messages it was sent), and the team conversation to mark read from the pop-up.
-export function pushThread(eventType: string | null | undefined, details: PushDetails = {}): { thread?: string; count?: number; conversation?: string } {
+// the messages it was sent), and the conversation to mark read from the pop-up: a team conversation, or a guest conversation
+// (read on the device: the app marks it when it next opens, mobile/src/LiveGuestInbox.tsx).
+export function pushThread(eventType: string | null | undefined, details: PushDetails = {}): { thread?: string; count?: number; conversation?: string; guest?: string } {
   if (!isMessage(eventType)) return {};
   const thread = pushCopy(eventType, null, { ...details, unreadCount: null }).title;
-  const unread = Number(details.unreadCount ?? 0), conversation = text(details.conversationId).toLowerCase();
+  const unread = Number(details.unreadCount ?? 0), conversation = text(details.conversationId).toLowerCase(), guest = text(details.guestThreadId).toLowerCase();
   return {
     thread,
     ...(eventType !== 'guest.message' && Number.isInteger(unread) && unread > 0 ? { count: unread } : {}),
     ...(eventType !== 'guest.message' && UUID.test(conversation) ? { conversation } : {}),
+    ...(eventType === 'guest.message' && UUID.test(guest) ? { guest } : {}),
   };
 }
 

@@ -556,7 +556,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
       {owner ? (open ? fullScreen ? <Loading p={p} /> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border }]}>{thread(open)}</View>
         : mode.readOnly && (list || preview) ? <Text style={[ui.small, { color: p.muted, paddingVertical: 16 }]}>{preview ? "An owner's Messages is their conversation with Recharge. Choose an owner under View as to see theirs." : "This owner has not messaged Recharge yet."}</Text>
         : <Loading p={p} />)
-        : tab === "guests" ? <GuestInbox key="guests" palette={p} properties={properties} desktop={desktop} onChanged={onUnread} openThread={guestLink} account={account} />
+        : tab === "guests" ? <GuestInbox key="guests" palette={p} properties={properties} desktop={desktop} onChanged={onUnread} openThread={guestLink} focusReply={focusReply && !!guestLink} account={account} />
         : tab === "guestEmails" ? <GuestInbox key="guest-emails" emails palette={p} properties={properties} desktop={desktop} onChanged={onUnread} account={account} />
         : <MessagesSplit p={p} desktop={desktop} list={listView} detail={open && !fullScreen ? thread(open, desktop ? undefined : back) : null} />}
       {creating && <NewConversation p={p} properties={properties} only={tabs.length < 2 ? undefined : tab === "clients" ? "owners" : "team"} onClose={() => setCreating(false)} onOpen={c => { setCreating(false); setOpen(c.id); void loadList(); }} />}
