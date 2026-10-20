@@ -273,7 +273,8 @@ test('the migration runs twice, each anchor occurs once, and it stays locked dow
   assert.equal(count(shift, clockOut.join('\r\n')) + count(shift, clockOut.join('\n')), 1, 'clockOut anchor');
   assert.equal(count(shift, "elsif a='clockOut' then"), 1);
   assert.equal(count(shift, 'private.workspace_reflection_missing(actor)'), 1, 'clockOut patch once');
-  assert.ok(shift.indexOf('private.workspace_reflection_missing(actor)') < shift.indexOf("set clocked_out_at=now()"), 'checked before the shift ends');
+  assert.ok(shift.indexOf('private.workspace_reflection_missing(actor)') < shift.indexOf("update private.workspace_shifts set clocked_out_at=", shift.indexOf("elsif a='clockOut' then")), 'checked before the shift ends');
+  // (Migration 20261025600000 ends a shift left open past 16 hours at 16 hours, so the clock out is no longer now().)
   const teamsRead = await def('private.workspace_teams_read(text,date,date,uuid,uuid)');
   assert.equal(count(teamsRead, "elsif section='hub' then result:=private.workspace_hub_read();"), 1);
   assert.equal(count(teamsRead, 'private.workspace_reflection_read()'), 1);
