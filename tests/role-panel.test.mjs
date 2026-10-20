@@ -153,6 +153,34 @@ test('the team menu runs My Recharge to Finance in Alex\'s order, Home, Favourit
   assert.deepEqual(deepLinkFor(linkOf('admin', 'tool:reviews').target), { section: 'work', view: 'clients', sub: 'reviews' });
 });
 
+test('the calendar-only rule is judged after a saved menu order', () => {
+  const cal = l => l.key.startsWith('tool:calendar-'), M = DEFAULT_ROLE_MODULES.super_admin;
+  // Licensing and Compliance Certs moved to Management: Safety & Compliance is left with only its calendar, so it goes.
+  const moved = { sections: [], items: { management: ['tool:licensing', 'tool:compliance'] } };
+  const panel = rolePanel('super_admin', M, moved);
+  assert.ok(!panel.groups.some(g => g.key === 'safety'), 'no section for the safety calendar alone');
+  assert.ok(!links(panel).some(l => l.key === 'tool:calendar-safety'));
+  assert.deepEqual(panel.groups.find(g => g.key === 'management').links.slice(0, 2).map(l => l.key), ['tool:licensing', 'tool:compliance']);
+  for (const g of panel.groups) assert.ok(!g.links.every(cal), g.title + ' is only a calendar');
+  assert.equal(links(panel).filter(cal).length, 4, 'the other calendars stay');
+  assert.ok(!links(panel).some(l => l.key === 'page:calendar'), 'calendars remain, so no plain Calendar');
+  // The Menu order editor keeps the emptied section, so the links can move back; the lone calendar is not offered.
+  const editor = rolePanel('super_admin', M, moved, true);
+  assert.deepEqual(editor.groups.find(g => g.key === 'safety').links, []);
+  assert.ok(!links(editor).some(l => l.key === 'tool:calendar-safety'));
+  // The calendar moved in with them is kept: its section is not only a calendar.
+  const withCalendar = rolePanel('super_admin', M, { sections: [], items: { management: ['tool:licensing', 'tool:compliance', 'tool:calendar-safety'] } });
+  assert.equal(withCalendar.groups.find(g => g.key === 'management').links[2].key, 'tool:calendar-safety');
+  // Every calendar left alone by the saved order: the plain Calendar comes back in the first section.
+  const R = DEFAULT_ROLE_MODULES.ready, plain = rolePanel('ready', R);
+  const others = plain.groups.slice(1).flatMap(g => g.links).filter(l => !cal(l)).map(l => l.key);
+  const stripped = rolePanel('ready', R, { sections: [], items: { [plain.groups[0].key]: [...plain.groups[0].links.map(l => l.key), ...others] } });
+  assert.ok(!links(stripped).some(cal));
+  assert.ok(stripped.groups[0].links.some(l => l.key === 'page:calendar'), 'Ready can still open the Calendar');
+  // With no saved order nothing changes.
+  assert.deepEqual(rolePanel('super_admin', M, null), rolePanel('super_admin', M));
+});
+
 test('the menu\'s calendars open the Calendar on one team, for the teams the role can filter by', () => {
   // The safety and onboarding calendars hold Ready's work (safety visits, inspections), so they go to the roles that see it.
   const TEAM_OF = { 'tool:calendar-ready': 'ready', 'tool:calendar-stays': 'stays', 'tool:calendar-cleans': 'cleans', 'tool:calendar-safety': 'ready', 'tool:calendar-onboarding': 'ready' };
