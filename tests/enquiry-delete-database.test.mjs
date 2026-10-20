@@ -169,6 +169,26 @@ test('the files are queued for removal, and only the person who queued them mark
   await assert.rejects(db.query('select * from private.workspace_storage_removals'), /permission denied/);
 });
 
+test('the lead\'s PriceLabs reports are queued and handed back too (20261025500000)', async () => {
+  const e = await enquiry();
+  const file = ext => `leads/${e.id}/${crypto.randomUUID()}.${ext}`, reports = [file('pdf'), file('png')];
+  for (const [i, path] of reports.entries()) await owner("insert into private.workspace_lead_files(id,enquiry_id,path,name,mime,bytes,created_by,removed_at) values($1,$2,$3,'Report',$4,100,$5,$6)",
+    [crypto.randomUUID(), e.id, path, i ? 'image/png' : 'application/pdf', users[ADMIN], i ? new Date().toISOString() : null]);
+  const result = await del(ADMIN, e.id);
+  assert.deepEqual([...result.paths].sort(), [...e.paths].sort(), 'the photos as before');
+  assert.deepEqual([...result.leadPaths].sort(), [...reports].sort(), 'every report, a removed one too (its copy may still be there)');
+  assert.equal((await owner('select count(*)::int n from private.workspace_lead_files where enquiry_id=$1', [e.id]))[0].n, 0);
+  const queued = await owner("select bucket,path,reason,queued_by from private.workspace_storage_removals where path like $1 order by path", [`leads/${e.id}/%`]);
+  assert.deepEqual(queued.map(q => [q.bucket, q.path, q.reason, q.queued_by]), [...reports].sort().map(path => ['lead-files', path, 'client_enquiry.deleted', users[ADMIN]]));
+  await as(ADMIN);
+  assert.equal(await rpc('workspace_storage_removed', ['lead-files', reports]), 2);
+  assert.equal(await rpc('workspace_storage_removed', ['enquiry-files', reports]), 0, 'per bucket');
+  // A lead with no reports hands back an empty list.
+  const plain = await enquiry();
+  assert.deepEqual((await del(ADMIN, plain.id)).leadPaths, []);
+  await assert.rejects(owner("insert into private.workspace_storage_removals(bucket,path,reason) values('elsewhere','x','test')"), /check/);
+});
+
 test('the access history names who deleted which enquiry, without contact details', async () => {
   const e = await enquiry();
   const [{ name }] = await owner('select name from public.workspace_properties where id=$1', [e.prop]);
@@ -316,8 +336,9 @@ test('the screen asks first, for admins only, and the server removes the stored 
   assert.match(readFileSync('mobile/src/LiveWorkspace.tsx', 'utf8'), /<ClientRelations [^\n]*onRefresh=\{\(\) => refresh\(true\)\} \/>/);
   const server = readFileSync('lib/client-enquiry-server.ts', 'utf8');
   assert.match(server, /export async function deleteEnquiry\(/);
-  assert.match(server, /storage\.remove\(paths\)/);
-  assert.match(server, /rpc\('workspace_storage_removed', \{ bucket_name: ENQUIRY_BUCKET, removed: paths \}\)/);
+  assert.match(server, /deletedEnquiryFiles\(result\.data, \{ enquiry: ENQUIRY_BUCKET, lead: LEAD_BUCKET \}\)/);
+  assert.match(server, /removeStoredCopies\(batches, \{/);
+  assert.match(server, /rpc\('workspace_storage_removed', \{ bucket_name: bucket, removed \}\)/);
   assert.match(readFileSync('lib/workspace-finance-server.ts', 'utf8'), /input\.action === 'deleteEnquiry' \? import\('\.\/client-enquiry-server'\)\.then\(m => m\.deleteEnquiry\(context, input\)\)/);
 });
 
@@ -330,6 +351,10 @@ test('the migration runs twice without change', async () => {
   // The later fix (20261024200000) patches the same functions: run again after it, nothing changes either.
   await db.exec(await fs.readFile('supabase/migrations/20261024200000_enquiry_delete_repair_limits.sql', 'utf8'));
   await db.exec(await fs.readFile('supabase/migrations/20261024200000_enquiry_delete_repair_limits.sql', 'utf8'));
+  // And the lead files fix (20261025500000), twice.
+  await db.exec(await fs.readFile('supabase/migrations/20261025500000_lead_files_on_delete.sql', 'utf8'));
+  await db.exec(await fs.readFile('supabase/migrations/20261025500000_lead_files_on_delete.sql', 'utf8'));
   assert.equal(await defs(), before);
   assert.equal(before.split('private.workspace_client_enquiry_delete(input)').length, 2, 'routed once');
+  assert.equal(before.split('/* lead files queued: 20261025500000 */').length, 2, 'lead files queued once');
 });
