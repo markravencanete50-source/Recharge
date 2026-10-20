@@ -39,6 +39,16 @@ export async function refreshNotificationLink() {
   if (subscription) await save(subscription).catch(() => undefined);
 }
 
+// A conversation read in the app takes its pop-up off the phone, as WhatsApp does (its tag: lib/push-copy.ts pushTarget), so the
+// next message starts a fresh pop-up instead of joining ones already read.
+export function clearConversationNotices(conversationId: string) {
+  if (!supported() || !/^[0-9a-f-]{36}$/i.test(conversationId)) return;
+  void navigator.serviceWorker.getRegistration("/workspace/")
+    .then(registration => registration?.getNotifications({ tag: "chat-" + conversationId.toLowerCase() }))
+    .then(list => { for (const notice of list ?? []) notice.close(); })
+    .catch(() => undefined);
+}
+
 // The switch's state and its two actions, shared by the setting and the reminder on the page.
 function useNotificationSwitch() {
   const [state, setState] = useState<State>("loading");

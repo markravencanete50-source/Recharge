@@ -7,8 +7,9 @@ import type { NoticeCopy } from './notice-copy';
 // Messages look like a phone messenger (Alex: "more like WhatsApp style"): a 1-to-1 chat is titled with the sender's name and shows
 // the message; a group is titled with the group's name and shows "Erika: Morning team!" (or "Erika mentioned you: …"); an owner
 // is "Sarah Jones (owner)" and a guest "Sam (guest) · 110 Hawk". A voice note reads "🎤 Voice note (0:42)" and a photo "📷 Photo".
-// More than one unread message in the same conversation: "(3 new messages)" after the title, and the pop-ups of one conversation
-// replace each other (pushTarget's tag) instead of piling up.
+// More than one unread message in the same conversation: "(3 messages)" after the title, and the pop-ups of one conversation
+// replace each other (pushTarget's tag) instead of piling up: the browser lists the latest messages in one pop-up
+// (mobile/web-static/sw.js, from pushThread).
 // Everything else (repairs, approvals, to-dos, client emails) keeps Lee's wording (14 October): the pop-up names the person it is
 // for, "Mark, new to-do for you", with who, what and where below.
 export type PushDetails = {
@@ -73,7 +74,7 @@ export function pushCopy(eventType: string | null | undefined, workKind?: string
   }
   if (isMessage(eventType)) {
     const unread = Number(details.unreadCount ?? 0);
-    const more = eventType !== 'guest.message' && Number.isInteger(unread) && unread > 1 ? ` (${unread > 99 ? '99+' : unread} new messages)` : '';
+    const more = eventType !== 'guest.message' && Number.isInteger(unread) && unread > 1 ? ` (${unread > 99 ? '99+' : unread} messages)` : '';
     return { title: clip(title, TITLE_MAX - more.length) + more, message: clip(message || plain(base.message), MESSAGE_MAX) };
   }
   const name = firstName(details.recipient);
@@ -99,13 +100,30 @@ export function pushTarget(eventType: string | null | undefined, details: PushDe
   return { tag: 'recharge', url: '/workspace/live' };
 }
 
+// A message pop-up's conversation, for the browser to gather its messages into one pop-up as WhatsApp does: the conversation's
+// title without the count (the browser adds "(3 messages)"), how many are unread there (team chats; a guest conversation counts
+// the messages it was sent), and the team conversation to mark read from the pop-up.
+export function pushThread(eventType: string | null | undefined, details: PushDetails = {}): { thread?: string; count?: number; conversation?: string } {
+  if (!isMessage(eventType)) return {};
+  const thread = pushCopy(eventType, null, { ...details, unreadCount: null }).title;
+  const unread = Number(details.unreadCount ?? 0), conversation = text(details.conversationId).toLowerCase();
+  return {
+    thread,
+    ...(eventType !== 'guest.message' && Number.isInteger(unread) && unread > 0 ? { count: unread } : {}),
+    ...(eventType !== 'guest.message' && UUID.test(conversation) ? { conversation } : {}),
+  };
+}
+
 // The profile colours (mobile/src/AccountSetup.tsx avatarColors), for a pop-up's initials when the sender has no photo.
 export const AVATAR_HEX: Record<string, string> = { forest: '#1C3934', sage: '#1F5F55', ocean: '#3B5866', plum: '#5B4A5E', clay: '#8E3F38', slate: '#4E6259' };
+const AVATAR_ORDER = Object.values(AVATAR_HEX);
+// Someone without a profile colour (a guest) gets one picked from their name, so the same person always has the same circle.
+const colourFor = (name: string) => AVATAR_ORDER[Array.from(name.toLowerCase()).reduce((h, c) => (h * 31 + c.codePointAt(0)!) >>> 0, 7) % AVATAR_ORDER.length];
 // The sender's initials and colour for the pop-up's picture, when there is a sender to draw (never "Recharge" itself).
 export function pushInitials(eventType: string | null | undefined, details: PushDetails = {}): { initials: string; colour: string } | null {
   const who = text(details.who);
   if (!isMessage(eventType) || !who || who === 'Recharge') return null;
   const initials = who.split(/\s+/).slice(0, 2).map(w => Array.from(w)[0] ?? '').join('').toUpperCase();
   if (!initials || !/^[\p{L}\p{N}]+$/u.test(initials)) return null;
-  return { initials, colour: AVATAR_HEX[text(details.senderColour)] ?? AVATAR_HEX.ocean };
+  return { initials, colour: AVATAR_HEX[text(details.senderColour)] ?? colourFor(who) };
 }

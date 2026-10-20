@@ -262,7 +262,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     heardBadge.current = messagesBadge;
   }, [messagesBadge, viewAs]);
   // "Message the property team" (and similar) opens Messages on one conversation.
-  const [chatTarget, setChatTarget] = useState<{ id: string; nonce: number } | null>(null);
+  const [chatTarget, setChatTarget] = useState<{ id: string; nonce: number; reply?: boolean } | null>(null);
   // Set when Messages should open on its Updates tab (an old Updates link or a notice).
   const [chatUpdates, setChatUpdates] = useState<number | null>(null);
   // Client enquiries opens in Client relations, on its Enquiries chip (lib/workspace-map.ts CLIENT_ENQUIRIES_LINK): the old
@@ -274,22 +274,23 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
-  const openMessages = (id: string) => { setOpenWork(null); setChatTarget({ id, nonce: Date.now() }); setChatUpdates(null); setFocus(null); router.setParams({ section: "inbox" }); };
+  const openMessages = (id: string, reply = false) => { setOpenWork(null); setChatTarget({ id, nonce: Date.now(), reply }); setChatUpdates(null); setFocus(null); router.setParams({ section: "inbox" }); };
   // A tapped pop-up opens what it is about (mobile/web-static/sw.js): the conversation for a message ("chat" in the address when
   // the app opens from it, or a message from the service worker when Recharge is already open), otherwise Messages or Home.
-  const { chat: chatLink } = useLocalSearchParams<{ chat?: string }>();
+  // Its Reply button adds "reply=1": the conversation opens with the message box ready to type in.
+  const { chat: chatLink, reply: replyLink } = useLocalSearchParams<{ chat?: string; reply?: string }>();
   const popupOpen = useRef({ openMessages, navigate });
   useEffect(() => { popupOpen.current = { openMessages, navigate }; });
   useEffect(() => {
-    if (typeof chatLink === "string" && CHAT_LINK.test(chatLink)) queueMicrotask(() => popupOpen.current.openMessages(chatLink));
-  }, [chatLink]);
+    if (typeof chatLink === "string" && CHAT_LINK.test(chatLink)) queueMicrotask(() => popupOpen.current.openMessages(chatLink, replyLink === "1"));
+  }, [chatLink, replyLink]);
   useEffect(() => {
     if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.serviceWorker) return;
     const onOpen = (event: MessageEvent) => {
       const data = event.data as { type?: string; url?: string } | null;
       if (data?.type !== "recharge-open" || typeof data.url !== "string" || !data.url.startsWith("/workspace")) return;
       const params = new URL(data.url, "https://recharge.invalid").searchParams, chat = params.get("chat") ?? "";
-      if (CHAT_LINK.test(chat)) popupOpen.current.openMessages(chat); else if (params.get("section") === "inbox") popupOpen.current.navigate("inbox");
+      if (CHAT_LINK.test(chat)) popupOpen.current.openMessages(chat, params.get("reply") === "1"); else if (params.get("section") === "inbox") popupOpen.current.navigate("inbox");
     };
     navigator.serviceWorker.addEventListener("message", onOpen);
     return () => navigator.serviceWorker.removeEventListener("message", onOpen);
@@ -669,7 +670,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
     : tab === "moderation" ? <LiveModeration palette={p} onOpenConversation={openMessages} />
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} />
-    : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} guestEmailWaiting={guestEmailWaiting} openConversation={chatTarget?.id}
+    : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} guestEmailWaiting={guestEmailWaiting} openConversation={chatTarget?.id} focusReply={!!chatTarget?.reply}
         updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} onLeave={() => navigate("home")} />
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view, sub) => { setTab(next); if (view) setWorkView(view); setFocus(sub ? { sub, nonce: Date.now() } : null); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.

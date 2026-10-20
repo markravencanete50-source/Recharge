@@ -25,6 +25,7 @@ import { byLatest, clientStatus, emptyStatusMessage, matchesSearch, statusCounts
 import { MessagesSplit, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { ROLE_LABEL } from "../../lib/admin-live";
 import { previewHasConversation } from "../../lib/view-as";
+import { clearConversationNotices } from "./Notifications";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
 import { z } from "zod";
@@ -151,7 +152,7 @@ const INPUT_LINE = 22, INPUT_MIN = 48, INPUT_MAX = INPUT_MIN + 4 * INPUT_LINE;
 // Within this distance of the newest message counts as reading the newest.
 const NEAR_END = 64;
 
-function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false, screen = false }: { p: Palette; id: string; onBack?: () => void; onChanged: () => void; onOpen: (c: Conversation) => void; onLeft: () => void; savedReplies?: boolean; screen?: boolean }) {
+function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false, screen = false, focusReply = false }: { p: Palette; id: string; onBack?: () => void; onChanged: () => void; onOpen: (c: Conversation) => void; onLeft: () => void; savedReplies?: boolean; screen?: boolean; focusReply?: boolean }) {
   const [thread, setThread] = useState<z.infer<typeof threadSchema> | null>(null);
   const [text, setText] = useState(""), [sending, setSending] = useState(false), [error, setError] = useState("");
   const [reacting, setReacting] = useState<string | null>(null), [people, setPeople] = useState(false), [safety, setSafety] = useState<ChatMessage | null>(null);
@@ -173,6 +174,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
         const first = !lastSeen.current;
         lastSeen.current = newest?.id ?? "";
         if (parsed.conversation.unread) { await writeChat({ action: "markRead", conversationId: id }).catch(() => undefined); onChanged(); }
+        clearConversationNotices(id);
         if (first || atEnd.current || newest?.mine) { atEnd.current = true; setTimeout(() => scroll.current?.scrollToEnd({ animated: !first }), 50); }
         else setUnseen(true);
       }
@@ -211,6 +213,13 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
     box.style.height = before;
     setInputHeight(next);
   });
+  // Opened from a pop-up's Reply: the message box is ready to type in once the conversation has loaded.
+  const replied = useRef(false), loaded = !!thread;
+  useEffect(() => {
+    if (!focusReply || !loaded || replied.current) return;
+    replied.current = true;
+    setTimeout(() => input.current?.focus(), 80);
+  }, [focusReply, loaded]);
   // Where the caret is, for @mentions: typing at the end keeps it at the end.
   const [caret, setCaret] = useState(0), [placeCaret, setPlaceCaret] = useState<number | null>(null);
   const write = (value: string) => { if (caret >= text.length) setCaret(value.length); setText(value); fit(); };
@@ -425,7 +434,7 @@ type Row = { kind: "chat"; id: string; at: string | null; c: Conversation } | { 
 const chatRow = (c: Conversation): Row => ({ kind: "chat", id: c.id, at: c.lastMessageAt, c });
 const emailRow = (t: ClientEmailThread): Row => ({ kind: "email", id: "email:" + t.id, at: t.lastMessageAt, t });
 
-export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, guestEmailWaiting = 0, openConversation, updates, initialTab, onLeave }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; guestEmailWaiting?: number; openConversation?: string; updates?: ReactNode; initialTab?: "updates";
+export function LiveChat({ palette: p, account, desktop, properties, onUnread, guestWaiting = 0, guestEmailWaiting = 0, openConversation, focusReply = false, updates, initialTab, onLeave }: { palette: Palette; account: WorkspaceAccount; desktop: boolean; properties: PropertyView[]; onUnread: () => void; guestWaiting?: number | null; guestEmailWaiting?: number; openConversation?: string; focusReply?: boolean; updates?: ReactNode; initialTab?: "updates";
   // Leaving an owner's conversation on a phone (it is their whole Messages): back to Home.
   onLeave?: () => void }) {
   const owner = account.role === "client", guests = hasGuestInbox(account);
@@ -497,7 +506,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
   const shown = clients ? found.filter(r => statusOf(r) === status || (desktop && r.id === open)) : found;
   const thread = (id: string, back?: () => void, screen = false) => id.startsWith("email:")
     ? <ClientEmailThreadPane key={id} p={p} threadId={id.slice(6)} onBack={back} onChanged={changed} />
-    : <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} screen={screen} onOpen={c => { setOpen(c.id); void loadList(); }} onLeft={() => { setOpen(null); void loadList(); }} />;
+    : <Thread key={id} p={p} id={id} onBack={back} onChanged={changed} savedReplies={guests} screen={screen} focusReply={focusReply && id === openConversation} onOpen={c => { setOpen(c.id); void loadList(); }} onLeft={() => { setOpen(null); void loadList(); }} />;
   const listView = (
     <View style={{ gap: 10 }}>
       <SearchBar p={p} value={query} onChange={setQuery} placeholder={clients ? "Search owner or property" : "Search conversations or people"}
