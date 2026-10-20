@@ -23,7 +23,7 @@ import {
   FREQUENCY_LABEL, ROTA_HOURS, ROTA_LABEL, dayLabel, londonClock, londonInstant, minutesLabel, mondayOf, rotaCell, shiftWeek, timesheetCsv, timesheetRows,
   timesheetSummary, validClock, weekOf, type TimesheetRow,
 } from "../../lib/team-time";
-import { COUNTED_UNTIL_CORRECTED, NOT_CLOCKED_OUT, shiftEnds } from "../../lib/shift-hours";
+import { COUNTED_UNTIL_CORRECTED, LONG_SHIFT_HOURS, LONG_SHIFT_QUESTION, MAX_SHIFT_HOURS, NOT_CLOCKED_OUT, checkShiftTimes, fullStamp, shiftEnds, ukDayOf } from "../../lib/shift-hours";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { actualsByPerson, rotaActuals } from "../../lib/rota-actuals";
 
@@ -328,8 +328,9 @@ export function PersonDays({ p, person, today, pending = [], onShift }: { p: Pal
   );
 }
 
-// Correcting a shift (or adding a forgotten one): UK times; an end before the start means after midnight.
-// Hours are locked: a super admin's change applies at once (direct); an admin's waits for a super
+// Correcting a shift (or adding a forgotten one): clock in and clock out each have their own UK date and time, so
+// a night shift or one over several days is plain (lib/shift-hours.ts checks them: clock out after clock in, over 16
+// hours only with a yes, never over 24). Hours are locked: a super admin's change applies at once (direct); an admin's waits for a super
 // admin's approval and reaches the hours only then.
 export function ShiftSheet({ p, target, today, direct, people = [], pending = [], onClose, onSaved }: {
   p: Palette; target: ShiftTarget | null; today: string; direct: boolean; people?: TimesheetPerson[]; pending?: ShiftChange[];
@@ -337,17 +338,21 @@ export function ShiftSheet({ p, target, today, direct, people = [], pending = []
 }) {
   const shift = target?.shift;
   const [who, setWho] = useState("");
-  const [day, setDay] = useState(""), [from, setFrom] = useState(""), [to, setTo] = useState("");
+  const [day, setDay] = useState(""), [from, setFrom] = useState(""), [outDay, setOutDay] = useState(""), [to, setTo] = useState("");
+  const [confirmLong, setConfirmLong] = useState(false);
   const [department, setDepartment] = useState<Department>("guest_relations"), [why, setWhy] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const person = target?.person ?? people.find(x => x.userId === who);
   const waiting = shift ? pending.find(c => c.shiftId === shift.id) : undefined;
-  const request = useRequestId(target ? [shift?.id ?? "add:" + (person?.userId ?? ""), day, from, to, department, why].join(":") : null);
+  const request = useRequestId(target ? [shift?.id ?? "add:" + (person?.userId ?? ""), day, from, outDay, to, department, why, confirmLong].join(":") : null);
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
       if (!active || !target) return;
-      setWho(""); setDay(target.day ?? today); setFrom(shift ? londonClock(shift.clockedInAt) : ""); setTo(shift?.clockedOutAt ? londonClock(shift.clockedOutAt) : "");
+      // The shift's own dates (it may be listed on a later day it ran into), else the day chosen.
+      const inDay = shift ? ukDayOf(shift.clockedInAt) : target.day ?? today;
+      setWho(""); setDay(inDay); setFrom(shift ? londonClock(shift.clockedInAt) : "");
+      setOutDay(shift?.clockedOutAt ? ukDayOf(shift.clockedOutAt) : inDay); setTo(shift?.clockedOutAt ? londonClock(shift.clockedOutAt) : ""); setConfirmLong(false);
       setDepartment((shift?.department ?? target.person?.department ?? "guest_relations") as Department); setWhy(""); setError("");
     });
     return () => { active = false; };
@@ -355,22 +360,29 @@ export function ShiftSheet({ p, target, today, direct, people = [], pending = []
   async function save() {
     if (!target || busy) return;
     if (!person) { setError("Choose who the shift is for."); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) { setError("Choose the date."); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) { setError("Choose the clock in date."); return; }
+    if (to && !/^\d{4}-\d{2}-\d{2}$/.test(outDay)) { setError("Choose the clock out date."); return; }
     if (!validClock(from) || (to && !validClock(to))) { setError("Enter times as HH:MM, for example 08:00."); return; }
-    if (!to && !(shift && !shift.clockedOutAt)) { setError("Add when the shift ended."); return; }
+    const inAt = londonInstant(day, from), outAt = to ? londonInstant(outDay, to) : null;
+    const check = checkShiftTimes({ clockedInAt: inAt, clockedOutAt: outAt, confirmedLong: confirmLong, open: !!shift && !shift.clockedOutAt });
+    if (check.error) { setError(check.needsConfirm ? "" : check.error); return; }
     if (why.trim().length < 3) { setError("Say why it changed, for example “Forgot to clock out”."); return; }
-    const clockedInAt = londonInstant(day, from);
-    const clockedOutAt = to ? londonInstant(to <= from ? addDays(day, 1) : day, to) : null;
+    const long = confirmLong && !!check.minutes && check.minutes > LONG_SHIFT_HOURS * 60 ? { confirmLong: true } : {};
     setBusy(true); setError("");
     try {
       const result = shift
-        ? await writeTeams({ action: "editShift", requestId: request.get(), shiftId: shift.id, clockedInAt, clockedOutAt, department, note: why.trim() })
-        : await writeTeams({ action: "addShift", requestId: request.get(), userId: person.userId, clockedInAt, clockedOutAt: clockedOutAt!, department, note: why.trim() });
+        ? await writeTeams({ action: "editShift", requestId: request.get(), shiftId: shift.id, clockedInAt: inAt, clockedOutAt: outAt, department, note: why.trim(), ...long })
+        : await writeTeams({ action: "addShift", requestId: request.get(), userId: person.userId, clockedInAt: inAt, clockedOutAt: outAt!, department, note: why.trim(), ...long });
       request.done();
       await onSaved((result.data as { status?: string } | null)?.status === "pending" ? "pending" : "direct");
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   const changed = waiting ? describeChange(waiting) : null;
+  // What will be saved, with dates, checked as they type.
+  const clockedInAt = /^\d{4}-\d{2}-\d{2}$/.test(day) && validClock(from) ? londonInstant(day, from) : null;
+  const clockedOutAt = to && /^\d{4}-\d{2}-\d{2}$/.test(outDay) && validClock(to) ? londonInstant(outDay, to) : null;
+  const preview = clockedInAt && (clockedOutAt || !to) ? checkShiftTimes({ clockedInAt, clockedOutAt, confirmedLong: confirmLong, open: !!shift && !shift.clockedOutAt }) : null;
+  const askLong = !!preview?.needsConfirm || (confirmLong && !!preview?.minutes && preview.minutes > LONG_SHIFT_HOURS * 60);
   return (
     <Sheet palette={p} visible={!!target} onClose={onClose} title={shift ? (direct ? "Correct this shift" : "Ask to correct this shift") : direct ? "Add a shift" : "Ask to add a shift"} subtitle={person?.fullName || undefined} icon="hourglass">
       {waiting && changed ? <>
@@ -381,16 +393,29 @@ export function ShiftSheet({ p, target, today, direct, people = [], pending = []
           <SearchPicker p={p} options={people.map(x => ({ id: x.userId, label: x.fullName || "Team member", keywords: x.department ? DEPARTMENT_LABEL[x.department] : undefined }))} value={who} onChange={setWho} placeholder="Search the team" nouns="people" />
         </>}
         {!!shift?.editNote && <Notice text={`Changed before: ${shift.editNote}`} p={p} />}
-        <DateField p={p} label="Date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today} value={{ from: day, to: day }} onChange={next => setDay(next.from)} />
-        <Field label="Clocked in (HH:MM)" value={from} onChange={setFrom} p={p} placeholder="08:00" />
-        <Field label={shift && !shift.clockedOutAt ? "Clocked out (HH:MM, leave empty if still on shift)" : "Clocked out (HH:MM)"} value={to} onChange={setTo} p={p} placeholder="16:00" />
+        {!!shift && <Text style={[ui.small, { color: p.muted }]}>As it stands: in {fullStamp(shift.clockedInAt)}, out {shift.clockedOutAt ? fullStamp(shift.clockedOutAt) : shiftEnds(shift).out.toLowerCase()}.</Text>}
+        <DateField p={p} label="Clock in date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today} value={{ from: day, to: day }}
+          onChange={next => { setDay(next.from); if (!outDay || outDay < next.from || outDay === day) setOutDay(next.from); setConfirmLong(false); }} />
+        <Field label="Clock in time (HH:MM)" value={from} onChange={v => { setFrom(v); setConfirmLong(false); }} p={p} placeholder="08:00" />
+        <DateField p={p} label="Clock out date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today} value={{ from: outDay, to: outDay }} onChange={next => { setOutDay(next.from); setConfirmLong(false); }} />
+        <Field label={shift && !shift.clockedOutAt ? "Clock out time (HH:MM, leave empty if still on shift)" : "Clock out time (HH:MM)"} value={to} onChange={v => { setTo(v); setConfirmLong(false); }} p={p} placeholder="16:00" />
+        {!!clockedInAt && <View style={[ui.card, { backgroundColor: p.wash, borderColor: p.border, gap: 4, padding: 12 }]}>
+          <Text style={[ui.small, { color: p.text, fontVariant: ["tabular-nums"] }]}>Clock in: {fullStamp(clockedInAt)}</Text>
+          <Text style={[ui.small, { color: p.text, fontVariant: ["tabular-nums"] }]}>Clock out: {clockedOutAt ? fullStamp(clockedOutAt) : to ? "–" : shift && !shift.clockedOutAt ? "still open" : "–"}</Text>
+          {!!preview?.minutes && <Text style={[ui.small, { color: p.text, fontWeight: "700" }]}>{minutesLabel(preview.minutes)}</Text>}
+          {!!preview?.error && !preview.needsConfirm && <Text style={[ui.small, { color: p.danger, fontWeight: "700" }]}>{preview.error}</Text>}
+        </View>}
+        {askLong && <View style={{ gap: 8 }}>
+          <Notice text={`${LONG_SHIFT_QUESTION} ${minutesLabel(preview?.minutes ?? 0)} from ${clockedInAt ? fullStamp(clockedInAt) : ""} to ${clockedOutAt ? fullStamp(clockedOutAt) : ""}.`} p={p} />
+          <Chip p={p} label="Yes, that is right" on={confirmLong} onPress={() => setConfirmLong(v => !v)} />
+        </View>}
         <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Department</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{DEPARTMENTS.map(d => <Chip key={d} p={p} label={DEPARTMENT_LABEL[d]} on={department === d} onPress={() => setDepartment(d)} />)}</View>
         <Field label="Why it changed" value={why} onChange={setWhy} p={p} placeholder="Forgot to clock out" />
-        <Text style={[ui.small, { color: p.muted }]}>UK time. An end time earlier than the start counts as after midnight.{direct ? " It applies straight away, and they are told their timesheet was corrected." : ""}</Text>
+        <Text style={[ui.small, { color: p.muted }]}>UK time. A shift lasts at most {MAX_SHIFT_HOURS} hours; over {LONG_SHIFT_HOURS} hours needs a yes.{direct ? " It applies straight away, and they are told their timesheet was corrected." : ""}</Text>
         {!direct && <Notice text="Clock in and out is locked. This goes to a super admin; their hours, productivity and performance change only once it is approved." p={p} />}
         {!!error && <Notice text={error} p={p} tone="bad" />}
-        <Button label={busy ? "Saving…" : direct ? (shift ? "Save the correction" : "Add the shift") : "Send for approval"} icon={direct ? "check" : "send"} primary p={p} disabled={busy} onPress={() => void save()} />
+        <Button label={busy ? "Saving…" : direct ? (shift ? "Save the correction" : "Add the shift") : "Send for approval"} icon={direct ? "check" : "send"} primary p={p} disabled={busy || (askLong && !confirmLong)} onPress={() => void save()} />
       </>}
     </Sheet>
   );

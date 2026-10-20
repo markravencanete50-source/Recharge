@@ -20,7 +20,8 @@ import { DAILY_WORK, DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { formatCount, formatDay, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { londonInstant, validClock } from "../../lib/team-time";
-import { COUNTED_UNTIL_CORRECTED, NOT_CLOCKED_OUT, countedMinutes, dayClock, isStaleOpen } from "../../lib/shift-hours";
+import { COUNTED_UNTIL_CORRECTED, LONG_SHIFT_HOURS, LONG_SHIFT_QUESTION, NOT_CLOCKED_OUT, checkShiftTimes, countedMinutes, dayClock, fullStamp, isStaleOpen } from "../../lib/shift-hours";
+import { DateField } from "./CalendarPicker";
 import { isReflectionRefusal, needsReflection } from "../../lib/reflection";
 import { DayReflection } from "./DayReflection";
 import { KpiAdmin } from "./KpiAdmin";
@@ -32,7 +33,6 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: 
 const sinceMinutes = (iso: string) => Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
 const londonDay = (offset = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(Date.now() + offset * 86400000));
 const londonDayOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date(iso));
-const addDays = (iso: string, n: number) => new Date(Date.parse(iso + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 const PAUSE_ICON = { break: "pause-circle", emergency: "alert-triangle" } as const satisfies Record<PauseStartKind, string>;
 
 // Home: the person's own shift, with clock in and out.
@@ -252,8 +252,8 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
   const [kpis, setKpis] = useState<KpiRead | null>(null);
   const [closing, setClosing] = useState<Shift | null>(null);
   const [busy, setBusy] = useState(false), [closeError, setCloseError] = useState("");
-  const [stopped, setStopped] = useState(""), [why, setWhy] = useState("");
-  const request = useRequestId(closing ? ["close", closing.id, stopped, why].join(":") : null);
+  const [stopped, setStopped] = useState(""), [stoppedDay, setStoppedDay] = useState(""), [why, setWhy] = useState(""), [confirmLong, setConfirmLong] = useState(false);
+  const request = useRequestId(closing ? ["close", closing.id, stoppedDay, stopped, why, confirmLong].join(":") : null);
   const load = useCallback(async () => {
     setLoading(true); setError("");
     const { from, to } = period.range;
@@ -274,16 +274,24 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
     setLoading(false);
   }, [period.range, period.previous]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
-  const openClose = (s: Shift) => { setClosing(s); setStopped(time(new Date().toISOString())); setWhy(""); setCloseError(""); };
+  // A shift still within 16 hours ends now by default; one that did not clock out starts from its own clock in day.
+  const openClose = (s: Shift) => {
+    const stale = isStaleOpen(s);
+    setClosing(s); setStoppedDay(stale ? londonDayOf(s.clockedInAt) : londonDay()); setStopped(stale ? "" : time(new Date().toISOString())); setWhy(""); setCloseError(""); setConfirmLong(false);
+  };
+  // When the shift ends, with its date: clock out has its own date and time (lib/shift-hours.ts).
+  const endedAt = closing && /^\d{4}-\d{2}-\d{2}$/.test(stoppedDay) && validClock(stopped) ? londonInstant(stoppedDay, stopped) : null;
+  const closeCheck = closing && endedAt ? checkShiftTimes({ clockedInAt: closing.clockedInAt, clockedOutAt: endedAt, confirmedLong: confirmLong }) : null;
+  const askLong = !!closeCheck?.needsConfirm || (confirmLong && !!closeCheck?.minutes && closeCheck.minutes > LONG_SHIFT_HOURS * 60);
   async function close() {
     if (!closing || busy) return;
     if (!validClock(stopped)) { setCloseError("Enter the time as HH:MM, for example 17:30."); return; }
-    // The day they stopped: the day they started, or the next one for a time earlier than the start.
-    const started = londonDayOf(closing.clockedInAt), endedAt = londonInstant(stopped <= time(closing.clockedInAt) ? addDays(started, 1) : started, stopped);
-    if (Date.parse(endedAt) > Date.now()) { setCloseError("That time hasn’t happened yet."); return; }
+    if (!endedAt || !closeCheck) { setCloseError("Choose the date they stopped."); return; }
+    if (closeCheck.error) { setCloseError(closeCheck.needsConfirm ? "" : closeCheck.error); return; }
     setBusy(true); setCloseError("");
     try {
-      await writeTeams({ action: "closeShift", requestId: request.get(), shiftId: closing.id, endedAt, ...(why.trim().length >= 3 ? { note: why.trim() } : {}) });
+      await writeTeams({ action: "closeShift", requestId: request.get(), shiftId: closing.id, endedAt, ...(why.trim().length >= 3 ? { note: why.trim() } : {}),
+        ...(confirmLong && (closeCheck.minutes ?? 0) > LONG_SHIFT_HOURS * 60 ? { confirmLong: true } : {}) });
       request.done(); setClosing(null); celebrate(direct ? "Shift ended" : "Sent for approval"); await load();
     }
     catch (e) { setCloseError(message(e)); } finally { setBusy(false); }
@@ -353,14 +361,25 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
         </Section>
         <TargetsSheet key={t.version} p={p} targets={t} visible={targets} onClose={() => setTargets(false)} onDone={saved(load)} />
       </>}
-      <Sheet palette={p} visible={!!closing} onClose={() => setClosing(null)} title={closing?.fullName ?? ""} subtitle={closing ? `Clocked in at ${time(closing.clockedInAt)}` : undefined} icon="hourglass">
+      <Sheet palette={p} visible={!!closing} onClose={() => setClosing(null)} title={closing?.fullName ?? ""} subtitle={closing ? `Clocked in ${fullStamp(closing.clockedInAt)}` : undefined} icon="hourglass">
         <Text style={[ui.body, { color: p.text }]}>If they forgot to clock out, set when they actually stopped.</Text>
         <Tag label={closing ? isStaleOpen(closing) ? `${NOT_CLOCKED_OUT}: ${COUNTED_UNTIL_CORRECTED.toLowerCase()}` : `${hoursLabel(Math.round(countedMinutes(closing)))} so far` : ""} tone={closing && isStaleOpen(closing) ? "wait" : "plain"} p={p} />
-        <Field label="Stopped work at (HH:MM, UK time)" value={stopped} onChange={setStopped} p={p} placeholder="17:30" />
+        <DateField p={p} label="Stopped work on" mode="single" wholeMonthLink={false} empty="Choose a date" today={londonDay()} value={{ from: stoppedDay, to: stoppedDay }} onChange={next => { setStoppedDay(next.from); setConfirmLong(false); }} />
+        <Field label="Stopped work at (HH:MM, UK time)" value={stopped} onChange={v => { setStopped(v); setConfirmLong(false); }} p={p} placeholder="17:30" />
+        {!!closing && !!endedAt && <View style={[ui.card, { backgroundColor: p.wash, borderColor: p.border, gap: 4, padding: 12 }]}>
+          <Text style={[ui.small, { color: p.text, fontVariant: ["tabular-nums"] }]}>Clock in: {fullStamp(closing.clockedInAt)}</Text>
+          <Text style={[ui.small, { color: p.text, fontVariant: ["tabular-nums"] }]}>Clock out: {fullStamp(endedAt)}</Text>
+          {!!closeCheck?.minutes && <Text style={[ui.small, { color: p.text, fontWeight: "700" }]}>{hoursLabel(closeCheck.minutes)}</Text>}
+          {!!closeCheck?.error && !closeCheck.needsConfirm && <Text style={[ui.small, { color: p.danger, fontWeight: "700" }]}>{closeCheck.error}</Text>}
+        </View>}
+        {askLong && <View style={{ gap: 8 }}>
+          <Notice text={`${LONG_SHIFT_QUESTION} ${hoursLabel(closeCheck?.minutes ?? 0)}.`} p={p} />
+          <View style={[ui.row, { gap: 10 }]}><Switch value={confirmLong} onValueChange={setConfirmLong} accessibilityLabel="Yes, that is right" /><Text style={[ui.small, { color: p.text, fontWeight: "700" }]}>Yes, that is right</Text></View>
+        </View>}
         <Field label="Why (optional)" value={why} onChange={setWhy} p={p} placeholder="Forgot to clock out" />
         {!direct && <Notice text="Clock in and out is locked. This goes to a super admin, and the shift ends only once they approve it." p={p} />}
         {!!closeError && <Notice text={closeError} p={p} tone="bad" />}
-        <Button label={busy ? "Saving…" : direct ? "End the shift" : "Send for approval"} icon={direct ? "log-out" : "send"} primary p={p} disabled={busy} onPress={() => void close()} />
+        <Button label={busy ? "Saving…" : direct ? "End the shift" : "Send for approval"} icon={direct ? "log-out" : "send"} primary p={p} disabled={busy || (askLong && !confirmLong)} onPress={() => void close()} />
       </Sheet>
     </View>
   );

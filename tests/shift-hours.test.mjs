@@ -85,3 +85,24 @@ test('the day view: a shift left open needs attention, not "on shift"', () => {
   assert.deepEqual([t.minutes, t.open, t.stale], [921, 0, 1]);
   assert.ok(t.minutes <= 24 * 60);
 });
+
+test('the correction, add and end-shift sheets: own date and time each end, dated stamps, a yes over 16 hours', async () => {
+  const { readFileSync } = await import('node:fs');
+  const team = readFileSync('mobile/src/LiveTeamTime.tsx', 'utf8');
+  const sheet = team.slice(team.indexOf('export function ShiftSheet'));
+  for (const label of ['"Clock in date"', '"Clock out date"', 'Clock in time (HH:MM)', 'Clock out time (HH:MM']) assert.ok(sheet.includes(label), label);
+  assert.match(sheet, /checkShiftTimes\(/);
+  assert.match(sheet, /Clock in: \{fullStamp\(clockedInAt\)\}/);
+  assert.match(sheet, /Clock out: \{clockedOutAt \? fullStamp\(clockedOutAt\)/);
+  assert.match(sheet, /LONG_SHIFT_QUESTION/);
+  assert.match(sheet, /confirmLong: true/);
+  assert.doesNotMatch(sheet, /to <= from \? addDays/, 'no more guessing the next day from the times');
+  const shifts = readFileSync('mobile/src/LiveShifts.tsx', 'utf8');
+  assert.match(shifts, /label="Stopped work on"/);
+  assert.match(shifts, /Clock out: \{fullStamp\(endedAt\)\}/);
+  assert.match(shifts, /checkShiftTimes\(\{ clockedInAt: closing\.clockedInAt/);
+  for (const source of [team, shifts]) { assert.doesNotMatch(source, /—/); assert.doesNotMatch(source, /linear-gradient|LinearGradient/); }
+  // Ending a shift goes through the same rule on the server (closeShift takes the yes too).
+  const base = { action: 'closeShift', requestId: crypto.randomUUID(), shiftId: crypto.randomUUID(), endedAt: at('2026-10-16', '02:00') };
+  assert.ok(teamsActionSchema.parse({ ...base, confirmLong: true }));
+});
