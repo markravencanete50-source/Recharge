@@ -88,7 +88,7 @@ export const operationsReadSchema=z.union([
  z.object({section:z.literal('repairLimits')}).strict(),
  // The repairs a cleaner reported and where each is up to (lib/cleaner-repairs.ts; cleaners only, the database checks).
  z.object({section:z.literal('cleanerRepairs')}).strict(),
- z.object({propertyId:id.optional(),workId:id.optional()}).strict().refine(v=>!(v.propertyId&&v.workId),{message:'Choose a property or a work item'}),
+ z.object({propertyId:id.optional(),workId:id.optional(),kind:z.string().regex(/^[a-z_]{1,40}$/).optional()}).strict().refine(v=>!(v.propertyId&&v.workId),{message:'Choose a property or a work item'}).refine(v=>!(v.kind&&v.workId),{message:'Choose a kind or a work item'}),
 ]);
 // The journey route's 400 message. A comparable or a listing link is named in plain words ("Comparable 1 link: The link
 // must start with https://"); everything else reads as validationReason has it.

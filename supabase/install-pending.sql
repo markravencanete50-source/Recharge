@@ -28,3 +28,5 @@
 -- 20261025400000_push_message_time: installed by Lee in the SQL editor on 20 October 2026 (no DROP or DELETE; the push claim returns each message's time); verified by the lead.
 
 -- 20261025500000 lead_files_guest_push, 20261025600000 shift_hours_clip_open_limit, 20261025700000 view_as_super_admins: installed by Lee 2026-10-20, verified
+
+-- 20261025800000 operations_read_kind: installed by Lee 2026-10-20, verified
