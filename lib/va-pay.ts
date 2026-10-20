@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { brandCanvas, darkBrandCanvas, depthTokens, designTokens } from './design-tokens';
 import { legalDetails } from './legal-details';
-import { minutesLabel } from './team-time';
+import { londonClock, minutesLabel } from './team-time';
+import { NOT_CLOCKED_OUT, OPEN_SHIFT_LIMIT_HOURS, ukDayOf } from './shift-hours';
+import type { TimesheetPerson } from './workspace-teams-policy';
 
 // VA pay and the monthly Request for Invoice (migration 20261022200000). A VA (the admin and Stays team) is paid by the
 // hour in US dollars, plus a bonus for the highest KPI tier they reach. On the 1st of each month Recharge makes one
@@ -121,6 +123,47 @@ export function vaLines(r: VaRequest): VaLine[] {
   const lines: VaLine[] = [{ key: 'hours', label: `Hours worked ${monthLabel(r.periodStart)}: ${hoursLabel(r.minutes)} at ${rateLabel(r.hourlyRateMinor)}`, amountMinor: r.hoursMinor }];
   if (r.bonusMinor > 0) lines.push({ key: 'bonus', label: bonusLabel(r), amountMinor: r.bonusMinor });
   return lines;
+}
+
+// --- How the pay is worked out, shift by shift ------------------------------------------------------------------------
+// The VA's timesheet for the request's month (each day holds its own part of each shift, counted by lib/shift-hours.ts:
+// clipped to the month, unpaid pauses off, a shift left open counted up to 16 hours) gathered into one row per shift:
+// the date it started, clock in, clock out (with its date when it ended on another day), the hours that count this
+// month, the rate and the amount. The totals compare with the hours in the request, which was worked out when it was
+// made: a shift corrected since then, or rounding by the day, shows as a difference rather than silently.
+export type VaShiftRow = { id: string; date: string; clockIn: string; clockOut: string; stale: boolean; minutes: number; hours: string; rate: string; amountMinor: number; amount: string };
+export type VaBreakdown = {
+  rows: VaShiftRow[]; minutes: number; hours: string; amountMinor: number; amount: string;
+  requestMinutes: number; difference: number; note: string | null;
+  lines: { label: string; value: string; strong?: boolean }[];
+};
+export function vaShiftBreakdown(person: TimesheetPerson | null | undefined, r: Pick<VaRequest, 'hourlyRateMinor' | 'workedMinutes' | 'hoursAdjustMinutes' | 'minutes' | 'hoursMinor' | 'bonusMinor' | 'totalMinor'>): VaBreakdown {
+  const byShift = new Map<string, { shift: TimesheetPerson['days'][number]['shifts'][number]; minutes: number }>();
+  for (const d of person?.days ?? []) for (const s of d.shifts) {
+    const seen = byShift.get(s.id);
+    if (seen) seen.minutes += s.minutes; else byShift.set(s.id, { shift: s, minutes: s.minutes });
+  }
+  const rows = [...byShift.values()].sort((a, b) => Date.parse(a.shift.clockedInAt) - Date.parse(b.shift.clockedInAt)).map(({ shift: s, minutes }) => {
+    const inDay = ukDayOf(s.clockedInAt), outDay = s.clockedOutAt ? ukDayOf(s.clockedOutAt) : null;
+    const clockOut = s.clockedOutAt ? (outDay === inDay ? londonClock(s.clockedOutAt) : `${shortDay(outDay!)} ${londonClock(s.clockedOutAt)}`)
+      : s.stale ? `${NOT_CLOCKED_OUT} (${OPEN_SHIFT_LIMIT_HOURS}h max)` : 'Still on shift';
+    const amountMinor = hoursAmount(minutes, r.hourlyRateMinor);
+    return { id: s.id, date: shortDay(inDay), clockIn: londonClock(s.clockedInAt), clockOut, stale: !!s.stale, minutes, hours: hoursLabel(minutes), rate: rateLabel(r.hourlyRateMinor), amountMinor, amount: usd(amountMinor) };
+  });
+  const minutes = rows.reduce((t, x) => t + x.minutes, 0), amountMinor = hoursAmount(minutes, r.hourlyRateMinor);
+  const difference = r.workedMinutes - minutes;
+  const note = difference === 0 ? null : Math.abs(difference) <= rows.length
+    ? `The request counts ${hoursLabel(r.workedMinutes)}: it rounds each day to the minute, a difference of ${Math.abs(difference)} min.`
+    : `The request was made with ${hoursLabel(r.workedMinutes)}; the shifts now add up to ${hoursLabel(minutes)} (${signedHours(-difference)}). A shift was corrected after it was made: adjust the request if it should change.`;
+  const lines: VaBreakdown['lines'] = [
+    { label: `Shifts: ${hoursLabel(minutes)} at ${rateLabel(r.hourlyRateMinor)}`, value: usd(amountMinor) },
+    ...(difference !== 0 ? [{ label: `Hours in the request: ${hoursLabel(r.workedMinutes)}`, value: usd(hoursAmount(r.workedMinutes, r.hourlyRateMinor)) }] : []),
+    ...(r.hoursAdjustMinutes ? [{ label: `Hours correction ${signedHours(r.hoursAdjustMinutes)}`, value: `${hoursLabel(r.minutes)} paid` }] : []),
+    { label: `Hours paid: ${hoursLabel(r.minutes)} at ${rateLabel(r.hourlyRateMinor)}`, value: usd(r.hoursMinor) },
+    ...(r.bonusMinor > 0 ? [{ label: 'Bonus', value: usd(r.bonusMinor) }] : []),
+    { label: 'Total', value: usd(r.totalMinor), strong: true },
+  ];
+  return { rows, minutes, hours: hoursLabel(minutes), amountMinor, amount: usd(amountMinor), requestMinutes: r.workedMinutes, difference, note, lines };
 }
 
 // --- Status ----------------------------------------------------------------------------------------------------------

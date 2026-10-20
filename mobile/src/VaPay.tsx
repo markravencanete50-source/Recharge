@@ -11,10 +11,12 @@ import { Button, Field, Loading, london, message, Notice, Section, useRequestId 
 import { List, Row } from "./AccountsPayable";
 import { readTeams, writeTeams } from "./backend/client";
 import { exportReport } from "./exportReport";
+import { SheetTable, cellText } from "./SheetTable";
+import { timesheetSchema } from "../../lib/workspace-teams-policy";
 import {
   adjustVaAction, approveVaAction, hoursAmount, issueMonths, issueVaAction, hoursLabel, markVaPaidAction, monthLabel, parseUsd, queryVaAction, rateLabel, rejectVaAction, saveVaPayAction, signedHours,
   TIER_LABEL, usd, VA_DOC_TITLE, VA_PAPER, vaDoc, vaFileName, vaGroups, vaPayAccessQuery, vaPayAccessSchema, vaPaySetupQuery, vaPaySetupSchema, vaRequestHtml, vaRequestQuery,
-  vaRequestSchema, vaRequestsQuery, vaRequestsSchema, vaStatus, longDay, type StatusTone, type VaPayAccess, type VaPayRow, type VaPaySetup, type VaRequest,
+  vaRequestSchema, vaRequestsQuery, vaRequestsSchema, vaShiftBreakdown, vaStatus, longDay, type StatusTone, type VaBreakdown, type VaShiftRow, type VaPayAccess, type VaPayRow, type VaPaySetup, type VaRequest,
 } from "../../lib/va-pay";
 import { DEPARTMENT_LABEL } from "../../lib/hub";
 import { isWorkspaceAdmin } from "../../lib/modules";
@@ -134,6 +136,7 @@ export function VaRequestSheet({ p, requestId, canAct = false, onClose, onChange
         {!!request.hoursAdjustMinutes && <Notice text={`Hours corrected by ${signedHours(request.hoursAdjustMinutes)}${request.hoursAdjustReason ? `: ${request.hoursAdjustReason}` : ""}`} p={p} />}
         {request.bonusAdjusted && <Notice text={`Bonus set to ${usd(request.bonusMinor)} (the KPI's was ${usd(request.bonusAutoMinor)})${request.bonusAdjustReason ? `: ${request.bonusAdjustReason}` : ""}`} p={p} />}
         <VaRequestPaper request={request} />
+        <VaPayBreakdown p={p} request={request} />
         <Button label="Download (print or save as PDF)" icon="download" p={p} onPress={() => void download()} />
         {!!note && <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>{note}</Text>}
         {canAct && !request.own && <VaDecision p={p} request={request} onDone={saved(async () => { await load(); await onChanged?.(); })} />}
@@ -144,6 +147,47 @@ export function VaRequestSheet({ p, requestId, canAct = false, onClose, onChange
         </View>}
       </>}
     </Sheet>
+  );
+}
+
+// How the pay is worked out: every shift of the month (date, clock in, clock out, the hours that count, the rate and the
+// amount) from the VA's timesheet, with the totals beside the request's own (lib/va-pay.ts vaShiftBreakdown).
+function VaPayBreakdown({ p, request }: { p: Palette; request: VaRequest }) {
+  const [state, setState] = useState<{ key: string; breakdown: VaBreakdown | null; error: string } | null>(null);
+  const key = `${request.id}:${request.version}`;
+  useEffect(() => {
+    let active = true;
+    readTeams({ section: "timesheet", from: request.periodStart, to: request.periodEnd, userId: request.vaId })
+      .then(r => { if (active) setState({ key, breakdown: vaShiftBreakdown(timesheetSchema.parse(r.data).people.find(x => x.userId === request.vaId), request), error: "" }); })
+      .catch(e => { if (active) setState({ key, breakdown: null, error: message(e) }); });
+    return () => { active = false; };
+  }, [key, request]);
+  const b = state?.key === key ? state.breakdown : null;
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={[ui.label, { color: p.muted }]}>How the pay is worked out</Text>
+      {state?.key === key && !!state.error && <Notice text={`The shifts could not be read: ${state.error}`} p={p} />}
+      {state?.key !== key && <Loading p={p} rows={2} />}
+      {b && <>
+        <SheetTable<VaShiftRow> p={p} rows={b.rows} keyOf={r => r.id} search={false} empty="No clocked shifts in this month."
+          columns={[
+            { label: "Date", width: 96, cell: r => cellText(p, r.date, true) },
+            { label: "In", width: 64, cell: r => cellText(p, r.clockIn) },
+            { label: "Out", width: 150, cell: r => r.stale ? <Text style={[ui.small, { color: p.waiting, fontWeight: "700" }]}>{r.clockOut}</Text> : cellText(p, r.clockOut) },
+            { label: "Hours counted", width: 110, cell: r => cellText(p, r.hours) },
+            { label: "Rate", width: 80, cell: r => cellText(p, r.rate) },
+            { label: "Amount", width: 90, cell: r => cellText(p, r.amount, true) },
+          ]} />
+        <View style={{ gap: 4, padding: 12, borderRadius: 12, backgroundColor: p.wash }}>
+          {b.lines.map(l => <View key={l.label} style={[ui.between, { gap: 12 }]}>
+            <Text style={[ui.small, { color: p.text, flexShrink: 1, fontWeight: l.strong ? "700" : "400" }]}>{l.label}</Text>
+            <Text style={[ui.small, { color: p.text, fontWeight: l.strong ? "700" : "400", fontVariant: ["tabular-nums"] }]}>{l.value}</Text>
+          </View>)}
+        </View>
+        {!!b.note && <Text style={[ui.small, { color: p.muted }]}>{b.note}</Text>}
+        {b.rows.some(r => r.stale) && <Text style={[ui.small, { color: p.waiting }]}>A shift with no clock out counts at most 16 hours until a manager corrects it in Productivity.</Text>}
+      </>}
+    </View>
   );
 }
 

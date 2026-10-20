@@ -152,3 +152,36 @@ test('the screens and the monthly run are wired where people look for them', () 
   assert.doesNotMatch(read('lib/va-pay.ts'), /from '\.\/cleaner-invoices'/);
   assert.doesNotMatch(screens, /CleanerInvoices|cleaner-invoices/);
 });
+
+test('clicking a VA shows how the pay is worked out, shift by shift, with totals', () => {
+  // September at $6.00/h: a day shift, a night shift into the next day (each day's part from the timesheet), and a
+  // shift left open counted up to 16 hours.
+  const shift = (n, clockedInAt, clockedOutAt, minutes, extra = {}) => ({ id: id(n), department: 'guest_relations', clockedInAt, clockedOutAt, minutes, edited: false, editNote: '',
+    overtimeFrom: null, unpaidMinutes: 0, pauses: [], stale: false, countedUntil: null, ...extra });
+  const night = (m) => shift(11, '2026-09-10T21:00:00.000Z', '2026-09-11T01:30:00.000Z', m);
+  const person = { userId: id(2), fullName: 'Gina Santos', role: 'admin', department: 'guest_relations', active: true, totalMinutes: 0, days: [
+    { day: '2026-09-08', planned: null, minutes: 480, shifts: [shift(10, '2026-09-08T07:00:00.000Z', '2026-09-08T15:00:00.000Z', 480)] },
+    { day: '2026-09-10', planned: null, minutes: 120, shifts: [night(120)] },
+    { day: '2026-09-11', planned: null, minutes: 150, shifts: [night(150)] },
+    { day: '2026-09-15', planned: null, minutes: 921, shifts: [shift(12, '2026-09-15T07:39:00.000Z', null, 921, { stale: true })] },
+    { day: '2026-09-16', planned: null, minutes: 39, shifts: [shift(12, '2026-09-15T07:39:00.000Z', null, 39, { stale: true })] },
+  ] };
+  const worked = 480 + 270 + 960;
+  const b = va.vaShiftBreakdown(person, { hourlyRateMinor: 600, workedMinutes: worked, hoursAdjustMinutes: 0, minutes: worked, hoursMinor: worked * 10, bonusMinor: 5000, totalMinor: worked * 10 + 5000 });
+  assert.deepEqual(b.rows.map(r => [r.date, r.clockIn, r.clockOut, r.hours, r.rate, r.amount]), [
+    ['Tue 8 Sep', '08:00', '16:00', '8h 00m', '$6.00/h', '$48.00'],
+    ['Thu 10 Sep', '22:00', 'Fri 11 Sep 02:30', '4h 30m', '$6.00/h', '$27.00'],
+    ['Tue 15 Sep', '08:39', 'Did not clock out (16h max)', '16h 00m', '$6.00/h', '$96.00'],
+  ]);
+  assert.equal(b.rows[2].stale, true);
+  assert.deepEqual([b.minutes, b.amountMinor, b.difference, b.note], [worked, 17100, 0, null]);
+  assert.deepEqual(b.lines.map(l => [l.label, l.value]), [['Shifts: 28h 30m at $6.00/h', '$171.00'], ['Hours paid: 28h 30m at $6.00/h', '$171.00'], ['Bonus', '$50.00'], ['Total', '$221.00']]);
+  // A shift corrected after the request was made shows as a difference, never silently.
+  const later = va.vaShiftBreakdown(person, { hourlyRateMinor: 600, workedMinutes: worked + 60, hoursAdjustMinutes: 0, minutes: worked + 60, hoursMinor: (worked + 60) * 10, bonusMinor: 0, totalMinor: (worked + 60) * 10 });
+  assert.match(later.note, /was made with 29h 30m; the shifts now add up to 28h 30m/);
+  assert.equal(va.vaShiftBreakdown(undefined, { hourlyRateMinor: 600, workedMinutes: 0, hoursAdjustMinutes: 0, minutes: 0, hoursMinor: 0, bonusMinor: 0, totalMinor: 0 }).rows.length, 0);
+  const screens = read('mobile/src/VaPay.tsx');
+  assert.match(screens, /<VaPayBreakdown p=\{p\} request=\{request\} \/>/);
+  assert.match(screens, /section: "timesheet", from: request\.periodStart, to: request\.periodEnd, userId: request\.vaId/);
+  for (const label of ['"Date"', '"In"', '"Out"', '"Hours counted"', '"Rate"', '"Amount"']) assert.ok(screens.includes(`label: ${label}`), label);
+});

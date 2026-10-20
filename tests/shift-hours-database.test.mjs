@@ -146,6 +146,19 @@ test('VA pay counts the month by day, a shift left open up to the limit', async 
   assert.equal(req.w, 16 * 60 + 120, 'the open shift counts 16 hours, the last night only up to midnight');
   assert.equal(req.h, (16 * 60 + 120) * 600 / 60);
   assert.ok(req.d.every(x => x.minutes <= 24 * 60));
+  // The breakdown on the request (VaPay.tsx): the VA's timesheet for the month, read by management and by the VA, adds
+  // up to the same hours.
+  for (const reader of [SUPER, ADMIN]) {
+    await as(reader);
+    const sheet = timesheetSchema.parse(await rpc('workspace_teams_read', ['timesheet', start, lastDay, null, users[ADMIN]]));
+    const alex = sheet.people.find(x => x.userId === users[ADMIN]);
+    assert.equal(alex.totalMinutes, req.w);
+    const { vaShiftBreakdown } = await vite.ssrLoadModule('/lib/va-pay.ts');
+    const b = vaShiftBreakdown(alex, { hourlyRateMinor: 600, workedMinutes: req.w, hoursAdjustMinutes: 0, minutes: req.w, hoursMinor: req.h, bonusMinor: 0, totalMinor: req.h });
+    assert.deepEqual([b.rows.length, b.minutes, b.difference, b.rows[0].stale], [2, req.w, 0, true]);
+  }
+  await as(JOHN);
+  await assert.rejects(rpc('workspace_teams_read', ['timesheet', start, lastDay, null, users[ADMIN]]), /only see your own timesheet/);
 });
 
 test('the migration runs twice without changing anything', async () => {
