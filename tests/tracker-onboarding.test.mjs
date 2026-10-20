@@ -249,12 +249,6 @@ test('the onboarding, licensing and purchase screens take SectionProps, draw a t
   assert.match(source('mobile/src/PurchaseOrdersList.tsx'), /trackerItemsFor\(work, ctx, "purchases"\)/);
 });
 
-test('the Hub keeps its own purchase and licensing lists until it is unrouted', () => {
-  const hub = source('mobile/src/LiveHub.tsx');
-  assert.match(hub, /trackerItemsFor\(work, ctx, "purchases"\)/);
-  assert.match(hub, /trackerItemsFor\(work, ctx, "licensing"\)/);
-});
-
 test('none of the new files holds an em dash', () => {
   for (const path of ['lib/tracker-onboarding.ts', 'mobile/src/OnboardingTracker.tsx', 'mobile/src/LicensingList.tsx', 'mobile/src/PurchaseOrdersList.tsx', 'mobile/src/Tracker.tsx', 'tests/tracker-onboarding.test.mjs'])
     assert.ok(!source(path).includes(String.fromCharCode(0x2014)), path);

@@ -227,9 +227,8 @@ test('deep links resolve for every page, sub-page and old link', () => {
   }
 });
 
-test('Hub tabs are not used by any navigation file', () => {
-  const lib = read('lib/hub.ts');
-  assert.match(lib, /@deprecated[\s\S]*export function hubTabsFor/, 'kept only until the unrouted Hub screen goes');
+test('Hub tabs are gone, and no navigation file uses them', () => {
+  assert.doesNotMatch(read('lib/hub.ts'), /hubTabsFor/, 'deleted with the unrouted Hub screen');
   for (const file of ['lib/role-panel.ts', 'lib/home-tools.ts', 'lib/workspace-search.ts', 'lib/workspace-map.ts', 'lib/tool-directory.ts', 'mobile/src/NavigationBar.tsx', 'mobile/src/RoleNavigation.tsx', 'mobile/src/DesktopNavigation.tsx'])
     assert.doesNotMatch(read(file), /hubTabsFor/, file);
 });

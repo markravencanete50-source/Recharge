@@ -173,9 +173,8 @@ test('clocking out opens the reflection first for required roles, and other role
   assert.match(shifts, /<DayReflection palette=\{p\} visible=\{reflecting\}/);
   // The plain clock-out call is unchanged.
   assert.match(shifts, /action: "clockOut", requestId: request\.get\(\)/);
-  // The old sign-off card now lives in its own file (Home offers it when nobody is clocked in); LiveStays still exports it.
+  // The old sign-off card now lives in its own file (Home offers it when nobody is clocked in).
   assert.match(readFileSync('mobile/src/SignOffCard.tsx', 'utf8'), /function SignOffCard/);
-  assert.match(readFileSync('mobile/src/LiveStays.tsx', 'utf8'), /export \{ SignOffCard \}/);
   const sheet = readFileSync('mobile/src/DayReflection.tsx', 'utf8');
   assert.match(sheet, /useRequestId/);
   assert.match(sheet, /disabled=\{busy\}/);

@@ -6,8 +6,8 @@ import { readFileSync } from 'node:fs';
 // and the local read of an uploaded file before anything is sent.
 const DASH = String.fromCharCode(0x2014);
 const read = name => readFileSync(new URL(`../mobile/src/${name}.tsx`, import.meta.url), 'utf8');
-const files = Object.fromEntries(['LiveAccounts', 'PayoutStays', 'PayoutLinesSheet', 'LiveStays', 'StaySheet', 'AccountsFlows'].map(name => [name, read(name)]));
-const { LiveAccounts, PayoutStays, PayoutLinesSheet, LiveStays, StaySheet, AccountsFlows } = files;
+const files = Object.fromEntries(['LiveAccounts', 'PayoutStays', 'PayoutLinesSheet', 'StaySheet', 'AccountsFlows'].map(name => [name, read(name)]));
+const { LiveAccounts, PayoutStays, PayoutLinesSheet, StaySheet, AccountsFlows } = files;
 
 test('every platform has its own upload button, driven by the shared list', () => {
   assert.match(LiveAccounts, /RECONCILED_CHANNELS\.map\(channel => <Button key=\{channel\}/);
