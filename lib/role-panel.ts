@@ -31,7 +31,7 @@ const PAGE: Record<Page, [string, PanelIcon]> = {
   home: ['Home', 'home'], todo: ['To-do', 'clipboard'], calendar: ['Calendar', 'calendar'], decisions: ['My requests', 'check-circle'],
   favorites: ['Favourites', 'star'], properties: ['Properties', 'key'], analytics: ['Reports', 'bar-chart-2'],
   inbox: ['Messages', 'message-circle'], help: ['Help & training', 'help-circle'],
-  approvals: ['Approvals', 'check-circle'], mailbox: ['Mailbox', 'mail'], statements: ['Owner statements', 'pie-chart'], enquiries: ['Client enquiries', 'mail'],
+  approvals: ['Approvals', 'check-circle'], mailbox: ['Mailbox', 'mail'], statements: ['Owner statements', 'pie-chart'], enquiries: ['Leads', 'mail'],
   feedback: ['Feedback', 'message-square'], moderation: ['Reported messages', 'flag'],
 };
 const AREA_ICON: Record<WorkView, PanelIcon> = {

@@ -632,7 +632,7 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
       <PageHeading palette={p} title={account.role === "client" ? "Your properties" : account.role === "cleans" ? "Assigned properties" : "Properties"} subtitle={loading ? "Loading your properties…" : `${properties.length} ${properties.length === 1 ? "property" : "properties"} within your access.`} />
       {(account.role === "client" || staff) && account.modules.includes("property-onboarding") && <EnquiryCard palette={p} team={staff} onStart={() => onForm(newEnquiryForm(staff))} />}
       {/* Client Enquiries: the landlord fills the form in themselves (on phones this is the way in). */}
-      {staff && account.modules.includes("property-onboarding") && jump && <SoftButton label="Client enquiries: send the form to a landlord" icon="arrow-right" palette={p} onPress={() => jump({ kind: "tab", tab: "enquiries" })} />}
+      {staff && account.modules.includes("property-onboarding") && jump && <SoftButton label="Leads: send the form to a landlord" icon="arrow-right" palette={p} onPress={() => jump({ kind: "tab", tab: "enquiries" })} />}
       {staff && <HostawaySyncCard p={p} onSynced={onRefresh} />}
       {staff && !loading && properties.length > 0 && <PortfolioCard palette={p} properties={properties} onOpen={setSelected} summary={{ ...portfolioSummary(properties, journeys), ...(ownerCount !== null ? { owners: ownerCount } : {}) }} />}
       {staff && !loading && properties.length > 0 && account.modules.includes("property-database") && <PortfolioInsights palette={p} properties={properties} journeys={journeys} filter={filter} onFilter={f => { setFilter(f); setShown(24); }} onOwners={setOwnerCount} />}

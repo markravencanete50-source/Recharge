@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-// As many comparables as the team wants (Lee, 14 October), up to the ceiling the app also checks (MAX_COMPARABLES).
-// The database used to refuse a fourth; it now takes up to 20 and refuses the 21st. The patch runs twice without change.
+// Comparables on an estimate. 20261020400000 raised the limit from 3 to 20; Estimate Delivery (Alex, 20261025300000)
+// brings a new estimate back to up to 3 hand-picked comparables (MAX_COMPARABLES), keeping the old ceiling of 20 in the
+// text so this patch still finds itself done. The patch runs twice without change.
 const MINE = '20261020400000_estimate_comparables_limit.sql';
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -32,17 +33,17 @@ const journey = async input => (await db.query('select public.workspace_journey_
 const comparables = n => Array.from({ length: n }, (_, i) => ({ name: 'Flat ' + (i + 1), url: 'https://www.airbnb.co.uk/rooms/' + (i + 1), adrMinor: 9000 + i * 100 }));
 const rates = { lowRateMinor: 9000, mediumRateMinor: 11000, highRateMinor: 14000, comments: '' };
 
-test('the patch runs twice without change, and the old limit of 3 is gone', () => {
+test('the patch runs twice without change, and a new estimate is held to 3', () => {
   assert.equal(secondRun, firstRun);
   assert.match(firstRun, /jsonb_array_length\(input->'comparables'\)>20 then raise exception 'Invalid estimate'/);
-  assert.doesNotMatch(firstRun, /jsonb_array_length\(input->'comparables'\)>3\b/);
+  assert.match(firstRun, /jsonb_array_length\(input->'comparables'\)>3\/\* estimate comparables three: 20261025300000 \*\//);
 });
 
-test('an estimate takes 4, 12 or 20 comparables, and refuses a 21st', async () => {
+test('an estimate takes 0 to 3 comparables, and refuses a 4th', async () => {
   let j = await journey({ action: 'createEnquiry', name: 'Many comparables flat', address: '3 Holmhead Place, Glasgow', propertyType: 'Flat', bedrooms: 2, bathrooms: 1, enquiry: { contactName: 'Isla Example', email: 'isla@example.com' } });
-  for (const n of [4, 12, 20]) {
+  for (const n of [0, 1, 3]) {
     j = await journey({ action: 'publishEstimate', propertyId: j.propertyId, version: j.version, ...rates, comparables: comparables(n) });
     assert.equal(j.estimate.comparables.length, n);
   }
-  await assert.rejects(journey({ action: 'publishEstimate', propertyId: j.propertyId, version: j.version, ...rates, comparables: comparables(21) }), /Invalid estimate/);
+  await assert.rejects(journey({ action: 'publishEstimate', propertyId: j.propertyId, version: j.version, ...rates, comparables: comparables(4) }), /Invalid estimate/);
 });

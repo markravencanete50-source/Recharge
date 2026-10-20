@@ -171,7 +171,7 @@ test('a possible duplicate tells the same people as the form coming back; a form
   // The wording: in the app, by email and on a phone.
   const copy = noticeCopy('enquiry.duplicate');
   assert.equal(copy.title, 'An enquiry may be a duplicate');
-  assert.match(copy.message, /^A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry\. Check it in Client enquiries before valuing\. Sign in/);
+  assert.match(copy.message, /^A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry\. Check it in Leads before valuing\. Sign in/);
   assert.doesNotMatch(copy.title + copy.message, /—/);
 });
 

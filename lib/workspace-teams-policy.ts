@@ -3,6 +3,7 @@ import { parseAnalyticsDate } from './analytics';
 import { enquiryInviteSchema } from './client-enquiry';
 import { enquiryDetailsSchema } from './journey-policy';
 import { MENU_ROLES, menuLayoutSchema } from './menu-layout';
+import { leadActionSchemas, leadStepIssue } from './lead-policy';
 
 const id = z.string().uuid();
 export const DEPARTMENTS = ['guest_relations', 'client_relations', 'cleaning', 'ready', 'accounts', 'management'] as const;
@@ -53,8 +54,10 @@ export const teamsReadSchema = z.object({
     'vaPayAccess', 'vaPayRequests', 'vaPayRequest', 'vaPaySetup',
     // Property ratings (20261022500000): every visible property's guest ratings, or one property's (propertyId) in full.
     // Read through workspace_property_ratings, which decides who sees which properties (owners are refused for now).
-    'propertyRatings']),
-  from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(),
+    'propertyRatings',
+    // A lead's ticket (20261025300000): the enquiry, its checklist, Estimate Delivery steps and activity (enquiryId).
+    'lead']),
+  from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(), enquiryId: id.optional(),
   channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).optional(),
   role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),
 }).strict().superRefine((value, context) => {
@@ -81,6 +84,7 @@ export const teamsReadSchema = z.object({
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
   }
+  if ((value.section === 'lead') !== !!value.enquiryId) context.addIssue({ code: 'custom', message: value.enquiryId ? 'A lead is read on its own' : 'Choose a lead' });
   if ((BUSINESS_REPORT_SECTIONS as readonly string[]).includes(value.section) || value.section === 'stayAnalytics') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 365 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 366 days' });
@@ -277,7 +281,10 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('readTodo'), requestId: id, id }).strict(),
   // Round 6: delete a client enquiry that has not moved on (admins and super admins).
   z.object({ action: z.literal('deleteEnquiry'), requestId: id, enquiryId: id, version }).strict(),
+  // Leads (20261025300000): a comment on a lead, and its Estimate Delivery steps saved, ticked or reopened.
+  ...leadActionSchemas,
 ]).superRefine((value, context) => {
+  if (value.action === 'saveLeadStep') { const issue = leadStepIssue(value.step, value.data, value.done); if (issue) context.addIssue({ code: 'custom', path: ['data'], message: issue }); }
   if (value.action === 'flagForManagement') {
     if (value.source === 'work' && (!value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'Flag work with its work id only' });
     if (value.source === 'hub' && (!value.hubItemId || value.workId)) context.addIssue({ code: 'custom', message: 'Flag a hub item with its id only' });

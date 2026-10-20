@@ -129,7 +129,7 @@ const PANEL_ONLY: Record<string, Candidate[]> = {
   admin: [
     tool('productivity', 'Productivity', 'Clock in and out, hours by week and month', 'hourglass', work('management', { sub: 'productivity' })),
     // A shortcut: the page opens Client relations on its Enquiries chip (lib/workspace-map.ts CLIENT_ENQUIRIES_LINK).
-    tool('enquiries', 'Client enquiries', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }),
+    tool('enquiries', 'Leads', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }),
     // Repair spending limits per owner and property (Limit Changer, Repairs with contractors).
     tool('limits', 'Limit Changer', 'Repair spending limits by owner', 'coins', work('management', { sub: 'limits' })),
     // Furnishing Studio: catalogue, client quotes and shopping lists (Client relations; Stays team and management only).
@@ -157,7 +157,7 @@ const PANEL_ONLY: Record<string, Candidate[]> = {
     CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS,
   ],
   stays: [
-    tool('enquiries', 'Client enquiries', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }, ['property-onboarding']),
+    tool('enquiries', 'Leads', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }, ['property-onboarding']),
     tool('studio', 'Furnishing Studio', 'Catalogue, client quotes, shopping lists', 'sofa', work('clients', { sub: 'furnishing' })),
     // Client relations' own sections (lib/relations-subs.ts holds the same tools for each).
     tool('onboarding', 'Property onboarding', 'Where each new property stands', 'key', work('clients', { sub: 'onboarding' })),
