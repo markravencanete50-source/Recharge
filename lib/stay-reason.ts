@@ -10,7 +10,6 @@ export const STAY_REASONS = ['holiday', 'work', 'family_friends', 'event', 'othe
 export type StayReason = (typeof STAY_REASONS)[number];
 // In the question's order: the guest replies with the number.
 export const STAY_REASON_LABEL: Record<StayReason, string> = { holiday: 'Holiday', work: 'Work', family_friends: 'Visiting family or friends', event: 'An event', other: 'Something else' };
-export const stayReasonName = (reason: string) => STAY_REASON_LABEL[reason as StayReason] ?? 'Something else';
 
 // --- The question -------------------------------------------------------------------------------------------------
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

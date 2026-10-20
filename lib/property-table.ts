@@ -113,7 +113,6 @@ export function sortPropertyRows(rows: readonly PropertyRow[], sort: Sort = DEFA
 // --- Filtering: every word typed must appear (name, address, region, status or stage, any order),
 // then the chosen region and status.
 export type PropertyFilter = { query: string; region: string | null; status: string | null };
-export const NO_FILTER: PropertyFilter = { query: '', region: null, status: null };
 export function filterPropertyRows(rows: readonly PropertyRow[], filter: Partial<PropertyFilter>): PropertyRow[] {
   const words = normalise(filter.query ?? '').split(' ').filter(Boolean);
   return rows.filter(r => (!filter.region || r.region === filter.region) && (!filter.status || r.status === filter.status) && words.every(w => r.search.includes(w)));

@@ -442,11 +442,4 @@ export const analyticsSchema = z.object({
   byMonth: z.array(z.object({ month: z.string(), projects: n, sent: n, accepted: n, quotedPence: z.number().int() })),
 });
 export type FurnishingAnalytics = z.infer<typeof analyticsSchema>;
-export const percentLine = (p: number | null) => p == null ? 'No quotes sent yet' : `${p.toLocaleString('en-GB', { maximumFractionDigits: 1 })}%`;
 export const monthName = (month: string) => new Date(month + '-01T12:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
-// The last twelve months to today, as the analytics opens.
-export function lastTwelveMonths(today: string) {
-  const [y, m] = today.split('-').map(Number);
-  const start = new Date(Date.UTC(y, m - 12, 1)).toISOString().slice(0, 10);
-  return { from: start, to: today };
-}

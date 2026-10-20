@@ -3,7 +3,6 @@ import {
   useMemo,
   useContext,
   useState,
-  useEffect,
   type ComponentProps,
 } from "react";
 import {
@@ -56,7 +55,6 @@ import {
   type WorkItem,
 } from "./model";
 import {
-  calendarCells,
   WORKSPACE_MAP,
   type WorkspaceSection,
 } from "../../lib/workspace-map";

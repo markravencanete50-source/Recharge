@@ -126,7 +126,6 @@ export const CALENDAR_FOCUS: Record<CalendarFocus, CalendarFocusRule> = {
   safety: { label: 'Safety and compliance', kinds: ['routine'], visits: ['routine'], workKinds: ['licensing'] },
   onboarding: { label: 'Property onboarding', kinds: ['inspection'], workKinds: ['cleaning_setup', 'garden_setup', 'furnishing_quote'], modules: ['property-onboarding'] },
 };
-export const isCalendarFocus = (value: unknown): value is CalendarFocus => (CALENDAR_FOCUSES as readonly unknown[]).includes(value);
 export function inFocus(e: CalendarEntry, focus: CalendarFocus | null | undefined): boolean {
   if (!focus) return true;
   const rule = CALENDAR_FOCUS[focus];

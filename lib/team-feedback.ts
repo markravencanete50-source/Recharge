@@ -12,7 +12,6 @@ export const STATUS_LABEL: Record<FeedbackStatus, string> = { new: 'New', seen: 
 // Who may send feedback; super admins receive it.
 export const FEEDBACK_SENDERS = ['admin', 'stays'] as const;
 export const canSendFeedback = (role: string) => (FEEDBACK_SENDERS as readonly string[]).includes(role);
-export const FEEDBACK_ROLES = ['super_admin', ...FEEDBACK_SENDERS] as const;
 
 export const feedbackItemSchema = z.object({
   id: z.string().uuid(), category: z.enum(FEEDBACK_CATEGORIES), message: z.string(), status: z.enum(FEEDBACK_STATUSES), createdAt: z.string(), version: z.number().int().positive(),

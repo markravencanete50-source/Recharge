@@ -151,7 +151,6 @@ export function syncPayout(r: Raw, channel: SyncChannel): { payoutMinor: number 
   const payout = pence(total) - (commission ?? 0) - (guestFee ?? 0) - (paymentCharge ?? 0) - (commissionVat ?? 0);
   return { payoutMinor: payout >= 0 ? payout : null, breakdown };
 }
-export const syncPayoutMinor = (r: Raw, channel: SyncChannel): number | null => syncPayout(r, channel).payoutMinor;
 
 // --- Booking detail for Guests & stays ---------------------------------------------------------------------
 // Every Hostaway field name read for the report, first match wins. Taken from Hostaway's reservation object as other code

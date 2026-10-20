@@ -3,7 +3,6 @@ import type { WorkflowData } from "../../lib/workflow-types";
 import { MAINTENANCE_CATEGORIES, type MaintenanceData } from "../../lib/maintenance-types";
 import type { OnboardingData } from "../../lib/onboarding-types";
 import type { CleansData } from "../../lib/cleans-types";
-import { defaultModulesForRole, type WorkspaceRole } from "../../lib/modules";
 
 // Fictional sample data for the app's preview mode. No client records, credentials or integrations.
 const now = 1791028800;
@@ -29,10 +28,6 @@ export const properties: PropertyDatabaseData = {
   clients: [{key: "example-company", companyName: "Example Property Company", ownerName: "Example owner", directorNames: [], ownerEmail: "preview@example.com", ownerPhone: "", properties: demoProperties}],
   reporting: {newEnquiries: {week: 0, month: 0, quarter: 0, year: 0}, signedUp: [], strikeRate: 0},
 };
-export const accessUsers = (["super_admin", "admin", "stays", "cleans", "ready", "client"] as WorkspaceRole[]).map(role => ({
-  email: `${role}@example.com`, fullName: `Example ${role} user`, responsibilities: "Fictional preview team member", role,
-  modules: defaultModulesForRole(role), status: "active" as const,
-}));
 export const workflows: WorkflowData = {
   available: true,
   onboardings: [{id: "demo-onboarding", propertyName: "Example Glasgow Apartment", propertyAddress: "Example address, Scotland", progress: 60, status: "active", createdByName: "Preview user", completedAt: null, createdAt: now}],

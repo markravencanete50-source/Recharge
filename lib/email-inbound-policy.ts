@@ -3,8 +3,6 @@
 // subdomain Resend receives for (in.rechargegroup.co.uk). Resend posts a signed webhook; the Worker verifies it before reading it.
 
 export const MAIL_DOMAIN = 'rechargegroup.co.uk';
-export const GUEST_MAILBOX = `guestrelations@${MAIL_DOMAIN}`;
-export const OWNER_MAILBOX = `ownerrelations@${MAIL_DOMAIN}`;
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_ATTACHMENTS = 10;
 export const MAX_TEXT = 5000;
