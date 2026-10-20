@@ -36,8 +36,11 @@ async function webClient(headers?: Record<string, string>) {
 export const verifiedWorkspaceUser = cache(async () => {
   const client = await workspaceSupabase();
   if (!client) return null;
-  const { data, error } = await client.auth.getUser();
+  // The user check and the session check only read, so they go out together: one wait on every request instead of two.
+  // Someone not signed in is answered as before (null) even when the session check's connection fails.
+  const sessionCheck = (async () => { try { return { ok: true as const, answer: await client.rpc("workspace_session_allowed") }; } catch (thrown) { return { ok: false as const, thrown }; } })();
+  const [{ data, error }, check] = await Promise.all([client.auth.getUser(), sessionCheck]);
   if (error || !data.user || !confirmedContact(data.user)) return null;
-  const allowed = await client.rpc("workspace_session_allowed");
-  return allowed.error || allowed.data !== true ? null : data.user;
+  if (!check.ok) throw check.thrown;
+  return check.answer.error || check.answer.data !== true ? null : data.user;
 });

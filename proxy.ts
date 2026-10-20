@@ -13,11 +13,16 @@ export async function proxy(request: NextRequest) {
     const serverToServer = request.nextUrl.pathname === "/api/hostaway/webhook" || request.nextUrl.pathname === "/api/resend/webhook";
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && !serverToServer && !isSameOrigin(request, security?.origin) && !isNativeRequest(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403, headers: securityHeaders });
     if (!security) return NextResponse.json({ error: "Security connection is awaiting configuration" }, { status: 503, headers: securityHeaders });
-    try {
-      const quota = await requestQuota(request, "api-ip", 120, 60);
-      if (!quota.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { ...securityHeaders, "Retry-After": String(quota.retryAfter) } });
-    } catch { return NextResponse.json({ error: "Security checks are temporarily unavailable" }, { status: 503, headers: securityHeaders }); }
   }
+  // The request quota and the session check below go out together, one wait instead of two on every API call; a request
+  // over its quota (or with the quota check down) is still refused before anything else runs.
+  const quota = request.nextUrl.pathname.startsWith("/api/") ? requestQuota(request, "api-ip", 120, 60).then(answer => answer, () => null) : null;
+  const refused = async () => {
+    if (!quota) return null;
+    const answer = await quota;
+    if (!answer) return NextResponse.json({ error: "Security checks are temporarily unavailable" }, { status: 503, headers: securityHeaders });
+    return answer.allowed ? null : NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { ...securityHeaders, "Retry-After": String(answer.retryAfter) } });
+  };
   // Private file routes supply their own sandbox and same-origin frame policy.
   // Do not replace those policies with the page-level CSP or frame prohibition.
   const responseHeaders = request.nextUrl.pathname.startsWith("/api/")
@@ -26,9 +31,9 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   for (const [name, value] of responseHeaders) response.headers.set(name, value);
   response.headers.set("Permissions-Policy", "geolocation=(), microphone=(self), camera=(self)");
-  if (isNativeRequest(request)) { response.headers.set("Vary", "Authorization"); return response; }
+  if (isNativeRequest(request)) { response.headers.set("Vary", "Authorization"); return await refused() ?? response; }
   const config = supabaseConfiguration();
-  if (!config) return response;
+  if (!config) return await refused() ?? response;
   const client = createServerClient(config.url, config.key, {
     cookieOptions: { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/" },
     cookies: {
@@ -42,7 +47,8 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  await client.auth.getClaims();
+  const [stop] = await Promise.all([refused(), client.auth.getClaims()]);
+  if (stop) return stop;
   response.headers.set("Cache-Control", "private, no-store");
   response.headers.set("Vary", "Cookie");
   return response;
