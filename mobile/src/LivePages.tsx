@@ -25,7 +25,7 @@ import { EstimateExplorer } from "./LiveEstimate";
 import { OwnerOnboarding } from "./OwnerOnboarding";
 import { EstimateDeliveryCard } from "./EstimateDelivery";
 import { OwnerAccountCard, ownerAccountEmailOf } from "./OwnerAccountCard";
-import { ScotlandMap } from "./ScotlandMap";
+import { lazyScreen } from "./lazyScreen";
 import { EstimateGuide, InspectionResult, JourneyQuestions } from "./LiveOnboardingGuide";
 import { readEstimate } from "../../lib/estimate-projection";
 import { agreementDocument, agreementFileName, agreementReadable } from "../../lib/agreement-copy";
@@ -43,7 +43,7 @@ import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
 import { LiveWorkRow, NoticeRowView, isDone, noticeIcon } from "./LiveRows";
 import { mayHaveOlder, mergeNotices, noticeRow, noticeRows, oldestNoticeId, workItemFrom, type NoticeRow } from "../../lib/notice-details";
 import { ListSearchBox, SearchBox, useListSearch } from "./SearchPicker";
-import { Calendar } from "./WorkspaceScreens";
+import { Calendar } from "./MonthCalendar";
 import { DateField } from "./CalendarPicker";
 import { FavoriteButton } from "./Favorites";
 import { Sheet } from "./TeamFlows";
@@ -71,6 +71,8 @@ import { pillBox, pillInk } from "./Pills";
 import { ownerPropertyStatus, type OwnerPropertyStatus } from "../../lib/owner-approvals";
 import { EnquiryUploadPicker, EnquiryUploadStatus, sendEnquiryFiles, type EnquiryFile } from "./EnquiryUploads";
 import { repairLimitText, type FieldIssue } from "../../lib/journey-policy";
+// The map and its coastline (about 100 KB) load when the Portfolio card first shows.
+const ScotlandMap = lazyScreen(() => import("./ScotlandMap").then(module => module.ScotlandMap));
 
 export const message = (error: unknown) => readableError(error);
 const money = (n: unknown) => formatMoney(Number(n));

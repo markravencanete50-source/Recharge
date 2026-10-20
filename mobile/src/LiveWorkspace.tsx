@@ -194,7 +194,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [workLoaded, setWorkLoaded] = useState(false);
   const [budget, setBudget] = useState<BudgetItem[]>([]);
   const [invoices, setInvoices] = useState<InvoiceView[]>([]), [notices, setNotices] = useState<NoticeView[]>([]), [policyConfirmed, setPolicyConfirmed] = useState(false), [policy, setPolicy] = useState<BookingPolicy | null>(null);
-  const [loading, setLoading] = useState(true), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  // `loading` is the first read only, while there is nothing to show yet. A later read (Refresh, or the read after a save)
+  // is `refreshing`: the page stays on screen until the new figures arrive instead of turning into placeholders.
+  const [loading, setLoading] = useState(true), [refreshing, setRefreshing] = useState(false), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [period, setPeriod] = useState<AnalyticsPeriod>(() => presetPeriod(30)), [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null), [reportError, setReportError] = useState(""), [dates, setDates] = useState(false);
   const [exporting, setExporting] = useState(false), [exportMessage, setExportMessage] = useState("");
   const [form, setForm] = useState<WorkflowForm | null>(null), [openWork, setOpenWork] = useState<OperationView | null>(null);
@@ -305,7 +307,15 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     navigator.serviceWorker.addEventListener("message", onOpen);
     return () => navigator.serviceWorker.removeEventListener("message", onOpen);
   }, []);
-  const lastRefresh = useRef(0), editing = useRef(false);
+  const lastRefresh = useRef(0), editing = useRef(false), loadedOnce = useRef(false);
+  // What each list last showed, as read. The refresh every minute (and after each save) usually brings back exactly the
+  // same records; those are left as they are, so the whole workspace does not draw itself again for nothing.
+  const shownAs = useRef(new Map<string, string>());
+  const unchanged = (key: string, value: unknown) => {
+    const stamp = JSON.stringify(value) ?? "";
+    if (shownAs.current.get(key) === stamp) return true;
+    shownAs.current.set(key, stamp); return false;
+  };
   // A super admin can change someone's role or tools while they are signed in. Every read carries
   // the current account, so the app switches to the new role's Home, Work and tools on the next refresh.
   const accountKey = (a: WorkspaceAccount) => [a.role, a.status, a.fullName, [...a.modules].sort().join()].join("|");
@@ -329,16 +339,17 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       if (rolePreview) {
         const all = z.array(storedMenuLayoutSchema).parse((await readTeams({ section: "menuLayouts" })).data);
         setMenuState({ role: rolePreview, layout: parseMenuLayout(all.find(l => l.role === rolePreview) ?? null) });
+        shownAs.current.delete("menuLayout");
       } else {
         const own = (await readTeams({ section: "menuLayout" })).data as { role?: unknown } | null;
-        if (own && typeof own.role === "string") setMenuState({ role: own.role, layout: parseMenuLayout(own) });
+        if (own && typeof own.role === "string" && !unchanged("menuLayout", own)) setMenuState({ role: own.role, layout: parseMenuLayout(own) });
       }
     } catch { /* the default order, or the one already shown */ }
   }, [rolePreview]);
   // A save in the Menu order editor shows here at once when it is this role's.
   useEffect(() => onMenuLayoutSaved((role, layout) => { if (role === account.role) setMenuState({ role, layout }); }), [account.role]);
   const refresh = useCallback(async (quiet = false) => {
-    if (!quiet) { setLoading(true); setError(""); }
+    if (!quiet) { if (!loadedOnce.current) setLoading(true); setRefreshing(true); setError(""); }
     void loadMenuLayout();
     const keep = rolePreview ? previewKeeps(rolePreview, account.modules) : null;
     // Properties and invoices come a page of 100 at a time; read every page.
@@ -369,17 +380,20 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       if (result.status === "rejected") {
         if (quiet) { if (result.reason instanceof WorkspaceApiError && result.reason.status === 401) onSignedOut(); return; }
         if (key === "properties") setProperties([]); if (key === "journeys") setJourneys([]); if (key === "work") setWork([]); if (key === "invoices") setInvoices([]); if (key === "notices") setNotices([]);
+        shownAs.current.delete(key);
         if (result.reason instanceof WorkspaceApiError && result.reason.status === 401) onSignedOut();
         setError(message(result.reason)); return;
       }
       try {
         const data = result.value.data;
+        // The same records, read for the same view (a role preview keeps only some of them), are already on screen.
+        if (unchanged(key, [rolePreview, account.modules, data])) return;
         if (key === "properties") setProperties(z.array(propertyViewSchema).parse(data).sort((x, y) => x.name.localeCompare(y.name)));
         if (key === "journeys") setJourneys(keep && !keep.journeys ? [] : z.array(journeyViewSchema).parse(data));
         if (key === "work") setWork(z.array(operationViewSchema).parse(data).filter(item => !keep || keep.work(item.moduleId)));
         if (key === "invoices") setInvoices(keep && !keep.invoices ? [] : z.array(invoiceViewSchema).parse(data));
         if (key === "notices") setNotices(keep && !keep.notices ? [] : z.array(noticeViewSchema).parse(data));
-      } catch { if (!quiet) setError("Unexpected response. Refresh to try again."); }
+      } catch { shownAs.current.delete(key); if (!quiet) setError("Unexpected response. Refresh to try again."); }
     };
     await Promise.all(jobs.map(([key, path]) => (key === "properties" || key === "invoices" ? readAll(key) : liveApi(path)).then(
       value => { apply(key, { status: "fulfilled", value }); if (key === "work") setWorkLoaded(true); },
@@ -393,7 +407,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       setPolicy(value); setPolicyConfirmed(value?.confirmed ?? false);
     }
     lastRefresh.current = Date.now();
-    if (!quiet) setLoading(false);
+    if (!quiet) { loadedOnce.current = true; setLoading(false); setRefreshing(false); }
   }, [account.role, account.modules, rolePreview, onSignedOut, onAccount, loadMenuLayout]);
   const loadReport = useCallback(async (range: AnalyticsPeriod) => {
     if (periodError(range)) return;
@@ -747,7 +761,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
                   <IconButton label={messagesBadge ? `Messages, ${[chatUnread ? `${chatUnread} unread` : "", guestWaiting ? `${guestWaiting} ${guestWaiting === 1 ? "guest" : "guests"} waiting` : ""].filter(Boolean).join(", ")}` : "Messages"} icon="message-circle" palette={header} onPress={() => { setChatTarget(null); navigate("inbox"); }} />
                   {messagesBadge > 0 && <Bump value={messagesBadge} pointerEvents="none" style={{ position: "absolute", top: -4, right: -4 }}><View pointerEvents="none" style={{ minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: p.badge, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: p.header }}><Text style={{ color: p.onBadge, fontSize: 11, fontWeight: "800" }}>{messagesBadge > 99 ? "99+" : messagesBadge}</Text></View></Bump>}
                 </View>
-                {inHeader("refresh") && <IconButton label={loading ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={refreshAll} />}
+                {inHeader("refresh") && <IconButton label={loading || refreshing ? "Refreshing" : "Refresh"} icon="refresh-cw" palette={header} onPress={refreshAll} />}
                 {showFaq && <IconButton label="Help and FAQs" icon="help-circle" palette={header} onPress={() => navigate("help")} />}
                 {inHeader("theme") && <IconButton label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} icon={theme === "dark" ? "sun" : "moon"} palette={header} onPress={() => setTheme(theme === "dark" ? "light" : "dark", reduced)} />}
                 <MotionPress accessibilityRole="button" accessibilityLabel={`Open profile and preferences, ${roleLabel}`} onPress={() => setSettings(true)} style={{ minHeight: 48, minWidth: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: desktop ? 14 : 0, borderRadius: 999, backgroundColor: desktop ? p.headerControl : "transparent", borderWidth: desktop ? 1 : 0, borderColor: p.headerBorder }}>
@@ -778,7 +792,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
               onPress={() => { setPhoneMenu(false); if (extra === "search") setSearchOpen(true); else if (extra === "viewAs") setViewAsOpen(true); else if (extra === "refresh") refreshAll(); else setTheme(theme === "dark" ? "light" : "dark", reduced); }}
               style={[ui.row, { gap: 12, minHeight: 48, paddingHorizontal: 4, borderBottomWidth: 1, borderColor: p.border }]}>
               <Feather name={extra === "search" ? "search" : extra === "viewAs" ? "eye" : extra === "refresh" ? "refresh-cw" : theme === "dark" ? "sun" : "moon"} size={17} color={p.muted} />
-              <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 15 }}>{extra === "theme" ? (theme === "dark" ? "Light mode" : "Dark mode") : extra === "viewAs" && viewAs ? `Viewing as ${viewAsName(viewAs)}` : extra === "refresh" && loading ? "Refreshing…" : HEADER_EXTRA_LABEL[extra]}</Text>
+              <Text numberOfLines={1} style={{ flex: 1, color: p.text, fontSize: 15 }}>{extra === "theme" ? (theme === "dark" ? "Light mode" : "Dark mode") : extra === "viewAs" && viewAs ? `Viewing as ${viewAsName(viewAs)}` : extra === "refresh" && (loading || refreshing) ? "Refreshing…" : HEADER_EXTRA_LABEL[extra]}</Text>
             </MotionPress>
           ))}
         </View>}
@@ -843,7 +857,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
           </View>
         </View>
         {canViewAs(realAccount) && <SoftButton label={viewAs ? `Viewing as ${viewAsName(viewAs)}: change` : "View the app as someone else"} icon="arrow-right" palette={p} onPress={() => { setSettings(false); setViewAsOpen(true); }} />}
-        {!inHeader("refresh") && <SoftButton label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" palette={p} onPress={() => { setSettings(false); refreshAll(); }} />}
+        {!inHeader("refresh") && <SoftButton label={loading || refreshing ? "Refreshing…" : "Refresh"} icon="refresh-cw" palette={p} onPress={() => { setSettings(false); refreshAll(); }} />}
         <SoftButton label="Blocked people" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setBlockedOpen(true); }} />
         <PrivacySection p={p} onDelete={() => { setSettings(false); setDeleting(true); }} />
         {(account.role === "super_admin" || account.role === "admin") && <SoftButton label="Reported messages" icon="arrow-right" palette={p} onPress={() => { setSettings(false); setTab("moderation"); }} />}

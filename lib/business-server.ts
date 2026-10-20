@@ -20,10 +20,16 @@ export async function businessContext(request: Request, native: boolean) {
 }
 async function ownContext(request: Request, native: boolean) {
   if (native) return isNativeRequest(request) ? nativeWorkspace(request) : null;
-  if (!await verifiedWorkspaceUser()) return null;
   const client = await workspaceSupabase();
   if (!client) return null;
-  const result = await client.rpc("workspace_account");
+  // The sign-in check and the account read go out together, one wait instead of two on every request. The account read
+  // only reads, and the database refuses it without a verified session (private.workspace_account); a failed sign-in check
+  // still signs the request out, and a connection failure on the account read is still an outage, never a sign-out.
+  const accountRead = (async () => { try { return { ok: true as const, answer: await client.rpc("workspace_account") }; } catch (thrown) { return { ok: false as const, thrown }; } })();
+  const [user, read] = await Promise.all([verifiedWorkspaceUser(), accountRead]);
+  if (!user) return null;
+  if (!read.ok) throw read.thrown;
+  const result = read.answer;
   const account = workspaceAccountSchema.safeParse(result.data);
   return result.error || !account.success ? null : { client, account: account.data };
 }

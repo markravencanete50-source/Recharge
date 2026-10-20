@@ -25,14 +25,19 @@ await cp(`${root}/preview-dist/assets/node_modules`, `${root}/preview-dist/asset
 await rm(`${root}/preview-dist/assets/node_modules`, { recursive: true });
 const webBundleDir = `${root}/preview-dist/_expo/static/js/web`;
 let nativeHtml = await readFile(`${root}/preview-dist/native.html`, "utf8");
-for (const name of await readdir(webBundleDir)) {
-  if (!name.endsWith(".js")) continue;
+// Screens loaded on demand (React.lazy) are bundles of their own, named inside the entry bundle; rename those first so the
+// entry points at their published names.
+const renamed = [];
+const bundleNames = (await readdir(webBundleDir)).filter(name => name.endsWith(".js")).sort((a, b) => Number(a.startsWith("entry-")) - Number(b.startsWith("entry-")));
+for (const name of bundleNames) {
   const path = `${webBundleDir}/${name}`;
-  const bundle = (await readFile(path, "utf8")).replaceAll("/assets/node_modules/", "/assets/vendor/");
+  let bundle = (await readFile(path, "utf8")).replaceAll("/assets/node_modules/", "/assets/vendor/");
+  for (const [from, to] of renamed) bundle = bundle.replaceAll(from, to);
   const publishedName = `${name.slice(0, -3)}-pages-${createHash("sha256").update(bundle).digest("hex").slice(0, 12)}.js`;
   await writeFile(`${webBundleDir}/${publishedName}`, bundle);
   await rm(path);
   nativeHtml = nativeHtml.replaceAll(name, publishedName);
+  renamed.push([name, publishedName]);
 }
 await writeFile(`${root}/preview-dist/native.html`, nativeHtml);
 await cp(`${root}/mobile/dist-web/favicon.ico`, `${root}/preview-dist/favicon.ico`);

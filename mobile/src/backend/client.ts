@@ -128,12 +128,31 @@ export function setViewOnly(message: string, person?: { userId: string; onEnded:
 }
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
 export const viewMode = () => ({ readOnly: viewOnly !== "", person: viewing });
+// Identical reads already on their way are shared: screens that open together often ask for the same thing (Home's shift
+// button and end-of-day card, the to-do hub), and each caller gets its own copy of the one answer. A save forgets them, so a
+// read made after it is always fresh.
+const readsInFlight = new Map<string, Promise<Response>>();
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
   if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|lead-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|onboarding-settings|owner-account|profile|owner|oversight|checklists|privacy|documents|furnishing|client-onboarding)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   // While a super admin views the app as someone else nothing is saved (this device's own
   // notification link aside), so trying the screens never changes the business's records.
   if (viewOnly && body !== undefined && !options.asSelf && !path.startsWith("/api/mobile/devices")) throw new WorkspaceApiError(viewOnly, 423);
   const as = body === undefined && !options.asSelf && !path.startsWith("/api/mobile/devices") ? viewing ?? undefined : undefined;
+  if (body !== undefined) {
+    readsInFlight.clear();
+    try { return await send(path, body, as); } finally { readsInFlight.clear(); }
+  }
+  const key = path + "\n" + (as ?? "");
+  let shared = readsInFlight.get(key);
+  if (!shared) {
+    const read = send(path, undefined, as);
+    const settled = () => { if (readsInFlight.get(key) === read) readsInFlight.delete(key); };
+    read.then(settled, settled);
+    readsInFlight.set(key, shared = read);
+  }
+  return (await shared).clone();
+}
+async function send(path: string, body: BusinessAction | Record<string, unknown> | FormData | undefined, as: string | undefined) {
   try {
     if (sameOriginWeb) return await call(webWorkspacePath(path), body, undefined, as);
     if (!session || session.expiresAt * 1000 <= Date.now() + 60000) await refresh();
