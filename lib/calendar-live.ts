@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TEAM_EVENT_KINDS, type RotaPlan } from './workspace-teams-policy';
 import { londonClock, ROTA_HOURS, ROTA_LABEL } from './team-time';
+import { visitType, type VisitKind } from './repairs-live';
 
 // The live calendar: what the shared schedule holds for each day (cleans, arrivals and departures,
 // repairs, routine visits, inspections, other dated work and, for admins and accounts, payment
@@ -113,6 +114,27 @@ export const timeRange = (start: string | null | undefined, end?: string | null)
 export function filterEntries(entries: CalendarEntry[], team: Team | 'all', person: string | null) {
   return entries.filter(e => (team === 'all' || e.team === team) && (!person || e.personId === person));
 }
+// Calendars a menu link opens on one kind of work rather than one team (Alex's menu, 20 October 2026). Safety &
+// Compliance's holds the routine (safety) visits and licensing work; garden and bins visits are not safety work.
+// Property Onboarding's holds the new property inspections and the set-ups for new properties. A preset names
+// entry kinds, the visit kinds a routine entry must be (from its title, as private.workspace_visit_type reads it),
+// and the work kinds or tools whose dated work counts too. The person can clear it on the Calendar.
+export const CALENDAR_FOCUSES = ['safety', 'onboarding'] as const;
+export type CalendarFocus = (typeof CALENDAR_FOCUSES)[number];
+export type CalendarFocusRule = { label: string; kinds: readonly EntryKind[]; visits?: readonly VisitKind[]; workKinds?: readonly string[]; modules?: readonly string[] };
+export const CALENDAR_FOCUS: Record<CalendarFocus, CalendarFocusRule> = {
+  safety: { label: 'Safety and compliance', kinds: ['routine'], visits: ['routine'], workKinds: ['licensing'] },
+  onboarding: { label: 'Property onboarding', kinds: ['inspection'], workKinds: ['cleaning_setup', 'garden_setup', 'furnishing_quote'], modules: ['property-onboarding'] },
+};
+export const isCalendarFocus = (value: unknown): value is CalendarFocus => (CALENDAR_FOCUSES as readonly unknown[]).includes(value);
+export function inFocus(e: CalendarEntry, focus: CalendarFocus | null | undefined): boolean {
+  if (!focus) return true;
+  const rule = CALENDAR_FOCUS[focus];
+  if (e.kind === 'routine') return rule.kinds.includes('routine') && (!rule.visits || rule.visits.includes(visitType(e.title)));
+  if (rule.kinds.includes(e.kind)) return true;
+  return !!e.work && (!!rule.workKinds?.includes(e.work.kind ?? '') || !!rule.modules?.includes(e.work.moduleId ?? ''));
+}
+export const filterFocus = (entries: CalendarEntry[], focus: CalendarFocus | null | undefined) => focus ? entries.filter(e => inFocus(e, focus)) : entries;
 // People with work in the schedule, for the person picker.
 export function calendarPeople(entries: CalendarEntry[]) {
   return Array.from(new Map(entries.filter(e => e.personId).map(e => [e.personId!, e.personName || 'Team member'])).entries()).sort((a, b) => a[1].localeCompare(b[1]));

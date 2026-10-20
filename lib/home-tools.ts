@@ -38,6 +38,20 @@ const calendar = (team: 'stays' | 'ready' | 'cleans'): HomeToolTarget => ({ kind
 const CALENDAR_READY = tool('calendar-ready', 'Maintenance calendar', 'Repairs, visits and inspections by day', 'calendar', calendar('ready'));
 const CALENDAR_STAYS = tool('calendar-stays', 'Booking calendar', 'Stays, arrivals and departures by day', 'calendar', calendar('stays'));
 const CALENDAR_CLEANS = tool('calendar-cleans', 'Housekeeping calendar', 'Cleans and changeovers by day', 'calendar', calendar('cleans'));
+// The Calendar opened on one kind of work instead (the sub names the preset: lib/calendar-live.ts CALENDAR_FOCUS), for
+// the roles whose Calendar shows Ready's work, where safety visits and inspections sit.
+const preset = (name: 'safety' | 'onboarding'): HomeToolTarget => ({ kind: 'work', view: 'calendar', sub: name });
+const CALENDAR_SAFETY = tool('calendar-safety', 'Safety and compliance calendar', 'Safety visits and licensing by day', 'calendar', preset('safety'));
+const CALENDAR_ONBOARDING = tool('calendar-onboarding', 'Onboarding calendar', 'New property inspections and set-ups by day', 'calendar', preset('onboarding'));
+// Preventative visits of one kind (Alex's menu: Garden Maintenance, Waste Collection). The sub presets the visit
+// type filter in Work → Maintenance → Preventative maintenance (mobile/src/LiveRepairs.tsx), which can be cleared.
+const ROUTINE_MODULES: ModuleId[] = ['routine-bin-garden-board', 'safety-maintenance', 'ready-schedule'];
+const visits = (kind: 'garden' | 'bins'): HomeToolTarget => work('repairs', { sub: 'visits-' + kind, section: 'Preventative maintenance' });
+const GARDEN = tool('garden', 'Garden maintenance', 'Garden visits, due and done', 'sun', visits('garden'));
+const BINS = tool('bins', 'Waste collection', 'Bins visits, due and done', 'box', visits('bins'));
+// Licensing's safety certificates (gas safety, EICR and PAT, EPC...) are steps inside each licence application in
+// the same tracker; it has no certificates part of its own, so Compliance Certs opens the tracker as Licensing does.
+const COMPLIANCE = (needs?: ModuleId[]) => tool('compliance', 'Compliance certificates', 'Gas safety, EICR, EPC and more', 'shield', work('clients', { sub: 'licensing' }), needs);
 
 const BY_ROLE: Record<string, Candidate[]> = {
   admin: [
@@ -155,6 +169,7 @@ const PANEL_ONLY: Record<string, Candidate[]> = {
     tool('expenses', 'Expenses', 'Evidence to approve', 'receipt', work('accounts', { sub: 'expenses' })),
     tool('profit-loss', 'Profit and loss', 'Fees, cleaning margin and occupancy', 'pie', work('accounts', { sub: 'performance' })),
     CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS,
+    GARDEN, BINS, COMPLIANCE(), CALENDAR_SAFETY, CALENDAR_ONBOARDING,
   ],
   stays: [
     tool('enquiries', 'Leads', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }, ['property-onboarding']),
@@ -164,18 +179,24 @@ const PANEL_ONLY: Record<string, Candidate[]> = {
     tool('reviews', 'Guest reviews', 'Reviews to log and answer', 'star', work('clients', { sub: 'reviews' }), ['listing-health']),
     tool('purchases', 'Purchase orders', 'Orders and deliveries', 'cart', work('clients', { sub: 'purchases' }), ['purchase-order', 'purchase-order-requests', 'purchase-order-accounts']),
     CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS,
+    // Guest relations open Maintenance's routine visits (mobile/src/LiveRepairs.tsx) with the tools New routine visit needs.
+    { ...GARDEN, needs: ROUTINE_MODULES }, { ...BINS, needs: ROUTINE_MODULES }, COMPLIANCE(['licensing']), CALENDAR_SAFETY, CALENDAR_ONBOARDING,
   ],
   cleans: [CALENDAR_CLEANS],
   cleaning_manager: [CALENDAR_CLEANS, CALENDAR_STAYS],
-  ready: [CALENDAR_READY, CALENDAR_STAYS],
+  ready: [CALENDAR_READY, CALENDAR_STAYS, GARDEN, BINS, CALENDAR_SAFETY, CALENDAR_ONBOARDING],
   accounts: [
     tool('receivable', 'Receivable invoices', 'Invoices to send and settle', 'receipt', work('accounts', { sub: 'receivable' })),
     tool('profit-loss', 'Profit and loss', 'Fees, cleaning margin and occupancy', 'pie', work('accounts', { sub: 'performance' })),
     tool('aircover', 'AirCover claims', 'Add and close claims', 'shield', work('accounts', { sub: 'aircover' }), ['aircover-reporting']),
-    CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS,
+    CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS, CALENDAR_SAFETY, CALENDAR_ONBOARDING,
   ],
   // The Statements part of the owner's Portfolio page (mobile/src/LiveClientReports.tsx).
-  client: [tool('statements', 'Statements', 'Your issued and paid statements', 'pie', { kind: 'tab', tab: 'analytics', anchor: sectionAnchor('Statements') })],
+  // Calendar is the Booking calendar part of the same page.
+  client: [
+    tool('statements', 'Statements', 'Your issued and paid statements', 'pie', { kind: 'tab', tab: 'analytics', anchor: sectionAnchor('Statements') }),
+    tool('booking-calendar', 'Booking calendar', 'Every stay across your properties', 'calendar', { kind: 'tab', tab: 'analytics', anchor: sectionAnchor('Booking calendar') }),
+  ],
 };
 PANEL_ONLY.super_admin = PANEL_ONLY.admin;
 

@@ -77,8 +77,8 @@ test('a link listed under two sections stays in the first', () => {
 });
 
 test('a section emptied by moves is hidden in the app and kept in the editor', () => {
-  // (Licensing, Safety & Compliance's one link, moved to Management.)
-  const layout = { sections: [], items: { management: ['tool:licensing'] } };
+  // (Licensing, Compliance Certs and the safety calendar, all of Safety & Compliance's links, moved to Management.)
+  const layout = { sections: [], items: { management: ['tool:licensing', 'tool:compliance', 'tool:calendar-safety'] } };
   const app = panelOf('stays', layout), editor = panelOf('stays', layout, undefined, true);
   assert.ok(!sectionKeys(app).includes('safety'), 'hidden');
   assert.deepEqual(editor.groups.find(g => g.key === 'safety').links, [], 'kept, empty, in the editor');

@@ -35,6 +35,10 @@ export async function unlinkNotifications() {
 // When the app opens: a browser that already allowed notifications is kept linked to whoever is signed in now.
 export async function refreshNotificationLink() {
   if (!supported() || Notification.permission !== "granted") return;
+  // Each time the app opens, fetch the latest notification code (sw.js) so a phone picks up changes such as the
+  // Recharge badge straight away, instead of whenever the browser next checks on its own.
+  const registration = await navigator.serviceWorker.getRegistration("/workspace/").catch(() => undefined);
+  await registration?.update().catch(() => undefined);
   const subscription = await currentSubscription().catch(() => null);
   if (subscription) await save(subscription).catch(() => undefined);
 }

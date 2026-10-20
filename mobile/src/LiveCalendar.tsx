@@ -16,10 +16,10 @@ import { DateField } from "./CalendarPicker";
 import { radius, icon, ui, type Palette } from "./theme";
 import type { DimensionalName } from "./DimensionalIcon";
 import {
-  calendarEntries, calendarPeople, calendarProperties, calendarScheduleSchema, calendarTeamsFor, changeoversBetween, CLEAN_STATE_LABEL, CLEAN_STATE_TONE, ENTRY_KINDS, entryTitle,
-  eventsOn, filterEntries, filterProperty, guestNameOf, KIND_COLOUR, KIND_LABEL, kindCount, monthCounts, monthGrid, monthLabel, paymentSummary, periodLabel, scheduleFor, shiftMonth, shiftWeekDay,
+  CALENDAR_FOCUS, calendarEntries, calendarPeople, calendarProperties, calendarScheduleSchema, calendarTeamsFor, changeoversBetween, CLEAN_STATE_LABEL, CLEAN_STATE_TONE, ENTRY_KINDS, entryTitle,
+  eventsOn, filterEntries, filterFocus, filterProperty, guestNameOf, KIND_COLOUR, KIND_LABEL, kindCount, monthCounts, monthGrid, monthLabel, paymentSummary, periodLabel, scheduleFor, shiftMonth, shiftWeekDay,
   shortDay, stayDates, stayDetail, stayLabel, stayNights, teamEventsSchema, TEAM_EVENT_COLOUR, TEAM_LABEL, teamPeople, timelineRows, timeRange, weekDays, weekRangeLabel, weekStart,
-  type CalendarEntry, type CalendarSchedule, type Changeover, type DayCounts, type EntryKind, type Team, type TeamEvent, type TeamEvents, type TimelineRow,
+  type CalendarEntry, type CalendarFocus, type CalendarSchedule, type Changeover, type DayCounts, type EntryKind, type Team, type TeamEvent, type TeamEvents, type TimelineRow,
 } from "../../lib/calendar-live";
 import { CHANNEL_LABEL, type GuestChannel } from "../../lib/guest-inbox-policy";
 import { workViewsFor, type WorkView } from "../../lib/tool-directory";
@@ -178,13 +178,16 @@ function WeekTimeline({ p, days, today, rows, onStay, onWork }: { p: Palette; da
   );
 }
 
-export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, onOpenView, properties = [], focusTeam }: {
+export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, onOpenView, properties = [], focusTeam, focusPreset }: {
   palette: Palette; account: WorkspaceAccount; work: OperationView[]; desktop: boolean; onOpenWork: (item: OperationView) => void; onOpenView?: (view: WorkView, sub?: string) => void;
   // Optional: with the property list the Changeovers view shows each full address.
   properties?: PropertyView[];
   // Optional: the team the Calendar opens on (the menu's Maintenance, Booking and Housekeeping calendars). The Team
   // filter starts there and can be changed; a team the role cannot filter by opens on all teams.
   focusTeam?: Team;
+  // Optional: the kind of work the Calendar opens on (the menu's Safety & Compliance and Onboarding calendars:
+  // lib/calendar-live.ts CALENDAR_FOCUS). Shown as a filter the person can clear.
+  focusPreset?: CalendarFocus;
 }) {
   const { width } = useWindowDimensions();
   const roomy = width >= 700;
@@ -194,6 +197,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   const [month, setMonth] = useState(today.slice(0, 7)), [selected, setSelected] = useState(today);
   const [team, setTeam] = useState<Team | "all">(() => focusTeam && calendarTeamsFor(account.role).includes(focusTeam) ? focusTeam : "all"), [person, setPerson] = useState<{ id: string; name: string } | null>(null), [propertyId, setPropertyId] = useState("");
   const [filter, setFilter] = useState<"property" | "person" | null>(null);
+  const [preset, setPreset] = useState<CalendarFocus | null>(() => focusPreset ?? null);
   const [schedule, setSchedule] = useState<CalendarSchedule | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [events, setEvents] = useState<TeamEvents | null>(null), [eventsMissing, setEventsMissing] = useState(false), [rota, setRota] = useState<RotaPlan | null>(null);
   const [open, setOpen] = useState<CalendarEntry | null>(null), [eventSheet, setEventSheet] = useState<{ event: TeamEvent | null; day: string } | null>(null);
@@ -257,7 +261,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
     return Array.from(list.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [staff, entries, rota, evList, person]);
   const propertyLabel = propertyList.find(([id]) => id === propertyId)?.[1];
-  const shown = useMemo(() => filterEntries(filterProperty(entries, propertyId || null), teams.length > 1 ? team : "all", person?.id ?? null), [entries, propertyId, teams.length, team, person]);
+  const shown = useMemo(() => filterEntries(filterFocus(filterProperty(entries, propertyId || null), preset), teams.length > 1 ? team : "all", person?.id ?? null), [entries, propertyId, teams.length, team, person, preset]);
   // Team events have no property, so a property filter leaves them out.
   const eventsShown = useMemo(() => propertyId ? [] : person ? evList.filter(e => e.userId === person.id) : evList, [evList, propertyId, person]);
   const cells = useMemo(() => monthCounts(month, shown, eventsShown), [month, shown, eventsShown]);
@@ -479,6 +483,16 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
       {staff && <Segmented p={p} label="Calendar view" items={MODES.map(m => ({ key: m, label: MODE_LABEL[m] }))} value={mode} onChange={setMode} />}
       {(mode === "month" || mode === "week") && teams.length > 1 && <Dropdown p={p} label="Team" hideLabel value={team} onChange={setTeam}
         options={(["all", ...teams] as (Team | "all")[]).map(v => ({ value: v, label: v === "all" ? "All teams" : TEAM_LABEL[v] }))} />}
+      {!!preset && mode !== "team" && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <MotionPress accessibilityRole="button" accessibilityLabel={`Showing ${CALENDAR_FOCUS[preset].label.toLowerCase()} only. Clear this filter`} onPress={() => setPreset(null)}
+            style={[ui.row, { gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: p.primary, backgroundColor: p.wash }]}>
+            <Feather name="filter" size={14} color={p.primary} />
+            <Text numberOfLines={1} style={{ color: p.text, fontSize: 13, fontWeight: "500", flexShrink: 1 }}>{CALENDAR_FOCUS[preset].label} only</Text>
+            <Feather name="x" size={14} color={p.muted} />
+          </MotionPress>
+        </View>
+      )}
       {filters && (
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>

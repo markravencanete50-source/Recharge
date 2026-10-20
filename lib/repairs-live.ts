@@ -129,6 +129,12 @@ export function visitType(title: string, data: Record<string, unknown> = {}): Vi
   const lower = (title || "").toLowerCase();
   return lower.includes("garden") ? "garden" : lower.includes("bin") ? "bins" : "routine";
 }
+export const VISIT_KINDS: readonly VisitKind[] = ["routine", "garden", "bins"];
+// The visit type a link presets on Preventative maintenance (Garden Maintenance opens "visits-garden"), or null.
+export function visitKindOfSub(sub: string | null | undefined): VisitKind | null {
+  const kind = sub?.startsWith("visits-") ? sub.slice(7) : "";
+  return (VISIT_KINDS as readonly string[]).includes(kind) ? kind as VisitKind : null;
+}
 // The checklist the form must answer, in order: the visit's own (copied from its plan), else its type's list.
 export function visitChecklist(visit: { title: string; data?: Record<string, unknown> }): string[] {
   const own = visit.data?.checklist;

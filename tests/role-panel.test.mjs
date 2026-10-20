@@ -93,6 +93,7 @@ test('a role preview keeps only the records that role could be shown', () => {
 // Alex's menu (20 October 2026): the team's sections in this order, each role seeing only what it can open.
 const TEAM_SECTIONS = ['My Recharge', 'Maintenance', 'Management', 'Safety & Compliance', 'Property Onboarding', 'Listing Management', 'Property Database', 'Stock', 'Housekeeping', 'Finance', 'Start something'];
 const linkOf = (role, key) => links(rolePanel(role, DEFAULT_ROLE_MODULES[role])).find(l => l.key === key);
+const has = (role, key, modules = DEFAULT_ROLE_MODULES[role]) => links(rolePanel(role, modules)).some(l => l.key === key);
 const sectionOf = (role, key) => rolePanel(role, DEFAULT_ROLE_MODULES[role]).groups.find(g => g.links.some(l => l.key === key))?.title;
 
 test('the team menu runs My Recharge to Finance in Alex\'s order, Home, Favourites, Inbox and To-do first', () => {
@@ -111,15 +112,15 @@ test('the team menu runs My Recharge to Finance in Alex\'s order, Home, Favourit
   assert.deepEqual(admin.groups.map(g => g.title), TEAM_SECTIONS);
   const at = (title, panel = admin) => panel.groups.find(g => g.title === title).links.map(l => l.label);
   assert.deepEqual(at('My Recharge'), ['Home', 'Favourites', 'Inbox', 'To-do', 'Schedule', 'Reports']);
-  assert.deepEqual(at('Maintenance'), ['Reactive Jobs', 'AirCover Claims', 'Maintenance Calendar']);
+  assert.deepEqual(at('Maintenance'), ['Reactive Jobs', 'Garden Maintenance', 'Waste Collection', 'AirCover Claims', 'Maintenance Calendar']);
   assert.deepEqual(at('Management').slice(0, 2), ['Approval Requests', 'Daily Checklist']);
   for (const key of ['tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:limits', 'page:moderation', 'tool:training', 'page:feedback', 'area:management', 'area:all'])
     assert.equal(sectionOf('admin', key), 'Management', key);
-  assert.deepEqual(at('Safety & Compliance'), ['Licensing']);
-  assert.deepEqual(at('Property Onboarding'), ['New Property Inspections', 'Leads', 'Property Status', 'Client relations']);
+  assert.deepEqual(at('Safety & Compliance'), ['Licensing', 'Compliance Certs', 'Safety & Compliance Calendar']);
+  assert.deepEqual(at('Property Onboarding'), ['New Property Inspections', 'Leads', 'Property Status', 'Calendar', 'Client relations']);
   assert.deepEqual(at('Listing Management'), ['Direct Bookings', 'Booking Calendar', 'Pricing', 'Booking Performance', 'Reviews', 'Listing Maintenance', 'Guest relations']);
   assert.deepEqual(at('Property Database'), ['Property Database']);
-  assert.deepEqual(at('Stock'), ['Place Order', 'Item Catalogue']);
+  assert.deepEqual(at('Stock'), ['Place Order', 'Item Catalogue', 'Reimbursement Request']);
   assert.deepEqual(at('Housekeeping'), ['Cleans', 'Calendar', 'Form Submissions']);
   assert.deepEqual(at('Finance'), ['Order Fulfilment', 'Payable Invoices', 'Receivable Invoices', 'Client Funds & Expenses', 'Owner Statements', 'Profit/Loss Reporting', 'Accounts desk']);
   // The team's own numbers are My Performance; admins' Reports is the business, last in My Recharge.
@@ -153,20 +154,28 @@ test('the team menu runs My Recharge to Finance in Alex\'s order, Home, Favourit
 });
 
 test('the menu\'s calendars open the Calendar on one team, for the teams the role can filter by', () => {
-  const TEAM_OF = { 'tool:calendar-ready': 'ready', 'tool:calendar-stays': 'stays', 'tool:calendar-cleans': 'cleans' };
+  // The safety and onboarding calendars hold Ready's work (safety visits, inspections), so they go to the roles that see it.
+  const TEAM_OF = { 'tool:calendar-ready': 'ready', 'tool:calendar-stays': 'stays', 'tool:calendar-cleans': 'cleans', 'tool:calendar-safety': 'ready', 'tool:calendar-onboarding': 'ready' };
+  const PRESET_OF = { 'tool:calendar-safety': 'safety', 'tool:calendar-onboarding': 'onboarding' };
   for (const role of roles.filter(r => r !== 'client')) {
     const panel = rolePanel(role, DEFAULT_ROLE_MODULES[role]), calendars = links(panel).filter(l => l.key.startsWith('tool:calendar-'));
     for (const l of calendars) assert.ok(calendarTeamsFor(role).includes(TEAM_OF[l.key]), role + ' ' + l.key);
     // A section is never only a calendar; a role whose calendars would each stand alone keeps the plain Calendar.
     for (const g of panel.groups) assert.ok(!g.links.every(l => l.key.startsWith('tool:calendar-')), role + ': ' + g.title + ' is only a calendar');
     assert.ok(calendars.length || panel.groups[0].links.some(l => l.key === 'page:calendar'), role + ' can open the Calendar');
-    for (const l of calendars) assert.deepEqual(deepLinkFor(l.target), { section: 'calendar', team: TEAM_OF[l.key] }, role + ' ' + l.key);
+    for (const l of calendars) assert.deepEqual(deepLinkFor(l.target), PRESET_OF[l.key] ? { section: 'calendar', preset: PRESET_OF[l.key] } : { section: 'calendar', team: TEAM_OF[l.key] }, role + ' ' + l.key);
   }
-  // Admins and Guest relations keep all three; accounts' would each stand alone, so they get the plain Calendar.
-  for (const role of ['admin', 'super_admin', 'stays']) assert.equal(links(rolePanel(role, DEFAULT_ROLE_MODULES[role])).filter(l => l.key.startsWith('tool:calendar-')).length, 3, role);
+  // Admins and Guest relations keep all five; accounts' would each stand alone, so they get the plain Calendar.
+  for (const role of ['admin', 'super_admin', 'stays']) assert.equal(links(rolePanel(role, DEFAULT_ROLE_MODULES[role])).filter(l => l.key.startsWith('tool:calendar-')).length, 5, role);
   const accounts = rolePanel('accounts', DEFAULT_ROLE_MODULES.accounts);
   assert.ok(!links(accounts).some(l => l.key.startsWith('tool:calendar-')));
-  assert.deepEqual(accounts.groups.map(g => g.title), ['My Recharge', 'Management', 'Finance', 'Start something']);
+  assert.deepEqual(accounts.groups.map(g => g.title), ['My Recharge', 'Management', 'Stock', 'Finance', 'Start something']);
+  // Ready cannot open Licensing, so no Safety & Compliance for its calendar alone; its Onboarding keeps the calendar.
+  assert.ok(!linkOf('ready', 'tool:calendar-safety'));
+  assert.equal(linkOf('ready', 'tool:calendar-onboarding').label, 'Calendar');
+  assert.equal(sectionOf('ready', 'tool:calendar-onboarding'), 'Property Onboarding');
+  assert.equal(sectionOf('stays', 'tool:calendar-safety'), 'Safety & Compliance');
+  assert.ok(!has('stays', 'tool:calendar-safety', []), 'without Licensing the safety calendar would stand alone');
   assert.equal(linkOf('accounts', 'page:calendar').label, 'Calendar');
   assert.ok(!linkOf('ready', 'tool:calendar-stays') && !linkOf('cleaning_manager', 'tool:calendar-stays'), 'no Listing Management for a Booking calendar alone');
   assert.equal(linkOf('ready', 'tool:calendar-ready').label, 'Maintenance Calendar');
@@ -177,21 +186,76 @@ test('the menu\'s calendars open the Calendar on one team, for the teams the rol
   assert.equal(sectionOf('cleans', 'tool:calendar-cleans'), 'Housekeeping');
   // The workspace hands the team to the Calendar, whose Team filter starts on it (and can be changed).
   const workspace = readFileSync('mobile/src/LiveWorkspace.tsx', 'utf8'), calendar = readFileSync('mobile/src/LiveCalendar.tsx', 'utf8');
-  assert.match(workspace, /setCalendarTeam\(link\.team \? \{ team: link\.team, nonce: freshNonce\(\) \} : null\);/);
-  assert.match(workspace, /<LiveCalendar key=\{"calendar:" \+ \(calendarTeam\?\.nonce \?\? ""\)\}[^>]*focusTeam=\{calendarTeam\?\.team\}/);
+  assert.match(workspace, /setCalendarTeam\(link\.team \? \{ team: link\.team, nonce: freshNonce\(\) \} : link\.preset \? \{ preset: link\.preset, nonce: freshNonce\(\) \} : null\);/);
+  assert.match(workspace, /<LiveCalendar key=\{"calendar:" \+ \(calendarTeam\?\.nonce \?\? ""\)\}[^>]*focusTeam=\{calendarTeam\?\.team\} focusPreset=\{calendarTeam\?\.preset\}/);
   assert.match(calendar, /useState<Team \| "all">\(\(\) => focusTeam && calendarTeamsFor\(account\.role\)\.includes\(focusTeam\) \? focusTeam : "all"\)/);
   // A team that is not a calendar team is no link at all; the plain Calendar link has no team.
   assert.equal(deepLinkFor({ kind: 'work', view: 'calendar', sub: 'nobody' }), null);
   assert.deepEqual(deepLinkFor({ kind: 'work', view: 'calendar' }), { section: 'calendar' });
+  // The preset starts the Calendar on that kind of work, shown as a filter the person can clear.
+  assert.match(calendar, /useState<CalendarFocus \| null>\(\(\) => focusPreset \?\? null\)/);
+  assert.match(calendar, /filterFocus\(filterProperty\(entries, propertyId \|\| null\), preset\)/);
+  assert.match(calendar, /onPress=\{\(\) => setPreset\(null\)\}/);
 });
 
-test('the owner menu: Home, Favourites, Inbox, My Portfolio, My Statements, Property Performance, Approvals, Mailbox', () => {
+test('the safety calendar keeps routine safety visits and licensing, never garden or bins; onboarding keeps inspections', async () => {
+  const cal = await vite.ssrLoadModule('/lib/calendar-live.ts');
+  const day = '2026-10-20', id = n => '00000000-0000-4000-8000-00000000000' + n;
+  const w = (n, kind, title, moduleId = null) => ({ workId: id(n), propertyId: id(9), propertyName: 'Flat', moduleId, title, status: 'open', dueOn: day, dueTime: null, endTime: null, assigneeId: null, assigneeName: null, kind, version: 1 });
+  const entries = cal.calendarEntries({ work: [w(1, 'routine_visit', 'Safety check'), w(2, 'routine_visit', 'Garden visit'), w(3, 'routine_visit', 'Bin collection'), w(4, 'inspection', 'New property inspection'),
+    w(5, 'licensing', 'Licence application'), w(6, 'cleaning', 'Clean'), w(7, 'garden_setup', 'Garden set-up'), w(8, 'maintenance', 'Leak')], stays: [], payments: [] });
+  const titles = focus => cal.filterFocus(entries, focus).map(e => e.title).sort();
+  assert.deepEqual(titles('safety'), ['Licence application', 'Safety check']);
+  assert.deepEqual(titles('onboarding'), ['Garden set-up', 'New property inspection']);
+  assert.equal(cal.filterFocus(entries, null).length, entries.length);
+  assert.deepEqual([...cal.CALENDAR_FOCUSES], ['safety', 'onboarding']);
+});
+
+test('Garden Maintenance and Waste Collection open preventative visits on that visit type, which can be cleared', async () => {
+  const { visitKindOfSub } = await vite.ssrLoadModule('/lib/repairs-live.ts');
+  for (const role of ['admin', 'super_admin', 'stays', 'ready']) {
+    assert.deepEqual(deepLinkFor(linkOf(role, 'tool:garden').target), { section: 'work', view: 'repairs', sub: 'visits-garden', anchor: 'section-preventative-maintenance' }, role);
+    assert.deepEqual(deepLinkFor(linkOf(role, 'tool:bins').target), { section: 'work', view: 'repairs', sub: 'visits-bins', anchor: 'section-preventative-maintenance' }, role);
+    assert.equal(sectionOf(role, 'tool:garden'), 'Maintenance', role);
+  }
+  assert.ok(!has('stays', 'tool:garden', []), 'Guest relations need a routine tool');
+  for (const role of ['cleans', 'cleaning_manager', 'accounts', 'client']) assert.ok(!linkOf(role, 'tool:garden') && !linkOf(role, 'tool:bins'), role);
+  const ready = rolePanel('ready', DEFAULT_ROLE_MODULES.ready).groups.find(g => g.title === 'Maintenance').links.map(l => l.label);
+  assert.deepEqual(ready.slice(0, 3), ['Reactive Jobs', 'Garden Maintenance', 'Waste Collection']);
+  assert.equal(visitKindOfSub('visits-garden'), 'garden');
+  assert.equal(visitKindOfSub('visits-bins'), 'bins');
+  assert.equal(visitKindOfSub('action'), null);
+  const repairs = readFileSync('mobile/src/LiveRepairs.tsx', 'utf8');
+  assert.match(repairs, /useState<VisitKind \| "all">\(\(\) => visitKindOfSub\(focus\?\.sub\) \?\? "all"\)/);
+  assert.match(repairs, /<Dropdown p=\{p\} label="Visit type" value=\{visitKind\} onChange=\{setVisitKind\}/);
+});
+
+test('Compliance Certs opens the licensing tracker; Reimbursement Request starts the New expense form', () => {
+  for (const role of ['admin', 'stays']) {
+    assert.deepEqual(deepLinkFor(linkOf(role, 'tool:compliance').target), deepLinkFor(linkOf(role, 'tool:licensing').target), role);
+    assert.equal(sectionOf(role, 'tool:compliance'), 'Safety & Compliance', role);
+  }
+  assert.ok(!has('stays', 'tool:compliance', []));
+  for (const role of ['admin', 'super_admin', 'accounts']) {
+    const link = linkOf(role, 'form:new-expense');
+    assert.equal(link.label, 'Reimbursement Request', role);
+    assert.equal(link.kind, 'start', role);
+    assert.deepEqual(link.target, { kind: 'work', view: 'accounts', sub: 'expenses', open: 'new-expense' }, role);
+    assert.equal(sectionOf(role, 'form:new-expense'), 'Stock', role);
+    assert.ok(linkOf(role, 'start:new-expense'), role + ' keeps New expense in Start something');
+  }
+  for (const role of ['stays', 'ready', 'cleans', 'cleaning_manager', 'client']) assert.ok(!linkOf(role, 'form:new-expense'), role);
+});
+
+test('the owner menu: Home, Favourites, Inbox, My Portfolio, My Statements, Calendar, Property Performance, Approvals, Mailbox', () => {
   const panel = rolePanel('client', DEFAULT_ROLE_MODULES.client);
-  assert.deepEqual(panel.groups[0].links.map(l => l.label), ['Home', 'Favourites', 'Inbox', 'My Portfolio', 'My Statements', 'Property Performance', 'Approvals', 'Mailbox']);
-  // My Statements opens the Statements part of the Portfolio page.
+  assert.deepEqual(panel.groups[0].links.map(l => l.label), ['Home', 'Favourites', 'Inbox', 'My Portfolio', 'My Statements', 'Calendar', 'Property Performance', 'Approvals', 'Mailbox']);
+  // My Statements and Calendar open the Statements and Booking calendar parts of the Portfolio page.
   assert.deepEqual(deepLinkFor(panel.groups[0].links[4].target), { section: 'analytics', anchor: 'section-statements' });
+  assert.deepEqual(deepLinkFor(panel.groups[0].links[5].target), { section: 'analytics', anchor: 'section-booking-calendar' });
+  assert.match(readFileSync('mobile/src/LiveClientReports.tsx', 'utf8'), /<Anchor id=\{sectionAnchor\("Booking calendar"\)\}><View style=\{\[card, \{ gap: 14 \}\]\}>\s*\{heading\("Booking calendar"/);
   // Their repairs, requests and furnishing stay one section down, then Start something.
   assert.deepEqual(panel.groups.map(g => g.key), ['your-properties', 'requests', 'start']);
   assert.deepEqual(panel.groups[1].links.map(l => l.key), ['area:repairs', 'area:all', 'tool:furnishing', 'page:help']);
-  assert.ok(!links(panel).some(l => l.key === 'page:calendar' || l.key.startsWith('tool:calendar-')), 'owners have no calendar yet');
+  assert.ok(!links(panel).some(l => l.key === 'page:calendar' || l.key.startsWith('tool:calendar-')), 'owners have no team Calendar page');
 });

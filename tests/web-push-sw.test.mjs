@@ -146,3 +146,12 @@ test('the icons: a white mark on a transparent badge, and maskable home-screen i
   assert.deepEqual(manifest.icons.filter(i => i.purpose === 'maskable').map(i => i.sizes), ['192x192', '512x512']);
   for (const icon of manifest.icons) await fs.access('mobile/web-static/' + icon.src.replace('/workspace/', ''));
 });
+
+test('a phone picks up new notification code each time the app opens, and it takes over at once', async () => {
+  const notifications = await fs.readFile('mobile/src/Notifications.tsx', 'utf8');
+  assert.match(notifications, /getRegistration\("\/workspace\/"\)[^\n]*\n\s*await registration\?\.update\(\)/, 'the app asks the browser for the latest sw.js');
+  const workspace = await fs.readFile('mobile/src/LiveWorkspace.tsx', 'utf8');
+  assert.match(workspace, /useEffect\(\(\) => \{ void refreshNotificationLink\(\); \}, \[account\.userId\]\);/, 'on every app open');
+  assert.match(source, /self\.skipWaiting\(\)/);
+  assert.match(source, /self\.clients\.claim\(\)/);
+});
