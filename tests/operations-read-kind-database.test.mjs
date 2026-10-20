@@ -14,12 +14,14 @@ create function auth.jwt() returns jsonb language sql stable as $$select coalesc
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 const files = (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort();
 assert.ok(files.includes(MINE + '.sql'));
-for (const file of files) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+// Later migrations may redefine these functions, so the second run is checked before they load.
+for (const file of files.filter(f => f <= MINE + '.sql')) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 const SIGS = ['private.workspace_operations_read_kind(uuid,text)', 'public.workspace_operations_read_kind(uuid,text)'];
 const definition = async sig => (await db.query('select pg_get_functiondef($1::regprocedure) def', [sig])).rows[0].def;
 const firstRun = await Promise.all(SIGS.map(definition));
 await db.exec(await fs.readFile(`supabase/migrations/${MINE}.sql`, 'utf8'));
 const secondRun = await Promise.all(SIGS.map(definition));
+for (const file of files.filter(f => f > MINE + '.sql')) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 after(() => db.close());
 
 const roles = ['admin', 'stays', 'client', 'client', 'cleans'];
