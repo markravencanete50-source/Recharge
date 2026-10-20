@@ -1,16 +1,18 @@
 import { londonClock } from './team-time';
+import { OPEN_SHIFT_LIMIT_HOURS, ukDayOf } from './shift-hours';
 import type { Timesheet, TimesheetPerson } from './workspace-teams-policy';
 
 // What actually happened on a rota day: each shift's clock in and clock out, in UK time. A shift
 // belongs to the UK day it started on, so one that runs past midnight shows on its first day (the
-// timesheet already groups shifts that way). A shift still open is "Not clocked out" until it has
-// run for 16 hours; after that nobody is plausibly still working it, so it reads "Did not clock out".
-export const FORGOTTEN_CLOCK_OUT_MINUTES = 16 * 60;
+// timesheet lists it on every day it touches, so the other days skip it here). A shift still open is
+// "Not clocked out" until it has run for 16 hours; after that nobody is plausibly still working it, so it
+// reads "Did not clock out". The limit is the shared one (lib/shift-hours.ts), where its hours stop counting.
+export const FORGOTTEN_CLOCK_OUT_MINUTES = OPEN_SHIFT_LIMIT_HOURS * 60;
 export type RotaActual = { id: string; state: 'closed' | 'open' | 'forgotten'; text: string };
 
 export function rotaActuals(person: TimesheetPerson | undefined, day: string, now: Date = new Date()): RotaActual[] {
   const shifts = person?.days.find(d => d.day === day)?.shifts ?? [];
-  return shifts.slice().sort((a, b) => Date.parse(a.clockedInAt) - Date.parse(b.clockedInAt)).map(s => {
+  return shifts.filter(s => ukDayOf(s.clockedInAt) === day).sort((a, b) => Date.parse(a.clockedInAt) - Date.parse(b.clockedInAt)).map(s => {
     const clockIn = `In ${londonClock(s.clockedInAt)}`;
     if (s.clockedOutAt) return { id: s.id, state: 'closed', text: `${clockIn} · Out ${londonClock(s.clockedOutAt)}` };
     const forgotten = now.getTime() - Date.parse(s.clockedInAt) >= FORGOTTEN_CLOCK_OUT_MINUTES * 60000;

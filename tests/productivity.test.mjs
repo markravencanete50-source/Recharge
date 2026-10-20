@@ -78,8 +78,8 @@ test('the calendar: whole weeks, and each day\'s hours, people, missed days and 
   const isla = person('Isla', [{ day: '2026-10-09', planned: null, minutes: 60, shifts: [shift('2026-10-09T08:00:00Z', null, 60)] }]);
   const sheet = timesheetSchema.parse({ from: '2026-10-01', to: '2026-10-31', canEdit: true, people: [callum, fiona, isla], pending: [] });
   const totals = dayTotals(sheet, '2026-10-10');
-  assert.deepEqual(totals.get('2026-10-08'), { minutes: 480, people: 1, shifts: 1, missed: 1, waiting: 0, open: 0 });
-  assert.deepEqual(totals.get('2026-10-09'), { minutes: 60, people: 1, shifts: 1, missed: 0, waiting: 0, open: 1 });
+  assert.deepEqual(totals.get('2026-10-08'), { minutes: 480, people: 1, shifts: 1, missed: 1, waiting: 0, open: 0, stale: 0 });
+  assert.deepEqual(totals.get('2026-10-09'), { minutes: 60, people: 1, shifts: 1, missed: 0, waiting: 0, open: 1, stale: 0 });
   assert.deepEqual(dayPeople(sheet, '2026-10-08', '2026-10-10').map(x => x.person.fullName), ['Fiona', 'Callum'], 'who clocked in first, then who was planned but did not');
   assert.deepEqual(dayPeople(sheet, '2026-10-11', '2026-10-10'), []);
 });
