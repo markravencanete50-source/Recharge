@@ -11,6 +11,7 @@ const L = await vite.ssrLoadModule('/lib/lead-estimate.ts');
 const { teamsActionSchema, teamsReadSchema } = await vite.ssrLoadModule('/lib/workspace-teams-policy.ts');
 const { MAX_COMPARABLES, MAX_SAVED_COMPARABLES } = await vite.ssrLoadModule('/lib/journey-policy.ts');
 const { estimateComparables } = await vite.ssrLoadModule('/lib/workspace-view.ts');
+const { estimateComparablesOf } = await vite.ssrLoadModule('/lib/estimate-link.ts');
 const { rolePanel } = await vite.ssrLoadModule('/lib/role-panel.ts');
 const { CLIENT_SUB_LABEL } = await vite.ssrLoadModule('/lib/relations-subs.ts');
 const { homeToolsFor } = await vite.ssrLoadModule('/lib/home-tools.ts');
@@ -149,6 +150,8 @@ test('the estimate is built from the steps, with up to 3 comparables; saved esti
   });
   assert.equal(MAX_COMPARABLES, 3); assert.equal(MAX_SAVED_COMPARABLES, 20); assert.equal(L.MAX_LEAD_COMPARABLES, 3);
   assert.equal(estimateComparables({ comparables: Array.from({ length: 12 }, (_, i) => comp(i)) }).length, 12, 'an older estimate with 12 still reads');
+  assert.equal(estimateComparablesOf({ comparables: Array.from({ length: 12 }, (_, i) => comp(i)) }).length, 12, 'the owner estimate page reads all 12 an older estimate was saved with');
+  assert.equal(estimateComparablesOf({ comparables: Array.from({ length: 25 }, (_, i) => comp(i)) }).length, MAX_SAVED_COMPARABLES);
 });
 
 test('the thread: the lead history and the team, oldest first', () => {

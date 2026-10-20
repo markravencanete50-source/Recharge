@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { emailSignature } from './email-brand';
-import { DECLINE_REASON_MESSAGE, MAX_COMPARABLES, declineReasonMissing, repairLimitMinorSchema } from './journey-policy';
+import { DECLINE_REASON_MESSAGE, MAX_SAVED_COMPARABLES, declineReasonMissing, repairLimitMinorSchema } from './journey-policy';
 import { ENQUIRY_REPLY_TO } from './integration-policy';
 
 // The estimate, emailed with a private link (Lee, 14 October). Pure: the email, the client's decision and the team's
@@ -39,9 +39,11 @@ export const estimateDecisionSchema = z.object({
 // The three answers on the page, in this order (Alex, client meeting): go ahead, say no, or take time and come back to us.
 export const DECISION_LABEL = { proceed: 'Proceed', decline: 'No, thank you', review: 'Thank you, I’ll be in touch' } as const;
 
+// Reading: an estimate published before the limit for new ones dropped to MAX_COMPARABLES (3) keeps all it was saved with
+// (up to MAX_SAVED_COMPARABLES); new submissions are still held to 3 by journeyActionSchema.
 const comparablesOf = (estimate: Record<string, unknown>) => (Array.isArray(estimate.comparables) ? estimate.comparables : [])
   .filter((c): c is { name: string; url: string; adrMinor: number } => !!c && typeof c === 'object' && typeof (c as { name?: unknown }).name === 'string' && typeof (c as { url?: unknown }).url === 'string' && /^https:\/\//.test((c as { url: string }).url))
-  .slice(0, MAX_COMPARABLES);
+  .slice(0, MAX_SAVED_COMPARABLES);
 export const estimateComparablesOf = comparablesOf;
 
 // The email (Alex's onboarding framework, 20261025200000): the estimate is ready, and one button into the app, where they
