@@ -19,7 +19,7 @@ import { icon, radius, space, textSize, ui, type Palette } from "./theme";
 import { addDays, Anchor, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading, OnlySection, useOnlySection } from "./LiveKit";
 import { formatDay, formatMoney } from "../../lib/format";
 import { raisedByLine } from "../../lib/cleaner-repairs";
-import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeInbox, writeOperation, writeTeams } from "./backend/client";
+import { readOperationsOfKind, readTeams, readWorkMedia, workspaceRequest, writeInbox, writeOperation, writeTeams } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { PropertyAccess } from "./LiveTools";
 import { REPAIR_GUIDES, SAFETY_STOP, repairTypeLabel, troubleshootingNote, type RepairType } from "../../lib/repair-guides";
@@ -96,7 +96,7 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const all = z.array(operationViewSchema).parse((await readOperations()).data), ops = all.filter(op => op.kind === "maintenance");
+      const all = z.array(operationViewSchema).parse((await readOperationsOfKind("maintenance")).data), ops = all.filter(op => op.kind === "maintenance");
       setRepairs(ops);
       setVisitOps(all.filter(op => op.kind === "routine_visit"));
       if (routines) {

@@ -173,6 +173,8 @@ export const readWorkspace = async (query: Record<string, string>) => (await wor
 export const writeWorkspace = async (action: BusinessAction) => (await workspaceRequest("/api/mobile/workspace", action)).json();
 export const downloadReport = async (period: AnalyticsPeriod) => (await workspaceRequest("/api/mobile/reports/export?" + new URLSearchParams(period))).text();
 export const readOperations = async (propertyId?:string) => (await workspaceRequest('/api/mobile/operations'+(propertyId?'?propertyId='+encodeURIComponent(propertyId):''))).json();
+// One kind of work only, such as the repairs ("maintenance"), instead of every work item in the business.
+export const readOperationsOfKind = async (kind:string) => (await workspaceRequest('/api/mobile/operations?kind='+encodeURIComponent(kind))).json();
 // One work item by its id (an update whose item is not in the loaded list), and the 50 updates before a given one.
 export const readWorkItem = async (workId: string) => (await workspaceRequest('/api/mobile/operations?workId=' + encodeURIComponent(workId))).json();
 export const readOlderNotices = async (before: number) => (await workspaceRequest('/api/mobile/portfolio?section=notifications&before=' + encodeURIComponent(String(before)))).json();

@@ -11,7 +11,7 @@ import { Sheet } from "./TeamFlows";
 import { SearchPicker } from "./SearchPicker";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { OpenMessagesContext } from "./PropertyTeamChat";
-import { photoSource, readInbox, readOperations, readRepairContractors, readWorkItem, readWorkMedia, uploadWorkFile, writeOperation } from "./backend/client";
+import { photoSource, readInbox, readOperationsOfKind, readRepairContractors, readWorkItem, readWorkMedia, uploadWorkFile, writeOperation } from "./backend/client";
 import { icon, radius, ui, type Palette } from "./theme";
 import { documentsAllowed } from "../../lib/integration-policy";
 import { inboxThreadSchema } from "../../lib/guest-inbox-policy";
@@ -202,7 +202,7 @@ export function ContractorJobs({ p, userId, properties, onOpen }: { p: Palette; 
   const [jobs, setJobs] = useState<Job[] | null>(null), [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    queueMicrotask(() => void readOperations().then(r => { if (active) setJobs(z.array(operationViewSchema).parse(r.data).filter(op => op.kind === "maintenance" && assignedTo(op.data, userId) && !!assignedContractor(op.data))); }).catch(e => { if (active) setError(message(e)); }));
+    queueMicrotask(() => void readOperationsOfKind("maintenance").then(r => { if (active) setJobs(z.array(operationViewSchema).parse(r.data).filter(op => op.kind === "maintenance" && assignedTo(op.data, userId) && !!assignedContractor(op.data))); }).catch(e => { if (active) setError(message(e)); }));
     return () => { active = false; };
   }, [userId]);
   const name = (id: string) => properties?.find(x => x.id === id)?.name ?? "Property";
@@ -291,7 +291,7 @@ export function ContractorReviews({ p, role, properties, refreshKey = 0 }: { p: 
   const management = role === "admin" || role === "super_admin";
   useEffect(() => {
     let active = true;
-    if (management) queueMicrotask(() => void readOperations().then(r => { if (active) setJobs(z.array(operationViewSchema).parse(r.data).filter(op => op.kind === "maintenance" && op.data.phase === REVIEW_PHASE)); }).catch(() => undefined));
+    if (management) queueMicrotask(() => void readOperationsOfKind("maintenance").then(r => { if (active) setJobs(z.array(operationViewSchema).parse(r.data).filter(op => op.kind === "maintenance" && op.data.phase === REVIEW_PHASE)); }).catch(() => undefined));
     return () => { active = false; };
   }, [management, refreshKey, tick]);
   if (!management || !jobs.length) return null;
