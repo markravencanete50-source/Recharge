@@ -268,15 +268,31 @@ export async function tokenHash(token: string) {
   return Array.from(digest, b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Delete (round 6, then Lee: "WE SHOULD BE ABLE TO DELETE ENQUIRIES"): admins and super admins, at any stage up to
-// and including the agreement. The button shows only then; the database checks again (unsigned, not live, no invoice,
-// bookings or other money) and otherwise answers ENQUIRY_PAST_AGREEMENT or names what stops it. Close stays as it is.
-export const DELETABLE_STAGES = ['enquiry', 'estimate', 'reviewing', 'agreement', 'archived'] as const;
+// Delete (round 6, then Lee: "WE SHOULD BE ABLE TO DELETE ENQUIRIES", and "make sure we always have the way to delete it"):
+// admins and super admins, at any onboarding stage before the property goes live, signed agreement and onboarding invoice
+// included (migration 20261025500000). The database checks again (not live, no bookings, statements or other real
+// business) and otherwise answers ENQUIRY_LIVE or names what stops it. Past the agreement more goes with it, so the person
+// types DELETE_CONFIRM_WORD to confirm. Close stays as it is.
+export const DELETABLE_STAGES = ['enquiry', 'estimate', 'reviewing', 'agreement', 'form', 'invoice', 'inspection_to_book', 'inspection_booked', 'inspection_complete', 'archived'] as const;
 export const canDeleteEnquiry = (role: string, e: Pick<ClientEnquiry, 'propertyId' | 'stage'>) =>
   (role === 'admin' || role === 'super_admin') && (!e.propertyId || !e.stage || (DELETABLE_STAGES as readonly string[]).includes(e.stage));
+// The stages past the agreement, and what onboarding has made by each (for the warning).
+const PAST_AGREEMENT: Record<string, readonly string[]> = {
+  form: ['the signed agreement'],
+  invoice: ['the signed agreement', 'the set-up form and payout details', 'the onboarding invoice'],
+  inspection_to_book: ['the signed agreement', 'the set-up form and payout details', 'the onboarding invoice', 'the inspection'],
+  inspection_booked: ['the signed agreement', 'the set-up form and payout details', 'the onboarding invoice', 'the booked inspection'],
+  inspection_complete: ['the signed agreement', 'the set-up form and payout details', 'the onboarding invoice', 'the inspection report'],
+};
+export const DELETE_CONFIRM_WORD = 'DELETE';
+// Typing DELETE is asked for past the agreement, and for a closed one (it may have been signed before it was closed).
+export const deleteNeedsConfirm = (e: Pick<ClientEnquiry, 'propertyId' | 'stage'>) => !!e.propertyId && !!e.stage && (e.stage in PAST_AGREEMENT || e.stage === 'archived');
 export const deleteEnquiryWarning = (e: Pick<ClientEnquiry, 'propertyId' | 'propertyName' | 'stage'>) => {
   if (!e.propertyId) return 'Delete this enquiry? This removes the enquiry, its answers and photos. This can’t be undone.';
   const place = e.propertyName?.trim() || 'the property', estimate = !!e.stage && e.stage !== 'enquiry';
+  const past = e.stage ? PAST_AGREEMENT[e.stage] : undefined;
+  if (past) return `Delete this enquiry? This also removes the onboarding for ${place}: ${[...past, 'every onboarding task', 'its estimate and history'].join(', ')}. This can’t be undone.`;
+  if (e.stage === 'archived') return `Delete this enquiry? This also removes the onboarding for ${place}, with anything it reached (a signed agreement, set-up form or onboarding invoice) and its history. This can’t be undone.`;
   return `Delete this enquiry? This also removes the onboarding for ${place}${estimate ? ', its estimate and history' : ' and its history'}. This can’t be undone.`;
 };
-export const ENQUIRY_PAST_AGREEMENT = 'The agreement is signed or the property is live, so this enquiry can no longer be deleted. Archive it instead.';
+export const ENQUIRY_LIVE = 'The property is live, so this enquiry can no longer be deleted. Archive it instead.';

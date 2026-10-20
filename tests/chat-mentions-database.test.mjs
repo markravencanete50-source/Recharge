@@ -101,12 +101,12 @@ test('in Guest relations, Erika mentions Alex and Mark (an admin who does not he
   assert.equal(m.mentionsEveryone, false);
   await as(ERIKA);
   assert.ok((await messages(guestRelations)).find(x => x.id === sent.id).mentions.every(x => !x.you));
-  // Mark's pop-up: the channel's name on top, "Erika mentioned you" in front of the message, the conversation to open.
+  // Mark's pop-up (WhatsApp layout, 20261025500000): Erika on top, the channel on the first line, "Mentioned you" before the message.
   const popup = await details(sent.id, MARK);
   assert.deepEqual([popup.mention, popup.conversationId, popup.conversationKind, popup.context], ['you', guestRelations, 'group', 'Guest relations']);
   assert.equal(popup.senderPhotoPath, `${users[ERIKA]}/97c20000-0000-4000-8000-000000000001.jpg`, 'the backend signs it; it never reaches a device');
   assert.equal(popup.senderColour, 'plum');
-  assert.deepEqual(pushCopy('chat.message', null, popup), { title: 'Guest relations (2 messages)', message: 'Erika mentioned you: @Alex Coghill and @Mark Raven can you check 110 Hawk?' });
+  assert.deepEqual(pushCopy('chat.message', null, popup), { title: 'Erika Smith', message: 'Guest relations\nMentioned you: @Alex Coghill and @Mark Raven can you check 110 Hawk?' });
   assert.equal(pushTarget('chat.message', popup).url, `/workspace/live?section=inbox&chat=${guestRelations}`);
 });
 
@@ -156,7 +156,7 @@ test('@everyone tells everyone who can read it, Mark (admin) included, and reads
   assert.equal((await list()).find(c => c.id === guestRelations).mentioned, true);
   const popup = await details(sent.id, MARK);
   assert.equal(popup.mention, 'everyone');
-  assert.match(pushCopy('chat.message', null, popup).message, /^Erika mentioned everyone: @everyone the boiler/);
+  assert.match(pushCopy('chat.message', null, popup).message, /^Guest relations\nMentioned everyone: @everyone the boiler/);
   // A group chat: its members.
   await as(ALEX);
   group = (await act({ action: 'startGroup', title: 'Deep clean Friday', userIds: [users[ISLA], users[ERIKA]] })).id;
@@ -196,7 +196,7 @@ test('the pop-up counts unread messages and never gives an owner a staff photo; 
   const back = await send(owner, 'Thank you!');
   const toMark = await details(back.id, MARK);
   assert.equal(toMark.ownerName, 'Sarah Jones');
-  assert.deepEqual(pushCopy('chat.owner_message', null, toMark), { title: 'Sarah Jones (owner)', message: 'Thank you!' });
+  assert.deepEqual(pushCopy('chat.owner_message', null, toMark), { title: 'Sarah Jones', message: 'Owner\nThank you!' });
   assert.equal(pushTarget('chat.owner_message', toMark).url, `/workspace/live?section=inbox&chat=${owner}`);
   // Phone-app pushes: the claim hands the push channel its details, never the email channel.
   await asDatabase();

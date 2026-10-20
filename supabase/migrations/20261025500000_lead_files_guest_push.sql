@@ -1,0 +1,222 @@
+-- Two fixes.
+-- 1. Deleting a lead (a client enquiry) left its PriceLabs reports in the private 'lead-files' bucket: the rows in
+-- private.workspace_lead_files go with the enquiry (on delete cascade), but nothing removed the stored copies.
+--  * The delete now reads the lead's files first, queues them in private.workspace_storage_removals (bucket 'lead-files',
+--    reason 'client_enquiry.deleted', as the enquiry's own photos already are) and hands their paths back as leadPaths.
+--    The site's server removes the stored copies straight away with the service client and marks them removed, best
+--    effort (lib/enquiry-storage-cleanup.ts): a failed removal never fails the delete and stays queued on record.
+--  * private.workspace_storage_removals accepts the 'lead-files' bucket.
+--    Unchanged: who may delete, at which stages, what stops it, and everything else it deletes.
+-- 2. A guest message pop-up opened Messages instead of the guest's conversation. Its notice now keeps the guest conversation
+--    (private.workspace_activity_details.guest_thread_id, set by private.workspace_guest_message_notices) and
+--    private.integration_push_details hands it on as 'guestThreadId', so a tap and Reply open that conversation, Mark as read
+--    marks it read on the device, and its pop-ups group per conversation (lib/push-copy.ts, mobile/web-static/sw.js).
+--    Who is told, and when, is unchanged. A team chat message's pop-up also gets what it carries ('attachmentKind': image,
+--    video or audio) and its first photo's private path ('attachmentPath'), which the server signs for an hour for the
+--    pop-up's picture (lib/web-push.ts); the path never reaches a device.
+-- 3. Lee: "if it's already done with the agreement we cannot delete it, make sure we always have the way to delete it."
+--    Admins and super admins can now delete an enquiry and its property at ANY onboarding stage before it goes live
+--    (enquiry, estimate, reviewing, agreement, form, invoice, inspection_to_book, inspection_booked, inspection_complete,
+--    or archived), including a signed agreement, a submitted set-up form and an onboarding invoice. Everything onboarding
+--    made goes with it: the journey (agreement, signature, set-up form, inspection report), the onboarding invoice
+--    (module onboarding-invoices), the payout details from the set-up form (private.workspace_bank_details), the garden
+--    and bins routine and its scheduled visits, every work item with its details, the lead's steps, comments and files,
+--    the enquiry's files, access and notices, as before.
+--    Still refused ("Archive it instead"): a live property (status not onboarding or archived, or stage live), and real
+--    business: another invoice, bookings, owner statements, guest messages, messages, photos on work, clean reviews, a
+--    furnishing quote, or completed work that is not part of onboarding (a clean, a repair, a routine visit done).
+--    Past the agreement (signed, a set-up form, an invoice, or an inspection stage) the request must carry
+--    confirm: 'DELETE' (the person types it in the app). The access history records whether it was signed and invoiced.
+-- 4. Lee: notices name people, not labels. The Updates feed said "Guest message, 64/2 Rannoch" with "Guest" below it.
+--  * Each guest message notice now keeps, for good, its guest conversation and the guest's name as it was when the message
+--    came in (new table private.workspace_guest_notices; private.workspace_activity_details is cleared after 3 days). The
+--    name is the conversation's guest name (Hostaway's), else the first name on the stay the conversation is about
+--    (private.workspace_stay_contacts, matched by the booking code or the property and dates): private.workspace_guest_thread_name.
+--  * The pop-up's sender (activity_details.who) uses the same name, so the pop-up and the feed agree.
+--  * The feed read (private.workspace_notifications_read) returns guest_name (the conversation's current name, else the one
+--    kept), guest_channel, guest_check_in and guest_check_out for a guest message, and guest_name only to those who may see
+--    guest names (private.workspace_guest_name_visible), and guest_thread_id, so a tap on the row opens that conversation. The app titles the row "<guest>, <property>" with "Guest message,
+--    Airbnb, 12 to 15 Oct" below (lib/notice-details.ts); a notice from before this, with no name, says "Guest".
+--  * Guest message notices of the last 3 days are filled in from their pop-up details, once.
+-- Patched by anchor (sentinel, an anchor that must occur once): private.workspace_client_enquiry_delete(jsonb),
+-- private.workspace_enquiry_blocker(uuid,uuid[],uuid), private.workspace_guest_message_notices(),
+-- private.integration_push_details(bigint) and private.workspace_notifications_read(bigint). The bucket check is replaced
+-- by name with the wider one; one nullable column and one table are added. No DROP of a table; the only rows deleted are
+-- the deleted property's own, inside the admin's delete. Safe to run twice.
+
+alter table private.workspace_storage_removals drop constraint if exists workspace_storage_removals_bucket_check;
+alter table private.workspace_storage_removals add constraint workspace_storage_removals_bucket_check check(bucket in ('enquiry-files','lead-files'));
+
+alter table private.workspace_activity_details add column if not exists guest_thread_id uuid references private.workspace_guest_threads(id) on delete set null;
+create index if not exists workspace_activity_details_guest_thread_idx on private.workspace_activity_details(guest_thread_id);
+
+-- 4. Who wrote a guest message notice, kept as long as the notice.
+create table if not exists private.workspace_guest_notices (
+ event_id bigint primary key references public.workspace_activity(id) on delete cascade,
+ guest_thread_id uuid references private.workspace_guest_threads(id) on delete set null,
+ guest_name text check(guest_name is null or char_length(guest_name) between 1 and 120),
+ created_at timestamptz not null default now()
+);
+create index if not exists workspace_guest_notices_thread_idx on private.workspace_guest_notices(guest_thread_id);
+alter table private.workspace_guest_notices enable row level security;
+revoke all on private.workspace_guest_notices from public,anon,authenticated,service_role;
+
+-- The guest's name for a conversation: its own (from Hostaway or the channel), else the first name on its stay, matched by the
+-- booking code, else by the property and the dates. Null when neither is known.
+create or replace function private.workspace_guest_thread_name(guest_thread uuid) returns text language sql stable security definer set search_path='' as $fn$
+ select coalesce(
+  (select nullif(btrim(t.guest_name),'') from private.workspace_guest_threads t where t.id=guest_thread),
+  (select nullif(btrim(c.first_name),'') from private.workspace_guest_threads t
+    join private.workspace_reservations r on (t.property_id is null or r.property_id=t.property_id)
+     and ((t.reservation_ref is not null and upper(btrim(t.reservation_ref))=any(private.workspace_stay_codes(r.channel_reference,r.reference)))
+      or (t.property_id is not null and t.check_in is not null and r.check_in=t.check_in and r.check_out=t.check_out))
+    join private.workspace_stay_contacts c on c.reservation_id=r.id
+   where t.id=guest_thread and nullif(btrim(c.first_name),'') is not null
+   order by (t.reservation_ref is not null and upper(btrim(t.reservation_ref))=any(private.workspace_stay_codes(r.channel_reference,r.reference))) desc,c.updated_at desc
+   limit 1))
+$fn$;
+
+-- Guest message notices still within their 3 days of pop-up details, filled in once.
+insert into private.workspace_guest_notices(event_id,guest_thread_id,guest_name,created_at)
+ select d.event_id,d.guest_thread_id,left(nullif(btrim(coalesce(d.who,private.workspace_guest_thread_name(d.guest_thread_id))),''),120),a.created_at
+ from private.workspace_activity_details d join public.workspace_activity a on a.id=d.event_id
+ where a.event_type='guest.message'
+on conflict(event_id) do nothing;
+
+do $patch$
+declare
+ -- function, anchor (must occur exactly once), replacement, sentinel (present once patched)
+ fixes constant text[][] := array[
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$paths text[];events bigint[];$q$,
+   $q$paths text[];/* lead files declared: 20261025500000 */lead_file_paths text[];events bigint[];$q$,
+   $q$/* lead files declared: 20261025500000 */$q$],
+  -- Read before the enquiry goes (its file rows go with it), queued like the enquiry's photos.
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$delete from private.workspace_client_enquiries where id=e.id;$q$,
+   $q$/* lead files queued: 20261025500000 */ lead_file_paths:=array(select f.path from private.workspace_lead_files f where f.enquiry_id=e.id order by f.created_at,f.path);
+ insert into private.workspace_storage_removals(bucket,path,reason,queued_by) select 'lead-files',x,'client_enquiry.deleted',auth.uid() from unnest(lead_file_paths) x;
+ delete from private.workspace_client_enquiries where id=e.id;$q$,
+   $q$/* lead files queued: 20261025500000 */$q$],
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$'paths',to_jsonb(paths));$q$,
+   $q$'paths',to_jsonb(paths),'leadPaths',to_jsonb(coalesce(lead_file_paths,'{}'::text[]))/* lead files returned: 20261025500000 */);$q$,
+   $q$/* lead files returned: 20261025500000 */$q$],
+  -- The guest message notice keeps its conversation.
+  ['private.workspace_guest_message_notices()',
+   $q$insert into private.workspace_activity_details(event_id,who,preview,replied)$q$,
+   $q$insert into private.workspace_activity_details(event_id,who,preview,replied,guest_thread_id)/* guest push columns: 20261025500000 */$q$,
+   $q$/* guest push columns: 20261025500000 */$q$],
+  ['private.workspace_guest_message_notices()',
+   $q$x.id<>m.id and x.sent_at<=m.sent_at))$q$,
+   $q$x.id<>m.id and x.sent_at<=m.sent_at),
+     (select t.id from private.workspace_guest_threads t where t.source=m.source and t.thread_ref=m.thread_ref)/* guest push thread: 20261025500000 */)$q$,
+   $q$/* guest push thread: 20261025500000 */$q$],
+  -- The pop-up gets it (guest messages only).
+  ['private.integration_push_details(bigint)',
+   $q$'senderColour',case when d.message_id is not null and rp.role<>'client' then ap.avatar_preset end$q$,
+   $q$'senderColour',case when d.message_id is not null and rp.role<>'client' then ap.avatar_preset end,
+  'guestThreadId',case when a.event_type='guest.message' then d.guest_thread_id end,
+  'attachmentKind',case when d.message_id is not null then (select case when count(*)=0 then null when bool_or(x.kind='audio') then 'audio'
+   when bool_or(x.kind='image') then 'image' else 'video' end from private.chat_attachments x where x.message_id=d.message_id) end,
+  'attachmentPath',case when d.message_id is not null then (select x.path from private.chat_attachments x where x.message_id=d.message_id and x.kind='image'
+   order by x.position,x.created_at limit 1) end/* guest push details: 20261025500000 */$q$,
+   $q$/* guest push details: 20261025500000 */$q$],
+  -- 3. Any onboarding stage before live. The request may carry confirm.
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$perform private.workspace_json_keys(input,array['action','requestId','enquiryId','version']);$q$,
+   $q$perform private.workspace_json_keys(input,array['action','requestId','enquiryId','version','confirm']);/* onboarding delete confirm key: 20261025500000 */$q$,
+   $q$/* onboarding delete confirm key: 20261025500000 */$q$],
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$ or (j.property_id is not null and (j.stage not in ('enquiry','estimate','reviewing','agreement','archived') or j.signed_at is not null or j.signed_name is not null or j.invoice_id is not null)) then$q$,
+   $q$ or (j.property_id is not null and j.stage not in ('enquiry','estimate','reviewing','agreement','form','invoice','inspection_to_book','inspection_booked','inspection_complete','archived'))/* onboarding delete any stage: 20261025500000 */ then$q$,
+   $q$/* onboarding delete any stage: 20261025500000 */$q$],
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$raise exception 'The agreement is signed or the property is live, so this enquiry can no longer be deleted. Archive it instead.' using errcode='22023';$q$,
+   $q$raise exception 'The property is live, so this enquiry can no longer be deleted. Archive it instead.' using errcode='22023';/* onboarding delete live words: 20261025500000 */$q$,
+   $q$/* onboarding delete live words: 20261025500000 */$q$],
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$blocker:=private.workspace_enquiry_blocker(prop,tasks,e.id);$q$,
+   $q$/* onboarding delete work done: 20261025500000 */
+ -- Work done on the property that is not onboarding (a clean, a repair, a routine visit) means it has been in use.
+ if prop is not null and exists(select 1 from public.workspace_work_items w where w.id=any(tasks) and w.status='completed'
+  and (w.module_id not in ('property-onboarding','onboarding-invoices','licensing','new-property-inspection-board','property-furnishing-board','clean-property-onboarding','routine-bin-garden-board')
+   or exists(select 1 from private.workspace_routine_visits v where v.work_id=w.id))) then
+  raise exception 'This property has completed work recorded, so this enquiry can no longer be deleted. Archive it instead.' using errcode='22023';
+ end if;
+ blocker:=private.workspace_enquiry_blocker(prop,tasks,e.id);
+ -- Past the agreement more goes with it, so the person confirms by typing DELETE.
+ if j.property_id is not null and (j.signed_at is not null or j.signed_name is not null or j.invoice_id is not null or j.invoice_outside_at is not null or j.submitted_at is not null
+   or j.stage in ('form','invoice','inspection_to_book','inspection_booked','inspection_complete'))
+  and blocker is null and input->>'confirm' is distinct from 'DELETE' then
+  raise exception 'Type DELETE to confirm. This removes the signed agreement, the set-up form, the onboarding invoice and the inspection too.' using errcode='22023';
+ end if;$q$,
+   $q$/* onboarding delete work done: 20261025500000 */$q$],
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$'status',e.status,'stage',j.stage,$q$,
+   $q$'status',e.status,'stage',j.stage,'signed',(j.signed_at is not null),'invoiced',(j.invoice_id is not null or j.invoice_outside_at is not null),/* onboarding delete audit: 20261025500000 */$q$,
+   $q$/* onboarding delete audit: 20261025500000 */$q$],
+  -- The onboarding invoice goes once the journey that points at it has gone.
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$delete from private.workspace_journeys x where x.property_id=prop;$q$,
+   $q$delete from private.workspace_journeys x where x.property_id=prop;
+  /* onboarding delete invoice: 20261025500000 */ delete from public.workspace_invoices i where i.property_id=prop and i.module_id='onboarding-invoices';
+  delete from private.workspace_bank_details b where b.property_id=prop;$q$,
+   $q$/* onboarding delete invoice: 20261025500000 */$q$],
+  -- The garden and bins routine and its scheduled visits, before the work items.
+  ['private.workspace_client_enquiry_delete(jsonb)',
+   $q$delete from public.workspace_work_updates u where u.work_id=any(tasks);$q$,
+   $q$/* onboarding delete routine: 20261025500000 */ delete from private.workspace_routine_visits v where v.work_id=any(tasks) or v.plan_id in (select r.id from private.workspace_routine_plans r where r.property_id=prop);
+  delete from private.workspace_routine_plans r where r.property_id=prop;
+  delete from public.workspace_work_updates u where u.work_id=any(tasks);$q$,
+   $q$/* onboarding delete routine: 20261025500000 */$q$],
+  -- What the delete now clears is not a blocker; an onboarding invoice is not either (any other invoice still is).
+  ['private.workspace_enquiry_blocker(uuid,uuid[],uuid)',
+   $q$continue when r.conrelid=any(cleared);$q$,
+   $q$continue when r.conrelid=any(cleared);
+  /* onboarding delete blockers: 20261025500000 */
+  continue when r.conrelid=any(array['private.workspace_bank_details','private.workspace_routine_plans','private.workspace_routine_visits']::regclass[]);
+  continue when r.conrelid='public.workspace_invoices'::regclass and r.confrelid='public.workspace_properties'::regclass
+   and not exists(select 1 from public.workspace_invoices i where i.property_id=prop and i.module_id<>'onboarding-invoices');$q$,
+   $q$/* onboarding delete blockers: 20261025500000 */$q$],
+  -- 4. The pop-up's sender is the guest's name, from the conversation or its stay.
+  ['private.workspace_guest_message_notices()',
+   $q$(select left(t.guest_name,200) from private.workspace_guest_threads t where t.source=m.source and t.thread_ref=m.thread_ref)$q$,
+   $q$left(private.workspace_guest_thread_name((select t.id from private.workspace_guest_threads t where t.source=m.source and t.thread_ref=m.thread_ref)),200)/* guest notice sender: 20261025500000 */$q$,
+   $q$/* guest notice sender: 20261025500000 */$q$],
+  -- The notice keeps its conversation and the guest's name for good.
+  ['private.workspace_guest_message_notices()',
+   $q$insert into private.workspace_notification_outbox(user_id,event_id)$q$,
+   $q$/* guest notice kept: 20261025500000 */ insert into private.workspace_guest_notices(event_id,guest_thread_id,guest_name)
+    values(ev,(select t.id from private.workspace_guest_threads t where t.source=m.source and t.thread_ref=m.thread_ref),
+     left(private.workspace_guest_thread_name((select t.id from private.workspace_guest_threads t where t.source=m.source and t.thread_ref=m.thread_ref)),120))
+    on conflict do nothing;
+   insert into private.workspace_notification_outbox(user_id,event_id)$q$,
+   $q$/* guest notice kept: 20261025500000 */$q$],
+  -- The feed read names the guest (to those who may see guest names), with the channel and the stay's dates.
+  ['private.workspace_notifications_read(bigint)',
+   $q$'available_in_app' as status from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id$q$,
+   $q$case when a.event_type='guest.message' and private.workspace_guest_name_visible(actor) then coalesce(nullif(btrim(gt.guest_name),''),gn.guest_name) end as guest_name,
+  case when a.event_type='guest.message' then gt.channel end as guest_channel,case when a.event_type='guest.message' then gt.check_in end as guest_check_in,
+  case when a.event_type='guest.message' then gt.check_out end as guest_check_out,case when a.event_type='guest.message' then gn.guest_thread_id end as guest_thread_id,
+  /* guest notice feed: 20261025500000 */
+  'available_in_app' as status from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id
+  left join private.workspace_guest_notices gn on gn.event_id=a.id left join private.workspace_guest_threads gt on gt.id=gn.guest_thread_id$q$,
+   $q$/* guest notice feed: 20261025500000 */$q$]
+ ];
+ definition text;hits integer;
+begin
+ for i in 1..array_length(fixes,1) loop
+  definition:=pg_get_functiondef(fixes[i][1]::regprocedure);
+  if position(fixes[i][4] in definition)=0 then
+   hits:=(length(definition)-length(replace(definition,fixes[i][2],'')))/length(fixes[i][2]);
+   if hits<>1 then raise exception 'Patch anchor found % times in % (patch %)',hits,fixes[i][1],i;end if;
+   execute replace(definition,fixes[i][2],fixes[i][3]);
+   if position(fixes[i][4] in pg_get_functiondef(fixes[i][1]::regprocedure))=0 then raise exception 'Patch did not take in % (patch %)',fixes[i][1],i;end if;
+  end if;
+ end loop;
+end $patch$;
+
+revoke all on function private.workspace_client_enquiry_delete(jsonb),private.workspace_guest_message_notices(),private.integration_push_details(bigint),
+ private.workspace_guest_thread_name(uuid)
+ from public,anon,authenticated,service_role;

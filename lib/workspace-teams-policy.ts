@@ -280,7 +280,7 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('setTodoFields'), requestId: id, id, priority: z.enum(TODO_PRIORITIES).nullable().optional(), startOn: date.nullable().optional(), dueOn: date.nullable().optional() }).strict(),
   z.object({ action: z.literal('readTodo'), requestId: id, id }).strict(),
   // Round 6: delete a client enquiry that has not moved on (admins and super admins).
-  z.object({ action: z.literal('deleteEnquiry'), requestId: id, enquiryId: id, version }).strict(),
+  z.object({ action: z.literal('deleteEnquiry'), requestId: id, enquiryId: id, version, confirm: z.literal('DELETE').optional() }).strict(),
   // Leads (20261025300000): a comment on a lead, and its Estimate Delivery steps saved, ticked or reopened.
   ...leadActionSchemas,
 ]).superRefine((value, context) => {

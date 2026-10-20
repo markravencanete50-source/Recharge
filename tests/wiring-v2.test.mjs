@@ -70,7 +70,7 @@ test('the workspace mounts every page and builds the section props once', () => 
 
 test('Messages gets the Updates tab and the old Updates page opens it', () => {
   // Round 6: the feed also gets the work list and where a row opens (the work item, or Messages).
-  assert.match(workspace, /<LiveChat [^]*?updates=\{team \? <LiveActivity palette=\{p\} notices=\{notices\} loading=\{loading\} onRead=\{markRead\} work=\{work\} onOpenWork=\{setOpenWork\} onOpenMessages=\{\(\) => openMessages\(""\)\} onOpenProperty=\{openProperty\} onOpenEnquiries=\{\(\) => openLink\(CLIENT_ENQUIRIES_LINK\)\} \/> : undefined\}/);
+  assert.match(workspace, /<LiveChat [^]*?updates=\{team \? <LiveActivity palette=\{p\} notices=\{notices\} loading=\{loading\} onRead=\{markRead\} work=\{work\} onOpenWork=\{setOpenWork\} onOpenMessages=\{conversation => openMessages\(conversation \?\? ""\)\} onOpenProperty=\{openProperty\} onOpenEnquiries=\{\(\) => openLink\(CLIENT_ENQUIRIES_LINK\)\} \/> : undefined\}/);
   assert.match(workspace, /initialTab=\{team && \(chatUpdates !== null \|\| updatesLink\) \? "updates" : undefined\}/);
   assert.match(workspace, /const updatesLink = requested === "activity" && team;/);
   assert.match(workspace, /const tab: WorkspaceSection = updatesLink \? "inbox"/);

@@ -15,7 +15,7 @@ import { depth, ui, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
-  DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PRIORITY_LABEL, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, deleteEnquiryWarning, duplicateNote, enquiryStep,
+  DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PRIORITY_LABEL, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, DELETE_CONFIRM_WORD, deleteEnquiryWarning, deleteNeedsConfirm, duplicateNote, enquiryStep,
   OWNER_ENQUIRY_LABEL, OWNER_ENQUIRY_NOTE, PUBLIC_ENQUIRY_LABEL, PUBLIC_ENQUIRY_NOTE, REFERRAL_LABEL, STAGE_LABEL, isPublicEnquiry, TEAM_ENQUIRY_NOTE, isOwnerEnquiry, isPriority, isTeamEnquiry, teamEnquiryTag, priorityFirst, valuationDraft, valueButtonLabel,
   type ClientEnquiries, type ClientEnquiry, type EnquiryStep,
 } from "../../lib/client-enquiry";
@@ -356,22 +356,25 @@ export function DeleteEnquiryAction({ p, role, enquiry, onDeleted }: { p: Palett
   </>;
 }
 
-// Delete (admins and super admins): asks first, in a sheet. The database refuses one past the agreement, or with money or bookings.
+// Delete (admins and super admins): asks first, in a sheet. The database refuses a live property, or one with bookings or
+// other real business. Past the agreement (a signed agreement, set-up form or invoice goes too) the person types DELETE.
 function DeleteSheet({ p, enquiry: e, onClose, onDone }: { p: Palette; enquiry: ClientEnquiry; onClose: () => void; onDone: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const request = useRequestId(["delete", e.id, e.version].join(":"));
+  const [busy, setBusy] = useState(false), [error, setError] = useState(""), [typed, setTyped] = useState("");
+  const confirm = deleteNeedsConfirm(e), confirmed = !confirm || typed.trim().toUpperCase() === DELETE_CONFIRM_WORD;
+  const request = useRequestId(["delete", e.id, e.version, confirm ? "confirm" : ""].join(":"));
   async function remove() {
-    if (busy) return;
+    if (busy || !confirmed) return;
     setBusy(true); setError("");
-    try { await writeTeams({ action: "deleteEnquiry", requestId: request.get(), enquiryId: e.id, version: e.version }); request.done(); await onDone(); }
+    try { await writeTeams({ action: "deleteEnquiry", requestId: request.get(), enquiryId: e.id, version: e.version, ...(confirm ? { confirm: DELETE_CONFIRM_WORD } : {}) }); request.done(); await onDone(); }
     catch (err) { setError(message(err)); } finally { setBusy(false); }
   }
   return (
     <Sheet palette={p} visible onClose={onClose} title="Delete enquiry" subtitle={e.answers?.fullName ?? e.recipientName} icon="building">
       <Text style={[ui.body, { color: p.text }]}>{deleteEnquiryWarning(e)}</Text>
+      {confirm && <Field label={`Type ${DELETE_CONFIRM_WORD} to confirm`} value={typed} onChange={setTyped} p={p} placeholder={DELETE_CONFIRM_WORD} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
-        <Button label={busy ? "Deleting…" : "Delete enquiry"} icon="trash-2" primary p={p} disabled={busy} onPress={() => void remove()} />
+        <Button label={busy ? "Deleting…" : "Delete enquiry"} icon="trash-2" primary p={p} disabled={busy || !confirmed} onPress={() => void remove()} />
         <Button label="Keep it" p={p} disabled={busy} onPress={onClose} />
       </View>
     </Sheet>

@@ -27,7 +27,10 @@ export const reportViewSchema=z.object({title:z.string(),description:z.string(),
 export const noticeViewSchema=z.object({id:z.number(),event_type:z.string(),created_at:z.string(),read_at:z.string().nullable().optional(),
  property_id:z.string().nullable().optional(),work_id:z.string().nullable().optional(),work_title:z.string().nullable().optional(),work_kind:z.string().nullable().optional(),
  work_module:z.string().nullable().optional(),property_name:z.string().nullable().optional(),property_address:z.string().nullable().optional(),
- automatic:z.boolean().nullable().optional(),actor_name:z.string().nullable().optional()});
+ automatic:z.boolean().nullable().optional(),actor_name:z.string().nullable().optional(),
+ // A guest message (20261025500000): the guest's name (staff who may see guest names), the channel and the stay's dates.
+ guest_name:z.string().nullable().optional(),guest_channel:z.string().nullable().optional(),guest_check_in:z.string().nullable().optional(),guest_check_out:z.string().nullable().optional(),
+ guest_thread_id:z.string().nullable().optional()});
 // Updates the person has not seen yet. Opening Activity marks them all read in one request.
 export const unreadNotices=(notices:{id:number;read_at?:string|null}[])=>notices.filter(n=>!n.read_at);
 export type PropertyView=z.infer<typeof propertyViewSchema>;
