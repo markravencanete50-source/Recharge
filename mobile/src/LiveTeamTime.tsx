@@ -24,6 +24,7 @@ import {
   timesheetSummary, validClock, weekOf, type TimesheetRow,
 } from "../../lib/team-time";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import { actualsByPerson, rotaActuals } from "../../lib/rota-actuals";
 
 // Who does what (the responsibilities register), who works when (the rota by date) and the hours
 // actually clocked (timesheets), as rows in the hub.
@@ -155,26 +156,39 @@ export function RotaTab({ p, account }: { p: Palette; account: WorkspaceAccount 
   const today = london(new Date());
   const [monday, setMonday] = useState(mondayOf(today));
   const [plan, setPlan] = useState<RotaPlan | null>(null);
+  const [sheet, setSheet] = useState<Timesheet | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<RotaPlan["people"][number] | null>(null);
   const days = useMemo(() => weekOf(monday), [monday]);
   const load = useCallback(async () => {
-    try { setPlan(rotaPlanSchema.parse((await readTeams({ section: "rotaPlan", from: days[0], to: days[6] })).data)); setError(""); } catch (e) { setError(message(e)); }
+    // The clock in and out times come from the timesheet (the same read the Timesheets tab uses);
+    // if that read fails the rota still shows, just without the actual times.
+    const [planned, clocked] = await Promise.allSettled([readTeams({ section: "rotaPlan", from: days[0], to: days[6] }), readTeams({ section: "timesheet", from: days[0], to: days[6] })]);
+    try { setSheet(clocked.status === "fulfilled" ? timesheetSchema.parse(clocked.value.data) : null); } catch { setSheet(null); }
+    try { if (planned.status === "rejected") throw planned.reason; setPlan(rotaPlanSchema.parse(planned.value.data)); setError(""); } catch (e) { setError(message(e)); }
   }, [days]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setPlan(null); void load(); } }); return () => { active = false; }; }, [load]);
   const rows = (plan?.people ?? []).slice().sort((a, b) => Number(b.userId === account.userId) - Number(a.userId === account.userId));
+  const clocked = useMemo(() => actualsByPerson(sheet), [sheet]);
+  const now = new Date();
   return (
     <View style={{ gap: 12 }}>
-      <Text style={[ui.small, { color: p.muted }]}>Who is working each day: early is 8am–4pm, late is 3pm–11pm.{plan?.canEdit ? " Tap someone to plan their week." : ""}</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Who is working each day: early is 8am–4pm, late is 3pm–11pm. Under each day are the times actually clocked in and out (UK time).{plan?.canEdit ? " Tap someone to plan their week." : ""}</Text>
       <WeekNav p={p} label={weekLabel(monday)} onMove={step => setMonday(shiftWeek(monday, step))} onToday={() => setMonday(mondayOf(today))} />
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!plan && !error && <Loading p={p} />}
       {plan && <SheetTable p={p} rows={rows} keyOf={r => r.userId} onRow={plan.canEdit ? r => setEditing(r) : undefined} empty="No one on the team yet."
         columns={[
           { label: "Person", width: 150, cell: r => <View style={{ gap: 2 }}>{cellText(p, r.userId === account.userId ? "You" : r.fullName || "Team member", true)}<Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{r.department ? DEPARTMENT_LABEL[r.department] : "No department"}</Text></View> },
-          ...days.map(day => ({ label: dayLabel(day) + (day === today ? " · today" : ""), width: 96, cell: (r: RotaPlan["people"][number]) => {
+          ...days.map(day => ({ label: dayLabel(day) + (day === today ? " · today" : ""), width: 150, cell: (r: RotaPlan["people"][number]) => {
             const cell = rotaCell(r, day);
-            return cell ? <View style={{ gap: 2, alignItems: "flex-start" }}><Tag label={ROTA_LABEL[cell.shift]} tone={SHIFT_TONE[cell.shift]} p={p} />{!!cell.note && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{cell.note}</Text>}</View> : cellText(p, null);
+            const actual = rotaActuals(clocked.get(r.userId), day, now);
+            if (!cell && !actual.length) return cellText(p, null);
+            return <View style={{ gap: 2, alignItems: "flex-start" }}>
+              {cell && <Tag label={ROTA_LABEL[cell.shift]} tone={SHIFT_TONE[cell.shift]} p={p} />}
+              {!!cell?.note && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{cell.note}</Text>}
+              {actual.map(a => <Text key={a.id} numberOfLines={2} style={[ui.small, { color: a.state === "closed" ? p.text : a.state === "open" ? p.waiting : p.danger, fontWeight: a.state === "closed" ? "400" : "700", fontVariant: ["tabular-nums"] }]}>{a.text}</Text>)}
+            </View>;
           } })),
         ]} />}
       <RotaWeekSheet p={p} person={editing} days={days} onClose={() => setEditing(null)} onSaved={saved(async () => { setEditing(null); await load(); })} />

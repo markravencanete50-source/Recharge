@@ -191,6 +191,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [sidebarHidden, setSidebarHidden] = useState(false), [scrolled, setScrolled] = useState(false), [offline, setOffline] = useState(false), [settings, setSettings] = useState(false), [deleting, setDeleting] = useState(false), [blockedOpen, setBlockedOpen] = useState(false);
   const [welcome, setWelcome] = useState<"splash" | "greeting" | null>(welcomeOnOpen ? "splash" : null);
   const [properties, setProperties] = useState<PropertyView[]>([]), [journeys, setJourneys] = useState<JourneyView[]>([]), [work, setWork] = useState<OperationView[]>([]);
+  const [workLoaded, setWorkLoaded] = useState(false);
   const [budget, setBudget] = useState<BudgetItem[]>([]);
   const [invoices, setInvoices] = useState<InvoiceView[]>([]), [notices, setNotices] = useState<NoticeView[]>([]), [policyConfirmed, setPolicyConfirmed] = useState(false), [policy, setPolicy] = useState<BookingPolicy | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -365,9 +366,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       isWorkspaceAdmin(account.role) || account.role === "accounts" ? readTeams({ section: "budgetChart" }).then(r => budgetChartSchema.parse(r.data)) : Promise.resolve(null),
       isWorkspaceAdmin(account.role) || account.role === "stays" ? liveApi("/portfolio?section=bookingPolicy").then(r => bookingPolicySchema.parse(r.data)) : Promise.resolve(null),
     ]);
-    const results = await Promise.allSettled(jobs.map(async ([key, path]) => key === "properties" || key === "invoices" ? readAll(key) : liveApi(path)));
-    results.forEach((result, i) => {
-      const key = jobs[i][0];
+    // Each collection is shown as soon as it arrives, so quick reads such as work (the greeting counts) never wait
+    // behind the paged property and invoice reads.
+    const apply = (key: typeof jobs[number][0], result: PromiseSettledResult<{ data?: unknown }>) => {
       // A failed collection is cleared, including after an assignment is revoked.
       if (result.status === "rejected") {
         if (quiet) { if (result.reason instanceof WorkspaceApiError && result.reason.status === 401) onSignedOut(); return; }
@@ -383,7 +384,11 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
         if (key === "invoices") setInvoices(keep && !keep.invoices ? [] : z.array(invoiceViewSchema).parse(data));
         if (key === "notices") setNotices(keep && !keep.notices ? [] : z.array(noticeViewSchema).parse(data));
       } catch { if (!quiet) setError("Unexpected response. Refresh to try again."); }
-    });
+    };
+    await Promise.all(jobs.map(([key, path]) => (key === "properties" || key === "invoices" ? readAll(key) : liveApi(path)).then(
+      value => { apply(key, { status: "fulfilled", value }); if (key === "work") setWorkLoaded(true); },
+      reason => { apply(key, { status: "rejected", reason }); if (key === "work") setWorkLoaded(true); },
+    )));
     // The budget chart (for approving purchases) and the direct-booking policy, read alongside the rest.
     const [budgetResult, policyResult] = await extras;
     if (!quiet || budgetResult.status === "fulfilled") setBudget(budgetResult.status === "fulfilled" && budgetResult.value ? budgetResult.value : []);
@@ -890,7 +895,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       <DateRangeSheet key={period.from + period.to + String(dates)} palette={p} visible={dates} period={period} onClose={() => setDates(false)} onApply={range => { setDates(false); setPeriod(range); setSnapshot(null); }} />
       {welcome === "splash" && <RechargeSplash palette={p} onDone={() => setWelcome("greeting")} />}
       </OpenMessagesContext.Provider></CelebrateProvider></FlagRoleContext.Provider></FavoritesContext.Provider>
-      {welcome === "greeting" && <GreetingCard palette={p} profile={profile} openTasks={work.filter(item => !isDone(item.status)).length} waiting={work.filter(item => isWaitingWork(item.status)).length} onClose={finishWelcome} onWork={() => { finishWelcome(); setTab("work"); }} />}
+      {welcome === "greeting" && <GreetingCard palette={p} profile={profile} openTasks={workLoaded ? work.filter(item => !isDone(item.status)).length : null} waiting={workLoaded ? work.filter(item => isWaitingWork(item.status)).length : null} onClose={finishWelcome} onWork={() => { finishWelcome(); setTab("work"); }} />}
     </SafeAreaView>
   );
 }
