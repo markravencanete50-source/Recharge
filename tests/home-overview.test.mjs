@@ -174,13 +174,13 @@ test('Home order for admins: greeting and search, This month, Needs your attenti
   assert.match(oversight, /payoutsOverdue: overview\?\.accounts\.payoutsToReconcile \?\? null/);
 });
 
-test('the phone menu lists Management centre for admins, first in Departments as on desktop', () => {
+test('the phone menu lists Management centre for admins, in Management as on desktop', () => {
   for (const role of ['super_admin', 'admin']) {
     const panel = rolePanel(role, DEFAULT_ROLE_MODULES[role], null, false);
-    const desktop = panel.groups.find(g => g.key === 'departments').links.map(l => l.label);
-    const phone = phoneMoreGroups(panel, orderPhoneBar(phoneBarFor(role).slice(0, 5), panel)).find(g => g.key === 'departments').links.map(l => l.label);
-    assert.equal(phone[0], 'Management centre', role);
-    assert.deepEqual(phone, desktop, role + ': the same departments, in the same order');
+    const desktop = panel.groups.find(g => g.key === 'management').links.map(l => l.label);
+    const phone = phoneMoreGroups(panel, orderPhoneBar(phoneBarFor(role).slice(0, 5), panel)).find(g => g.key === 'management').links.map(l => l.label);
+    assert.ok(phone.includes('Management centre'), role);
+    assert.deepEqual(phone, desktop, role + ': the same links, in the same order');
   }
 });
 

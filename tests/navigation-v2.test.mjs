@@ -72,7 +72,9 @@ test('Work views by role', () => {
 test('the new pages and areas exist for the right roles and nobody else', () => {
   const has = (role, key) => links(role).some(l => l.key === key);
   for (const role of TEAM) {
-    for (const key of ['page:home', 'page:todo', 'page:calendar', 'page:inbox', 'page:decisions', 'page:analytics']) assert.ok(has(role, key), `${role} has ${key}`);
+    for (const key of ['page:home', 'page:todo', 'page:inbox', 'page:decisions', 'page:analytics']) assert.ok(has(role, key), `${role} has ${key}`);
+    // The Calendar opens from the team calendars in Alex's menu (Maintenance, Booking, Housekeeping).
+    assert.ok(links(role).some(l => l.key.startsWith('tool:calendar-')), role + ' has a calendar');
   }
   // Owners never see the team's pages or areas.
   // Favorites is for every role since round 6, owners included.
@@ -89,9 +91,9 @@ test('the new pages and areas exist for the right roles and nobody else', () => 
   const label = (role, key) => links(role).find(l => l.key === key).label;
   assert.equal(label('admin', 'area:stays'), 'Guest relations');
   assert.equal(label('admin', 'area:clients'), 'Client relations');
-  assert.equal(label('admin', 'page:decisions'), 'Management approvals');
-  assert.equal(label('stays', 'page:decisions'), 'My requests');
-  for (const role of ['stays', 'cleans', 'cleaning_manager', 'ready', 'accounts']) assert.equal(label(role, 'page:analytics'), 'My performance', role);
+  assert.equal(label('admin', 'page:decisions'), 'Approval Requests');
+  assert.equal(label('stays', 'page:decisions'), 'Approval Requests');
+  for (const role of ['stays', 'cleans', 'cleaning_manager', 'ready', 'accounts']) assert.equal(label(role, 'page:analytics'), 'My Performance', role);
   assert.equal(label('admin', 'page:analytics'), 'Reports');
 });
 

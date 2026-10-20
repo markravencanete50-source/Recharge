@@ -32,8 +32,9 @@ test('every way in to Client enquiries opens Client relations on its Enquiries c
   assert.ok(map.isWorkSub('clients', 'enquiries'));
   for (const role of ['super_admin', 'admin', 'stays']) {
     const modules = modulesOf(role);
-    // The menu keeps its "Client enquiries" entry (and its place in a saved menu order); it is a shortcut now.
-    const link = rolePanel(role, modules).groups.flatMap(g => g.links).find(l => l.label === 'Client enquiries');
+    // The menu keeps its entry (and its place in a saved menu order); it is a shortcut now, called Leads in
+    // Property Onboarding since Alex's menu (20 October 2026).
+    const link = rolePanel(role, modules).groups.flatMap(g => g.links).find(l => l.label === 'Leads');
     assert.ok(link, role + ' keeps the menu entry');
     assert.equal(link.key, 'page:enquiries', role);
     assert.deepEqual(where(map.pageLink(link.section)), HOME, role);

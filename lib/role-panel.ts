@@ -8,8 +8,9 @@ import type { WorkspaceSection } from './workspace-map';
 // looks nothing like Accounts' or a super admin's. View as uses the same panel for the role being
 // viewed, so the super admin sees exactly that role's panel and none of their own tools.
 //
-// Order for the team: Home, To-do, the Work areas, then Calendar and Messages, then everything else.
-// The Hub, Updates and Stays are gone (Updates is a tab inside Messages; Stays is Guest relations).
+// Order for the team (Alex, 20 October 2026): My Recharge, Maintenance, Management, Safety & Compliance,
+// Property Onboarding, Listing Management, Property Database, Stock, Housekeeping, Finance, then Start
+// something. Every team role has the same sections in the same order and sees only the links it can open.
 //
 // Each link opens a page (Home, Messages…), a Work area (Cleans, Maintenance…), one of the role's
 // Home tools (Guest inbox, Payouts…; only the ones the person holds), or starts a form.
@@ -21,12 +22,14 @@ export type PanelLink =
   | { key: string; kind: 'start'; label: string; icon: PanelIcon; target: HomeToolTarget };
 // `key` is the section's stable name (the saved menu order uses it, never the title).
 export type PanelGroup = { key: string; title: string; links: PanelLink[] };
-export type RolePanel = { title: string; tagline: string; icon: PanelIcon; groups: PanelGroup[] };
+// `work` is the Work area the phone bar's Work button opens (the role's first Work view), so the bar and the phone
+// menu know which panel link that button stands for wherever the menu puts it.
+export type RolePanel = { title: string; tagline: string; icon: PanelIcon; groups: PanelGroup[]; work?: WorkView };
 
 type Page = 'home' | 'todo' | 'calendar' | 'decisions' | 'favorites' | 'properties' | 'analytics' | 'inbox' | 'help' | 'approvals' | 'statements' | 'enquiries' | 'feedback' | 'moderation' | 'mailbox';
 const PAGE: Record<Page, [string, PanelIcon]> = {
   home: ['Home', 'home'], todo: ['To-do', 'clipboard'], calendar: ['Calendar', 'calendar'], decisions: ['My requests', 'check-circle'],
-  favorites: ['Favorites', 'star'], properties: ['Properties', 'key'], analytics: ['Reports', 'bar-chart-2'],
+  favorites: ['Favourites', 'star'], properties: ['Properties', 'key'], analytics: ['Reports', 'bar-chart-2'],
   inbox: ['Messages', 'message-circle'], help: ['Help & training', 'help-circle'],
   approvals: ['Approvals', 'check-circle'], mailbox: ['Mailbox', 'mail'], statements: ['Owner statements', 'pie-chart'], enquiries: ['Client enquiries', 'mail'],
   feedback: ['Feedback', 'message-square'], moderation: ['Reported messages', 'flag'],
@@ -57,6 +60,9 @@ const KEY_HUE: Record<string, PanelHue> = {
   'tool:disputes': 'rose', 'tool:unassigned': 'amber', 'tool:cleaners': 'plum', 'tool:setups': 'sky', 'tool:invoices': 'accounts', 'tool:pipeline': 'ocean',
   'tool:visits': 'sage', 'tool:inspections': 'sky', 'tool:purchases': 'amber', 'tool:furnishing': 'plum', 'tool:expenses': 'rose', 'tool:payouts': 'sage',
   'tool:budget': 'amber', 'tool:limits': 'amber', 'tool:studio': 'plum', 'tool:cleaner-invoices': 'cleans', 'tool:mailbox': 'ocean',
+  'tool:rota': 'ocean', 'tool:dailytasks': 'sage', 'tool:licensing': 'plum', 'tool:onboarding': 'clients', 'tool:reviews': 'amber',
+  'tool:booking-performance': 'plum', 'tool:order-fulfilment': 'amber', 'tool:receivable': 'accounts', 'tool:profit-loss': 'accounts',
+  'tool:statements': 'accounts', 'tool:calendar-ready': 'ready', 'tool:calendar-stays': 'stays', 'tool:calendar-cleans': 'cleans',
 };
 export const linkHue = (link: PanelLink): PanelHue =>
   link.kind === 'area' ? AREA_HUE[link.view] : link.kind === 'start' ? 'forest' : KEY_HUE[link.key] ?? 'slate';
@@ -68,72 +74,62 @@ export const linkHue = (link: PanelLink): PanelHue =>
 // page:<page>[=label], area:<view>[=label], tool:<home tool key>[=label], start (the role's "start something" forms),
 // same:<home tool key> (a tool another link in the panel already opens).
 type Layout = { title: string; tagline: string; icon: PanelIcon; groups: [string, string, string[]][] };
-const MANAGEMENT_GROUPS: [string, string, string[]][] = [
-  ['overview', 'Overview', ['page:home', 'page:favorites', 'page:todo']],
-  ['departments', 'Departments', ['area:management=Management centre', 'area:stays', 'area:clients', 'area:cleans', 'area:repairs', 'area:accounts', 'area:all']],
-  ['calendar-messages', 'Calendar & messages', ['page:calendar', 'page:inbox', 'page:decisions', 'same:queue']],
-  ['management', 'Management', ['tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:limits', 'page:moderation', 'tool:training']],
-  ['more', 'More', ['tool:enquiries', 'tool:studio', 'page:analytics', 'page:properties', 'page:statements', 'page:feedback']],
-  ['start', 'Start something', ['start']],
-];
+// Alex's menu (20 October 2026). The team's sections, in this order, the same for every team role; each role
+// gets only the links it can open (links it lacks drop out, and an empty section is not shown), so admins
+// and super admins, who can open everything, see the same menu. Section keys are the stable names saved menu
+// orders use: the first section keeps each role's old key, Management keeps "management" and Finance keeps
+// "money"; the rest are new, so an order saved for the old sections leaves their links in these defaults.
+// Calendars open the Calendar page on one team (tool:calendar-*, lib/home-tools.ts).
+const FIRST_KEY: Record<string, string> = { super_admin: 'overview', admin: 'overview', stays: 'today', cleans: 'my-day', cleaning_manager: 'today', ready: 'today', accounts: 'overview' };
+function teamGroups(role: string): [string, string, string[]][] {
+  const admin = role === 'admin' || role === 'super_admin', cleaning = role === 'cleans' || role === 'cleaning_manager';
+  const only = (yes: boolean, specs: string[]) => yes ? specs : [];
+  return [
+    // Admins' Reports is the whole business, not their own performance, so it comes last here as Reports.
+    [FIRST_KEY[role], 'My Recharge', ['page:home', 'page:favorites', 'page:inbox=Inbox', 'page:todo=To-do',
+      ...only(!admin, ['page:analytics=My Performance', 'tool:month']),
+      'tool:schedule=Schedule', 'tool:today=Schedule', 'tool:rota=Schedule',
+      ...only(!admin, ['tool:training', 'page:feedback=Send feedback', 'page:help=Help']),
+      ...only(admin, ['page:analytics=Reports'])]],
+    // Garden maintenance and waste collection are not built yet.
+    ['maintenance', 'Maintenance', ['tool:pipeline=Reactive Jobs', role === 'ready' ? 'area:repairs=All maintenance' : 'area:repairs=Reactive Jobs', 'tool:visits',
+      'tool:aircover=AirCover Claims', 'tool:calendar-ready=Maintenance Calendar']],
+    ['management', 'Management', ['page:decisions=Approval Requests', 'same:queue', 'tool:dailytasks=Daily Checklist',
+      'tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:limits', 'page:moderation', ...only(admin, ['tool:training', 'page:feedback']),
+      'area:management=Management centre', 'area:all']],
+    // Compliance certificates and the safety and compliance calendar are not built yet.
+    ['safety', 'Safety & Compliance', ['tool:licensing=Licensing']],
+    ['onboarding', 'Property Onboarding', ['tool:inspections=New Property Inspections', 'page:enquiries=Leads', 'tool:onboarding=Property Status', 'tool:furnishing',
+      'area:clients=Client relations']],
+    ['listings', 'Listing Management', ['tool:bookings=Direct Bookings', 'tool:calendar-stays=Booking Calendar', 'tool:pricing=Pricing',
+      'tool:booking-performance=Booking Performance', 'tool:reviews=Reviews', 'tool:checks=Listing Maintenance', 'area:stays=Guest relations']],
+    // Accounts have never had the property pages (lib/tool-directory.ts).
+    ['property-database', 'Property Database', only(role !== 'accounts', ['page:properties=Property Database'])],
+    // Accounts' Purchases is their order fulfilment, under Finance. Reimbursement requests are not built yet.
+    ['stock', 'Stock', [...only(role !== 'accounts', ['tool:purchases=Place Order']), 'tool:studio=Item Catalogue', 'tool:restock']],
+    ['housekeeping', 'Housekeeping', [cleaning ? 'area:cleans=My Jobs' : 'area:cleans=Cleans', 'tool:calendar-cleans=Calendar', 'tool:review=Form Submissions',
+      'tool:respond', 'tool:disputes', 'tool:unassigned', 'tool:cleaners', 'tool:setups', ...only(role === 'cleaning_manager', ['tool:invoices'])]],
+    ['money', 'Finance', [...only(role === 'accounts', ['tool:purchases=Order Fulfilment']), 'tool:order-fulfilment=Order Fulfilment',
+      'tool:cleaner-invoices=Payable Invoices', 'tool:receivable=Receivable Invoices', 'tool:invoices', 'tool:expenses=Client Funds & Expenses',
+      'page:statements=Owner Statements', 'same:statements', 'tool:profit-loss=Profit/Loss Reporting', 'tool:payouts', 'tool:budget', 'area:accounts=Accounts desk']],
+    ['start', 'Start something', ['start']],
+  ];
+}
 const LAYOUTS: Record<string, Layout> = {
-  super_admin: { title: 'Super admin', tagline: 'The whole business, its people and access', icon: 'shield', groups: MANAGEMENT_GROUPS },
-  admin: { title: 'Management', tagline: 'Every team, property and decision', icon: 'briefcase', groups: MANAGEMENT_GROUPS },
-  stays: {
-    title: 'Guest relations', tagline: 'Guests, listings and bookings', icon: 'moon', groups: [
-      ['today', 'Today', ['page:home', 'page:favorites', 'page:todo']],
-      ['work', 'Work', ['area:stays', 'area:clients', 'area:cleans', 'area:repairs=Reactive maintenance', 'area:all']],
-      ['calendar-messages', 'Calendar & messages', ['page:calendar', 'page:inbox']],
-      ['guests-listings', 'Guests & listings', ['tool:enquiries', 'tool:bookings', 'tool:aircover', 'tool:licensing', 'tool:checks', 'tool:pricing', 'tool:studio', 'page:properties']],
-      ['more', 'More', ['page:analytics', 'page:decisions', 'tool:training', 'page:feedback=Send feedback']],
-      ['start', 'Start something', ['start']],
-    ],
-  },
-  cleans: {
-    title: 'Cleaning', tagline: 'Your cleans, checklists and pay', icon: 'check-square', groups: [
-      ['my-day', 'My day', ['page:home', 'page:favorites', 'page:todo']],
-      ['my-work', 'My work', ['area:cleans=All my cleans', 'area:all']],
-      ['calendar-messages', 'Calendar & messages', ['page:calendar=My calendar', 'page:inbox']],
-      ['me', 'Me', ['tool:today', 'tool:respond', 'tool:month', 'page:analytics', 'tool:restock']],
-      ['more', 'More', ['page:properties', 'page:decisions', 'tool:training', 'page:help=Help']],
-    ],
-  },
-  cleaning_manager: {
-    title: 'Cleaning team', tagline: 'Schedule, reviews and cleaners', icon: 'users', groups: [
-      ['today', 'Today', ['page:home', 'page:favorites', 'page:todo']],
-      ['cleaning-team', 'Cleaning team', ['area:cleans=Cleans', 'area:all']],
-      ['calendar-messages', 'Calendar & messages', ['page:calendar', 'page:inbox']],
-      ['cleaning-desk', 'Cleaning desk', ['tool:schedule', 'tool:review', 'tool:disputes', 'tool:unassigned', 'tool:cleaners', 'tool:setups', 'tool:invoices', 'tool:restock']],
-      ['more', 'More', ['page:analytics', 'page:properties', 'page:decisions', 'tool:training', 'page:help=Help']],
-      ['start', 'Start something', ['start']],
-    ],
-  },
-  ready: {
-    title: 'Ready', tagline: 'Repairs, visits and purchases', icon: 'tool', groups: [
-      ['today', 'Today', ['page:home', 'page:favorites', 'page:todo']],
-      ['jobs', 'Jobs', ['area:repairs=All maintenance', 'area:all']],
-      ['calendar-messages', 'Calendar & messages', ['page:calendar', 'page:inbox']],
-      ['ready-desk', 'Ready desk', ['tool:pipeline', 'tool:visits', 'tool:inspections', 'tool:purchases', 'tool:furnishing']],
-      ['more', 'More', ['page:analytics', 'page:properties', 'page:decisions', 'tool:training', 'page:help=Help']],
-      ['start', 'Start something', ['start']],
-    ],
-  },
-  accounts: {
-    title: 'Accounts', tagline: 'Invoices, payouts and statements', icon: 'pie-chart', groups: [
-      ['overview', 'Overview', ['page:home', 'page:favorites', 'page:todo']],
-      ['accounts', 'Accounts', ['area:accounts=Accounts desk', 'area:all']],
-      ['calendar-messages', 'Calendar & messages', ['page:calendar', 'page:inbox']],
-      ['money', 'Money', ['tool:expenses', 'tool:payouts', 'page:statements', 'same:statements', 'tool:invoices']],
-      ['costs', 'Costs', ['tool:purchases', 'tool:cleaner-invoices', 'tool:budget', 'tool:restock']],
-      ['more', 'More', ['page:analytics', 'page:decisions', 'tool:training', 'page:help=Tools & help']],
-      ['start', 'Start something', ['start']],
-    ],
-  },
+  super_admin: { title: 'Super admin', tagline: 'The whole business, its people and access', icon: 'shield', groups: teamGroups('super_admin') },
+  admin: { title: 'Management', tagline: 'Every team, property and decision', icon: 'briefcase', groups: teamGroups('admin') },
+  stays: { title: 'Guest relations', tagline: 'Guests, listings and bookings', icon: 'moon', groups: teamGroups('stays') },
+  cleans: { title: 'Cleaning', tagline: 'Your cleans, checklists and pay', icon: 'check-square', groups: teamGroups('cleans') },
+  cleaning_manager: { title: 'Cleaning team', tagline: 'Schedule, reviews and cleaners', icon: 'users', groups: teamGroups('cleaning_manager') },
+  ready: { title: 'Ready', tagline: 'Repairs, visits and purchases', icon: 'tool', groups: teamGroups('ready') },
+  accounts: { title: 'Accounts', tagline: 'Invoices, payouts and statements', icon: 'pie-chart', groups: teamGroups('accounts') },
+  // Owners (Alex): their own places first, then their requests. Statements opens the Statements part of the
+  // Portfolio page. Owners have no calendar yet.
   client: {
     title: 'Owner', tagline: 'Your properties, stays and earnings', icon: 'home', groups: [
-      ['your-properties', 'Your properties', ['page:home', 'page:favorites', 'page:properties=My properties', 'page:approvals', 'page:analytics=Portfolio', 'page:inbox']],
-      ['requests', 'Requests', ['area:repairs=Repairs', 'area:all=All requests', 'tool:mailbox', 'tool:furnishing']],
-      ['more', 'More', ['page:help=Tools & help']],
+      ['your-properties', 'My Recharge', ['page:home', 'page:favorites', 'page:inbox=Inbox', 'page:properties=My Portfolio', 'tool:statements=My Statements',
+        'page:analytics=Property Performance', 'page:approvals', 'page:mailbox']],
+      ['requests', 'Requests', ['area:repairs=Repairs', 'area:all=All requests', 'tool:furnishing', 'page:help=Tools & help']],
       ['start', 'Start something', ['start']],
     ],
   },
@@ -186,14 +182,13 @@ export function rolePanel(role: string, modules: readonly string[], layout?: Men
   const groups: PanelGroup[] = spec.groups.map(([key, title, specs]) => ({
     key, title, links: specs.flatMap(resolve).filter(link => !used.has(link.key) && !!used.add(link.key)),
   }));
-  // Anything the role has that the layout does not place yet still gets a place, under More.
+  // Anything the role has that the layout does not place yet still gets a place, under More. (Its key is not the
+  // old "more", so an order saved for the old More section cannot pull links out of their sections into it.)
   const rest = [...views.map(v => area(v)), ...tools.map(t => fromTool(t))].filter((l): l is PanelLink => !!l && !used.has(l.key) && !!used.add(l.key));
-  if (rest.length) {
-    const more = groups.find(g => g.key === 'more');
-    if (more) more.links.push(...rest); else groups.push({ key: 'more', title: 'More', links: rest });
-  }
-  return applyMenuLayout({ title: spec.title, tagline: spec.tagline, icon: spec.icon, groups: groups.filter(g => g.links.length) }, layout, keepEmpty);
+  if (rest.length) groups.push({ key: UNPLACED, title: 'More', links: rest });
+  return applyMenuLayout({ title: spec.title, tagline: spec.tagline, icon: spec.icon, groups: groups.filter(g => g.links.length), ...(views[0] ? { work: views[0] } : {}) }, layout, keepEmpty);
 }
+export const UNPLACED = 'unplaced';
 // The desktop left panel (Lee, 15 October 2026): Messages is not listed, because the Messages button
 // sits at the top of every desktop page already, and each section shows its first few links with
 // "See more" for the rest. The phone menu and the Menu order editor keep every link.

@@ -4,7 +4,9 @@ import type { PanelGroup, PanelLink, RolePanel } from './role-panel';
 // The menu order a super admin sets per role in Access control → Menu order (migration
 // 20261015210000_menu_layouts.sql). It only ARRANGES: the sections and links a person gets still come
 // from their role and tools (lib/role-panel.ts). The saved layout is applied on top:
-//   * sections: the saved ones the role has, in the saved order, then any others in their default order;
+//   * sections: the saved ones the role has, in the saved order; any other section goes straight after the section
+//     before it in the default order (so a layout saved before a section existed, such as one saved for the menu
+//     before Alex's sections of 20 October 2026, keeps the new sections in their default places);
 //   * links: each section lists its links in order, and a link belongs to the section it is listed under, so
 //     links can move between sections (Lee, round 5). A link listed under two sections stays in the first
 //     (sections in the saved order, then any other listed sections);
@@ -52,6 +54,14 @@ function ordered<T>(list: readonly T[], keyOf: (x: T) => string, wanted: readonl
   return [...first, ...list.filter(x => !seen.has(keyOf(x)))];
 }
 
+// The sections in the saved order, each section the layout does not list placed straight after its default
+// neighbour above (the first, when it has none).
+function orderedSections(groups: readonly PanelGroup[], wanted: readonly string[]): PanelGroup[] {
+  const out = ordered(groups, g => g.key, wanted).filter(g => wanted.includes(g.key));
+  groups.forEach((g, i) => { if (!out.includes(g)) out.splice(i === 0 ? 0 : out.indexOf(groups[i - 1]) + 1, 0, g); });
+  return out;
+}
+
 // Links a saved layout cannot move out of their own section. Favorites stays in every role's first section,
 // straight after Home by default (Lee, round 6); it can still move up and down within that section.
 export const LOCKED_LINKS: readonly string[] = ['page:favorites'];
@@ -69,7 +79,7 @@ export function applyMenuLayout(panel: RolePanel, layout: MenuLayout | null | un
   // A locked link only takes its place from its own section; listed anywhere else it goes back there.
   const ownSection = new Map(panel.groups.flatMap(g => g.links.map(l => [l.key, g.key] as const)));
   for (const s of listed) if (sections.has(s)) for (const k of layout.items[s] ?? []) if (links.has(k) && !home.has(k) && (!isLocked(k) || ownSection.get(k) === s)) home.set(k, s);
-  const groups = ordered(panel.groups, g => g.key, layout.sections).map((g): PanelGroup => {
+  const groups = orderedSections(panel.groups, layout.sections).map((g): PanelGroup => {
     const placed = [...new Set((layout.items[g.key] ?? []).filter(k => home.get(k) === g.key))].map(k => links.get(k)!);
     return { ...g, links: [...placed, ...g.links.filter(l => !home.has(l.key))] };
   });
@@ -101,10 +111,11 @@ export function moveItemTo(panel: RolePanel, linkKey: string, toSection: string)
   return { ...panel, groups: panel.groups.map(g => ({ ...g, links: [...g.links.filter(l => l.key !== linkKey), ...(g.key === toSection ? [link] : [])] })) };
 }
 
-// The panel link a phone bar destination stands for: Work is the first Work area, the others their page.
+// The panel link a phone bar destination stands for: Work is the Work area the button opens (the first area
+// listed, for a panel that does not say), the others their page.
 export function barLinkKey(value: string, panel: RolePanel): string | null {
   const links = panel.groups.flatMap(g => g.links);
-  if (value === 'work') return links.find(l => l.kind === 'area')?.key ?? null;
+  if (value === 'work') return (links.find(l => l.kind === 'area' && l.view === panel.work) ?? links.find(l => l.kind === 'area'))?.key ?? null;
   return links.some(l => l.key === 'page:' + value) ? 'page:' + value : null;
 }
 
