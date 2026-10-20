@@ -157,7 +157,8 @@ test('productivity: hours by week and by month, everyone for admins, your own fo
   assert.equal(data.canEdit, true);
   assert.equal(data.canApprove, false);
   const dan = data.people.find(p => p.userId === users[DAN]);
-  assert.deepEqual([dan.minutes, dan.shifts, dan.days], [480 + 270 + 480, 3, 3]);
+  // The night shift touches two days (each counts its own part, migration 20261025600000), still one shift.
+  assert.deepEqual([dan.minutes, dan.shifts, dan.days], [480 + 270 + 480, 3, 4]);
   assert.deepEqual(dan.months.map(m => [m.month, m.minutes]), [[`${year}-03`, 750], [`${year}-04`, 480]], 'a night shift counts in the month it started');
   assert.equal(dan.weeks.length, 3);
   assert.ok(dan.weeks.every(w => new Date(w.start + 'T12:00:00Z').getUTCDay() === 1), 'weeks start on Monday');

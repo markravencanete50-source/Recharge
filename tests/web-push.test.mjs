@@ -83,6 +83,27 @@ test('the push service answer is kept for each notice and device, so a refused p
  assert.deepEqual(calls[1],['integration_web_push_result',{outbox:7,subscription:job.subscriptionId,outcome:'failed',status_code:403}]);
 });
 
+test('a photo in a message: the minute run signs it once for the pop-up\'s picture; the private path never travels',async()=>{
+ const {settings}=await vapidKeys();
+ const ua=await subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']),auth=crypto.getRandomValues(new Uint8Array(16));
+ const conv='5a1e0000-0000-4000-8000-000000000001',path=conv+'/6b2f0000-0000-4000-8000-000000000002.jpg';
+ const base={endpoint:'https://fcm.googleapis.com/fcm/send/pic',p256dh:push.b64url(new Uint8Array(await subtle.exportKey('raw',ua.publicKey))),auth:push.b64url(auth),eventType:'chat.message'};
+ const jobs=[1,2].map(n=>({...base,outboxId:n,details:{who:'Alex',preview:'The tap',conversationKind:'group',context:'Deep clean Friday',attachmentKind:'image',attachmentPath:path}}));
+ const bodies=[];globalThis.fetch=async(url,init)=>{bodies.push(new Uint8Array(init.body));return new Response('',{status:201});};
+ const signed=[];const sign=async p=>{signed.push(p);return 'https://project.supabase.co/storage/v1/object/sign/chat-files/'+p+'?token=t';};
+ const rpc=async name=>name==='integration_claim_web_push'?jobs:null;
+ await push.dispatchWebPush(settings,rpc,undefined,sign);
+ assert.deepEqual(signed,[path],'signed once a run');
+ const message=JSON.parse(await browserDecrypt(bodies[0],ua,auth));
+ assert.equal(message.image,'https://project.supabase.co/storage/v1/object/sign/chat-files/'+path+'?token=t');
+ assert.equal(message.title,'Alex');assert.equal(message.body,'Deep clean Friday\nThe tap');
+ assert.equal('attachmentPath' in message,false);
+ // No signer, or one that fails: no picture, and the line says Photo.
+ bodies.length=0;await push.dispatchWebPush(settings,rpc,undefined,async()=>{throw new Error('down');});
+ const plain=JSON.parse(await browserDecrypt(bodies[0],ua,auth));
+ assert.equal(plain.image,undefined);assert.equal(plain.body,'Deep clean Friday\nPhoto: The tap');
+});
+
 test('each notice goes once to each browser of its person, and only while they have access',async()=>{
  const db=new PGlite();
  const roles=['super_admin','client','client'];

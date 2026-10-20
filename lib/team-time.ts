@@ -35,18 +35,19 @@ export function rotaCell(person: RotaPlan['people'][number], day: string) {
 }
 
 // Each day of a timesheet, with what stands out: a planned day with nothing clocked (once it has
-// passed), hours with nothing planned, and shifts still open or changed by an admin.
-export type TimesheetRow = TimesheetPerson['days'][number] & { missed: boolean; unplanned: boolean; open: boolean; edited: boolean };
+// passed), hours with nothing planned, shifts still open or changed by an admin, and shifts left open past the limit
+// (stale: they did not clock out; lib/shift-hours.ts).
+export type TimesheetRow = TimesheetPerson['days'][number] & { missed: boolean; unplanned: boolean; open: boolean; stale: boolean; edited: boolean };
 export function timesheetRows(person: TimesheetPerson, today: string): TimesheetRow[] {
   return person.days.map(d => {
     const working = !!d.planned && d.planned.shift !== 'off';
     return { ...d, missed: working && !d.shifts.length && d.day < today, unplanned: !!d.shifts.length && !working,
-      open: d.shifts.some(s => !s.clockedOutAt), edited: d.shifts.some(s => s.edited) };
+      open: d.shifts.some(s => !s.clockedOutAt && !s.stale), stale: d.shifts.some(s => s.stale), edited: d.shifts.some(s => s.edited) };
   });
 }
 export function timesheetSummary(person: TimesheetPerson, today: string) {
   const rows = timesheetRows(person, today);
-  return { minutes: person.totalMinutes, daysWorked: rows.filter(r => r.shifts.length).length, plannedDays: rows.filter(r => r.planned && r.planned.shift !== 'off').length, missed: rows.filter(r => r.missed).length };
+  return { minutes: person.totalMinutes, daysWorked: rows.filter(r => r.shifts.length).length, plannedDays: rows.filter(r => r.planned && r.planned.shift !== 'off').length, missed: rows.filter(r => r.missed).length, notClockedOut: new Set(rows.flatMap(r => r.shifts.filter(s => s.stale).map(s => s.id))).size };
 }
 
 // The timesheet as a spreadsheet: one row per shift (or per planned day with nothing clocked).
@@ -56,7 +57,7 @@ export function timesheetCsv(sheet: Timesheet) {
     for (const d of person.days) {
       const planned = d.planned ? ROTA_LABEL[d.planned.shift] : '';
       if (!d.shifts.length) rows.push([person.fullName, DEPARTMENT_LABEL[(d.planned ? d.planned.department : person.department) ?? ''] ?? '', d.day, planned, '', '', 0, '']);
-      for (const s of d.shifts) rows.push([person.fullName, DEPARTMENT_LABEL[s.department] ?? s.department, d.day, planned, londonClock(s.clockedInAt), s.clockedOutAt ? londonClock(s.clockedOutAt) : 'Still on shift',
+      for (const s of d.shifts) rows.push([person.fullName, DEPARTMENT_LABEL[s.department] ?? s.department, d.day, planned, londonClock(s.clockedInAt), s.clockedOutAt ? londonClock(s.clockedOutAt) : s.stale ? 'Did not clock out (counted up to 16h until corrected)' : 'Still on shift',
         (s.minutes / 60).toFixed(2), s.edited ? s.editNote || 'Yes' : '']);
     }
     rows.push([person.fullName, 'Total', sheet.from + ' to ' + sheet.to, '', '', '', (person.totalMinutes / 60).toFixed(2), '']);

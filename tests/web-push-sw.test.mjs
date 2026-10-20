@@ -11,7 +11,7 @@ const CONV = '5a1e0000-0000-4000-8000-000000000001';
 const plain = value => JSON.parse(JSON.stringify(value));
 
 // A pretend phone: the notifications on screen (one per tag, as the browser keeps them), the open windows, and what was fetched.
-function phone({ windows = [] } = {}) {
+function phone({ windows = [], caches } = {}) {
   const handlers = {}, screen = new Map(), shown = [], fetched = [], opened = [], messages = [];
   const registration = {
     showNotification: async (title, options) => { const n = { title, ...options, close: () => screen.delete(options.tag) }; screen.set(options.tag, n); shown.push(n); },
@@ -22,7 +22,7 @@ function phone({ windows = [] } = {}) {
     openWindow: async url => { opened.push(url); }, claim: async () => undefined,
   };
   const self = { addEventListener: (type, fn) => { handlers[type] = fn; }, skipWaiting: () => undefined, registration, clients };
-  const context = vm.createContext({ self, URL, Promise, JSON, Math, Number, Array, String, Date, fetch: async (url, init) => { fetched.push([url, init]); return { ok: true }; } });
+  const context = vm.createContext({ self, URL, Promise, JSON, Math, Number, Array, String, Date, Object, Response, ...(caches ? { caches } : {}), fetch: async (url, init) => { fetched.push([url, init]); return { ok: true }; } });
   vm.runInContext(source, context);
   const run = async (type, event) => { let work; handlers[type]({ ...event, waitUntil: p => { work = p; } }); await work; };
   const push = data => run('push', { data: { json: () => data, text: () => JSON.stringify(data) } });
@@ -30,6 +30,37 @@ function phone({ windows = [] } = {}) {
   return { context, screen, shown, fetched, opened, messages, push, click };
 }
 const guest = (id, body, time) => ({ title: 'Jack (guest) · 2 Panmure', body, url: '/workspace/live?section=inbox', tag: 'guest-jack-2-panmure', initials: 'J', colour: '#3B5866', id, time, thread: 'Jack (guest) · 2 Panmure' });
+
+// Lee: as WhatsApp lays it out. The sender on top; the conversation on the first line, then the messages.
+const rebecca = (id, line, time, extra = {}) => ({ title: 'Rebecca', body: 'Guest · Bornisketaig\n' + line, url: '/workspace/live?section=inbox', tag: 'guest-rebecca', id, time,
+  thread: 'Guest · Bornisketaig', who: 'Rebecca', context: 'Guest · Bornisketaig', line, ...extra });
+test('WhatsApp layout: the sender on top, the conversation first, then each message; a group with several senders says so', () => {
+  const { context } = phone();
+  let n = context.noticeFor(rebecca('r1', 'Is there a hairdryer?', 1), null, 0);
+  assert.equal(n.title, 'Rebecca');
+  assert.equal(n.options.body, 'Guest · Bornisketaig\nIs there a hairdryer?');
+  n = context.noticeFor(rebecca('r2', 'And towels?', 2), n.options.data, 0);
+  assert.equal(n.title, 'Rebecca', 'one sender: still her name');
+  assert.equal(n.options.body, 'Guest · Bornisketaig\nIs there a hairdryer?\nAnd towels?');
+  // A group where several people wrote: the group and how many, each line with its sender's first name.
+  const group = (id, who, line, time) => ({ title: who, body: 'Recharge Stays | 3 3, 18 Byres Rd\n' + line, url: '/workspace/live?section=inbox', tag: 'chat-g', id, time,
+    thread: 'Recharge Stays | 3 3, 18 Byres Rd', who, context: 'Recharge Stays | 3 3, 18 Byres Rd', line });
+  let g = context.noticeFor(group('g1', 'John Pagueran', 'Keys are in the box', 1), null, 0);
+  assert.equal(g.title, 'John Pagueran');
+  assert.equal(g.options.body, 'Recharge Stays | 3 3, 18 Byres Rd\nKeys are in the box');
+  g = context.noticeFor(group('g2', 'Erika Smith', 'Thanks John', 2), g.options.data, 0);
+  g = context.noticeFor(group('g3', 'John Pagueran', 'No problem', 3), g.options.data, 0);
+  assert.equal(g.title, 'Recharge Stays | 3 3, 18 Byres Rd (3 messages)');
+  assert.equal(g.options.body, 'Recharge Stays | 3 3, 18 Byres Rd\nJohn: Keys are in the box\nErika: Thanks John\nJohn: No problem');
+  // A photo: the signed link is the pop-up's picture; anything but https is ignored. Reply, Mark as read, the badge and the tag stay.
+  const photo = context.noticeFor(rebecca('r3', 'The kettle', 3, { image: 'https://project.supabase.co/storage/v1/object/sign/chat-files/x.jpg?token=a' }), null, 0);
+  assert.equal(photo.options.image, 'https://project.supabase.co/storage/v1/object/sign/chat-files/x.jpg?token=a');
+  assert.equal(context.noticeFor(rebecca('r4', 'x', 4, { image: 'http://x.example/a.jpg' }), null, 0).options.image, undefined);
+  assert.deepEqual(plain(photo.options.actions.map(a => a.action)), ['reply', 'read']);
+  assert.equal(photo.options.badge, '/workspace/badge-96.png');assert.equal(photo.options.tag, 'guest-rebecca');
+  // An older payload (no line) still reads its body.
+  assert.equal(context.noticeFor({ ...rebecca('r5', 'x', 5), line: undefined, who: undefined, context: undefined, body: 'Old words' }, null, 0).options.body, 'Old words');
+});
 
 test('one message: the conversation on top, the message below, at the time it was written, with Reply and Mark as read', () => {
   const { context } = phone();
@@ -122,10 +153,58 @@ test('Reply opens the conversation with the message box ready; Mark as read mark
   const [url, init] = p.fetched[0];
   assert.equal(url, '/api/workspace/chat');assert.equal(init.method, 'POST');assert.equal(init.credentials, 'same-origin');
   assert.deepEqual(JSON.parse(init.body), { action: 'markRead', conversationId: CONV });
-  // A guest conversation is read on the device that opens it: the pop-up just goes.
+  // A guest message from before the conversation was sent: the pop-up just goes.
   await p.push(guest('n3', 'Hi', 3));
   await p.click('guest-jack-2-panmure', 'read');
   assert.equal(p.fetched.length, 1);assert.equal(p.screen.size, 0);
+});
+
+// A pretend cache storage, as the browser keeps it for the worker and the page.
+function fakeCaches() {
+  const stores = new Map();
+  return {
+    stores,
+    open: async name => {
+      if (!stores.has(name)) stores.set(name, new Map());
+      const store = stores.get(name);
+      return { match: async key => store.has(key) ? new Response(store.get(key)) : undefined, put: async (key, response) => { store.set(key, await response.text()); }, delete: async key => store.delete(key) };
+    },
+  };
+}
+const GUEST = '6b2f0000-0000-4000-8000-000000000002';
+const guestIn = (id, body, time) => ({ ...guest(id, body, time), url: `/workspace/live?section=inbox&guest=${GUEST}`, tag: 'guest-' + GUEST, guest: GUEST });
+
+test('a guest message opens that guest conversation; Reply readies the reply box; Mark as read marks it read on this device', async () => {
+  const win = { url: 'https://app.example/workspace/live' }, caches = fakeCaches();
+  const p = phone({ caches });
+  await p.push(guestIn('g1', 'Is there a hairdryer?', 1));
+  assert.equal(p.screen.get('guest-' + GUEST).data.guest, GUEST, 'the pop-up keeps its guest conversation');
+  await p.click('guest-' + GUEST);
+  assert.deepEqual(p.opened, [`/workspace/live?section=inbox&guest=${GUEST}`]);
+  await p.push(guestIn('g2', 'And the wifi?', 2));
+  await p.click('guest-' + GUEST, 'reply');
+  assert.deepEqual(p.opened.at(-1), `/workspace/live?section=inbox&guest=${GUEST}&reply=1`);
+  // Mark as read: nothing opens and no team call is made; the browser keeps a note for the guest inbox, and an open window hears now.
+  const q = phone({ caches, windows: [win] });
+  await q.push(guestIn('g3', 'Thanks', 3));
+  await q.click('guest-' + GUEST, 'read');
+  assert.deepEqual(q.opened, []);assert.equal(q.fetched.length, 0);assert.equal(q.screen.size, 0);
+  const note = JSON.parse(caches.stores.get('recharge-guest-read').get('/workspace/guest-read'));
+  assert.deepEqual(Object.keys(note), [GUEST]);
+  assert.ok(Math.abs(Date.parse(note[GUEST]) - Date.now()) < 60_000);
+  const told = plain(q.messages).filter(m => m.type === 'recharge-guest-read');
+  assert.deepEqual(told, [{ type: 'recharge-guest-read', thread: GUEST, at: note[GUEST] }]);
+  // A second conversation joins the note; an id that is not a conversation is ignored.
+  const OTHER = '6b2f0000-0000-4000-8000-000000000003';
+  await q.push({ ...guestIn('g4', 'Hello', 4), tag: 'guest-' + OTHER, guest: OTHER, url: `/workspace/live?section=inbox&guest=${OTHER}` });
+  await q.click('guest-' + OTHER, 'read');
+  assert.deepEqual(Object.keys(JSON.parse(caches.stores.get('recharge-guest-read').get('/workspace/guest-read'))).sort(), [GUEST, OTHER]);
+  assert.equal(q.context.noticeFor({ ...guestIn('g5', 'x', 5), guest: 'not-an-id' }, null, 0).options.data.guest, null);
+  // Without cache storage the window is still told.
+  const r = phone({ windows: [win] });
+  await r.push(guestIn('g6', 'Hi', 6));
+  await r.click('guest-' + GUEST, 'read');
+  assert.equal(plain(r.messages).filter(m => m.type === 'recharge-guest-read').length, 1);
 });
 
 test('a tap opens the conversation in the open Recharge window, or a new one', async () => {

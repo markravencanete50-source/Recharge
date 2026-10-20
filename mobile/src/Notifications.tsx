@@ -53,6 +53,46 @@ export function clearConversationNotices(conversationId: string) {
     .catch(() => undefined);
 }
 
+// The same for a guest conversation (tag "guest-" and its id, lib/push-copy.ts pushTarget).
+export function clearGuestNotices(threadId: string) {
+  if (!supported() || !/^[0-9a-f-]{36}$/i.test(threadId)) return;
+  void navigator.serviceWorker.getRegistration("/workspace/")
+    .then(registration => registration?.getNotifications({ tag: "guest-" + threadId.toLowerCase() }))
+    .then(list => { for (const notice of list ?? []) notice.close(); })
+    .catch(() => undefined);
+}
+
+// Guest conversations marked read from a pop-up (mobile/web-static/sw.js markGuestRead): the service worker cannot reach the
+// guest inbox's storage, so it leaves them in this browser's cache storage. Taken once (and cleared) when the guest inbox opens;
+// while it is open, the worker also tells it straight away. Each is the conversation's id and when it was marked read.
+const GUEST_READ_CACHE = "recharge-guest-read", GUEST_READ_KEY = "/workspace/guest-read";
+const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function guestReadsFrom(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([id, at]) => THREAD_ID.test(id) && typeof at === "string" && Number.isFinite(Date.parse(at))) as [string, string][]);
+}
+export async function takeGuestReads(): Promise<Record<string, string>> {
+  if (Platform.OS !== "web" || typeof caches === "undefined") return {};
+  try {
+    const cache = await caches.open(GUEST_READ_CACHE), found = await cache.match(GUEST_READ_KEY);
+    if (!found) return {};
+    const read = guestReadsFrom(await found.json().catch(() => null));
+    await cache.delete(GUEST_READ_KEY);
+    return read;
+  } catch { return {}; }
+}
+export function onGuestRead(handler: (threadId: string, at: string) => void) {
+  if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.serviceWorker) return () => undefined;
+  const listen = (event: MessageEvent) => {
+    const data = event.data as { type?: string; thread?: unknown; at?: unknown } | null;
+    if (data?.type !== "recharge-guest-read") return;
+    const read = guestReadsFrom(typeof data.thread === "string" ? { [data.thread]: data.at } : null);
+    for (const [id, at] of Object.entries(read)) handler(id, at);
+  };
+  navigator.serviceWorker.addEventListener("message", listen);
+  return () => navigator.serviceWorker.removeEventListener("message", listen);
+}
+
 // The switch's state and its two actions, shared by the setting and the reminder on the page.
 function useNotificationSwitch() {
   const [state, setState] = useState<State>("loading");

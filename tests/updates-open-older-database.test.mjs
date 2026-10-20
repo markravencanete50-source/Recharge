@@ -15,12 +15,15 @@ create function auth.jwt() returns jsonb language sql stable as $$select coalesc
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 const files = (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort();
 assert.ok(files.includes(MINE + '.sql'));
-for (const file of files) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+// The second run is checked before the later migrations, which patch the feed read (20261025500000 adds the guest's name).
+const mineAt = files.indexOf(MINE + '.sql');
+for (const file of files.slice(0, mineAt + 1)) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 const SIGS = ['private.workspace_controls_read(text,uuid,uuid)', 'private.workspace_notifications_read(bigint)', 'private.workspace_operation_read(uuid)'];
 const definition = async sig => (await db.query('select pg_get_functiondef($1::regprocedure) def', [sig])).rows[0].def;
 const firstRun = await Promise.all(SIGS.map(definition));
 await db.exec(await fs.readFile(`supabase/migrations/${MINE}.sql`, 'utf8'));
 const secondRun = await Promise.all(SIGS.map(definition));
+for (const file of files.slice(mineAt + 1)) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 after(() => db.close());
 
 const roles = ['admin', 'stays', 'client', 'client', 'cleans'];

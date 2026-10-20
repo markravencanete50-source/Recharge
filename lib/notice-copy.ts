@@ -149,6 +149,7 @@ const EXACT: Record<string, NoticeCopy> = {
   'enquiry.lead_comment': copy('New comment on a lead', 'Someone on the team has commented on a lead you are part of. Open Leads to read it.'),
   'feedback.received': copy('New team feedback', 'Someone on the team has sent feedback. Read it in Feedback, mark it seen or done, and reply if you like.'),
   'feedback.replied': copy('A reply to your feedback', 'A super admin has replied to feedback you sent. Open Feedback to read it.'),
+  'team.shift_not_clocked_out': copy('Shift not clocked out', 'A shift has been open for more than 16 hours with no clock out. It counts up to 16 hours until a manager corrects it in Productivity.'),
   'team.emergency': copy('Emergency on shift', 'A team member has paused their shift for an emergency. Open Access control or Productivity to see who, and check in with them.'),
   'team.shift_change_requested': copy('Timesheet change to approve', 'An admin has asked to change someone\'s clock in or clock out. It reaches their hours only once you approve it.'),
   'team.shift_change_approved': copy('Timesheet change approved', 'A super admin has approved your change to someone\'s hours. It now counts in their timesheet and productivity.'),

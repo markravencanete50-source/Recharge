@@ -4,6 +4,7 @@ import { enquiryInviteSchema } from './client-enquiry';
 import { enquiryDetailsSchema } from './journey-policy';
 import { MENU_ROLES, menuLayoutSchema } from './menu-layout';
 import { leadActionSchemas, leadStepIssue } from './lead-policy';
+import { checkShiftTimes } from './shift-hours';
 
 const id = z.string().uuid();
 export const DEPARTMENTS = ['guest_relations', 'client_relations', 'cleaning', 'ready', 'accounts', 'management'] as const;
@@ -151,8 +152,8 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   // The rota by date (a null shift clears the day), and corrected or forgotten shifts.
   z.object({ action: z.literal('planRota'), requestId: id, userId: id, days: z.array(z.object({ day: date, shift: z.enum(ROTA_SHIFTS).nullable(),
     department: z.enum(DEPARTMENTS).optional(), note: z.string().trim().max(300).optional() }).strict()).min(1).max(31) }).strict(),
-  z.object({ action: z.literal('editShift'), requestId: id, shiftId: id, clockedInAt: moment, clockedOutAt: moment.nullable(), department: z.enum(DEPARTMENTS).optional(), note: text(3, 500) }).strict(),
-  z.object({ action: z.literal('addShift'), requestId: id, userId: id, clockedInAt: moment, clockedOutAt: moment, department: z.enum(DEPARTMENTS), note: text(3, 500) }).strict(),
+  z.object({ action: z.literal('editShift'), requestId: id, shiftId: id, clockedInAt: moment, clockedOutAt: moment.nullable(), department: z.enum(DEPARTMENTS).optional(), note: text(3, 500), confirmLong: z.boolean().optional() }).strict(),
+  z.object({ action: z.literal('addShift'), requestId: id, userId: id, clockedInAt: moment, clockedOutAt: moment, department: z.enum(DEPARTMENTS), note: text(3, 500), confirmLong: z.boolean().optional() }).strict(),
   // An admin's change to someone's hours waits for a super admin, who approves or declines it (with
   // a reason); the admin who asked can withdraw it while it waits.
   z.object({ action: z.literal('decideShiftChange'), requestId: id, changeId: id, decision: z.enum(['approve', 'decline']), note: z.string().trim().max(500).optional() }).strict(),
@@ -230,7 +231,7 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   // A reported guest or client message: hide it in the app, or dismiss the report.
   z.object({ action: z.literal('decideMessageReport'), requestId: id, reportId: id, version, decision: z.enum(['hide', 'dismiss']) }).strict(),
   z.object({ action: z.literal('updateFeedback'), requestId: id, feedbackId: id, version, status: z.enum(['new', 'seen', 'done']), reply: z.string().trim().max(1000).optional() }).strict(),
-  z.object({ action: z.literal('closeShift'), requestId: id, shiftId: id, endedAt: z.string().datetime({ offset: true }), note: text(3, 500).optional() }).strict(),
+  z.object({ action: z.literal('closeShift'), requestId: id, shiftId: id, endedAt: z.string().datetime({ offset: true }), note: text(3, 500).optional(), confirmLong: z.boolean().optional() }).strict(),
   z.object({ action: z.literal('saveTargets'), requestId: id, version, greenMinutes: z.number().int().min(1).max(120), amberMinutes: z.number().int().min(2).max(240),
     passPercent: z.number().int().min(1).max(100), bonusPercents: z.array(z.number().int().min(1).max(100)).max(5),
     // How much daily work counts in the score (0-100%), and what's expected on each Stays shift day.
@@ -280,7 +281,7 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('setTodoFields'), requestId: id, id, priority: z.enum(TODO_PRIORITIES).nullable().optional(), startOn: date.nullable().optional(), dueOn: date.nullable().optional() }).strict(),
   z.object({ action: z.literal('readTodo'), requestId: id, id }).strict(),
   // Round 6: delete a client enquiry that has not moved on (admins and super admins).
-  z.object({ action: z.literal('deleteEnquiry'), requestId: id, enquiryId: id, version }).strict(),
+  z.object({ action: z.literal('deleteEnquiry'), requestId: id, enquiryId: id, version, confirm: z.literal('DELETE').optional() }).strict(),
   // Leads (20261025300000): a comment on a lead, and its Estimate Delivery steps saved, ticked or reopened.
   ...leadActionSchemas,
 ]).superRefine((value, context) => {
@@ -310,6 +311,11 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   if (value.action === 'saveResponsibility' && value.ownerId && value.ownerId === value.backupId) context.addIssue({ code: 'custom', message: 'The backup must be someone else' });
   if (value.action === 'setWorkTime' && value.endTime && (!value.startTime || value.endTime <= value.startTime)) context.addIssue({ code: 'custom', message: 'The end time must be after the start time' });
   if ((value.action === 'editShift' || value.action === 'addShift') && value.clockedOutAt && Date.parse(value.clockedOutAt) <= Date.parse(value.clockedInAt)) context.addIssue({ code: 'custom', message: 'The shift must end after it starts' });
+  // Each end has its own date and time (lib/shift-hours.ts): over 16 hours needs an explicit yes, over 24 is refused.
+  if ((value.action === 'editShift' || value.action === 'addShift') && value.clockedOutAt && Date.parse(value.clockedOutAt) > Date.parse(value.clockedInAt)) {
+    const check = checkShiftTimes({ clockedInAt: value.clockedInAt, clockedOutAt: value.clockedOutAt, confirmedLong: value.confirmLong === true, now: Infinity });
+    if (check.error) context.addIssue({ code: 'custom', message: check.error });
+  }
   if (value.action === 'decideShiftChange' && value.decision === 'decline' && (value.note ?? '').length < 3) context.addIssue({ code: 'custom', message: 'Say why it is declined' });
   if (value.action === 'saveCourse' && Boolean(value.courseId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a course needs its current version' });
   if (value.action === 'saveTargets' && value.amberMinutes <= value.greenMinutes) context.addIssue({ code: 'custom', message: 'Amber must be longer than green' });
@@ -376,7 +382,7 @@ export type ShiftChanges = z.infer<typeof shiftChangesSchema>;
 const tally = { minutes: z.number(), shifts: z.number(), days: z.number(), overtime: z.number().default(0) };
 export const productivitySchema = z.object({
   from: z.string(), to: z.string(), canEdit: z.boolean(), canApprove: z.boolean(), pending: z.number(),
-  people: z.array(z.object({ ...person, active: z.boolean(), onShift: z.boolean(), ...tally, overtimeMinutes: z.number().default(0),
+  people: z.array(z.object({ ...person, active: z.boolean(), onShift: z.boolean(), notClockedOutSince: z.string().nullable().default(null), ...tally, overtimeMinutes: z.number().default(0),
     weeks: z.array(z.object({ start: z.string(), ...tally })), months: z.array(z.object({ month: z.string(), ...tally })) })),
 });
 export type Productivity = z.infer<typeof productivitySchema>;
@@ -388,6 +394,9 @@ export const timesheetSchema = z.object({
     days: z.array(z.object({ day: z.string(), planned: rotaDay.omit({ day: true }).nullable(), minutes: z.number(),
       shifts: z.array(z.object({ id, department: z.enum(DEPARTMENTS), clockedInAt: z.string(), clockedOutAt: z.string().nullable(), minutes: z.number(), edited: z.boolean(), editNote: z.string(),
         overtimeFrom: z.string().nullable().default(null), unpaidMinutes: z.number().default(0),
+        // minutes: this day's part of the shift; shiftMinutes: all of it. stale: no clock out after 16 hours, counted
+        // up to countedUntil (lib/shift-hours.ts, migration 20261025600000).
+        shiftMinutes: z.number().optional(), stale: z.boolean().default(false), countedUntil: z.string().nullable().default(null),
         pauses: z.array(z.object({ kind: z.enum(['lunch', 'break', 'emergency']), startedAt: z.string(), endedAt: z.string().nullable() })).default([]) })) })) })),
 });
 export type Timesheet = z.infer<typeof timesheetSchema>;

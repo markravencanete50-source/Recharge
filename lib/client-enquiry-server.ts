@@ -10,6 +10,7 @@ import { integrationSettings } from './integration-server';
 import { sendEmail } from './integration-providers';
 import { formAnswersSchema, enquiryEmail, enquiryFileType, MAX_ENQUIRY_FILE_BYTES, tokenHash, tokenPattern } from './client-enquiry';
 import type { RpcContext } from './workspace-rpc-route';
+import { LEAD_FILES_BUCKET, deletedEnquiryFiles, removeStoredCopies } from './enquiry-storage-cleanup';
 import type { TeamsAction } from './workspace-teams-policy';
 
 // Client Enquiries on the server: the team's "send the form" (the link and the email), the
@@ -60,16 +61,20 @@ export async function sendEnquiryForm(context: RpcContext, input: Invite) {
 }
 
 // ---------------------------------------------------------------- the team: delete an enquiry
-// The database deletes the enquiry (and the property it made) and queues its files; the stored copies are
-// removed here straight away and marked removed. Anything left queued (storage was down) stays on record.
+// The database deletes the enquiry (and the property it made) and queues its files: the client's photos and videos
+// (enquiry-files) and the lead's PriceLabs reports (lead-files, migration 20261025500000). The stored copies are removed
+// here straight away and marked removed, best effort (lib/enquiry-storage-cleanup.ts): a failed removal is logged and
+// stays queued on record, and never fails the delete.
 export async function deleteEnquiry(context: RpcContext, input: Extract<TeamsAction, { action: 'deleteEnquiry' }>) {
   const result = await context.client.rpc('workspace_teams_action', { input });
   if (result.error) return databaseFailure(result.error);
-  const paths = z.array(z.string()).catch([]).parse((result.data as { paths?: unknown })?.paths);
-  const storage = secretClient()?.storage.from(ENQUIRY_BUCKET);
-  if (paths.length && storage) {
-    const removed = await storage.remove(paths).then(r => !r.error, () => false);
-    if (removed) await context.client.rpc('workspace_storage_removed', { bucket_name: ENQUIRY_BUCKET, removed: paths }).then(() => undefined, () => undefined);
+  const batches = deletedEnquiryFiles(result.data, { enquiry: ENQUIRY_BUCKET, lead: LEAD_FILES_BUCKET });
+  if (batches.length) {
+    const client = secretClient();
+    await removeStoredCopies(batches, {
+      bucket: name => client?.storage.from(name),
+      markRemoved: async (bucket, removed) => { const marked = await context.client.rpc('workspace_storage_removed', { bucket_name: bucket, removed }); if (marked.error) throw marked.error; },
+    }).catch(() => undefined);
   }
   return businessResponse({ ok: true, data: result.data });
 }

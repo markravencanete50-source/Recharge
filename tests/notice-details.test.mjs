@@ -45,18 +45,68 @@ test('a title and a second line for each kind of work', () => {
 test('the fallback: no work item keeps today\'s wording; chat and guest notices say who or where', () => {
   assert.equal(d.noticeRow(notice()).title, 'New task for your team');
   assert.equal(d.noticeRow(notice()).target, null);
-  assert.equal(d.noticeRow(notice({ event_type: 'team.event_set', actor_name: 'Ann Lee' })).title, 'Your calendar was changed');
-  assert.equal(d.noticeRow(notice({ event_type: 'team.event_set', actor_name: 'Ann Lee' })).line, 'Ann Lee · 13 Oct, 13:39');
+  // Notices name people (Lee): the person who did it is in the title, and not repeated below (20261025500000).
+  assert.equal(d.noticeRow(notice({ event_type: 'team.event_set', actor_name: 'Ann Lee' })).title, 'Ann Lee changed your calendar');
+  assert.equal(d.noticeRow(notice({ event_type: 'team.event_set', actor_name: 'Ann Lee' })).line, '13 Oct, 13:39');
+  assert.equal(d.noticeRow(notice({ event_type: 'team.event_set', actor_name: 'You' })).title, 'Your calendar was changed', 'not "You changed your calendar"');
+  assert.equal(d.noticeRow(notice({ event_type: 'team.event_set' })).title, 'Your calendar was changed', 'nobody named: the plain wording');
+  assert.equal(d.noticeRow(notice({ event_type: 'routine.plan_saved', actor_name: 'Ann Lee' })).line, 'Ann Lee · 13 Oct, 13:39', 'no personal title: the name stays below');
   const chat = d.noticeRow(notice({ event_type: 'chat.message', actor_name: 'Holly Holder' }));
   assert.deepEqual([chat.title, chat.target], ['Message from Holly Holder', { kind: 'messages' }]);
   assert.equal(chat.line, '13 Oct, 13:39', 'the writer is in the title, not repeated');
   assert.equal(d.noticeRow(notice({ event_type: 'chat.owner_message', actor_name: 'Olive Owner' })).title, 'Message from Olive Owner');
   assert.equal(d.noticeRow(notice({ event_type: 'chat.message' })).title, 'New message', 'no name known: the usual wording');
-  const guest = d.noticeRow(notice({ event_type: 'guest.message', property_name: '10 Barnet Cres', automatic: true }));
-  assert.deepEqual([guest.title, guest.line, guest.target], ['Guest message · 10 Barnet Cres', 'Guest · 13 Oct, 13:39', { kind: 'messages' }]);
-  assert.equal(d.noticeRow(notice({ event_type: 'guest.message' })).title, 'Guest message');
+  // A guest message names the guest and the property, then says what it is, with the channel and the stay (20261025500000).
+  const guest = d.noticeRow(notice({ event_type: 'guest.message', property_name: '64/2 Rannoch', automatic: true, guest_name: 'Rebecca Hall', guest_channel: 'airbnb',
+    guest_check_in: '2026-11-12', guest_check_out: '2026-11-15' }));
+  assert.deepEqual([guest.title, guest.detail, guest.line, guest.target], ['Rebecca Hall · 64/2 Rannoch', 'Guest message · Airbnb · 12 to 15 Nov',
+    'Guest message · Airbnb · 12 to 15 Nov · 13 Oct, 13:39', { kind: 'messages' }]);
+  assert.equal(d.noticeRow(notice({ event_type: 'guest.message', property_name: '64/2 Rannoch', guest_name: 'Priya', guest_channel: 'booking_com' })).detail, 'Guest message · Booking.com');
+  // Before the name was kept, or for someone who may not see guest names: "Guest".
+  const older = d.noticeRow(notice({ event_type: 'guest.message', property_name: '10 Barnet Cres', automatic: true }));
+  assert.deepEqual([older.title, older.line], ['Guest · 10 Barnet Cres', 'Guest message · 13 Oct, 13:39']);
+  assert.equal(d.noticeRow(notice({ event_type: 'guest.message' })).title, 'Guest');
+  // With its conversation, a tap opens it in Messages > Guests.
+  const G = '33333333-3333-4333-8333-333333333333';
+  assert.deepEqual(d.noticeRow(notice({ event_type: 'guest.message', guest_thread_id: G.toUpperCase() })).target, { kind: 'messages', guestThreadId: G });
+  assert.match(source('mobile/src/LivePages.tsx'), /onOpenMessages\(t\.guestThreadId \? "guest:" \+ t\.guestThreadId : undefined\)/);
+  assert.equal(d.noticeRow(notice({ event_type: 'guest.message', guest_channel: 'other' })).detail, 'Guest message', 'no label for an unknown channel');
+  assert.equal(d.stayDates('2026-10-30', '2026-11-02'), '30 Oct to 2 Nov');
+  assert.equal(d.stayDates('2026-12-28', '2027-01-02'), '28 Dec 2026 to 2 Jan 2027');
+  assert.equal(d.stayDates('2026-11-12', null), '12 Nov');
+  assert.equal(d.stayDates(null, null), null);
   // An older database without the new fields still reads.
   assert.equal(d.noticeRow(noticeViewSchema.parse({ id: 9, event_type: 'handover.created', created_at: AT })).title, 'New task for your team');
+});
+
+test('a person who did it is named in the title, for the team; owners and automatic notices keep the plain wording', () => {
+  const cases = [
+    ['enquiry.lead_comment', 'Holly Holder commented on a lead'],
+    ['feedback.received', 'Feedback from Holly Holder'],
+    ['hub.todo_mentioned', 'Holly Holder mentioned you on a to-do'],
+    ['hub.approval_added', 'Holly Holder asked for an approval'],
+    ['management.flag_raised', 'Holly Holder flagged something for management'],
+    ['reflection.saved', 'Day reflection from Holly Holder'],
+    ['team.emergency', 'Holly Holder paused their shift for an emergency'],
+    ['cleaning.cleaner_responded', 'Holly Holder responded to a complaint'],
+  ];
+  for (const [event_type, title] of cases) {
+    const row = d.noticeRow(notice({ event_type, actor_name: 'Holly Holder', automatic: false }));
+    assert.equal(row.title, title, event_type);
+    assert.equal(row.line, '13 Oct, 13:39', event_type + ': the name is not repeated');
+  }
+  // An onboarding notice keeps its label in front.
+  const P = '22222222-2222-4222-8222-222222222222';
+  assert.equal(d.noticeRow(notice({ event_type: 'journey.signAgreement', property_id: P, actor_name: 'Olive Owner', property_name: 'Harbour Flat' })).title, 'Onboarding: Olive Owner signed the management agreement');
+  assert.equal(d.noticeRow(notice({ event_type: 'journey.signAgreement', property_id: P, actor_name: 'You', property_name: 'Harbour Flat' })).title, 'Onboarding: Management agreement signed');
+  // An owner's view names "Recharge", not a person: the plain wording, "Recharge" below.
+  const owner = d.noticeRow(notice({ event_type: 'feedback.replied', actor_name: 'Recharge', automatic: false }));
+  assert.deepEqual([owner.title, owner.line], ['A reply to your feedback', 'Recharge · 13 Oct, 13:39']);
+  // A work item keeps its title; the person stays below.
+  const work = d.noticeRow(notice({ event_type: 'cleaning.cleaner_responded', work_id: W, work_kind: 'cleaning_complaint', work_title: 'Hair in the shower', actor_name: 'Holly Holder' }));
+  assert.deepEqual([work.title, work.line], ['Clean complaint: Hair in the shower', 'Holly Holder · 13 Oct, 13:39']);
+  // Email keeps the plain wording, as an email can be forwarded.
+  assert.equal(d.noticeCopyFor('feedback.received').title, 'New team feedback');
 });
 
 test('owners see "Recharge", never a staff name, and never "Automatic"', () => {
@@ -99,9 +149,9 @@ test('a row opens its work item, a chat or guest notice opens Messages, and a bu
   assert.match(pages, /if \(row\.notices\.length > 1\) return \(\) => setOpened\(opened === row\.key \? null : row\.key\);/);
   // Round 7: an item not in the loaded work list is read on its own (tests/updates-open-older*.test.mjs).
   assert.match(pages, /if \(t\?\.kind === "work" && onOpenWork\) \{ const item = byId\.get\(t\.workId\); return item \? \(\) => onOpenWork\(item\) : \(\) => void openWork\(t\.workId\); \}/);
-  assert.match(pages, /if \(t\?\.kind === "messages" && onOpenMessages\) return onOpenMessages;/);
+  assert.match(pages, /if \(t\?\.kind === "messages" && onOpenMessages\) return \(\) => onOpenMessages\(t\.guestThreadId \? "guest:" \+ t\.guestThreadId : undefined\);/);
   // An enquiry notice opens Client enquiries, in Client relations (tests/client-enquiries-one-place.test.mjs).
-  assert.equal((workspace.match(/<LiveActivity palette=\{p\} notices=\{notices\} loading=\{loading\} onRead=\{markRead\} work=\{work\} onOpenWork=\{setOpenWork\} onOpenMessages=\{\(\) => openMessages\(""\)\} onOpenProperty=\{openProperty\} onOpenEnquiries=\{\(\) => openLink\(CLIENT_ENQUIRIES_LINK\)\} \/>/g) ?? []).length, 2);
+  assert.equal((workspace.match(/<LiveActivity palette=\{p\} notices=\{notices\} loading=\{loading\} onRead=\{markRead\} work=\{work\} onOpenWork=\{setOpenWork\} onOpenMessages=\{conversation => openMessages\(conversation \?\? ""\)\} onOpenProperty=\{openProperty\} onOpenEnquiries=\{\(\) => openLink\(CLIENT_ENQUIRIES_LINK\)\} \/>/g) ?? []).length, 2);
   // Thin rows: one line for what it is, one for where, who and when.
   const rows = source('mobile/src/LiveRows.tsx');
   assert.match(rows, /fontWeight: row\.unread \? "600" : "500", flex: 1, minWidth: 0 \}\}>\{row\.title\}<\/Text>/);
@@ -119,5 +169,5 @@ test('email names the type of work and still carries no property, title or names
   assert.equal(d.noticeCopyFor('operations.updateOperation.completeRepair', 'maintenance').title, 'Repair: Repair completed');
   assert.match(source('lib/integration-providers.ts'), /noticeCopyFor\(job\.eventType, job\.workKind\)/);
   // Pop-ups are encrypted for one device, so they name who and what (lib/push-copy.ts, tested in push-copy.test.mjs).
-  assert.match(source('lib/web-push.ts'), /const details = job\.details \?\? \{\};\s*const \{ title, message \} = copy \?\? pushCopy\(job\.eventType, job\.workKind, details\);/);
+  assert.match(source('lib/web-push.ts'), /const details = \{ \.\.\.\(job\.details \?\? \{\}\), attachmentShown: shown \};\s*const \{ title, message \} = copy \?\? pushCopy\(job\.eventType, job\.workKind, details\);/);
 });
