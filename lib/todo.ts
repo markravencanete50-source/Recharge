@@ -4,7 +4,8 @@ import { DEPARTMENT_LABEL, onboardingRows } from './hub';
 import { LISTING_HEALTH_VIEW } from './feedback-defaults';
 import { addressOf, EMPTY_CELL, timeAgo } from './tracker';
 import type { ThinColumnSize } from './thin-table';
-import { DEPARTMENTS, hubItemSchema, hubSchema } from './workspace-teams-policy';
+import { DEPARTMENTS, TODO_PRIORITIES, TODO_PRIORITY_LABEL, hubItemSchema, hubSchema } from './workspace-teams-policy';
+export type TodoPriority = (typeof TODO_PRIORITIES)[number];
 import type { JourneyView, OperationView } from './workflow-forms';
 import type { PropertyView } from './workspace-view';
 
@@ -44,17 +45,26 @@ export const TODO_TARGETS = {
 
 // One update on a to-do (round 6): what was said, who said it and when. "Marked done" and "Reopened" are
 // logged by the database when the to-do is ticked or unticked.
+// Like ClickUp (migration 20261025100000): a comment can be a reply (parentId, the comment it answers), names the people it
+// @mentions, and carries reactions.
 export const todoUpdateSchema = z.object({
   id: z.number(), text: z.string(), kind: z.enum(['note', 'done', 'reopened']).catch('note'),
   byId: z.string().uuid().nullable(), byName: z.string().nullable(), at: z.string(),
+  parentId: z.number().nullable().default(null),
+  mentions: z.array(z.object({ userId: z.string().uuid(), name: z.string().nullable().transform(v => v ?? ''), you: z.boolean() })).default([]),
+  reactions: z.array(z.object({ emoji: z.string(), count: z.number(), mine: z.boolean(), names: z.array(z.string().nullable().transform(v => v ?? '')) })).default([]),
 });
 export type TodoUpdate = z.infer<typeof todoUpdateSchema>;
+// What changed on a to-do and who changed it ("set the due date to 24 Oct 2026"), written by the database.
+export const todoActivitySchema = z.object({ id: z.number(), text: z.string(), byId: z.string().uuid().nullable(), byName: z.string().nullable(), at: z.string() });
+export type TodoActivity = z.infer<typeof todoActivitySchema>;
 
 // The hub read, keeping the template link the database adds to a to-do made from a daily task, and the
 // to-do's updates (newest first) with their running total. Older answers without them still parse.
 export const todoHubItemSchema = hubItemSchema.extend({
   templateId: z.string().uuid().nullable().optional(),
   updateCount: z.number().int().min(0).default(0), updates: z.array(todoUpdateSchema).default([]),
+  activity: z.array(todoActivitySchema).default([]), unread: z.number().int().min(0).default(0),
 });
 export const todoHubSchema = hubSchema.extend({ items: z.array(todoHubItemSchema) });
 export type TodoHubItem = z.infer<typeof todoHubItemSchema>;
@@ -72,6 +82,8 @@ export type TodoRow = {
   since: string; touched: string;
   // The newest update and how many there are (hub to-dos only; Automatic tasks have none).
   latest: TodoLatest | null; updateCount: number;
+  // Like ClickUp: the priority, the start date and other people's comments you have not read yet (hub to-dos only).
+  priority?: TodoPriority | null; startOn?: string | null; unread?: number;
   derived?: DerivedKind; open?: TodoOpen; item?: TodoHubItem;
   // Which Client relations filter an Automatic task sits under (see clientAreaOf).
   area?: ClientArea;
@@ -115,7 +127,7 @@ export function hubRows(items: readonly TodoHubItem[], me: string, properties: r
       id: i.id, source: 'hub' as const, heading: headingOf(i, me), title: i.title, details: i.details, propertyId: i.propertyId,
       address: (property ? addressOf(property) : '') || i.propertyName || null, dueOn: i.dueOn, who: whoFor(i, me),
       done: i.status === 'done', automatic: !!i.templateId, since: i.createdAt, touched: i.updatedAt || i.createdAt, item: i,
-      latest: latestOf(i.updates), updateCount: i.updateCount,
+      latest: latestOf(i.updates), updateCount: i.updateCount, priority: i.priority ?? null, startOn: i.startOn ?? null, unread: i.unread,
     };
   });
 }
@@ -307,15 +319,17 @@ export function clientFilterCounts(rows: readonly TodoRow[]): Record<ClientFilte
 // Open first. Among open rows: due today first, then overdue, then due later, then no date; within
 // each, the earlier due date, then the oldest. Done rows follow, the latest finished first.
 const dueRank = (r: TodoRow, today: string) => !r.dueOn ? 3 : r.dueOn === today ? 0 : r.dueOn < today ? 1 : 2;
-// The person can re-order the list: by due date (the default), newest first, oldest first or A to Z.
-export const TODO_SORTS = ['due', 'newest', 'oldest', 'title'] as const;
+// The person can re-order the list: by due date (the default), priority (Urgent first, none last), newest first, oldest first or A to Z.
+export const TODO_SORTS = ['due', 'priority', 'newest', 'oldest', 'title'] as const;
 export type TodoSort = (typeof TODO_SORTS)[number];
-export const TODO_SORT_LABEL: Record<TodoSort, string> = { due: 'Due date', newest: 'Newest', oldest: 'Oldest', title: 'A to Z' };
+export const TODO_SORT_LABEL: Record<TodoSort, string> = { due: 'Due date', priority: 'Priority', newest: 'Newest', oldest: 'Oldest', title: 'A to Z' };
+const priorityRank = (r: TodoRow) => (r.priority ? TODO_PRIORITIES.indexOf(r.priority) : TODO_PRIORITIES.length);
 export function sortTodoRows(rows: readonly TodoRow[], today: string, sort: TodoSort = 'due'): TodoRow[] {
   const age = (r: TodoRow) => r.since || '9999';
   const open = (a: TodoRow, b: TodoRow) => sort === 'newest' ? (b.since || '').localeCompare(a.since || '')
     : sort === 'oldest' ? age(a).localeCompare(age(b))
     : sort === 'title' ? 0
+    : sort === 'priority' ? priorityRank(a) - priorityRank(b) || dueRank(a, today) - dueRank(b, today) || (a.dueOn ?? '9999').localeCompare(b.dueOn ?? '9999')
     : dueRank(a, today) - dueRank(b, today) || (a.dueOn ?? '9999').localeCompare(b.dueOn ?? '9999') || age(a).localeCompare(age(b));
   return [...rows].sort((a, b) =>
     Number(a.done) - Number(b.done)
@@ -364,7 +378,7 @@ export function dueState(row: Pick<TodoRow, 'dueOn' | 'done'>, today: string): '
 // One compact row per to-do, like a spreadsheet. On a computer the columns below, left to right, in rows about
 // 40 px high (clicking a row opens the detail); on a phone a two-line card with a 44 px tick. The automatic
 // sections use the same rows.
-export type TodoColumnKey = 'tick' | 'property' | 'task' | 'update' | 'by' | 'when' | 'due' | 'status';
+export type TodoColumnKey = 'tick' | 'property' | 'task' | 'update' | 'by' | 'when' | 'due' | 'priority' | 'status';
 // The tick, When, Due and Status keep their width; the text columns shrink (with "…") so the table always fits
 // its card (lib/thin-table.ts). Every column stays, even when its cells read "–".
 export const TODO_COLUMNS: readonly ({ key: TodoColumnKey; label: string } & ThinColumnSize)[] = [
@@ -375,6 +389,7 @@ export const TODO_COLUMNS: readonly ({ key: TodoColumnKey; label: string } & Thi
   { key: 'by', label: 'Updated by', width: 120, min: 80 },
   { key: 'when', label: 'When', width: 96, fixed: true },
   { key: 'due', label: 'Due', width: 96, fixed: true },
+  { key: 'priority', label: 'Priority', width: 96, fixed: true },
   { key: 'status', label: 'Status', width: 116, fixed: true },
 ];
 // The table from this window width up (the same width the trackers switch at); cards below it.
@@ -393,7 +408,7 @@ export function shortDay(day: string, today: string): string {
 
 export type TodoCells = {
   property: string; task: string; detail: string; update: string; by: string; when: string;
-  due: string; dueTone: 'overdue' | 'today' | 'plain'; status: 'Done' | 'Automatic' | 'To do' | 'Approval'; statusTone: 'good' | 'plain' | 'wait';
+  due: string; dueTone: 'overdue' | 'today' | 'plain'; priority: string; status: 'Done' | 'Automatic' | 'To do' | 'Approval'; statusTone: 'good' | 'plain' | 'wait';
 };
 // What each column shows for a row. Empty cells read "–". The person is the one who wrote the latest update.
 export function todoCells(row: TodoRow, today: string, now: Date = new Date()): TodoCells {
@@ -406,6 +421,7 @@ export function todoCells(row: TodoRow, today: string, now: Date = new Date()): 
     when: latest ? timeAgo(latest.at, now) || EMPTY_CELL : EMPTY_CELL,
     due: !row.dueOn ? EMPTY_CELL : state === 'today' ? 'Today' : shortDay(row.dueOn, today),
     dueTone: row.done ? 'plain' : state === 'overdue' ? 'overdue' : state === 'today' ? 'today' : 'plain',
+    priority: row.priority ? TODO_PRIORITY_LABEL[row.priority] : EMPTY_CELL,
     status: row.done ? 'Done' : row.derived === 'approval' ? 'Approval' : row.automatic ? 'Automatic' : 'To do',
     statusTone: row.done ? 'good' : row.automatic ? 'plain' : 'wait',
   };
@@ -425,6 +441,26 @@ export function lastUpdateWords(latest: TodoLatest | null, now: Date = new Date(
   const when = timeAgo(latest.at, now), who = oneLine(latest.by) || 'Automatic';
   return `Last update ${when || 'at an unknown time'} by ${who}`;
 }
+// A to-do's Activity, as in ClickUp: oldest first, so the newest is at the bottom by the comment box. Each comment carries its
+// replies (oldest first); what changed ("set the due date to 24 Oct 2026") and the ticks ("marked it done") sit between them as
+// one-line entries. A reply whose comment is too old to have come back is shown as a comment of its own.
+export type TodoFeedEntry =
+  | { kind: 'comment'; key: string; at: string; comment: TodoUpdate; replies: TodoUpdate[] }
+  | { kind: 'change'; key: string; at: string; text: string; byName: string | null };
+export function todoFeed(item: Pick<TodoHubItem, 'updates' | 'activity'>): TodoFeedEntry[] {
+  const updates = item.updates ?? [], notes = updates.filter(u => u.kind === 'note');
+  const roots = new Set(notes.filter(u => u.parentId == null).map(u => u.id));
+  const replies = (id: number) => notes.filter(u => u.parentId === id).sort((a, b) => a.id - b.id);
+  const entries: TodoFeedEntry[] = [
+    ...notes.filter(u => u.parentId == null || !roots.has(u.parentId)).map(u => ({ kind: 'comment' as const, key: 'u' + u.id, at: u.at, comment: u, replies: roots.has(u.id) ? replies(u.id) : [] })),
+    ...updates.filter(u => u.kind !== 'note').map(u => ({ kind: 'change' as const, key: 'u' + u.id, at: u.at, text: u.kind === 'done' ? 'marked it done' : 'reopened it', byName: u.byName })),
+    ...(item.activity ?? []).map(e => ({ kind: 'change' as const, key: 'e' + e.id, at: e.at, text: e.text, byName: e.byName })),
+  ];
+  return entries.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.key.localeCompare(b.key));
+}
+// "Alex set the due date to 24 Oct 2026"; the app's own changes read "Recharge".
+export const changeWords = (e: { text: string; byName: string | null }) => `${oneLine(e.byName) || 'Recharge'} ${e.text}`;
+
 // "1 update", "4 updates".
 export const updateTotal = (n: number) => (n === 1 ? '1 update' : `${n} updates`);
 // "Show all 180" under a heading with more open rows than it shows; "Show fewer" once open.

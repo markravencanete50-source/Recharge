@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import { formatMoney } from './format';
-import { readEstimate } from './estimate-projection';
 import { emailSignature } from './email-brand';
-import { MAX_COMPARABLES, repairLimitMinorSchema } from './journey-policy';
+import { DECLINE_REASON_MESSAGE, MAX_COMPARABLES, declineReasonMissing, repairLimitMinorSchema } from './journey-policy';
 import { ENQUIRY_REPLY_TO } from './integration-policy';
 
 // The estimate, emailed with a private link (Lee, 14 October). Pure: the email, the client's decision and the team's
@@ -36,7 +34,8 @@ export const estimateDecisionSchema = z.object({
   feedback: z.string().max(5000, 'Feedback can be up to 5,000 characters').default(''), followUpOn: isoDate.nullable().optional(),
   // Item 7: with Proceed, the repairs Recharge may approve without asking (lib/journey-policy.ts).
   repairLimitMinor: repairLimitMinorSchema.optional(),
-}).strict().refine(v => v.decision !== 'review' || !!v.followUpOn, { message: 'Choose a follow-up date', path: ['followUpOn'] });
+}).strict().refine(v => v.decision !== 'review' || !!v.followUpOn, { message: 'Choose a follow-up date', path: ['followUpOn'] })
+  .refine(v => !declineReasonMissing(v), { message: DECLINE_REASON_MESSAGE, path: ['feedback'] });
 // The three answers on the page, in this order (Alex, client meeting): go ahead, say no, or take time and come back to us.
 export const DECISION_LABEL = { proceed: 'Proceed', decline: 'No, thank you', review: 'Thank you, I’ll be in touch' } as const;
 
@@ -45,35 +44,28 @@ const comparablesOf = (estimate: Record<string, unknown>) => (Array.isArray(esti
   .slice(0, MAX_COMPARABLES);
 export const estimateComparablesOf = comparablesOf;
 
-// The email: a short summary and one button. Plain text and HTML; no em dashes.
-export function estimateEmail(input: { name: string; propertyName: string; estimate: Record<string, unknown>; link: string }) {
-  const e = readEstimate(input.estimate);
-  const notes = typeof input.estimate.comments === 'string' ? input.estimate.comments.trim() : '';
-  const comparables = comparablesOf(input.estimate);
+// The email (Alex's onboarding framework, 20261025200000): the estimate is ready, and one button into the app, where they
+// create an account (or sign in) with this email and see it. The account is linked to the enquiry by that verified email.
+// The figures stay in the app. Plain text and HTML; no em dashes. Estimates emailed before keep their private link.
+export function estimateEmail(input: { name: string; propertyName: string; link: string }) {
   const first = input.name.trim().split(/\s+/)[0] ?? '';
   const greeting = first ? `Hello ${first},` : 'Hello,';
-  const rates = e ? [['Low', e.lowRateMinor], ['Expected', e.mediumRateMinor], ['High', e.highRateMinor]] as const : [];
-  const subject = `Your free performance estimate for ${input.propertyName}`;
+  const subject = `Your free performance estimate for ${input.propertyName} is ready`;
   const text = [
     greeting, '',
-    `Thank you for your enquiry. Here is our free performance estimate for ${input.propertyName}.`, '',
-    ...(rates.length ? ['Nightly rate:', ...rates.map(([label, v]) => `  ${label}: ${formatMoney(v)}`), ''] : []),
-    ...(notes ? ['Notes from Recharge:', notes, ''] : []),
-    ...(comparables.length ? ['Similar properties nearby:', ...comparables.map(c => `  ${c.name}, ${formatMoney(c.adrMinor)} a night: ${c.url}`), ''] : []),
-    `View your estimate, explore what the property could earn, and tell us how you would like to go ahead: ${input.link}`, '',
+    `Thank you for your enquiry. Your free performance estimate for ${input.propertyName} is ready.`, '',
+    'To view it, create your Recharge account with this email address, or sign in if you already have one. Your estimate is waiting in the app, where you can explore what the property could earn and tell us how you would like to go ahead.', '',
+    `Open the Recharge app: ${input.link}`, '',
     'If you have any questions, just reply to this email.', '', 'Recharge Property Management',
   ].join('\n');
   const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const p = (s: string, style = '') => `<p style="margin:0 0 14px${style}">${s}</p>`;
-  const row = (label: string, value: string, strong = false) => `<tr><td style="padding:6px 16px 6px 0;color:#4E6259">${label}</td><td style="padding:6px 0;font-weight:${strong ? 700 : 600}">${value}</td></tr>`;
   const html = `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.6;color:#152D28;max-width:560px">`
     + p(escape(greeting))
-    + p(`Thank you for your enquiry. Here is our free performance estimate for <strong>${escape(input.propertyName)}</strong>.`)
-    + (rates.length ? `<table role="presentation" style="border-collapse:collapse;margin:0 0 18px">${rates.map(([label, v]) => row(`${label} nightly rate`, formatMoney(v), label === 'Expected')).join('')}</table>` : '')
-    + (notes ? p('<strong>Notes from Recharge</strong><br>' + escape(notes).replace(/\n/g, '<br>')) : '')
-    + (comparables.length ? p('<strong>Similar properties nearby</strong><br>' + comparables.map(c => `<a href="${escape(c.url)}" style="color:#1F3D38">${escape(c.name)}</a>, ${formatMoney(c.adrMinor)} a night`).join('<br>')) : '')
-    + `<p style="margin:28px 0"><a href="${escape(input.link)}" style="background:#1F3D38;color:#FAF7F0;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">View your estimate</a></p>`
-    + p('Explore what the property could earn, and tell us how you would like to go ahead. If you have any questions, just reply to this email.')
+    + p(`Thank you for your enquiry. Your free performance estimate for <strong>${escape(input.propertyName)}</strong> is ready.`)
+    + p('To view it, create your Recharge account with this email address, or sign in if you already have one. Your estimate is waiting in the app, where you can explore what the property could earn and tell us how you would like to go ahead.')
+    + `<p style="margin:28px 0"><a href="${escape(input.link)}" style="background:#1F3D38;color:#FAF7F0;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">View your estimate in the app</a></p>`
+    + p('If you have any questions, just reply to this email.')
     + `<p style="margin:0;color:#4E6259;font-size:13px;word-break:break-all">If the button doesn't work, copy this link into your browser: ${escape(input.link)}</p>`
     + emailSignature(ENQUIRY_REPLY_TO) + `</div>`;
   return { subject, text, html };

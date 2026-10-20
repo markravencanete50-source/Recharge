@@ -131,6 +131,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'hub.todo_added': copy('New to-do for you', 'A to-do has been added to your list or your department\'s.'),
   'hub.todo_changed': copy('To-do updated', 'A to-do on your list has been changed.'),
   'hub.todo_done': copy('To-do done', 'A to-do you set has been marked done.'),
+  'hub.todo_updated': copy('New comment on a to-do', 'Someone has commented on a to-do you are part of.'),
+  'hub.todo_mentioned': copy('You were mentioned on a to-do', 'Someone mentioned you in a comment on a to-do.'),
   'hub.approval_added': copy('Approval needed', 'Someone on the team has asked management to approve a cost.'),
   'hub.approval_approved': copy('Approved', 'Management has approved your request.'),
   'hub.approval_declined': copy('Not approved', 'Management has declined your request and said why.'),
@@ -138,9 +140,13 @@ const EXACT: Record<string, NoticeCopy> = {
   'team.responsibility_given': copy('A responsibility is yours', 'You have been made responsible for something, or its backup, in the responsibilities register.'),
   'team.rota_planned': copy('Your rota has changed', 'Management has planned or changed your shifts. Check the rota for your days.'),
   'team.shift_corrected': copy('Your timesheet was corrected', 'Management has corrected or added one of your shifts, with a note of why.'),
-  'enquiry.received': copy('A client enquiry is back', 'A landlord has filled in the property enquiry form. Their details are in Client enquiries, ready to value.'),
+  'enquiry.received': copy('A client enquiry is back', 'A landlord has filled in the property enquiry form. Their details are in Leads, ready to value.'),
   // The same people, when that form is a possible duplicate (migration 20261020800000).
-  'enquiry.duplicate': copy('An enquiry may be a duplicate', 'A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry. Check it in Client enquiries before valuing.'),
+  // The landlord made their account with the email from their enquiry, so the property moved onto it (20261025200000).
+  'enquiry.owner_linked': copy('An enquiry now has an owner account', 'A landlord created their Recharge account with the email from their enquiry. Their property is on their account now, and they follow the onboarding in the app.'),
+  'enquiry.duplicate': copy('An enquiry may be a duplicate', 'A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry. Check it in Leads before valuing.'),
+  // A comment on a lead (migration 20261025300000): whoever sent or valued it and everyone who commented on it.
+  'enquiry.lead_comment': copy('New comment on a lead', 'Someone on the team has commented on a lead you are part of. Open Leads to read it.'),
   'feedback.received': copy('New team feedback', 'Someone on the team has sent feedback. Read it in Feedback, mark it seen or done, and reply if you like.'),
   'feedback.replied': copy('A reply to your feedback', 'A super admin has replied to feedback you sent. Open Feedback to read it.'),
   'team.emergency': copy('Emergency on shift', 'A team member has paused their shift for an emergency. Open Access control or Productivity to see who, and check in with them.'),

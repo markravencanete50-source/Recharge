@@ -10,6 +10,7 @@ import { HeroGlow } from "./TodayAnalytics";
 import { MotionPress, Stagger, motionTokens, useReducedMotion } from "./motion";
 import { headerPalette, ui, type Palette } from "./theme";
 import { accountStep, liveApiOrigin, registrationOpen, signIn } from "./backend/client";
+import { APP_ENTRY_NOTICE, appEntry } from "../../lib/client-onboarding";
 import { LegalConsent } from "./LivePrivacy";
 import { darkBrandCanvas, designTokens } from "../../lib/design-tokens";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -90,9 +91,11 @@ function TextLink({ p, label, onPress }: { p: Palette; label: string; onPress: (
 
 // Self sign-up: details, then the code from the verification email. The new account waits for an
 // administrator to approve it and give it a role, as in People → Approve access.
-function CreateAccount({ p, desktop, onBack }: { p: Palette; desktop: boolean; onBack: (email: string) => void }) {
+// `owner`: they came from the enquiry form's thank-you or the "estimate ready" email (lib/client-onboarding.ts appEntry),
+// so their email is filled in and signing in links their property to the account.
+function CreateAccount({ p, desktop, onBack, initialEmail = "", owner = false }: { p: Palette; desktop: boolean; onBack: (email: string) => void; initialEmail?: string; owner?: boolean }) {
   const [step, setStep] = useState<"details" | "code" | "done">("details");
-  const [name, setName] = useState(""), [email, setEmail] = useState(""), [password, setPassword] = useState(""), [again, setAgain] = useState(""), [code, setCode] = useState("");
+  const [name, setName] = useState(""), [email, setEmail] = useState(initialEmail), [password, setPassword] = useState(""), [again, setAgain] = useState(""), [code, setCode] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const address = email.trim().toLowerCase();
   const short = password.length > 0 && password.length < 12, mismatch = again.length > 0 && again !== password;
@@ -121,18 +124,18 @@ function CreateAccount({ p, desktop, onBack }: { p: Palette; desktop: boolean; o
   );
   if (step === "done") return (
     <View style={{ width: "100%", maxWidth: 440, alignSelf: "center", gap: 18 }}>
-      {title("Account created", "Thanks, " + (name.trim().split(/\s+/)[0] || "there") + ". An administrator will now give you access to the right tools. You can sign in once they have.")}
-      <View style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.wash, alignItems: "flex-start" }]}>
+      {title("Account created", "Thanks, " + (name.trim().split(/\s+/)[0] || "there") + (owner ? ". Sign in now with this email to see your property and your estimate." : ". An administrator will now give you access to the right tools. You can sign in once they have."))}
+      {!owner && <View style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.wash, alignItems: "flex-start" }]}>
         <Feather name="clock" size={16} color={p.primary} style={{ marginTop: 2 }} />
         <Text style={[ui.small, { color: p.text, flex: 1 }]}>Until then, signing in shows that your account is waiting for approval.</Text>
-      </View>
+      </View>}
       <Primary p={p} label="Back to sign in" busy={false} disabled={false} onPress={() => onBack(address)} />
     </View>
   );
   return (
     <View style={{ width: "100%", maxWidth: 440, alignSelf: "center", gap: 18 }}>
       {step === "details" ? <>
-        {title("Create an account", "Your administrator approves new accounts and chooses what you can see.")}
+        {title("Create an account", owner ? APP_ENTRY_NOTICE.signup : "Your administrator approves new accounts and chooses what you can see.")}
         <Input label="Full name" value={name} onChange={setName} p={p} kind="name" />
         <Input label="Email" value={email} onChange={setEmail} p={p} kind="email" />
         <Input label="Password" value={password} onChange={setPassword} p={p} kind="new-password" />
@@ -157,10 +160,14 @@ function CreateAccount({ p, desktop, onBack }: { p: Palette; desktop: boolean; o
 export function LiveSignIn({ palette: p, onSignedIn, onTheme, notice = "" }: { palette: Palette; onSignedIn: (account: WorkspaceAccount) => void; onTheme: () => void; notice?: string }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 1024;
-  const [email, setEmail] = useState(""), [password, setPassword] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  // On the web, a link from the enquiry form (?signup=1&email=) or the "estimate ready" email (?from=estimate&email=)
+  // fills in the email, and the first opens "Create an account" (Alex's onboarding framework).
+  const [entry] = useState(() => Platform.OS === "web" && typeof window !== "undefined" ? appEntry(window.location.search) : { signup: false, email: "", from: null });
+  const [email, setEmail] = useState(entry.email), [password, setPassword] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [creating, setCreating] = useState(false), [canRegister, setCanRegister] = useState(false);
   const header = headerPalette(p);
-  useEffect(() => { let alive = true; void registrationOpen().then(open => { if (alive) setCanRegister(open); }); return () => { alive = false; }; }, []);
+  useEffect(() => { let alive = true; void registrationOpen().then(open => { if (!alive) return; setCanRegister(open); if (open && entry.signup) setCreating(true); }); return () => { alive = false; }; }, [entry.signup]);
+  const owner = !!entry.email || entry.signup || entry.from === "estimate";
   async function submit() {
     if (busy || !email.trim() || !password) return;
     setBusy(true); setError("");
@@ -183,6 +190,10 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme, notice = "" }: { p
       <Text accessibilityRole="header" style={[ui.title, { color: p.text, fontSize: desktop ? 34 : 28, lineHeight: desktop ? 40 : 34 }]}>Sign in</Text>
       <Text style={[ui.body, { color: p.muted }]}>Use the email your administrator approved for your workspace.</Text>
     </View>,
+    ...(entry.from === "estimate" && !notice ? [<View key="estimate" style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.wash, alignItems: "flex-start" }]}>
+      <Feather name="file-text" size={16} color={p.primary} style={{ marginTop: 2 }} />
+      <Text style={[ui.small, { color: p.text, flex: 1 }]}>{APP_ENTRY_NOTICE.estimate}</Text>
+    </View>] : []),
     ...(notice ? [<View key="notice" accessibilityRole="alert" style={[ui.row, { gap: 10, padding: 14, borderRadius: 16, backgroundColor: p.successWash, alignItems: "flex-start" }]}>
       <Feather name="check-circle" size={16} color={p.success} style={{ marginTop: 2 }} />
       <Text style={[ui.small, { color: p.text, flex: 1 }]}>{notice}</Text>
@@ -209,7 +220,7 @@ export function LiveSignIn({ palette: p, onSignedIn, onTheme, notice = "" }: { p
       <Text style={[ui.small, { color: p.text, flex: 1 }]}>Five incorrect passwords pause sign-in for 24 hours. Password reset stays available.</Text>
     </View>,
   ];
-  const form = creating ? <CreateAccount p={p} desktop={desktop} onBack={address => { setCreating(false); if (address) setEmail(address); }} /> : (
+  const form = creating ? <CreateAccount p={p} desktop={desktop} initialEmail={email} owner={owner} onBack={address => { setCreating(false); if (address) setEmail(address); }} /> : (
     <View style={{ width: "100%", maxWidth: 440, alignSelf: "center", gap: 18 }}>
       {items.map((item, i) => <Stagger key={item.key} index={i + 2}>{item}</Stagger>)}
     </View>

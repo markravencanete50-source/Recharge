@@ -18,6 +18,8 @@ const endpoints = new Set([
   "/api/workspace/teams", "/api/mobile/teams",
   "/api/workspace/admin", "/api/mobile/admin",
   "/api/workspace/chat", "/api/mobile/chat", "/api/workspace/guest-inbox", "/api/mobile/guest-inbox", "/api/workspace/training-files", "/api/mobile/training-files",
+  // The PriceLabs report kept with a lead (20261025300000).
+  "/api/workspace/lead-files", "/api/mobile/lead-files",
   "/api/workspace/owner", "/api/mobile/owner",
   "/api/hostaway/webhook", "/api/resend/webhook", "/api/workspace/email-files", "/api/mobile/email-files", "/api/workspace/email-inbox", "/api/mobile/email-inbox", "/api/workspace/client-email", "/api/mobile/client-email", "/api/workspace/account", "/api/workspace/notifications",
   "/api/workspace/oversight", "/api/mobile/oversight",
@@ -34,6 +36,8 @@ const endpoints = new Set([
   "/stay-survey", "/api/stay-survey",
   // Onboarding settings (the contract used as the agreement template) and the owner's account made on Proceed.
   "/api/workspace/onboarding-settings", "/api/mobile/onboarding-settings", "/api/workspace/owner-account", "/api/mobile/owner-account",
+  // The owner's onboarding checklist and the onboarding videos (migration 20261025200000).
+  "/api/workspace/client-onboarding", "/api/mobile/client-onboarding",
   // Messages photos and videos, and profile photos.
   "/api/workspace/chat-files", "/api/mobile/chat-files", "/api/workspace/profile", "/api/mobile/profile",
   "/privacy", "/terms", "/delete-account", "/api/session/delete-account", "/api/workspace/privacy", "/api/mobile/privacy",

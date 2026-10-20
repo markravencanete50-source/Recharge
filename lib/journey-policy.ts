@@ -10,8 +10,11 @@ export const HTTPS_LINK_MESSAGE='The link must start with https://';
 export const isHttpsLink=(v:string)=>{try{return new URL(v).protocol==='https:';}catch{return false;}};
 const https=z.string({required_error:HTTPS_LINK_MESSAGE,invalid_type_error:HTTPS_LINK_MESSAGE}).max(1000).refine(isHttpsLink,HTTPS_LINK_MESSAGE);
 // A comparable on the estimate: the name, an https link and the nightly rate, each with a plain message.
-// As many as the team wants (Lee, 14 October), up to a generous ceiling; the database checks the same number.
-export const MAX_COMPARABLES=20;
+// Up to 3 on a new estimate (Alex's Estimate Delivery: the consultant hand-picks up to 3 in External Analysis); the database
+// checks the same number (migration 20261025300000). Estimates saved before, with up to 20 (Lee, 14 October), still read:
+// MAX_SAVED_COMPARABLES is what a saved estimate may hold.
+export const MAX_COMPARABLES=3;
+export const MAX_SAVED_COMPARABLES=20;
 const comparable=z.object({name:text(160).min(1,'Add the name').refine(v=>!/^(https?:|www\.)/i.test(v),'Put the link in the link field'),url:https,adrMinor:z.number({required_error:'Add the nightly rate',invalid_type_error:'Add the nightly rate'}).int().min(0).max(10000000)}).strict();
 const base={requestId:id,propertyId:id,version:z.number().int().positive()};
 // Item 7 (Lee, 16 October): at Proceed the owner says which repairs Recharge may approve without asking them. Saved as the
@@ -71,6 +74,11 @@ export const journeyActionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('makeLive'),...base,listingLinks:z.array(z.object({platform:z.enum(['Airbnb','Booking.com','Direct','Comfy Workers']),url:https}).strict()).min(1).max(10)}).strict(),
 ]);
 export type JourneyAction=z.infer<typeof journeyActionSchema>;
+// Not proceeding needs a reason (Alex's onboarding framework): the app, the estimate page, the server and the database
+// (migration 20261025200000) all refuse a decline without one, with these words.
+export const DECLINE_REASON_MESSAGE='Tell us why you are not going ahead';
+export const DECLINE_REASON_MIN=3;
+export const declineReasonMissing=(v:{decision?:unknown;feedback?:unknown})=>v.decision==='decline'&&String(v.feedback??'').trim().length<DECLINE_REASON_MIN;
 export const journeyReadSchema=z.object({propertyId:id.optional()}).strict();
 // The work list, or one work item by its id (opened from an update, migration 20261017300000).
 export const operationsReadSchema=z.union([

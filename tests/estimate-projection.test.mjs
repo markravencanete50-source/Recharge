@@ -39,7 +39,7 @@ test('without published fees, only booking income is shown', () => {
   const e = readEstimate({ lowRateMinor: 10000, mediumRateMinor: 12000, highRateMinor: 15000 });
   assert.equal(hasFees(e), false);
   const p = project(e, startingChoices(e));
-  assert.equal(p.grossMinor, 3066000, 'starts at 70% occupancy');
+  assert.equal(p.grossMinor, 3285000, 'starts at 75% occupancy (Alex, was 70%)');
   assert.equal(p.ownerMinor, null);
   assert.equal(p.platformFeesMinor, null);
   assert.equal(directBookingGain(e, startingChoices(e)), null);

@@ -39,12 +39,14 @@ test('each section shows three links and the rest behind See more', () => {
   assert.deepEqual(shownLinks(links.slice(0, 3), 'x', false), { links: links.slice(0, 3), hidden: 0, forced: false });
 });
 
-test('the admin panel: Departments, Calendar and the other long sections fold', () => {
+test('the admin panel: Management, Listing Management and the other long sections fold', () => {
   const desk = desktopPanel(rolePanel('admin', DEFAULT_ROLE_MODULES.admin));
-  const dept = desk.groups.find(g => g.key === 'departments');
-  assert.ok(dept.links.length > PANEL_SHOWN && shownLinks(dept.links, 'page:home', false).hidden > 0);
-  const cal = desk.groups.find(g => g.key === 'calendar-messages');
-  assert.equal(cal.links[0].key, 'page:calendar');
+  for (const key of ['management', 'listings', 'money']) {
+    const section = desk.groups.find(g => g.key === key);
+    assert.ok(section.links.length > PANEL_SHOWN && shownLinks(section.links, 'page:home', false).hidden > 0, key);
+  }
+  // Messages is the button at the top of the page, so My Recharge lists To-do third on desktop.
+  assert.deepEqual(desk.groups[0].links.map(l => l.key).slice(0, 3), ['page:home', 'page:favorites', 'page:todo']);
 });
 
 test('the panel renders the folded list with a labelled toggle', () => {

@@ -291,3 +291,20 @@ test('wiring: the routes, the Management centre view for admins, and the journey
   const sql = await fs.readFile('supabase/migrations/20261020870000_agreement_template.sql', 'utf8');
   assert.ok(sql.includes(`array[${T.AGREEMENT_PLACEHOLDERS.map(n => `'${n}'`).join(',')}]`), 'the database lists the same placeholders');
 });
+
+test('the team can pick the start date: it replaces the drafted date wherever the wording shows it', () => {
+  const now = new Date('2026-10-19T09:00:00Z');
+  assert.equal(T.londonToday(now), '2026-10-19');
+  assert.equal(T.agreementDate('2026-11-01'), '1 November 2026');
+  const draft = { templateId: '00000000-0000-4000-8000-000000000001', version: 1, kind: 'docx', fileName: 'Agreement.docx', missing: [],
+    text: '# Agreement\n\nMade on 19 October 2026.\n\nThe services commence on 19 October 2026.' };
+  const j = { propertyId: '00000000-0000-4000-8000-000000000002', version: 3, stage: 'agreement', signedName: null, agreementDraft: draft };
+  const [form] = T.agreementTemplateForms({ role: 'admin' }, j, now);
+  const start = form.fields.find(f => f.name === 'startOn');
+  assert.equal(start.type, 'date');
+  assert.equal(start.defaultValue, '2026-10-19');
+  assert.equal('agreement' in form.build({ startOn: '2026-10-19', agreement: draft.text }), false, 'unchanged: the database fills it in again');
+  assert.equal(form.build({ startOn: '2026-11-01', agreement: draft.text }).agreement, '# Agreement\n\nMade on 1 November 2026.\n\nThe services commence on 1 November 2026.');
+  const undated = T.agreementTemplateForms({ role: 'admin' }, { ...j, agreementDraft: { ...draft, text: '# Agreement\n\nNo date here at all.' } }, now)[0];
+  assert.equal(undated.fields.some(f => f.name === 'startOn'), false, 'no date field when the contract has no start date');
+});

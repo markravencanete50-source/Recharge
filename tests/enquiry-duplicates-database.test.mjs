@@ -84,8 +84,9 @@ test('a form without a correspondence address or "existing client" is taken; the
   await as(ADMIN);
   await rpc('workspace_teams_action', [{ ...teamsActionSchema.parse({ action: 'inviteEnquiry', requestId: crypto.randomUUID(), name: 'X', email: 'x@example.com', subject: 'S', body: 'B', delivery: 'link' }), tokenHash: hash(t) }]);
   await asServer();
-  const { phone: _phone, ...noPhone } = ANSWERS; void _phone;
-  await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: noPhone }), /marked with \*/);
+  // The phone number is optional since the open form (20261025200000); the property type is still required.
+  const { propertyType: _type, ...noType } = ANSWERS; void _type;
+  await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: noType }), /marked with \*/);
   await assert.rejects(pub({ action: 'submit', tokenHash: hash(t), answers: { ...ANSWERS, admin: true } }), /./, 'no other keys');
 });
 
@@ -170,7 +171,7 @@ test('a possible duplicate tells the same people as the form coming back; a form
   // The wording: in the app, by email and on a phone.
   const copy = noticeCopy('enquiry.duplicate');
   assert.equal(copy.title, 'An enquiry may be a duplicate');
-  assert.match(copy.message, /^A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry\. Check it in Client enquiries before valuing\. Sign in/);
+  assert.match(copy.message, /^A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry\. Check it in Leads before valuing\. Sign in/);
   assert.doesNotMatch(copy.title + copy.message, /—/);
 });
 

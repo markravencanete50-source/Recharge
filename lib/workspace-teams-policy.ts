@@ -3,10 +3,16 @@ import { parseAnalyticsDate } from './analytics';
 import { enquiryInviteSchema } from './client-enquiry';
 import { enquiryDetailsSchema } from './journey-policy';
 import { MENU_ROLES, menuLayoutSchema } from './menu-layout';
+import { leadActionSchemas, leadStepIssue } from './lead-policy';
 
 const id = z.string().uuid();
 export const DEPARTMENTS = ['guest_relations', 'client_relations', 'cleaning', 'ready', 'accounts', 'management'] as const;
 export const HUB_KINDS = ['todo', 'approval', 'aircover', 'invoice'] as const;
+// A to-do's priority, as in ClickUp (migration 20261025100000); none is allowed.
+export const TODO_PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const;
+export const TODO_PRIORITY_LABEL: Record<(typeof TODO_PRIORITIES)[number], string> = { urgent: 'Urgent', high: 'High', normal: 'Normal', low: 'Low' };
+// The reactions on a to-do's comments: the chat's eight.
+export const TODO_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🎉', '✅'] as const;
 export const HUB_STATUSES = ['open', 'done', 'pending', 'approved', 'declined', 'to_claim', 'claimed', 'paid', 'to_send', 'sent'] as const;
 export const CONTRACT_AUDIENCES = ['all', 'stays', 'cleans', 'cleaning_manager', 'ready', 'accounts'] as const;
 const version = z.number().int().positive();
@@ -48,8 +54,10 @@ export const teamsReadSchema = z.object({
     'vaPayAccess', 'vaPayRequests', 'vaPayRequest', 'vaPaySetup',
     // Property ratings (20261022500000): every visible property's guest ratings, or one property's (propertyId) in full.
     // Read through workspace_property_ratings, which decides who sees which properties (owners are refused for now).
-    'propertyRatings']),
-  from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(),
+    'propertyRatings',
+    // A lead's ticket (20261025300000): the enquiry, its checklist, Estimate Delivery steps and activity (enquiryId).
+    'lead']),
+  from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(), enquiryId: id.optional(),
   channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).optional(),
   role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),
 }).strict().superRefine((value, context) => {
@@ -76,6 +84,7 @@ export const teamsReadSchema = z.object({
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
   }
+  if ((value.section === 'lead') !== !!value.enquiryId) context.addIssue({ code: 'custom', message: value.enquiryId ? 'A lead is read on its own' : 'Choose a lead' });
   if ((BUSINESS_REPORT_SECTIONS as readonly string[]).includes(value.section) || value.section === 'stayAnalytics') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 365 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 366 days' });
@@ -124,7 +133,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
     details: z.string().trim().max(3000).optional(), propertyId: id.nullable().optional(), assigneeId: id.nullable().optional(), department: z.enum(DEPARTMENTS).nullable().optional(),
     dueOn: date.nullable().optional(), amountMinor: z.number().int().min(0).max(10000000).nullable().optional(), link: https.nullable().optional(),
     // reference is the invoice number on an invoice. reservationId and clientId link the row to a stay or an owner.
-    reference: z.string().trim().max(120).optional(), reservationId: id.nullable().optional(), clientId: id.nullable().optional() }).strict(),
+    reference: z.string().trim().max(120).optional(), reservationId: id.nullable().optional(), clientId: id.nullable().optional(),
+    // A to-do's priority and start date (migration 20261025100000).
+    priority: z.enum(TODO_PRIORITIES).nullable().optional(), startOn: date.nullable().optional() }).strict(),
   z.object({ action: z.literal('moveHubItem'), requestId: id, id, version, status: z.enum(HUB_STATUSES), note: z.string().trim().max(2000).optional(),
     settledMinor: z.number().int().min(0).max(10000000).optional() }).strict(),
   // The responsibilities register, kept by admins.
@@ -262,10 +273,18 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('saveMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0), ...menuLayoutSchema.shape }).strict(),
   z.object({ action: z.literal('resetMenuLayout'), requestId: id, role: z.enum(MENU_ROLES), version: z.number().int().min(0) }).strict(),
   // Round 6: an update on a to-do (anyone who can see the to-do; never owners).
-  z.object({ action: z.literal('addTodoUpdate'), requestId: id, id, text: text(1, 2000) }).strict(),
+  z.object({ action: z.literal('addTodoUpdate'), requestId: id, id, text: text(1, 2000),
+    // Like ClickUp (migration 20261025100000): a reply to a comment, and the people the comment @mentions.
+    replyTo: z.number().int().positive().nullable().optional(), mentions: z.array(id).max(20, 'Mention up to 20 people').optional() }).strict(),
+  z.object({ action: z.literal('reactTodoUpdate'), requestId: id, updateId: z.number().int().positive(), emoji: z.enum(TODO_REACTIONS).nullable() }).strict(),
+  z.object({ action: z.literal('setTodoFields'), requestId: id, id, priority: z.enum(TODO_PRIORITIES).nullable().optional(), startOn: date.nullable().optional(), dueOn: date.nullable().optional() }).strict(),
+  z.object({ action: z.literal('readTodo'), requestId: id, id }).strict(),
   // Round 6: delete a client enquiry that has not moved on (admins and super admins).
   z.object({ action: z.literal('deleteEnquiry'), requestId: id, enquiryId: id, version }).strict(),
+  // Leads (20261025300000): a comment on a lead, and its Estimate Delivery steps saved, ticked or reopened.
+  ...leadActionSchemas,
 ]).superRefine((value, context) => {
+  if (value.action === 'saveLeadStep') { const issue = leadStepIssue(value.step, value.data, value.done); if (issue) context.addIssue({ code: 'custom', path: ['data'], message: issue }); }
   if (value.action === 'flagForManagement') {
     if (value.source === 'work' && (!value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'Flag work with its work id only' });
     if (value.source === 'hub' && (!value.hubItemId || value.workId)) context.addIssue({ code: 'custom', message: 'Flag a hub item with its id only' });
@@ -284,6 +303,9 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   if (value.action === 'saveRoutinePlan' && Boolean(value.planId) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing a plan needs its current version' });
   if (value.action === 'saveHubItem' && Boolean(value.id) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing needs the current version' });
   if (value.action === 'saveHubItem' && value.kind === 'approval' && value.amountMinor == null) context.addIssue({ code: 'custom', message: 'Add the amount to approve' });
+  if ((value.action === 'saveHubItem' || value.action === 'setTodoFields') && value.startOn && value.dueOn && value.startOn > value.dueOn) context.addIssue({ code: 'custom', message: 'The start date must be on or before the due date' });
+  if (value.action === 'saveHubItem' && value.kind !== 'todo' && (value.priority || value.startOn)) context.addIssue({ code: 'custom', message: 'Only a to-do has a priority or a start date' });
+  if (value.action === 'setTodoFields' && value.priority === undefined && value.startOn === undefined && value.dueOn === undefined) context.addIssue({ code: 'custom', message: 'Nothing to change' });
   if (value.action === 'saveResponsibility' && Boolean(value.id) !== Boolean(value.version)) context.addIssue({ code: 'custom', message: 'Editing needs the current version' });
   if (value.action === 'saveResponsibility' && value.ownerId && value.ownerId === value.backupId) context.addIssue({ code: 'custom', message: 'The backup must be someone else' });
   if (value.action === 'setWorkTime' && value.endTime && (!value.startTime || value.endTime <= value.startTime)) context.addIssue({ code: 'custom', message: 'The end time must be after the start time' });
@@ -307,6 +329,8 @@ export const hubItemSchema = z.object({
   amountMinor: z.number().nullable(), settledMinor: z.number().nullable(), link: z.string().nullable(), reference: z.string(),
   // Added with the hub links migration; optional so older answers still parse.
   reservationId: id.nullable().optional(), clientId: id.nullable().optional(),
+  // A to-do's priority and start date (migration 20261025100000); optional so older answers still parse.
+  priority: z.enum(TODO_PRIORITIES).nullable().optional().catch(null), startOn: z.string().nullable().optional(),
   status: z.enum(HUB_STATUSES), outcomeNote: z.string(), decidedBy: z.string().nullable(), decidedAt: z.string().nullable(),
   createdBy: id, createdByName: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(), version: z.number(),
 });

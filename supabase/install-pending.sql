@@ -21,4 +21,8 @@
 -- 20261023200000_furnishing_studio: installed by the lead on 17 October 2026 (no DROP or DELETE; six new tables, 97 catalogue items).
 -- 20261023300000_report_analytics: installed by the lead on 18 October 2026 (no DROP or DELETE; patches the ratings and business report reads).
 -- 20261024100000_agreement_signature: installed by the lead on 18 October 2026 (no DROP or DELETE; adds the drawn signature column and lets the team edit the contract wording).
--- 20261024200000_enquiry_delete_repair_limits: NOT installed yet. It adds two DELETE lines to the enquiry delete function (repair limits and their history), so it waits for Lee's approval.
+-- 20261024200000_enquiry_delete_repair_limits: installed by Lee in the SQL editor on 20 October 2026, approved (adds two DELETE lines to the enquiry delete function for repair limits and their history); verified by the lead.
+-- 20261025100000_todo_like_clickup: installed by Lee in the SQL editor on 20 October 2026 (no DROP of data or DELETE; drop trigger if exists only; three new tables, two to-do columns, patches the hub view, visibility and actions); verified by the lead.
+-- 20261025200000_client_onboarding_framework: installed by Lee in the SQL editor on 20 October 2026 (no DROP of data or DELETE; replaces the enquiry source check to allow website enquiries; two new tables); verified by the lead.
+-- 20261025300000_lead_estimate_delivery: installed by Lee in the SQL editor on 20 October 2026 (no DROP or DELETE; three new tables and the lead-files bucket); verified by the lead.
+-- 20261025400000_push_message_time: installed by Lee in the SQL editor on 20 October 2026 (no DROP or DELETE; the push claim returns each message's time); verified by the lead.

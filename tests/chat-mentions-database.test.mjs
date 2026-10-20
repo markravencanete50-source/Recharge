@@ -106,7 +106,7 @@ test('in Guest relations, Erika mentions Alex and Mark (an admin who does not he
   assert.deepEqual([popup.mention, popup.conversationId, popup.conversationKind, popup.context], ['you', guestRelations, 'group', 'Guest relations']);
   assert.equal(popup.senderPhotoPath, `${users[ERIKA]}/97c20000-0000-4000-8000-000000000001.jpg`, 'the backend signs it; it never reaches a device');
   assert.equal(popup.senderColour, 'plum');
-  assert.deepEqual(pushCopy('chat.message', null, popup), { title: 'Guest relations (2 new messages)', message: 'Erika mentioned you: @Alex Coghill and @Mark Raven can you check 110 Hawk?' });
+  assert.deepEqual(pushCopy('chat.message', null, popup), { title: 'Guest relations (2 messages)', message: 'Erika mentioned you: @Alex Coghill and @Mark Raven can you check 110 Hawk?' });
   assert.equal(pushTarget('chat.message', popup).url, `/workspace/live?section=inbox&chat=${guestRelations}`);
 });
 

@@ -54,6 +54,9 @@ export const CLIENT_RELATIONS_SUBS = ["onboarding", "enquiries", "licensing", "l
 // Management's own tabs and Accounts' tabs, as the screens know them today.
 export const MANAGEMENT_SUBS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "limits", "decisions", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
 export const ACCOUNTS_SUBS = ["expenses", "payouts", "statements", "receivable", "performance", "aircover"] as const;
+// The Calendar opened on one team's work (Maintenance calendar is "ready"): the teams of lib/calendar-live.ts TEAMS.
+export const CALENDAR_TEAMS = ["stays", "ready", "cleans", "accounts"] as const;
+export type CalendarTeam = (typeof CALENDAR_TEAMS)[number];
 export type WorkSub = { view: WorkView; sub: string; label: string; words: string };
 export const WORK_SUBS: readonly WorkSub[] = [
   { view: "stays", sub: "cleans", label: "Changeover cleans", words: "cleans cleaning changeovers turnover guest relations" },
@@ -72,7 +75,7 @@ export const WORK_SUBS: readonly WorkSub[] = [
   { view: "clients", sub: "furnishing", label: "Furnishing Studio", words: "furnishing studio catalogue client quotes shopping list furniture estimate" },
 ];
 const SUBS_BY_VIEW: Partial<Record<WorkView, readonly string[]>> = {
-  stays: GUEST_RELATIONS_SUBS, clients: CLIENT_RELATIONS_SUBS, management: MANAGEMENT_SUBS, accounts: ACCOUNTS_SUBS,
+  stays: GUEST_RELATIONS_SUBS, clients: CLIENT_RELATIONS_SUBS, management: MANAGEMENT_SUBS, accounts: ACCOUNTS_SUBS, calendar: CALENDAR_TEAMS,
 };
 // Whether a Work area opens a sub-page by that name. Areas whose tabs are not listed here (Cleans,
 // Maintenance, All work) take their tab names from their own screens, so any name passes.
@@ -81,7 +84,8 @@ export const isWorkSub = (view: WorkView, sub: string) => { const known = SUBS_B
 // Every top-level page a deep link can name. "activity" is no longer a menu entry; it stays here so old
 // links resolve (they open Messages, Updates).
 export const PAGE_SECTIONS: readonly WorkspaceSection[] = ["home", "mailbox", "todo", "work", "calendar", "inbox", "decisions", "properties", "analytics", "favorites", "approvals", "statements", "enquiries", "feedback", "moderation", "help", "activity"];
-export type DeepLink = { section: WorkspaceSection; view?: WorkView; sub?: string; anchor?: string; open?: string; workId?: string; messagesTab?: "updates"; redirected?: boolean };
+// `team` opens the Calendar filtered to that team's work (the person can switch back to All teams there).
+export type DeepLink = { section: WorkspaceSection; view?: WorkView; sub?: string; anchor?: string; open?: string; workId?: string; messagesTab?: "updates"; team?: CalendarTeam; redirected?: boolean };
 // Client enquiries has one home, the Enquiries chip in Client relations (Lee, 16 October 2026). "Client enquiries" in
 // the menu, its old page links and the enquiry notices open it there; the page itself is no longer a page of its own.
 export const CLIENT_ENQUIRIES_LINK: DeepLink = { section: "work", view: "clients", sub: "enquiries", redirected: true };
@@ -94,7 +98,8 @@ export function pageLink(section: string): DeepLink | null {
 }
 // Resolves a Home tool, search result or old link to where it opens now, or null when it names a
 // Work sub-page that does not exist. The Hub and Updates are gone: their links land in To-do, Management
-// approvals and Messages. Work → Calendar is the Calendar page; Guest relations → Guest inbox is Messages.
+// approvals and Messages. Work → Calendar is the Calendar page (a sub names the team to filter it to, such as
+// "ready" for the Maintenance calendar); Guest relations → Guest inbox is Messages.
 export function deepLinkFor(target: HomeToolTarget): DeepLink | null {
   if (target.kind === "tab") {
     const link = pageLink(target.tab);
@@ -102,7 +107,10 @@ export function deepLinkFor(target: HomeToolTarget): DeepLink | null {
   }
   if (target.kind !== "work") return null;
   const extra = { ...(target.anchor ? { anchor: target.anchor } : {}), ...(target.open ? { open: target.open } : {}), ...(target.workId ? { workId: target.workId } : {}) };
-  if (target.view === "calendar") return { section: "calendar", ...extra };
+  if (target.view === "calendar") {
+    if (target.sub && !isWorkSub("calendar", target.sub)) return null;
+    return { section: "calendar", ...(target.sub ? { team: target.sub as CalendarTeam } : {}), ...extra };
+  }
   if (target.view === "hub") return { section: target.sub === "approvals" ? "decisions" : "todo", redirected: true, ...extra };
   if (target.view === "stays" && target.sub === "inbox") return { section: "inbox", redirected: true };
   if (target.sub && !isWorkSub(target.view, target.sub)) return null;

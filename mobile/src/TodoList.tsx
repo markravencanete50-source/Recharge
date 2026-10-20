@@ -4,12 +4,12 @@ import Feather from "@expo/vector-icons/Feather";
 import * as Crypto from "expo-crypto";
 import { Text } from "./Typography";
 import { ExpandChevron, MotionPress } from "./motion";
-import { Button, Field, Loading, message, Notice, Tag, london, useRequestId } from "./LiveKit";
-import { Sheet } from "./TeamFlows";
+import { Button, Loading, message, Notice, Tag, london } from "./LiveKit";
 import { ThinTable, thinText, type ThinColumn } from "./Tracker";
 import { Chip } from "./LivePortfolio";
 import { useSaved } from "./Celebrate";
 import { HubItemSheet } from "./HubItemSheet";
+import { TodoTaskPage } from "./TodoTask";
 import { readInbox, readTeams, writeTeams } from "./backend/client";
 import { managementSchema, type Management } from "../../lib/management-live";
 import { approvalItems, parseApprovalFlags, type ApprovalFlag } from "../../lib/tracker-approvals";
@@ -20,11 +20,10 @@ import { formatDay } from "../../lib/format";
 import { inboxListSchema } from "../../lib/guest-inbox-policy";
 import type { HubItem } from "../../lib/workspace-teams-policy";
 import {
-  CLIENT_FILTERS, CLIENT_FILTER_LABEL, ROWS_PER_HEADING, SUMMARY_ROWS, TODO_COLUMNS, TODO_HEADINGS, TODO_HEADING_LABEL, deriveTasks, derivedKindsFor, dueState, ensureKey, groupTodo, hubRows, lastUpdateWords, matchesClientFilter, needsEnsure, nextRows,
-  clientFilterCounts, showAllLabel, sortTodoRows, TODO_SORTS, TODO_SORT_LABEL, type TodoSort, todoCardLines, todoCells, todoCounts, todoHubSchema, todoLayout, updateTotal,
+  CLIENT_FILTERS, CLIENT_FILTER_LABEL, ROWS_PER_HEADING, SUMMARY_ROWS, TODO_COLUMNS, TODO_HEADINGS, TODO_HEADING_LABEL, deriveTasks, derivedKindsFor, dueState, ensureKey, groupTodo, hubRows, matchesClientFilter, needsEnsure, nextRows,
+  clientFilterCounts, showAllLabel, sortTodoRows, TODO_SORTS, TODO_SORT_LABEL, type TodoSort, todoCardLines, todoCells, todoCounts, todoHubSchema, todoLayout,
   type ClientFilter, type TodoColumnKey, type TodoHeading, type TodoHub, type TodoRow,
 } from "../../lib/todo";
-import { timeAgo, updateStamp } from "../../lib/tracker";
 
 // The To-do list: one page for everything a person has to do today. Guest relations and Client
 // relations first (for the people who work them), then Your team and Personal. The database adds the
@@ -168,6 +167,7 @@ function TodoCard({ p, row, today, first, busy = false, onTick, onOpen }: {
       <MotionPress accessibilityRole="button" accessibilityLabel={rowLabel(row, today)} onPress={() => onOpen(row)} style={{ flex: 1, minWidth: 0, minHeight: 44, justifyContent: "center", paddingVertical: 6, paddingRight: 6, gap: 2 }}>
         <View style={[ui.row, { gap: 8 }]}>
           <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, color: row.done ? p.muted : p.text, fontSize: 14, lineHeight: 20, fontWeight: "600", textDecorationLine: row.done ? "line-through" : "none" }}>{lines.top}</Text>
+          {!!row.unread && <Text style={{ color: p.primary, fontSize: 12, lineHeight: 16, fontWeight: "700" }}>{`${row.unread} new`}</Text>}
           {!!lines.due && <Text style={{ color: dueInk, fontSize: 12, lineHeight: 16, fontWeight: "600", fontVariant: ["tabular-nums"] }}>{lines.due}</Text>}
         </View>
         {!!lines.bottom && <Text numberOfLines={1} style={{ color: p.muted, fontSize: 12, lineHeight: 17 }}>{lines.bottom}</Text>}
@@ -185,13 +185,16 @@ function todoColumns(p: Palette, today: string, busy: ReadonlySet<string>, onTic
     task: row => {
       const c = todoCells(row, today, now);
       return <Text numberOfLines={1} style={{ fontSize: 13, lineHeight: 18, color: row.done ? p.muted : p.text }}>
-        <Text style={{ fontWeight: "600", textDecorationLine: row.done ? "line-through" : "none" }}>{c.task}</Text>{!!c.detail && <Text style={{ color: p.muted }}>{"  " + c.detail}</Text>}
+        <Text style={{ fontWeight: "600", textDecorationLine: row.done ? "line-through" : "none" }}>{c.task}</Text>{!!row.unread && <Text style={{ color: p.primary, fontWeight: "700" }}>{`  ${row.unread} new`}</Text>}{!!c.detail && <Text style={{ color: p.muted }}>{"  " + c.detail}</Text>}
       </Text>;
     },
     update: row => thinText(p, todoCells(row, today, now).update),
     by: row => thinText(p, todoCells(row, today, now).by),
     when: row => thinText(p, todoCells(row, today, now).when),
     due: row => { const c = todoCells(row, today, now); return thinText(p, c.due, { strong: c.dueTone !== "plain", color: c.dueTone === "overdue" ? p.danger : c.dueTone === "today" ? p.waiting : undefined }); },
+    priority: row => row.priority
+      ? <View style={[ui.row, { gap: 4 }]}><Feather name="flag" size={12} color={row.priority === "urgent" ? p.danger : row.priority === "high" ? p.waiting : row.priority === "normal" ? p.primary : p.muted} />{thinText(p, todoCells(row, today, now).priority)}</View>
+      : thinText(p, todoCells(row, today, now).priority),
     status: row => { const c = todoCells(row, today, now); return <Tag label={c.status} tone={c.statusTone} p={p} />; },
   };
   // The tick column's cell holds its own button, so the column is fixed and narrow.
@@ -205,58 +208,6 @@ function TodoRows({ p, rows, today, table, busy, onTick, onOpen }: { p: Palette;
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 2, paddingHorizontal: 4, gap: 0 }]}>
       {rows.map((r, n) => <TodoCard key={r.id} p={p} row={r} today={today} first={!n} busy={!!r.item && busy.has(r.item.id)} onTick={onTick} onOpen={onOpen} />)}
     </View>
-  );
-}
-
-// A to-do's detail: where, what, when and who; its updates (the running total, "Last update 2h ago by Dan",
-// an Add update box and the full history, newest first); and ticking it off or changing it.
-function TodoDetailSheet({ p, row, today, busy, onClose, onTick, onEdit, onUpdated }: {
-  p: Palette; row: TodoRow | null; today: string; busy: boolean; onClose: () => void; onTick: (row: TodoRow) => void; onEdit: (row: TodoRow) => void; onUpdated: () => Promise<void>;
-}) {
-  const item = row?.item;
-  const [draft, setDraft] = useState({ id: "", text: "" });
-  const text = draft.id === item?.id ? draft.text : "";
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const request = useRequestId(item ? "update:" + item.id + ":" + text.trim() : null);
-  async function add() {
-    if (!item || saving || !text.trim()) return;
-    setSaving(true); setError("");
-    try {
-      await writeTeams({ action: "addTodoUpdate", requestId: request.get(), id: item.id, text: text.trim() });
-      request.done(); setDraft({ id: item.id, text: "" }); await onUpdated();
-    } catch (e) { setError(message(e)); } finally { setSaving(false); }
-  }
-  const now = new Date(), c = row ? todoCells(row, today, now) : null;
-  const facts = row ? [row.address, dueWords(row, today), row.who ? "For " + row.who : ""].filter(Boolean) : [];
-  return (
-    <Sheet palette={p} visible={!!row} onClose={onClose} title={row?.title ?? ""} subtitle={c ? `To-do · ${c.status}` : undefined} icon="clipboard">
-      {row && item && c && <View style={{ gap: 16 }}>
-        <View style={{ gap: 6 }}>
-          {facts.map(f => <Text key={f} style={small(p)}>{f}</Text>)}
-          {!!row.details && <Text selectable style={[ui.body, { color: p.text }]}>{row.details}</Text>}
-        </View>
-        <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
-          <Button label={row.done ? "Reopen" : "Mark done"} icon={row.done ? "rotate-ccw" : "check"} primary={!row.done} p={p} disabled={busy} onPress={() => onTick(row)} />
-          <Button label="Edit" icon="edit-2" p={p} onPress={() => onEdit(row)} />
-        </View>
-        <View style={{ gap: 10 }}>
-          <Text accessibilityRole="header" style={headingStyle(p)}>Updates</Text>
-          <Text accessibilityLiveRegion="polite" style={small(p, { fontVariant: ["tabular-nums"] })}>{row.updateCount ? `${updateTotal(row.updateCount)} · ${lastUpdateWords(row.latest, now)}` : lastUpdateWords(row.latest, now)}</Text>
-          <Field label="Add update" value={text} onChange={v => setDraft({ id: item.id, text: v })} p={p} multiline placeholder="What happened, what is next" />
-          <Button label={saving ? "Adding…" : "Add update"} icon="plus" p={p} disabled={saving || !text.trim()} onPress={() => void add()} />
-          {!!error && <Notice text={error} p={p} tone="bad" />}
-          {!!item.updates?.length && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
-            {item.updates.map((u, n) => (
-              <View key={u.id} accessible accessibilityLabel={`${u.text}, ${u.byName ?? "Automatic"}, ${timeAgo(u.at, now)}`} style={{ paddingVertical: 10, gap: 2, borderTopWidth: n ? 1 : 0, borderTopColor: p.border }}>
-                <Text selectable style={{ color: u.kind === "note" ? p.text : p.muted, fontSize: 14, lineHeight: 20, fontWeight: u.kind === "note" ? "400" : "600" }}>{u.text}</Text>
-                <Text style={small(p, { fontVariant: ["tabular-nums"] })}>{updateStamp({ at: u.at, by: u.byName, what: null }, now)} · {timeAgo(u.at, now)}</Text>
-              </View>
-            ))}
-          </View>}
-        </View>
-      </View>}
-    </Sheet>
   );
 }
 
@@ -379,7 +330,7 @@ export function TodoList(props: SectionProps) {
         </View>
       )}
 
-      <TodoDetailSheet p={p} row={detail} today={today} busy={!!detail?.item && busy.has(detail.item.id)} onClose={() => setDetailId(null)} onTick={onTick} onEdit={edit} onUpdated={reload} />
+      <TodoTaskPage p={p} row={detail} today={today} busy={!!detail?.item && busy.has(detail.item.id)} me={account.userId} people={hub?.people ?? []} onClose={() => setDetailId(null)} onTick={onTick} onEdit={edit} onUpdated={reload} />
       <HubItemSheet p={p} hub={hub} account={account} properties={properties} target={editing} defaults={defaults} onClose={() => setEditing(null)} onSaved={saved(async () => { setEditing(null); await reload(); })} />
     </View>
   );

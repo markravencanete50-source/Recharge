@@ -9,6 +9,7 @@ import { integrationSettings } from './integration-server';
 import { sendEmail } from './integration-providers';
 import { tokenHash } from './client-enquiry';
 import { ESTIMATE_LINK_PATH, autoRequestId, estimateDecisionSchema, estimateEmail, estimateLinkActionSchema, estimateTokenPattern } from './estimate-link';
+import { appEstimateLink } from './client-onboarding';
 import type { RpcContext } from './workspace-rpc-route';
 
 // The estimate, emailed with a private link (migration 20261019520000). After a publish the server makes the link and
@@ -31,7 +32,8 @@ export async function issueEstimateLink(context: Context, input: { propertyId: s
   const state = issued.data as Issued;
   let estimateDelivery = state.estimateDelivery, emailStatus = state.emailStatus;
   if (state.send && state.to) {
-    const email = estimateEmail({ name: state.name, propertyName: state.propertyName, estimate: state.estimate, link });
+    // New emails open the app (create an account or sign in with this email); the private link still works for the team's copy.
+    const email = estimateEmail({ name: state.name, propertyName: state.propertyName, link: appEstimateLink(config.origin, state.to) });
     let status: 'sent' | 'failed' = 'sent';
     try { await sendEmail(settings, { to: state.to, ...email, from: enquirySender(settings), replyTo: ENQUIRY_REPLY_TO, idempotencyKey: `recharge-estimate/${context.account.userId}/${input.requestId}` }); } catch { status = 'failed'; }
     const marked = await context.client.rpc('workspace_estimate_link_action', { input: { action: 'markEmail', requestId: input.requestId, emailStatus: status } });

@@ -165,7 +165,7 @@ test('the routes, the phone client and the screen are wired', async () => {
   const server = await read('lib/furnishing-studio-server.ts');
   for (const rpc of ['workspace_furnishing_read', 'workspace_furnishing_analytics', 'workspace_furnishing_action']) assert.match(server, new RegExp(`'${rpc}'`));
   const client = await read('mobile/src/backend/client.ts');
-  assert.match(client, /\|furnishing\)\(\?:\[\/\?\]\|\$\)/, 'the phone may call the endpoint');
+  assert.match(client, /\|furnishing[|)][^\n]*\)\(\?:\[\/\?\]\|\$\)/, 'the phone may call the endpoint');
   assert.match(client, /export const readFurnishing = .*\/api\/mobile\/furnishing\?/);
   assert.match(client, /export const writeFurnishing = .*\/api\/mobile\/furnishing'/);
   const relations = await read('mobile/src/ClientRelations.tsx');

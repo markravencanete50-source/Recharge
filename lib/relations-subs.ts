@@ -12,7 +12,7 @@ export const GUEST_SUB_LABEL: Record<GuestSub, string> = {
   cleans: 'Cleans', bookings: 'Direct bookings', aircover: 'AirCover', reactive: 'Reactive maintenance', preventative: 'Preventative maintenance',
 };
 export const CLIENT_SUB_LABEL: Record<ClientSub, string> = {
-  onboarding: 'Onboarding', enquiries: 'Enquiries', licensing: 'Licensing', listings: 'Listing health', pricing: 'Pricing',
+  onboarding: 'Onboarding', enquiries: 'Leads', licensing: 'Licensing', listings: 'Listing health', pricing: 'Pricing',
   reviews: 'Reviews', relisting: 'Re-listing', purchases: 'Purchase orders', furnishing: 'Furnishing Studio',
 };
 

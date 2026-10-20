@@ -6,10 +6,12 @@ import * as DocumentPicker from "expo-document-picker";
 import * as Linking from "expo-linking";
 import { Text } from "./Typography";
 import { ui, type Palette } from "./theme";
-import { Button, Field, Loading, message, Notice, Section, Tag } from "./LiveKit";
+import { Button, Field, Loading, message, Notice, Section, Tag, useRequestId } from "./LiveKit";
 import { MotionPress } from "./motion";
 import { useToolTitled } from "./ToolPage";
-import { agreementFileLink, readOnboardingSettings, saveOnboardingSettings, uploadAgreementTemplate } from "./backend/client";
+import { agreementFileLink, readClientOnboarding, readOnboardingSettings, saveClientOnboarding, saveOnboardingSettings, uploadAgreementTemplate } from "./backend/client";
+import { clientOnboardingSchema, VIDEO_LINK_MESSAGE, VIDEO_SETTINGS_HELP, VIDEO_STEP_LABEL, VIDEO_STEPS, type VideoStep } from "../../lib/client-onboarding";
+import { isOnboardingVideoLink } from "../../lib/video-embed";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import {
   AGREEMENT_PLACEHOLDERS, MAX_AGREEMENT_BYTES, MAX_OWN_COST_CATEGORIES, PLACEHOLDER_HELP, fileSizeLabel, onboardingSettingsSchema, placeholderToken, type OnboardingSettings as Settings,
@@ -160,6 +162,45 @@ export function OnboardingSettings({ p, account }: { p: Palette; account: Worksp
           </View>
         </View>
       </Section>
+      {account.role === "super_admin" && <OnboardingVideos p={p} />}
     </View>
+  );
+}
+
+// The owner's onboarding checklist videos (Alex's framework, migration 20261025200000): super admins only. A YouTube,
+// Vimeo or Loom link for each of the three steps; until one is set the step shows its words only.
+function OnboardingVideos({ p }: { p: Palette }) {
+  const [saved, setSaved] = useState<Record<VideoStep, string> | null>(null);
+  const [links, setLinks] = useState<Record<VideoStep, string>>({ welcome: "", process: "", estimate: "" });
+  const [busy, setBusy] = useState<VideoStep | "">("");
+  const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+  const request = useRequestId("onboarding-videos");
+  const load = useCallback(async () => {
+    try { const videos = clientOnboardingSchema.parse((await readClientOnboarding()).data).videos; setSaved(videos); setLinks(videos); setError(""); }
+    catch (e) { setError(message(e)); }
+  }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  async function save(step: VideoStep) {
+    const url = links[step].trim();
+    if (url && !isOnboardingVideoLink(url)) { setError(VIDEO_LINK_MESSAGE); return; }
+    setBusy(step); setError(""); setNote("");
+    try { await saveClientOnboarding({ action: "setVideo", requestId: request.get(step + "|" + url), step, url }); request.done(step + "|" + url); await load(); setNote(url ? VIDEO_STEP_LABEL[step] + " video saved." : VIDEO_STEP_LABEL[step] + " video removed."); }
+    catch (e) { setError(message(e)); } finally { setBusy(""); }
+  }
+  return (
+    <Section title="Onboarding videos" p={p}>
+      <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 12 }]}>
+        <Text style={[ui.small, { color: p.muted }]}>{VIDEO_SETTINGS_HELP}</Text>
+        {!!error && <Notice text={error} p={p} tone="bad" />}
+        {!!note && <Text accessibilityLiveRegion="polite" style={[ui.small, { color: p.muted }]}>{note}</Text>}
+        {!saved && !error ? <Loading p={p} rows={2} /> : VIDEO_STEPS.map(step => (
+          <View key={step} style={{ gap: 8 }}>
+            <Field p={p} label={VIDEO_STEP_LABEL[step] + " video"} value={links[step]} onChange={v => setLinks(l => ({ ...l, [step]: v }))} placeholder="https://www.youtube.com/watch?v=..." />
+            <Button label={busy === step ? "Saving…" : "Save"} p={p} disabled={!!busy || !saved || links[step].trim() === saved[step]} onPress={() => void save(step)} />
+          </View>
+        ))}
+      </View>
+    </Section>
   );
 }

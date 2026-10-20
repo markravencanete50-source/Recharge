@@ -67,8 +67,8 @@ test('"when" is relative: just now, minutes, hours, days, then the day', () => {
 });
 
 test('the desktop columns, left to right', () => {
-  assert.deepEqual(T.TODO_COLUMNS.map(c => c.key), ['tick', 'property', 'task', 'update', 'by', 'when', 'due', 'status']);
-  assert.deepEqual(T.TODO_COLUMNS.map(c => c.label), ['', 'Property', 'Task', 'Latest update', 'Updated by', 'When', 'Due', 'Status']);
+  assert.deepEqual(T.TODO_COLUMNS.map(c => c.key), ['tick', 'property', 'task', 'update', 'by', 'when', 'due', 'priority', 'status']);
+  assert.deepEqual(T.TODO_COLUMNS.map(c => c.label), ['', 'Property', 'Task', 'Latest update', 'Updated by', 'When', 'Due', 'Priority', 'Status']);
   assert.deepEqual(T.TODO_COLUMNS.filter(c => c.grow).map(c => c.key), ['task'], 'the task takes the spare width');
   assert.equal(T.THIN_ROW_HEIGHT, 40);
 });
@@ -79,7 +79,7 @@ test('what each column shows', () => {
   const c = T.todoCells(row(item), TODAY, NOW);
   assert.deepEqual(c, {
     property: '1 High Street, Perth', task: 'Chase the gas certificate', detail: 'Engineer said Thursday, ask again',
-    update: 'Booked for Thursday', by: 'Dan', when: '2h ago', due: '12 Oct', dueTone: 'overdue', status: 'To do', statusTone: 'wait',
+    update: 'Booked for Thursday', by: 'Dan', when: '2h ago', due: '12 Oct', dueTone: 'overdue', priority: EMPTY_CELL, status: 'To do', statusTone: 'wait',
   });
   // No property, no update, no date: each empty cell reads "–" (the sheet tables' own dash).
   const empty = T.todoCells(row(todo(2)), TODAY, NOW);
@@ -174,16 +174,18 @@ test('the To-do page: thin table on a computer, two-line cards on a phone, 44 px
   assert.match(list, /onRow=\{onOpen\}/, 'clicking a row opens it');
 });
 
-test('the To-do detail: Add update, the history newest first, the running total and the last update', () => {
+test('the To-do task page: a wide two-pane page with comments, replies, reactions and the activity', () => {
   const list = source('mobile/src/TodoList.tsx');
-  assert.match(list, /function TodoDetailSheet\(/);
-  assert.match(list, /<Field label="Add update"/);
-  assert.match(list, /writeTeams\(\{ action: "addTodoUpdate", requestId: request\.get\(\), id: item\.id, text: text\.trim\(\) \}\)/);
-  assert.match(list, /`\$\{updateTotal\(row\.updateCount\)\} · \$\{lastUpdateWords\(row\.latest, now\)\}`/);
-  assert.match(list, /lastUpdateWords\(row\.latest, now\)/);
-  assert.match(list, /item\.updates\.map\(\(u, n\) =>/, 'drawn in the order the database gives: newest first');
+  const task = source('mobile/src/TodoTask.tsx');
+  assert.doesNotMatch(list, /function TodoDetailSheet\(/, 'the small sheet is replaced by the task page');
   assert.match(list, /const open = \(row: TodoRow\) => \{ if \(row\.item\) setDetailId\(row\.id\); else openAutomatic\(row\); \};/);
-  assert.match(list, /<TodoDetailSheet p=\{p\} row=\{detail\}/);
+  assert.match(list, /<TodoTaskPage p=\{p\} row=\{detail\}/);
+  assert.match(task, /export const TASK_PAGE_WIDTH = 1080;/);
+  assert.match(task, /todoFeed\(item\)/, 'comments and changes in one oldest-first feed');
+  assert.match(task, /action: "readTodo"/, 'opening it marks the comments read');
+  assert.match(task, /<MentionPicker/, 'the comment box can mention people');
+  assert.match(task, /<ReactionPicker/);
+  assert.match(task, /`\$\{e\.replies\.length\} replies`/, 'long reply threads fold');
 });
 
 test('the tracker table uses the same thin rows', () => {
@@ -196,6 +198,6 @@ test('the tracker table uses the same thin rows', () => {
 });
 
 test('no em dashes in the round 6 files', () => {
-  for (const file of ['lib/todo.ts', 'lib/tracker.ts', 'mobile/src/TodoList.tsx', 'mobile/src/HubItemSheet.tsx', 'mobile/src/Tracker.tsx', 'tests/todo-rows.test.mjs', 'tests/todo-updates-database.test.mjs', 'supabase/migrations/20261016200000_todo_updates.sql'])
+  for (const file of ['lib/todo.ts', 'lib/tracker.ts', 'mobile/src/TodoList.tsx', 'mobile/src/TodoTask.tsx', 'tests/todo-clickup-database.test.mjs', 'supabase/migrations/20261025100000_todo_like_clickup.sql', 'mobile/src/HubItemSheet.tsx', 'mobile/src/Tracker.tsx', 'tests/todo-rows.test.mjs', 'tests/todo-updates-database.test.mjs', 'supabase/migrations/20261016200000_todo_updates.sql'])
     assert.ok(!source(file).includes(String.fromCharCode(0x2014)), file);
 });

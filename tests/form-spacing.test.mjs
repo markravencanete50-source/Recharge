@@ -45,8 +45,8 @@ test('Publish the estimate: each comparable under its own heading, short labels,
     const form = journeyForms(admin, { stage: 'estimate', propertyId: '00000000-0000-4000-8000-000000000002', clientId: null, ownerAccount: false, agreementRevision: 0 }).find(f => f.key === 'publishEstimate');
     assert.ok(form, 'the publish form');
     const comps = form.fields.filter(f => f.group);
-    // As many as the team wants (Lee, 14 October): 20 groups, each shown once the one before has a name.
-    assert.equal(comps.length, 20 * 3);
+    // Up to 3 hand-picked comparables (Alex, Estimate Delivery): 3 groups, each shown once the one before has a name.
+    assert.equal(comps.length, 3 * 3);
     comps.forEach((f, i) => { const n = Math.floor(i / 3); assert.equal(f.group, 'Comparable ' + (n + 1)); assert.equal(f.after ?? '', n ? 'name' + (n - 1) : ''); });
     assert.deepEqual(comps.slice(0, 9).map(f => [f.name, f.label, f.group, f.section ?? '', f.after ?? '']), [
       ['name0', 'Name', 'Comparable 1', 'Comparable 1 (optional)', ''], ['url0', 'Link (https://)', 'Comparable 1', '', ''], ['adrMinor0', 'Nightly rate, GBP', 'Comparable 1', '', ''],
