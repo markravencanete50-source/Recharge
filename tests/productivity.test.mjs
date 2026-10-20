@@ -61,9 +61,9 @@ test('Productivity is a management tool in the left panel and search, not a Home
   // Nobody else has Productivity. The Stays team's panel-only tools without a module are Furnishing Studio (role-gated),
   // Property onboarding and their calendars (Alex's menu); Client enquiries still needs its module.
   for (const role of ['stays', 'cleans', 'cleaning_manager', 'ready', 'accounts', 'client']) assert.equal(panelToolsFor(role, []).some(t => t.key === 'productivity'), false, role);
-  assert.deepEqual(panelToolsFor('stays', []).map(t => t.key), ['studio', 'onboarding', 'calendar-ready', 'calendar-stays', 'calendar-cleans']);
+  assert.deepEqual(panelToolsFor('stays', []).map(t => t.key), ['studio', 'onboarding', 'calendar-ready', 'calendar-stays', 'calendar-cleans', 'calendar-safety', 'calendar-onboarding']);
   assert.deepEqual(panelToolsFor('cleans', []).map(t => t.key), ['calendar-cleans']);
-  assert.deepEqual(panelToolsFor('client', []).map(t => t.key), ['statements']);
+  assert.deepEqual(panelToolsFor('client', []).map(t => t.key), ['statements', 'booking-calendar']);
 });
 
 test('the calendar: whole weeks, and each day\'s hours, people, missed days and changes waiting', () => {

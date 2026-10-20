@@ -57,6 +57,9 @@ export const ACCOUNTS_SUBS = ["expenses", "payouts", "statements", "receivable",
 // The Calendar opened on one team's work (Maintenance calendar is "ready"): the teams of lib/calendar-live.ts TEAMS.
 export const CALENDAR_TEAMS = ["stays", "ready", "cleans", "accounts"] as const;
 export type CalendarTeam = (typeof CALENDAR_TEAMS)[number];
+// Or on one kind of work (Safety & Compliance's calendar is "safety"): the presets of lib/calendar-live.ts CALENDAR_FOCUSES.
+export const CALENDAR_PRESETS = ["safety", "onboarding"] as const;
+export type CalendarPreset = (typeof CALENDAR_PRESETS)[number];
 export type WorkSub = { view: WorkView; sub: string; label: string; words: string };
 export const WORK_SUBS: readonly WorkSub[] = [
   { view: "stays", sub: "cleans", label: "Changeover cleans", words: "cleans cleaning changeovers turnover guest relations" },
@@ -75,7 +78,7 @@ export const WORK_SUBS: readonly WorkSub[] = [
   { view: "clients", sub: "furnishing", label: "Furnishing Studio", words: "furnishing studio catalogue client quotes shopping list furniture estimate" },
 ];
 const SUBS_BY_VIEW: Partial<Record<WorkView, readonly string[]>> = {
-  stays: GUEST_RELATIONS_SUBS, clients: CLIENT_RELATIONS_SUBS, management: MANAGEMENT_SUBS, accounts: ACCOUNTS_SUBS, calendar: CALENDAR_TEAMS,
+  stays: GUEST_RELATIONS_SUBS, clients: CLIENT_RELATIONS_SUBS, management: MANAGEMENT_SUBS, accounts: ACCOUNTS_SUBS, calendar: [...CALENDAR_TEAMS, ...CALENDAR_PRESETS],
 };
 // Whether a Work area opens a sub-page by that name. Areas whose tabs are not listed here (Cleans,
 // Maintenance, All work) take their tab names from their own screens, so any name passes.
@@ -85,7 +88,8 @@ export const isWorkSub = (view: WorkView, sub: string) => { const known = SUBS_B
 // links resolve (they open Messages, Updates).
 export const PAGE_SECTIONS: readonly WorkspaceSection[] = ["home", "mailbox", "todo", "work", "calendar", "inbox", "decisions", "properties", "analytics", "favorites", "approvals", "statements", "enquiries", "feedback", "moderation", "help", "activity"];
 // `team` opens the Calendar filtered to that team's work (the person can switch back to All teams there).
-export type DeepLink = { section: WorkspaceSection; view?: WorkView; sub?: string; anchor?: string; open?: string; workId?: string; messagesTab?: "updates"; team?: CalendarTeam; redirected?: boolean };
+// `preset` opens it on one kind of work (safety visits, onboarding inspections), which the person can clear there.
+export type DeepLink = { section: WorkspaceSection; view?: WorkView; sub?: string; anchor?: string; open?: string; workId?: string; messagesTab?: "updates"; team?: CalendarTeam; preset?: CalendarPreset; redirected?: boolean };
 // Client enquiries has one home, the Enquiries chip in Client relations (Lee, 16 October 2026). "Client enquiries" in
 // the menu, its old page links and the enquiry notices open it there; the page itself is no longer a page of its own.
 export const CLIENT_ENQUIRIES_LINK: DeepLink = { section: "work", view: "clients", sub: "enquiries", redirected: true };
@@ -109,7 +113,8 @@ export function deepLinkFor(target: HomeToolTarget): DeepLink | null {
   const extra = { ...(target.anchor ? { anchor: target.anchor } : {}), ...(target.open ? { open: target.open } : {}), ...(target.workId ? { workId: target.workId } : {}) };
   if (target.view === "calendar") {
     if (target.sub && !isWorkSub("calendar", target.sub)) return null;
-    return { section: "calendar", ...(target.sub ? { team: target.sub as CalendarTeam } : {}), ...extra };
+    const preset = (CALENDAR_PRESETS as readonly string[]).includes(target.sub ?? "");
+    return { section: "calendar", ...(target.sub ? preset ? { preset: target.sub as CalendarPreset } : { team: target.sub as CalendarTeam } : {}), ...extra };
   }
   if (target.view === "hub") return { section: target.sub === "approvals" ? "decisions" : "todo", redirected: true, ...extra };
   if (target.view === "stays" && target.sub === "inbox") return { section: "inbox", redirected: true };

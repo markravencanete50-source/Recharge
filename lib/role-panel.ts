@@ -45,7 +45,8 @@ const ART_ICON: Record<ToolArt, PanelIcon> = {
 };
 
 // Tools whose picture would repeat another's in the panel (Waiting on you is the clock).
-const TOOL_ICON: Record<string, PanelIcon> = { productivity: 'activity', performance: 'award', month: 'trending-up', limits: 'sliders' };
+const TOOL_ICON: Record<string, PanelIcon> = { productivity: 'activity', performance: 'award', month: 'trending-up', limits: 'sliders', bins: 'trash-2', compliance: 'file-text' };
+const FORM_ICON: Partial<Record<string, PanelIcon>> = { 'new-expense': 'file-plus' };
 
 // The colour of each link's icon tile: departments in their own colours, everything else in one of
 // the panel hues (lib/design-tokens.ts navHueTokens), so similar places look alike across roles.
@@ -63,6 +64,8 @@ const KEY_HUE: Record<string, PanelHue> = {
   'tool:rota': 'ocean', 'tool:dailytasks': 'sage', 'tool:licensing': 'plum', 'tool:onboarding': 'clients', 'tool:reviews': 'amber',
   'tool:booking-performance': 'plum', 'tool:order-fulfilment': 'amber', 'tool:receivable': 'accounts', 'tool:profit-loss': 'accounts',
   'tool:statements': 'accounts', 'tool:calendar-ready': 'ready', 'tool:calendar-stays': 'stays', 'tool:calendar-cleans': 'cleans',
+  'tool:garden': 'sage', 'tool:bins': 'slate', 'tool:compliance': 'plum', 'tool:calendar-safety': 'ready', 'tool:calendar-onboarding': 'clients',
+  'tool:booking-calendar': 'ocean',
 };
 export const linkHue = (link: PanelLink): PanelHue =>
   link.kind === 'area' ? AREA_HUE[link.view] : link.kind === 'start' ? 'forest' : KEY_HUE[link.key] ?? 'slate';
@@ -72,6 +75,7 @@ export const linkHue = (link: PanelLink): PanelHue =>
 // Each group is [key, title, links]. The key is the section's stable name for the saved menu order
 // (lib/menu-layout.ts); keep it when renaming a title. Links:
 // page:<page>[=label], area:<view>[=label], tool:<home tool key>[=label], start (the role's "start something" forms),
+// form:<form>[=label] (one of those forms, for roles that can start it),
 // same:<home tool key> (a tool another link in the panel already opens).
 type Layout = { title: string; tagline: string; icon: PanelIcon; groups: [string, string, string[]][] };
 // Alex's menu (20 October 2026). The team's sections, in this order, the same for every team role; each role
@@ -79,8 +83,9 @@ type Layout = { title: string; tagline: string; icon: PanelIcon; groups: [string
 // and super admins, who can open everything, see the same menu. Section keys are the stable names saved menu
 // orders use: the first section keeps each role's old key, Management keeps "management" and Finance keeps
 // "money"; the rest are new, so an order saved for the old sections leaves their links in these defaults.
-// Calendars open the Calendar page on one team (tool:calendar-*, lib/home-tools.ts).
+// Calendars open the Calendar page on one team, or on one kind of work (safety, onboarding) (tool:calendar-*, lib/home-tools.ts).
 const FIRST_KEY: Record<string, string> = { super_admin: 'overview', admin: 'overview', stays: 'today', cleans: 'my-day', cleaning_manager: 'today', ready: 'today', accounts: 'overview' };
+const VISIT_KINDS = ['tool:garden=Garden Maintenance', 'tool:bins=Waste Collection'];
 function teamGroups(role: string): [string, string, string[]][] {
   const admin = role === 'admin' || role === 'super_admin', cleaning = role === 'cleans' || role === 'cleaning_manager';
   const only = (yes: boolean, specs: string[]) => yes ? specs : [];
@@ -91,22 +96,23 @@ function teamGroups(role: string): [string, string, string[]][] {
       'tool:schedule=Schedule', 'tool:today=Schedule', 'tool:rota=Schedule',
       ...only(!admin, ['tool:training', 'page:feedback=Send feedback', 'page:help=Help']),
       ...only(admin, ['page:analytics=Reports'])]],
-    // Garden maintenance and waste collection are not built yet.
-    ['maintenance', 'Maintenance', ['tool:pipeline=Reactive Jobs', role === 'ready' ? 'area:repairs=All maintenance' : 'area:repairs=Reactive Jobs', 'tool:visits',
-      'tool:aircover=AirCover Claims', 'tool:calendar-ready=Maintenance Calendar']],
+    // Garden Maintenance and Waste Collection open the preventative visits filtered to garden or bins visits.
+    ['maintenance', 'Maintenance', [...(role === 'ready' ? ['tool:pipeline=Reactive Jobs', ...VISIT_KINDS, 'area:repairs=All maintenance'] : ['area:repairs=Reactive Jobs', ...VISIT_KINDS]),
+      'tool:visits', 'tool:aircover=AirCover Claims', 'tool:calendar-ready=Maintenance Calendar']],
     ['management', 'Management', ['page:decisions=Approval Requests', 'same:queue', 'tool:dailytasks=Daily Checklist',
       'tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:limits', 'page:moderation', ...only(admin, ['tool:training', 'page:feedback']),
       'area:management=Management centre', 'area:all']],
-    // Compliance certificates and the safety and compliance calendar are not built yet.
-    ['safety', 'Safety & Compliance', ['tool:licensing=Licensing']],
-    ['onboarding', 'Property Onboarding', ['tool:inspections=New Property Inspections', 'page:enquiries=Leads', 'tool:onboarding=Property Status', 'tool:furnishing',
+    // Compliance Certs opens the licensing tracker too (its certificates are steps there); the calendar is preset to safety work.
+    ['safety', 'Safety & Compliance', ['tool:licensing=Licensing', 'tool:compliance=Compliance Certs', 'tool:calendar-safety=Safety & Compliance Calendar']],
+    ['onboarding', 'Property Onboarding', ['tool:inspections=New Property Inspections', 'page:enquiries=Leads', 'tool:onboarding=Property Status',
+      'tool:calendar-onboarding=Calendar', 'tool:furnishing',
       'area:clients=Client relations']],
     ['listings', 'Listing Management', ['tool:bookings=Direct Bookings', 'tool:calendar-stays=Booking Calendar', 'tool:pricing=Pricing',
       'tool:booking-performance=Booking Performance', 'tool:reviews=Reviews', 'tool:checks=Listing Maintenance', 'area:stays=Guest relations']],
     // Accounts have never had the property pages (lib/tool-directory.ts).
     ['property-database', 'Property Database', only(role !== 'accounts', ['page:properties=Property Database'])],
-    // Accounts' Purchases is their order fulfilment, under Finance. Reimbursement requests are not built yet.
-    ['stock', 'Stock', [...only(role !== 'accounts', ['tool:purchases=Place Order']), 'tool:studio=Item Catalogue', 'tool:restock']],
+    // Accounts' Purchases is their order fulfilment, under Finance. Reimbursement Request starts the New expense form.
+    ['stock', 'Stock', [...only(role !== 'accounts', ['tool:purchases=Place Order']), 'tool:studio=Item Catalogue', 'form:new-expense=Reimbursement Request', 'tool:restock']],
     ['housekeeping', 'Housekeeping', [cleaning ? 'area:cleans=My Jobs' : 'area:cleans=Cleans', 'tool:calendar-cleans=Calendar', 'tool:review=Form Submissions',
       'tool:respond', 'tool:disputes', 'tool:unassigned', 'tool:cleaners', 'tool:setups', ...only(role === 'cleaning_manager', ['tool:invoices'])]],
     ['money', 'Finance', [...only(role === 'accounts', ['tool:purchases=Order Fulfilment']), 'tool:order-fulfilment=Order Fulfilment',
@@ -123,12 +129,12 @@ const LAYOUTS: Record<string, Layout> = {
   cleaning_manager: { title: 'Cleaning team', tagline: 'Schedule, reviews and cleaners', icon: 'users', groups: teamGroups('cleaning_manager') },
   ready: { title: 'Ready', tagline: 'Repairs, visits and purchases', icon: 'tool', groups: teamGroups('ready') },
   accounts: { title: 'Accounts', tagline: 'Invoices, payouts and statements', icon: 'pie-chart', groups: teamGroups('accounts') },
-  // Owners (Alex): their own places first, then their requests. Statements opens the Statements part of the
-  // Portfolio page. Owners have no calendar yet.
+  // Owners (Alex): their own places first, then their requests. Statements and Calendar open the Statements and
+  // Booking calendar parts of the Portfolio page.
   client: {
     title: 'Owner', tagline: 'Your properties, stays and earnings', icon: 'home', groups: [
       ['your-properties', 'My Recharge', ['page:home', 'page:favorites', 'page:inbox=Inbox', 'page:properties=My Portfolio', 'tool:statements=My Statements',
-        'page:analytics=Property Performance', 'page:approvals', 'page:mailbox']],
+        'tool:booking-calendar=Calendar', 'page:analytics=Property Performance', 'page:approvals', 'page:mailbox']],
       ['requests', 'Requests', ['area:repairs=Repairs', 'area:all=All requests', 'tool:furnishing', 'page:help=Tools & help']],
       ['start', 'Start something', ['start']],
     ],
@@ -173,6 +179,11 @@ export function rolePanel(role: string, modules: readonly string[], layout?: Men
   const resolve = (spec: string): PanelLink[] => {
     if (spec.startsWith('same:')) { used.add('tool:' + spec.slice(5)); return []; }
     if (spec === 'start') return actions.map(a => ({ key: 'start:' + a.key, kind: 'start', label: a.label, icon: a.icon, target: a.target }));
+    if (spec.startsWith('form:')) {
+      // Its own key, so Start something keeps the same form too.
+      const [ref, label] = spec.split('='), a = actions.find(x => x.key === ref.slice(5));
+      return a ? [{ key: ref, kind: 'start', label: label ?? a.label, icon: FORM_ICON[a.key] ?? a.icon, target: a.target }] : [];
+    }
     const [ref, label] = spec.split('=');
     const [kind, name] = ref.split(':');
     const link = kind === 'page' ? page(name as Page, label) : kind === 'area' ? area(name as WorkView, label)

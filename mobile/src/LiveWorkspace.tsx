@@ -61,7 +61,7 @@ import { WORK_VIEW_LABEL, workViewsFor, type WorkView } from "../../lib/tool-dir
 import { formatBps, formatMoney } from "../../lib/format";
 import { liveApiOrigin, readChat, readTeams, restoreAccount, signOut, workspaceRequest, WorkspaceApiError } from "./backend/client";
 import { workspaceAccountSchema, type WorkspaceAccount } from "../../lib/workspace-account-policy";
-import { CLIENT_ENQUIRIES_LINK, PAGE_SECTIONS, deepLinkFor, pageLink, type CalendarTeam, type DeepLink, type WorkspaceSection } from "../../lib/workspace-map";
+import { CLIENT_ENQUIRIES_LINK, PAGE_SECTIONS, deepLinkFor, pageLink, type CalendarPreset, type CalendarTeam, type DeepLink, type WorkspaceSection } from "../../lib/workspace-map";
 import { isWorkspaceAdmin } from "../../lib/modules";
 import { periodError, presetPeriod, type AnalyticsPeriod, type AnalyticsSnapshot } from "../../lib/analytics";
 import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSchema, propertyViewSchema, readableStage, reportViewSchema, type InvoiceView, type NoticeView, type PropertyView } from "../../lib/workspace-view";
@@ -196,8 +196,9 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [form, setForm] = useState<WorkflowForm | null>(null), [openWork, setOpenWork] = useState<OperationView | null>(null);
   const [billOpen, setBillOpen] = useState<string | null>(null);
   const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active"), [workQuery, setWorkQuery] = useState("");
-  // The team a link asked the Calendar to show (Maintenance calendar: "ready"); a fresh nonce opens it afresh each time.
-  const [calendarTeam, setCalendarTeam] = useState<{ team: CalendarTeam; nonce: number } | null>(null);
+  // The team a link asked the Calendar to show (Maintenance calendar: "ready"), or the kind of work (Safety & Compliance
+  // Calendar: "safety"); a fresh nonce opens it afresh each time.
+  const [calendarTeam, setCalendarTeam] = useState<{ team?: CalendarTeam; preset?: CalendarPreset; nonce: number } | null>(null);
   // The bottom bar and sidebar open each page at its start, not where a Home tool last pointed.
   // Accounts' Invoices opens Work → Accounts on its expenses.
   // Opens a place named by a deep link (lib/workspace-map.ts deepLinkFor): a page, or a Work area and its sub-page.
@@ -206,7 +207,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     if (to === "work" && view) setWorkView(view);
     setFocus(to === "work" || anchor || open || workId ? { sub, anchor, open, workId, nonce: freshNonce() } : null);
     setChatUpdates(link.messagesTab === "updates" ? freshNonce() : null);
-    setCalendarTeam(link.team ? { team: link.team, nonce: freshNonce() } : null);
+    setCalendarTeam(link.team ? { team: link.team, nonce: freshNonce() } : link.preset ? { preset: link.preset, nonce: freshNonce() } : null);
     setTab(to);
   };
   const navigate = (value: WorkspaceSection) => {
@@ -662,7 +663,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={section => (section === "activity" ? navigate(section) : setTab(section))} onTool={openTool} favoriteEntries={entries} onOpenEntry={openEntry} />
     : tab === "todo" ? <TodoList {...sectionProps} />
     : tab === "decisions" ? <ManagementApprovals palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />
-    : tab === "calendar" ? <LiveCalendar key={"calendar:" + (calendarTeam?.nonce ?? "")} palette={p} account={account} work={work} desktop={desktop} properties={properties} focusTeam={calendarTeam?.team} onOpenWork={setOpenWork} onOpenView={openView} />
+    : tab === "calendar" ? <LiveCalendar key={"calendar:" + (calendarTeam?.nonce ?? "")} palette={p} account={account} work={work} desktop={desktop} properties={properties} focusTeam={calendarTeam?.team} focusPreset={calendarTeam?.preset} onOpenWork={setOpenWork} onOpenView={openView} />
     : tab === "favorites" ? <FavoritesPage palette={p} desktop={desktop} entries={entries} onOpen={openEntry} onSearch={() => setSearchOpen(true)} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} focusProperty={propertyFocus} />

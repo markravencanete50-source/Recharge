@@ -27,7 +27,7 @@ import { profileAccess, reservationsSchema, stayLines, type StayLine } from "../
 import { operationViewSchema, type PropertyView } from "../../lib/workspace-view";
 import { scheduleSchema } from "../../lib/cleans-live";
 import { canStart } from "../../lib/home-tools";
-import { canCloseRepair, canReportRepair, canResolveRepair, canReviseQuote, daysFromNow, declineNote, londonDayOf, poundsToMinor, repairClosed, repairStage, repairStep, REPAIR_STAGES, RESOLUTION_MAX, RESOLUTION_MIN, routinePlanSchema, visitChecklist, visitDates, visitFormOf, type RepairStep } from "../../lib/repairs-live";
+import { canCloseRepair, canReportRepair, canResolveRepair, canReviseQuote, daysFromNow, declineNote, londonDayOf, poundsToMinor, repairClosed, repairStage, repairStep, REPAIR_STAGES, RESOLUTION_MAX, RESOLUTION_MIN, routinePlanSchema, VISIT_KIND_LABEL, VISIT_KINDS, visitChecklist, visitDates, visitFormOf, visitKindOfSub, visitType, type RepairStep, type VisitKind } from "../../lib/repairs-live";
 import { VisitDates, VisitForm, VisitMoves } from "./VisitForm";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { canFlagAirCover } from "../../lib/aircover-flag";
@@ -87,6 +87,9 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
   const [planning, setPlanning] = useState(() => focus?.open === "new-routine" && ["ready", "stays", "admin", "super_admin"].includes(account.role));
   const [visitId, setVisitId] = useState<string | null>(() => focus?.workId ?? null);
   const routines = ["ready", "stays", "admin", "super_admin"].includes(account.role);
+  // The visit type shown under Preventative maintenance: the menu's Garden Maintenance and Waste Collection preset
+  // garden or bins (focus sub "visits-garden"); the person can go back to all visits.
+  const [visitKind, setVisitKind] = useState<VisitKind | "all">(() => visitKindOfSub(focus?.sub) ?? "all");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -126,6 +129,8 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
   }
   const open = repairs.find(r => r.workId === openId);
   const visit = visits.find(v => v.workId === visitId);
+  const kindOf = (v: Visit) => visitType(v.title, visitOps.find(o => o.workId === v.workId)?.data);
+  const openVisits = visits.filter(v => v.status !== "completed"), shownVisits = openVisits.filter(v => visitKind === "all" || kindOf(v) === visitKind);
   const recording = visits.find(v => v.workId === recordingId), recordingOp = visitOps.find(o => o.workId === recordingId);
 
   return (
@@ -183,7 +188,9 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
             <Button label="New routine" icon="repeat" quiet p={p} onPress={() => setPlanning(true)} />
             <Button label={creatingVisits ? "Creating visits…" : "Create this month's visits"} icon="calendar" p={p} disabled={!plans.length || creatingVisits} onPress={() => void createVisits()} />
           </View>
-          {visits.filter(v => v.status !== "completed").length ? visits.filter(v => v.status !== "completed").map(v => {
+          <Dropdown p={p} label="Visit type" value={visitKind} onChange={setVisitKind}
+            options={[{ value: "all" as const, label: "All visits" }, ...VISIT_KINDS.map(k => ({ value: k, label: `${VISIT_KIND_LABEL[k]} · ${openVisits.filter(v => kindOf(v) === k).length}` }))]} />
+          {shownVisits.length ? shownVisits.map(v => {
             const last = londonDayOf(visitDates(visitOps.find(o => o.workId === v.workId)?.data).lastDoneAt);
             return (
             <MotionPress key={v.workId} accessibilityRole="button" onPress={() => setVisitId(v.workId)} style={[ui.card, ui.between, { gap: 10, backgroundColor: p.surface, borderColor: p.border }]}>
@@ -191,7 +198,7 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
               <Tag label={v.status === "in_review" ? "Awaiting sign-off" : v.status === "in_progress" ? "In progress" : v.status === "approved" ? "Signed off" : "To do"} tone={v.status === "in_review" ? "wait" : "plain"} p={p} />
             </MotionPress>
             );
-          }) : !loading && <Notice text={plans.length ? "No open visits. Visits are created automatically for this month and next; create them now if one is missing." : "No routines yet. Add bins, garden or safety checks as a routine."} p={p} />}
+          }) : !loading && <Notice text={visitKind !== "all" && openVisits.length ? `No open ${VISIT_KIND_LABEL[visitKind].toLowerCase()} visits. Choose All visits to see the others.` : plans.length ? "No open visits. Visits are created automatically for this month and next; create them now if one is missing." : "No routines yet. Add bins, garden or safety checks as a routine."} p={p} />}
           {plans.map(plan => <Text key={plan.id} style={[ui.small, { color: p.muted }]}>{plan.propertyName}: {plan.title} · {plan.frequency} on day {plan.dayOfMonth}{plan.active ? "" : " · paused"}</Text>)}
         </Section>
       )}

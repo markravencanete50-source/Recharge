@@ -8,7 +8,8 @@ import { Entrance, GrowBar, MotionPress, TweenNumber } from "./motion";
 import { Sheet } from "./TeamFlows";
 import { ui, type Palette } from "./theme";
 import { ChartTip, useChartFocus } from "./ChartTip";
-import { addDays, Loading, london, message, Notice, Section } from "./LiveKit";
+import { addDays, Anchor, Loading, london, message, Notice, Section } from "./LiveKit";
+import { sectionAnchor } from "../../lib/home-tools";
 import { StatementCard } from "./LiveOwner";
 import { readFinance, readOwner } from "./backend/client";
 import { formatCount, formatMoney, formatMoneyShort } from "../../lib/format";
@@ -158,10 +159,11 @@ export function LiveClientReports({ palette: p }: { palette: Palette }) {
       </View>
       <Text style={[ui.small, { color: p.muted, marginTop: -12 }]}>Earnings count when a stay checks out. Occupancy is nights booked out of {formatCount(stats.available)} available in {monthName(month, false)}{stats.averageNightlyMinor !== null ? "; the nightly rate is your payout per night booked." : "."}</Text>
 
-      <View style={[card, { gap: 14 }]}>
+      {/* The owner menu's Calendar opens here (lib/home-tools.ts client "booking-calendar"). */}
+      <Anchor id={sectionAnchor("Booking calendar")}><View style={[card, { gap: 14 }]}>
         {heading("Booking calendar", "Every stay across your properties. Tap a stay or a day for details.")}
         <BookingCalendar p={p} month={month} today={today} stays={monthStays} colourOf={colourOf} onMonth={setMonth} onStay={setOpen} />
-      </View>
+      </View></Anchor>
 
       <View style={{ flexDirection: desktop ? "row" : "column", gap: 16, alignItems: "flex-start" }}>
         <View style={[card, { flex: desktop ? 1 : undefined, alignSelf: "stretch", gap: 4 }]}>
