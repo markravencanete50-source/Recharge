@@ -119,5 +119,5 @@ test('email names the type of work and still carries no property, title or names
   assert.equal(d.noticeCopyFor('operations.updateOperation.completeRepair', 'maintenance').title, 'Repair: Repair completed');
   assert.match(source('lib/integration-providers.ts'), /noticeCopyFor\(job\.eventType, job\.workKind\)/);
   // Pop-ups are encrypted for one device, so they name who and what (lib/push-copy.ts, tested in push-copy.test.mjs).
-  assert.match(source('lib/web-push.ts'), /const details = job\.details \?\? \{\};\s*const \{ title, message \} = copy \?\? pushCopy\(job\.eventType, job\.workKind, details\);/);
+  assert.match(source('lib/web-push.ts'), /const details = \{ \.\.\.\(job\.details \?\? \{\}\), attachmentShown: shown \};\s*const \{ title, message \} = copy \?\? pushCopy\(job\.eventType, job\.workKind, details\);/);
 });
