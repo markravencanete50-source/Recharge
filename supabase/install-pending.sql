@@ -26,3 +26,5 @@
 -- 20261025200000_client_onboarding_framework: installed by Lee in the SQL editor on 20 October 2026 (no DROP of data or DELETE; replaces the enquiry source check to allow website enquiries; two new tables); verified by the lead.
 -- 20261025300000_lead_estimate_delivery: installed by Lee in the SQL editor on 20 October 2026 (no DROP or DELETE; three new tables and the lead-files bucket); verified by the lead.
 -- 20261025400000_push_message_time: installed by Lee in the SQL editor on 20 October 2026 (no DROP or DELETE; the push claim returns each message's time); verified by the lead.
+
+-- 20261025500000 lead_files_guest_push, 20261025600000 shift_hours_clip_open_limit, 20261025700000 view_as_super_admins: installed by Lee 2026-10-20, verified
