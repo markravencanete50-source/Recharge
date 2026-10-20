@@ -39,7 +39,7 @@ import { propertyPoints } from "../../lib/property-points";
 import { usesPropertyTable } from "../../lib/property-table";
 import { canEditPropertyDetails, propertyEditForm } from "../../lib/property-edit";
 import { formatCount, formatMoney } from "../../lib/format";
-import { StatGrid, StatTile, Tag, dayLabel, type IconName } from "./LiveKit";
+import { StatGrid, StatTile, Tag, dayLabel, message, type IconName } from "./LiveKit";
 import { LiveWorkRow, NoticeRowView, isDone, noticeIcon } from "./LiveRows";
 import { mayHaveOlder, mergeNotices, noticeRow, noticeRows, oldestNoticeId, workItemFrom, type NoticeRow } from "../../lib/notice-details";
 import { ListSearchBox, SearchBox, useListSearch } from "./SearchPicker";
@@ -66,7 +66,6 @@ import { createOperationForms, inspectionReportFrom, issuesSummary, journeyForms
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { PhotoPicker, WorkPhotos } from "./Photos";
 import { LegalLinks } from "./LivePrivacy";
-import { readableError } from "../../lib/error-copy";
 import { pillBox, pillInk } from "./Pills";
 import { ownerPropertyStatus, type OwnerPropertyStatus } from "../../lib/owner-approvals";
 import { EnquiryUploadPicker, EnquiryUploadStatus, sendEnquiryFiles, type EnquiryFile } from "./EnquiryUploads";
@@ -74,7 +73,6 @@ import { repairLimitText, type FieldIssue } from "../../lib/journey-policy";
 // The map and its coastline (about 100 KB) load when the Portfolio card first shows.
 const ScotlandMap = lazyScreen(() => import("./ScotlandMap").then(module => module.ScotlandMap));
 
-export const message = (error: unknown) => readableError(error);
 const money = (n: unknown) => formatMoney(Number(n));
 const hoverLift = Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {};
 export async function liveApi(path: string, body?: Record<string, unknown>) {

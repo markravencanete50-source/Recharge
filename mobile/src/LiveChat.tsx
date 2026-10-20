@@ -15,7 +15,7 @@ import { SavedReplies } from "./SavedReplies";
 import { ClientEmailRow, ClientEmailThreadPane } from "./ClientEmailThread";
 import { clientEmailListSchema, clientEmailStatus, type ClientEmailThread } from "../../lib/client-email-policy";
 import { chatPeopleSchema, chatTime, conversationSchema, hasGuestInbox, messageTabs, presenceLabel, presenceOf, threadSchema, type ChatMessage, type ChatReaction, type Conversation, type MessagesTab } from "../../lib/workspace-chat-policy";
-import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, MentionPicker, MessageText, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, useChatUploads, useMembers } from "./ChatParts";
+import { Attachments, ConversationAvatar, MemberFaces, MembersSheet, MentionPicker, MessageText, PendingFiles, PersonAvatar, ReactionChips, ReactionPicker, roleName, useChatUploads, useMembers } from "./ChatParts";
 import { insertMention, mentionOptions, mentionQuery, mentionsIn, type MentionOption } from "../../lib/chat-mentions";
 import { MessageSafety } from "./ChatSafety";
 import { MicButton, VoiceBar, useVoiceNote } from "./VoiceNotes";
@@ -23,7 +23,6 @@ import { BLOCKED_LABEL, REMOVED_LABEL } from "../../lib/chat-moderation";
 import { inboxListSchema, isGuestEmail } from "../../lib/guest-inbox-policy";
 import { byLatest, clientStatus, emptyStatusMessage, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
-import { ROLE_LABEL } from "../../lib/admin-live";
 import { previewHasConversation } from "../../lib/view-as";
 import { clearConversationNotices } from "./Notifications";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
@@ -40,7 +39,6 @@ const LIST_EVERY = 15000, THREAD_EVERY = 3000, GUESTS_EVERY = 60000;
 type Tab = MessagesTab;
 const TAB_LABEL: Record<Tab, string> = { guests: "Guests", clients: "Clients", guestEmails: "Guest emails", clientEmails: "Client emails", team: "Team" };
 const tabOf = (c: Conversation): Tab => c.kind === "owner" ? "clients" : "team";
-const roleName = (role: string) => ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role;
 
 function useVisiblePoll(run: () => void, every: number, active: boolean) {
   const latest = useRef(run);
