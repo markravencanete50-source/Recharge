@@ -69,7 +69,7 @@ import { workDetails } from "../../lib/work-details";
 import { AccountsWork } from "./LiveAccountsWork";
 import { CelebrateProvider } from "./Celebrate";
 import { Anchor, AnchorRegistry, OnlySection, WorkFocusContext, dayLabel, type WorkFocus } from "./LiveKit";
-import { ToolHeader } from "./ToolPage";
+import { ToolHeader, ToolTitled } from "./ToolPage";
 import { LiveTraining } from "./LiveTraining";
 import { DEPARTMENT_BACK, toolPageFor, type ToolPageInfo } from "../../lib/tool-focus";
 import type { HomeToolTarget } from "../../lib/home-tools";
@@ -700,7 +700,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} guestEmailWaiting={guestEmailWaiting} openConversation={chatTarget?.id} focusReply={!!chatTarget?.reply}
         updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} onLeave={() => navigate("home")} />
-    : toolPage?.only === "section-training" ? <><ToolHeader p={p} back="Help" onBack={toolBack} title={toolPage.title} detail={toolPage.detail} /><LiveTraining palette={p} /></>
+    : toolPage?.only === "section-training" ? <><ToolHeader p={p} back="Help" onBack={toolBack} title={toolPage.title} detail={toolPage.detail} /><ToolTitled.Provider value={true}><LiveTraining palette={p} /></ToolTitled.Provider></>
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view, sub) => { setTab(next); if (view) setWorkView(view); setFocus(sub ? { sub, nonce: Date.now() } : null); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;

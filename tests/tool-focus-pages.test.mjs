@@ -134,7 +134,11 @@ test('the workspace opens tool pages: back to the department, the title and line
   assert.match(workspace, /setFocus\(tab === "work" \? \{ nonce: freshNonce\(\) \} : null\); setVisit\(v => v \+ 1\);/);
   // The owner's Portfolio parts and Help's Training.
   assert.match(workspace, /<LiveClientReports key=\{"portfolio:" \+ \(focus\?\.nonce \?\? ""\)\} palette=\{p\} tool=\{toolPage\} onBack=\{toolBack\} \/>/);
-  assert.match(workspace, /toolPage\?\.only === "section-training" \? <><ToolHeader p=\{p\} back="Help"/);
+  assert.match(workspace, /toolPage\?\.only === "section-training" \? <><ToolHeader p=\{p\} back="Help"[^\n]*<ToolTitled\.Provider value=\{true\}><LiveTraining palette=\{p\} \/><\/ToolTitled\.Provider>/);
+  // Training's own page has one heading: the tool header's.
+  const training = source('mobile/src/LiveTraining.tsx');
+  assert.match(training, /const titled = useToolTitled\(\) && !manage;/);
+  assert.match(training, /const training = titled \? <View style=\{\{ gap: space\.row \}\}>\{content\}<\/View> : <Section title="Training"/);
 });
 
 test('department screens honour the focus key: only the named section, no heading, figures or other buttons', () => {
