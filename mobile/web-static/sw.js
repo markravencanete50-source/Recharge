@@ -28,9 +28,11 @@ async function initialsIcon(initials, colour) {
 const seen = [];
 // What to show for a push (data, from lib/web-push.ts pushPayload) given the pop-up of the same conversation already on screen
 // (shown: its data, or null). Returns null for a message already shown. Pure, so tests/web-push-sw.test.mjs runs it as is.
-//  * A message (it has a thread): one pop-up per conversation. Its title is the conversation (for a guest "Jack (guest)" and the property, with
-//    "(3 messages)" when there are more), its body the latest messages one per line, newest last, at the message's own time.
-//    Reply and Mark as read below it.
+//  * A message (it has a thread): one pop-up per conversation, laid out as WhatsApp does. Its title is the sender ("Rebecca"),
+//    or, when several people wrote, the conversation with "(3 messages)"; its body starts with the conversation ("Guest ·
+//    Bornisketaig", a group's name; none for a one-to-one chat), then the latest messages one per line, newest last (with the
+//    sender's first name in front when several people wrote), at the message's own time. A photo the newest message carries is
+//    the pop-up's picture (an hour's signed link). Reply and Mark as read below it.
 //  * Anything else: its own title and words, replacing the last general notice.
 function noticeFor(data, shown, now) {
   const url = safeUrl(data.url);
@@ -45,8 +47,10 @@ function noticeFor(data, shown, now) {
   if (!thread) return { title: data.title || "Recharge", options: { ...options, body: data.body || "There is an update in Recharge.", data: { url, tag, id } } };
   const earlier = shown && shown.tag === tag && Array.isArray(shown.lines) ? shown.lines.filter(l => l && typeof l.text === "string") : [];
   if (id && earlier.some(l => l.id === id)) return null;
-  const text = oneLine(data.body) || "New message";
-  let lines = [...earlier, { id, text, time }].sort((a, b) => (a.time || 0) - (b.time || 0));
+  // The message itself (`line`); an older payload has only its body.
+  const text = oneLine(typeof data.line === "string" ? data.line : data.body).slice(0, 300) || "New message";
+  const who = oneLine(data.who).slice(0, 120), context = oneLine(data.context).slice(0, 120);
+  let lines = [...earlier, { id, text, time, who }].sort((a, b) => (a.time || 0) - (b.time || 0));
   let total = (Number(shown && shown.total) || earlier.length) + 1;
   // A team chat says how many messages are unread there: messages read in the app since the last pop-up drop out.
   const count = Number(data.count);
@@ -55,11 +59,17 @@ function noticeFor(data, shown, now) {
   total = Math.max(total, lines.length);
   const conversation = typeof data.conversation === "string" && CONVERSATION.test(data.conversation) ? data.conversation : null;
   const guest = typeof data.guest === "string" && CONVERSATION.test(data.guest) ? data.guest : null;
+  // One sender: their name on top. Several: the conversation and how many, each line with its sender's first name.
+  const senders = new Set(lines.map(l => l.who || "")), single = senders.size === 1 && !senders.has("");
+  const title = single ? lines[0].who : total > 1 ? `${thread} (${total > 99 ? "99+" : total} messages)` : thread;
+  const said = lines.map(l => !single && senders.size > 1 && l.who ? `${l.who.split(" ")[0]}: ${l.text}` : l.text);
+  const image = typeof data.image === "string" && data.image.startsWith("https://") ? data.image : undefined;
   return {
-    title: total > 1 ? `${thread} (${total > 99 ? "99+" : total} messages)` : thread,
+    title,
     options: {
-      ...options, body: lines.map(l => l.text).join("\n"), timestamp: Math.max(...lines.map(l => l.time || 0), time),
-      data: { url, tag, id, thread, lines, total, conversation, guest },
+      ...options, body: [context, ...said].filter(Boolean).join("\n"), timestamp: Math.max(...lines.map(l => l.time || 0), time),
+      ...(image ? { image } : {}),
+      data: { url, tag, id, thread, context, lines, total, conversation, guest },
       actions: [{ action: "reply", title: "Reply" }, { action: "read", title: "Mark as read" }],
     },
   };
@@ -79,7 +89,7 @@ self.addEventListener("push", event => {
     const notice = again ? null : noticeFor(data, last && last.data, Date.now());
     // The same message twice: the pop-up on screen stays as it is, without a second alert.
     if (!notice) return last ? self.registration.showNotification(last.title, {
-      body: last.body, tag: last.tag, data: last.data, icon: last.icon, badge: last.badge, timestamp: last.timestamp, actions: last.actions,
+      body: last.body, tag: last.tag, data: last.data, icon: last.icon, badge: last.badge, timestamp: last.timestamp, actions: last.actions, image: last.image,
       requireInteraction: last.requireInteraction, renotify: false, silent: true,
     }).then(() => false) : false;
     // On computers the pop-up stays on screen until it is clicked or closed (Lee, 14 October: make it clearer).

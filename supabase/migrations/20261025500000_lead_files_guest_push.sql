@@ -11,7 +11,9 @@
 --    (private.workspace_activity_details.guest_thread_id, set by private.workspace_guest_message_notices) and
 --    private.integration_push_details hands it on as 'guestThreadId', so a tap and Reply open that conversation, Mark as read
 --    marks it read on the device, and its pop-ups group per conversation (lib/push-copy.ts, mobile/web-static/sw.js).
---    Who is told, and when, is unchanged.
+--    Who is told, and when, is unchanged. A team chat message's pop-up also gets what it carries ('attachmentKind': image,
+--    video or audio) and its first photo's private path ('attachmentPath'), which the server signs for an hour for the
+--    pop-up's picture (lib/web-push.ts); the path never reaches a device.
 -- 3. Lee: "if it's already done with the agreement we cannot delete it, make sure we always have the way to delete it."
 --    Admins and super admins can now delete an enquiry and its property at ANY onboarding stage before it goes live
 --    (enquiry, estimate, reviewing, agreement, form, invoice, inspection_to_book, inspection_booked, inspection_complete,
@@ -70,7 +72,11 @@ declare
   ['private.integration_push_details(bigint)',
    $q$'senderColour',case when d.message_id is not null and rp.role<>'client' then ap.avatar_preset end$q$,
    $q$'senderColour',case when d.message_id is not null and rp.role<>'client' then ap.avatar_preset end,
-  'guestThreadId',case when a.event_type='guest.message' then d.guest_thread_id end/* guest push details: 20261025500000 */$q$,
+  'guestThreadId',case when a.event_type='guest.message' then d.guest_thread_id end,
+  'attachmentKind',case when d.message_id is not null then (select case when count(*)=0 then null when bool_or(x.kind='audio') then 'audio'
+   when bool_or(x.kind='image') then 'image' else 'video' end from private.chat_attachments x where x.message_id=d.message_id) end,
+  'attachmentPath',case when d.message_id is not null then (select x.path from private.chat_attachments x where x.message_id=d.message_id and x.kind='image'
+   order by x.position,x.created_at limit 1) end/* guest push details: 20261025500000 */$q$,
    $q$/* guest push details: 20261025500000 */$q$],
   -- 3. Any onboarding stage before live. The request may carry confirm.
   ['private.workspace_client_enquiry_delete(jsonb)',

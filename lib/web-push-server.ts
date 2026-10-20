@@ -58,4 +58,17 @@ function photoSigner() {
     return signed.error ? null : signed.data?.signedUrl ?? null;
   };
 }
-export const runWebPush = () => dispatchWebPush(integrationSettings(), securityRpc, photoSigner());
+// The first photo a message carries, the same way: an hour's link to the private chat-files bucket, only for a path the backend
+// gave (a conversation's own folder and an image), never a link anyone else could keep using.
+const CHAT_FILES_BUCKET = 'chat-files'; // lib/chat-media-server.ts CHAT_BUCKET
+function attachmentSigner() {
+  const config = authSecurityConfiguration();
+  if (!config) return undefined;
+  const files = createClient(config.url, config.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }).storage.from(CHAT_FILES_BUCKET);
+  return async (path: string) => {
+    if (!/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(jpg|jpeg|png|webp|gif)$/.test(path)) return null;
+    const signed = await files.createSignedUrl(path, PHOTO_SECONDS);
+    return signed.error ? null : signed.data?.signedUrl ?? null;
+  };
+}
+export const runWebPush = () => dispatchWebPush(integrationSettings(), securityRpc, photoSigner(), attachmentSigner());

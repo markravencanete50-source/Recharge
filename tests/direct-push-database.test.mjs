@@ -83,6 +83,16 @@ test('team chat carries who wrote, the message and the group name; an owner sees
   // With the conversation, its kind, the unread count and the sender's colour for the picture (migration 20261021400000).
   assert.deepEqual(await popup(ALEX, 'chat.message'), { recipient: 'Alex Coghill', who: 'Mark Raven', preview: 'Can you check the linen?', context: 'Deep clean Friday', replied: false, actorName: 'Mark Raven',
     conversationId: group, conversationKind: 'group', unreadCount: 1, senderColour: 'ocean' });
+  // A photo it carries (20261025500000): its kind, and the first photo's private path for the server to sign (never a device).
+  await asDatabase();
+  const [last] = (await db.query('select id from private.chat_messages where conversation_id=$1 order by created_at desc limit 1', [group])).rows;
+  for (const [i, kind, mime] of [[1, 'image', 'image/jpeg'], [0, 'image', 'image/png'], [2, 'video', 'video/mp4']])
+    await db.query('insert into private.chat_attachments(conversation_id,message_id,uploader_id,path,kind,mime,bytes,position) values($1,$2,$3,$4,$5,$6,100,$7)',
+      [group, last.id, users[MARK], `${group}/${crypto.randomUUID()}.${mime.split('/')[1]}`, kind, mime, i]);
+  const withPhoto = await popup(ALEX, 'chat.message');
+  assert.equal(withPhoto.attachmentKind, 'image');
+  assert.match(withPhoto.attachmentPath, new RegExp(`^${group}/[0-9a-f-]{36}\\.png$`), 'the first photo by its place');
+  await as(MARK);
   await as(OWNER);
   const owner = (await rpc('workspace_chat_action', [{ action: 'startOwner' }])).id;
   await rpc('workspace_chat_action', [{ action: 'send', requestId: crypto.randomUUID(), conversationId: owner, body: 'Is the boiler fixed?' }]);

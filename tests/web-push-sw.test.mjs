@@ -31,6 +31,37 @@ function phone({ windows = [], caches } = {}) {
 }
 const guest = (id, body, time) => ({ title: 'Jack (guest) · 2 Panmure', body, url: '/workspace/live?section=inbox', tag: 'guest-jack-2-panmure', initials: 'J', colour: '#3B5866', id, time, thread: 'Jack (guest) · 2 Panmure' });
 
+// Lee: as WhatsApp lays it out. The sender on top; the conversation on the first line, then the messages.
+const rebecca = (id, line, time, extra = {}) => ({ title: 'Rebecca', body: 'Guest · Bornisketaig\n' + line, url: '/workspace/live?section=inbox', tag: 'guest-rebecca', id, time,
+  thread: 'Guest · Bornisketaig', who: 'Rebecca', context: 'Guest · Bornisketaig', line, ...extra });
+test('WhatsApp layout: the sender on top, the conversation first, then each message; a group with several senders says so', () => {
+  const { context } = phone();
+  let n = context.noticeFor(rebecca('r1', 'Is there a hairdryer?', 1), null, 0);
+  assert.equal(n.title, 'Rebecca');
+  assert.equal(n.options.body, 'Guest · Bornisketaig\nIs there a hairdryer?');
+  n = context.noticeFor(rebecca('r2', 'And towels?', 2), n.options.data, 0);
+  assert.equal(n.title, 'Rebecca', 'one sender: still her name');
+  assert.equal(n.options.body, 'Guest · Bornisketaig\nIs there a hairdryer?\nAnd towels?');
+  // A group where several people wrote: the group and how many, each line with its sender's first name.
+  const group = (id, who, line, time) => ({ title: who, body: 'Recharge Stays | 3 3, 18 Byres Rd\n' + line, url: '/workspace/live?section=inbox', tag: 'chat-g', id, time,
+    thread: 'Recharge Stays | 3 3, 18 Byres Rd', who, context: 'Recharge Stays | 3 3, 18 Byres Rd', line });
+  let g = context.noticeFor(group('g1', 'John Pagueran', 'Keys are in the box', 1), null, 0);
+  assert.equal(g.title, 'John Pagueran');
+  assert.equal(g.options.body, 'Recharge Stays | 3 3, 18 Byres Rd\nKeys are in the box');
+  g = context.noticeFor(group('g2', 'Erika Smith', 'Thanks John', 2), g.options.data, 0);
+  g = context.noticeFor(group('g3', 'John Pagueran', 'No problem', 3), g.options.data, 0);
+  assert.equal(g.title, 'Recharge Stays | 3 3, 18 Byres Rd (3 messages)');
+  assert.equal(g.options.body, 'Recharge Stays | 3 3, 18 Byres Rd\nJohn: Keys are in the box\nErika: Thanks John\nJohn: No problem');
+  // A photo: the signed link is the pop-up's picture; anything but https is ignored. Reply, Mark as read, the badge and the tag stay.
+  const photo = context.noticeFor(rebecca('r3', 'The kettle', 3, { image: 'https://project.supabase.co/storage/v1/object/sign/chat-files/x.jpg?token=a' }), null, 0);
+  assert.equal(photo.options.image, 'https://project.supabase.co/storage/v1/object/sign/chat-files/x.jpg?token=a');
+  assert.equal(context.noticeFor(rebecca('r4', 'x', 4, { image: 'http://x.example/a.jpg' }), null, 0).options.image, undefined);
+  assert.deepEqual(plain(photo.options.actions.map(a => a.action)), ['reply', 'read']);
+  assert.equal(photo.options.badge, '/workspace/badge-96.png');assert.equal(photo.options.tag, 'guest-rebecca');
+  // An older payload (no line) still reads its body.
+  assert.equal(context.noticeFor({ ...rebecca('r5', 'x', 5), line: undefined, who: undefined, context: undefined, body: 'Old words' }, null, 0).options.body, 'Old words');
+});
+
 test('one message: the conversation on top, the message below, at the time it was written, with Reply and Mark as read', () => {
   const { context } = phone();
   const n = context.noticeFor(guest('n1', 'Is there a hairdryer?', 1_000), null, 9_999);
