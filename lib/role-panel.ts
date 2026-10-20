@@ -193,19 +193,31 @@ export function rolePanel(role: string, modules: readonly string[], layout?: Men
   const groups: PanelGroup[] = spec.groups.map(([key, title, specs]) => ({
     key, title, links: specs.flatMap(resolve).filter(link => !used.has(link.key) && !!used.add(link.key)),
   }));
-  // A section left holding only a team calendar is not shown for this role (accounts get no Maintenance section for
-  // its calendar alone); a role left with no calendar link gets the plain Calendar in My Recharge instead.
-  const isCalendar = (l: PanelLink) => l.key.startsWith('tool:calendar-');
-  for (const g of groups.slice(1)) if (g.links.length && g.links.every(isCalendar)) g.links = [];
-  if (views.includes('calendar') && groups[0] && !groups.some(g => g.links.some(isCalendar))) {
-    const calendar = page('calendar');
-    if (calendar) groups[0].links.push(calendar);
-  }
   // Anything the role has that the layout does not place yet still gets a place, under More. (Its key is not the
   // old "more", so an order saved for the old More section cannot pull links out of their sections into it.)
   const rest = [...views.map(v => area(v)), ...tools.map(t => fromTool(t))].filter((l): l is PanelLink => !!l && !used.has(l.key) && !!used.add(l.key));
   if (rest.length) groups.push({ key: UNPLACED, title: 'More', links: rest });
-  return applyMenuLayout({ title: spec.title, tagline: spec.tagline, icon: spec.icon, groups: groups.filter(g => g.links.length), ...(views[0] ? { work: views[0] } : {}) }, layout, keepEmpty);
+  const meta = { title: spec.title, tagline: spec.tagline, icon: spec.icon, ...(views[0] ? { work: views[0] } : {}) };
+  // A section left holding only a team calendar is not shown for this role (accounts get no Maintenance section for
+  // its calendar alone); a role left with no calendar link gets the plain Calendar in My Recharge instead. This is
+  // judged on the menu as arranged, after the saved order: an order that moves Licensing and Compliance Certs out of
+  // Safety & Compliance leaves that section only its calendar, so it goes too. First see where the saved order puts
+  // every link, then drop the calendars that end up alone and arrange again (the plain Calendar then takes the place
+  // the saved order gives it, if any).
+  // A calendar alone in its default section stays out whatever the order (the saved order only arranges, never adds).
+  const isCalendar = (l: PanelLink) => l.key.startsWith('tool:calendar-');
+  const firstKey = groups[0]?.key;
+  const aloneIn = (gs: readonly PanelGroup[]) => gs.filter(g => g.key !== firstKey && g.links.length && g.links.every(isCalendar)).flatMap(g => g.links.map(l => l.key));
+  const alone = new Set(aloneIn(groups));
+  const without = (gs: readonly PanelGroup[]) => gs.map(g => ({ ...g, links: g.links.filter(l => !alone.has(l.key)) }));
+  const arranged = applyMenuLayout({ ...meta, groups: without(groups).filter(g => g.links.length) }, layout, true);
+  for (const k of aloneIn(arranged.groups)) alone.add(k);
+  const kept: PanelGroup[] = without(groups);
+  if (views.includes('calendar') && kept[0] && !kept.some(g => g.links.some(isCalendar))) {
+    const calendar = page('calendar');
+    if (calendar) kept[0].links.push(calendar);
+  }
+  return applyMenuLayout({ ...meta, groups: kept.filter(g => g.links.length) }, layout, keepEmpty);
 }
 export const UNPLACED = 'unplaced';
 // The desktop left panel (Lee, 15 October 2026): Messages is not listed, because the Messages button
