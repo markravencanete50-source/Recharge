@@ -77,16 +77,17 @@ export const ROTA_SPAN = { early: [8, 16], late: [15, 23], both: [8, 23] } as co
 export const ukHours = (iso: string) => { const [h, m] = londonClock(iso).split(':').map(Number); return h + m / 60; };
 
 type Sheet = Timesheet;
-export type DayTotal = { minutes: number; people: number; shifts: number; missed: number; waiting: number; open: number };
+// stale: shifts with no clock out after 16 hours (they count only up to the limit); they need attention like missed days.
+export type DayTotal = { minutes: number; people: number; shifts: number; missed: number; waiting: number; open: number; stale: number };
 // Every day of a timesheet: hours, who worked, shifts, planned days with nothing clocked (once
 // passed), changes waiting for a super admin, and shifts still running.
 export function dayTotals(sheet: Sheet, today: string): Map<string, DayTotal> {
   const days = new Map<string, DayTotal>();
-  const at = (day: string) => days.get(day) ?? (days.set(day, { minutes: 0, people: 0, shifts: 0, missed: 0, waiting: 0, open: 0 }), days.get(day)!);
+  const at = (day: string) => days.get(day) ?? (days.set(day, { minutes: 0, people: 0, shifts: 0, missed: 0, waiting: 0, open: 0, stale: 0 }), days.get(day)!);
   for (const person of sheet.people) for (const row of timesheetRows(person, today)) {
     const t = at(row.day);
     t.minutes += row.minutes; t.shifts += row.shifts.length; if (row.shifts.length) t.people += 1;
-    if (row.missed) t.missed += 1; if (row.open) t.open += 1;
+    if (row.missed) t.missed += 1; if (row.open) t.open += 1; if (row.stale) t.stale += 1;
   }
   for (const change of sheet.pending) at(ukDay(change.clockedInAt)).waiting += 1;
   return days;

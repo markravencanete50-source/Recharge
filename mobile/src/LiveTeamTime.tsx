@@ -23,6 +23,7 @@ import {
   FREQUENCY_LABEL, ROTA_HOURS, ROTA_LABEL, dayLabel, londonClock, londonInstant, minutesLabel, mondayOf, rotaCell, shiftWeek, timesheetCsv, timesheetRows,
   timesheetSummary, validClock, weekOf, type TimesheetRow,
 } from "../../lib/team-time";
+import { COUNTED_UNTIL_CORRECTED, NOT_CLOCKED_OUT, shiftEnds } from "../../lib/shift-hours";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { actualsByPerson, rotaActuals } from "../../lib/rota-actuals";
 
@@ -187,7 +188,7 @@ export function RotaTab({ p, account }: { p: Palette; account: WorkspaceAccount 
             return <View style={{ gap: 2, alignItems: "flex-start" }}>
               {cell && <Tag label={ROTA_LABEL[cell.shift]} tone={SHIFT_TONE[cell.shift]} p={p} />}
               {!!cell?.note && <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{cell.note}</Text>}
-              {actual.map(a => <Text key={a.id} numberOfLines={2} style={[ui.small, { color: a.state === "closed" ? p.text : a.state === "open" ? p.waiting : p.danger, fontWeight: a.state === "closed" ? "400" : "700", fontVariant: ["tabular-nums"] }]}>{a.text}</Text>)}
+              {actual.map(a => <Text key={a.id} numberOfLines={2} style={[ui.small, { color: a.state === "closed" ? p.text : a.state === "open" ? p.success : p.waiting, fontWeight: a.state === "closed" ? "400" : "700", fontVariant: ["tabular-nums"] }]}>{a.text}</Text>)}
             </View>;
           } })),
         ]} />}
@@ -309,19 +310,20 @@ export function PersonDays({ p, person, today, pending = [], onShift }: { p: Pal
   const waiting = new Set(pending.map(c => c.shiftId));
   type Shift = TimesheetPerson["days"][number]["shifts"][number];
   const rows = timesheetRows(person, today).flatMap((d): { key: string; d: TimesheetRow; s: Shift | null; first: boolean }[] =>
-    d.shifts.length ? d.shifts.map((s, i) => ({ key: s.id, d, s, first: i === 0 })) : [{ key: d.day, d, s: null, first: true }]);
+    d.shifts.length ? d.shifts.map((s, i) => ({ key: d.day + ":" + s.id, d, s, first: i === 0 })) : [{ key: d.day, d, s: null, first: true }]);
   return (
     <View style={{ gap: 8 }}>
       <SheetTable p={p} rows={rows} keyOf={r => r.key} onRow={onShift ? r => { if (r.s) onShift(r.s, r.d.day); } : undefined} empty="Nothing clocked or planned in this period."
         columns={[
           { label: "Day", width: 100, cell: r => cellText(p, r.first ? dayLabel(r.d.day) : "", true) },
           { label: "Rota", width: 90, cell: r => r.first && r.d.planned ? <Tag label={ROTA_LABEL[r.d.planned.shift]} tone={SHIFT_TONE[r.d.planned.shift]} p={p} /> : cellText(p, null) },
-          { label: "In", width: 60, cell: r => cellText(p, r.s ? londonClock(r.s.clockedInAt) : null) },
-          { label: "Out", width: 60, cell: r => cellText(p, r.s ? (r.s.clockedOutAt ? londonClock(r.s.clockedOutAt) : "On shift") : null) },
+          { label: "In", width: 90, cell: r => cellText(p, r.s ? shiftEnds(r.s).in : null) },
+          { label: "Out", width: 130, cell: r => cellText(p, r.s ? shiftEnds(r.s).out : null) },
           { label: "Hours", width: 80, cell: r => cellText(p, r.s ? minutesLabel(r.s.minutes) : null) },
-          { label: "", width: 140, cell: r => r.s && waiting.has(r.s.id) ? <Tag label="Change waiting" tone="wait" p={p} /> : r.d.missed ? <Tag label="Not clocked" tone="bad" p={p} /> : r.s?.edited ? <Tag label="Corrected" tone="plain" p={p} /> : r.first && r.d.unplanned ? <Tag label="Not on rota" tone="plain" p={p} /> : null },
+          { label: "", width: 140, cell: r => r.s && waiting.has(r.s.id) ? <Tag label="Change waiting" tone="wait" p={p} /> : r.d.missed ? <Tag label="Not clocked" tone="bad" p={p} /> : r.s?.stale ? <Tag label={NOT_CLOCKED_OUT} tone="wait" p={p} /> : r.s?.edited ? <Tag label="Corrected" tone="plain" p={p} /> : r.first && r.d.unplanned ? <Tag label="Not on rota" tone="plain" p={p} /> : null },
         ]} />
       <Text style={[ui.small, { color: p.text, fontWeight: "700" }]}>Total {minutesLabel(person.totalMinutes)}</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Each day counts only its own hours: a shift past midnight shows on both days.{rows.some(r => r.s?.stale) ? ` ${NOT_CLOCKED_OUT}: ${COUNTED_UNTIL_CORRECTED.toLowerCase()}.` : ""}</Text>
     </View>
   );
 }

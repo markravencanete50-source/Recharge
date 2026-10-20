@@ -47,7 +47,7 @@ test('timesheet days: missed, not on the rota, still on shift, corrected', () =>
     ['2026-10-08', false, false, false, false],
     ['2026-10-09', false, false, false, false],
   ], 'today is not missed yet, and a day off is never missed');
-  assert.deepEqual(timesheetSummary(person, '2026-10-09'), { minutes: 600, daysWorked: 2, plannedDays: 3, missed: 1 });
+  assert.deepEqual(timesheetSummary(person, '2026-10-09'), { minutes: 600, daysWorked: 2, plannedDays: 3, missed: 1, notClockedOut: 0 });
 
   const csv = timesheetCsv({ from: '2026-10-05', to: '2026-10-11', canEdit: true, people: [person] });
   const lines = csv.split('\r\n');

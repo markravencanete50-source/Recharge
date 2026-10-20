@@ -32,6 +32,7 @@ import {
   productivitySchema, shiftChangesSchema, timesheetSchema,
   type Productivity, type ProductivityPerson, type ShiftChange, type ShiftChanges, type Timesheet, type TimesheetPerson,
 } from "../../lib/workspace-teams-policy";
+import { COUNTED_UNTIL_CORRECTED, NOT_CLOCKED_OUT, dayClock, dayHours, shiftEnds, shiftSpan, ukDayWindow } from "../../lib/shift-hours";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 
 // The Productivity Tool: every clock in and clock out, with hours that add up by week and by month.
@@ -70,6 +71,8 @@ export function LiveProductivity({ palette: p, account, initial = "days" }: { pa
   const goYear = (next: number) => { setData(null); setYear(next); setMonth(`${next}-${month.slice(5)}`); };
   const current = year === Number(today.slice(0, 4));
   const onShift = data?.people.filter(x => x.onShift) ?? [];
+  // Open for more than 16 hours: not on shift any more, they did not clock out (lib/shift-hours.ts).
+  const notClockedOut = data?.people.filter(x => x.notClockedOutSince) ?? [];
   const pending = data?.pending ?? 0;
   const yearMinutes = data?.people.reduce((sum, x) => sum + x.minutes, 0) ?? 0;
   const busiest = data ? monthsOf(year).reduce((best, m) => teamMonth(data, m) > teamMonth(data, best) ? m : best, `${year}-01`) : `${year}-01`;
@@ -89,6 +92,8 @@ export function LiveProductivity({ palette: p, account, initial = "days" }: { pa
             <StatTile key="busiest" p={p} icon="trending-up" tone="clients" label="Busiest month" value={data ? monthLabel(busiest, "long") : "–"} detail={data ? hoursShort(teamMonth(data, busiest)) : undefined} />,
           ]}
         <StatTile p={p} icon="activity" tone="cleans" label="On shift now" value={onShift.length} detail={onShift.length ? onShift.slice(0, 3).map(x => x.fullName.split(" ")[0]).join(", ") + (onShift.length > 3 ? "…" : "") : "Nobody is clocked in"} />
+        {notClockedOut.length > 0 && <StatTile p={p} icon="alert-triangle" tone="ready" label={NOT_CLOCKED_OUT} value={notClockedOut.length} attention
+          detail={`${notClockedOut.slice(0, 3).map(x => x.fullName.split(" ")[0]).join(", ")}${notClockedOut.length > 3 ? "…" : ""}. ${COUNTED_UNTIL_CORRECTED}.`} />}
         <StatTile p={p} icon="shield" tone="accounts" label="Waiting approval" value={pending} attention={pending > 0}
           detail={pending ? data?.canApprove ? "Changes for you to decide" : "With a super admin" : "No changes waiting"} />
       </StatGrid>
@@ -218,7 +223,7 @@ const personCell = (p: Palette, x: ProductivityPerson) => (
     <Initials p={p} name={x.fullName || "Team member"} size={30} />
     <View style={{ flex: 1, minWidth: 0 }}>
       <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "700", color: p.text }}>{(x.fullName || "Team member") + (x.active ? "" : " (left)")}</Text>
-      <Text numberOfLines={1} style={{ fontSize: 11, color: x.onShift ? p.success : p.muted, fontWeight: x.onShift ? "700" : "400" }}>{x.onShift ? "● On shift now" : x.department ? DEPARTMENT_LABEL[x.department] : ROLE_LABEL[x.role as keyof typeof ROLE_LABEL] ?? x.role}</Text>
+      <Text numberOfLines={1} style={{ fontSize: 11, color: x.notClockedOutSince ? p.waiting : x.onShift ? p.success : p.muted, fontWeight: x.onShift || x.notClockedOutSince ? "700" : "400" }}>{x.notClockedOutSince ? `${NOT_CLOCKED_OUT} since ${dayClock(x.notClockedOutSince)}` : x.onShift ? "● On shift now" : x.department ? DEPARTMENT_LABEL[x.department] : ROLE_LABEL[x.role as keyof typeof ROLE_LABEL] ?? x.role}</Text>
     </View>
   </View>
 );
@@ -289,6 +294,7 @@ function PersonSheet({ p, person, data, today, onClose }: { p: Palette; person: 
           ))}
         </View>
         {person.onShift && <Tag label="On shift now" tone="good" p={p} />}
+        {!!person.notClockedOutSince && <Notice text={`${NOT_CLOCKED_OUT} since ${dayClock(person.notClockedOutSince)}. ${COUNTED_UNTIL_CORRECTED}.`} p={p} />}
         <HoursColumns p={p} sessionKey={"person:" + person.userId} bars={monthsOf(year).map(m => ({ key: m, label: monthLabel(m).slice(0, 3), minutes: monthMinutes(person, m), now: m === today.slice(0, 7) }))} />
         {!!best && <Text style={[ui.small, { color: p.muted }]}>Busiest month: {monthLabel(best.month, "long")}, {minutesLabel(best.minutes)}.</Text>}
         <Text style={[ui.label, { color: p.muted }]}>Latest weeks</Text>
@@ -319,7 +325,9 @@ function ClockLog({ p, account, today, onChanged }: { p: Palette; account: Works
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) { setSheet(null); void load(); } }); return () => { active = false; }; }, [load]);
   const rows = useMemo<LogRow[]>(() => {
     if (!sheet) return [];
-    const out: LogRow[] = sheet.people.flatMap(person => person.days.flatMap(d => d.shifts.map(shift => ({ key: shift.id, person, day: d.day, shift, change: sheet.pending.find(c => c.shiftId === shift.id) }))));
+    // A shift that crosses midnight is on each day it touches: listed once, on the day it started.
+    const seen = new Set<string>();
+    const out: LogRow[] = sheet.people.flatMap(person => person.days.flatMap(d => d.shifts.filter(shift => !seen.has(shift.id) && !!seen.add(shift.id)).map(shift => ({ key: shift.id, person, day: d.day, shift, change: sheet.pending.find(c => c.shiftId === shift.id) }))));
     // Forgotten shifts asked for and still waiting, shown where they would go.
     for (const change of sheet.pending.filter(c => c.kind === "add")) {
       const person = sheet.people.find(x => x.userId === change.userId);
@@ -341,9 +349,9 @@ function ClockLog({ p, account, today, onChanged }: { p: Palette; account: Works
             { label: "Date", width: 130, cell: r => cellText(p, dayWithYear(r.day), true) },
             { label: "Person", width: 150, cell: r => cellText(p, r.person.fullName || "Team member") },
             { label: "Department", width: 120, cell: r => cellText(p, DEPARTMENT_LABEL[(r.shift ?? r.change)!.department]) },
-            { label: "Clock in", width: 80, cell: r => cellText(p, londonClock((r.shift ?? r.change)!.clockedInAt)) },
-            { label: "Clock out", width: 90, cell: r => { const out = (r.shift ?? r.change)!.clockedOutAt; return out ? cellText(p, londonClock(out)) : <Tag label="On shift" tone="good" p={p} />; } },
-            { label: "Hours", width: 80, cell: r => cellText(p, r.shift ? minutesLabel(r.shift.minutes) : "–", true) },
+            { label: "Clock in", width: 96, cell: r => cellText(p, shiftEnds((r.shift ?? r.change)!).in) },
+            { label: "Clock out", width: 150, cell: r => { const ends = shiftEnds((r.shift ?? r.change)!); return ends.state === "closed" ? cellText(p, ends.out) : <Tag label={ends.out} tone={ends.state === "on_shift" ? "good" : "wait"} p={p} />; } },
+            { label: "Hours", width: 80, cell: r => cellText(p, r.shift ? minutesLabel(r.shift.shiftMinutes ?? r.shift.minutes) : "–", true) },
             { label: "", width: 150, cell: r => r.change ? <Tag label={r.change.kind === "add" ? "Added · waiting" : "Change waiting"} tone="wait" p={p} /> : r.shift?.edited ? <Tag label="Corrected" tone="plain" p={p} />
               : <View style={[ui.row, { gap: 6 }]}><Feather name="lock" size={12} color={p.muted} /><Text style={{ fontSize: 12, color: p.muted }}>As clocked</Text></View> },
           ]} />
@@ -583,7 +591,7 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
   const people = dayPeople(sheet, day, today);
   const figures: [string, string][] = [
     ["Hours", total?.minutes ? minutesLabel(total.minutes) : "0h"], ["People", String(total?.people ?? 0)],
-    ["Shifts", String(total?.shifts ?? 0)], ["Not clocked", String(total?.missed ?? 0)],
+    ["Shifts", String(total?.shifts ?? 0)], ["Not clocked", String((total?.missed ?? 0) + (total?.stale ?? 0))],
   ];
   const ticks = [6, 9, 12, 15, 18, 21, 24];
   const [hoverShift, setHoverShift] = useState<string | null>(null), [trackWidth, setTrackWidth] = useState(0);
@@ -617,7 +625,7 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
           </View>
           {people.map(({ person, row, waiting }) => {
             const shifts = row?.shifts ?? [], planned = row?.planned && row.planned.shift !== "off" ? ROTA_SPAN[row.planned.shift] : null;
-            const status = waiting.length ? ["Change waiting", "wait"] as const : row?.missed ? ["Not clocked", "bad"] as const : row?.open ? ["On shift", "good"] as const
+            const status = waiting.length ? ["Change waiting", "wait"] as const : row?.missed ? ["Not clocked", "bad"] as const : row?.stale ? [NOT_CLOCKED_OUT, "wait"] as const : row?.open ? ["On shift", "good"] as const
               : row?.edited ? ["Corrected", "plain"] as const : null;
             const name = (
               <View style={[ui.row, { gap: 10, width: wide ? 176 : undefined, flex: wide ? undefined : 1, minWidth: 0 }]}>
@@ -633,6 +641,7 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
               <View style={{ width: wide ? 128 : undefined, alignItems: "flex-end", gap: 4 }}>
                 <Text style={{ color: p.text, fontSize: 14, fontWeight: "800", fontVariant: ["tabular-nums"] }}>{row?.minutes ? minutesLabel(row.minutes) : "–"}</Text>
                 {status && <Tag label={status[0]} tone={status[1]} p={p} />}
+                {row?.stale && <Text style={{ color: p.muted, fontSize: 11, textAlign: "right" }}>{COUNTED_UNTIL_CORRECTED}</Text>}
               </View>
             );
             const tipShift = shifts.find(s => s.id === hoverShift);
@@ -645,24 +654,27 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
                   <View key={c.id} style={{ position: "absolute", left: `${along(from)}%`, width: `${Math.max(1, along(to) - along(from))}%`, top: 3, bottom: 3, borderRadius: 7, borderWidth: 1.5, borderColor: p.waiting }} />); })}
                 {shifts.map(s => {
                   // The bar runs from clock-in to clock-out (pauses are marked on it, not cut out of it).
-                  const length = (iso: string | null) => ((iso ? Date.parse(iso) : Date.now()) - Date.parse(s.clockedInAt)) / 3600000;
-                  const from = ukHours(s.clockedInAt), to = from + length(s.clockedOutAt), w = Math.max(1.2, along(to) - along(from));
-                  const at = (iso: string) => w ? Math.min(100, Math.max(0, (along(from + length(iso)) - along(from)) / w * 100)) : 0;
+                  // This day's part of the shift only: one that crosses midnight, or is left open, is clipped to the day.
+                  const dayStart = ukDayWindow(day).from, hourOf = (iso: string) => (Date.parse(iso) - dayStart) / 3600000;
+                  const { from, to } = dayHours(s, day), w = Math.max(1.2, along(to) - along(from));
+                  const at = (iso: string) => w ? Math.min(100, Math.max(0, (along(hourOf(iso)) - along(from)) / w * 100)) : 0;
                   return (
                     <Animated.View key={s.id} {...shiftHover(s.id)} style={{ position: "absolute", left: `${along(from)}%`, top: 8, bottom: 8, borderRadius: 6, overflow: "hidden", width: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${w}%`] }),
-                      backgroundColor: s.clockedOutAt ? p.primary : p.success, ...web({ boxShadow: "0 4px 10px -6px rgba(21,45,40,.55)" }) }}>
+                      backgroundColor: s.clockedOutAt ? p.primary : s.stale ? p.waiting : p.success, ...web({ boxShadow: "0 4px 10px -6px rgba(21,45,40,.55)" }) }}>
                       {!!s.overtimeFrom && <View accessibilityLabel={`Overtime from ${londonClock(s.overtimeFrom)}`} style={{ position: "absolute", left: `${at(s.overtimeFrom)}%`, right: 0, top: 0, bottom: 0, backgroundColor: p.waiting, opacity: 0.85 }} />}
                       {s.pauses.map(x => <View key={x.startedAt} accessibilityLabel={`${PAUSE_LABEL[x.kind]} ${londonClock(x.startedAt)}`} style={{ position: "absolute", left: `${at(x.startedAt)}%`, width: `${Math.max(1, at(x.endedAt ?? s.clockedOutAt ?? new Date().toISOString()) - at(x.startedAt))}%`, top: 0, bottom: 0, backgroundColor: x.kind === "emergency" ? p.danger : p.surface, opacity: x.kind === "emergency" ? 0.75 : 0.6 }} />)}
-                      {w > 14 && <Text numberOfLines={1} style={{ color: p.onPrimary, fontSize: 10, fontWeight: "700", paddingHorizontal: 6, lineHeight: 18, fontVariant: ["tabular-nums"] }}>{londonClock(s.clockedInAt)}–{s.clockedOutAt ? londonClock(s.clockedOutAt) : "now"}</Text>}
+                      {w > 14 && <Text numberOfLines={1} style={{ color: p.onPrimary, fontSize: 10, fontWeight: "700", paddingHorizontal: 6, lineHeight: 18, fontVariant: ["tabular-nums"] }}>{shiftSpan(s)}</Text>}
                     </Animated.View>
                   );
                 })}
               </View>
               {tipShift && (() => {
-                const from = ukHours(tipShift.clockedInAt), hours = ((tipShift.clockedOutAt ? Date.parse(tipShift.clockedOutAt) : Date.now()) - Date.parse(tipShift.clockedInAt)) / 3600000;
-                const unpaid = tipShift.unpaidMinutes ?? 0, worked = Math.max(0, Math.round(hours * 60) - unpaid);
-                return <ChartTip p={p} x={(along(from) + along(from + hours)) / 200 * trackWidth} width={trackWidth} top={38} tipWidth={190} title={`${londonClock(tipShift.clockedInAt)} – ${tipShift.clockedOutAt ? londonClock(tipShift.clockedOutAt) : "now"}`} rows={[
-                  { label: "Worked", value: minutesLabel(worked), color: p.primary },
+                // The counted hours of this day (lib/shift-hours.ts), and the whole shift when it runs over another day.
+                const { from, to } = dayHours(tipShift, day), whole = tipShift.shiftMinutes ?? tipShift.minutes;
+                return <ChartTip p={p} x={(along(from) + along(to)) / 200 * trackWidth} width={trackWidth} top={38} tipWidth={210} title={shiftSpan(tipShift)} rows={[
+                  { label: "Worked this day", value: minutesLabel(tipShift.minutes), color: p.primary },
+                  ...(whole !== tipShift.minutes ? [{ label: "Whole shift", value: minutesLabel(whole) }] : []),
+                  ...(tipShift.stale ? [{ label: NOT_CLOCKED_OUT, value: "16h max", color: p.waiting }] : []),
                   ...tipShift.pauses.map(x => ({ label: `${PAUSE_LABEL[x.kind]} ${londonClock(x.startedAt)}`, value: x.endedAt ? minutesLabel(Math.max(1, Math.round((Date.parse(x.endedAt) - Date.parse(x.startedAt)) / 60000))) : "now", color: x.kind === "emergency" ? p.danger : p.muted })),
                   ...(tipShift.overtimeFrom ? [{ label: "Overtime from", value: londonClock(tipShift.overtimeFrom), color: p.waiting }] : []),
                 ]} />;
@@ -672,7 +684,7 @@ function DayDetail({ p, sheet, day, today, total, wide, canEdit, direct, onShift
             const first = shifts[0];
             return (
               <MotionPress key={person.userId} {...(Platform.OS === "web" && canEdit && first ? { dataSet: { hover: "tint" } } : {})} disabled={!canEdit || !first} accessibilityRole={canEdit && first ? "button" : undefined}
-                accessibilityLabel={`${person.fullName}: ${shifts.map(s => `${londonClock(s.clockedInAt)} to ${s.clockedOutAt ? londonClock(s.clockedOutAt) : "now"}`).join(", ") || "nothing clocked"}`}
+                accessibilityLabel={`${person.fullName}: ${shifts.map(s => shiftSpan(s)).join(", ") || "nothing clocked"}`}
                 onPress={() => first && onShift(person, first)} style={{ borderRadius: 14, paddingVertical: 6, paddingHorizontal: 4, zIndex: tipShift ? 10 : 0 }}>
                 {wide ? <View style={[ui.row, { gap: 10 }]}>{name}{track}{figure}</View>
                   : <View style={{ gap: 8 }}><View style={[ui.row, { gap: 10 }]}>{name}{figure}</View>{track}</View>}

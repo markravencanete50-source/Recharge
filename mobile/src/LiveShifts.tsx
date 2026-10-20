@@ -20,6 +20,7 @@ import { DAILY_WORK, DEPARTMENTS } from "../../lib/workspace-teams-policy";
 import { formatCount, formatDay, plural } from "../../lib/format";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { londonInstant, validClock } from "../../lib/team-time";
+import { COUNTED_UNTIL_CORRECTED, NOT_CLOCKED_OUT, countedMinutes, dayClock, isStaleOpen } from "../../lib/shift-hours";
 import { isReflectionRefusal, needsReflection } from "../../lib/reflection";
 import { DayReflection } from "./DayReflection";
 import { KpiAdmin } from "./KpiAdmin";
@@ -89,7 +90,8 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
   const onPause = open?.pause ?? null;
   const unpaid = (kind: PauseKind) => shift ? !({ lunch: shift.pausePolicy.lunchPaid, break: shift.pausePolicy.breakPaid, emergency: shift.pausePolicy.emergencyPaid })[kind] : false;
   // Worked so far: the time since clocking in, less pauses that don't count as paid time.
-  const worked = open ? Math.max(0, sinceMinutes(open.clockedInAt) - open.unpaidMinutes) : 0;
+  // Counted up to 16 hours at most, the rule everywhere (lib/shift-hours.ts).
+  const worked = open ? Math.max(0, Math.round(countedMinutes(open)) - open.unpaidMinutes) : 0;
   const score = shift && shift.responses ? Math.floor(shift.green * 100 / shift.responses) : null;
   return (
     <View style={[ui.card, { backgroundColor: open ? p.header : p.surface, borderColor: open ? p.header : p.border, gap: 12 }]}>
@@ -100,6 +102,7 @@ export function ShiftCard({ palette: p, account }: { palette: Palette; account: 
             {!shift ? "Checking…" : open ? `${DEPARTMENT_LABEL[open.department] ?? open.department} · since ${time(open.clockedInAt)}` : "You’re clocked out"}
           </Text>
           {!!open && <Text style={{ color: p.headerMuted, fontSize: 13 }}>{shiftName(open.clockedInAt)} · {hoursLabel(worked)} worked so far{open.overtimeFrom ? ` · overtime since ${time(open.overtimeFrom)}` : ""}</Text>}
+          {!!open && isStaleOpen(open) && <Text style={{ color: p.waiting, fontSize: 13, fontWeight: "700" }}>{NOT_CLOCKED_OUT} since {dayClock(open.clockedInAt)}. Clocking out now records 16 hours; a manager corrects it if you stopped earlier.</Text>}
           {!!open && needsReflectionNow && <Text style={{ color: p.headerMuted, fontSize: 13 }}>Clocking out starts your end-of-day reflection.</Text>}
           {!!onPause && <View style={[ui.row, { gap: 8, marginTop: 2 }]}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: onPause.kind === "emergency" ? p.danger : p.waiting }} />
@@ -294,8 +297,10 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
       {data && t && <>
         <Section title="On shift now" count={data.onShift.length} p={p}>
           <List p={p} empty="Nobody is clocked in.">
-            {data.onShift.map((s, i) => <Row key={s.id} p={p} first={i === 0} icon="clock" tone="stays" title={s.fullName ?? "Team member"} detail={`${DEPARTMENT_LABEL[s.department] ?? s.department} · since ${time(s.clockedInAt)} · ${hoursLabel(sinceMinutes(s.clockedInAt))}`}
-              tags={[[shiftName(s.clockedInAt), "plain"]]} onPress={() => openClose(s)} />)}
+            {/* A shift open past 16 hours did not clock out: it counts up to 16 hours (lib/shift-hours.ts), in amber. */}
+            {data.onShift.map((s, i) => { const stale = isStaleOpen(s); return <Row key={s.id} p={p} first={i === 0} icon={stale ? "alert-triangle" : "clock"} tone="stays" title={s.fullName ?? "Team member"}
+              detail={`${DEPARTMENT_LABEL[s.department] ?? s.department} · since ${stale ? dayClock(s.clockedInAt) : time(s.clockedInAt)} · ${hoursLabel(Math.round(countedMinutes(s)))}${stale ? ` (${COUNTED_UNTIL_CORRECTED.toLowerCase()})` : ""}`}
+              tags={[stale ? [NOT_CLOCKED_OUT, "wait"] : [shiftName(s.clockedInAt), "plain"]]} onPress={() => openClose(s)} />; })}
           </List>
         </Section>
         <Section title="Scores and bonuses" p={p}>
@@ -350,7 +355,7 @@ export function LiveTeamPerformance({ palette: p, role }: { palette: Palette; ro
       </>}
       <Sheet palette={p} visible={!!closing} onClose={() => setClosing(null)} title={closing?.fullName ?? ""} subtitle={closing ? `Clocked in at ${time(closing.clockedInAt)}` : undefined} icon="hourglass">
         <Text style={[ui.body, { color: p.text }]}>If they forgot to clock out, set when they actually stopped.</Text>
-        <Tag label={closing ? `${hoursLabel(sinceMinutes(closing.clockedInAt))} so far` : ""} tone="plain" p={p} />
+        <Tag label={closing ? isStaleOpen(closing) ? `${NOT_CLOCKED_OUT}: ${COUNTED_UNTIL_CORRECTED.toLowerCase()}` : `${hoursLabel(Math.round(countedMinutes(closing)))} so far` : ""} tone={closing && isStaleOpen(closing) ? "wait" : "plain"} p={p} />
         <Field label="Stopped work at (HH:MM, UK time)" value={stopped} onChange={setStopped} p={p} placeholder="17:30" />
         <Field label="Why (optional)" value={why} onChange={setWhy} p={p} placeholder="Forgot to clock out" />
         {!direct && <Notice text="Clock in and out is locked. This goes to a super admin, and the shift ends only once they approve it." p={p} />}

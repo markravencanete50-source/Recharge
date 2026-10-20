@@ -229,6 +229,8 @@ test('the migration runs twice without changing anything', async () => {
   await db.exec('reset role'); await db.exec(await fs.readFile(MIGRATION, 'utf8'));
   // The report analytics patch (20261023300000) sits on top of this function, so it is run again after it.
   await db.exec(await fs.readFile('supabase/migrations/20261023300000_report_analytics.sql', 'utf8'));
+  // So does the shift hours patch (20261025600000: the window's part of each shift).
+  await db.exec(await fs.readFile('supabase/migrations/20261025600000_shift_hours_clip_open_limit.sql', 'utf8'));
   assert.equal(await definition(), before);
   await as(ADMIN);
   assert.equal(R.todosReportSchema.parse(await report('todos')).total, 4);
