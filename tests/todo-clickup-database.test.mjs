@@ -167,5 +167,5 @@ test('no direct table access, and the migration runs twice without changing anyt
   assert.deepEqual((await owner(defs))[0], before);
   assert.equal((await owner('select count(*)::int n from private.workspace_hub_item_events'))[0].n, events);
   assert.equal(before.a.split('todo fields added: 20261025100000').length, 2, 'patched once');
-  assert.equal(sql.includes('—'), false, 'no em dash');
+  assert.equal(sql.includes(String.fromCharCode(0x2014)), false, 'no em dash');
 });

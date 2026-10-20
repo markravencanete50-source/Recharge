@@ -22,8 +22,8 @@ const trackerColumns = percent => [...tracker.matchAll(/\{ key: "(\w+)", label: 
 
 const TABLES = [['To-do', TODO_COLUMNS], ['Trackers', trackerColumns(false)], ['Trackers with %', trackerColumns(true)]];
 
-test('the columns: the tick, When, Due, Status and Progress are fixed; the text columns shrink', () => {
-  assert.deepEqual(TODO_COLUMNS.filter(c => c.fixed).map(c => c.key), ['tick', 'when', 'due', 'status']);
+test('the columns: the tick, When, Due, Priority, Status and Progress are fixed; the text columns shrink', () => {
+  assert.deepEqual(TODO_COLUMNS.filter(c => c.fixed).map(c => c.key), ['tick', 'when', 'due', 'priority', 'status']);
   assert.deepEqual(TODO_COLUMNS.filter(c => !c.fixed).map(c => c.key), ['property', 'task', 'update', 'by'], 'Alex\'s columns, kept');
   assert.deepEqual(trackerColumns(false).map(c => c.key), ['property', 'status', 'next', 'action', 'update', 'progress']);
   assert.deepEqual(trackerColumns(false).filter(c => c.fixed).map(c => c.key), ['status', 'progress']);

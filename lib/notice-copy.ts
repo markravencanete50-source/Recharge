@@ -131,6 +131,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'hub.todo_added': copy('New to-do for you', 'A to-do has been added to your list or your department\'s.'),
   'hub.todo_changed': copy('To-do updated', 'A to-do on your list has been changed.'),
   'hub.todo_done': copy('To-do done', 'A to-do you set has been marked done.'),
+  'hub.todo_updated': copy('New comment on a to-do', 'Someone has commented on a to-do you are part of.'),
+  'hub.todo_mentioned': copy('You were mentioned on a to-do', 'Someone mentioned you in a comment on a to-do.'),
   'hub.approval_added': copy('Approval needed', 'Someone on the team has asked management to approve a cost.'),
   'hub.approval_approved': copy('Approved', 'Management has approved your request.'),
   'hub.approval_declined': copy('Not approved', 'Management has declined your request and said why.'),

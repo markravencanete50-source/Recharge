@@ -357,7 +357,7 @@ test('the New to-do form labels: assign to, departments with what they cover, th
   assert.match(sheet, /Area: what to do, for example Pricing: check the rates at Rose Cottage/);
 });
 
-test('the list can be ordered by due date, newest, oldest or A to Z', () => {
+test('the list can be ordered by due date, priority, newest, oldest or A to Z', () => {
   const rows = rowsOf([
     todo(1, { title: 'Charlie', dueOn: '2026-10-20', createdAt: '2026-10-02T09:00:00Z' }),
     todo(2, { title: 'Alpha', dueOn: null, createdAt: '2026-10-05T09:00:00Z' }),
@@ -369,5 +369,9 @@ test('the list can be ordered by due date, newest, oldest or A to Z', () => {
   assert.deepEqual(titles('newest'), ['Alpha', 'Bravo', 'Charlie']);
   assert.deepEqual(titles('oldest'), ['Charlie', 'Bravo', 'Alpha']);
   assert.deepEqual(titles('title'), ['Alpha', 'Bravo', 'Charlie']);
-  assert.deepEqual(T.TODO_SORTS, ['due', 'newest', 'oldest', 'title']);
+  assert.deepEqual(T.TODO_SORTS, ['due', 'priority', 'newest', 'oldest', 'title']);
+  const ranked = rowsOf([
+    todo(1, { title: 'Low', priority: 'low' }), todo(2, { title: 'None' }), todo(3, { title: 'Urgent', priority: 'urgent' }), todo(4, { title: 'High', priority: 'high' }),
+  ]);
+  assert.deepEqual(T.sortTodoRows(ranked, TODAY, 'priority').map(r => r.title), ['Urgent', 'High', 'Low', 'None'], 'most urgent first, no priority last');
 });
