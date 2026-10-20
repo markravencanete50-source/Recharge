@@ -82,7 +82,8 @@ test('only a super admin can view as another role, with that role’s tools',()=
  assert.equal(previewAccount(me,null),me);
  const adminAccount={...me,role:'admin'};
  assert.ok(!canViewAs(adminAccount));assert.equal(previewAccount(adminAccount,'cleans'),adminAccount,'an admin cannot preview');
- assert.ok(!VIEW_AS_ROLES.some(r=>r.role==='super_admin'));
+ assert.deepEqual(VIEW_AS_ROLES.find(r=>r.role==='super_admin'),{role:'super_admin',label:'Super admin',detail:'The whole business'},'co super admins can be viewed as people');
+ assert.equal(previewAccount(me,'super_admin'),me,'no role-only preview of super admin: that is your own view');
  assert.match(viewOnlyMessage({role:'ready',person:null}),/viewing as the Ready role, so nothing is saved/);
  assert.match(viewOnlyMessage({role:'cleans',person:{userId:me.userId,fullName:'Ana Ruiz'}}),/viewing as Ana Ruiz \(Cleaner\)/);
 });
@@ -94,10 +95,13 @@ test('View as lists people under their role and remembers the view for the tab',
  assert.deepEqual(groups.map(g=>g.role),VIEW_AS_ROLES.map(r=>r.role));
  assert.deepEqual(groups.find(g=>g.role==='cleans').people.map(p=>p.fullName),['Ana','Zoe']);
  assert.equal(groups.find(g=>g.role==='stays').people.length,0,'a role nobody has is still offered');
- assert.throws(()=>viewAsPeopleSchema.parse([{userId:id(4),fullName:'Me',role:'super_admin'}]),'super admins are never offered');
+ const coSuper=viewAsPeopleSchema.parse([{userId:id(4),fullName:'Rachel',role:'super_admin'}]);
+ assert.deepEqual(viewAsGroups(coSuper).find(g=>g.role==='super_admin').people.map(p=>p.fullName),['Rachel'],'a co super admin is listed under Super admin');
+ assert.throws(()=>viewAsPeopleSchema.parse([{userId:id(4),fullName:'X',role:'owner'}]));
  assert.equal(viewAsKey(null),'self');assert.equal(viewAsKey({role:'stays',person:null}),'role:stays');assert.equal(viewAsKey({role:'cleans',person:{userId:id(1),fullName:'Zoe'}}),id(1));
  assert.deepEqual(readSavedView(JSON.stringify({role:'cleans',person:{userId:id(1),fullName:'Zoe'}})),{role:'cleans',person:{userId:id(1),fullName:'Zoe'}});
  assert.equal(readSavedView('cleans'),null,'the older saved form is ignored');
- assert.equal(readSavedView(JSON.stringify({role:'super_admin',person:null})),null);
+ assert.equal(readSavedView(JSON.stringify({role:'super_admin',person:null})),null,'never a super admin role preview');
+ assert.deepEqual(readSavedView(JSON.stringify({role:'super_admin',person:{userId:id(4),fullName:'Rachel'}})),{role:'super_admin',person:{userId:id(4),fullName:'Rachel'}});
  assert.equal(readSavedView(null),null);
 });
