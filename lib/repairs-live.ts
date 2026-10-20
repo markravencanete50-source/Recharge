@@ -157,7 +157,6 @@ export function visitFormOf(data: Record<string, unknown> | undefined): VisitFor
     recordedAt: typeof f.recordedAt === "string" ? f.recordedAt : null,
   };
 }
-export const visitFormRecorded = (data: Record<string, unknown> | undefined) => visitFormOf(data) !== null;
 // When the visit was last done and when the next one falls due, as the database stamped them with the form.
 export function visitDates(data: Record<string, unknown> | undefined): { lastDoneAt: string | null; nextDueOn: string | null } {
   return { lastDoneAt: typeof data?.lastDoneAt === "string" ? data.lastDoneAt : null, nextDueOn: typeof data?.nextDueOn === "string" ? data.nextDueOn : null };

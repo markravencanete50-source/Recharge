@@ -96,15 +96,11 @@ export type PayoutLineRow = z.infer<typeof payoutLineSchema>;
 // The 'payoutLines' report: up to 500 lines, newest first; count and activeMinor cover every line that matched.
 export const payoutLinesReportSchema = z.object({ count: z.number(), activeMinor: minor, more: z.boolean(), lines: z.array(payoutLineSchema) }).passthrough();
 export type PayoutLinesReport = z.infer<typeof payoutLinesReportSchema>;
-export const PAYOUT_LINE_STATES = ["active", "setAside", "noConfirmedStay"] as const;
 
 // --- Owner statements with a period, VAT and ordered lines (migration 20261012100000). Every new field is optional so older answers still parse.
 // The lines are deductions from gross in this order, each category in date order.
 // visitor_levy: the visitor levy (20261014150000), straight after the OTA fees.
 export const STATEMENT_LINE_KINDS = ["ota_fee", "visitor_levy", "changeover", "management_fee", "vat", "payable"] as const;
-export const STATEMENT_LINE_LABEL: Record<(typeof STATEMENT_LINE_KINDS)[number], string> = {
-  ota_fee: "Platform fees", visitor_levy: "Visitor levy", changeover: "Changeover clean", management_fee: "Management fee", vat: "VAT on the fee", payable: "Other costs",
-};
 export const statementLineSchema = z.object({
   kind: z.enum(STATEMENT_LINE_KINDS), label: z.string(), date: z.string().nullable().optional(), amountMinor: minor, refId: z.string().nullable().optional(),
 });

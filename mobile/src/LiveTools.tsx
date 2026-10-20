@@ -112,19 +112,6 @@ export function TrackerSheet({ palette: p, tool, properties, onClose }: { palett
   );
 }
 
-// Owners: the furnishing calculator, one tap from their stays and statements.
-export function FurnishingCard({ palette: p }: { palette: Palette }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 10 }]}>
-      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Furnishing your property yourself?</Text>
-      <Text style={[ui.small, { color: p.muted }]}>Enter the layout and get the full quantity list for every room, ready to copy or download.</Text>
-      <Button label="Open the furnishing calculator" icon="arrow-right" primary p={p} onPress={() => setOpen(true)} />
-      <FurnishingSheet palette={p} visible={open} onClose={() => setOpen(false)} />
-    </View>
-  );
-}
-
 // Owners: what the cleaners did with the post at their properties, as the owner allowed.
 const MAIL_LABEL: Record<string, string> = { photograph: "Photographed the post", open_and_photograph: "Opened and photographed the post", leave_safely: "Left the post somewhere safe" };
 const mailSchema = z.array(z.object({ workId: z.string(), propertyId: z.string(), propertyName: z.string(), on: z.string(), action: z.string(), note: z.string(), photoIds: z.array(z.string().uuid()).default([]) }));

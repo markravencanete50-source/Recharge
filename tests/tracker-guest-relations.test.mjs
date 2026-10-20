@@ -340,7 +340,7 @@ test('the record-a-stay sheet shows the nights and the follow-up hint, and its o
   assert.match(text, /minimumNights = DEFAULT_MINIMUM_NIGHTS/);
   assert.match(text, /direct-booking follow-up/);
   assert.match(text, /export function StaySheet\(/);
-  assert.match(source('mobile/src/LiveStays.tsx'), /<StaySheet p=\{p\} visible=\{recording\} properties=\{properties\}/);
+  assert.match(source('mobile/src/GuestRelations.tsx'), /<StaySheet p=\{p\} visible=\{recording\} properties=\{properties\}/);
 });
 
 test('none of the new files contains an em dash, and the typed files keep their CRLF line endings', () => {

@@ -12,7 +12,6 @@ import { pillBox, pillInk } from "./Pills";
 // (broadband, heating, bins, garden, meter, cutlery, letters), repairs, items to order and
 // recommendations. The team reads it back and turns it into a purchase order or reactive maintenance.
 export type ItemRow = { item: string; quantity: string };
-export const emptyCheck = (): { answers: Partial<CleanCondition>; items: ItemRow[] } => ({ answers: {}, items: [] });
 
 // What goes to the server, leaving out anything blank.
 export function conditionOf(answers: Partial<CleanCondition>, items: ItemRow[]): CleanCondition | null {

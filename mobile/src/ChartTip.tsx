@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Platform, View } from 'react-native';
 import { Text } from './Typography';
 import { MotionPress } from './motion';
@@ -47,9 +47,4 @@ export function HoverColumns({ xs, width, top = 0, height, label, focus }: { xs:
       })}
     </View>
   );
-}
-
-// A wrapper that measures its width, so a tip can be placed over flex-laid bars.
-export function ChartFrame({ children, onWidth, style }: { children: ReactNode; onWidth: (w: number) => void; style?: object }) {
-  return <View onLayout={e => onWidth(e.nativeEvent.layout.width)} style={[{ position: 'relative' }, style]}>{children}</View>;
 }

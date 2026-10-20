@@ -19,7 +19,7 @@ import { VoiceNotePlayer } from "./VoiceNotes";
 
 // Messages, messenger-style: people's photos (with a dot when they are online), photos and a video
 // in a message, reactions, and the people in a conversation (adding people to a group, leaving it).
-const roleName = (role: string) => ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role;
+export const roleName = (role: string) => ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role;
 export const initialsOf = (name: string) => name.replace(/^Recharge · /, "").trim().split(/\s+/).slice(0, 2).map(w => w[0] ?? "").join("").toUpperCase() || "R";
 const web = Platform.OS === "web";
 const sizeLabel = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 0 : 1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;

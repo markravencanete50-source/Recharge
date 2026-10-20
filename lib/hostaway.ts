@@ -1,12 +1,7 @@
 // Hostaway API client: properties, reservations, calendar rates and reviews.
 // Credentials come from Worker secrets; nothing here touches a local database.
 import { env } from "cloudflare:workers";
-import type {
-  HostawayProperty,
-  HostawayReview,
-  HostawayCalendarRate,
-  HostawayReservation,
-} from "@/lib/hostaway-types";
+import type { HostawayReservation } from "@/lib/hostaway-types";
 import { reviewsPath, sweepReviews, type ReviewSweep } from "./hostaway-reviews-policy";
 
 const HOSTAWAY_API = "https://api.hostaway.com/v1";
@@ -31,18 +26,6 @@ class HostawayApiError extends Error {
 
 export function isHostawayConfigured() {
   return Boolean(env.HOSTAWAY_ACCOUNT_ID && env.HOSTAWAY_API_KEY);
-}
-
-export function hostawayErrorMessage(error: unknown) {
-  if (error instanceof HostawayApiError) {
-    if (error.status === 401 || error.status === 403) {
-      return "Hostaway rejected the saved credentials. Replace them with a fresh Hostaway Public API key.";
-    }
-    if (error.status === 429) {
-      return "Hostaway is temporarily limiting requests. Recharge will try again automatically.";
-    }
-  }
-  return "Hostaway could not be reached. Recharge will keep the existing inbox and retry automatically.";
 }
 
 // Shown to admins on the Hostaway card, so it says what actually went wrong. Never includes
@@ -86,133 +69,6 @@ export function hostawayReplyErrorMessage(error: unknown) {
   const name = error instanceof Error ? error.name : "";
   if (name === "TimeoutError" || name === "AbortError") return "Hostaway took too long to answer. The message may have been sent: check the conversation in a minute before sending it again.";
   return "Hostaway could not be reached. Nothing was sent; try again in a minute.";
-}
-
-export function hostawayPropertyErrorMessage(error: unknown) {
-  if (error instanceof HostawayApiError) {
-    if (error.status === 401 || error.status === 403) {
-      return "Hostaway rejected the saved credentials. Replace them with a fresh Hostaway Public API key.";
-    }
-    if (error.status === 429) {
-      return "Hostaway is temporarily limiting requests. Try loading the properties again shortly.";
-    }
-  }
-  return "Hostaway properties could not be loaded. Try again or enter the property manually.";
-}
-
-export function hostawayReservationErrorMessage(error: unknown) {
-  if (error instanceof HostawayApiError) {
-    if (error.status === 401 || error.status === 403) {
-      return "Hostaway rejected the saved credentials. Replace them with a fresh Hostaway Public API key.";
-    }
-    if (error.status === 429) {
-      return "Hostaway is temporarily limiting requests. Try loading the reservations again shortly.";
-    }
-  }
-  return "Hostaway reservations could not be loaded. The ticket can still be raised without a reservation.";
-}
-
-export async function listHostawayProperties(): Promise<HostawayProperty[]> {
-  if (!isHostawayConfigured()) {
-    throw new HostawayApiError("Hostaway credentials are missing", 401);
-  }
-
-  const pageSize = 100;
-  const properties = new Map<string, HostawayProperty>();
-
-  for (let offset = 0; offset < 1000; offset += pageSize) {
-    const listings = await hostawayRequest<unknown[]>(
-      `/listings?limit=${pageSize}&offset=${offset}&includeResources=1`,
-    );
-    if (!Array.isArray(listings)) {
-      throw new HostawayApiError("Hostaway returned an invalid property list", 502);
-    }
-
-    for (const value of listings) {
-      const listing = asObject(value);
-      const location = asObject(listing.location);
-      const owner = asObject(listing.owner ?? listing.ownerUser);
-      const id = firstString(listing.id, listing.listingMapId);
-      if (!id) continue;
-
-      const name =
-        firstString(
-          listing.internalListingName,
-          listing.name,
-          listing.listingName,
-          listing.title,
-        ) || `Hostaway property ${id}`;
-      const address = joinAddressParts([
-        firstString(
-          listing.address,
-          listing.street,
-          listing.streetAddress,
-          location.address,
-          location.street,
-        ),
-        firstString(listing.address2, location.address2),
-        firstString(listing.city, location.city),
-        firstString(
-          listing.zipcode,
-          listing.zipCode,
-          listing.postcode,
-          location.zipcode,
-          location.postcode,
-        ),
-      ]);
-
-      const listingLinks = uniqueLinks([
-        { label: "Airbnb", url: firstUrl(listing.airbnbListingUrl, listing.airbnbUrl) },
-        { label: "Booking.com", url: firstUrl(listing.bookingComListingUrl, listing.bookingUrl) },
-        { label: "Vrbo", url: firstUrl(listing.vrboListingUrl, listing.vrboUrl) },
-        { label: "Direct", url: firstUrl(listing.directBookingUrl, listing.bookingEngineUrl) },
-        { label: "Listing", url: firstUrl(listing.listingUrl, listing.publicUrl) },
-      ]);
-
-      properties.set(id, {
-        id,
-        name,
-        address,
-        ownerName: firstString(
-          owner.name,
-          owner.fullName,
-          listing.ownerName,
-          listing.ownerFullName,
-        ),
-        ownerEmail: firstString(owner.email, listing.ownerEmail),
-        ownerPhone: firstString(owner.phone, owner.phoneNumber, listing.ownerPhone),
-        accessCode: firstString(
-          listing.doorSecurityCode,
-          listing.accessCode,
-          listing.keyCode,
-        ),
-        accessInfo: firstString(
-          listing.checkInInstructions,
-          listing.checkinInstructions,
-          listing.keyPickup,
-          listing.accessInstructions,
-        ),
-        guidebookUrl: firstUrl(
-          listing.guidebookUrl,
-          listing.guidebookLink,
-          listing.guestGuideUrl,
-        ),
-        listingLinks,
-        status: firstString(
-          listing.status,
-          listing.listingStatus,
-          listing.airbnbStatus,
-          listing.isActive === false ? "inactive" : "active",
-        ),
-      });
-    }
-
-    if (listings.length < pageSize) break;
-  }
-
-  return Array.from(properties.values()).sort((a, b) =>
-    a.name.localeCompare(b.name, "en-GB", { sensitivity: "base" }),
-  );
 }
 
 export async function listHostawayReservations(
@@ -403,20 +259,6 @@ export async function fetchHostawayListing(id: string): Promise<unknown> {
   return hostawayRequest<unknown>(`/listings/${encodeURIComponent(id)}`);
 }
 
-export async function listHostawayCalendarRates(listingId: string, startDate: string, endDate: string): Promise<HostawayCalendarRate[]> {
-  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
-  const result = await hostawayRequest<unknown[]>(`/listings/${encodeURIComponent(listingId)}/calendar?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`);
-  if (!Array.isArray(result)) return [];
-  return result.map((value) => {
-    const day = asObject(value);
-    return {
-      date: firstString(day.date, day.calendarDate).slice(0, 10),
-      pricePence: moneyPence(day.price ?? day.basePrice ?? day.rate),
-      available: day.isAvailable !== false && !/blocked|booked|unavailable/i.test(firstString(day.status)),
-    };
-  }).filter((day) => Boolean(day.date));
-}
-
 // Raw guest reviews for the ratings sync (mapped in lib/hostaway-reviews-policy.ts): the newest pages, then the sweep from
 // `sweepOffset` (where the last run stopped), REVIEW_PAGES requests at most. See sweepReviews.
 export async function fetchHostawayReviews(sweepOffset: number): Promise<ReviewSweep> {
@@ -426,33 +268,6 @@ export async function fetchHostawayReviews(sweepOffset: number): Promise<ReviewS
     if (!Array.isArray(batch)) throw new HostawayApiError("Hostaway returned an invalid review list", 502);
     return batch;
   }, sweepOffset);
-}
-
-export async function listHostawayReviews(): Promise<HostawayReview[]> {
-  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
-  const reviews: HostawayReview[] = [];
-  const pageSize = 100;
-  for (let offset = 0; offset < 500; offset += pageSize) {
-    const result = await hostawayRequest<unknown[]>(`/reviews?limit=${pageSize}&offset=${offset}&includeResources=1`);
-    if (!Array.isArray(result)) throw new HostawayApiError("Hostaway returned an invalid review list", 502);
-    for (const value of result) {
-      const review = asObject(value);
-      const id = firstString(review.id, review.reviewId, review.externalId);
-      if (!id) continue;
-      reviews.push({
-        id,
-        listingId: firstString(review.listingMapId, review.listingId),
-        propertyName: firstString(review.listingName, review.internalListingName),
-        channelName: firstString(review.channelName, review.channel, review.source, "Hostaway"),
-        rating: numberValue(review.rating ?? review.overallRating ?? review.score),
-        text: firstString(review.publicReview, review.review, review.comment, review.text),
-        createdAt: firstString(review.createdOn, review.createdAt, review.submittedAt),
-        reviewUrl: firstString(review.reviewUrl, review.publicReviewUrl, review.channelReviewUrl, review.url),
-      });
-    }
-    if (result.length < pageSize) break;
-  }
-  return reviews;
 }
 
 function moneyPence(value: unknown) {
@@ -567,34 +382,6 @@ function firstString(...values: unknown[]) {
     if (text) return text;
   }
   return "";
-}
-
-function firstUrl(...values: unknown[]) {
-  for (const value of values) {
-    const url = scalarString(value);
-    if (/^https?:\/\//i.test(url)) return url;
-  }
-  return "";
-}
-
-function uniqueLinks(links: Array<{ label: string; url: string }>) {
-  const seen = new Set<string>();
-  return links.filter((link) => {
-    if (!link.url || seen.has(link.url)) return false;
-    seen.add(link.url);
-    return true;
-  });
-}
-
-function joinAddressParts(values: string[]) {
-  const parts: string[] = [];
-  for (const value of values) {
-    const part = value.trim();
-    if (!part) continue;
-    const current = parts.join(", ").toLowerCase();
-    if (!current.includes(part.toLowerCase())) parts.push(part);
-  }
-  return parts.join(", ");
 }
 
 function numberValue(value: unknown) {

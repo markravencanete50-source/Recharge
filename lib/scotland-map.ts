@@ -50,8 +50,6 @@ export function viewFor(region: string | null, points: readonly (readonly [numbe
   const w = Math.min(MAP_WIDTH, Math.max(own ? 60 : 150, (x1 - x0) * (own ? 2.2 : 1.7), ((y1 - y0) * (own ? 2.2 : 1.7)) / ratio)), h = w * ratio;
   return { x: Math.min(MAP_WIDTH - w, Math.max(0, (x0 + x1) / 2 - w / 2)), y: Math.min(MAP_HEIGHT - h, Math.max(0, (y0 + y1) / 2 - h / 2)), w, h };
 }
-// The council areas that make up an area, for outlining it.
-export const councilAreasOf = (region: string) => COUNCIL_AREAS.filter(a => a.region === region);
 // A round distance (miles) for the scale bar that fits in about `target` screen pixels.
 export function scaleBar(milesPerPixel: number, target = 90): { miles: number; pixels: number } {
   const raw = milesPerPixel * target, steps = [1, 2, 5, 10, 20, 25, 50, 100, 200];

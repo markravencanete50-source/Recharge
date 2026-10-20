@@ -28,7 +28,7 @@ test("no chosen chip fills with solid primary", () => {
 });
 
 test("the screens that drew their own chosen chips now use pillBox and pillInk", () => {
-  for (const file of ["LiveStays", "TeamFlows", "TeamEvents", "LivePages", "CleanReport", "SearchPicker", "AccountsFlows", "LiveRepairs", "LiveFurnishing", "LiveOnboarding", "LiveTraining", "ChecklistTemplates", "ListingSheets"]) {
+  for (const file of ["TeamFlows", "TeamEvents", "LivePages", "CleanReport", "SearchPicker", "AccountsFlows", "LiveRepairs", "LiveFurnishing", "LiveOnboarding", "LiveTraining", "ChecklistTemplates", "ListingSheets"]) {
     const source = readFileSync(join(dir, `${file}.tsx`), "utf8");
     assert.match(source, /import \{[^}]*\bpillBox\b[^}]*\} from "\.\/Pills"/, file);
     assert.match(source, /\.\.\.pillBox\(p, /, file);

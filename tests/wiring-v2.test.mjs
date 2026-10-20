@@ -1,6 +1,6 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createServer } from 'vite';
 
 // Source-level wiring for the remaining client feedback (INT-B): every page and sub-page is mounted by a
@@ -87,7 +87,7 @@ test('Messages gets the Updates tab and the old Updates page opens it', () => {
   assert.deepEqual(map.pageLink('activity'), { section: 'inbox', messagesTab: 'updates', redirected: true });
 });
 
-test('Hub and Stays are unrouted: nothing mounts them, and both files are still there', () => {
+test('Hub and Stays are gone: nothing mounts them, and both files are deleted', () => {
   for (const file of readdirSync('mobile/src').filter(f => f.endsWith('.tsx'))) {
     const text = mobile(file);
     assert.doesNotMatch(text, /<LiveHub[\s/>]/, file);
@@ -96,8 +96,8 @@ test('Hub and Stays are unrouted: nothing mounts them, and both files are still 
   assert.doesNotMatch(workspace, /from "\.\/LiveHub"/);
   assert.doesNotMatch(workspace, /from "\.\/LiveStays"/);
   assert.doesNotMatch(workspace, /currentView === "hub"/);
-  assert.match(mobile('LiveHub.tsx'), /export function LiveHub/);
-  assert.match(mobile('LiveStays.tsx'), /export function LiveStays/);
+  assert.equal(existsSync('mobile/src/LiveHub.tsx'), false);
+  assert.equal(existsSync('mobile/src/LiveStays.tsx'), false);
 });
 
 test('the flag role is provided and the shared work sheet offers Flag for management', () => {

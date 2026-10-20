@@ -91,12 +91,10 @@ test('Stays can sign off a day with no open shift, from Home, and only Stays', (
   // The database refuses signOffDay for these roles, so they are not offered a button that fails.
   for (const role of ['ready', 'accounts', 'cleaning_manager', 'cleans', 'client', 'admin', 'super_admin']) assert.ok(!offered(role, false, 1, 17), role);
   assert.equal(day.londonHour(new Date('2026-07-01T12:30:00Z')), 13, 'London summer time');
-  const card = read('mobile/src/SignOffCard.tsx'), stays = read('mobile/src/LiveStays.tsx'), homeSource = read('mobile/src/LiveHome.tsx');
+  const card = read('mobile/src/SignOffCard.tsx'), homeSource = read('mobile/src/LiveHome.tsx');
   assert.match(card, /export function SignOffCard\(/);
   assert.match(card, /action: "signOffDay"/);
   assert.match(card, /quietWhenDone/);
-  assert.match(stays, /import \{ SignOffCard \} from "\.\/SignOffCard";\s+export \{ SignOffCard \};/, 'LiveStays still exports it');
-  assert.doesNotMatch(stays, /function SignOffCard/);
   assert.match(homeSource, /<EndOfDayCard palette=\{p\} account=\{account\} \/>/);
   const eod = read('mobile/src/EndOfDayCard.tsx');
   assert.match(eod, /<SignOffCard p=\{p\} quietWhenDone \/>/);

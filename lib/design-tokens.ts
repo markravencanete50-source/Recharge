@@ -182,7 +182,6 @@ export const navHueTokens = {
     sage: { ink: "#B7DA92", wash: "#22341A" }, slate: { ink: "#C7CBBE", wash: "#2A332F" },
   },
 };
-export type NavHue = keyof typeof navHueTokens.light;
 // Chart colours for the report analytics (lib/report-analytics.ts, mobile/src/AnalyticsKit.tsx). Six identity colours in a
 // fixed order (a seventh thing folds into "Other"), checked for colour-blind separation, chroma and 3:1 contrast against
 // the card in each theme (tests/report-analytics.test.mjs keeps the light and dark values apart); the status colours are

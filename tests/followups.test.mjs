@@ -153,7 +153,7 @@ test('the forms each role can start open from the panel, search and Work views; 
   assert.deepEqual(homeActionsFor('client', DEFAULT_ROLE_MODULES.client).map(a => a.key), ['report-repair'], 'owners keep their one pill');
   assert.deepEqual(startActionsFor('accounts', MODULE_IDS).find(a => a.key === 'new-expense').target, { kind: 'work', view: 'accounts', sub: 'expenses', open: 'new-expense' });
   // Each form is opened by the screen it lives in.
-  const screens = { 'record-stay': 'LiveStays', 'report-repair': 'LiveRepairs', 'new-routine': 'LiveRepairs', 'new-clean': 'LiveCleans', 'new-expense': 'LiveAccounts' };
+  const screens = { 'record-stay': 'GuestRelations', 'report-repair': 'LiveRepairs', 'new-routine': 'LiveRepairs', 'new-clean': 'LiveCleans', 'new-expense': 'LiveAccounts' };
   for (const [form, screen] of Object.entries(screens)) assert.match(readFileSync(`mobile/src/${screen}.tsx`, 'utf8'), new RegExp(`focus\\?\\.open === "${form}"`), form);
 });
 

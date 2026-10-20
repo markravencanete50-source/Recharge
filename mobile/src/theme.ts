@@ -1,7 +1,7 @@
 import { StyleSheet, type ViewStyle } from "react-native";
 import type { DepartmentTone } from "../../lib/workspace-map";
 import { Platform } from "react-native";
-import { designTokens, departmentTokens, navHueTokens, type NavHue } from "../../lib/design-tokens";
+import { designTokens, departmentTokens } from "../../lib/design-tokens";
 export const themes = Object.fromEntries(
   Object.entries(designTokens).map(([mode, values]) => [
     mode,
@@ -29,11 +29,6 @@ export function departmentColor(tone: DepartmentTone, palette: Palette) {
     wash: Platform.OS === "web" ? "var(--rc-" + tone + "-wash)" : values.wash,
     art: Platform.OS === "web" ? "var(--rc-" + tone + "-wash)" : values.wash,
   };
-}
-// A left-panel hue: CSS variables on the web (so the theme can switch), values on phones.
-export function navHue(hue: NavHue, palette: Palette) {
-  const values = navHueTokens[palette.isDark ? "dark" : "light"][hue];
-  return Platform.OS === "web" ? { ink: `var(--rc-hue-${hue}-ink)`, wash: `var(--rc-hue-${hue}-wash)` } : values;
 }
 // Styles that only exist in the browser (layered shadows, blur); nothing elsewhere.
 export const web = (style: Record<string, unknown>): ViewStyle => (Platform.OS === "web" ? style : {}) as ViewStyle;

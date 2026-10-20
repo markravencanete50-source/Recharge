@@ -16,7 +16,7 @@ import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
 import { SCOTTISH_REGIONS } from "../../lib/regions";
 import {
   DEFAULT_SUBJECT, DUPLICATE_LABEL, LINK_PLACEHOLDER, PRIORITY_LABEL, PROPERTY_TYPES, STEP_LABEL, STEP_TONE, canDeleteEnquiry, clientEnquiriesSchema, defaultBody, DELETE_CONFIRM_WORD, deleteEnquiryWarning, deleteNeedsConfirm, duplicateNote, enquiryStep,
-  OWNER_ENQUIRY_LABEL, OWNER_ENQUIRY_NOTE, PUBLIC_ENQUIRY_LABEL, PUBLIC_ENQUIRY_NOTE, REFERRAL_LABEL, STAGE_LABEL, isPublicEnquiry, TEAM_ENQUIRY_NOTE, isOwnerEnquiry, isPriority, isTeamEnquiry, teamEnquiryTag, priorityFirst, valuationDraft, valueButtonLabel,
+  OWNER_ENQUIRY_LABEL, OWNER_ENQUIRY_NOTE, PUBLIC_ENQUIRY_LABEL, PUBLIC_ENQUIRY_NOTE, isPublicEnquiry, TEAM_ENQUIRY_NOTE, isOwnerEnquiry, isPriority, isTeamEnquiry, teamEnquiryTag, priorityFirst, valuationDraft, valueButtonLabel,
   type ClientEnquiries, type ClientEnquiry, type EnquiryStep,
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";

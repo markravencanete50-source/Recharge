@@ -4,7 +4,6 @@
 export const CHAT_CHIPS = ['all', 'unread', 'reply', 'mine'] as const;
 export const GUEST_CHIPS = ['reply', 'unread', 'mine', 'open', 'done', 'all'] as const;
 export type InboxChip = (typeof GUEST_CHIPS)[number];
-export const INBOX_CHIP_LABEL: Record<InboxChip, string> = { all: 'All', unread: 'Unread', reply: 'Needs a reply', mine: 'Mine', open: 'Open', done: 'Done' };
 export const ALL_PROPERTIES = 'all';
 
 // What a conversation is, for the chips.

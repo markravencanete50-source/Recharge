@@ -26,7 +26,6 @@ export const flagSchema = z.object({
   createdAt: z.string(), updatedAt: z.string().optional(), version: z.number(),
 });
 export type Flag = z.infer<typeof flagSchema>;
-export const flagsSchema = z.object({ canDecide: z.boolean().optional(), me: id.optional(), flags: z.array(flagSchema) });
 
 // The flags read answers an object ({ flags: [...] }) or a bare list; anything unreadable is no flags.
 export function parseFlags(raw: unknown): Flag[] {

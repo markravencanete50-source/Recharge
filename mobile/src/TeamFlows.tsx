@@ -7,7 +7,7 @@ import { Artwork } from "./Artwork";
 import { DimensionalIcon, type DimensionalName } from "./DimensionalIcon";
 import { Entrance, MotionPress, Stagger, usePresence, useReducedMotion } from "./motion";
 import { Text } from "./Typography";
-import { depth, space, ui, web, type Palette } from "./theme";
+import { depth, space, ui, type Palette } from "./theme";
 import { InSheet } from "./LiveKit";
 import { WORKSPACE_MAP } from "../../lib/workspace-map";
 import type { Tool, WorkspaceRole } from "./model";

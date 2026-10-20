@@ -128,7 +128,6 @@ test('the unions carry the new members', () => {
   assert.equal(WORK_VIEW_LABEL.clients, 'Client relations');
   assert.ok(Object.keys(WORK_VIEW_LABEL).includes('clients'));
   assert.match(panel, /clients: 'users'/);
-  assert.match(panel, /clients: 'clients'/);
   assert.match(map, /export type WorkspaceSection = [^;]*"todo"[^;]*"decisions"/);
   const sections = tracker.match(/export type TrackerSection = ([^;]*);/)?.[1] ?? '';
   for (const s of ['purchases', 'licensing', 'onboarding', 'statements', 'payables', 'receivable', 'direct_bookings', 'aircover', 'listing_health', 'pricing', 'reviews', 'relisting', 'approvals', 'cleans', 'repairs', 'preventative'])

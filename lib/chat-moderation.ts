@@ -24,7 +24,6 @@ export const BLOCKED_LABEL = 'Message from someone you blocked';
 export const REPORT_SOURCES = ['chat', 'guest_message', 'guest_email', 'client_email'] as const;
 export type ReportSource = (typeof REPORT_SOURCES)[number];
 export const REPORT_SOURCE_LABEL: Record<ReportSource, string> = { chat: 'Team chat', guest_message: 'Guest message', guest_email: 'Guest email', client_email: 'Client email' };
-export const REPORT_SOURCE_ICON: Record<ReportSource, string> = { chat: 'message-circle', guest_message: 'message-square', guest_email: 'mail', client_email: 'mail' };
 export const HIDDEN_LABEL = 'Hidden by an admin';
 export const HIDE_EXPLAINED = 'This hides the message for the team in Recharge, shown as “Hidden by an admin”. It cannot delete it from Airbnb, Booking.com or the sender’s mailbox.';
 export const isInboxReport = (r: Pick<ChatReport, 'source'>) => r.source !== 'chat';

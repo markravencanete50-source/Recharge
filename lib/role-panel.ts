@@ -48,27 +48,6 @@ const ART_ICON: Record<ToolArt, PanelIcon> = {
 const TOOL_ICON: Record<string, PanelIcon> = { productivity: 'activity', performance: 'award', month: 'trending-up', limits: 'sliders', bins: 'trash-2', compliance: 'file-text' };
 const FORM_ICON: Partial<Record<string, PanelIcon>> = { 'new-expense': 'file-plus' };
 
-// The colour of each link's icon tile: departments in their own colours, everything else in one of
-// the panel hues (lib/design-tokens.ts navHueTokens), so similar places look alike across roles.
-export type PanelHue = 'forest' | 'ocean' | 'plum' | 'amber' | 'rose' | 'sky' | 'sage' | 'slate' | 'stays' | 'cleans' | 'ready' | 'accounts' | 'clients';
-const AREA_HUE: Record<WorkView, PanelHue> = { management: 'forest', hub: 'sky', calendar: 'ocean', stays: 'stays', clients: 'clients', cleans: 'cleans', repairs: 'ready', accounts: 'accounts', all: 'slate' };
-const KEY_HUE: Record<string, PanelHue> = {
-  'page:home': 'forest', 'page:todo': 'sage', 'page:calendar': 'ocean', 'page:decisions': 'rose', 'page:favorites': 'amber', 'page:inbox': 'ocean', 'page:analytics': 'plum', 'page:help': 'slate',
-  'page:properties': 'forest', 'page:approvals': 'rose', 'page:mailbox': 'ocean', 'page:statements': 'accounts', 'page:enquiries': 'sky', 'page:feedback': 'plum', 'page:moderation': 'rose',
-  'tool:queue': 'rose', 'tool:people': 'ocean', 'tool:productivity': 'sage', 'tool:performance': 'amber', 'tool:access': 'rose', 'tool:training': 'plum',
-  'tool:inbox': 'ocean', 'tool:checks': 'sage', 'tool:pricing': 'amber', 'tool:signoff': 'plum', 'tool:bookings': 'ocean', 'tool:aircover': 'rose',
-  'tool:today': 'forest', 'tool:respond': 'rose', 'tool:month': 'plum', 'tool:restock': 'amber', 'tool:schedule': 'ocean', 'tool:review': 'sage',
-  'tool:disputes': 'rose', 'tool:unassigned': 'amber', 'tool:cleaners': 'plum', 'tool:setups': 'sky', 'tool:invoices': 'accounts', 'tool:pipeline': 'ocean',
-  'tool:visits': 'sage', 'tool:inspections': 'sky', 'tool:purchases': 'amber', 'tool:furnishing': 'plum', 'tool:expenses': 'rose', 'tool:payouts': 'sage',
-  'tool:budget': 'amber', 'tool:limits': 'amber', 'tool:studio': 'plum', 'tool:cleaner-invoices': 'cleans', 'tool:mailbox': 'ocean',
-  'tool:rota': 'ocean', 'tool:dailytasks': 'sage', 'tool:licensing': 'plum', 'tool:onboarding': 'clients', 'tool:reviews': 'amber',
-  'tool:booking-performance': 'plum', 'tool:order-fulfilment': 'amber', 'tool:receivable': 'accounts', 'tool:profit-loss': 'accounts',
-  'tool:statements': 'accounts', 'tool:calendar-ready': 'ready', 'tool:calendar-stays': 'stays', 'tool:calendar-cleans': 'cleans',
-  'tool:garden': 'sage', 'tool:bins': 'slate', 'tool:compliance': 'plum', 'tool:calendar-safety': 'ready', 'tool:calendar-onboarding': 'clients',
-  'tool:booking-calendar': 'ocean',
-};
-export const linkHue = (link: PanelLink): PanelHue =>
-  link.kind === 'area' ? AREA_HUE[link.view] : link.kind === 'start' ? 'forest' : KEY_HUE[link.key] ?? 'slate';
 
 // Favorites is in every role's first section, straight after Home (Lee, round 6: "always in the overview for
 // easy access regardless of which role"), and the menu order cannot move it out (lib/menu-layout.ts).

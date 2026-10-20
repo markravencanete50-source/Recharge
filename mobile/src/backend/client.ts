@@ -197,8 +197,6 @@ export const startViewAs = async (userId: string) => workspaceAccountSchema.pars
 export const stopViewAs = async () => { await workspaceRequest('/api/mobile/teams', { action: 'stopViewAs' }, { asSelf: true }); };
 export const readAdmin = async (section: 'people' | 'properties' | 'accessControl' | 'accessHistory') => (await workspaceRequest('/api/mobile/admin?section='+section)).json();
 export const writeAdmin = async (action: AdminAction) => (await workspaceRequest('/api/mobile/admin',action)).json();
-export const requestPhoneReset = async (phone: string) => (await call('/api/mobile/recovery',{action:'request',phone})).json();
-export const completePhoneReset = async (phone: string, code: string, password: string) => (await call('/api/mobile/recovery',{action:'verify',phone,code,password})).json();
 export type PhotoPurpose = 'cleaning'|'mailbox'|'delivery'|'licence'|'maintenance'|'inspection'|'setup'|'expense';
 // A photo goes on a work item, or (Accounts' invoice paperwork) on an expense.
 export async function uploadWorkPhoto(input: {requestId: string;workId?: string;expenseId?: string;purpose: PhotoPurpose;checklistItem?: string}, photo: {uri:string;name:string;type:'image/jpeg'|'image/png'|'image/webp'}) {
@@ -244,7 +242,6 @@ const pushDeviceSchema = z.object({ endpointHost: z.string().nullable(), since: 
 export type PushDevice = z.infer<typeof pushDeviceSchema>;
 const notificationStatusSchema = z.object({ publicKey: z.string().nullable(), devices: z.array(pushDeviceSchema).nullable().optional() });
 export const readNotificationStatus = async () => notificationStatusSchema.parse(await (await call('/api/workspace/notifications')).json());
-export const readNotificationKey = async () => (await readNotificationStatus()).publicKey;
 type PushAddress = { endpoint: string; p256dh: string; auth: string };
 export const writeNotifications = async (body: ({ action: 'subscribe' } & PushAddress) | { action: 'unsubscribe'; endpoint: string }) => (await call('/api/workspace/notifications', body)).json();
 export const testNotification = async (address: PushAddress) => z.object({ data: z.object({ outcome: z.enum(['sent', 'gone', 'failed']), status: z.number() }) })
@@ -364,7 +361,6 @@ export const writeClientEmail = async (action: import('../../../lib/client-email
 // The estimate emailed with a private link: email it again, or make a link to send by hand.
 export const writeEstimateLink = async (action: import('../../../lib/estimate-link').EstimateLinkAction) => (await workspaceRequest('/api/mobile/estimate-link', action)).json() as Promise<{ data?: { link: string; estimateDelivery: unknown } }>;
 export const readEmailInbox = async () => (await workspaceRequest('/api/mobile/email-inbox')).json();
-export const writeEmailInbox = async (action: { action: 'assign'; id: string; ownerId: string } | { action: 'dismiss'; id: string }) => (await workspaceRequest('/api/mobile/email-inbox', action)).json();
 // Management oversight: the business overview, an item's history, the decisions report and management's reminders.
 export const readOversight = async (query: Record<string, string>) => (await workspaceRequest('/api/mobile/oversight?' + new URLSearchParams(query))).json();
 export const writeOversight = async (action: OversightAction) => (await workspaceRequest('/api/mobile/oversight', action)).json();

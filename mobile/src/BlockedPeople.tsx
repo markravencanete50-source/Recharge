@@ -3,14 +3,12 @@ import { View } from "react-native";
 import { Text } from "./Typography";
 import { Sheet } from "./TeamFlows";
 import { Button, Loading, message, Notice } from "./LiveKit";
-import { PersonAvatar } from "./ChatParts";
+import { PersonAvatar, roleName } from "./ChatParts";
 import { useBlocks } from "./ChatSafety";
 import { ui, type Palette } from "./theme";
 import { viewMode } from "./backend/client";
-import { ROLE_LABEL } from "../../lib/admin-live";
 
 // Blocked people (Profile & preferences): who you have blocked, and a way to unblock each.
-const roleName = (role: string) => ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role;
 export function BlockedPeopleSheet({ p, visible, onClose }: { p: Palette; visible: boolean; onClose: () => void }) {
   return (
     <Sheet palette={p} visible={visible} onClose={onClose} title="Blocked people" subtitle="You don't see their messages, and they can't start a new direct message with you." icon="people">
