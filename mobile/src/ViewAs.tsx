@@ -12,6 +12,8 @@ import { viewAsGroups, viewAsKey, viewAsLabel, viewAsName, type ViewAs, type Vie
 
 // The super admin's "View as" picker: each role, with the people in it. Picking a person shows
 // exactly what they see; a role nobody has yet can still be previewed with its screens and tools.
+// Co super admins are listed as people ("Name · Super admin"); there is no super admin screens
+// preview, since that is your own view.
 export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose }: {
   palette: Palette; visible: boolean; current: ViewAs | null; onClose: () => void; onChoose: (view: ViewAs | null) => Promise<void>;
 }) {
@@ -23,6 +25,8 @@ export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose }:
       .catch(e => { if (active) { setPeople(current => current ?? []); setError(e instanceof WorkspaceApiError ? e.message : "The list of people could not be loaded."); } });
     return () => { active = false; };
   }, [visible]);
+  // The roles whose screens can be previewed without a person: every role but super admin.
+  const previews = people ? viewAsGroups(people).filter(group => group.role !== "super_admin") : [];
   const choose = async (view: ViewAs | null) => {
     if (busy) return;
     if (viewAsKey(view) === viewAsKey(current)) { onClose(); return; }
@@ -62,8 +66,8 @@ export function ViewAsSheet({ palette: p, visible, current, onClose, onChoose }:
           empty="Nobody to view as yet." />
         <Text accessibilityRole="header" style={{ color: p.text, fontSize: 13, fontWeight: "800", paddingTop: 6 }}>A role&apos;s screens only</Text>
         <ChoiceField p={p} label="A role's screens only" value={current && !current.person ? current.role : ""}
-          options={[{ value: "", label: "Choose a role to preview" }, ...viewAsGroups(people).map(group => ({ value: group.role as string, label: group.people.length ? `${group.label} screens` : `${group.label} screens (nobody has this role yet)` }))]}
-          onChange={role => { const group = viewAsGroups(people).find(g => g.role === role); if (group) void choose({ role: group.role, person: null }); }} />
+          options={[{ value: "", label: "Choose a role to preview" }, ...previews.map(group => ({ value: group.role as string, label: group.people.length ? `${group.label} screens` : `${group.label} screens (nobody has this role yet)` }))]}
+          onChange={role => { const group = previews.find(g => g.role === role); if (group) void choose({ role: group.role, person: null }); }} />
         <Text style={[ui.small, { color: p.muted }]}>A role&apos;s screens show its menus, tools and records only, without your own updates or favorites.</Text>
         {!!busy && <ActivityIndicator accessibilityLabel="Opening the view" color={p.primary} />}
       </>}
