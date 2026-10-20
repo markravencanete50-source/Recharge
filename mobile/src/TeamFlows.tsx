@@ -32,7 +32,8 @@ function SectionTitle({ palette: p, title, detail, action }: { palette: Palette;
   );
 }
 
-export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, children }: { palette: Palette; visible: boolean; onClose: () => void; title: string; subtitle?: string; icon?: DimensionalName; children: ReactNode }) {
+// width: the widest the panel grows on a large screen (580 by default; the to-do task page opens wider, like ClickUp).
+export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, children, width: widest = 580 }: { palette: Palette; visible: boolean; onClose: () => void; title: string; subtitle?: string; icon?: DimensionalName; children: ReactNode; width?: number }) {
   const { width, height } = useWindowDimensions();
   const wide = width >= 768;
   const reduced = useReducedMotion();
@@ -62,7 +63,7 @@ export function Sheet({ palette: p, visible, onClose, title, subtitle, icon, chi
         <Animated.View {...(Platform.OS === "web" ? { dataSet: { overlay: "blur" } } : {})} style={[StyleSheet.absoluteFill, { backgroundColor: p.overlay, opacity: progress }]}>
           <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onClose} disabled={!visible} style={StyleSheet.absoluteFill} {...(Platform.OS === "web" ? { tabIndex: -1 } : {})} />
         </Animated.View>
-        <Animated.View accessibilityViewIsModal pointerEvents={visible ? "auto" : "none"} style={{ width: "100%", maxWidth: Math.min(580, width), minWidth: 0, maxHeight: wide ? "92%" : "92%", borderRadius: 30, borderBottomLeftRadius: wide ? 30 : 0, borderBottomRightRadius: wide ? 30 : 0, backgroundColor: p.surface, overflow: "hidden", ...depth.floating,
+        <Animated.View accessibilityViewIsModal pointerEvents={visible ? "auto" : "none"} style={{ width: "100%", maxWidth: Math.min(widest, width), minWidth: 0, maxHeight: wide ? "92%" : "92%", borderRadius: 30, borderBottomLeftRadius: wide ? 30 : 0, borderBottomRightRadius: wide ? 30 : 0, backgroundColor: p.surface, overflow: "hidden", ...depth.floating,
           opacity: wide ? progress : progress.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 1, 1] }),
           transform: [{ translateY: wide || reduced ? lift : Animated.add(lift, drag) }, { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [wide ? 0.96 : 1, 1] }) }] }}>
           <View {...(wide ? {} : pull.panHandlers)}>
