@@ -15,13 +15,13 @@
 -- the trigger is replaced, and each patch of a shared function has a sentinel and an anchor that must occur exactly once.
 
 alter table private.workspace_hub_items add column if not exists priority text;
-alter table private.workspace_hub_items add column if not exists start_on date;
+alter table private.workspace_hub_items add column if not exists begins_on date;
 do $c$ begin
  if not exists(select 1 from pg_constraint where conname='workspace_hub_items_priority' and conrelid='private.workspace_hub_items'::regclass) then
   alter table private.workspace_hub_items add constraint workspace_hub_items_priority check(priority is null or (kind='todo' and priority in ('urgent','high','normal','low')));
  end if;
  if not exists(select 1 from pg_constraint where conname='workspace_hub_items_start_on' and conrelid='private.workspace_hub_items'::regclass) then
-  alter table private.workspace_hub_items add constraint workspace_hub_items_start_on check(start_on is null or kind='todo');
+  alter table private.workspace_hub_items add constraint workspace_hub_items_start_on check(begins_on is null or kind='todo');
  end if;
 end $c$;
 
@@ -84,7 +84,7 @@ begin
   if new.property_id is distinct from old.property_id then
    lines:=lines||case when new.property_id is null then 'took the property off' else 'linked it to '||coalesce((select p.name from public.workspace_properties p where p.id=new.property_id),'a property') end;
   end if;
-  if new.start_on is distinct from old.start_on then lines:=lines||case when new.start_on is null then 'removed the start date' else 'set the start date to '||to_char(new.start_on,'FMDD Mon YYYY') end;end if;
+  if new.begins_on is distinct from old.begins_on then lines:=lines||case when new.begins_on is null then 'removed the start date' else 'set the start date to '||to_char(new.begins_on,'FMDD Mon YYYY') end;end if;
   if new.due_on is distinct from old.due_on then lines:=lines||case when new.due_on is null then 'removed the due date' else 'set the due date to '||to_char(new.due_on,'FMDD Mon YYYY') end;end if;
   if new.priority is distinct from old.priority then lines:=lines||case when new.priority is null then 'cleared the priority' else 'set the priority to '||(prio->>new.priority) end;end if;
  end if;
@@ -132,10 +132,10 @@ begin
  if input ? 'priority' and input->>'priority' is not null and input->>'priority' not in ('urgent','high','normal','low') then raise exception 'Choose a priority' using errcode='22023';end if;
  if input ? 'startOn' and input->>'startOn' is not null and (input->>'startOn')!~'^\d{4}-\d{2}-\d{2}$' then raise exception 'Choose a valid start date' using errcode='22023';end if;
  if input ? 'dueOn' and input->>'dueOn' is not null and (input->>'dueOn')!~'^\d{4}-\d{2}-\d{2}$' then raise exception 'Choose a valid date' using errcode='22023';end if;
- st:=case when input ? 'startOn' then (input->>'startOn')::date else item.start_on end;
+ st:=case when input ? 'startOn' then (input->>'startOn')::date else item.begins_on end;
  du:=case when input ? 'dueOn' then (input->>'dueOn')::date else item.due_on end;
  if st is not null and du is not null and st>du then raise exception 'The start date must be on or before the due date' using errcode='22023';end if;
- update private.workspace_hub_items set priority=case when input ? 'priority' then input->>'priority' else priority end,start_on=st,due_on=du
+ update private.workspace_hub_items set priority=case when input ? 'priority' then input->>'priority' else priority end,begins_on=st,due_on=du
   where id=item.id returning * into changed;
  return changed;
 end $fn$;
@@ -243,7 +243,7 @@ declare
   ['private.workspace_hub_view(private.workspace_hub_items)',
    $q$'updates',case when item.kind='todo' then private.workspace_todo_updates_view(item.id) else '[]'::jsonb end,$q$,
    $q$'updates',case when item.kind='todo' then private.workspace_todo_updates_view(item.id) else '[]'::jsonb end,
-  'priority',item.priority,'startOn',item.start_on,'activity',case when item.kind='todo' then private.workspace_todo_activity_view(item.id) else '[]'::jsonb end,
+  'priority',item.priority,'startOn',item.begins_on,'activity',case when item.kind='todo' then private.workspace_todo_activity_view(item.id) else '[]'::jsonb end,
   'unread',case when item.kind='todo' then private.workspace_todo_unread(item.id) else 0 end,$q$,
    $q$private.workspace_todo_activity_view(item.id)$q$],
   -- Someone mentioned on a to-do can see it.
